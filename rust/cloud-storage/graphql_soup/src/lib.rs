@@ -14,12 +14,14 @@ use model_entity::EntityType;
 use models_pagination::{
     Base64Str, CursorWithValAndFilter, PaginatedOpaqueCursor, SimpleSortMethod, TypeEraseCursor,
 };
+use models_properties::service::property_value::PropertyValue;
 use models_soup::{
+    SoupProperty,
     call_record::SoupCallRecord,
     chat::SoupChat,
     comms::{ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
-    document::SoupDocument,
+    document::{SoupDocument, SoupDocumentSubType},
     email_thread::SoupEnrichedEmailThreadPreview,
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
@@ -256,7 +258,6 @@ impl GraphqlSoupItem {
     async fn entity(&self) -> &GraphqlSoupEntity {
         &self.entity
     }
-
 }
 
 impl From<FrecencySoupItem> for GraphqlSoupItem {
@@ -346,6 +347,204 @@ impl GraphqlSoupDocument {
 
     async fn deleted_at(&self) -> Option<String> {
         self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn sub_type(&self) -> Option<GraphqlSoupDocumentSubType> {
+        self.0
+            .sub_type
+            .as_ref()
+            .map(GraphqlSoupDocumentSubType::from)
+    }
+
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
+    }
+}
+
+pub struct GraphqlSoupDocumentSubType {
+    kind: &'static str,
+    is_completed: Option<bool>,
+}
+
+impl From<&SoupDocumentSubType> for GraphqlSoupDocumentSubType {
+    fn from(value: &SoupDocumentSubType) -> Self {
+        match value {
+            SoupDocumentSubType::Task { is_completed } => Self {
+                kind: "task",
+                is_completed: Some(*is_completed),
+            },
+            SoupDocumentSubType::Snippet {} => Self {
+                kind: "snippet",
+                is_completed: None,
+            },
+        }
+    }
+}
+
+#[Object]
+impl GraphqlSoupDocumentSubType {
+    async fn kind(&self) -> &str {
+        self.kind
+    }
+
+    async fn is_completed(&self) -> Option<bool> {
+        self.is_completed
+    }
+}
+
+pub struct GraphqlSoupProperty(SoupProperty);
+
+#[Object]
+impl GraphqlSoupProperty {
+    async fn id(&self) -> ID {
+        ID(self.0.definition.id.to_string())
+    }
+
+    async fn display_name(&self) -> &str {
+        &self.0.definition.display_name
+    }
+
+    async fn data_type(&self) -> String {
+        format!("{:?}", self.0.definition.data_type)
+    }
+
+    async fn is_multi_select(&self) -> bool {
+        self.0.definition.is_multi_select
+    }
+
+    async fn specific_entity_type(&self) -> Option<String> {
+        self.0
+            .definition
+            .specific_entity_type
+            .map(|entity_type| entity_type.to_string())
+    }
+
+    async fn is_system(&self) -> bool {
+        self.0.definition.is_system
+    }
+
+    async fn is_metadata(&self) -> bool {
+        self.0.definition.is_metadata
+    }
+
+    async fn value(&self) -> Option<GraphqlSoupPropertyValue> {
+        self.0.value.as_ref().map(GraphqlSoupPropertyValue::from)
+    }
+}
+
+#[derive(SimpleObject)]
+pub struct GraphqlSoupPropertyValue {
+    kind: String,
+    bool_value: Option<bool>,
+    number_value: Option<f64>,
+    string_value: Option<String>,
+    date_value: Option<String>,
+    select_option_ids: Vec<ID>,
+    entity_references: Vec<GraphqlSoupPropertyEntityReference>,
+    links: Vec<String>,
+}
+
+impl From<&PropertyValue> for GraphqlSoupPropertyValue {
+    fn from(value: &PropertyValue) -> Self {
+        match value {
+            PropertyValue::Bool(value) => Self {
+                kind: "Boolean".to_owned(),
+                bool_value: Some(*value),
+                number_value: None,
+                string_value: None,
+                date_value: None,
+                select_option_ids: Vec::new(),
+                entity_references: Vec::new(),
+                links: Vec::new(),
+            },
+            PropertyValue::Num(value) => Self {
+                kind: "Number".to_owned(),
+                bool_value: None,
+                number_value: Some(*value),
+                string_value: None,
+                date_value: None,
+                select_option_ids: Vec::new(),
+                entity_references: Vec::new(),
+                links: Vec::new(),
+            },
+            PropertyValue::Str(value) => Self {
+                kind: "String".to_owned(),
+                bool_value: None,
+                number_value: None,
+                string_value: Some(value.clone()),
+                date_value: None,
+                select_option_ids: Vec::new(),
+                entity_references: Vec::new(),
+                links: Vec::new(),
+            },
+            PropertyValue::Date(value) => Self {
+                kind: "Date".to_owned(),
+                bool_value: None,
+                number_value: None,
+                string_value: None,
+                date_value: Some(value.to_rfc3339()),
+                select_option_ids: Vec::new(),
+                entity_references: Vec::new(),
+                links: Vec::new(),
+            },
+            PropertyValue::SelectOption(values) => Self {
+                kind: "SelectOption".to_owned(),
+                bool_value: None,
+                number_value: None,
+                string_value: None,
+                date_value: None,
+                select_option_ids: values.iter().map(|id| ID(id.to_string())).collect(),
+                entity_references: Vec::new(),
+                links: Vec::new(),
+            },
+            PropertyValue::EntityRef(values) => Self {
+                kind: "EntityReference".to_owned(),
+                bool_value: None,
+                number_value: None,
+                string_value: None,
+                date_value: None,
+                select_option_ids: Vec::new(),
+                entity_references: values
+                    .iter()
+                    .map(GraphqlSoupPropertyEntityReference::from)
+                    .collect(),
+                links: Vec::new(),
+            },
+            PropertyValue::Link(values) => Self {
+                kind: "Link".to_owned(),
+                bool_value: None,
+                number_value: None,
+                string_value: None,
+                date_value: None,
+                select_option_ids: Vec::new(),
+                entity_references: Vec::new(),
+                links: values.clone(),
+            },
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+pub struct GraphqlSoupPropertyEntityReference {
+    entity_id: String,
+    entity_type: String,
+    specific_message_id: Option<ID>,
+}
+
+impl From<&models_properties::EntityReference> for GraphqlSoupPropertyEntityReference {
+    fn from(value: &models_properties::EntityReference) -> Self {
+        Self {
+            entity_id: value.entity_id.clone(),
+            entity_type: value.entity_type.to_string(),
+            specific_message_id: value
+                .specific_message_id
+                .map(|message_id| ID(message_id.to_string())),
+        }
     }
 }
 
