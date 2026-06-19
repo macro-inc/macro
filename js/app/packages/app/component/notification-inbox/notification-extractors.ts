@@ -78,7 +78,7 @@ export const notificationTitle = (
     case 'github_pr_review':
       return metadata.content.title || metadata.content.displayName;
     case 'ai_response':
-      return 'AI response';
+      return metadata.content.summary || 'Macro agent';
     case 'call_started':
     case 'call-started':
       return metadata.content.channel_name ?? undefined;
@@ -99,6 +99,8 @@ export const notificationAction = (
       return 'sent a message';
     case 'channel_message_reply':
       return 'replied';
+    case 'new_email':
+      return 'sent an email';
     case 'channel_invite':
       return 'started a conversation';
     case 'invite_to_team':
@@ -125,6 +127,8 @@ export const notificationAction = (
       return 'mentioned you';
     case 'github_pr_review':
       return 'reviewed';
+    case 'ai_response':
+      return 'responded';
     case 'call_started':
     case 'call-started':
       return 'started a call';

@@ -30,8 +30,9 @@ import {
   compositeEntity,
   type UnifiedNotification,
 } from '@notifications';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -51,6 +52,7 @@ import {
   type InboxItem as InboxItemData,
   type InboxRelatedDocument,
 } from './InboxItem';
+import { InboxItemActionLocationLayout } from './layouts/InboxItemActionLocationLayout';
 import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
 import {
   notificationAction,
@@ -80,12 +82,20 @@ type InboxDateGroup = {
 
 type InboxListRow =
   | { type: 'header'; id: string; label: string }
-  | { type: 'item'; id: string; item: InboxItemData; depth: number };
+  | { type: 'item'; id: string; item: InboxItemData; depth: number }
+  | {
+      type: 'group-controls';
+      id: string;
+      item: InboxItemData;
+      visibleCount: number;
+      totalCount: number;
+    };
 
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type InboxMode = 'signal' | 'noise' | 'all';
+type InboxLayoutMode = 'inline' | 'action-location';
 
 type DevNotificationFilter = {
   id: string;
@@ -173,7 +183,7 @@ const transformNotificationItem = (args: {
   const notificationTitleValue = notificationTitle(args.notification);
   const title = metadata.tag.startsWith('channel_')
     ? String(args.entity?.name ?? '') || notificationTitleValue
-    : notificationTitleValue || String(args.entity?.name ?? '');
+    : String(args.entity?.name ?? '') || notificationTitleValue;
   const showSubItems = metadata.tag !== 'github_pr_status_changed';
 
   return {
@@ -188,6 +198,10 @@ const transformNotificationItem = (args: {
         ? (args.entity.subType?.type ?? notificationSubType(args.notification))
         : notificationSubType(args.notification),
     entityName: title,
+    channelType:
+      args.entity?.type === 'channel_message' || args.entity?.type === 'channel'
+        ? args.entity.channelType
+        : undefined,
     senderId: args.notification.sender_id ?? undefined,
     senderName: notificationSenderName(args.notification),
     action: notificationAction(args.notification),
@@ -619,7 +633,7 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
       return {
         id: notification.entity_id,
         type: 'chat',
-        name: metadata.content.summary || 'AI response',
+        name: item.entityName || metadata.content.summary || 'AI response',
         ownerId: '',
         createdAt: date,
         updatedAt: date,
@@ -647,9 +661,11 @@ function NotificationInboxList(props: {
   hiddenFilterIds: string[];
   readFilter: ReadFilter;
   inboxMode: InboxMode;
+  layoutMode: InboxLayoutMode;
   selectedItem: InboxItemData | undefined;
   onReadFilterChange: (filter: ReadFilter) => void;
   onInboxModeChange: (mode: InboxMode) => void;
+  onLayoutModeChange: (mode: InboxLayoutMode) => void;
   onLoadMore: () => void;
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
@@ -660,6 +676,12 @@ function NotificationInboxList(props: {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
   const [expandedItemIds, setExpandedItemIds] = createSignal<string[]>([]);
+  const [visibleGroupItemCounts, setVisibleGroupItemCounts] = createSignal<
+    Record<string, number>
+  >({});
+
+  const visibleGroupItemCount = (item: InboxItemData) =>
+    visibleGroupItemCounts()[item.id] ?? 0;
 
   const isExpanded = (item: InboxItemData) =>
     expandedItemIds().includes(item.id);
@@ -677,17 +699,47 @@ function NotificationInboxList(props: {
   const rows = createMemo<InboxListRow[]>(() =>
     props.groups.flatMap((group) => [
       { type: 'header' as const, id: group.id, label: group.label },
-      ...group.items.flatMap((item) => [
-        { type: 'item' as const, id: item.id, item, depth: 0 },
-        ...(isExpanded(item)
-          ? (item.subItems ?? []).map((subItem) => ({
+      ...group.items.flatMap((item) => {
+        if (props.layoutMode === 'action-location' && item.subItems?.length) {
+          const subItems = item.subItems;
+          const visibleCount = Math.min(
+            visibleGroupItemCount(item),
+            subItems.length
+          );
+          return [
+            { type: 'item' as const, id: item.id, item, depth: 0 },
+            ...subItems.slice(0, visibleCount).map((subItem) => ({
               type: 'item' as const,
-              id: subItem.id,
+              id: `${item.id}:sub:${subItem.id}`,
               item: subItem,
               depth: 1,
-            }))
-          : []),
-      ]),
+            })),
+            ...(visibleCount > 0
+              ? [
+                  {
+                    type: 'group-controls' as const,
+                    id: `${item.id}:controls`,
+                    item,
+                    visibleCount,
+                    totalCount: subItems.length,
+                  },
+                ]
+              : []),
+          ];
+        }
+
+        return [
+          { type: 'item' as const, id: item.id, item, depth: 0 },
+          ...(isExpanded(item)
+            ? (item.subItems ?? []).map((subItem) => ({
+                type: 'item' as const,
+                id: subItem.id,
+                item: subItem,
+                depth: 1,
+              }))
+            : []),
+        ];
+      }),
     ])
   );
 
@@ -962,6 +1014,30 @@ function NotificationInboxList(props: {
               </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>
+          <Dropdown placement="bottom-start" gutter={4}>
+            <Dropdown.Trigger
+              class="h-7 bg-surface text-ink-muted capitalize"
+              depth={2}
+              size="sm"
+              variant="base"
+            >
+              {props.layoutMode === 'inline' ? 'Inline' : 'Action'}
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <For each={['inline', 'action-location'] as const}>
+                  {(mode) => (
+                    <Dropdown.Item
+                      class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
+                      onSelect={() => props.onLayoutModeChange(mode)}
+                    >
+                      {mode === 'inline' ? 'Inline' : 'Action/location'}
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
           <TabsInset
             class="ml-auto h-auto w-fit"
             list={[
@@ -977,14 +1053,8 @@ function NotificationInboxList(props: {
           <Show when={currentHeader()}>
             {(label) => (
               <Layer depth={2}>
-                <div class="flex items-center">
-                  <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
-                    <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-                    <h1 class="text-xs font-medium text-ink-extra-muted">
-                      {label()}
-                    </h1>
-                  </header>
-                  <div class="w-full h-px bg-edge-muted" />
+                <div class="my-2 flex items-center px-2">
+                  <h1 class="text-base text-ink/50">{label()}</h1>
                 </div>
               </Layer>
             )}
@@ -1005,20 +1075,61 @@ function NotificationInboxList(props: {
                   <Layer depth={2}>
                     <div
                       class={cn(
-                        'flex items-center',
+                        'my-2 flex items-center px-2',
                         row.label === currentHeader() &&
-                          'invisible pointer-events-none'
+                          'invisible h-px overflow-hidden pointer-events-none'
                       )}
                     >
-                      <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
-                        <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-                        <h1 class="text-xs font-medium text-ink-extra-muted">
-                          {row.label}
-                        </h1>
-                      </header>
-                      <div class="w-full h-px bg-edge-muted" />
+                      <h1 class="text-base text-ink/50">{row.label}</h1>
                     </div>
                   </Layer>
+                );
+              }
+
+              if (row.type === 'group-controls') {
+                const hasMore = row.visibleCount < row.totalCount;
+                const canCollapse = row.visibleCount > 0;
+                return (
+                  <div class="ml-8 flex gap-2 pl-2 py-2">
+                    <Show when={hasMore}>
+                      <Button
+                        class="rounded-full bg-surface py-1 text-xs text-ink-muted"
+                        depth={1}
+                        size="sm"
+                        variant="base"
+                        onClick={() =>
+                          setVisibleGroupItemCounts((counts) => ({
+                            ...counts,
+                            [row.item.id]: Math.min(
+                              row.visibleCount + 3,
+                              row.totalCount
+                            ),
+                          }))
+                        }
+                      >
+                        <CaretDownIcon class="size-3" />
+                        See {Math.min(3, row.totalCount - row.visibleCount)}{' '}
+                        more
+                      </Button>
+                    </Show>
+                    <Show when={canCollapse || !hasMore}>
+                      <Button
+                        class="rounded-full bg-surface py-1 text-xs text-ink-muted"
+                        depth={1}
+                        size="sm"
+                        variant="base"
+                        onClick={() =>
+                          setVisibleGroupItemCounts((counts) => ({
+                            ...counts,
+                            [row.item.id]: 0,
+                          }))
+                        }
+                      >
+                        <CaretUpIcon class="size-3" />
+                        {hasMore ? 'Collapse' : 'See less'}
+                      </Button>
+                    </Show>
+                  </div>
                 );
               }
 
@@ -1049,12 +1160,45 @@ function NotificationInboxList(props: {
                   entityName: document.name,
                 });
               };
+              const groupControls = () => {
+                if (
+                  props.layoutMode !== 'action-location' ||
+                  row.depth > 0 ||
+                  !row.item.subItems?.length
+                ) {
+                  return undefined;
+                }
+
+                const visibleCount = visibleGroupItemCount(row.item);
+                if (visibleCount > 0) return undefined;
+
+                return {
+                  hasMore: true,
+                  canCollapse: false,
+                  remainingCount: row.item.subItems.length,
+                  onSeeMore: () =>
+                    setVisibleGroupItemCounts((counts) => ({
+                      ...counts,
+                      [row.item.id]: Math.min(
+                        3,
+                        row.item.subItems?.length ?? 0
+                      ),
+                    })),
+                  onCollapse: () =>
+                    setVisibleGroupItemCounts((counts) => ({
+                      ...counts,
+                      [row.item.id]: 0,
+                    })),
+                };
+              };
 
               return (
                 <div
                   class={cn(
-                    'pb-1.5',
-                    row.depth > 0 && 'ml-2 border-l border-edge-muted pl-4'
+                    row.depth > 0 &&
+                      (props.layoutMode === 'action-location'
+                        ? 'ml-8 pl-2'
+                        : 'ml-2 border-l border-edge-muted pl-4')
                   )}
                 >
                   <InboxItem.Root
@@ -1063,10 +1207,28 @@ function NotificationInboxList(props: {
                     item={row.item}
                     selected={props.selectedItem?.id === row.item.id}
                   >
-                    <InboxItemInlineTypeLayout
-                      onClick={onItemClick}
-                      onSelectRelatedDocument={onSelectRelatedDocument}
-                    />
+                    <Show
+                      when={props.layoutMode === 'action-location'}
+                      fallback={
+                        <InboxItemInlineTypeLayout
+                          onClick={onItemClick}
+                          onSelectRelatedDocument={onSelectRelatedDocument}
+                          onToggleExpanded={() =>
+                            setExpanded(row.item, !isExpanded(row.item))
+                          }
+                        />
+                      }
+                    >
+                      <InboxItemActionLocationLayout
+                        groupControls={groupControls()}
+                        nested={row.depth > 0}
+                        onClick={onItemClick}
+                        onSelectRelatedDocument={onSelectRelatedDocument}
+                        onToggleExpanded={() =>
+                          setExpanded(row.item, !isExpanded(row.item))
+                        }
+                      />
+                    </Show>
                   </InboxItem.Root>
                 </div>
               );
@@ -1085,6 +1247,7 @@ export function NotificationInbox2() {
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
   const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
   const [inboxMode, setInboxMode] = createSignal<InboxMode>('signal');
+  const [layoutMode, setLayoutMode] = createSignal<InboxLayoutMode>('inline');
   const hiddenTags = createMemo(() => {
     const ids = new Set(hiddenFilterIds());
     return new Set(
@@ -1210,8 +1373,10 @@ export function NotificationInbox2() {
               groups={groups()}
               hiddenFilterIds={hiddenFilterIds()}
               inboxMode={inboxMode()}
+              layoutMode={layoutMode()}
               readFilter={readFilter()}
               onInboxModeChange={setInboxMode}
+              onLayoutModeChange={setLayoutMode}
               onLoadMore={() => {
                 if (!soupQuery.hasNextPage || soupQuery.isFetchingNextPage) {
                   return;

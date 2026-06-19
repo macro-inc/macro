@@ -43,6 +43,7 @@ export interface InboxItem {
   entityType?: EntityData['type'];
   entitySubType?: string;
   entityName?: string;
+  channelType?: string;
   senderId?: string;
   senderName?: string;
   action?: string;

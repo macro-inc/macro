@@ -14,6 +14,7 @@ import GithubIcon from '@icon/mcp-github.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import BellIcon from '@phosphor-icons/core/regular/bell.svg?component-solid';
+import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import ChatIcon from '@phosphor-icons/core/regular/chat.svg?component-solid';
 import EnvelopeIcon from '@phosphor-icons/core/regular/envelope.svg?component-solid';
 import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
@@ -23,7 +24,7 @@ import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
-import { Avatar, Dropdown, Layer } from '@ui';
+import { Avatar, cn, Dropdown, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -623,7 +624,7 @@ function RelatedDocuments(props: {
   return (
     <Show when={first}>
       {(document) => (
-        <div class="flex min-w-0 items-center gap-1">
+        <div class="mt-0.5 flex min-w-0 items-center gap-1">
           <RelatedDocumentPill document={document()} />
           <Show when={rest.length > 0}>
             <Dropdown placement="bottom-start" gutter={4}>
@@ -835,15 +836,35 @@ function ActionRow() {
   );
 }
 
-function TimestampColumn() {
-  const { item } = useInboxItem();
+function TimestampColumn(props: { onToggleExpanded?: () => void }) {
+  const { expanded, item } = useInboxItem();
+  const grouped = () => Boolean(item().subItems?.length);
 
   return (
-    <div class="flex h-full flex-col items-end pt-0.5">
+    <div class="flex h-full flex-col items-end justify-between pt-0.5">
       <Show when={item().timestamp}>
         {(timestamp) => (
           <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
         )}
+      </Show>
+      <Show when={grouped()}>
+        <button
+          type="button"
+          class="grid size-5 place-items-center rounded text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+          aria-label={expanded() ? 'Collapse group' : 'Expand group'}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onToggleExpanded?.();
+          }}
+        >
+          <CaretDownIcon
+            class={cn(
+              'size-3 transition-transform',
+              expanded() && 'rotate-180'
+            )}
+          />
+        </button>
       </Show>
     </div>
   );
@@ -853,6 +874,7 @@ export function InboxItemInlineTypeLayout(
   props: {
     onClick?: (event: MouseEvent) => void;
     onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
+    onToggleExpanded?: () => void;
   } = {}
 ) {
   return (
@@ -872,7 +894,7 @@ export function InboxItemInlineTypeLayout(
               />
             </div>
           </div>
-          <TimestampColumn />
+          <TimestampColumn onToggleExpanded={props.onToggleExpanded} />
         </div>
       </InboxItem.Body>
     </InboxItem.Content>
