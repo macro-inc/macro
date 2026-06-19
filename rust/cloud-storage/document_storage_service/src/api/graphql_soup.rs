@@ -1,7 +1,12 @@
 use crate::api::context::{ApiContext, EntityAccessService};
 use async_graphql::{Response, ServerError, http::GraphiQLSource};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{Router, extract::State, response::Html, routing::get};
+use axum::{
+    Router,
+    extract::{OriginalUri, State},
+    response::Html,
+    routing::get,
+};
 use axum_extra::extract::Cached;
 use email::domain::ports::EmailService;
 use entity_access::{
@@ -14,12 +19,8 @@ pub(crate) fn router() -> Router<ApiContext> {
     Router::new().route("/soup/graphql", get(graphiql).post(handler))
 }
 
-async fn graphiql() -> Html<String> {
-    Html(
-        GraphiQLSource::build()
-            .endpoint("/items/soup/graphql")
-            .finish(),
-    )
+async fn graphiql(OriginalUri(uri): OriginalUri) -> Html<String> {
+    Html(GraphiQLSource::build().endpoint(uri.path()).finish())
 }
 
 async fn handler(
