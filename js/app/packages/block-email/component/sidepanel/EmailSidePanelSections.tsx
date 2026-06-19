@@ -1,7 +1,9 @@
 import { SidePanel } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
+import { References } from '@core/component/References';
 import type { Property } from '@property/types';
-import { Suspense } from 'solid-js';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import { Show, Suspense } from 'solid-js';
 import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
@@ -45,7 +47,37 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
           />
         </Suspense>
       </SidePanel.Section>
+      <ReferencesSectionConditional threadId={props.threadId} />
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// References Section (conditional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReferencesSectionConditional(props: { threadId: string }) {
+  const references = useAttachmentReferencesQuery(
+    () => props.threadId,
+    () => 'email'
+  );
+
+  const count = () => references.data?.length ?? 0;
+
+  return (
+    <Show when={count() > 0}>
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={50}
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
+          <div class="text-xs">
+            <References documentId={props.threadId} entityType="email" />
+          </div>
+        </Suspense>
+      </SidePanel.Section>
+    </Show>
   );
 }
 
