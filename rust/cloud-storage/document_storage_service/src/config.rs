@@ -3,11 +3,10 @@ pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
+
+/// DOC COMMENT FOR TESTING
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
-                                                                         //
-                                                                         //
-                                                                         //
 
 env_vars! {
     pub struct DatabaseUrl;
