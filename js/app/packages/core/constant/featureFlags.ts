@@ -337,6 +337,11 @@ export const ENABLE_PR_DISCUSSION_INPUT = resolveFeatureFlag(
   false
 );
 
+export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
+  'USE_MACRO_PR_SUMMARY_BLOCK',
+  false
+);
+
 // skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
 // can also be overridden via VITE_ENABLE_TEAMS env var
 export const ENABLE_TEAMS_OVERRIDE =

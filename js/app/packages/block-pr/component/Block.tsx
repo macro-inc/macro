@@ -7,14 +7,7 @@ import {
 import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { cn, Layer, Scroll } from '@ui';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  type JSX,
-  onMount,
-  Show,
-} from 'solid-js';
+import { type Accessor, createMemo, Show } from 'solid-js';
 
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import {
@@ -29,7 +22,6 @@ import {
 } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
 import { prDisplayName } from '../util/prKey';
-import { logPrLoading } from '../util/prLoadingLog';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -43,10 +35,6 @@ import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 export default function PrBlock() {
   const blockId = useBlockId();
 
-  logPrLoading('PrBlock render', {
-    blockId,
-  });
-
   return (
     <Show when={blockId}>
       {(id) => <PrBlockContent foreignEntityId={id()} />}
@@ -55,12 +43,6 @@ export default function PrBlock() {
 }
 
 function PrBlockContent(props: { foreignEntityId: string }) {
-  onMount(() => {
-    logPrLoading('PrBlockContent mounted', {
-      foreignEntityId: props.foreignEntityId,
-    });
-  });
-
   const foreignEntityQuery = usePrForeignEntityQuery(
     () => props.foreignEntityId
   );
@@ -75,28 +57,6 @@ function PrBlockContent(props: { foreignEntityId: string }) {
   const prRef = createMemo(() => foreignEntityData()?.prRef);
   const pullRequest = createMemo(() => foreignEntityData()?.pullRequest);
 
-  createEffect(() => {
-    logPrLoading('foreign entity query state', {
-      id: props.foreignEntityId,
-      status: foreignEntityQuery.status,
-      fetchStatus: foreignEntityQuery.fetchStatus,
-      isPending: foreignEntityQuery.isPending,
-      isFetching: foreignEntityQuery.isFetching,
-      isSuccess: foreignEntityQuery.isSuccess,
-      isError: foreignEntityQuery.isError,
-      error: describeError(foreignEntityQuery.error),
-      hasData: !!foreignEntityData(),
-      dataUpdatedAt: foreignEntityQuery.dataUpdatedAt,
-    });
-  });
-
-  createEffect(() => {
-    logPrLoading('resolved PR data for render', {
-      source: 'foreign-entity',
-      fields: describePullRequest(pullRequest()),
-    });
-  });
-
   const loadFailed = createMemo(
     () => !pullRequest() && !!foreignEntityQuery.error
   );
@@ -109,10 +69,7 @@ function PrBlockContent(props: { foreignEntityId: string }) {
       <SidePanel.Layout>
         <PrSidePanelSections enrichment={pullRequest} />
         <div class="flex flex-col size-full min-w-0">
-          <Show
-            when={prRef()}
-            fallback={<LoggedFallback name="split-header" />}
-          >
+          <Show when={prRef()}>
             {(ref) => (
               <PrSplitHeader prRef={ref()} enrichment={pullRequest()} />
             )}
@@ -124,7 +81,6 @@ function PrBlockContent(props: { foreignEntityId: string }) {
                 when={prRef()}
                 fallback={
                   <>
-                    <LoggedFallback name="content" />
                     <PrTitleSkeleton />
                     <div class="spacer h-3" />
                     <PrMetadataSkeleton />
@@ -153,41 +109,6 @@ function PrBlockContent(props: { foreignEntityId: string }) {
       </SidePanel.Layout>
     </div>
   );
-}
-
-function describeError(error: unknown) {
-  if (!error) return null;
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-  return String(error);
-}
-
-function describePullRequest(
-  pullRequest: GithubPullRequestWithDetails | undefined
-) {
-  if (!pullRequest) return null;
-  return {
-    githubKey: pullRequest.githubKey,
-    name: pullRequest.name,
-    status: pullRequest.status,
-    hasDescription: !!pullRequest.description,
-    authorLogin: pullRequest.authorLogin,
-    checks: pullRequest.checks?.length ?? null,
-    comments: pullRequest.comments?.length ?? null,
-    additions: pullRequest.additions,
-    deletions: pullRequest.deletions,
-  };
-}
-
-function LoggedFallback(props: { name: string; children?: JSX.Element }) {
-  onMount(() => {
-    logPrLoading('loading fallback mounted', { name: props.name });
-  });
-  return <>{props.children}</>;
 }
 
 function PrTitle(props: {

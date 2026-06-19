@@ -12,6 +12,7 @@ import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { seedPrBlockData } from '@block-pr/data/queries';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -20,6 +21,7 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
+import { openExternalUrl } from '@core/util/url';
 import {
   type EntityData,
   getSnippetHit,
@@ -341,19 +343,23 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   if (isGithubPrEntity(entity)) {
-    // Seed the PR block with the entity's stored metadata so it renders
-    // without needing a personal GitHub link.
-    const prBlockId = seedPrBlockData(entity);
-    splitManager.openWithSplit(
-      { type: 'pr', id: prBlockId },
-      {
-        referredFrom: options.referredFrom,
-        activate: true,
-        preferNewSplit: openInNewSplit,
-        handle: splitHandle,
-        mergeHistory,
-      }
-    );
+    if (USE_MACRO_PR_SUMMARY_BLOCK) {
+      // Seed the PR block with the entity's stored metadata so it renders
+      // without needing a personal GitHub link.
+      const prBlockId = seedPrBlockData(entity);
+      splitManager.openWithSplit(
+        { type: 'pr', id: prBlockId },
+        {
+          referredFrom: options.referredFrom,
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          handle: splitHandle,
+          mergeHistory,
+        }
+      );
+    } else {
+      openExternalUrl(entity.metadata.url);
+    }
     return;
   }
   if (entity.type === 'foreign') return;

@@ -14,7 +14,6 @@ import {
   prHtmlUrl,
   toGithubKey,
 } from '../util/prKey';
-import { logPrLoading } from '../util/prLoadingLog';
 
 const PR_STALE_TIME = 60 * 1000;
 const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
@@ -114,14 +113,6 @@ function prForeignEntityDataFromForeignEntity(
 export function seedPrBlockData(entity: GithubPullRequestEntity): string {
   const { owner, repo, number } = entity.metadata;
   const ref: PrRef = { owner, repo, number };
-  logPrLoading('seedPrBlockData called', {
-    ref,
-    storedForId: entity.storedForId,
-    hasName: !!entity.metadata.name,
-    hasStatus: !!entity.metadata.status,
-    checks: entity.metadata.checks?.length ?? null,
-    comments: entity.metadata.comments?.length ?? null,
-  });
   queryClient.setQueryData<PrForeignEntityData>(
     prForeignEntityQueryKey(entity.id),
     prForeignEntityDataFromParts({
@@ -143,10 +134,6 @@ export function seedPrBlockData(entity: GithubPullRequestEntity): string {
       },
     })
   );
-  logPrLoading('seedPrBlockData wrote foreign entity cache', {
-    id: entity.id,
-    ref,
-  });
   return entity.id;
 }
 
@@ -156,21 +143,10 @@ export function usePrForeignEntityQuery(id: Accessor<string>) {
     return {
       queryKey: prForeignEntityQueryKey(currentId),
       queryFn: async (): Promise<PrForeignEntityData> => {
-        logPrLoading('foreign entity queryFn start', { id: currentId });
         const entity = await throwOnErr(() =>
           storageServiceClient.getForeignEntity({ id: currentId })
         );
-        const data = prForeignEntityDataFromForeignEntity(entity);
-        logPrLoading('foreign entity queryFn success', {
-          id: currentId,
-          githubKey: data.pullRequest.githubKey,
-          hasName: !!data.pullRequest.name,
-          hasDescription: !!data.pullRequest.description,
-          authorLogin: data.pullRequest.authorLogin,
-          checks: data.pullRequest.checks?.length ?? null,
-          comments: data.pullRequest.comments?.length ?? null,
-        });
-        return data;
+        return prForeignEntityDataFromForeignEntity(entity);
       },
       staleTime: PR_STALE_TIME,
       retry: 1,

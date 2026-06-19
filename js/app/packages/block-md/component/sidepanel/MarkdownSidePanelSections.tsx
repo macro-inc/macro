@@ -14,10 +14,12 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
@@ -509,10 +511,10 @@ function GithubSectionConditional(props: {
                     </Show>
                     <button
                       type="button"
-                      disabled={!pr.foreignEntityId}
+                      disabled={!pr.url}
                       class={cn(
                         'inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink',
-                        !pr.foreignEntityId &&
+                        !pr.url &&
                           'cursor-not-allowed text-ink-placeholder hover:text-ink-placeholder'
                       )}
                       title={
@@ -521,14 +523,17 @@ function GithubSectionConditional(props: {
                           : pr.displayName
                       }
                       onClick={() => {
-                        if (!pr.foreignEntityId) return;
-                        openWithSplit(
-                          {
-                            type: 'pr',
-                            id: pr.foreignEntityId,
-                          },
-                          { referredFrom: null }
-                        );
+                        if (USE_MACRO_PR_SUMMARY_BLOCK && pr.foreignEntityId) {
+                          openWithSplit(
+                            {
+                              type: 'pr',
+                              id: pr.foreignEntityId,
+                            },
+                            { referredFrom: null }
+                          );
+                          return;
+                        }
+                        if (pr.url) openExternalUrl(pr.url);
                       }}
                     >
                       <GithubIcon

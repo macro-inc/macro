@@ -14,16 +14,6 @@ import type { Accessor } from 'solid-js';
 import { documentGithubPullRequestsKeys } from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
-const PR_QUERY_LOG_PREFIX = '[pr-block:loading]';
-
-function logDocumentPrLoading(message: string, details?: unknown) {
-  const time = Math.round(performance.now());
-  if (details === undefined) {
-    console.log(PR_QUERY_LOG_PREFIX, `${time}ms`, message);
-    return;
-  }
-  console.log(PR_QUERY_LOG_PREFIX, `${time}ms`, message, details);
-}
 
 type DocumentIdInput =
   | string
@@ -128,53 +118,23 @@ export async function fetchDocumentGithubPullRequests(
   documentId: string,
   options?: FetchDocumentGithubPullRequestsOptions
 ): Promise<GithubPullRequestsWithDetailsResponse> {
-  logDocumentPrLoading('document PR fetch start', { documentId });
   const rawResponse = await throwOnErr(() =>
     storageServiceClient.getDocumentGithubPullRequests({ documentId })
   );
-  logDocumentPrLoading('document PR storage response', {
-    documentId,
-    count: rawResponse.pullRequests.length,
-    hasStoredEnrichedData: hasStoredEnrichedGithubPullRequests(rawResponse),
-    pullRequests: rawResponse.pullRequests.map((pullRequest) => ({
-      githubKey: pullRequest.githubKey,
-      hasName: !!pullRequest.name,
-      status: pullRequest.status,
-      checks: pullRequest.checks?.length ?? null,
-      comments: pullRequest.comments?.length ?? null,
-      additions: pullRequest.additions,
-      deletions: pullRequest.deletions,
-    })),
-  });
 
   if (rawResponse.pullRequests.length === 0) {
-    logDocumentPrLoading('document PR fetch returning empty storage response', {
-      documentId,
-    });
     return rawResponse;
   }
 
   if (hasStoredEnrichedGithubPullRequests(rawResponse)) {
-    logDocumentPrLoading('document PR setting intermediate storage cache', {
-      documentId,
-      count: rawResponse.pullRequests.length,
-    });
     options?.onInitialResponse?.(rawResponse);
   }
 
-  logDocumentPrLoading('document PR enrichment request start', {
-    documentId,
-    count: rawResponse.pullRequests.length,
-  });
   const enrichedResponse = await authServiceClient.enrichGithubPullRequests({
     pullRequests: rawResponse.pullRequests.map(toGithubPullRequestRef),
   });
 
   if (enrichedResponse.isErr()) {
-    logDocumentPrLoading('document PR enrichment failed; returning storage', {
-      documentId,
-      codes: enrichedResponse.error.map((error) => String(error.code)),
-    });
     return rawResponse;
   }
 
@@ -192,18 +152,6 @@ export async function fetchDocumentGithubPullRequests(
         )
     ),
   };
-  logDocumentPrLoading('document PR enrichment success; returning merged', {
-    documentId,
-    count: mergedResponse.pullRequests.length,
-    pullRequests: mergedResponse.pullRequests.map((pullRequest) => ({
-      githubKey: pullRequest.githubKey,
-      hasName: !!pullRequest.name,
-      hasDescription: !!pullRequest.description,
-      authorLogin: pullRequest.authorLogin,
-      checks: pullRequest.checks?.length ?? null,
-      comments: pullRequest.comments?.length ?? null,
-    })),
-  });
   return mergedResponse;
 }
 
@@ -219,12 +167,6 @@ export function useDocumentGithubPullRequestsQuery(
     const queryKey = currentDocumentId
       ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
       : documentGithubPullRequestsKeys.list._def;
-
-    logDocumentPrLoading('document PR query options evaluated', {
-      documentId: currentDocumentId,
-      enabled: currentEnabled,
-      queryKey,
-    });
 
     return {
       queryKey,

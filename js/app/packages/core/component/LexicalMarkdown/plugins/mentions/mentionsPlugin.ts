@@ -9,6 +9,7 @@ import {
   $createDocumentMentionNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
+  $createPullRequestMentionNode,
   $createSnapshotNode,
   $createThemeMentionNode,
   $createUserMentionNode,
@@ -18,6 +19,7 @@ import {
   $isDateMentionNode,
   $isDocumentMentionNode,
   $isGroupMentionNode,
+  $isPullRequestMentionNode,
   $isUserMentionNode,
   $removeInlineSearch,
   type ContactMentionInfo,
@@ -30,6 +32,8 @@ import {
   GroupMentionNode,
   InlineSearchNode,
   InlineSearchNodesType,
+  type PullRequestMentionInfo,
+  PullRequestMentionNode,
   type SnapshotNodeInfo,
   type ThemeMentionInfo,
   type UserMentionInfo,
@@ -105,6 +109,9 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
 
+export const INSERT_PR_MENTION_COMMAND: LexicalCommand<PullRequestMentionInfo> =
+  createCommand('INSERT_PR_MENTION_COMMAND');
+
 export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
   createCommand('INSERT_THEME_MENTION_COMMAND');
 
@@ -122,6 +129,7 @@ export type ItemMention = {
     | 'unknown'
     | 'color'
     | 'call'
+    | 'foreign'
     | 'group'
     | 'automation'
     | 'crm_company'
@@ -140,12 +148,14 @@ function $isMentionNode(
   | DocumentMentionNode
   | ContactMentionNode
   | DateMentionNode
+  | PullRequestMentionNode
   | GroupMentionNode {
   return (
     $isUserMentionNode(node) ||
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
+    $isPullRequestMentionNode(node) ||
     $isGroupMentionNode(node)
   );
 }
@@ -214,6 +224,13 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
       itemType: 'group',
       itemId: node.getGroupAlias(),
       groupAlias: node.getGroupAlias(),
+    };
+  } else if ($isPullRequestMentionNode(node)) {
+    return {
+      itemType: 'foreign',
+      itemId: node.getId(),
+      fileType: 'github_pull_request',
+      documentName: node.getLabel(),
     };
   } else {
     return {
@@ -301,6 +318,7 @@ function registerMentionsPlugin(
       GroupMentionNode,
       ContactMentionNode,
       DateMentionNode,
+      PullRequestMentionNode,
       InlineSearchNode,
     ])
   ) {
@@ -476,6 +494,27 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const mentionNode = $createGroupMentionNode(payload);
+
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_PR_MENTION_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const mentionNode = $createPullRequestMentionNode(payload);
+
+          if (payload.mentionUuid) {
+            mentionNode.setMentionUuid(payload.mentionUuid);
+          }
 
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
@@ -824,6 +863,33 @@ function registerMentionsPlugin(
                 groupAlias: node.getGroupAlias(),
               });
             }
+          }
+        }
+        updateMentionsSignal();
+      }
+    ),
+
+    editor.registerMutationListener(
+      PullRequestMentionNode,
+      (mutatedNodes, { prevEditorState }) => {
+        for (const [nodeKey, mutation] of mutatedNodes) {
+          const node = nodeByKey(
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
+            nodeKey
+          ) as PullRequestMentionNode | null;
+
+          if (!node) continue;
+
+          if (mutation === 'destroyed') {
+            const mentionUuid = node.getMentionUuid();
+            if (mentionUuid && sourceDocumentId) {
+              untrackMention(sourceDocumentId, mentionUuid);
+            }
+            onRemoveMention?.($mentionItemFromNode(node));
+          } else if (mutation === 'created') {
+            onCreateMention?.($mentionItemFromNode(node));
           }
         }
         updateMentionsSignal();
