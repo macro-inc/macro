@@ -7,6 +7,7 @@ const SERVICE_NAMES = [
   'contacts-service',
   'cloud-storage-service',
   'search-processing-service',
+  'unfurl-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {
