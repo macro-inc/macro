@@ -799,6 +799,7 @@
             {
               buildInputs = shellTools ++ libraries;
               PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
@@ -817,6 +818,7 @@
             {
               buildInputs = jsPackages ++ jsLibraries;
               PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
+              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath jsLibraries}:$LD_LIBRARY_PATH";

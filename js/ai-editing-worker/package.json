@@ -1,0 +1,29 @@
+{
+	"name": "ai-editing-worker",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --env local",
+		"deploy": "wrangler deploy",
+		"deploy:dev": "wrangler deploy --env dev",
+		"deploy:prod": "wrangler deploy --env prod",
+		"type-check": "tsc --noEmit --project tsconfig.json"
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.85",
+		"@ai-sdk/cerebras": "^2.0.57",
+		"@ai-sdk/openai": "^3.0.73",
+		"ai": "^6.0.207",
+		"envsafe": "^2.0.3",
+		"hono": "^4.6.20",
+		"quickjs-emscripten": "^0.31.0",
+		"yargs": "^18.0.0",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.3",
+		"@types/yargs": "^17.0.35",
+		"wrangler": "^4.103.0"
+	}
+}

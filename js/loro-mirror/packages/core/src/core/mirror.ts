@@ -512,6 +512,14 @@ export class Mirror<S extends SchemaType> {
       if (this.options.debug) {
         console.log('changes:', JSON.stringify(changes, null, 2));
       }
+      // Log text changes to help diagnose concurrent-edit overwrite issues
+      for (const change of changes) {
+        if (change.kind === 'insert' && typeof change.value === 'string') {
+          const prevText = JSON.stringify(currentDocState).slice(0, 120);
+          const newText = String(change.value).slice(0, 120);
+          console.debug(`[mirror:updateLoro] text change on key=${change.key} prevPreview=${prevText} newPreview=${newText}`);
+        }
+      }
       // Apply the changes to the Loro document
       this.applyChangesToLoro(changes);
 

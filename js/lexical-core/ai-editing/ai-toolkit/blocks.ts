@@ -68,12 +68,13 @@ export function $setBlockType(
   return replacement;
 }
 
-/** Rewrite a block's inline content to plain text, keeping its type and id. */
+/** Rewrite a block's inline content to plain text, keeping its type and id. Always strips any inline formatting (bold, italic, underline, etc.) on the kept node. */
 export function $setText(block: ElementNode, text: string): void {
   const children = block.getChildren();
   const existing = children.find($isTextNode) as TextNode | undefined;
   if (existing) {
     existing.setTextContent(text);
+    existing.setFormat(0);
     for (const child of children) {
       if (child !== existing) child.remove();
     }

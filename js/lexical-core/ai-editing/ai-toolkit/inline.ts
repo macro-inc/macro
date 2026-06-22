@@ -2,6 +2,7 @@ import { $createLinkNode } from '@lexical/link';
 import { $createMarkNode } from '@lexical/mark';
 import {
   $createTextNode,
+  $isTextNode,
   type ElementNode,
   type LexicalNode,
   type TextFormatType,
@@ -80,6 +81,13 @@ export function $clearFormat(
   });
 }
 
+/** Strip all inline formatting (bold, italic, underline, etc.) from every text node in a block. */
+export function $stripFormat(block: ElementNode): void {
+  for (const node of collectTextNodes(block)) {
+    node.setFormat(0);
+  }
+}
+
 /** Set (or clear) formatting on every text node in a block. Omit `format` to strip all formatting. */
 export function $setAllFormat(block: ElementNode, format?: InlineFormat): void {
   for (const node of collectTextNodes(block)) {
@@ -92,31 +100,75 @@ export function $setAllFormat(block: ElementNode, format?: InlineFormat): void {
   }
 }
 
-/** Literal text replace, preserving formatting of the matched node. */
+/**
+ * Literal text replace. Mutates matched text nodes IN PLACE (via
+ * `setTextContent`) so their durable ids survive — the diff then sees a clean
+ * `setText{from,to}` instead of node churn, which is what lets the replay
+ * highlight/animate the exact changed span. Like the formatting helpers it
+ * works per text node, so a needle straddling two nodes isn't matched.
+ */
 export function $replaceString(
   block: ElementNode,
   find: string,
   replace: string,
   scope?: Scope
 ): number {
-  return mutateMatches(block, find, scope, (matchNode) => {
-    matchNode.setTextContent(replace);
-  });
+  if (find.length === 0) return 0;
+  const all = scope?.all === true;
+  const nth = scope?.nth;
+  let occ = 0; // global, 1-based occurrence counter across the block's text nodes
+  let count = 0;
+  for (const tn of collectTextNodes(block)) {
+    const content = tn.getTextContent();
+    if (!content.includes(find)) continue;
+    let next = '';
+    let i = 0;
+    let changed = false;
+    while (i < content.length) {
+      if (content.startsWith(find, i)) {
+        occ++;
+        const take = all || (nth == null ? occ === 1 : occ === nth);
+        if (take) {
+          next += replace;
+          changed = true;
+          count++;
+        } else {
+          next += find;
+        }
+        i += find.length;
+      } else {
+        next += content[i];
+        i++;
+      }
+    }
+    if (!changed) continue;
+    if (next.length === 0) tn.remove();
+    else tn.setTextContent(next);
+  }
+  return count;
 }
 
-/** Append plain text to the end of a block. */
+/** Append plain text to the end of a block. Extends the trailing plain text node
+ *  in place (preserving its id) when possible, else adds a new node. */
 export function $appendText(block: ElementNode, text: string): void {
-  block.append($createTextNode(text));
+  const last = block.getLastChild();
+  if ($isTextNode(last) && last.getFormat() === 0) {
+    last.setTextContent(last.getTextContent() + text);
+  } else {
+    block.append($createTextNode(text));
+  }
 }
 
-/** Prepend plain text to the start of a block. */
+/** Prepend plain text to the start of a block. Extends the leading plain text
+ *  node in place (preserving its id) when possible, else adds a new node. */
 export function $prependText(block: ElementNode, text: string): void {
-  const node = $createTextNode(text);
   const first = block.getFirstChild();
-  if (first) {
-    first.insertBefore(node);
+  if ($isTextNode(first) && first.getFormat() === 0) {
+    first.setTextContent(text + first.getTextContent());
+  } else if (first) {
+    first.insertBefore($createTextNode(text));
   } else {
-    block.append(node);
+    block.append($createTextNode(text));
   }
 }
 

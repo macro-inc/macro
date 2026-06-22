@@ -310,7 +310,10 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
   );
 }
 
-export function LexicalStateDebugger(props: { state: EditorState; editor: LexicalEditor }) {
+export function LexicalStateDebugger(props: {
+  state: EditorState;
+  editor: LexicalEditor;
+}) {
   const state = createMemo(() => {
     let nodes = EditorStateToNodeList(props.state);
     const selection = EditorStateToSelection(props.state);
@@ -325,106 +328,106 @@ export function LexicalStateDebugger(props: { state: EditorState; editor: Lexica
   return (
     <div class="font-mono text-ink bg-surface text-xs size-full min-h-0 flex flex-row overflow-hidden">
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
-      <Layer depth={0}>
-        <div class="bg-surface m-2 min-h-0 flex-1 overflow-y-auto select-children rounded-md p-1 border border-edge">
-          <div class="px-1">
-            <For each={state().nodeList}>
-              {(node) => {
-                return (
-                  <div
-                    style={{ 'margin-left': `${node.depth * 24}px` }}
-                    class="flex relative"
-                  >
-                    <span>
-                      {' '}
-                      {node.depth > 0 ? '↳' : ''}[{node.key}]
-                    </span>
-                    <Show when={node.id}>
-                      <span class="px-1 text-ink-extra-muted">{node.id}</span>
-                    </Show>
-                    <Show when={node.peerId}>
-                      <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
-                        Peer ID: {node.peerId}
-                      </span>
-                    </Show>
-                    <Show
-                      when={node.sharedPeers && node.sharedPeers.length > 0}
+        <Layer depth={0}>
+          <div class="bg-surface m-2 min-h-0 flex-1 overflow-y-auto select-children rounded-md p-1 border border-edge">
+            <div class="px-1">
+              <For each={state().nodeList}>
+                {(node) => {
+                  return (
+                    <div
+                      style={{ 'margin-left': `${node.depth * 24}px` }}
+                      class="flex relative"
                     >
-                      <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
-                        <For each={node.sharedPeers}>
-                          {(id) => <span>{id}</span>}
-                        </For>
+                      <span>
+                        {' '}
+                        {node.depth > 0 ? '↳' : ''}[{node.key}]
                       </span>
-                    </Show>
-                    <span
-                      class={cn('inline-block px-1 mx-1', colors[node.type])}
-                    >
-                      {node.type}
-                    </span>
-                    <For each={node.styles}>
-                      {(style) => (
-                        <span class="bg-accent-60/15 border border-accent-60/30 text-accent-60 mx-0.5">
-                          {style}
-                        </span>
-                      )}
-                    </For>
-                    <span class="inline-block">{node.text}</span>
-                    <SelectionIndicator
-                      anchor={node.isAnchor}
-                      focus={node.isFocus}
-                      selected={node.selected}
-                      class=""
-                    />
-                    <Show
-                      when={
-                        node.type === 'mark' || node.type === 'comment-mark'
-                      }
-                    >
-                      <span class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5">
-                        {markNodeKeysToIDs.get(node.key)?.join(', ') ?? ''}
-                      </span>
-                      <Show when={node.type === 'comment-mark'}>
-                        {(_) => {
-                          const commentNode = () =>
-                            $getNodeByKey(
-                              node.key,
-                              props.state
-                            ) as CommentNode | null;
-                          return (
-                            <Show when={commentNode()}>
-                              {(commentNode) => (
-                                <span
-                                  class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5"
-                                  classList={{
-                                    'bg-accent-30/30':
-                                      commentNode().getIsDraft(),
-                                    'bg-accent-30/5':
-                                      !commentNode().getIsDraft(),
-                                  }}
-                                >
-                                  {commentNode().getThreadId() ?? 'NO # ID'}
-                                </span>
-                              )}
-                            </Show>
-                          );
-                        }}
+                      <Show when={node.id}>
+                        <span class="px-1 text-ink-extra-muted">{node.id}</span>
                       </Show>
-                    </Show>
-                  </div>
-                );
-              }}
-            </For>
+                      <Show when={node.peerId}>
+                        <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
+                          Peer ID: {node.peerId}
+                        </span>
+                      </Show>
+                      <Show
+                        when={node.sharedPeers && node.sharedPeers.length > 0}
+                      >
+                        <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
+                          <For each={node.sharedPeers}>
+                            {(id) => <span>{id}</span>}
+                          </For>
+                        </span>
+                      </Show>
+                      <span
+                        class={cn('inline-block px-1 mx-1', colors[node.type])}
+                      >
+                        {node.type}
+                      </span>
+                      <For each={node.styles}>
+                        {(style) => (
+                          <span class="bg-accent-60/15 border border-accent-60/30 text-accent-60 mx-0.5">
+                            {style}
+                          </span>
+                        )}
+                      </For>
+                      <span class="inline-block">{node.text}</span>
+                      <SelectionIndicator
+                        anchor={node.isAnchor}
+                        focus={node.isFocus}
+                        selected={node.selected}
+                        class=""
+                      />
+                      <Show
+                        when={
+                          node.type === 'mark' || node.type === 'comment-mark'
+                        }
+                      >
+                        <span class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5">
+                          {markNodeKeysToIDs.get(node.key)?.join(', ') ?? ''}
+                        </span>
+                        <Show when={node.type === 'comment-mark'}>
+                          {(_) => {
+                            const commentNode = () =>
+                              $getNodeByKey(
+                                node.key,
+                                props.state
+                              ) as CommentNode | null;
+                            return (
+                              <Show when={commentNode()}>
+                                {(commentNode) => (
+                                  <span
+                                    class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5"
+                                    classList={{
+                                      'bg-accent-30/30':
+                                        commentNode().getIsDraft(),
+                                      'bg-accent-30/5':
+                                        !commentNode().getIsDraft(),
+                                    }}
+                                  >
+                                    {commentNode().getThreadId() ?? 'NO # ID'}
+                                  </span>
+                                )}
+                              </Show>
+                            );
+                          }}
+                        </Show>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
           </div>
-        </div>
-      </Layer>
-      <Layer depth={0}>
-        <div class="bg-surface m-2 shrink-0">
-          <Selection
-            selection={state().selection}
-            class="bg-surface p-1 border border-edge rounded-md"
-          />
-        </div>
-      </Layer>
+        </Layer>
+        <Layer depth={0}>
+          <div class="bg-surface m-2 shrink-0">
+            <Selection
+              selection={state().selection}
+              class="bg-surface p-1 border border-edge rounded-md"
+            />
+          </div>
+        </Layer>
       </div>
       <div class="flex flex-col w-1/2 border-l border-edge overflow-hidden">
         <div class="flex items-center justify-between px-2 py-1 border-b border-edge shrink-0">
@@ -436,7 +439,9 @@ export function LexicalStateDebugger(props: { state: EditorState; editor: Lexica
             Copy
           </button>
         </div>
-        <pre class="flex-1 overflow-auto p-2 text-xs select-all">{jsonState()}</pre>
+        <pre class="flex-1 overflow-auto p-2 text-xs select-all">
+          {jsonState()}
+        </pre>
         <div class="flex flex-col space-y-1 border-t border-edge p-2 shrink-0">
           <span class="text-ink-extra-muted">Import JSON</span>
           <textarea

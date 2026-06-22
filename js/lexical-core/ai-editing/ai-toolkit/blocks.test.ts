@@ -2,7 +2,6 @@ import { $createParagraphNode, $createTextNode } from 'lexical';
 import { $createHeadingNode } from '@lexical/rich-text';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../plugins/nodeIdPlugin';
-import { serializeWithIds } from '../utils';
 import {
   $appendBlock,
   $blockNode,
@@ -17,9 +16,8 @@ import {
   $splitBlock,
 } from './blocks';
 import { $allById, $blockById, $byId } from './locate';
-import { edit, setup, topLevelIds } from './_test-helpers';
+import { removeLinePrefix, edit, setup, topLevelIds } from './_test-helpers';
 
-// ============================================================================
 describe('block ops', () => {
   it('$blockNode builds a heading at the requested level', () => {
     const { s } = setup('x');
@@ -38,7 +36,7 @@ describe('block ops', () => {
     edit(s, () =>
       $setBlockType(s, $blockById(s, id), () => $blockNode('heading', { level: 2 }))
     );
-    expect(serializeWithIds(s)).toBe(`## Notes {${id}|heading}`);
+    expect(removeLinePrefix(s)).toBe(`## Notes {${id}|heading}`);
     expect(topLevelIds(s)).toEqual([id]); // id preserved
   });
 
@@ -46,7 +44,7 @@ describe('block ops', () => {
     const { s, ids } = setup('ok so the launch is kinda behind');
     const id = ids[0];
     edit(s, () => $setText($blockById(s, id), 'The launch is behind schedule.'));
-    expect(serializeWithIds(s)).toBe(`The launch is behind schedule. {${id}|paragraph}`);
+    expect(removeLinePrefix(s)).toBe(`The launch is behind schedule. {${id}|paragraph}`);
   });
 
   it('$replaceBlock replaces type+content with FRESH ids', () => {
@@ -59,7 +57,7 @@ describe('block ops', () => {
       p.append($createTextNode('Behind schedule.'));
       $replaceBlock($blockById(s, oldId), h2, p);
     });
-    const out = serializeWithIds(s);
+    const out = removeLinePrefix(s);
     const lines = out.split('\n\n');
     expect(lines[0]).toMatch(/^## Status \{[^}]+\}$/);
     expect(lines[1]).toMatch(/^Behind schedule\. \{[^}]+\}$/);
@@ -86,7 +84,7 @@ describe('block ops', () => {
     const fresh = after.slice(1);
     expect(fresh).not.toContain(before[0]);
     expect(new Set(after).size).toBe(3);
-    const lines = serializeWithIds(s).split('\n\n');
+    const lines = removeLinePrefix(s).split('\n\n');
     expect(lines[1]).toMatch(/^## Recommendation /);
     expect(lines[2]).toMatch(/^Ship next week\. /);
   });
@@ -106,7 +104,7 @@ describe('block ops', () => {
     expect(after[2]).toBe(anchor); // anchor still last
     expect(after.slice(0, 2)).not.toContain(anchor);
     expect(new Set(after).size).toBe(3);
-    expect(serializeWithIds(s).split('\n\n')[0]).toMatch(/^## TL;DR /);
+    expect(removeLinePrefix(s).split('\n\n')[0]).toMatch(/^## TL;DR /);
   });
 
   it('$appendBlock adds blocks at the end with fresh ids', () => {
@@ -122,7 +120,7 @@ describe('block ops', () => {
     expect(after[0]).toBe(ids[0]);
     expect(after).toHaveLength(3);
     expect(new Set(after).size).toBe(3);
-    const lines = serializeWithIds(s).split('\n\n');
+    const lines = removeLinePrefix(s).split('\n\n');
     expect(lines[1]).toMatch(/^## Notes /);
     expect(lines[2]).toMatch(/^Follow up Friday\. /);
   });
@@ -138,7 +136,7 @@ describe('block ops', () => {
     expect(after).toHaveLength(2);
     expect(after[1]).toBe(ids[0]);
     expect(after[0]).not.toBe(ids[0]);
-    expect(serializeWithIds(s).split('\n\n')[0]).toMatch(/^# Title /);
+    expect(removeLinePrefix(s).split('\n\n')[0]).toMatch(/^# Title /);
   });
 
   it('$moveBlock (2-arg) relocates a block after another', () => {
@@ -146,7 +144,7 @@ describe('block ops', () => {
     const [decisions, , pricing] = ids;
     edit(s, () => $moveBlock($byId(s, pricing), { afterId: decisions }));
     expect(topLevelIds(s)).toEqual([decisions, pricing, ids[1]]);
-    const lines = serializeWithIds(s).split('\n\n');
+    const lines = removeLinePrefix(s).split('\n\n');
     expect(lines[0]).toMatch(/^## Decisions /);
     expect(lines[1]).toMatch(/^need to finalize pricing /);
   });
@@ -166,7 +164,7 @@ describe('block ops', () => {
       return $getId(merged);
     });
     expect(resultId).toBe(a); // first block's id preserved
-    expect(serializeWithIds(s)).toBe(`We were behind. QA hadn't started. {${a}|paragraph}`);
+    expect(removeLinePrefix(s)).toBe(`We were behind. QA hadn't started. {${a}|paragraph}`);
   });
 
   it('$splitBlock keeps first id, gives remainder a fresh id, preserves whitespace', () => {
@@ -180,7 +178,7 @@ describe('block ops', () => {
     expect(firstId).toBe(id); // first half keeps id
     expect(secondId).not.toBe(id); // remainder is fresh
     expect(secondId).toBeTruthy();
-    const lines = serializeWithIds(s).split('\n\n');
+    const lines = removeLinePrefix(s).split('\n\n');
     // whitespace preserved verbatim: the space before "Second" stays on first half
     expect(lines[0]).toBe(`First, we shipped.  {${firstId}|paragraph}`);
     expect(lines[1]).toBe(`Second, we tested. {${secondId}|paragraph}`);

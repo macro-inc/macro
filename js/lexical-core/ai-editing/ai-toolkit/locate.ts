@@ -1,8 +1,10 @@
 import {
   $getNodeByKey,
   $isElementNode,
+  $isTextNode,
   type ElementNode,
   type LexicalNode,
+  type TextNode,
 } from 'lexical';
 import type { Session } from './session';
 
@@ -35,6 +37,17 @@ export function $blockById(s: Session, id: string): ElementNode {
 /** Resolve several ids at once (each must resolve, in order). */
 export function $allById(s: Session, ids: string[]): LexicalNode[] {
   return ids.map((id) => $byId(s, id));
+}
+
+/**
+ * Resolve a text node by its XML id (the `id` attr on `<t>` elements). Use
+ * this in XML mode when you want to act on a specific text span without
+ * knowing its parent block id. Throws if the id resolves to a non-text node.
+ */
+export function $textById(s: Session, id: string): TextNode {
+  const node = $byId(s, id);
+  if (!$isTextNode(node)) throw new Error(`Node "${id}" is not a TextNode`);
+  return node;
 }
 
 /** Plain text of a node (block, list item, or inline). */

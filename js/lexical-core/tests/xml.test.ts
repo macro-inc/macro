@@ -1,25 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  fromXml as fromXmlManual,
-  type SerializedEditorState,
-  toXml as toXmlManual,
-} from '../transformers/xml-manual';
-import {
-  fromXml as fromXmlTransformer,
-  toXml as toXmlTransformer,
-} from '../transformers/xml-transformer';
-
-const impls = [
-  { name: 'manual', toXml: toXmlManual, fromXml: fromXmlManual },
-  { name: 'transformer', toXml: toXmlTransformer, fromXml: fromXmlTransformer },
-];
-
-// ---------------------------------------------------------------------------
-// Helpers for building SerializedEditorState JSON by hand. These are plain
-// objects — no headless editor required to exercise toXml / fromXml.
-// ---------------------------------------------------------------------------
+import { fromXml, type SerializedEditorState, toXml } from '../transformers/xml';
 
 function root(children: any[]): SerializedEditorState {
   return {
@@ -104,8 +86,7 @@ function normalize(state: any): any {
   return clone;
 }
 
-for (const { name, toXml, fromXml } of impls) {
-  describe(name, () => {
+describe('xml', () => {
     it('round-trips doc.json (XML stable + semantic deep-equal)', () => {
       const docPath = fileURLToPath(new URL('../doc.json', import.meta.url));
       const doc = JSON.parse(
@@ -261,15 +242,12 @@ for (const { name, toXml, fromXml } of impls) {
           'p1'
         ),
       ]);
-      // option-2 known tradeoff: string values that look like numbers (e.g. userId: '123')
-      // round-trip as numbers in the transformer impl. Acceptable for this use case.
+      // Known tradeoff: unknown-node attrs that look like numbers round-trip as numbers.
       const normalized = normalize(fromXml(toXml(state)));
       const expected = normalize(state);
-      if (name === 'transformer') {
-        (normalized.root as any).children[0].children[3].userId = String(
-          (normalized.root as any).children[0].children[3].userId
-        );
-      }
+      (normalized.root as any).children[0].children[3].userId = String(
+        (normalized.root as any).children[0].children[3].userId
+      );
       expect(normalized).toEqual(expected);
     });
 
@@ -293,8 +271,7 @@ for (const { name, toXml, fromXml } of impls) {
         },
       ]);
       const xml = toXml(state);
-      // transformer emits <snapshot id="sn1" .../>; manual emits <unknown type="snapshot" .../>
-      expect(xml).toMatch(/<(unknown type="snapshot"|snapshot) id="sn1"/);
+      expect(xml).toMatch(/<snapshot id="sn1"/);
       const back = fromXml(xml);
       expect(back).toEqual(state);
     });
@@ -323,5 +300,4 @@ for (const { name, toXml, fromXml } of impls) {
       expect(xml).toContain('&gt;');
       expect(normalize(fromXml(xml))).toEqual(normalize(state));
     });
-  });
-}
+});

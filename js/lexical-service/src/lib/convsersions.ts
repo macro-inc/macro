@@ -6,8 +6,8 @@ import {
   EXTERNAL_TRANSFORMERS,
   type ImageNode,
   INTERNAL_TRANSFORMERS,
-  XML_TRANSFORMERS,
   markdownToEmbeddingText,
+  toXml,
 } from '@macro-inc/lexical-core';
 import { $getRoot, $isElementNode, type SerializedEditorState } from 'lexical';
 import type { CognitionNode, NewMdNode, SearchableNode } from '../types';
@@ -145,16 +145,8 @@ export function toCognitionV2(raw: SerializedEditorState): NewMdNode[] {
   }
 }
 
-export function toXmlText(raw: SerializedEditorState) {
-  const editor = createEditor();
-  try {
-    const parsed = editor.parseEditorState(raw);
-    editor.setEditorState(parsed);
-    return editor.read(() => $convertToMarkdownString(XML_TRANSFORMERS));
-  } catch (error) {
-    if (error instanceof Error) throw error;
-    throw new Error('Error converting snapshot to XML');
-  }
+export function toXmlText(raw: SerializedEditorState): string {
+  return toXml(raw);
 }
 
 export type MarkdownTarget = 'internal' | 'external' | 'embedding';

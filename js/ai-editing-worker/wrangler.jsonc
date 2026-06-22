@@ -1,0 +1,40 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ai-editing-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-07-22",
+	"alias": {
+		"loro-crdt": "loro-crdt/bundler"
+	},
+	"rules": [
+		{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true },
+		{ "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+	],
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"SYNC_WS_BASE": "wss://sync-service-prod2.macroverse.workers.dev"
+	},
+	"env": {
+		"local": {
+			"vars": {
+				"SYNC_WS_BASE": "ws://localhost:8787"
+			}
+		},
+		"dev": {
+			"vars": {
+				"SYNC_WS_BASE": "wss://sync-service-dev3.macroverse.workers.dev"
+			}
+		},
+		"prod": {
+			"vars": {
+				"SYNC_WS_BASE": "wss://sync-service-prod2.macroverse.workers.dev"
+			}
+		}
+	},
+	"dev": {
+		"port": 8933
+	}
+}

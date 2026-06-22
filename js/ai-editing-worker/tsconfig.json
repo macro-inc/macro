@@ -1,0 +1,28 @@
+{
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"target": "es2022",
+		"verbatimModuleSyntax": false,
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"moduleDetection": "force",
+		"downlevelIteration": true,
+		"noImplicitAny": false,
+		"strictNullChecks": false,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"moduleResolution": "Bundler",
+		"module": "es2022",
+		"noEmit": true,
+		"lib": ["es2022", "dom"],
+		"types": ["./worker-configuration.d.ts", "@types/node"]
+	},
+	"exclude": [
+		"node_modules",
+		"../lexical-core/nodes",
+		"../lexical-core/transformers",
+		"../loro-mirror"
+	],
+	"include": ["src", "worker-configuration.d.ts", "prompts.d.ts"]
+}

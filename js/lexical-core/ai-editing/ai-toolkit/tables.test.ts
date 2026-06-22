@@ -2,11 +2,10 @@ import { $createTextNode, $getRoot } from 'lexical';
 import { $isTableNode } from '@lexical/table';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../plugins/nodeIdPlugin';
-import { serializeWithIds } from '../utils';
 import { $blockNode } from './blocks';
 import { $byId } from './locate';
 import { $setCell, $table } from './tables';
-import { edit, read, setup } from './_test-helpers';
+import { removeLinePrefix, edit, read, setup } from './_test-helpers';
 
 // ============================================================================
 describe('$table', () => {
@@ -22,10 +21,10 @@ describe('$table', () => {
       )
     );
     expect(read(s, () => $getRoot().getChildren().some($isTableNode))).toBe(true);
-    const out = serializeWithIds(s);
-    expect(out).toContain('<m-table-cell>Fruit</m-table-cell>');
-    expect(out).toContain('<m-table-cell>Apple</m-table-cell>');
-    expect(out).toContain('<m-table-cell>Lemon</m-table-cell>');
+    const out = removeLinePrefix(s);
+    expect(out).toContain('| Fruit | Taste |');
+    expect(out).toContain('| Apple | Sweet |');
+    expect(out).toContain('| Lemon | Sour |');
   });
 });
 
@@ -43,9 +42,9 @@ describe('$setCell', () => {
     );
     const tableId = read(s, () => $getId($getRoot().getChildren()[1]!));
     edit(s, () => $setCell($byId(s, tableId!), 1, 0, 'Banana')); // Apple -> Banana
-    const out = serializeWithIds(s);
-    expect(out).toContain('<m-table-cell>Banana</m-table-cell>');
-    expect(out).not.toContain('<m-table-cell>Apple</m-table-cell>');
+    const out = removeLinePrefix(s);
+    expect(out).toContain('| Banana | Sweet |');
+    expect(out).not.toContain('Apple');
   });
 
   it('throws on an out-of-range cell', () => {

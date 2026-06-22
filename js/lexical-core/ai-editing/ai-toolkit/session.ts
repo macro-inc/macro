@@ -11,7 +11,7 @@ import {
   nodeIdPlugin,
   type NodeIdMappings,
 } from '../../plugins/nodeIdPlugin';
-import { XML_TRANSFORMERS } from '../../transformers/xml';
+import { INTERNAL_TRANSFORMERS } from '../../transformers';
 
 export type Session = {
   editor: LexicalEditor;
@@ -38,7 +38,7 @@ export function loadMarkdown(s: Session, md: string): void {
   s.editor.update(
     () => {
       $getRoot().clear();
-      $convertFromMarkdownString(md, XML_TRANSFORMERS);
+      $convertFromMarkdownString(md, INTERNAL_TRANSFORMERS);
     },
     { discrete: true }
   );
@@ -52,9 +52,24 @@ export function loadMarkdown(s: Session, md: string): void {
   );
 }
 
+/** Walk a raw snapshot and fix any heading nodes that are missing a `tag` field.
+ *  The @lexical/markdown exporter calls `getTag().slice()` unconditionally, so a
+ *  null tag produces a TypeError before the AI even sees the document. */
+function sanitizeSnapshot(raw: SerializedEditorState): SerializedEditorState {
+  function walk(node: any): any {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) return node.map(walk);
+    const out = { ...node };
+    if (out.type === 'heading' && !out.tag) out.tag = 'h1';
+    if (out.children) out.children = out.children.map(walk);
+    return out;
+  }
+  return { ...(raw as any), root: walk((raw as any).root) };
+}
+
 /** Load a document from a serialized editor-state snapshot. */
 export function loadSnapshot(s: Session, raw: SerializedEditorState): void {
-  const state = s.editor.parseEditorState(raw);
+  const state = s.editor.parseEditorState(sanitizeSnapshot(raw));
   s.editor.setEditorState(state);
   s.editor.update(
     () => {

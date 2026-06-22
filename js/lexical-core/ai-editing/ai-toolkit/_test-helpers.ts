@@ -30,3 +30,12 @@ export function setup(md: string): { s: Session; ids: string[] } {
   loadMarkdown(s, md);
   return { s, ids: topLevelIds(s) };
 }
+
+/** Serialization with the `N | ` line-number prefix stripped — for asserting
+ *  document *content* (the line numbers are a presentation detail). */
+export function removeLinePrefix(s: Session): string {
+  return serializeWithIds(s)
+    .split('\n')
+    .map((line) => line.replace(/^\d+ \| /, ''))
+    .join('\n');
+}

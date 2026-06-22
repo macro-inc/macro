@@ -82,7 +82,6 @@ describe('serializeWithIds — block-level ids', () => {
         if (node === $getRoot()) continue;
         if (node.getType() === 'list') continue; // container, no own line
         // count only block-level (non-inline) elements
-        // @ts-expect-error isInline exists on ElementNode
         if (typeof node.isInline === 'function' && !node.isInline()) blocks++;
       }
     });

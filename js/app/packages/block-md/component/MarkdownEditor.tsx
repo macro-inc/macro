@@ -1121,7 +1121,10 @@ export function MarkdownEditor(props: {
                 title="Lexical state debugger"
                 onClose={props.onLexicalStateDebuggerClose}
               >
-                <LexicalStateDebugger state={state()} editor={editor}></LexicalStateDebugger>
+                <LexicalStateDebugger
+                  state={state()}
+                  editor={editor}
+                ></LexicalStateDebugger>
               </SplitBottomPanel>
             )}
           </Show>

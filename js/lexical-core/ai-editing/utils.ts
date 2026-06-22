@@ -1,4 +1,5 @@
 import { $convertToMarkdownString, type TextFormatTransformer } from '@lexical/markdown';
+import { $isHeadingNode } from '@lexical/rich-text';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -12,6 +13,7 @@ import {
 } from 'lexical';
 import { $getId } from '../plugins/nodeIdPlugin';
 import { EXTERNAL_TRANSFORMERS } from '../transformers';
+import { toXml } from '../transformers/xml';
 import { createEditingSession, loadSnapshot, type Session } from './ai-toolkit';
 
 const UNDERLINE_FORMAT: TextFormatTransformer = {
@@ -77,6 +79,14 @@ export function serializeSnapshotWithIds(snapshot: SerializedEditorState): strin
   loadSnapshot(tmp, snapshot);
   tmp.editor.update(
     () => {
+      for (const child of $getRoot().getChildren()) {
+        // HeadingNodes with a null tag (corrupt Loro sync state) crash markdown export.
+        if ($isHeadingNode(child) && child.getTag() == null) {
+          const p = $createParagraphNode();
+          p.append(...child.getChildren());
+          child.replace(p);
+        }
+      }
       for (const child of $getRoot().getChildren()) annotate(child);
     },
     { discrete: true }
@@ -144,4 +154,8 @@ export function findInDocument(s: Session, needle: string, contextLines = 5): st
       return allLines.slice(lo, hi + 1).join('\n');
     })
     .join('\n---\n');
+}
+
+export function serializeWithXml(s: Session): string {
+  return toXml(s.editor.getEditorState().toJSON());
 }

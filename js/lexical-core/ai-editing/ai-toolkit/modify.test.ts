@@ -2,24 +2,23 @@ import { $isListItemNode } from '@lexical/list';
 import { $getRoot } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../plugins/nodeIdPlugin';
-import { serializeWithIds } from '../utils';
 import { $byId } from './locate';
 import { $modifyNode } from './modify';
 import { createEditingSession, loadMarkdown } from './session';
-import { edit, read, setup } from './_test-helpers';
+import { removeLinePrefix, edit, read, setup } from './_test-helpers';
 
 // ============================================================================
 describe('$modifyNode', () => {
   it("op 'blockType' changes type + level, keeping the id", () => {
     const { s, ids } = setup('Notes');
     edit(s, () => $modifyNode(s, ids[0], { op: 'blockType', block: 'heading', level: 2 }));
-    expect(serializeWithIds(s)).toBe(`## Notes {${ids[0]}|heading}`);
+    expect(removeLinePrefix(s)).toBe(`## Notes {${ids[0]}|heading}`);
   });
 
   it("op 'text' rewrites a block's content, keeping type + id", () => {
     const { s, ids } = setup('# Title');
     edit(s, () => $modifyNode(s, ids[0], { op: 'text', text: 'New title' }));
-    expect(serializeWithIds(s)).toBe(`# New title {${ids[0]}|heading}`);
+    expect(removeLinePrefix(s)).toBe(`# New title {${ids[0]}|heading}`);
   });
 
   it("op 'listType' retypes the enclosing list from any item, preserving nesting", () => {
@@ -75,6 +74,6 @@ describe('$modifyNode', () => {
       const node = $byId(s, ids[2]);
       $modifyNode(s, node, { op: 'blockType', block: 'quote' });
     });
-    expect(serializeWithIds(s)).toContain('> the frog line');
+    expect(removeLinePrefix(s)).toContain('> the frog line');
   });
 });

@@ -1,0 +1,17 @@
+dev-local:
+  bun run src/server.ts
+
+dev:
+  SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt npx wrangler dev --env local
+
+dev-remote-dev:
+  npx wrangler dev --env dev
+
+dev-remote-prod:
+  npx wrangler dev --env prod
+
+deploy-dev:
+  npx wrangler deploy --env dev
+
+deploy-prod:
+  npx wrangler deploy --env prod
