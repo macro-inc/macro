@@ -66,7 +66,9 @@ impl IntoResponse for AiProjectionError {
                     message: msg.into(),
                 }),
             ),
-            AiProjectionError::InvalidStoredData(_) | AiProjectionError::StorageLayerError(_) => (
+            AiProjectionError::InvalidStoredData(_)
+            | AiProjectionError::Generation(_)
+            | AiProjectionError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal server error".into(),

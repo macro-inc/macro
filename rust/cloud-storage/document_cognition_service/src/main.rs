@@ -413,12 +413,20 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized ai cost service");
 
+    // Generator that materializes projections by running their prompt through
+    // the shared AI toolset, attributed to the requesting user.
+    let projection_generator =
+        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+            tool_service_context.clone(),
+            ai_tools::all_tools(),
+        );
     let ai_projections_service_impl =
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
                 db.clone(),
             ),
             sqs_client.clone(),
+            projection_generator,
         );
 
     // Spawn the inbound worker that polls ai_projection_queue and materializes

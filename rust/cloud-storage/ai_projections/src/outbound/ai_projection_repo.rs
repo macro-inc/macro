@@ -132,6 +132,169 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_projection(&self, id: &str) -> Result<AiProjection, AiProjectionError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, created_at, updated_at
+            FROM ai_projection
+            WHERE id = $1
+            "#,
+            id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(AiProjection {
+            id: row.id,
+            prompt: row.prompt,
+            prompt_hash: row.prompt_hash,
+            target_type: row.target_type.parse()?,
+            refresh_cadence: row.refresh_cadence.parse()?,
+            expiry: row.expiry.parse()?,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn try_start_processing(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+    ) -> Result<bool, AiProjectionError> {
+        // Reclaim claims left behind by crashed/stuck workers so they do not
+        // block reprocessing forever. The threshold is a SQL literal because
+        // `query!` binds parameters as typed values, not as an interval string.
+        sqlx::query!(
+            r#"
+            DELETE FROM processing_ai_projections
+            WHERE created_at < NOW() - INTERVAL '15 minutes'
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        // Claim the pair. The composite primary key makes this atomic: only one
+        // worker can insert the row, and `ON CONFLICT DO NOTHING` makes a losing
+        // insert affect zero rows.
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO processing_ai_projections (ai_projection_id, target_id)
+            VALUES ($1, $2)
+            ON CONFLICT (ai_projection_id, target_id) DO NOTHING
+            "#,
+            ai_projection_id,
+            target_id,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(result.rows_affected() == 1)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn finish_processing(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+    ) -> Result<(), AiProjectionError> {
+        sqlx::query!(
+            r#"
+            DELETE FROM processing_ai_projections
+            WHERE ai_projection_id = $1 AND target_id = $2
+            "#,
+            ai_projection_id,
+            target_id,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_projection_loading(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+    ) -> Result<(), AiProjectionError> {
+        sqlx::query!(
+            r#"
+            UPDATE user_ai_projection
+            SET status = $3, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2
+            "#,
+            ai_projection_id,
+            target_id,
+            ProjectionStatus::Loading.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, result), err)]
+    async fn set_projection_result(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+        result: &str,
+        generated_at: chrono::DateTime<chrono::Utc>,
+        stale_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), AiProjectionError> {
+        sqlx::query!(
+            r#"
+            UPDATE user_ai_projection
+            SET status = $3, result = $4, error = NULL,
+                generated_at = $5, stale_at = $6, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2
+            "#,
+            ai_projection_id,
+            target_id,
+            ProjectionStatus::Ready.to_string(),
+            result,
+            generated_at,
+            stale_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_projection_error(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+        error: &str,
+    ) -> Result<(), AiProjectionError> {
+        sqlx::query!(
+            r#"
+            UPDATE user_ai_projection
+            SET status = $3, error = $4, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2
+            "#,
+            ai_projection_id,
+            target_id,
+            ProjectionStatus::Error.to_string(),
+            error,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn user_has_permission(
         &self,
         user_id: &MacroUserIdStr<'_>,

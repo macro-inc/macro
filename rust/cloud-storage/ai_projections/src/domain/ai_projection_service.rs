@@ -14,6 +14,7 @@ use crate::domain::{
         AiProjectionError, ProjectionStatus, TargetType, UpsertProjectionError,
         UpsertProjectionParams, UserAiProjection,
     },
+    projection_generator::ProjectionGenerator,
 };
 
 /// The permission required to read professional (premium) features.
@@ -48,25 +49,77 @@ pub trait AiProjectionService: Clone + Send + Sync + 'static {
 }
 
 /// Implementation of [`AiProjectionService`] backed by an
-/// [`AiProjectionRepository`] and an [`AiProjectionQueue`].
+/// [`AiProjectionRepository`], an [`AiProjectionQueue`], and a
+/// [`ProjectionGenerator`].
 #[derive(Debug, Clone)]
-pub struct AiProjectionServiceImpl<R, Q>
+pub struct AiProjectionServiceImpl<R, Q, G>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
+    G: ProjectionGenerator,
 {
     repository: R,
     queue: Q,
+    generator: G,
 }
 
-impl<R, Q> AiProjectionServiceImpl<R, Q>
+impl<R, Q, G> AiProjectionServiceImpl<R, Q, G>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
+    G: ProjectionGenerator,
 {
     /// Creates a new AiProjectionServiceImpl.
-    pub fn new(repository: R, queue: Q) -> Self {
-        Self { repository, queue }
+    pub fn new(repository: R, queue: Q, generator: G) -> Self {
+        Self {
+            repository,
+            queue,
+            generator,
+        }
+    }
+
+    /// Loads the projection definition, marks the target instance as loading,
+    /// runs the prompt through the generator, and stores the result as ready.
+    ///
+    /// The caller ([`AiProjectionService::materialize`]) owns the processing
+    /// claim and is responsible for releasing it and recording errors.
+    async fn generate_and_store(
+        &self,
+        message: &AiProjectionQueueMessage,
+    ) -> Result<(), AiProjectionError> {
+        let projection = self
+            .repository
+            .get_projection(&message.ai_projection_id)
+            .await?;
+
+        self.repository
+            .set_projection_loading(&message.ai_projection_id, &message.target_id)
+            .await?;
+
+        // For `user` targets the target id is the user id. `team` targets store
+        // a team id here and are not yet materialized against a specific user.
+        let user_id = MacroUserIdStr::try_from(message.target_id.clone())
+            .map_err(|e| AiProjectionError::BadRequest(format!("invalid target user id: {e}")))?;
+
+        let result = self
+            .generator
+            .generate(&user_id, &projection.prompt)
+            .await?;
+
+        let generated_at = chrono::Utc::now();
+        let stale_at = generated_at + projection.expiry.to_duration();
+
+        self.repository
+            .set_projection_result(
+                &message.ai_projection_id,
+                &message.target_id,
+                &result,
+                generated_at,
+                stale_at,
+            )
+            .await?;
+
+        Ok(())
     }
 
     /// Resolves the concrete target id from the authenticated user and the
@@ -107,10 +160,11 @@ pub fn hash_prompt(prompt: &str) -> String {
     hex
 }
 
-impl<R, Q> AiProjectionService for AiProjectionServiceImpl<R, Q>
+impl<R, Q, G> AiProjectionService for AiProjectionServiceImpl<R, Q, G>
 where
     R: AiProjectionRepository,
     Q: AiProjectionQueue,
+    G: ProjectionGenerator,
 {
     #[tracing::instrument(skip(self), err)]
     async fn upsert_projection(
@@ -192,9 +246,58 @@ where
             "materializing ai projection"
         );
 
-        // TODO: load the target projection, mark it as Loading/Refreshing, call
-        // the LLM to generate the result, and persist it with status=Ready (or
-        // status=Error on failure). This currently only acknowledges the message.
-        Ok(())
+        // Claim the (ai_projection_id, target_id) pair. If another worker is
+        // already processing it, skip and acknowledge the message rather than
+        // duplicating work.
+        let acquired = self
+            .repository
+            .try_start_processing(&message.ai_projection_id, &message.target_id)
+            .await?;
+        if !acquired {
+            tracing::info!(
+                ai_projection_id = %message.ai_projection_id,
+                target_id = %message.target_id,
+                "ai projection already processing; skipping"
+            );
+            return Ok(());
+        }
+
+        // Run the generation, then release the claim regardless of the outcome
+        // so a retried message can re-acquire it.
+        let result = self.generate_and_store(&message).await;
+
+        match result {
+            Ok(()) => {
+                // Best-effort release; a leftover row would be reclaimed by the
+                // staleness check on the next attempt anyway.
+                self.repository
+                    .finish_processing(&message.ai_projection_id, &message.target_id)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to release ai projection processing claim");
+                    })
+                    .ok();
+                Ok(())
+            }
+            Err(e) => {
+                // Record the failure for visibility, then release the claim so
+                // SQS redelivery can re-acquire and retry.
+                self.repository
+                    .set_projection_error(
+                        &message.ai_projection_id,
+                        &message.target_id,
+                        &e.to_string(),
+                    )
+                    .await
+                    .inspect_err(|err| {
+                        tracing::error!(error=?err, "failed to record ai projection error");
+                    })
+                    .ok();
+                self.repository
+                    .finish_processing(&message.ai_projection_id, &message.target_id)
+                    .await?;
+                Err(e)
+            }
+        }
     }
 }

@@ -140,6 +140,116 @@ async fn get_user_team_ids_returns_memberships(pool: Pool<Postgres>) -> anyhow::
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("ai_projections"))
 )]
+async fn get_projection_returns_definition_or_not_found(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+
+    assert!(matches!(
+        repo.get_projection("missing").await,
+        Err(AiProjectionError::NotFound)
+    ));
+
+    repo.get_or_create_projection(
+        "inbox/important",
+        "What is important?",
+        "hash_v1",
+        TargetType::User,
+        RefreshCadence::High,
+        Expiry::Day,
+    )
+    .await?;
+
+    let projection = repo.get_projection("inbox/important").await?;
+    assert_eq!(projection.prompt, "What is important?");
+    assert_eq!(projection.expiry, Expiry::Day);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn processing_claim_is_exclusive_and_releasable(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+
+    repo.get_or_create_projection(
+        "inbox/important",
+        "What is important?",
+        "hash_v1",
+        TargetType::User,
+        RefreshCadence::High,
+        Expiry::Day,
+    )
+    .await?;
+
+    let target = "macro|pro@user.com";
+
+    // First claim acquires the lock; a second concurrent claim is refused.
+    assert!(repo.try_start_processing("inbox/important", target).await?);
+    assert!(!repo.try_start_processing("inbox/important", target).await?);
+
+    // Releasing the claim allows it to be re-acquired (i.e. retried).
+    repo.finish_processing("inbox/important", target).await?;
+    assert!(repo.try_start_processing("inbox/important", target).await?);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn set_projection_result_and_error_update_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let target = "macro|pro@user.com";
+
+    repo.get_or_create_projection(
+        "inbox/important",
+        "What is important?",
+        "hash_v1",
+        TargetType::User,
+        RefreshCadence::High,
+        Expiry::Day,
+    )
+    .await?;
+    repo.get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .await?;
+
+    let generated_at = chrono::Utc::now();
+    let stale_at = generated_at + Expiry::Day.to_duration();
+    repo.set_projection_result(
+        "inbox/important",
+        target,
+        "the result",
+        generated_at,
+        stale_at,
+    )
+    .await?;
+
+    let ready = repo
+        .get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .await?;
+    assert_eq!(ready.status, ProjectionStatus::Ready);
+    assert_eq!(ready.result.as_deref(), Some("the result"));
+    assert!(ready.generated_at.is_some());
+
+    repo.set_projection_error("inbox/important", target, "it broke")
+        .await?;
+    let errored = repo
+        .get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .await?;
+    assert_eq!(errored.status, ProjectionStatus::Error);
+    assert_eq!(errored.error.as_deref(), Some("it broke"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
 async fn user_has_permission_reflects_roles(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = AiProjectionRepositoryImpl::new(pool);
 

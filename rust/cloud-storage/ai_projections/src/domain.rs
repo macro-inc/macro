@@ -4,3 +4,4 @@ pub mod ai_projection_queue;
 pub mod ai_projection_repo;
 pub mod ai_projection_service;
 pub mod model;
+pub mod projection_generator;
