@@ -223,6 +223,72 @@ fn test_build_bool_query_name_content_mode_matches_either() -> anyhow::Result<()
 }
 
 #[test]
+fn test_build_bool_query_property_filters_emit_nested() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .property_filters(vec![
+            PropertyFilterArg {
+                definition_id: "00000001-0000-0000-0000-000000000002".to_string(),
+                values: vec![
+                    "00000001-0000-0000-0002-000000000001".to_string(),
+                    "00000001-0000-0000-0002-000000000004".to_string(),
+                ],
+            },
+            PropertyFilterArg {
+                definition_id: "00000001-0000-0000-0000-000000000001".to_string(),
+                values: vec!["macro|alice@example.com".to_string()],
+            },
+        ]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+
+    let nested: Vec<&serde_json::Value> = filter
+        .iter()
+        .filter(|f| f.get("nested").is_some())
+        .collect();
+    assert_eq!(nested.len(), 2, "one nested clause per filter: {filter:?}");
+
+    let status = &nested[0]["nested"];
+    assert_eq!(status["path"], "properties");
+    assert_eq!(status["ignore_unmapped"], true);
+    let status_inner = status["query"]["bool"]["filter"]
+        .as_array()
+        .expect("nested bool filter");
+    assert!(status_inner.contains(&serde_json::json!({
+        "term": {"properties.definition_id": "00000001-0000-0000-0000-000000000002"}
+    })));
+    assert!(status_inner.contains(&serde_json::json!({
+        "terms": {"properties.values": [
+            "00000001-0000-0000-0002-000000000001",
+            "00000001-0000-0000-0002-000000000004"
+        ]}
+    })));
+
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_property_filter_empty_values_skipped() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .property_filters(vec![PropertyFilterArg {
+            definition_id: "00000001-0000-0000-0000-000000000002".to_string(),
+            values: vec![],
+        }]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter.iter().any(|f| f.get("nested").is_some()),
+        "empty-values filter should emit no nested clause: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn document_index_deserializes_parent_shape() {
     // Parent docs carry only parent-level metadata in `_source`; the
     // matching chunks' node_id / raw_content come via `inner_hits`.

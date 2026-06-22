@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
     BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    QueryType, ToOpenSearchJson,
+    NestedQuery, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
@@ -53,6 +53,22 @@ pub enum DocumentSearchMode {
     NameContent,
 }
 
+/// Nested path holding denormalized entity properties on the parent doc.
+const PROPERTIES_PATH: &str = "properties";
+
+/// A property-equality filter applied against the indexed `properties` nested
+/// field. Matches parents that have a nested entry whose `definition_id`
+/// equals `definition_id` and whose `values` contains any of `values`.
+/// Empty `values` means "no constraint" and is dropped before querying.
+#[derive(Debug, Clone)]
+pub struct PropertyFilterArg {
+    /// The property definition id to match on.
+    pub definition_id: String,
+    /// Candidate values (OR'd). Select-option UUIDs and entity-ref ids both
+    /// live in the indexed `values` keyword array.
+    pub values: Vec<String>,
+}
+
 #[derive(Clone)]
 pub(crate) struct DocumentSearchConfig;
 
@@ -66,6 +82,7 @@ pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
     mode: DocumentSearchMode,
+    property_filters: Vec<PropertyFilterArg>,
 }
 
 impl DocumentQueryBuilder {
@@ -74,6 +91,7 @@ impl DocumentQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
+            property_filters: Vec::new(),
         }
     }
 
@@ -95,6 +113,11 @@ impl DocumentQueryBuilder {
 
     pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
         self.sub_types = sub_types;
+        self
+    }
+
+    pub fn property_filters(mut self, property_filters: Vec<PropertyFilterArg>) -> Self {
+        self.property_filters = property_filters;
         self
     }
 
@@ -130,6 +153,16 @@ impl DocumentQueryBuilder {
         // Optional sub_type filter (parent field).
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
+        }
+
+        // Property filters: one nested clause per filter, ANDed via bool.filter.
+        // Each matches a `properties` entry whose definition_id and value line
+        // up within the same nested object. On bool.filter, so they constrain
+        // both name and content matches.
+        for filter in &self.property_filters {
+            if let Some(nested) = build_property_filter(filter) {
+                bool_query.filter(nested);
+            }
         }
 
         // Match clause(s) per mode: the parent `document_name` (Name), child
@@ -213,6 +246,32 @@ impl DocumentQueryBuilder {
         filter.should(owner_query);
         Ok(filter.build().into())
     }
+}
+
+/// Build a `nested` query over `properties` for one property filter:
+/// a parent matches when it has a nested entry with `definition_id` equal to
+/// the filter's id AND `values` containing any of the filter's values.
+/// Returns `None` when the filter carries no values.
+fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>> {
+    if filter.values.is_empty() {
+        return None;
+    }
+    let mut inner = BoolQueryBuilder::new();
+    inner.filter(QueryType::term(
+        format!("{PROPERTIES_PATH}.definition_id"),
+        filter.definition_id.clone(),
+    ));
+    inner.filter(QueryType::terms(
+        format!("{PROPERTIES_PATH}.values"),
+        filter.values.clone(),
+    ));
+    // ignore_unmapped: the unified query spans indices that don't map
+    // `properties` as nested; there the clause is a no-op rather than an error.
+    Some(
+        NestedQuery::new(PROPERTIES_PATH, inner.build().into())
+            .ignore_unmapped(true)
+            .into(),
+    )
 }
 
 /// Highlight config attached to each `has_child` inner_hits block.
@@ -302,6 +361,7 @@ pub struct DocumentSearchArgs {
     pub ids_only: bool,
     pub sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
+    pub property_filters: Vec<PropertyFilterArg>,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -316,6 +376,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
             .mode(args.mode)
+            .property_filters(args.property_filters)
     }
 }
 

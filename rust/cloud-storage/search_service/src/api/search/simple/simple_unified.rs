@@ -21,7 +21,7 @@ use models_search::{
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
-use opensearch_client::search::documents::DocumentSearchMode;
+use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg};
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
@@ -108,6 +108,33 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
         .collect())
 }
 
+/// Convert request property filters into OpenSearch property-filter args.
+///
+/// `entity_type` is dropped: the indexed `properties` field carries only
+/// `definition_id` + `values`, and definition ids are globally unique, so the
+/// entity type adds nothing to the query. Select-option UUIDs and entity-ref
+/// ids both match against `values`. Filters with no values are skipped.
+fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<PropertyFilterArg> {
+    filters
+        .iter()
+        .filter_map(|f| {
+            let values: Vec<String> = f
+                .option_ids
+                .iter()
+                .chain(f.entity_ids.iter())
+                .cloned()
+                .collect();
+            if values.is_empty() {
+                return None;
+            }
+            Some(PropertyFilterArg {
+                definition_id: f.property_definition_id.clone(),
+                values,
+            })
+        })
+        .collect()
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
@@ -168,6 +195,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     // membership). `crm_company_filters` scopes/selects within the team.
     let crm_company_filters = req.filters.crm_company_filters.clone();
     let should_include_crm = crm_access.is_some();
+
+    // Property filters live at the top level of the request and only apply to
+    // the OpenSearch documents index, so capture them before the conversion
+    // (which drops them) and attach them to the document search args below.
+    let property_filter_args = to_property_filter_args(&req.filters.property_filters);
 
     let search_filters = SearchEntityFilters::from(req.filters);
     let channel_filters = search_filters.channel_filters;
@@ -242,6 +274,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     // call records are join-shape, where each term becomes a separate
     // has_child clause ANDed via bool.must.
     filter_document_response.terms = search_terms.clone();
+    filter_document_response.property_filters = property_filter_args;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
     filter_email_response.terms = email_terms.clone();
