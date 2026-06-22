@@ -135,9 +135,12 @@ export function NotificationStackRow(props: {
             <NotificationSenderIcon stack={props.stack} size="sm" />
           </div>
           <span
-            class={cn('ph-no-capture min-w-0 shrink truncate text-xs text-ink', {
-              'font-medium': unread(),
-            })}
+            class={cn(
+              'ph-no-capture min-w-0 shrink truncate text-xs text-ink',
+              {
+                'font-medium': unread(),
+              }
+            )}
           >
             <NotificationDescription stack={props.stack} />
           </span>
