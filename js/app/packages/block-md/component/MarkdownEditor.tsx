@@ -85,10 +85,10 @@ import {
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
 import {
-  createHoverTooltipStore,
-  HoverTooltip,
-  hoverTooltipPlugin,
-} from '@core/component/LexicalMarkdown/plugins/hover-tooltip';
+  createBlameTooltipStore,
+  BlameTooltip,
+  blameTooltipPlugin,
+} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import {
   GO_TO_LOCATION_COMMAND,
@@ -942,8 +942,8 @@ export function MarkdownEditor(props: {
     },
   });
 
-  const [hoverTooltipStore, setHoverTooltipStore] = createHoverTooltipStore();
-  plugins.use(hoverTooltipPlugin({ setState: (s) => setHoverTooltipStore(s) }));
+  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
+  plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
@@ -1029,7 +1029,7 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <HoverTooltip state={hoverTooltipStore} documentId={blockId} />
+        <BlameTooltip state={blameTooltipStore} documentId={blockId} />
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
 

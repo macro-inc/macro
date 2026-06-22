@@ -9,15 +9,15 @@ import {
 } from 'lexical';
 import { createStore } from 'solid-js/store';
 
-export type HoverTooltipState = {
+export type BlameTooltipState = {
   hovering: boolean;
   x: number;
   y: number;
   nodeId: string | null;
 };
 
-export function createHoverTooltipStore() {
-  return createStore<HoverTooltipState>({
+export function createBlameTooltipStore() {
+  return createStore<BlameTooltipState>({
     hovering: false,
     x: 0,
     y: 0,
@@ -25,8 +25,8 @@ export function createHoverTooltipStore() {
   });
 }
 
-type HoverTooltipPluginProps = {
-  setState: (state: Partial<HoverTooltipState>) => void;
+type BlameTooltipPluginProps = {
+  setState: (state: Partial<BlameTooltipState>) => void;
 };
 
 /**
@@ -50,9 +50,9 @@ function $resolveHoveredNodeId(target: HTMLElement): string | null {
   return null;
 }
 
-function registerHoverTooltipPlugin(
+function registerBlameTooltipPlugin(
   editor: LexicalEditor,
-  props: HoverTooltipPluginProps
+  props: BlameTooltipPluginProps
 ) {
   const handlePointerMove = (e: MouseEvent) => {
     if (isTouchDevice()) return;
@@ -103,6 +103,6 @@ function registerHoverTooltipPlugin(
   );
 }
 
-export function hoverTooltipPlugin(props: HoverTooltipPluginProps) {
-  return (editor: LexicalEditor) => registerHoverTooltipPlugin(editor, props);
+export function blameTooltipPlugin(props: BlameTooltipPluginProps) {
+  return (editor: LexicalEditor) => registerBlameTooltipPlugin(editor, props);
 }

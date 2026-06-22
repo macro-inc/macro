@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { ENABLE_GIT_BLAME } from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
 import { syncServiceClient } from '@service-sync/client';
@@ -12,7 +13,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { Store } from 'solid-js/store';
-import type { HoverTooltipState } from './hoverTooltipPlugin';
+import type { BlameTooltipState } from './blameTooltipPlugin';
 
 const FETCH_DELAY_MS = 400;
 const SHOW_DELAY_MS = 500;
@@ -31,8 +32,8 @@ function UserLine(props: { userId: string; editedAt: Date }) {
   );
 }
 
-export function HoverTooltip(props: {
-  state: Store<HoverTooltipState>;
+export function BlameTooltip(props: {
+  state: Store<BlameTooltipState>;
   documentId: string;
 }) {
   const [visible, setVisible] = createSignal(false);
@@ -56,13 +57,16 @@ export function HoverTooltip(props: {
     setVisible(false);
   };
 
-  const [blame] = createResource(armedNodeId, async (nodeId) => {
-    const res = await syncServiceClient.getNodeBlame({
-      documentId: props.documentId,
-      nodeId,
-    });
-    return res.isOk() ? res.value : null;
-  });
+  const [blame] = createResource(
+    () => (ENABLE_GIT_BLAME() ? armedNodeId() : null),
+    async (nodeId) => {
+      const res = await syncServiceClient.getNodeBlame({
+        documentId: props.documentId,
+        nodeId,
+      });
+      return res.isOk() ? res.value : null;
+    }
+  );
 
   // Drive the fetch — debounced on nodeId only, ignores cursor x/y.
   createEffect(() => {
