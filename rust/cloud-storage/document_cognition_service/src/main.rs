@@ -412,6 +412,16 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized ai cost service");
 
+    let ai_projections_service = Arc::new(
+        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
+            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
+                db.clone(),
+            ),
+        ),
+    );
+
+    tracing::info!("initialized ai projections service");
+
     let mcp_credentials_key_b64 = match config.environment {
         Environment::Local => config.mcp_credentials_key_secret_name.clone(),
         _ => secretsmanager_client
@@ -459,6 +469,7 @@ async fn main() -> anyhow::Result<()> {
         document_tool_context,
         memory_service,
         usage_service,
+        ai_projections_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
         call_tool_context,

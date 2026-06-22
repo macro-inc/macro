@@ -95,6 +95,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_projections"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "http-body-util",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
@@ -3467,6 +3493,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "aho-corasick",
+ "ai_projections",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
