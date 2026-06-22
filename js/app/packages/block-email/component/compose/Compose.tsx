@@ -772,9 +772,7 @@ export function EmailCompose(props: EmailComposeProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              notice={
-                hasLinkError() ? <EmailPermissionsBanner /> : undefined
-              }
+              notice={hasLinkError() ? <EmailPermissionsBanner /> : undefined}
               class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>
