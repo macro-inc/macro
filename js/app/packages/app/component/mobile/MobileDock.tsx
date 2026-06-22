@@ -1,6 +1,12 @@
 import './MobileDock.css';
-import { isListViewID, type ListView } from '@app/constants/list-views';
+import type { ListView } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  ENABLE_ANIMATED_ICONS,
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
@@ -22,9 +28,9 @@ import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useLocation } from '@solidjs/router';
 import { cn, Layer } from '@ui';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
-import { setCreateMenuOpen } from '../Launcher';
+import { CREATABLE_BLOCKS, runCreateAction } from '../Launcher';
 import { useSplitLayout } from '../split-layout/layout';
 import { SearchState } from './mobileSearchState';
 import { pressPulse } from './pressPulse';
@@ -34,9 +40,7 @@ false && pressPulse;
 
 type DockId = ListView | 'home';
 
-type IconComponent = Component<
-  JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
->;
+type IconComponent = Component<any>;
 
 type MobileDockButtonProps = {
   icon: IconComponent;
@@ -111,13 +115,22 @@ const MORE_VIEWS: { id: ListView; label: string; icon: IconComponent }[] = [
   { id: 'folders', label: 'Folders', icon: AnimatedFolderIcon },
 ];
 
-// The More button opens the menu on pointer-down (see fireOnPress), which also
-// arms the hold-and-drag-to-select gesture. The opening touch lifts after the
+type MobileDockMenuItem = {
+  id: string;
+  label: string;
+  icon?: IconComponent;
+  active?: () => boolean;
+  animateIcon?: boolean;
+  onSelect: () => void;
+};
+
+// Dock menu triggers open on pointer-down (see fireOnPress), which also arms
+// the hold-and-drag-to-select gesture. The opening touch lifts after the
 // overlay is up, and its trailing synthesized click would land on whatever is
-// now under the finger: a freshly-mounted menu item (accidental selection) or,
-// once a drag-release dismisses the menu, the adjacent Create button. Swallow
-// that one click (capture phase, one-shot) so the opening touch can't leak
-// through. The timeout clears the listener if no ghost click arrives.
+// now under the finger: a freshly-mounted menu item (accidental selection) or
+// another dock button after a drag-release dismisses the menu. Swallow that one
+// click (capture phase, one-shot) so the opening touch can't leak through. The
+// timeout clears the listener if no ghost click arrives.
 function suppressNextClick() {
   const onClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -132,11 +145,13 @@ function suppressNextClick() {
   document.addEventListener('click', onClick, true);
 }
 
-function MorePopover(props: {
-  isActive: (id: DockId) => boolean;
-  onNavigate: (id: DockId) => void;
+function MobileDockMenu(props: {
+  triggerIcon: IconComponent;
+  triggerAriaLabel: string;
+  footerLabel: string;
+  footerCaretClass?: string;
+  items: MobileDockMenuItem[];
 }) {
-  const { settingsOpen, toggleSettings } = useSettingsState();
   // `open` drives the show/hide animation (via data-expanded); `mounted`
   // keeps the overlay in the DOM until the hide animation finishes.
   const [open, setOpen] = createSignal(false);
@@ -170,28 +185,27 @@ function MorePopover(props: {
     setHoveredId(null);
   };
 
+  const getItem = (id: string | null) =>
+    id ? props.items.find((item) => item.id === id) : undefined;
+
   const handleTouchMove = (e: TouchEvent) => {
     if (!open()) return;
     const touch = e.touches[0];
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const button = el?.closest('[data-more-item]') as HTMLElement | null;
-    const id = button?.dataset.moreItem ?? null;
+    const button = el?.closest(
+      '[data-mobile-dock-menu-item]'
+    ) as HTMLElement | null;
+    const id = button?.dataset.mobileDockMenuItem ?? null;
     if (id !== hoveredId()) {
       setHoveredId(id);
       if (id) hapticImpact('light');
     }
   };
 
-  // Acts on a row by id. 'settings' toggles the settings panel; list-view ids
-  // navigate. Shared by tap (onClick) and the hold-and-drag-release gesture.
   const select = (id: string | null) => {
-    if (id === 'settings') {
-      toggleSettings();
-    } else if (isListViewID(id)) {
-      props.onNavigate(id);
-    } else {
-      return;
-    }
+    const item = getItem(id);
+    if (!item) return;
+    item.onSelect();
     dismissMenu();
   };
 
@@ -204,8 +218,8 @@ function MorePopover(props: {
   return (
     <>
       <MobileDockButton
-        icon={CaretUpIcon}
-        ariaLabel="More views"
+        icon={props.triggerIcon}
+        ariaLabel={props.triggerAriaLabel}
         animateIcon={false}
         fireOnPress
         onClick={() => (open() ? closeMenu() : openMenu())}
@@ -237,13 +251,13 @@ function MorePopover(props: {
                 edge (so it stays put vertically and is unmasked top-down as
                 the box grows upward). */}
               <div
-                class="more-popover-content flex items-end justify-start overflow-hidden rounded-2xl bg-surface ring ring-edge"
+                class="mobile-dock-menu-content flex items-end justify-start overflow-hidden rounded-2xl bg-surface ring ring-edge"
                 data-expanded={open() ? '' : undefined}
                 style={{
-                  '--more-popover-width': menuSize.width
+                  '--mobile-dock-menu-width': menuSize.width
                     ? `${menuSize.width}px`
                     : undefined,
-                  '--more-popover-height': menuSize.height
+                  '--mobile-dock-menu-height': menuSize.height
                     ? `${menuSize.height}px`
                     : undefined,
                 }}
@@ -259,32 +273,14 @@ function MorePopover(props: {
                   class="flex w-[calc(100vw-2*var(--mobile-chrome-gutter))] shrink-0 flex-col gap-1 p-1"
                   ref={setMenuRef}
                 >
-                  <button
-                    type="button"
-                    data-more-item="settings"
-                    class={cn(
-                      'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
-                      settingsOpen() ? 'text-accent' : 'text-ink',
-                      hoveredId() === 'settings' ? 'bg-hover' : 'hover:bg-hover'
-                    )}
-                    onClick={() => {
-                      hapticImpact('light');
-                      select('settings');
-                    }}
-                  >
-                    <div class="size-4 shrink-0 [&_svg]:size-4">
-                      <IconGear />
-                    </div>
-                    <span>Settings</span>
-                  </button>
-                  <For each={MORE_VIEWS}>
+                  <For each={props.items}>
                     {(item) => (
                       <button
                         type="button"
-                        data-more-item={item.id}
+                        data-mobile-dock-menu-item={item.id}
                         class={cn(
                           'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
-                          props.isActive(item.id) ? 'text-accent' : 'text-ink',
+                          item.active?.() ? 'text-accent' : 'text-ink',
                           hoveredId() === item.id
                             ? 'bg-hover'
                             : 'hover:bg-hover'
@@ -294,12 +290,21 @@ function MorePopover(props: {
                           select(item.id);
                         }}
                       >
-                        <div class="size-4 shrink-0 [&_svg]:size-4">
-                          <Dynamic
-                            component={item.icon}
-                            triggerAnimation={hoveredId() === item.id}
-                          />
-                        </div>
+                        <Show when={item.icon}>
+                          {(Icon) => (
+                            <div class="size-4 shrink-0 [&_svg]:size-4">
+                              <Show
+                                when={item.animateIcon !== false}
+                                fallback={<Dynamic component={Icon()} />}
+                              >
+                                <Dynamic
+                                  component={Icon()}
+                                  triggerAnimation={hoveredId() === item.id}
+                                />
+                              </Show>
+                            </div>
+                          )}
+                        </Show>
                         <span>{item.label}</span>
                       </button>
                     )}
@@ -314,9 +319,14 @@ function MorePopover(props: {
                       closeMenu();
                     }}
                   >
-                    <span>Views</span>
-                    {/* Center the caret over the dock's More trigger (this menu's opener) so it lines up with that button's caret. */}
-                    <CaretUpIcon class="mr-11 size-6 rotate-180 text-ink" />
+                    <span>{props.footerLabel}</span>
+                    {/* Align the caret with this menu's dock trigger. */}
+                    <CaretUpIcon
+                      class={cn(
+                        'size-6 rotate-180 text-ink',
+                        props.footerCaretClass
+                      )}
+                    />
                   </button>
                 </div>
               </div>
@@ -325,6 +335,68 @@ function MorePopover(props: {
         </Portal>
       </Show>
     </>
+  );
+}
+
+function MoreViewsMenu(props: {
+  isActive: (id: DockId) => boolean;
+  onNavigate: (id: DockId) => void;
+}) {
+  const { settingsOpen, toggleSettings } = useSettingsState();
+
+  return (
+    <MobileDockMenu
+      triggerIcon={CaretUpIcon}
+      triggerAriaLabel="More views"
+      footerLabel="Views"
+      footerCaretClass="mr-11"
+      items={[
+        {
+          id: 'settings',
+          label: 'Settings',
+          icon: IconGear,
+          active: settingsOpen,
+          animateIcon: false,
+          onSelect: toggleSettings,
+        },
+        ...MORE_VIEWS.map((item) => ({
+          id: item.id,
+          label: item.label,
+          icon: item.icon,
+          active: () => props.isActive(item.id),
+          onSelect: () => props.onNavigate(item.id),
+        })),
+      ]}
+    />
+  );
+}
+
+function CreateMenu() {
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+
+  const blocks = () =>
+    CREATABLE_BLOCKS.filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    ).toReversed();
+
+  return (
+    <MobileDockMenu
+      triggerIcon={PlusIcon}
+      triggerAriaLabel="Create"
+      footerLabel="Create"
+      items={blocks().map((block) => {
+        const useAnimatedIcon = ENABLE_ANIMATED_ICONS && block.animatedIcon;
+        return {
+          id: block.blockName,
+          label: block.label,
+          icon: useAnimatedIcon ? block.animatedIcon : block.icon,
+          animateIcon: !!useAnimatedIcon,
+          onSelect: () => runCreateAction(block.blockName),
+        };
+      })}
+    />
   );
 }
 
@@ -384,14 +456,8 @@ export function MobileDock() {
           SearchState.open();
         }}
       />
-      <MorePopover isActive={isActive} onNavigate={navigate} />
-      <MobileDockButton
-        icon={PlusIcon}
-        animateIcon={false}
-        ariaLabel="Create"
-        class="size-10 rounded-full"
-        onClick={() => setCreateMenuOpen(true)}
-      />
+      <MoreViewsMenu isActive={isActive} onNavigate={navigate} />
+      <CreateMenu />
     </div>
   );
 }

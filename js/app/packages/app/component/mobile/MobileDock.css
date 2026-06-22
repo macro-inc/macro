@@ -1,23 +1,23 @@
-@keyframes more-popover-show {
+@keyframes mobile-dock-menu-show {
   from {
     width: 10rem;
     height: 5rem;
   }
   to {
     width: var(
-      --more-popover-width,
+      --mobile-dock-menu-width,
       calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
     );
-    height: var(--more-popover-height, 23.5rem);
+    height: var(--mobile-dock-menu-height, 23.5rem);
   }
 }
-@keyframes more-popover-hide {
+@keyframes mobile-dock-menu-hide {
   from {
     width: var(
-      --more-popover-width,
+      --mobile-dock-menu-width,
       calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
     );
-    height: var(--more-popover-height, 23.5rem);
+    height: var(--mobile-dock-menu-height, 23.5rem);
     opacity: 1;
   }
   to {
@@ -26,9 +26,9 @@
     opacity: 0;
   }
 }
-.more-popover-content {
-  animation: more-popover-hide 120ms ease-in forwards;
+.mobile-dock-menu-content {
+  animation: mobile-dock-menu-hide 120ms ease-in forwards;
 }
-.more-popover-content[data-expanded] {
-  animation: more-popover-show 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
+.mobile-dock-menu-content[data-expanded] {
+  animation: mobile-dock-menu-show 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
 }
