@@ -25,6 +25,9 @@ const recentlyViewedArgs: SoupItemsQueryArgs = {
     call_filters: {
       call_ids: [NIL_UUID],
     },
+    channel_thread_filters: {
+      thread_ids: [NIL_UUID],
+    },
     foreign_entity_filters: {
       ids: [NIL_UUID],
     },

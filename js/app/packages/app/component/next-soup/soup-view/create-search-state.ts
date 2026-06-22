@@ -26,7 +26,9 @@ import type {
 import { type Accessor, createMemo, on, type Setter } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
-  const filters: EntityFilters = {};
+  const filters: EntityFilters = {
+    channel_thread_filters: { thread_ids: [NIL_UUID] },
+  };
   const { include } = data;
 
   // Document filters

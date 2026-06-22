@@ -31,6 +31,7 @@ export function useQuickAccessCrmCompaniesQuery() {
       body: {
         call_filters: { call_ids: [NIL_UUID] },
         channel_filters: { channel_ids: [NIL_UUID] },
+        channel_thread_filters: { thread_ids: [NIL_UUID] },
         chat_filters: { chat_ids: [NIL_UUID] },
         document_filters: { document_ids: [NIL_UUID] },
         email_filters: { email_thread_ids: [NIL_UUID] },

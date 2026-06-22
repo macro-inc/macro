@@ -38,6 +38,7 @@ export function useQuickAccessSnippetsQuery() {
       body: {
         call_filters: { call_ids: [NIL_UUID] },
         channel_filters: { channel_ids: [NIL_UUID] },
+        channel_thread_filters: { thread_ids: [NIL_UUID] },
         chat_filters: { chat_ids: [NIL_UUID] },
         crm_company_filters: { company_ids: [NIL_UUID] },
         document_filters: { sub_types: ['snippet'] },

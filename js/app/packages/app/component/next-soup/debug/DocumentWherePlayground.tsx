@@ -201,6 +201,7 @@ const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
   PostSoupRequest,
   | 'call_filters'
   | 'channel_filters'
+  | 'channel_thread_filters'
   | 'chat_filters'
   | 'crm_company_filters'
   | 'email_filters'
@@ -209,6 +210,7 @@ const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
 > = {
   call_filters: { call_ids: [NIL_UUID] },
   channel_filters: { channel_ids: [NIL_UUID] },
+  channel_thread_filters: { thread_ids: [NIL_UUID] },
   chat_filters: { chat_ids: [NIL_UUID] },
   crm_company_filters: { company_ids: [NIL_UUID] },
   email_filters: { email_thread_ids: [NIL_UUID] },
@@ -219,6 +221,7 @@ const SIMPLE_SOUP_NON_DOCUMENT_FILTERS: Pick<
 const AST_SOUP_DOCUMENT_ONLY_FILTERS: Query['include'] = {
   callId: [NIL_UUID],
   channelId: [NIL_UUID],
+  channelThreadId: [NIL_UUID],
   chatId: [NIL_UUID],
   crmCompanyId: [NIL_UUID],
   foreignEntityRecordId: [NIL_UUID],

@@ -11,6 +11,7 @@ const EXCLUDE: string[] = [NIL_UUID];
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
+  channel_thread_filters: { thread_ids: EXCLUDE },
   chat_filters: { chat_ids: EXCLUDE },
   crm_company_filters: { company_ids: EXCLUDE },
   document_filters: { document_ids: EXCLUDE },
@@ -84,7 +85,15 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'channelThread' },
       ({ data }) =>
-        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel_id)
+        !isIdFilteredOut(body.channel_thread_filters?.thread_ids, data.id) &&
+        !isIdFilteredOut(
+          body.channel_thread_filters?.channel_ids,
+          data.channel_id
+        ) &&
+        !isValueFilteredOut(
+          body.channel_thread_filters?.root_sender_ids,
+          data.sender_id
+        )
     )
     .with(
       { tag: 'project' },
