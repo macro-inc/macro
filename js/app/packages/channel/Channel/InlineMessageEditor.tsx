@@ -1,6 +1,8 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { IUser } from '@core/user/types';
 import { cn } from '@ui';
+import type { Accessor } from 'solid-js';
 import { ChannelInput, createInputAttachmentTracker, Input } from '../Input';
 import { useMessage } from '../Message';
 import type { MessageEditor } from './create-message-editor';
@@ -8,6 +10,7 @@ import type { MessageEditor } from './create-message-editor';
 type MessageEditorContentProps = {
   channelId: string;
   messageEditor: MessageEditor;
+  participants?: Accessor<IUser[]>;
   class?: string;
 };
 
@@ -47,6 +50,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
           placeholder: 'Edit message',
         }}
         attachmentTracker={attachmentTracker}
+        participants={props.participants}
         markdownNamespace={`edit-message-${props.channelId}-${message().id}`}
         onChange={(nextSnapshot) =>
           props.messageEditor.update(message(), nextSnapshot)

@@ -1,9 +1,10 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { IUser } from '@core/user/types';
 import TrashIcon from '@icon/square-trash.svg';
 import { cn } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import type { MessageSelectionState } from './context';
@@ -18,6 +19,7 @@ type ChannelMessageProps = {
   actions?: MessageActions;
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
+  participants?: Accessor<IUser[]>;
   highlighted?: boolean;
   selectionState?: MessageSelectionState;
   onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
@@ -33,6 +35,7 @@ function isEditingMessage(
 function MessageContentSlot(props: {
   channelId: string;
   messageEditor?: MessageEditor;
+  participants?: Accessor<IUser[]>;
   class?: string;
 }) {
   const message = useMessage();
@@ -45,6 +48,7 @@ function MessageContentSlot(props: {
           <MessageEditorContent
             channelId={props.channelId}
             messageEditor={messageEditor()}
+            participants={props.participants}
             class={props.class}
           />
         )}
@@ -115,6 +119,7 @@ function DeletedMessageLayout() {
 function RegularMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
+  participants?: Accessor<IUser[]>;
 }) {
   return (
     <Message.Layout class="pt-(--regular-message-padding-t)">
@@ -134,6 +139,7 @@ function RegularMessageLayout(props: {
         <MessageContentSlot
           channelId={props.channelId}
           messageEditor={props.messageEditor}
+          participants={props.participants}
         />
       </Message.Slot>
       <Message.Slot
@@ -150,6 +156,7 @@ function RegularMessageLayout(props: {
 function GroupedMessageLayout(props: {
   channelId: string;
   messageEditor?: MessageEditor;
+  participants?: Accessor<IUser[]>;
 }) {
   return (
     <Message.Layout>
@@ -161,6 +168,7 @@ function GroupedMessageLayout(props: {
           <MessageContentSlot
             channelId={props.channelId}
             messageEditor={props.messageEditor}
+            participants={props.participants}
             class="min-w-0 flex-1"
           />
           {/* TODO (seamus): hiding the grouped meta for now */}
@@ -207,12 +215,14 @@ export function ChannelMessage(props: ChannelMessageProps) {
             <GroupedMessageLayout
               channelId={props.channelId}
               messageEditor={props.messageEditor}
+              participants={props.participants}
             />
           </Match>
           <Match when={true}>
             <RegularMessageLayout
               channelId={props.channelId}
               messageEditor={props.messageEditor}
+              participants={props.participants}
             />
           </Match>
         </Switch>

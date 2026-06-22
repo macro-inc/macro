@@ -527,6 +527,7 @@ export function Channel(props: ChannelProps) {
                                 setReplyInputHandle={state.setReplyInputHandle}
                                 listMeta={listMetaByMessageId()[item.id]}
                                 messageEditor={messageEditor}
+                                participants={participants.users}
                                 threadActions={{
                                   onDismissNewMessages:
                                     activityTracker.dismissNewMessages,
