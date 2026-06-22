@@ -6,8 +6,14 @@
   "build": {
     "frontendDist": "../../packages/app/dist",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": { "script": "just dev-tauri", "cwd": "../.." },
-    "beforeBuildCommand": { "script": "just build-tauri", "cwd": "../.." }
+    "beforeDevCommand": {
+      "script": "just dev-tauri",
+      "cwd": "../.."
+    },
+    "beforeBuildCommand": {
+      "script": "just build-tauri",
+      "cwd": "../.."
+    }
   },
   "app": {
     "windows": [
@@ -16,7 +22,8 @@
         "width": 800,
         "height": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "backgroundThrottling": "disabled"
       }
     ],
     "security": {
@@ -53,24 +60,34 @@
     "deep-link": {
       "mobile": [
         {
-          "scheme": ["macro"],
+          "scheme": [
+            "macro"
+          ],
           "appLink": false
         },
         {
           "host": "macro.com",
-          "pathPrefix": ["/app"]
+          "pathPrefix": [
+            "/app"
+          ]
         },
         {
           "host": "dev.macro.com",
-          "pathPrefix": ["/app"]
+          "pathPrefix": [
+            "/app"
+          ]
         },
         {
           "host": "staging.macro.com",
-          "pathPrefix": ["/app"]
+          "pathPrefix": [
+            "/app"
+          ]
         }
       ],
       "desktop": {
-        "schemes": ["macro"]
+        "schemes": [
+          "macro"
+        ]
       }
     }
   }
