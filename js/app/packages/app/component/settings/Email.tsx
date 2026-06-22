@@ -12,11 +12,16 @@ import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import {
+  BackfillJobStatus,
   type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  getBackfillProgress,
+  useBackfillJobsQuery,
+} from '@queries/email/backfill';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   useAddInboxFlow,
   useEmailLinks,
@@ -49,6 +54,19 @@ export function Email() {
   } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
+
+  // Fires when the Email settings open. Used only to surface COMPLETED
+  // backfills; in-progress state comes from the live connection-gateway store.
+  const backfillJobsQuery = useBackfillJobsQuery();
+  const completedBackfillLinkIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const job of backfillJobsQuery.data?.jobs ?? []) {
+      if (job.status === BackfillJobStatus.Complete && job.link_id) {
+        ids.add(job.link_id);
+      }
+    }
+    return ids;
+  });
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: () => toast.success('Inbox removed'),
@@ -218,6 +236,9 @@ export function Email() {
                   link={primary()}
                   isPrimary
                   isOwn={primary().macro_id === userId()}
+                  hasCompletedBackfill={completedBackfillLinkIds().has(
+                    primary().id
+                  )}
                   resyncing={resyncingIds().has(primary().id)}
                   onResync={() => handleResyncInbox(primary().id)}
                   onReconnect={() => void startAddInbox()}
@@ -243,6 +264,7 @@ export function Email() {
                   link={link}
                   isPrimary={false}
                   isOwn={link.macro_id === userId()}
+                  hasCompletedBackfill={completedBackfillLinkIds().has(link.id)}
                   resyncing={resyncingIds().has(link.id)}
                   onResync={() => handleResyncInbox(link.id)}
                   onReconnect={() => void startAddInbox()}
@@ -381,6 +403,30 @@ function syncStatusLabel(status: SyncStatus): string {
     .exhaustive();
 }
 
+// Live backfill progress bar. `completed`/`total` are the connection-gateway
+// counters; render the ratio rather than the raw counts since the priority pass
+// can inflate both slightly above the real mailbox size.
+function BackfillProgressBar(props: { completed: number; total: number }) {
+  const percent = () =>
+    props.total > 0
+      ? Math.min(100, Math.round((props.completed / props.total) * 100))
+      : 0;
+  return (
+    <div class="flex w-40 flex-col gap-1">
+      <span class="flex items-center gap-1 text-xs text-ink-muted">
+        <ArrowsClockwiseIcon class="size-3 animate-spin" />
+        Syncing… {percent()}%
+      </span>
+      <div class="h-1 w-full overflow-hidden rounded-full bg-edge-muted">
+        <div
+          class="h-full rounded-full bg-ink transition-[width] duration-300"
+          style={{ width: `${percent()}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Chip(props: { label: string }) {
   return (
     <span class="shrink-0 rounded bg-edge-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
@@ -416,6 +462,7 @@ function InboxRow(props: {
   link: EmailLink;
   isPrimary: boolean;
   isOwn: boolean;
+  hasCompletedBackfill: boolean;
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
@@ -435,28 +482,49 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <Show
-          when={
-            ENABLE_INBOX_SYNC_STATUS &&
-            props.link.sync_status !== SyncStatus.UP_TO_DATE
-          }
-        >
-          <span
-            class="flex items-center gap-1 text-xs"
-            classList={{
-              'text-failure':
-                props.link.sync_status === SyncStatus.ERROR ||
-                props.link.sync_status === SyncStatus.NEEDS_REAUTH,
-              'text-ink-muted':
-                props.link.sync_status !== SyncStatus.ERROR &&
-                props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
-            }}
+        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+          <Switch
+            fallback={
+              <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                <span
+                  class="flex items-center gap-1 text-xs"
+                  classList={{
+                    'text-failure':
+                      props.link.sync_status === SyncStatus.ERROR ||
+                      props.link.sync_status === SyncStatus.NEEDS_REAUTH,
+                    'text-ink-muted':
+                      props.link.sync_status !== SyncStatus.ERROR &&
+                      props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
+                  }}
+                >
+                  <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+                    <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                  </Show>
+                  {syncStatusLabel(props.link.sync_status)}
+                </span>
+              </Show>
+            }
           >
-            <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-              <ArrowsClockwiseIcon class="size-3 animate-spin" />
-            </Show>
-            {syncStatusLabel(props.link.sync_status)}
-          </span>
+            {/* Live backfill progress (connection gateway) wins over the coarse
+                sync_status while a backfill is actively running. */}
+            <Match when={getBackfillProgress(props.link.id)}>
+              {(progress) => (
+                <BackfillProgressBar
+                  completed={progress().completed}
+                  total={progress().total}
+                />
+              )}
+            </Match>
+            {/* Settled inbox with a completed backfill from the BE list. */}
+            <Match
+              when={
+                props.link.sync_status === SyncStatus.UP_TO_DATE &&
+                props.hasCompletedBackfill
+              }
+            >
+              <span class="text-xs text-ink-muted">Backfill complete</span>
+            </Match>
+          </Switch>
         </Show>
       </div>
       <div class="flex items-center gap-2 shrink-0">

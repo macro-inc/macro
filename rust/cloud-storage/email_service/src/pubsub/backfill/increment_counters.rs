@@ -44,13 +44,15 @@ pub async fn incr_completed_threads(
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
-            RefreshEmailEvent::Backfill {
+            RefreshEmailEvent::BackfillProgress {
                 link_id: link.id,
                 status: if progress.job_complete {
                     BackfillStatus::Complete
                 } else {
                     BackfillStatus::Progress
                 },
+                completed_threads: progress.completed_threads,
+                total_threads: progress.total_threads,
             },
         )
         .await;

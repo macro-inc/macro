@@ -7,6 +7,10 @@ use uuid::Uuid;
 pub struct BackfillJobProgress {
     /// Number of threads completed so far, including this increment.
     pub completed_threads: i32,
+    /// The job's target thread total — the denominator for progress. Reflects
+    /// the Redis counter, which the priority pass may have bumped above the raw
+    /// mailbox size; `completed_threads` is inflated to match, so the ratio holds.
+    pub total_threads: i32,
     /// Whether every thread in the job has now been processed.
     pub job_complete: bool,
 }
@@ -110,6 +114,7 @@ impl RedisClient {
 
         Ok(BackfillJobProgress {
             completed_threads,
+            total_threads,
             job_complete,
         })
     }
