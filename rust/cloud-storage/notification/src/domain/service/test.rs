@@ -326,7 +326,10 @@ impl NotificationRepository for MockRepository {
         >,
         Report,
     > {
-        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
+        Ok(entity_refs
+            .into_iter()
+            .map(|entity_ref| (entity_ref, Vec::new()))
+            .collect())
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -541,7 +544,10 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         >,
         Report,
     > {
-        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
+        Ok(entity_refs
+            .into_iter()
+            .map(|entity_ref| (entity_ref, Vec::new()))
+            .collect())
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(

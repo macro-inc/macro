@@ -2,9 +2,10 @@
 name = "graphql_soup"
 version = "0.1.0"
 edition = "2024"
+publish = false
 
 [dependencies]
-async-graphql = { version = "7.2.1", features = ["dataloader"] }
+async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait = { workspace = true }
 either = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }

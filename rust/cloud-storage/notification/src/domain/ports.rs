@@ -152,7 +152,10 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>,
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
     > + Send;
 
     /// Get a single user notification by ID.

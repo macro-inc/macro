@@ -69,9 +69,9 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
+use notification::domain::service::SqsNotificationIngress;
 #[cfg(feature = "graphql")]
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
-use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{

@@ -14,8 +14,8 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::request::{
     BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
-    NotificationListFilters,
-    NotificationStatus, SendNotificationRequest, UpdateNotificationsRequest,
+    NotificationListFilters, NotificationStatus, SendNotificationRequest,
+    UpdateNotificationsRequest,
 };
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
@@ -86,7 +86,10 @@ pub trait NotificationReader: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> impl Future<
-        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>,
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
     > + Send;
 
     /// Get a single user notification by ID.

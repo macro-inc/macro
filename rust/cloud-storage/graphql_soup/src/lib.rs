@@ -16,10 +16,6 @@ use models_pagination::{
     Base64Str, CursorWithValAndFilter, PaginatedOpaqueCursor, SimpleSortMethod, TypeEraseCursor,
 };
 use models_properties::{EntityReference, service::property_value::PropertyValue};
-use notification::domain::models::{
-    UserNotificationRow,
-    request::{NotificationEntityRef, NotificationItemType},
-};
 use models_soup::{
     SoupProperty,
     call_record::SoupCallRecord,
@@ -31,6 +27,10 @@ use models_soup::{
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     project::SoupProject,
+};
+use notification::domain::models::{
+    UserNotificationRow,
+    request::{NotificationEntityRef, NotificationItemType},
 };
 use serde_json::Value;
 use soup::domain::{

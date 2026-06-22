@@ -281,7 +281,8 @@ fn notification_ref_matches_row(
         NotificationItemType::Chat => event_item_type == "chat",
         NotificationItemType::Call => event_item_type == "call",
         NotificationItemType::Github => {
-            event_item_type == "foreign_entity" && notification_event_type_is_github(notification_event_type)
+            event_item_type == "foreign_entity"
+                && notification_event_type_is_github(notification_event_type)
         }
         NotificationItemType::Message => false,
     }
@@ -454,7 +455,10 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         entity_refs: Vec<NotificationEntityRef>,
     ) -> impl std::future::Future<
-        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>,
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
     > + Send;
 
     /// Get a single user notification by ID.

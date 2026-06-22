@@ -169,7 +169,10 @@ impl NotificationRepository for MockNotifRepo {
         >,
         Report,
     > {
-        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
+        Ok(entity_refs
+            .into_iter()
+            .map(|entity_ref| (entity_ref, Vec::new()))
+            .collect())
     }
     async fn get_user_notification_by_id<T: serde::de::DeserializeOwned + Send>(
         &self,

@@ -30,7 +30,7 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
-async-graphql = { version = "7.2.1", optional = true }
+async-graphql = { workspace = true, optional = true }
 async-graphql-axum = { version = "7.0.17", optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }

@@ -6,18 +6,18 @@ mod task_properties;
 use std::collections::HashMap;
 
 use models_properties::api::requests::SetPropertyValue;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::{EntityReference, EntityType};
 use models_properties::convert_set_property_value_to_property_value;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::error::PropertiesErr;
 use std::sync::Arc;
-use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
+
+use super::error::PropertiesErr;
 use super::model::{EntityPropertiesKey, EntityPropertyInfo};
-use super::ports::{NotificationService, PermissionService, PropertiesRepo};
+use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
@@ -195,7 +195,8 @@ where
     async fn get_entity_properties_batch(
         &self,
         entity_refs: Vec<EntityReference>,
-    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr> {
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr>
+    {
         Ok(self
             .repository
             .get_entity_properties_batch(entity_refs)
