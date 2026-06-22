@@ -10,6 +10,7 @@ import {
   ServiceUrl,
   stack,
 } from '../../packages/shared';
+import { Queue } from '../../packages/resources';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import {
   DocumentCognitionService,
@@ -161,29 +162,14 @@ const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
 // ── AI projection queue ──────────────────────────────────────────────────────
 // This service both produces (on upsert) and consumes (via the inbound worker)
-// ai projection materialization messages, so the queue is owned here.
-const aiProjectionDlq = new aws.sqs.Queue('ai-projection-dlq', {
-  name: `document-cognition-ai-projection-dlq-${stack}`,
-  messageRetentionSeconds: 1209600,
+// ai projection materialization messages, so the queue is owned here. The Queue
+// component provisions the queue, its DLQ, and the associated alarms.
+const aiProjectionQueue = new Queue('ai-projection', {
   tags,
+  maxReceiveCount: 2,
+  // Give each message up to 2 minutes to process before it's re-queued.
+  visibilityTimeoutSeconds: 120,
 });
-
-const aiProjectionQueue = new aws.sqs.Queue(
-  'ai-projection-queue',
-  {
-    name: `document-cognition-ai-projection-${stack}`,
-    // Give each message up to 2 minutes to process before it's re-queued.
-    visibilityTimeoutSeconds: 120,
-    redrivePolicy: aiProjectionDlq.arn.apply((arn) =>
-      JSON.stringify({
-        deadLetterTargetArn: arn,
-        maxReceiveCount: 2,
-      })
-    ),
-    tags,
-  },
-  { dependsOn: [aiProjectionDlq] }
-);
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -211,7 +197,7 @@ const documentCognitionService = new DocumentCognitionService(
       deleteChatQueueArn,
       searchEventQueueArn,
       notificationIngressQueueArn,
-      aiProjectionQueue.arn,
+      aiProjectionQueue.queue.arn,
       ...aiTools.queueArns,
     ],
     connectionTablePolicyArn: connectionGatewayTablePolicyArn,
@@ -272,7 +258,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'AI_PROJECTION_QUEUE',
-        value: pulumi.interpolate`${aiProjectionQueue.name}`,
+        value: pulumi.interpolate`${aiProjectionQueue.queue.name}`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',
@@ -328,5 +314,5 @@ export const documentCognitionServiceAlbSgId =
 export const documentCognitionServiceUrl = pulumi.interpolate`${documentCognitionService.domain}`;
 export const documentCognitionServiceRoleArn =
   documentCognitionService.role.arn;
-export const aiProjectionQueueArn = pulumi.interpolate`${aiProjectionQueue.arn}`;
-export const aiProjectionQueueName = pulumi.interpolate`${aiProjectionQueue.name}`;
+export const aiProjectionQueueArn = aiProjectionQueue.queue.arn;
+export const aiProjectionQueueName = aiProjectionQueue.queue.name;
