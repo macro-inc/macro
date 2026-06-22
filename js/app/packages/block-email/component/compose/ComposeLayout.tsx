@@ -27,6 +27,7 @@ type ComposeLayoutRefs = {
 export function ComposeLayout(props: {
   toolbar?: JSX.Element;
   header?: JSX.Element;
+  notice?: JSX.Element;
   class?: string;
   bodyDebugName?: string;
 }) {
@@ -246,6 +247,10 @@ export function ComposeLayout(props: {
             </Show>
           </div>
         </div>
+
+        <Show when={props.notice}>
+          <div class="mb-4">{props.notice}</div>
+        </Show>
 
         <ComposeRecipients
           toRef={registerRef('directRecipientsSelector')}

@@ -40,7 +40,12 @@ false && pressPulse;
 
 type DockId = ListView | 'home';
 
-type IconComponent = Component<any>;
+type IconComponentProps = {
+  triggerAnimation?: boolean;
+  class?: string;
+};
+
+type IconComponent = Component<IconComponentProps>;
 
 type MobileDockButtonProps = {
   icon: IconComponent;
@@ -80,8 +85,13 @@ function MobileDockButton(props: MobileDockButtonProps) {
       }}
       // Default: fires on release — the press pulse holds the on-state while
       // touched. (Not on fireOnPress buttons, which already fired above.)
-      onClick={() => {
-        if (!props.fireOnPress) props.onClick();
+      onClick={(e) => {
+        if (props.fireOnPress) {
+          // Keyboard/assistive activation dispatches click without pointerdown.
+          if (e.detail === 0) props.onClick();
+          return;
+        }
+        props.onClick();
       }}
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}

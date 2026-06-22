@@ -125,7 +125,13 @@ const createBlock = async (spec: {
     });
   } else {
     openWithSplit(
-      { type: blockName, id },
+      {
+        type: blockName,
+        id,
+        ...(createMdParams
+          ? { params: createMdParams, preserveParams: true }
+          : {}),
+      },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
