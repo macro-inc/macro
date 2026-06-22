@@ -116,6 +116,9 @@ pub async fn init_backfill(
             job_id: scope.job_id,
             payload: ListThreadsPayload {
                 next_page_token: None, // a value of None tells the process to start from the beginning
+                // Seed the user's most important threads first; this pass then
+                // hands off to the normal most-recent-to-least sweep.
+                priority_pass: true,
             },
         }),
     };

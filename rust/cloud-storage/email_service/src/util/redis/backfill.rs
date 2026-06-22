@@ -44,6 +44,27 @@ impl RedisClient {
         Ok(())
     }
 
+    /// Atomically add `delta` to a job's `total_threads`. Used by the priority
+    /// first pass to account for the extra BackfillThread messages it enqueues:
+    /// the normal sweep re-covers those same threads and re-increments the
+    /// completed counter via the already-exists skip path, so the total must
+    /// grow to match or the `completed >= total` check would complete the job early.
+    pub async fn add_to_total_threads(&self, job_id: Uuid, delta: i32) -> anyhow::Result<()> {
+        let key = Self::job_status_key(job_id);
+
+        let mut redis_connection = self
+            .inner
+            .get_multiplexed_async_connection()
+            .await
+            .context("unable to connect to redis")?;
+
+        redis_connection
+            .hincr::<&str, &str, i32, i32>(&key, "total_threads", delta)
+            .await?;
+
+        Ok(())
+    }
+
     /// Increment completed threads count and return the resulting progress, deleting redis entry for job if complete
     pub async fn incr_completed_threads(
         &self,
