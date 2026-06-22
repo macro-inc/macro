@@ -25,11 +25,11 @@ import OpenIcon from '@phosphor/arrows-out.svg';
 import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
 import MessageIcon from '@phosphor/chat-circle.svg';
 import ThreadIcon from '@phosphor/chats-circle.svg';
-import Clipboard from '@phosphor/clipboard.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import HighlightIcon from '@phosphor/highlighter-circle.svg';
+import Link from '@phosphor/link.svg';
 import MapPinIcon from '@phosphor/map-pin-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
@@ -694,11 +694,7 @@ export function PopupPreview(props: {
     }
 
     buttons.push(
-      <PopupIconButton
-        tooltip="Copy Link"
-        onClick={handleCopy}
-        icon={Clipboard}
-      />
+      <PopupIconButton tooltip="Copy Link" onClick={handleCopy} icon={Link} />
     );
 
     if (props.documentInfo.type === 'task') {
