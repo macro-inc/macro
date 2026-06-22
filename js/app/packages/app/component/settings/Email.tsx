@@ -44,7 +44,6 @@ export function Email() {
 
   const {
     query: emailLinksQuery,
-    connect: connectEmail,
     disconnect: disconnectEmail,
     resyncInbox,
   } = useEmailLinks();
@@ -86,11 +85,11 @@ export function Email() {
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
     setIsEmailActionPending(true);
-    await connectEmail().match(
-      () => {},
-      () => toast.failure('Failed to connect email')
-    );
-    setIsEmailActionPending(false);
+    try {
+      await startAddInbox();
+    } finally {
+      setIsEmailActionPending(false);
+    }
   };
 
   const onDisconnectEmail = async () => {
