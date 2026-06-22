@@ -58,14 +58,19 @@ export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
   const { showPaywall } = usePaywallState();
 
-  // Seed the selector from the model the user just picked in the soup chat
-  // input (carried over the new-chat redirect via the pending send), then the
-  // chat's stored model, then the local draft, then the default. The chat input
-  // reconciles to an available model if the user isn't entitled to this one.
+  // Seed the model selector, highest priority first:
+  //  1. peekPendingSend — the model the user just sent with in the soup chat
+  //     input, carried over the new-chat redirect and reflected in the new chat.
+  //  2. loadedState.model — the per-chat draft: a model picked in this chat's
+  //     input but not yet sent (persisted per chat id, so it survives reload /
+  //     navigation, just like the draft text and attachments).
+  //  3. the chat's stored model.
+  // The chat input reconciles to an available model if the user isn't entitled
+  // to this one.
   const initialModel =
     peekPendingSend()?.model ??
-    parseModel(props.data.chat.model) ??
-    loadedState.model;
+    loadedState.model ??
+    parseModel(props.data.chat.model);
 
   return (
     <ChatInputProvider
