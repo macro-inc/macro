@@ -4,7 +4,7 @@
 mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model::ai_projection::AiProjectionQueueMessage;
+use models_ai_projection::AiProjectionQueueMessage;
 use sha2::{Digest, Sha256};
 
 use crate::domain::{

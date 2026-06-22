@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "models_ai_projection"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

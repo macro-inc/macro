@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::ai_projection::AiProjectionQueueMessage;
+use models_ai_projection::AiProjectionQueueMessage;
 
 use crate::domain::{
     ai_projection_queue::AiProjectionQueue,

@@ -105,9 +105,9 @@ dependencies = [
  "http-body-util",
  "macro_db_migrator",
  "macro_user_id",
- "model",
  "model-error-response",
  "model_user",
+ "models_ai_projection",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7596,6 +7596,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_ai_projection"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "workspace-hack",
+]
+
+[[package]]
 name = "models_bulk_upload"
 version = "0.1.0"
 dependencies = [
@@ -11730,6 +11738,7 @@ dependencies = [
  "email",
  "futures",
  "model",
+ "models_ai_projection",
  "models_email",
  "s3_key",
  "serde",

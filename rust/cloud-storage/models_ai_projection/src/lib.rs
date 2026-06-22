@@ -1,3 +1,6 @@
+#![deny(missing_docs)]
+//! Shared message types for the ai projection queue.
+
 use serde::{Deserialize, Serialize};
 
 /// Message enqueued onto `ai_projection_queue` to request async materialization

@@ -1,6 +1,6 @@
 //! Outbound port for enqueueing ai projection materialization requests.
 
-use model::ai_projection::AiProjectionQueueMessage;
+use models_ai_projection::AiProjectionQueueMessage;
 
 use crate::domain::model::AiProjectionError;
 

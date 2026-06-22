@@ -1,5 +1,5 @@
 use anyhow::Context;
-use model::ai_projection::AiProjectionQueueMessage;
+use models_ai_projection::AiProjectionQueueMessage;
 
 use crate::SQS;
 
