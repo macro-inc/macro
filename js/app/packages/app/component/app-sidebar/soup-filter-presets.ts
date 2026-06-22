@@ -468,14 +468,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. CRM rows are NIL-excluded the same way. `search-supported`
-        // mirrors these exclusions client-side so entities that enter the
-        // soup cache outside this query (e.g. websocket-driven inserts)
-        // don't surface in the search feed.
+        // them. CRM rows and non-displayable channel-thread rows are
+        // NIL-excluded the same way. `search-supported` mirrors these
+        // exclusions client-side so entities that enter the soup cache outside
+        // this query (e.g. websocket-driven inserts) don't surface in the
+        // search feed.
         filters: {
           include: {
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
+            channelThreadId: [NIL_UUID],
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

@@ -26,9 +26,7 @@ import type {
 import { type Accessor, createMemo, on, type Setter } from 'solid-js';
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
-  const filters: EntityFilters = {
-    channel_thread_filters: { thread_ids: [NIL_UUID] },
-  };
+  const filters: EntityFilters = {};
   const { include } = data;
 
   // Document filters
@@ -75,6 +73,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
       channel_ids: include.channelId,
       channel_types: include.channelType,
       sender_ids: include.channelSenderId,
+    };
+  }
+
+  // Channel thread filters
+  if (include.channelThreadId?.length) {
+    filters.channel_thread_filters = {
+      thread_ids: include.channelThreadId,
     };
   }
 
