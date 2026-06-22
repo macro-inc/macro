@@ -99,10 +99,11 @@ export function handleRefreshEmail(payload: unknown): void {
         toast.success('Inbox synced');
       }
     } else {
-      setBackfillProgress(event.link_id, {
-        completed: event.completed_threads,
-        total: event.total_threads,
-      });
+      setBackfillProgress(
+        event.link_id,
+        event.completed_threads,
+        event.total_threads
+      );
     }
   }
 }

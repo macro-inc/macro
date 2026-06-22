@@ -19,6 +19,8 @@ import {
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import {
+  type BackfillProgress,
+  estimateEtaSeconds,
   getBackfillProgress,
   useBackfillJobsQuery,
 } from '@queries/email/backfill';
@@ -411,16 +413,35 @@ function syncStatusLabel(status: SyncStatus): string {
 // Live backfill progress bar. `completed`/`total` are the connection-gateway
 // counters; render the ratio rather than the raw counts since the priority pass
 // can inflate both slightly above the real mailbox size.
-function BackfillProgressBar(props: { completed: number; total: number }) {
+// Rough "time left" from the recent backfill rate. Rounds up and bins into
+// s / m / h so the estimate doesn't visibly jitter between progress events.
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `~${Math.max(1, Math.ceil(seconds))}s left`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `~${minutes}m left`;
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  return remMinutes > 0 ? `~${hours}h ${remMinutes}m left` : `~${hours}h left`;
+}
+
+function BackfillProgressBar(props: { progress: BackfillProgress }) {
   const percent = () =>
-    props.total > 0
-      ? Math.min(100, Math.round((props.completed / props.total) * 100))
+    props.progress.total > 0
+      ? Math.min(
+          100,
+          Math.round((props.progress.completed / props.progress.total) * 100)
+        )
       : 0;
+  const etaLabel = createMemo(() => {
+    const seconds = estimateEtaSeconds(props.progress);
+    return seconds === undefined ? undefined : formatEta(seconds);
+  });
   return (
-    <div class="flex w-40 flex-col gap-1">
-      <span class="flex items-center gap-1 text-xs text-ink-muted">
-        <ArrowsClockwiseIcon class="size-3 animate-spin" />
-        Syncing… {percent()}%
+    <div class="flex w-60 flex-col gap-1">
+      <span class="flex items-center gap-1 whitespace-nowrap text-xs text-ink-muted">
+        <ArrowsClockwiseIcon class="size-3 shrink-0 animate-spin" />
+        Backfilling… {props.progress.completed}/{props.progress.total}
+        <Show when={etaLabel()}>{(label) => <>{' · '}{label()}</>}</Show>
       </span>
       <div class="h-1 w-full overflow-hidden rounded-full bg-edge-muted">
         <div
@@ -513,12 +534,7 @@ function InboxRow(props: {
             {/* Live backfill progress (connection gateway) wins over the coarse
                 sync_status while a backfill is actively running. */}
             <Match when={getBackfillProgress(props.link.id)}>
-              {(progress) => (
-                <BackfillProgressBar
-                  completed={progress().completed}
-                  total={progress().total}
-                />
-              )}
+              {(progress) => <BackfillProgressBar progress={progress()} />}
             </Match>
             {/* Settled inbox with a completed backfill from the BE list. */}
             <Match
