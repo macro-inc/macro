@@ -1,5 +1,14 @@
 name: Deploy Lexical Service
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-lexical-service.yml"
+      - "js/bun.lock"
+      - "js/package.json"
+      - "js/lexical-core/**"
+      - "js/lexical-service/**"
+      - "js/loro-mirror/**"
   workflow_dispatch:
     inputs:
       environment:
@@ -8,16 +17,19 @@ on:
         options:
           - dev
           - prod
-        description: The environment to deploy to
-
-concurrency:
-  group: ${{ github.workflow }}-lexical-service-${{ inputs.environment }}
-  # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
-  cancel-in-progress: false
+        description: The environment to deploy to manually
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.environment) || '["dev","prod"]') }}
+    concurrency:
+      group: ${{ github.workflow }}-lexical-service-${{ matrix.environment }}
+      # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
       - name: Setup Bun
@@ -25,9 +37,9 @@ jobs:
       - name: Install dependencies
         working-directory: js
         run: bun install --frozen-lockfile
-      - name: Deploy to Cloudflare (${{ inputs.environment }})
+      - name: Deploy to Cloudflare (${{ matrix.environment }})
         working-directory: js/lexical-service
-        run: bun run deploy-${{ inputs.environment }}
+        run: bun run deploy-${{ matrix.environment }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

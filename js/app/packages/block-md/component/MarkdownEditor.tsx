@@ -1,3 +1,4 @@
+import { SplitBottomPanel } from '@app/component/split-layout/components/SplitBottomPanel';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
@@ -129,12 +130,10 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
@@ -198,8 +197,6 @@ import { MarkdownPopup } from './MarkdownPopup';
 
 false && fileFolderDrop;
 
-const DEBUG = LOCAL_ONLY;
-
 // There is an invisible div below the editor that clicks to set editor focus
 // and add a new line. This constant is the minimum height of that element (in pixels)
 // once the editor has at least one full page of content.
@@ -223,6 +220,8 @@ function getBlankMarkdownPlaceholder(canEdit: boolean) {
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: LoroManager;
+  showLexicalStateDebugger?: boolean;
+  onLexicalStateDebuggerClose?: () => void;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -280,11 +279,12 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() || canComment());
+    editor.setEditable(editorReady() && (canEdit() || canComment()));
   });
 
   const isContentEditable = createMemo(() => {
     return (
+      editorReady() &&
       (canEdit() ?? false) &&
       !isGenerating() &&
       !generatedAndWaiting() &&
@@ -760,7 +760,7 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() ?? false);
+    editor.setEditable(editorReady() && (canEdit() ?? false));
   });
 
   plugins.useReactive(
@@ -1122,10 +1122,16 @@ export function MarkdownEditor(props: {
           />
         </Show>
 
-        <Show when={DEBUG && !isMobile()}>
+        <Show when={props.showLexicalStateDebugger}>
           <Show when={state()}>
             {(state) => (
-              <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              <SplitBottomPanel
+                id="lexical-state-debugger"
+                title="Lexical state debugger"
+                onClose={props.onLexicalStateDebuggerClose}
+              >
+                <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              </SplitBottomPanel>
             )}
           </Show>
         </Show>

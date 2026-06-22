@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "ai_usage"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+macro_user_id = { path = "../macro_user_id", features = ["schema"] }
+macro_uuid = { path = "../macro_uuid" }
+model_user = { path = "../model_user", features = ["axum"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

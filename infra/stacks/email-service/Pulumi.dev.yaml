@@ -31,3 +31,4 @@ config:
   email-service:macro_db_secret_key: macro-db-dev
   email-service:delete_unused_after_days: 5000
   email-service:delete_inactive_after_days: 5000
+  email-service:inbox_health_poll_interval_hours: 6

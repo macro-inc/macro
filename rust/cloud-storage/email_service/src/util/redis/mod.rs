@@ -1,5 +1,6 @@
 pub mod access_token;
 pub mod backfill;
+pub mod health_probe;
 pub mod lock;
 pub mod rate_limit;
 

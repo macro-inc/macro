@@ -4,11 +4,14 @@
     "agent": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "macro_user_id",
+      "macro_uuid",
       "model-entity",
       "model_file_type",
+      "model_user",
       "non_empty",
       "workspace-hack"
     ],
@@ -16,6 +19,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -113,6 +117,14 @@
       "macro_user_id",
       "workspace-hack"
     ],
+    "ai_usage": [
+      "ai_usage",
+      "cowlike",
+      "macro_user_id",
+      "macro_uuid",
+      "model_user",
+      "workspace-hack"
+    ],
     "analytics_client": [
       "analytics_client",
       "workspace-hack"
@@ -121,6 +133,7 @@
       "ai_toolset",
       "anthropic",
       "cowlike",
+      "macro_env_var",
       "macro_user_id",
       "workspace-hack"
     ],
@@ -136,6 +149,7 @@
     "authentication_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "analytics_client",
       "attachment",
       "authentication_service",
@@ -234,6 +248,7 @@
     "authentication_service_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -242,6 +257,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -269,6 +285,7 @@
     "bots": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "bot_id",
@@ -338,6 +355,7 @@
     "call": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "call",
       "comms",
@@ -389,6 +407,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -484,6 +503,7 @@
     "channels": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "bot_id",
@@ -546,6 +566,7 @@
     "chat": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "chat",
       "cowlike",
@@ -575,6 +596,7 @@
     "comms": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "comms",
       "cowlike",
@@ -584,6 +606,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -600,6 +623,7 @@
     "comms_db_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "comms_db_client",
       "cowlike",
@@ -624,6 +648,7 @@
     "connection": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "connection",
       "connection_gateway_client",
@@ -635,6 +660,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -650,6 +676,7 @@
     "connection_gateway": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "connection_gateway",
       "connection_gateway_client",
@@ -711,6 +738,7 @@
     "contacts": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "contacts",
       "cowlike",
@@ -753,6 +781,7 @@
     "contacts_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "contacts",
       "contacts_service",
@@ -804,6 +833,7 @@
     "convert_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "convert_service",
@@ -867,6 +897,7 @@
     "crm": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "crm",
@@ -928,6 +959,7 @@
     "deleted_item_poller": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -975,6 +1007,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -1080,6 +1113,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "analytics_client",
       "anthropic",
       "attachment",
@@ -1193,6 +1227,7 @@
     "document_storage_service_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_storage_service_client",
@@ -1201,6 +1236,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -1220,6 +1256,7 @@
     "document_text_extractor": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -1232,6 +1269,7 @@
       "macro_env",
       "macro_env_var",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -1248,6 +1286,7 @@
     "document_upload_finalizer_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -1321,6 +1360,7 @@
     "documents": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -1393,6 +1433,7 @@
     "docx_unzip_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1450,6 +1491,7 @@
     "email": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1521,6 +1563,7 @@
     "email_refresh_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1558,6 +1601,7 @@
     "email_scheduled_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1595,6 +1639,7 @@
     "email_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "connection_gateway_client",
@@ -1665,6 +1710,7 @@
     "email_service_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1696,6 +1742,7 @@
     "email_sfs_delete_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -1733,6 +1780,7 @@
     "email_suppression_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -1785,6 +1833,7 @@
     "entity_access": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -1793,6 +1842,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -1835,6 +1885,7 @@
     "foreign_entity": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -1878,6 +1929,7 @@
     "github": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -1973,6 +2025,7 @@
     "image_proxy_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -2062,6 +2115,7 @@
     "lexical_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -2159,6 +2213,9 @@
     "macro_config": [
       "macro_config",
       "macro_config_derive",
+      "macro_env",
+      "macro_env_var",
+      "remote_env_var",
       "workspace-hack"
     ],
     "macro_config_derive": [
@@ -2172,6 +2229,7 @@
     "macro_db_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -2223,6 +2281,7 @@
     "macro_middleware": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -2276,6 +2335,7 @@
     "macro_sha_count_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -2284,6 +2344,7 @@
       "item_filters",
       "macro_sha_count_client",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -2323,10 +2384,12 @@
     "mcp_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "macro_env_var",
       "macro_user_id",
+      "macro_uuid",
       "mcp_client",
       "model-entity",
       "model-error-response",
@@ -2339,6 +2402,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -2437,6 +2501,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -2542,6 +2607,7 @@
     "model": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -2549,6 +2615,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -2669,6 +2736,7 @@
     "models_search": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -2731,6 +2799,7 @@
     "models_soup": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -2889,6 +2958,7 @@
     "notification_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -2958,6 +3028,7 @@
     "organization_retention_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -2995,6 +3066,7 @@
     "organization_retention_trigger": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -3036,6 +3108,7 @@
     "properties": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -3091,6 +3164,7 @@
     "properties_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -3202,6 +3276,7 @@
       "agent",
       "ai_tools",
       "ai_toolset",
+      "ai_usage",
       "anthropic",
       "attachment",
       "authentication_service_client",
@@ -3299,6 +3374,7 @@
     "search_processing_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -3374,6 +3450,7 @@
     "search_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -3442,6 +3519,7 @@
     "search_service_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -3497,6 +3575,7 @@
     "search_upload_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -3543,6 +3622,7 @@
     "seed_cli": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "comms_db_client",
       "cowlike",
@@ -3617,6 +3697,7 @@
     "soup": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -3671,6 +3752,7 @@
     "sqs_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -3717,6 +3799,7 @@
     "static_file_service": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "decode_jwt",
@@ -3779,6 +3862,7 @@
     "sync_service_client": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",
@@ -3786,6 +3870,7 @@
       "frecency",
       "item_filters",
       "macro_user_id",
+      "macro_uuid",
       "model",
       "model-entity",
       "model-error-response",
@@ -3811,6 +3896,7 @@
     "task_dedup": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "call",
@@ -3877,6 +3963,7 @@
     "teams": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -3936,6 +4023,7 @@
     "upload_extractor_lambda_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "connection_gateway_client",
@@ -3978,6 +4066,7 @@
     "upload_extractor_lambda_trigger": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "authentication_service_client",
       "cowlike",
@@ -4016,6 +4105,7 @@
     "user_link_cleanup_handler": [
       "agent",
       "ai_toolset",
+      "ai_usage",
       "attachment",
       "cowlike",
       "document_sub_type",

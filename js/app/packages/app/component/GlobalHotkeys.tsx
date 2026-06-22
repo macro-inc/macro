@@ -32,7 +32,13 @@ import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, onCleanup } from 'solid-js';
-import { themes } from '../../theme/signals/themeSignals';
+import {
+  setDarkModeTheme,
+  setLightModeTheme,
+  setThemeShouldMatchSystem,
+  themeShouldMatchSystem,
+  themes,
+} from '../../theme/signals/themeSignals';
 
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
@@ -102,7 +108,7 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, closeSettings, settingsOpen, setActiveTabId } =
+  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
@@ -209,23 +215,11 @@ export default function GlobalShortcuts() {
     keyDownHandler: createNewSplit,
   });
 
-  const openSettingsInNewSplit = (tab?: SettingsTab) => {
+  // Settings open in a modal by default; tab selection is applied even when
+  // settings are already open.
+  const openSettingsModal = (tab?: SettingsTab) => {
     if (settingsOpen()) {
       if (tab) setActiveTabId(tab);
-      return;
-    }
-    if (canFit()) {
-      if (tab) setActiveTabId(tab);
-      analytics.track('split_created', { from: 'global_hotkey' });
-      openWithSplit(
-        { type: 'component', id: 'settings' },
-        {
-          referredFrom: 'hotkey',
-          allowDuplicate: true,
-          preferNewSplit: true,
-          mergeHistory: false,
-        }
-      );
       return;
     }
     openSettings(tab);
@@ -237,8 +231,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Toggle settings',
     keyDownHandler: () => {
-      if (settingsOpen()) closeSettings();
-      else openSettingsInNewSplit();
+      toggleSettings();
       return true;
     },
     runWithInputFocused: true,
@@ -249,7 +242,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettingsInNewSplit('Account');
+      openSettingsModal('Account');
       return true;
     },
     runWithInputFocused: true,
@@ -322,6 +315,65 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
     });
+  });
+
+  const setPreferredLightScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default light theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredLightScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setLightModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  const setPreferredDarkScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default dark theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredDarkScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setDarkModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: () =>
+      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
+    keyDownHandler: () => {
+      setThemeShouldMatchSystem((prev) => !prev);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({

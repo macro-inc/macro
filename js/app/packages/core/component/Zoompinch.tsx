@@ -30,6 +30,12 @@ type ZoompinchProps = {
   };
   class?: string;
   style?: JSX.CSSProperties;
+  /**
+   * Inline style for the .canvas element. The canvas defaults to filling the
+   * wrapper; pass an explicit size to give it its own layout box (the engine
+   * contain-fits it into the wrapper via naturalScale).
+   */
+  canvasStyle?: JSX.CSSProperties;
   children?: JSX.Element;
 };
 
@@ -164,7 +170,12 @@ export function Zoompinch(props: ZoompinchProps) {
       class={props.class}
       style={{ ...props.style, 'touch-action': 'none' }}
     >
-      <div class="canvas size-full will-change-transform">{props.children}</div>
+      <div
+        class="canvas size-full will-change-transform"
+        style={props.canvasStyle}
+      >
+        {props.children}
+      </div>
     </div>
   );
 }

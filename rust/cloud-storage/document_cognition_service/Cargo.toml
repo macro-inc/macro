@@ -25,6 +25,7 @@ local_queue = []
 
 [dependencies]
 agent = { path = "../agent", features = ["debug-messages"] }
+ai_usage = { path = "../ai_usage" }
 aho-corasick = "1.1.3"
 attachment = { path = "../attachment", features = ["provider"] }
 non_empty = { path = "../non_empty" }

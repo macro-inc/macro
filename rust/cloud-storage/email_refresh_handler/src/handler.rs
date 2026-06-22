@@ -21,16 +21,74 @@ pub async fn handler(
     ctx: context::Context,
     _event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
-    if matches!(ctx.config.environment, Environment::Production) {
-        // only send delete messages once daily, during the night
-        let current_hour = chrono::Utc::now().hour();
-        if current_hour == 5 {
-            tokio::try_join!(send_refresh_messages(&ctx), send_delete_messages(&ctx))?;
-        } else {
-            send_refresh_messages(&ctx).await?;
+    tokio::try_join!(
+        send_refresh_messages(&ctx),
+        send_health_check_messages(&ctx)
+    )?;
+
+    // only send delete messages once daily, during the night
+    if matches!(ctx.config.environment, Environment::Production) && chrono::Utc::now().hour() == 5 {
+        send_delete_messages(&ctx).await?;
+    }
+
+    Ok(())
+}
+
+/// send health-check notifications for active links, bucketed by id hash so each link is
+/// probed once per configured interval across the hourly runs
+async fn send_health_check_messages(ctx: &context::Context) -> Result<(), Error> {
+    let interval_hours = ctx.config.health_poll_interval_hours as i32;
+    if interval_hours <= 0 {
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now();
+    let current_hour = now.hour();
+    // Bucket on hours since the epoch rather than hour-of-day, so every bucket stays
+    // reachable even when the interval exceeds 24 hours.
+    let bucket = (now.timestamp().div_euclid(3600) % i64::from(interval_hours)) as i32;
+    let provider_filter = DbUserProvider::Gmail;
+
+    // uses the index idx_links_active_provider_hash_bucket
+    let link_ids = sqlx::query_scalar!(
+        r#"
+        SELECT
+            id as "link_id"
+        FROM email_links
+        WHERE
+            is_sync_active = TRUE
+            AND provider = $1
+            AND (abs(hashtext(id::text)::bigint) % $2::int4) = $3::int4
+        "#,
+        provider_filter as _,
+        interval_hours,
+        bucket
+    )
+    .fetch_all(&ctx.db)
+    .await
+    .unwrap_or_else(|e| {
+        tracing::error!(error = ?e, "Error fetching links for health check");
+        Vec::new()
+    });
+
+    if !link_ids.is_empty() {
+        tracing::info!(
+            "Hour {}. Sending health-check notifications for {} links (every {}h)",
+            current_hour,
+            link_ids.len(),
+            interval_hours
+        );
+
+        for link_id in link_ids {
+            let notif = LinkManagerMessage::HealthCheck { link_id };
+            ctx.sqs_client
+                .enqueue_link_manager_notification(notif)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, link_id=%link_id, "Error enqueueing health-check notification for link");
+                })
+                .ok();
         }
-    } else {
-        send_refresh_messages(&ctx).await?;
     }
     Ok(())
 }

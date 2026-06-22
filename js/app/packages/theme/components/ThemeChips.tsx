@@ -19,7 +19,7 @@ const sizeStyles: Record<
     icon: 'size-[18px]',
   },
   sm: {
-    root: 'gap-1 py-[3px] px-[5px] rounded-md',
+    root: 'gap-1 py-[3px] px-[5px] rounded-sm',
     accent: 'size-[9px]',
     icon: 'size-3',
   },

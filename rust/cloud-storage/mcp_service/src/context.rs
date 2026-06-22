@@ -337,6 +337,8 @@ async fn build_tool_context(
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        recorder: ai_usage::pg_recorder(db.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 
     tracing::info!("initialized tool context");

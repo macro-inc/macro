@@ -25,6 +25,7 @@ thiserror = { workspace = true }
 utoipa = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+ai_usage = { path = "../ai_usage" }
 ai_toolset = { path = "../ai_toolset" }
 attachment = { path = "../attachment" }
 macro_user_id = { path = "../macro_user_id" }

@@ -101,6 +101,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./memory/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./ai_usage/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./backfill_entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_management/.env

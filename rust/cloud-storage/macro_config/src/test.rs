@@ -1,6 +1,6 @@
 use super::*;
 use serde::Deserialize;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -208,7 +208,7 @@ struct EnvVarFieldConfig {
     missing_optional_secret: Option<OptionalConfigSecret>,
 }
 
-#[derive(Deserialize)]
+#[derive(MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 struct RemoteSecretFieldConfig {
     remote_config_secret: remote_env_var::LocalOrRemoteSecret<ConfigSecret>,
@@ -324,6 +324,62 @@ fn load_deserializes_local_or_remote_macro_env_var_fields() {
     assert_eq!(
         config.optional_remote_config_secret.as_str(),
         Some("optional-remote-secret-name")
+    );
+    assert_eq!(config.missing_remote_config_secret.as_str(), None);
+}
+
+#[derive(Debug)]
+struct TestSecretManagerError;
+
+impl std::fmt::Display for TestSecretManagerError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("test secret manager error")
+    }
+}
+
+impl std::error::Error for TestSecretManagerError {}
+
+struct TestSecretManager;
+
+impl remote_env_var::SecretManager for TestSecretManager {
+    type Err = TestSecretManagerError;
+
+    async fn get_secret_value<T: AsRef<str> + Send>(
+        &self,
+        secret_name: T,
+    ) -> Result<Arc<str>, Self::Err> {
+        Ok(Arc::from(format!("resolved-{}", secret_name.as_ref())))
+    }
+}
+
+#[tokio::test]
+async fn macro_config_derived_resolve_remote_secrets_resolves_local_or_remote_fields() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&[
+        "APP_SECRETS_JSON",
+        "REMOTE_CONFIG_SECRET",
+        "OPTIONAL_REMOTE_CONFIG_SECRET",
+        "MISSING_REMOTE_CONFIG_SECRET",
+    ]);
+    env.set("REMOTE_CONFIG_SECRET", "remote-secret-name");
+    env.set(
+        "OPTIONAL_REMOTE_CONFIG_SECRET",
+        "optional-remote-secret-name",
+    );
+
+    let config = ConfigLoader::load::<RemoteSecretFieldConfig>().expect("config should load");
+    let config = config
+        .resolve_remote_secrets(macro_env::Environment::Develop, &TestSecretManager)
+        .await
+        .expect("remote secrets should resolve");
+
+    assert_eq!(
+        config.remote_config_secret.as_ref(),
+        "resolved-remote-secret-name"
+    );
+    assert_eq!(
+        config.optional_remote_config_secret.as_str(),
+        Some("resolved-optional-remote-secret-name")
     );
     assert_eq!(config.missing_remote_config_secret.as_str(), None);
 }

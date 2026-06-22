@@ -48,6 +48,7 @@ name = "agent"
 version = "0.1.0"
 dependencies = [
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -98,6 +99,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_toolset",
+ "ai_usage",
  "anthropic",
  "anyhow",
  "async-trait",
@@ -180,6 +182,28 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "ai_usage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -307,6 +331,7 @@ dependencies = [
  "chrono",
  "futures",
  "lazy_static",
+ "macro_env_var",
  "rand 0.9.4",
  "regex",
  "reqwest 0.13.4",
@@ -1930,6 +1955,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "aws-sdk-s3",
@@ -2098,6 +2124,7 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "bot_id",
@@ -3463,6 +3490,7 @@ dependencies = [
  "aho-corasick",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -3558,6 +3586,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "ai_tools",
+ "ai_usage",
  "analytics_client",
  "anyhow",
  "aws-sdk-dynamodb",
@@ -6780,11 +6809,13 @@ name = "macro_config"
 version = "0.1.0"
 dependencies = [
  "macro_config_derive",
+ "macro_env",
  "macro_env_var",
  "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -7188,6 +7219,7 @@ version = "0.1.0"
 dependencies = [
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -7267,6 +7299,7 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "axum",
  "call",
@@ -10497,6 +10530,7 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -12042,6 +12076,7 @@ name = "task_dedup"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "aws-sdk-secretsmanager",

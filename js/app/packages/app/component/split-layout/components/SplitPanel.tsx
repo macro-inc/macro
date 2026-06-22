@@ -5,8 +5,9 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
+import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { cn, Panel } from '@ui';
+import { Button, cn, Panel } from '@ui';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   createEffect,
@@ -19,7 +20,11 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitPanelContext, type SplitPanelContextType } from '../context';
+import {
+  type SplitBottomPanelRegistration,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
@@ -43,6 +48,8 @@ export function SplitPanel(props: SplitPanelProps) {
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [bottomPanel, setBottomPanel] =
+    createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
@@ -137,6 +144,15 @@ export function SplitPanel(props: SplitPanelProps) {
           setContentOffsetTop,
           contentOffsetTop,
           splitHotkeyScope,
+          bottomPanel,
+          registerBottomPanel: (panel) => {
+            setBottomPanel(panel);
+            return () => {
+              setBottomPanel((current) =>
+                current?.id === panel.id ? undefined : current
+              );
+            };
+          },
           headerCollapser,
           layoutRefs,
           panelSize,
@@ -201,12 +217,41 @@ export function SplitPanel(props: SplitPanelProps) {
               </Panel.Toolbar>
 
               <Panel.Body>
-                <div class="@container/split size-full overflow-hidden relative">
-                  <Suspense>
-                    <SoupViewContextProvider soup={nextSoup}>
-                      <Dynamic component={props.split.mount.element} />
-                    </SoupViewContextProvider>
-                  </Suspense>
+                <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
+                  <div
+                    class={cn(
+                      'min-h-0 min-w-0 overflow-hidden relative',
+                      bottomPanel() ? 'h-1/2' : 'h-full'
+                    )}
+                  >
+                    <Suspense>
+                      <SoupViewContextProvider soup={nextSoup}>
+                        <Dynamic component={props.split.mount.element} />
+                      </SoupViewContextProvider>
+                    </Suspense>
+                  </div>
+                  <Show when={bottomPanel()}>
+                    {(panel) => (
+                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
+                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                          <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-content-secondary">
+                            {panel().title}
+                          </h3>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            label="Close"
+                            onClick={() => panel().onClose?.()}
+                          >
+                            <CloseIcon />
+                          </Button>
+                        </div>
+                        <div class="min-h-0 flex-1 overflow-hidden">
+                          {panel().content()}
+                        </div>
+                      </div>
+                    )}
+                  </Show>
                 </div>
               </Panel.Body>
             </Panel>

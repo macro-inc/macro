@@ -863,20 +863,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
       setActiveTabId(tab);
       return;
     }
-    if (globalSplitManager()?.canAppendSplit() ?? true) {
-      setActiveTabId(tab);
-      analytics.track('split_created', { from: 'sidebar' });
-      layout.openWithSplit(
-        { type: 'component', id: 'settings' },
-        {
-          referredFrom: 'sidebar',
-          allowDuplicate: true,
-          preferNewSplit: true,
-          mergeHistory: false,
-        }
-      );
-      return;
-    }
     openSettings(tab);
   };
 
