@@ -117,8 +117,12 @@ pub async fn init_backfill(
             payload: ListThreadsPayload {
                 next_page_token: None, // a value of None tells the process to start from the beginning
                 // Seed the user's most important threads first; this pass then
-                // hands off to the normal most-recent-to-least sweep.
-                priority_pass: true,
+                // hands off to the normal most-recent-to-least sweep. Only for
+                // full backfills: a bounded backfill (threads_requested_limit set)
+                // must process an exact count, but the priority pass and the
+                // newest-first sweep can each enqueue up to the limit, so their
+                // non-overlapping threads would push the unique total past it.
+                priority_pass: threads_requested_limit.is_none(),
             },
         }),
     };
