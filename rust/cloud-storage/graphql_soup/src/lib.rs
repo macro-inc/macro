@@ -2,6 +2,7 @@
 //!
 //! This crate is intentionally additive: it maps GraphQL requests onto the
 //! existing `soup` domain service without changing the existing REST API.
+#![deny(missing_docs)]
 
 use async_graphql::{
     Context, EmptyMutation, EmptySubscription, Enum, ID, Json, Object, Schema, SimpleObject, Union,
@@ -47,21 +48,27 @@ use uuid::Uuid;
 /// existing REST extractors.
 #[derive(Clone)]
 pub struct GraphqlSoupRequestContext {
+    /// Authenticated Macro user executing the request.
     pub macro_user_id: MacroUserIdStr<'static>,
+    /// Link IDs available to the request.
     pub link_ids: Vec<Uuid>,
+    /// Optional team access receipt used for CRM-scoped queries.
     pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
 }
 
 /// Key for loading properties attached to an entity.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct EntityPropertiesKey {
+    /// Entity type key used by the property service.
     pub entity_type: String,
+    /// Entity ID used by the property service.
     pub entity_id: String,
 }
 
 /// Object-safe reader used by GraphQL property edges.
 #[async_trait::async_trait]
 pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
+    /// Load properties for the requested entity keys.
     async fn get_properties(
         &self,
         keys: Vec<EntityPropertiesKey>,
@@ -85,16 +92,15 @@ where
 
         let entity_refs = keys
             .iter()
-            .map(|key| {
-                let entity_type = models_properties::EntityType::from_str(&key.entity_type)
-                    .map_err(|err| {
-                        rootcause::report!(
-                            "invalid entity type {} for property edge: {err}",
-                            key.entity_type
-                        )
-                    })?;
-                Ok(EntityReference::new(key.entity_id.clone(), entity_type))
-            })
+            .filter_map(
+                |key| match property_entity_type_from_key(&key.entity_type) {
+                    Ok(Some(entity_type)) => {
+                        Some(Ok(EntityReference::new(key.entity_id.clone(), entity_type)))
+                    }
+                    Ok(None) => None,
+                    Err(err) => Some(Err(err)),
+                },
+            )
             .collect::<Result<Vec<_>, rootcause::Report>>()?;
 
         let properties_by_entity = self
@@ -122,6 +128,7 @@ pub struct EntityPropertiesLoader {
 }
 
 impl EntityPropertiesLoader {
+    /// Create a new entity properties DataLoader.
     pub fn new(reader: Arc<dyn SoupPropertyEdgeReader>) -> Self {
         Self { reader }
     }
@@ -152,13 +159,16 @@ pub fn entity_properties_loader(
 /// Key for loading notifications attached to an entity.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct EntityNotificationsKey {
+    /// Entity type key used by the notification service.
     pub entity_type: String,
+    /// Entity ID used by the notification service.
     pub entity_id: String,
 }
 
 /// Object-safe reader used by GraphQL notification edges.
 #[async_trait::async_trait]
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
+    /// Load notifications for the requested entity keys.
     async fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -224,6 +234,7 @@ pub struct EntityNotificationsLoader {
 }
 
 impl EntityNotificationsLoader {
+    /// Create a new entity notifications DataLoader.
     pub fn new(
         user_id: MacroUserIdStr<'static>,
         reader: Arc<dyn SoupNotificationEdgeReader>,
@@ -269,6 +280,7 @@ pub type SharedSoupSchema<S> = SoupSchema<SharedSoupService<S>>;
 pub struct SharedSoupService<S>(Arc<S>);
 
 impl<S> SharedSoupService<S> {
+    /// Create a shared Soup service wrapper.
     pub fn new(service: Arc<S>) -> Self {
         Self(service)
     }
@@ -304,6 +316,7 @@ pub struct SoupQueryRoot<S> {
 }
 
 impl<S> SoupQueryRoot<S> {
+    /// Create a root GraphQL query object.
     pub fn new(service: S) -> Self {
         Self { service }
     }
@@ -408,9 +421,13 @@ impl SoupInput {
 /// GraphQL representation of supported simple Soup sorts.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlSimpleSortMethod {
+    /// Sort by most recently viewed.
     ViewedAt,
+    /// Sort by creation timestamp.
     CreatedAt,
+    /// Sort by update timestamp.
     UpdatedAt,
+    /// Sort by viewed timestamp, falling back to updated timestamp.
     ViewedUpdated,
 }
 
@@ -428,8 +445,11 @@ impl From<GraphqlSimpleSortMethod> for SimpleSortMethod {
 /// Page returned by `Query.soup`.
 #[derive(SimpleObject)]
 pub struct SoupPage {
+    /// Items in the current page.
     pub items: Vec<GraphqlSoupItem>,
+    /// Opaque cursor for the next page, if one exists.
     pub next_cursor: Option<String>,
+    /// Whether more items are available after this page.
     pub has_more: bool,
 }
 
@@ -491,16 +511,26 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
     }
 }
 
+/// GraphQL union over expanded Soup entity variants.
 #[derive(Union)]
 pub enum GraphqlSoupEntity {
+    /// Document entity.
     Document(GraphqlSoupDocument),
+    /// Chat entity.
     Chat(GraphqlSoupChat),
+    /// Project entity.
     Project(GraphqlSoupProject),
+    /// Email thread entity.
     EmailThread(GraphqlSoupEmailThread),
+    /// Channel entity.
     Channel(GraphqlSoupChannel),
+    /// Channel thread entity.
     ChannelThread(GraphqlSoupChannelThread),
+    /// Call entity.
     Call(GraphqlSoupCall),
+    /// CRM company entity.
     CrmCompany(GraphqlSoupCrmCompany),
+    /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity),
 }
 
@@ -520,6 +550,7 @@ impl From<SoupItem> for GraphqlSoupEntity {
     }
 }
 
+/// GraphQL document entity.
 pub struct GraphqlSoupDocument(SoupDocument);
 
 #[Object]
@@ -600,6 +631,7 @@ impl GraphqlSoupDocument {
     }
 }
 
+/// GraphQL document subtype details.
 pub struct GraphqlSoupDocumentSubType {
     kind: &'static str,
     is_completed: Option<bool>,
@@ -631,6 +663,7 @@ impl GraphqlSoupDocumentSubType {
     }
 }
 
+/// GraphQL notification attached to a Soup entity.
 pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
 
 #[Object]
@@ -700,6 +733,7 @@ async fn load_entity_notifications(
         .collect())
 }
 
+/// GraphQL property attached to a Soup entity.
 pub struct GraphqlSoupProperty(SoupProperty);
 
 #[Object]
@@ -740,6 +774,7 @@ impl GraphqlSoupProperty {
     }
 }
 
+/// GraphQL representation of a property value.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupPropertyValue {
     kind: String,
@@ -832,6 +867,7 @@ impl From<&PropertyValue> for GraphqlSoupPropertyValue {
     }
 }
 
+/// GraphQL entity reference stored in a property value.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupPropertyEntityReference {
     entity_id: String,
@@ -851,6 +887,7 @@ impl From<&models_properties::EntityReference> for GraphqlSoupPropertyEntityRefe
     }
 }
 
+/// GraphQL chat entity.
 pub struct GraphqlSoupChat(SoupChat);
 
 #[Object]
@@ -902,6 +939,7 @@ impl GraphqlSoupChat {
     }
 }
 
+/// GraphQL project entity.
 pub struct GraphqlSoupProject(SoupProject);
 
 #[Object]
@@ -949,6 +987,7 @@ impl GraphqlSoupProject {
     }
 }
 
+/// GraphQL email thread entity.
 pub struct GraphqlSoupEmailThread(SoupEnrichedEmailThreadPreview);
 
 #[Object]
@@ -1032,6 +1071,7 @@ impl GraphqlSoupEmailThread {
     }
 }
 
+/// GraphQL channel entity.
 pub struct GraphqlSoupChannel(SoupChannel);
 
 #[Object]
@@ -1087,6 +1127,7 @@ impl GraphqlSoupChannel {
     }
 }
 
+/// GraphQL channel thread entity.
 pub struct GraphqlSoupChannelThread(SoupChannelThread);
 
 #[Object]
@@ -1138,6 +1179,7 @@ impl GraphqlSoupChannelThread {
     }
 }
 
+/// GraphQL call entity.
 pub struct GraphqlSoupCall(SoupCallRecord);
 
 #[Object]
@@ -1204,6 +1246,7 @@ impl GraphqlSoupCall {
     }
 }
 
+/// GraphQL CRM company entity.
 pub struct GraphqlSoupCrmCompany(SoupCrmCompany);
 
 #[Object]
@@ -1257,6 +1300,7 @@ impl GraphqlSoupCrmCompany {
     }
 }
 
+/// GraphQL foreign entity.
 pub struct GraphqlSoupForeignEntity(SoupForeignEntity);
 
 #[Object]
@@ -1305,6 +1349,21 @@ impl GraphqlSoupForeignEntity {
             },
         )
         .await
+    }
+}
+
+fn property_entity_type_from_key(
+    key: &str,
+) -> Result<Option<models_properties::EntityType>, rootcause::Report> {
+    match key {
+        "email" | "email_thread" => Ok(Some(models_properties::EntityType::Thread)),
+        "crm_company" => Ok(Some(models_properties::EntityType::Company)),
+        "call" | "channel_message" | "channel_thread" | "foreign_entity" | "github" => Ok(None),
+        other => models_properties::EntityType::from_str(other)
+            .map(Some)
+            .map_err(|err| {
+                rootcause::report!("invalid entity type {other} for property edge: {err}")
+            }),
     }
 }
 

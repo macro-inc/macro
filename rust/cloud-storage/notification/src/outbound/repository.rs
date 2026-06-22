@@ -1081,6 +1081,12 @@ impl NotificationDbOps for PgPool {
         entity_refs: Vec<NotificationEntityRef>,
     ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
     {
+        let mut seen_entity_refs = HashSet::new();
+        let entity_refs = entity_refs
+            .into_iter()
+            .filter(|entity_ref| seen_entity_refs.insert(entity_ref.clone()))
+            .collect::<Vec<_>>();
+
         let mut result = entity_refs
             .iter()
             .cloned()
