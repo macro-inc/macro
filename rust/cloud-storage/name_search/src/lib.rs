@@ -2,12 +2,10 @@
 //! This crate contains queries to search over macro db entities by their name
 
 mod chat;
-mod document;
 mod highlight;
 mod project;
 
 pub use chat::search_chat_names;
-pub use document::search_document_names;
 pub use highlight::highlight_name;
 pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
