@@ -576,6 +576,7 @@ export const ListEntities = z.object({
   callf: z.any().default(null),
   cf: z.any().default(null),
   chanf: z.any().default(null),
+  cthf: z.any().default(null),
   df: z.any().default(null),
   ef: z.any().default(null),
   emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
@@ -591,6 +592,7 @@ export const ListEntities = z.object({
             z.literal('project'),
             z.literal('email'),
             z.literal('channel'),
+            z.literal('channel_thread'),
             z.literal('call'),
             z.literal('foreign_entity'),
           ];

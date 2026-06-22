@@ -8074,6 +8074,31 @@ export const postItemsSoupBody = zod
       .describe(
         'The channel message filters used to filter down what channel messages you search over.'
       ),
+    channel_thread_filters: zod
+      .object({
+        channel_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Channel IDs containing the thread. Empty to include threads from all accessible channels.'
+          ),
+        root_sender_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Sender IDs for the root thread message. Empty to include all root senders.'
+          ),
+        thread_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Channel thread parent message IDs to include. Empty to include all accessible threads.'
+          ),
+      })
+      .optional()
+      .describe(
+        'The channel thread filters used to filter down channel-thread entities.'
+      ),
     chat_filters: zod
       .object({
         chat_ids: zod
@@ -10222,6 +10247,12 @@ export const postItemsSoupAstBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the channel entity'),
+    cthf: zod
+      .unknown()
+      .optional()
+      .describe(
+        'the filters that should be applied to the channel-thread entity'
+      ),
     df: zod
       .unknown()
       .optional()
@@ -12028,6 +12059,12 @@ export const postItemsSoupAstGroupedBody = zod
           .unknown()
           .optional()
           .describe('the filters that should be applied to the channel entity'),
+        cthf: zod
+          .unknown()
+          .optional()
+          .describe(
+            'the filters that should be applied to the channel-thread entity'
+          ),
         df: zod
           .unknown()
           .optional()
@@ -12174,6 +12211,12 @@ export const postItemsSoupAstGroupedBody = zod
           .unknown()
           .optional()
           .describe('the filters that should be applied to the channel entity'),
+        cthf: zod
+          .unknown()
+          .optional()
+          .describe(
+            'the filters that should be applied to the channel-thread entity'
+          ),
         df: zod
           .unknown()
           .optional()

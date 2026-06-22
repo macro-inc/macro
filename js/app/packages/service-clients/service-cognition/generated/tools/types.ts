@@ -250,6 +250,7 @@ export type ItemType =
   | 'project'
   | 'email'
   | 'channel'
+  | 'channel_thread'
   | 'call'
   | 'foreign_entity';
 /**
@@ -1363,6 +1364,12 @@ export interface ListEntities {
    * Full soup AST channel filter (chanf).
    */
   chanf?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Full soup AST channel thread filter (cthf).
+   */
+  cthf?: {
     [k: string]: unknown;
   };
   /**

@@ -203,6 +203,7 @@ export * from './channelPreviewOneOfSevenAllOf';
 export * from './channelPreviewOneOfSevenAllOfType';
 export * from './channelSharePermission';
 export * from './channelTeamId';
+export * from './channelThreadFilters';
 export * from './channelType';
 export * from './channelWebhookRequest';
 export * from './channelWebhookResponse';
