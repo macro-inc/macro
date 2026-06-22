@@ -46,8 +46,8 @@ export function Discussion() {
   };
 
   return (
-    <section class="mt-8 pb-12">
-      <div class="flex items-center gap-2 pt-2">
+    <section class="mt-3 pb-12">
+      <div class="flex items-center gap-2">
         <div class="w-6 border-t border-edge-muted" />
         <button
           type="button"

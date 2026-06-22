@@ -986,7 +986,6 @@ export function MarkdownEditor(props: {
         <FocusClickTarget
           editor={editor}
           editorFocus={editorFocus}
-          class="bg-[pink]/20"
           style={{ height: `${clickTargetHeight()}px` }}
         />
         <Show when={!editorReady()}>
