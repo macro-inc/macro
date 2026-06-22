@@ -4,7 +4,12 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-07-22",
 	"alias": {
-		"loro-crdt": "loro-crdt/bundler"
+		"loro-crdt": "loro-crdt/bundler",
+		// Resolve the app/core path aliases the way the app bundler does, and swap
+		// the datadog-backed logger for a console shim (see src/logger-shim.ts).
+		"@observability/logger": "./src/logger-shim.ts",
+		"@core": "../app/packages/core",
+		"@loro-mirror": "../loro-mirror"
 	},
 	"rules": [
 		{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true },
