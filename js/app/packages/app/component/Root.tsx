@@ -2,6 +2,7 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
+import { PopupComponentGallery } from '@app/component/dev-component-gallery/PopupComponentGallery';
 import { GlobalShareInboxConflictDialog } from '@app/component/ShareInboxConflictDialog';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
@@ -82,6 +83,7 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -569,6 +571,9 @@ export function Root() {
                                   }}
                                 </IsomorphicRouter>
                               </Suspense>
+                              <Show when={import.meta.env.DEV}>
+                                <PopupComponentGallery />
+                              </Show>
                               <InitialInteractiveOnboardingModal />
                               <ToastRegion />
                             </SearchProvider>
