@@ -254,11 +254,15 @@ jobs:
 
       # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
       # make them writable so pulumi can write credentials + plugins as the
-      # runner. No-op when the runner already runs as root.
+      # runner. No-op when the runner already runs as root. mkdir -p first: the
+      # plugin cache mount is continue-on-error, so on a mount failure /pulumi
+      # may not exist yet — create it so the cold-cache fallback works instead
+      # of the chown hard-failing the deploy.
       - name: Ensure Pulumi home is writable
         shell: bash
         run: |
           set -euo pipefail
+          sudo mkdir -p /pulumi
           if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
 
       - name: Deploy ${{ inputs.service-name }}
