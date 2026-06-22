@@ -38,18 +38,34 @@ const INNER_HITS_PER_TERM: u32 = 100;
 /// query cost bounded without truncating common cases.
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
+/// Which fields a document search matches against.
+///
+/// `Content` (the default) preserves the chunk-only `has_child` behavior.
+/// `Name` matches the parent `document_name`. `NameContent` matches either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DocumentSearchMode {
+    /// Match terms against the parent `document_name` only.
+    Name,
+    /// Match terms against child chunk `content` only.
+    #[default]
+    Content,
+    /// Match a document by its name or its content.
+    NameContent,
+}
+
 #[derive(Clone)]
 pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: Option<&'static str> = Some("owner_id");
-    const TITLE_KEY: &'static str = "name";
+    const TITLE_KEY: &'static str = "document_name";
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Documents;
 }
 
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
+    mode: DocumentSearchMode,
 }
 
 impl DocumentQueryBuilder {
@@ -57,7 +73,13 @@ impl DocumentQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
+            mode: DocumentSearchMode::default(),
         }
+    }
+
+    pub fn mode(mut self, mode: DocumentSearchMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     // Copy function signature from SearchQueryBuilder
@@ -110,29 +132,65 @@ impl DocumentQueryBuilder {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
         }
 
-        // One has_child clause per term, ANDed via bool.must. Each carries
-        // its own inner_hits so highlights and chunk-nav data come back
-        // alongside the parent. `size` is bumped well above the OpenSearch
-        // default of 3 so a doc with many matching chunks returns all of
-        // them (the flat shape had no per-doc cap; this preserves parity).
-        //
-        // The inner_hits highlight uses a shared `highlight_query` that
-        // ORs every search term, so a chunk returned by any one
-        // has_child clause gets tags around *every* term it contains —
-        // not just the term whose clause produced it.
-        let highlight_query =
-            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
-        for (idx, term) in self.inner.terms.iter().enumerate() {
-            let inner_query = build_child_content_query(term, &self.inner.match_type);
-            let inner_hits = InnerHits::new()
-                .name(format!("term_{idx}"))
-                .size(INNER_HITS_PER_TERM)
-                .highlight(inner_hits_content_highlight(&highlight_query));
-            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query).inner_hits(inner_hits);
-            bool_query.must(has_child.into());
+        // Match clause(s) per mode: the parent `document_name` (Name), child
+        // chunk `content` via has_child (Content), or either (NameContent).
+        let include_name = matches!(
+            self.mode,
+            DocumentSearchMode::Name | DocumentSearchMode::NameContent
+        );
+        let include_content = matches!(
+            self.mode,
+            DocumentSearchMode::Content | DocumentSearchMode::NameContent
+        );
+
+        if include_name && include_content {
+            // A document matches when its name matches every term, or every
+            // term matches some chunk's content.
+            let mut content_bool = BoolQueryBuilder::new();
+            for clause in self.build_content_has_child_clauses() {
+                content_bool.must(clause);
+            }
+            let mut matched = BoolQueryBuilder::new();
+            matched.minimum_should_match(1);
+            matched.should(content_bool.build().into());
+            matched.should(self.inner.build_title_term_query()?);
+            bool_query.must(matched.build().into());
+        } else if include_name {
+            bool_query.must(self.inner.build_title_term_query()?);
+        } else {
+            // Content-only: one has_child clause per term, ANDed via bool.must.
+            for clause in self.build_content_has_child_clauses() {
+                bool_query.must(clause);
+            }
         }
 
         Ok(bool_query)
+    }
+
+    /// One `has_child` clause per term, each carrying its own `inner_hits` so
+    /// highlights and chunk-nav data come back alongside the parent. `size` is
+    /// bumped well above OpenSearch's default of 3 so a doc with many matching
+    /// chunks returns all of them. The shared `highlight_query` ORs every term
+    /// so a returned chunk gets tagged for every term it contains, not just the
+    /// one its clause matched.
+    fn build_content_has_child_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
+        let highlight_query =
+            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
+        self.inner
+            .terms
+            .iter()
+            .enumerate()
+            .map(|(idx, term)| {
+                let inner_query = build_child_content_query(term, &self.inner.match_type);
+                let inner_hits = InnerHits::new()
+                    .name(format!("term_{idx}"))
+                    .size(INNER_HITS_PER_TERM)
+                    .highlight(inner_hits_content_highlight(&highlight_query));
+                HasChildQuery::new(CHILD_RELATION, inner_query)
+                    .inner_hits(inner_hits)
+                    .into()
+            })
+            .collect()
     }
 
     /// Build the access-control filter using parent-side fields: either
@@ -243,6 +301,7 @@ pub struct DocumentSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    pub mode: DocumentSearchMode,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -256,6 +315,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
+            .mode(args.mode)
     }
 }
 

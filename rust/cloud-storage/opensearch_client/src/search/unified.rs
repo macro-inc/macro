@@ -15,6 +15,7 @@ use crate::{
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
+            DocumentSearchMode,
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
@@ -77,6 +78,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            mode: args.document_search_args.mode,
         }
     }
 }
@@ -171,6 +173,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    pub mode: DocumentSearchMode,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -307,20 +310,48 @@ where
 fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
     match &hit.source {
         UnifiedSearchIndex::Document(parent) => {
-            let Some(inner) = hit.inner_hits.as_ref() else {
-                return vec![hit.into()];
-            };
             let entity_id = parent.entity_id;
             let updated_at = parent
                 .updated_at_seconds
                 .and_then(|s| DateTime::from_timestamp(s, 0));
-            let expanded = crate::search::documents::expand_inner_hits_to_search_hits(
-                entity_id, updated_at, inner,
-            );
-            if expanded.is_empty() {
+
+            let mut out: Vec<SearchHit> = Vec::new();
+
+            // A name match surfaces as a parent-level hit. The content branch
+            // lives in inner_hits and never highlights `document_name`, so a
+            // top-level highlight on that field means the name matched. `goto`
+            // is None (no chunk to navigate to) so downstream grouping treats
+            // it as a name match, not an empty content result.
+            if let Some(highlight) = hit.highlight.as_ref()
+                && highlight.contains_key(DocumentSearchConfig::TITLE_KEY)
+            {
+                out.push(SearchHit {
+                    entity_id,
+                    entity_type: SearchEntityType::Documents,
+                    score: hit.score,
+                    highlight: parse_highlight_hit(
+                        highlight.clone(),
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    ),
+                    goto: None,
+                    updated_at,
+                });
+            }
+
+            // Content matches surface as one hit per matching chunk.
+            if let Some(inner) = hit.inner_hits.as_ref() {
+                out.extend(crate::search::documents::expand_inner_hits_to_search_hits(
+                    entity_id, updated_at, inner,
+                ));
+            }
+
+            if out.is_empty() {
                 return vec![hit.into()];
             }
-            expanded
+            out
         }
         UnifiedSearchIndex::Chat(parent) => {
             let Some(inner) = hit.inner_hits.as_ref() else {
@@ -604,6 +635,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     let highlight = Highlight::new()
         .require_field_match(true)
         .field("content", em_field().number_of_fragments(1))
+        .field("document_name", em_field().number_of_fragments(0))
         .field("subject", em_field().number_of_fragments(0))
         .field("sender", em_field().number_of_fragments(0))
         .field("sender_name", em_field().number_of_fragments(0))

@@ -1,7 +1,7 @@
 use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 
 use crate::api::search::crm_company;
-use crate::api::search::simple::{simple_chat, simple_document, simple_project};
+use crate::api::search::simple::{simple_chat, simple_project};
 use crate::api::{
     context::SearchHandlerState,
     search::{SearchPaginationParams, simple::SearchError},
@@ -21,13 +21,13 @@ use models_search::{
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
+use opensearch_client::search::documents::DocumentSearchMode;
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Identifies the source of a search result for cursor regeneration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchSource {
-    DocumentName,
     ChatName,
     ProjectName,
     Content,
@@ -268,10 +268,6 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Extract individual cursors from the combined cursor (SearchCursorOption)
     // Clone for use in async blocks and for cursor regeneration
-    let document_cursor = cursor
-        .as_ref()
-        .map(|c| c.document_name_cursor.clone())
-        .unwrap_or_default();
     let chat_cursor = cursor
         .as_ref()
         .map(|c| c.chat_name_cursor.clone())
@@ -292,7 +288,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         .unwrap_or_default();
 
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
-    let document_cursor_for_search = document_cursor.clone();
     let chat_cursor_for_search = chat_cursor.clone();
     let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
@@ -338,30 +333,7 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
-    let (doc_name_results, chat_results, project_results, content_results, crm_results) = tokio::join!(
-        async {
-            if should_include_documents {
-                match search_on {
-                    SearchOn::Name | SearchOn::NameContent => {
-                        simple_document::search_names(
-                            &ctx.db,
-                            &user_id,
-                            &simple_document::FilterDocumentResponse {
-                                ids_only: filter_document_response.ids_only,
-                                document_ids: filter_document_response.document_ids,
-                            },
-                            name_search_term.clone(),
-                            page_size,
-                            document_cursor_for_search,
-                        )
-                        .await
-                    }
-                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
-                }
-            } else {
-                Ok((vec![], SearchCursorOption::Done))
-            }
-        },
+    let (chat_results, project_results, content_results, crm_results) = tokio::join!(
         async {
             if should_include_chats {
                 match search_on {
@@ -409,13 +381,27 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            // For Name-only mode, only search emails via OpenSearch (subject field
-            // via simple_query_string). Other entity types use PG name searches above.
+            // Documents and email subjects are name-searched in OpenSearch.
+            // In Name mode keep only those two indices: chats and projects
+            // still name-search in Postgres above, and channels/call records
+            // have no name concept. Documents match `document_name`, emails
+            // their subject.
             let mut args = unified_search_args;
-            if matches!(search_on, SearchOn::Name) {
-                args.search_indices
-                    .retain(|i| *i == models_opensearch::OpenSearchEntityType::Emails);
-                args.email_search_args.subject_only = true;
+            match search_on {
+                SearchOn::Name => {
+                    args.document_search_args.mode = DocumentSearchMode::Name;
+                    args.email_search_args.subject_only = true;
+                    args.search_indices.retain(|i| {
+                        *i == models_opensearch::OpenSearchEntityType::Documents
+                            || *i == models_opensearch::OpenSearchEntityType::Emails
+                    });
+                }
+                SearchOn::NameContent => {
+                    args.document_search_args.mode = DocumentSearchMode::NameContent;
+                }
+                SearchOn::Content => {
+                    args.document_search_args.mode = DocumentSearchMode::Content;
+                }
             }
             if args.search_indices.is_empty() {
                 Ok((vec![], SearchCursorOption::Done))
@@ -446,14 +432,12 @@ pub(in crate::api::search) async fn perform_unified_search(
     );
 
     // Extract results and next cursors
-    let (doc_hits, doc_next_cursor) = doc_name_results?;
     let (chat_hits, chat_next_cursor) = chat_results?;
     let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
     let (crm_hits, crm_next_cursor) = crm_results?;
 
     // Track original counts before combining
-    let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();
     let project_name_count = project_hits.len();
     let content_count = content_hits.len();
@@ -462,7 +446,6 @@ pub(in crate::api::search) async fn perform_unified_search(
     let final_tagged = {
         let _span = tracing::info_span!(
             "combine_and_sort_results",
-            doc_name_count,
             chat_name_count,
             project_name_count,
             content_count
@@ -471,10 +454,6 @@ pub(in crate::api::search) async fn perform_unified_search(
 
         // Wrap results with source tags
         let mut combined: Vec<TaggedSearchHit> = Vec::new();
-        combined.extend(doc_hits.into_iter().map(|hit| TaggedSearchHit {
-            hit,
-            source: SearchSource::DocumentName,
-        }));
         combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
             source: SearchSource::ChatName,
@@ -521,10 +500,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         let _span = tracing::info_span!("compute_pagination_cursors").entered();
 
         // Count included results by source
-        let included_doc_names = final_tagged
-            .iter()
-            .filter(|h| h.source == SearchSource::DocumentName)
-            .count();
         let included_chat_names = final_tagged
             .iter()
             .filter(|h| h.source == SearchSource::ChatName)
@@ -543,14 +518,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             .count();
 
         // Generate new cursors using helper function
-        let new_doc_cursor = compute_next_cursor(
-            &doc_next_cursor,
-            included_doc_names,
-            doc_name_count,
-            find_last_of_source(&final_tagged, SearchSource::DocumentName),
-            &document_cursor,
-        );
-
         let new_chat_cursor = compute_next_cursor(
             &chat_next_cursor,
             included_chat_names,
@@ -584,15 +551,13 @@ pub(in crate::api::search) async fn perform_unified_search(
         );
 
         // Build next cursor if any source has more results
-        let has_more = new_doc_cursor.has_more()
-            || new_chat_cursor.has_more()
+        let has_more = new_chat_cursor.has_more()
             || new_project_cursor.has_more()
             || new_content_cursor.has_more()
             || new_crm_cursor.has_more();
 
         if has_more {
             let cursor = SearchCursor {
-                document_name_cursor: new_doc_cursor,
                 chat_name_cursor: new_chat_cursor,
                 content_cursor: new_content_cursor,
                 project_name_cursor: new_project_cursor,

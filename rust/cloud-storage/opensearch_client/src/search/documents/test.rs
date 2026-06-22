@@ -155,6 +155,74 @@ fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_build_bool_query_name_mode_matches_document_name() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["report".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .mode(DocumentSearchMode::Name);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    // Access + index filters are unchanged in name mode.
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(filter.contains(&serde_json::json!({"term": {"_index": "documents"}})));
+    assert!(filter.contains(&serde_json::json!({"term": {"owner_id": "alice"}})));
+
+    // The match clause targets the parent document_name, not child content.
+    let must = json["bool"]["must"].as_array().expect("must array");
+    assert_eq!(must.len(), 1, "name mode emits one title clause: {must:?}");
+    assert_eq!(
+        must[0]["match_phrase_prefix"]["document_name"]["query"],
+        "report"
+    );
+    assert!(
+        !json.to_string().contains("has_child"),
+        "name mode must not query child content: {json}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_name_content_mode_matches_either() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["report".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .mode(DocumentSearchMode::NameContent);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let must = json["bool"]["must"].as_array().expect("must array");
+    assert_eq!(
+        must.len(),
+        1,
+        "name_content wraps matching in one should-bool: {must:?}"
+    );
+    assert_eq!(must[0]["bool"]["minimum_should_match"], 1);
+    let should = must[0]["bool"]["should"].as_array().expect("should array");
+    assert_eq!(
+        should.len(),
+        2,
+        "expected a name branch and a content branch: {should:?}"
+    );
+
+    // One branch matches the parent document_name…
+    assert!(
+        should
+            .iter()
+            .any(|c| c["match_phrase_prefix"]["document_name"]["query"] == "report"),
+        "missing document_name branch: {should:?}"
+    );
+    // …the other matches child content via has_child.
+    assert!(
+        should
+            .iter()
+            .any(|c| c["bool"]["must"][0]["has_child"]["type"] == "chunk"),
+        "missing has_child content branch: {should:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn document_index_deserializes_parent_shape() {
     // Parent docs carry only parent-level metadata in `_source`; the
     // matching chunks' node_id / raw_content come via `inner_hits`.
