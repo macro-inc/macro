@@ -2265,6 +2265,7 @@
       "model_file_type",
       "model_notifications",
       "model_user",
+      "models_ai_projection",
       "models_bulk_upload",
       "models_dcs",
       "models_email",
