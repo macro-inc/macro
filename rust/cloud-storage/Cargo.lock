@@ -11772,6 +11772,7 @@ dependencies = [
  "chrono",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
