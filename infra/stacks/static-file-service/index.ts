@@ -2,12 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { config, getMacroApiToken } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import {
-  SERVICE_NAME,
-  SERVICE_URL,
-  STATIC_FILE_BUCKET,
-  StaticFileService,
-} from './static-file-service';
+import { SERVICE_NAME, StaticFileService } from './static-file-service';
 
 const stack = pulumi.getStack();
 
@@ -41,56 +36,12 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
-
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
-
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const containerEnvVars = [
   {
     name: 'ENVIRONMENT',
     value: stack,
-  },
-  {
-    name: 'JWT_SECRET_KEY',
-    value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-  },
-  {
-    name: 'AUDIENCE',
-    value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-  },
-
-  { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
-
-  {
-    name: 'STATIC_FILE_SERVICE_URL',
-    value: pulumi.interpolate`${SERVICE_URL}`,
-  },
-  {
-    name: 'STATIC_STORAGE_BUCKET',
-    value: pulumi.interpolate`${STATIC_FILE_BUCKET}`,
-  },
-  {
-    name: 'INTERNAL_API_SECRET_KEY',
-    value: pulumi.interpolate`${INTERNAL_API_SECRET_KEY}`,
-  },
-  {
-    name: 'RUST_LOG',
-    value: `static_file_service=${stack === 'prod' ? 'error' : 'info'}`,
-  },
-  {
-    name: 'MACRO_API_TOKEN_ISSUER',
-    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-  },
-  {
-    name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
   // OpenTelemetry / Datadog tracing configuration
   {
