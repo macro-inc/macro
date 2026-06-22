@@ -437,12 +437,17 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
     return seconds === undefined ? undefined : formatEta(seconds);
   });
   return (
-    <div class="flex w-60 flex-col gap-1">
-      <span class="flex items-center gap-1 whitespace-nowrap text-xs text-ink-muted">
+    <div class="flex w-60 flex-col gap-2">
+      <span class="flex items-center gap-1.5 text-xs text-ink-muted">
         <ArrowsClockwiseIcon class="size-3 shrink-0 animate-spin" />
-        Backfilling… {props.progress.completed}/{props.progress.total}
-        <Show when={etaLabel()}>{(label) => <>{' · '}{label()}</>}</Show>
+        Backfilling…
       </span>
+      <div class="flex items-center gap-6 whitespace-nowrap text-xs text-ink-muted">
+        <span>
+          {props.progress.completed}/{props.progress.total}
+        </span>
+        <Show when={etaLabel()}>{(label) => <span>{label()}</span>}</Show>
+      </div>
       <div class="h-1 w-full overflow-hidden rounded-full bg-edge-muted">
         <div
           class="h-full rounded-full bg-ink transition-[width] duration-300"
@@ -495,7 +500,7 @@ function InboxRow(props: {
   onRemove: () => void;
 }) {
   return (
-    <div class="bg-surface flex items-center justify-between gap-3 h-15.25 px-6">
+    <div class="bg-surface flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
       <div class="min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <span class="ph-no-capture text-sm truncate">
