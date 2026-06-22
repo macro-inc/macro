@@ -1609,7 +1609,8 @@
           "dynamic_completions_api",
           "chat_rename",
           "call_summary",
-          "channel_bot"
+          "channel_bot",
+          "ai_projection"
         ]
       },
       "AssistantMessagePart": {
