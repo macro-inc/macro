@@ -6,14 +6,13 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import { useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
-  ENABLE_RAIL_CHAT_TASK_COMMENTS,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -39,7 +38,7 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { TaskDiscussion } from './TaskDiscussion';
+import { DocumentDiscussion } from './DocumentDiscussion';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
@@ -87,7 +86,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const setWideEnoughForComments = commentWidthSignal.set;
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
-  const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
   const { navigatedFromJK } = useNavigatedFromJK();
 
@@ -296,9 +294,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
               setShowLexicalStateDebugger(false)
             }
           />
-          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-            <TaskDiscussion />
-          </Show>
+          <DocumentDiscussion />
         </ParamsProvider>
       </div>
       <div

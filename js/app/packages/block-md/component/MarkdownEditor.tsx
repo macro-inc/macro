@@ -130,7 +130,6 @@ import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
   blockHandleSignal,
@@ -192,12 +191,8 @@ import { MarkdownPopup } from './MarkdownPopup';
 
 false && fileFolderDrop;
 
-// There is an invisible div below the editor that clicks to set editor focus
-// and add a new line. This constant is the minimum height of that element (in pixels)
-// once the editor has at least one full page of content.
-const EDITOR_PADDING_BOTTOM = 200;
-// For tasks, the click target is a small fixed pad so the activity section stays visible.
-const TASK_EDITOR_PADDING_BOTTOM = 48;
+// Keep the bottom click target compact so document discussion stays visible.
+const EDITOR_CLICK_TARGET_HEIGHT = 80;
 
 function getBlankMarkdownPlaceholder(canEdit: boolean) {
   if (!canEdit) return 'This document is blank...';
@@ -231,7 +226,6 @@ export function MarkdownEditor(props: {
   const md = mdStore.get;
   const canEdit = useCanEdit();
   const canComment = useCanComment();
-  const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
   const docSource = blockSourceSignal.get;
 
@@ -667,24 +661,15 @@ export function MarkdownEditor(props: {
     })
   );
 
-  const isTask = blockName === 'task';
+  const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
   const observeClickTargetHeight = () => {
-    if (isTask) {
-      setClickTargetHeight(TASK_EDITOR_PADDING_BOTTOM);
-      return;
-    }
-    const blockEl = blockElement();
-    const rootEl = editor.getRootElement();
-    if (!blockEl || !rootEl) {
-      setClickTargetHeight(EDITOR_PADDING_BOTTOM);
-      return;
-    }
-    const blockBottom = blockEl.getBoundingClientRect().bottom;
-    const targetHeight =
-      blockBottom - rootEl.getBoundingClientRect().bottom - 40;
-    setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
+    setClickTargetHeight(EDITOR_CLICK_TARGET_HEIGHT);
   };
+
+  createEffect(() => {
+    observeClickTargetHeight();
+  });
 
   autoRegister(
     registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
@@ -765,8 +750,6 @@ export function MarkdownEditor(props: {
         return keyNavigationPlugin(md.titleEditor, isInlineMenuOpen);
     }
   );
-
-  const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
   const isBlankMarkdown = createMemo(() => {
     return editorHasNoContent() && !generateMenuOpen();
@@ -979,11 +962,10 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
-          class="ph-no-capture w-full max-w-full"
+          class="ph-no-capture w-full max-w-full min-h-52"
           classList={{
             'select-auto': !canEdit(),
             'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,
-            'min-h-52': isTask,
           }}
         />
 
@@ -1004,6 +986,7 @@ export function MarkdownEditor(props: {
         <FocusClickTarget
           editor={editor}
           editorFocus={editorFocus}
+          class="bg-[pink]/20"
           style={{ height: `${clickTargetHeight()}px` }}
         />
         <Show when={!editorReady()}>
