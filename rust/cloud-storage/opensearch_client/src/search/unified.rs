@@ -20,8 +20,8 @@ use crate::{
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
-            SearchGotoChat, SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit,
-            exclude_source_content, inject_fragment_size, parse_highlight_hit,
+            SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
+            inject_fragment_size, parse_highlight_hit,
         },
         query::Keys,
     },
@@ -430,14 +430,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         )
                     })
                     .unwrap_or_default(),
-                goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
-                    // Reached only on the defensive parent fallback when a
-                    // matched parent carried no inner_hits. node_id and
-                    // raw_content are child-only fields, so there is no
-                    // chunk-level identifier to navigate to here.
-                    node_id: String::new(),
-                    raw_content: None,
-                })),
+                goto: None,
                 updated_at: a
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
@@ -492,14 +485,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         )
                     })
                     .unwrap_or_default(),
-                goto: Some(SearchGotoContent::Chats(SearchGotoChat {
-                    // Reached only on the defensive parent fallback when a
-                    // matched parent carried no inner_hits. chat_message_id
-                    // and role are child-only fields, so there is no
-                    // message-level identifier to navigate to here.
-                    chat_message_id: uuid::Uuid::nil(),
-                    role: String::new(),
-                })),
+                goto: None,
                 updated_at: a
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
