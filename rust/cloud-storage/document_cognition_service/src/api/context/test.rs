@@ -347,12 +347,19 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_usage::outbound::PgUsageRepo::new(pool.clone()),
     ));
 
+    let projection_generator =
+        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+            tool_service_context.clone(),
+            ai_tools::all_tools(),
+        );
+
     let ai_projections_service = Arc::new(
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
                 pool.clone(),
             ),
             sqs_client.clone(),
+            projection_generator,
         ),
     );
 
