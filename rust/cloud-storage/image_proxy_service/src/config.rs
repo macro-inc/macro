@@ -1,29 +1,22 @@
 use anyhow::Context;
 
 pub use macro_env::Environment;
-use macro_env_var::maybe_env_vars;
-
-maybe_env_vars! {
-    struct Port;
-}
 
 /// The configuration parameters for the application.
-#[derive(Debug)]
+#[derive(Debug, macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// The port to listen on
+    /// The port to listen on.
+    #[macro_config_default(8080)]
     pub port: usize,
-    /// The environment we are in
+    /// The environment we are in.
+    #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let port = Port::new()
-            .map(|port| port.parse::<usize>().context("PORT must be a valid usize"))
-            .transpose()?
-            .unwrap_or(8080);
-        let environment = Environment::new_or_prod();
-
-        Ok(Config { port, environment })
+        macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load image proxy service config")
     }
 }
