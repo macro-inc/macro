@@ -1053,6 +1053,8 @@
       "lexical_client",
       "macro_auth",
       "macro_aws_config",
+      "macro_config",
+      "macro_config_derive",
       "macro_cors",
       "macro_db_client",
       "macro_entrypoint",
@@ -4057,10 +4059,13 @@
       "workspace-hack"
     ],
     "unfurl_service": [
+      "macro_config",
+      "macro_config_derive",
       "macro_cors",
       "macro_entrypoint",
       "macro_env",
       "macro_env_var",
+      "remote_env_var",
       "unfurl",
       "unfurl_service",
       "workspace-hack"

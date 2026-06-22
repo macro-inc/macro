@@ -12832,6 +12832,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
+ "doppler-config",
  "futures",
  "http 1.4.0",
  "http-body-util",
