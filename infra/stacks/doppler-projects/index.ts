@@ -8,6 +8,7 @@ const SERVICE_NAMES = [
   'cloud-storage-service',
   'search-processing-service',
   'unfurl-service',
+  'static-file-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {
