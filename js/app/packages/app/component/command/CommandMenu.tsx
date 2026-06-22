@@ -315,6 +315,9 @@ export function CommandMenuInner(props: {
         {
           type: 'component',
           id: 'search',
+          // Opening search into an existing split otherwise drops these params
+          // and the field mounts empty. Entry state still wins on back/forward.
+          preserveParams: true,
           params: {
             initialQuery: item.query,
             initialFilters: filters,
