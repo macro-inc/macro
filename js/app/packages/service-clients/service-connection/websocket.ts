@@ -56,6 +56,24 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   })
   .build();
 
+function reconnectIfDisconnected() {
+  ws.reconnectIfDisconnected();
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    reconnectIfDisconnected();
+  }
+}
+
+// When the browser regains connectivity or a background tab becomes visible,
+// kick the connection immediately instead of waiting for heartbeat/backoff
+// timers, which may have been throttled while the tab was stale.
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  window.addEventListener('online', reconnectIfDisconnected);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
 export const state = createWebsocketStateSignal(ws);
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(
