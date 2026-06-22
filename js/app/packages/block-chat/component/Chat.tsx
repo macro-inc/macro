@@ -21,7 +21,10 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
-import { getPendingSend } from '@core/component/AI/signal/pendingSend';
+import {
+  getPendingSend,
+  peekPendingSend,
+} from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
@@ -55,10 +58,14 @@ export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
   const { showPaywall } = usePaywallState();
 
-  // Seed the selector from the chat's stored model, then the local draft, then
-  // the default. The chat input reconciles to an available model if the user
-  // isn't entitled to this one.
-  const initialModel = parseModel(props.data.chat.model) ?? loadedState.model;
+  // Seed the selector from the model the user just picked in the soup chat
+  // input (carried over the new-chat redirect via the pending send), then the
+  // chat's stored model, then the local draft, then the default. The chat input
+  // reconciles to an available model if the user isn't entitled to this one.
+  const initialModel =
+    peekPendingSend()?.model ??
+    parseModel(props.data.chat.model) ??
+    loadedState.model;
 
   return (
     <ChatInputProvider
