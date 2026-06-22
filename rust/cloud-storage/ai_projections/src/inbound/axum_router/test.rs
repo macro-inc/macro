@@ -31,7 +31,7 @@ impl AiProjectionService for MockService {
         Ok(UserAiProjection {
             id: macro_uuid::generate_uuid_v7(),
             ai_projection_id: params.id,
-            user_id: user_id.as_ref().to_string(),
+            target_id: user_id.as_ref().to_string(),
             prompt_hash: "hash".to_string(),
             status: ProjectionStatus::Cold,
             result: None,
@@ -74,6 +74,7 @@ fn post_request() -> axum::http::Request<axum::body::Body> {
             serde_json::json!({
                 "id": "inbox/important",
                 "prompt": "What is important?",
+                "target_type": "user",
                 "refresh_cadence": "high",
                 "expiry": "day"
             })

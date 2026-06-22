@@ -6,10 +6,11 @@
  */
 import type { Expiry } from './expiry';
 import type { RefreshCadence } from './refreshCadence';
+import type { TargetType } from './targetType';
 
 /**
- * Request body for getting or creating an ai projection. The target is the
-authenticated user.
+ * Request body for getting or creating an ai projection. The concrete target
+id is resolved from the authenticated user, so only the target type is sent.
  */
 export interface UpsertProjectionRequest {
   /** How long the projection remains active without being requested. */
@@ -20,4 +21,6 @@ export interface UpsertProjectionRequest {
   prompt: string;
   /** How frequently the projection should be regenerated. */
   refresh_cadence: RefreshCadence;
+  /** Whether the projection is materialized for the requesting user or their team. */
+  target_type: TargetType;
 }

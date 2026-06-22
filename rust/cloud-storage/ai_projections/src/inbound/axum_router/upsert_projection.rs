@@ -7,21 +7,23 @@ use chrono::{DateTime, Utc};
 use crate::domain::{
     ai_projection_service::AiProjectionService,
     model::{
-        Expiry, ProjectionStatus, RefreshCadence, UpsertProjectionError, UpsertProjectionParams,
-        UserAiProjection,
+        Expiry, ProjectionStatus, RefreshCadence, TargetType, UpsertProjectionError,
+        UpsertProjectionParams, UserAiProjection,
     },
 };
 
 use super::{AiProjectionRouterState, premium_user::PremiumUserExtractor};
 
-/// Request body for getting or creating an ai projection. The target is the
-/// authenticated user.
+/// Request body for getting or creating an ai projection. The concrete target
+/// id is resolved from the authenticated user, so only the target type is sent.
 #[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct UpsertProjectionRequest {
     /// The frontend-defined projection id (e.g. `notification_important_widget`).
     pub id: String,
     /// The prompt used to materialize the projection.
     pub prompt: String,
+    /// Whether the projection is materialized for the requesting user or their team.
+    pub target_type: TargetType,
     /// How frequently the projection should be regenerated.
     pub refresh_cadence: RefreshCadence,
     /// How long the projection remains active without being requested.
@@ -71,21 +73,22 @@ impl From<UserAiProjection> for ProjectionStateResponse {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: AiProjectionService>(
     State(state): State<AiProjectionRouterState<T>>,
-    user: PremiumUserExtractor,
+    premium_user: PremiumUserExtractor,
     Json(req): Json<UpsertProjectionRequest>,
 ) -> Result<Json<ProjectionStateResponse>, UpsertProjectionError> {
-    let user_projection = state
+    let target_projection = state
         .service
         .upsert_projection(
-            &user.macro_user_id,
+            &premium_user.macro_user_id,
             UpsertProjectionParams {
                 id: req.id,
                 prompt: req.prompt,
+                target_type: req.target_type,
                 refresh_cadence: req.refresh_cadence,
                 expiry: req.expiry,
             },
         )
         .await?;
 
-    Ok(Json(user_projection.into()))
+    Ok(Json(target_projection.into()))
 }

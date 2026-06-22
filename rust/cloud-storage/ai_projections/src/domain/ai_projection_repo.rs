@@ -3,7 +3,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    AiProjection, AiProjectionError, Expiry, RefreshCadence, UserAiProjection,
+    AiProjection, AiProjectionError, Expiry, RefreshCadence, TargetType, UserAiProjection,
 };
 
 /// The AiProjectionRepository defines the persistence actions for ai projections.
@@ -15,16 +15,17 @@ pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
         id: &str,
         prompt: &str,
         prompt_hash: &str,
+        target_type: TargetType,
         refresh_cadence: RefreshCadence,
         expiry: Expiry,
     ) -> impl Future<Output = Result<AiProjection, AiProjectionError>> + Send;
 
-    /// Gets the requesting user's instance of a projection, or creates a cold
-    /// instance if one does not exist for the given prompt version.
-    fn get_or_create_user_projection(
+    /// Gets the target's instance of a projection, or creates a cold instance
+    /// if one does not exist for the given prompt version.
+    fn get_or_create_target_projection(
         &self,
         ai_projection_id: &str,
-        user_id: &MacroUserIdStr<'_>,
+        target_id: &str,
         prompt_hash: &str,
     ) -> impl Future<Output = Result<UserAiProjection, AiProjectionError>> + Send;
 
@@ -35,4 +36,10 @@ pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         permission: &str,
     ) -> impl Future<Output = Result<bool, AiProjectionError>> + Send;
+
+    /// Returns the ids of the teams the user belongs to.
+    fn get_user_team_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, AiProjectionError>> + Send;
 }

@@ -169,6 +169,7 @@ export * from './structuredCompletionError';
 export * from './structuredCompletionRequest';
 export * from './structuredCompletionRequestAdditionalInstructions';
 export * from './structuredCompletionResponse';
+export * from './targetType';
 export * from './toolSet';
 export * from './toolSetOneOf';
 export * from './toolSetOneOfThree';

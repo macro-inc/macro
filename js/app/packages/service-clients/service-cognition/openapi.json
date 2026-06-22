@@ -3575,6 +3575,11 @@
           "result": {}
         }
       },
+      "TargetType": {
+        "type": "string",
+        "description": "The kind of entity a projection is materialized for.",
+        "enum": ["user", "team"]
+      },
       "ToolSet": {
         "oneOf": [
           {
@@ -3713,8 +3718,14 @@
       },
       "UpsertProjectionRequest": {
         "type": "object",
-        "description": "Request body for getting or creating an ai projection. The target is the\nauthenticated user.",
-        "required": ["id", "prompt", "refresh_cadence", "expiry"],
+        "description": "Request body for getting or creating an ai projection. The concrete target\nid is resolved from the authenticated user, so only the target type is sent.",
+        "required": [
+          "id",
+          "prompt",
+          "target_type",
+          "refresh_cadence",
+          "expiry"
+        ],
         "properties": {
           "expiry": {
             "$ref": "#/components/schemas/Expiry",
@@ -3731,6 +3742,10 @@
           "refresh_cadence": {
             "$ref": "#/components/schemas/RefreshCadence",
             "description": "How frequently the projection should be regenerated."
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/TargetType",
+            "description": "Whether the projection is materialized for the requesting user or their team."
           }
         }
       },

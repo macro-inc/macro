@@ -17,7 +17,7 @@ use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
-use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence};
+use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence, TargetType};
 use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
@@ -193,6 +193,7 @@ use utoipa::OpenApi;
                 // AI projections
                 UpsertProjectionRequest,
                 ProjectionStateResponse,
+                TargetType,
                 RefreshCadence,
                 Expiry,
                 ProjectionStatus,

@@ -6,7 +6,8 @@ use sqlx::PgPool;
 use crate::domain::{
     ai_projection_repo::AiProjectionRepository,
     model::{
-        AiProjection, AiProjectionError, Expiry, ProjectionStatus, RefreshCadence, UserAiProjection,
+        AiProjection, AiProjectionError, Expiry, ProjectionStatus, RefreshCadence, TargetType,
+        UserAiProjection,
     },
 };
 
@@ -35,6 +36,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         id: &str,
         prompt: &str,
         prompt_hash: &str,
+        target_type: TargetType,
         refresh_cadence: RefreshCadence,
         expiry: Expiry,
     ) -> Result<AiProjection, AiProjectionError> {
@@ -42,13 +44,14 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         // read back the canonical row.
         sqlx::query!(
             r#"
-            INSERT INTO ai_projection (id, prompt, prompt_hash, refresh_cadence, expiry)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO ai_projection (id, prompt, prompt_hash, target_type, refresh_cadence, expiry)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO NOTHING
             "#,
             id,
             prompt,
             prompt_hash,
+            target_type.to_string(),
             refresh_cadence.to_string(),
             expiry.to_string(),
         )
@@ -58,7 +61,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
 
         let row = sqlx::query!(
             r#"
-            SELECT id, prompt, prompt_hash, refresh_cadence, expiry, created_at, updated_at
+            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, created_at, updated_at
             FROM ai_projection
             WHERE id = $1
             "#,
@@ -72,6 +75,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             id: row.id,
             prompt: row.prompt,
             prompt_hash: row.prompt_hash,
+            target_type: row.target_type.parse()?,
             refresh_cadence: row.refresh_cadence.parse()?,
             expiry: row.expiry.parse()?,
             created_at: row.created_at,
@@ -80,23 +84,23 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_or_create_user_projection(
+    async fn get_or_create_target_projection(
         &self,
         ai_projection_id: &str,
-        user_id: &MacroUserIdStr<'_>,
+        target_id: &str,
         prompt_hash: &str,
     ) -> Result<UserAiProjection, AiProjectionError> {
         let id = macro_uuid::generate_uuid_v7();
 
         sqlx::query!(
             r#"
-            INSERT INTO user_ai_projection (id, ai_projection_id, user_id, prompt_hash, status)
+            INSERT INTO user_ai_projection (id, ai_projection_id, target_id, prompt_hash, status)
             VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (ai_projection_id, user_id, prompt_hash) DO NOTHING
+            ON CONFLICT (ai_projection_id, target_id, prompt_hash) DO NOTHING
             "#,
             id,
             ai_projection_id,
-            user_id.as_ref(),
+            target_id,
             prompt_hash,
             ProjectionStatus::Cold.to_string(),
         )
@@ -106,13 +110,13 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
 
         let row = sqlx::query!(
             r#"
-            SELECT id, ai_projection_id, user_id, prompt_hash, status,
+            SELECT id, ai_projection_id, target_id, prompt_hash, status,
                    result, error, generated_at, stale_at
             FROM user_ai_projection
-            WHERE ai_projection_id = $1 AND user_id = $2 AND prompt_hash = $3
+            WHERE ai_projection_id = $1 AND target_id = $2 AND prompt_hash = $3
             "#,
             ai_projection_id,
-            user_id.as_ref(),
+            target_id,
             prompt_hash,
         )
         .fetch_one(&self.pool)
@@ -122,7 +126,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         Ok(UserAiProjection {
             id: row.id,
             ai_projection_id: row.ai_projection_id,
-            user_id: row.user_id,
+            target_id: row.target_id,
             prompt_hash: row.prompt_hash,
             status: row.status.parse()?,
             result: row.result,
@@ -155,6 +159,26 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         .map_err(sqlx_err)?;
 
         Ok(has_permission)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_team_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<uuid::Uuid>, AiProjectionError> {
+        let team_ids = sqlx::query_scalar!(
+            r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(team_ids)
     }
 }
 

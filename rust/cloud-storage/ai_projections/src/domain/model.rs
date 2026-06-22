@@ -4,6 +4,17 @@ use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
 
+/// The kind of entity a projection is materialized for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub enum TargetType {
+    /// The projection targets an individual user.
+    User,
+    /// The projection targets a team.
+    Team,
+}
+
 /// How frequently an active projection is regenerated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -123,6 +134,28 @@ impl FromStr for ProjectionStatus {
     }
 }
 
+impl Display for TargetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TargetType::User => "user",
+            TargetType::Team => "team",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl FromStr for TargetType {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user" => Ok(TargetType::User),
+            "team" => Ok(TargetType::Team),
+            other => Err(ParseEnumError::new("TargetType", other)),
+        }
+    }
+}
+
 /// Error returned when a stored string cannot be parsed into a domain enum.
 #[derive(Debug, thiserror::Error)]
 #[error("invalid {kind} value: {value}")]
@@ -154,6 +187,8 @@ pub struct AiProjection {
     pub prompt: String,
     /// A hash of the prompt, used to version cached instances.
     pub prompt_hash: String,
+    /// Whether this projection is materialized per user or per team.
+    pub target_type: TargetType,
     /// How frequently the projection should be regenerated.
     pub refresh_cadence: RefreshCadence,
     /// How long the projection remains active without being requested.
@@ -171,8 +206,9 @@ pub struct UserAiProjection {
     pub id: uuid::Uuid,
     /// The id of the projection definition this instance materializes.
     pub ai_projection_id: String,
-    /// The user this instance belongs to.
-    pub user_id: String,
+    /// The target this instance belongs to (a user id or a team id, per the
+    /// parent projection's `target_type`).
+    pub target_id: String,
     /// The prompt hash at the time the instance was created.
     pub prompt_hash: String,
     /// The materialization status.
@@ -195,6 +231,9 @@ pub struct UpsertProjectionParams {
     pub id: String,
     /// The prompt used to materialize the projection.
     pub prompt: String,
+    /// Whether the projection is materialized for the requesting user or their
+    /// team. The concrete target id is resolved from the authenticated user.
+    pub target_type: TargetType,
     /// How frequently the projection should be regenerated.
     pub refresh_cadence: RefreshCadence,
     /// How long the projection remains active without being requested.
