@@ -11770,6 +11770,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "doppler-config",
  "macro_auth",
  "macro_aws_config",
  "macro_config",
