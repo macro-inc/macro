@@ -13,10 +13,6 @@ path = "src/main.rs"
 name = "document_cognition_service_openapi"
 path = "src/openapi.rs"
 
-[[bin]]
-name = "document_cognition_service_models"
-path = "src/models_bin.rs"
-
 [features]
 local = []
 local_auth = ["macro_middleware/local_auth"]

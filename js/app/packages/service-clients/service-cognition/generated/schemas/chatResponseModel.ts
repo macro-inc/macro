@@ -6,6 +6,6 @@
  */
 
 /**
- * The model used to generate the chat (provider api id).
+ * The model used to generate the chat (`provider/model` id).
  */
 export type ChatResponseModel = string | null;

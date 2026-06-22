@@ -1,6 +1,5 @@
 // biohazard
 use crate::api::context::ApiContext;
-use crate::core::model::{CHAT_MODELS, FALLBACK_MODEL};
 use crate::model::chats::ChatResponse;
 use anyhow::Context;
 use macro_db_client::dcs::get_chat::{get_chat_db, get_messages, get_web_citations};
@@ -19,8 +18,6 @@ pub async fn get_chat(
     let messages = get_messages(&ctx.db, chat_id)
         .await
         .context("Failed to get messages")?;
-
-    let model = Some(FALLBACK_MODEL.to_string());
 
     let web_citations = get_web_citations(&ctx.db, chat_id)
         .await
@@ -47,14 +44,13 @@ pub async fn get_chat(
         id: chat.id,
         user_id: chat.user_id,
         name: chat.name,
-        model,
+        model: chat.model,
         messages,
         project_id: chat.project_id,
         created_at: chat.created_at,
         updated_at: chat.updated_at,
         attachments: vec![],
         token_count: chat.token_count,
-        available_models: CHAT_MODELS.iter().map(|m| m.to_string()).collect(),
         web_citations,
         is_persistent: chat.is_persistent,
     })

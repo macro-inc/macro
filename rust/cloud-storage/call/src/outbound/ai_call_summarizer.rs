@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::fmt::Write as _;
 
-use agent::AgentModel;
+use agent::PredefinedModel;
 use uuid::Uuid;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,7 +17,7 @@ use crate::domain::models::{
 use crate::domain::ports::CallSummarizer;
 
 /// Default model used when summarizing a call transcript.
-const SUMMARIZATION_MODEL: AgentModel = AgentModel::Sonnet4_6;
+const SUMMARIZATION_MODEL: PredefinedModel = PredefinedModel::Sonnet4_6;
 
 /// System prompt framing the LLM's task: produce a concise, factual call summary.
 const SUMMARIZATION_SYSTEM_PROMPT: &str = "\

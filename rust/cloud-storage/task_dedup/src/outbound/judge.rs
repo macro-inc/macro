@@ -1,7 +1,7 @@
 //! Duplicate judge adapters.
 
 use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
-use agent::{AgentModel, Message};
+use agent::{Message, PredefinedModel};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -41,7 +41,7 @@ In the reason, briefly compare the concrete categories that matter most for the 
 /// When the model call fails it defaults to *not* a duplicate, so an outage
 /// can't fabricate matches.
 pub struct AgentDuplicateJudge {
-    model: AgentModel,
+    model: PredefinedModel,
     recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
 }
 
@@ -55,14 +55,14 @@ impl AgentDuplicateJudge {
     /// Creates a new judge using the fast agent model.
     pub fn new(recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>) -> Self {
         Self {
-            model: AgentModel::Fast,
+            model: PredefinedModel::Fast,
             recorder,
         }
     }
 
     /// Creates a new judge with an explicit agent model.
     pub fn with_model(
-        model: AgentModel,
+        model: PredefinedModel,
         recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     ) -> Self {
         Self { model, recorder }

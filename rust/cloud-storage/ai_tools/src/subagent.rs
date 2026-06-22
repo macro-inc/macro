@@ -1,4 +1,4 @@
-use agent::AgentModel;
+use agent::PredefinedModel;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ToolServiceContext;
 
-static SUBAGENT_MODEL: AgentModel = AgentModel::Smart;
+static SUBAGENT_MODEL: PredefinedModel = PredefinedModel::Smart;
 
 static SUBAGENT_PROMPT: &str = include_str!("prompts/subagent.md");
 
