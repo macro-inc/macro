@@ -159,6 +159,32 @@ const { notificationIngressQueueName, notificationIngressQueueArn } =
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
+// ── AI projection queue ──────────────────────────────────────────────────────
+// This service both produces (on upsert) and consumes (via the inbound worker)
+// ai projection materialization messages, so the queue is owned here.
+const aiProjectionDlq = new aws.sqs.Queue('ai-projection-dlq', {
+  name: `document-cognition-ai-projection-dlq-${stack}`,
+  messageRetentionSeconds: 1209600,
+  tags,
+});
+
+const aiProjectionQueue = new aws.sqs.Queue(
+  'ai-projection-queue',
+  {
+    name: `document-cognition-ai-projection-${stack}`,
+    // Give each message up to 2 minutes to process before it's re-queued.
+    visibilityTimeoutSeconds: 120,
+    redrivePolicy: aiProjectionDlq.arn.apply((arn) =>
+      JSON.stringify({
+        deadLetterTargetArn: arn,
+        maxReceiveCount: 2,
+      })
+    ),
+    tags,
+  },
+  { dependsOn: [aiProjectionDlq] }
+);
+
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const documentCognitionService = new DocumentCognitionService(
@@ -185,6 +211,7 @@ const documentCognitionService = new DocumentCognitionService(
       deleteChatQueueArn,
       searchEventQueueArn,
       notificationIngressQueueArn,
+      aiProjectionQueue.arn,
       ...aiTools.queueArns,
     ],
     connectionTablePolicyArn: connectionGatewayTablePolicyArn,
@@ -244,6 +271,10 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${searchEventQueueName}`,
       },
       {
+        name: 'AI_PROJECTION_QUEUE',
+        value: pulumi.interpolate`${aiProjectionQueue.name}`,
+      },
+      {
         name: 'MACRO_API_TOKEN_ISSUER',
         value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
       },
@@ -297,3 +328,5 @@ export const documentCognitionServiceAlbSgId =
 export const documentCognitionServiceUrl = pulumi.interpolate`${documentCognitionService.domain}`;
 export const documentCognitionServiceRoleArn =
   documentCognitionService.role.arn;
+export const aiProjectionQueueArn = pulumi.interpolate`${aiProjectionQueue.arn}`;
+export const aiProjectionQueueName = pulumi.interpolate`${aiProjectionQueue.name}`;

@@ -108,12 +108,14 @@ serde_json = { workspace = true }
 soup = { path = "../soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "ai_projection",
   "chat",
   "document_text_extractor",
   "email",
   "gmail",
   "search",
 ] }
+sqs_worker = { path = "../sqs_worker" }
 static_file = { path = "../static_file", features = ["attachment"] }
 stream = { path = "../stream" }
 strum = { workspace = true }

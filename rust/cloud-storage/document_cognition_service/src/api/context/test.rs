@@ -352,6 +352,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
                 pool.clone(),
             ),
+            sqs_client.clone(),
         ),
     );
 

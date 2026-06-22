@@ -88,7 +88,8 @@ async fn main() -> anyhow::Result<()> {
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
-        .search_event_queue(&config.search_event_queue);
+        .search_event_queue(&config.search_event_queue)
+        .ai_projection_queue(&config.ai_projection_queue);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -412,13 +413,30 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized ai cost service");
 
-    let ai_projections_service = Arc::new(
+    let ai_projections_service_impl =
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
                 db.clone(),
             ),
+            sqs_client.clone(),
+        );
+
+    // Spawn the inbound worker that polls ai_projection_queue and materializes
+    // projection instances. It owns its own clone of the service.
+    let ai_projection_worker = ai_projections::worker::AiProjectionWorker::new(
+        sqs_worker::SQSWorker::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.ai_projection_queue.clone(),
+            10,
+            10,
         ),
+        ai_projections_service_impl.clone(),
     );
+    tokio::spawn(async move {
+        ai_projection_worker.poll().await;
+    });
+
+    let ai_projections_service = Arc::new(ai_projections_service_impl);
 
     tracing::info!("initialized ai projections service");
 

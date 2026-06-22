@@ -46,6 +46,13 @@ impl AiProjectionService for MockService {
     ) -> Result<bool, AiProjectionError> {
         Ok(self.has_permission)
     }
+
+    async fn materialize(
+        &self,
+        _message: model::ai_projection::AiProjectionQueueMessage,
+    ) -> Result<(), AiProjectionError> {
+        Ok(())
+    }
 }
 
 fn test_user_context() -> UserContext {

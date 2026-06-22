@@ -5,9 +5,11 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_projection = ["model"]
 chat = []
 convert = ["model"]
 default = [
+  "ai_projection",
   "chat",
   "convert",
   "document",

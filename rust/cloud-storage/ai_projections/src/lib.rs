@@ -23,3 +23,7 @@ pub mod inbound;
 /// The outbound module contains the outbound adapters for ai projections
 #[cfg(feature = "outbound")]
 pub mod outbound;
+
+/// The worker module contains the inbound SQS poller for ai projections
+#[cfg(feature = "worker")]
+pub mod worker;

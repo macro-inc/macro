@@ -4,13 +4,15 @@
 mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
+use model::ai_projection::AiProjectionQueueMessage;
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
+    ai_projection_queue::AiProjectionQueue,
     ai_projection_repo::AiProjectionRepository,
     model::{
-        AiProjectionError, TargetType, UpsertProjectionError, UpsertProjectionParams,
-        UserAiProjection,
+        AiProjectionError, ProjectionStatus, TargetType, UpsertProjectionError,
+        UpsertProjectionParams, UserAiProjection,
     },
 };
 
@@ -34,24 +36,37 @@ pub trait AiProjectionService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<bool, AiProjectionError>> + Send;
+
+    /// Materializes the projection instance referenced by the queue message.
+    ///
+    /// This is invoked by the inbound worker for each dequeued message and is
+    /// responsible for (eventually) generating the AI result and persisting it.
+    fn materialize(
+        &self,
+        message: AiProjectionQueueMessage,
+    ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
 }
 
-/// Implementation of [`AiProjectionService`] backed by an [`AiProjectionRepository`].
+/// Implementation of [`AiProjectionService`] backed by an
+/// [`AiProjectionRepository`] and an [`AiProjectionQueue`].
 #[derive(Debug, Clone)]
-pub struct AiProjectionServiceImpl<R>
+pub struct AiProjectionServiceImpl<R, Q>
 where
     R: AiProjectionRepository,
+    Q: AiProjectionQueue,
 {
     repository: R,
+    queue: Q,
 }
 
-impl<R> AiProjectionServiceImpl<R>
+impl<R, Q> AiProjectionServiceImpl<R, Q>
 where
     R: AiProjectionRepository,
+    Q: AiProjectionQueue,
 {
     /// Creates a new AiProjectionServiceImpl.
-    pub fn new(repository: R) -> Self {
-        Self { repository }
+    pub fn new(repository: R, queue: Q) -> Self {
+        Self { repository, queue }
     }
 
     /// Resolves the concrete target id from the authenticated user and the
@@ -92,9 +107,10 @@ pub fn hash_prompt(prompt: &str) -> String {
     hex
 }
 
-impl<R> AiProjectionService for AiProjectionServiceImpl<R>
+impl<R, Q> AiProjectionService for AiProjectionServiceImpl<R, Q>
 where
     R: AiProjectionRepository,
+    Q: AiProjectionQueue,
 {
     #[tracing::instrument(skip(self), err)]
     async fn upsert_projection(
@@ -134,6 +150,23 @@ where
             .get_or_create_target_projection(&projection.id, &target_id, &projection.prompt_hash)
             .await?;
 
+        // A cold instance has no materialized result yet, so request async
+        // materialization. The instance already exists, so a failed enqueue is
+        // logged and swallowed rather than failing the request.
+        if target_projection.status == ProjectionStatus::Cold {
+            self.queue
+                .enqueue_materialization(AiProjectionQueueMessage {
+                    ai_projection_id: target_projection.ai_projection_id.clone(),
+                    target_id: target_projection.target_id.clone(),
+                    prompt_hash: target_projection.prompt_hash.clone(),
+                })
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to enqueue ai projection materialization");
+                })
+                .ok();
+        }
+
         Ok(target_projection)
     }
 
@@ -145,5 +178,23 @@ where
         self.repository
             .user_has_permission(user_id, READ_PROFESSIONAL_FEATURES)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn materialize(
+        &self,
+        message: AiProjectionQueueMessage,
+    ) -> Result<(), AiProjectionError> {
+        tracing::info!(
+            ai_projection_id = %message.ai_projection_id,
+            target_id = %message.target_id,
+            prompt_hash = %message.prompt_hash,
+            "materializing ai projection"
+        );
+
+        // TODO: load the target projection, mark it as Loading/Refreshing, call
+        // the LLM to generate the result, and persist it with status=Ready (or
+        // status=Error on failure). This currently only acknowledges the message.
+        Ok(())
     }
 }

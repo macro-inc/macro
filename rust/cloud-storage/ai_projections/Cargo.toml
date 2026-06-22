@@ -11,19 +11,28 @@ axum = [
   "dep:model_user",
   "dep:utoipa",
 ]
-default = ["axum", "inbound", "outbound", "ports"]
+default = ["axum", "inbound", "outbound", "ports", "worker"]
 inbound = ["axum", "ports"]
 outbound = [
   "dep:sqlx",
+  "dep:sqs_client",
+  "dep:serde_json",
   "ports",
 ]
 ports = ["dep:tokio"]
+worker = [
+  "ports",
+  "dep:sqs_worker",
+  "dep:aws-sdk-sqs",
+  "dep:serde_json",
+]
 
 [dependencies]
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+model = { path = "../model" }
 serde = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
@@ -42,6 +51,14 @@ utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
 sqlx = { workspace = true, optional = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "ai_projection",
+], optional = true }
+
+# Worker (inbound SQS poller) dependencies
+sqs_worker = { path = "../sqs_worker", optional = true }
+aws-sdk-sqs = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
