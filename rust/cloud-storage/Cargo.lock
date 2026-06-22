@@ -59,6 +59,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "prompt",
  "regex",
  "rig-core",
  "schemars 1.2.1",

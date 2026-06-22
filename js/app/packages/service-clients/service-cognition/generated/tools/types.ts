@@ -1633,6 +1633,43 @@ export interface ToolTeamMember {
   userId: string;
 }
 /**
+ * Load tools by name (from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need.
+ */
+export interface LoadTools {
+  /**
+   * Exact tool names to load, taken from SearchTools results.
+   */
+  names: string[];
+}
+/**
+ * Response from [`LoadTools`]: which requested tools were loaded, and any names
+ * that weren't found.
+ */
+export interface LoadToolsResponse {
+  /**
+   * Tools that are now loaded and callable by name.
+   */
+  loaded: ToolMatch[];
+  /**
+   * Requested names that don't exist (call `SearchTools` to find valid names).
+   */
+  not_found: string[];
+}
+/**
+ * A tool surfaced by [`SearchTools`] or loaded by [`LoadTools`] — just enough
+ * for the model to decide whether to load it and how to call it.
+ */
+export interface ToolMatch {
+  /**
+   * What the tool does.
+   */
+  description: string;
+  /**
+   * The exact name to load and then call the tool by.
+   */
+  name: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -2470,6 +2507,25 @@ export interface RenameDocumentResponse {
 }
 export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
+}
+/**
+ * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. Returns matching tools' names and descriptions but does NOT load them — pass the names you want to `LoadTools` to make them callable. Searching is cheap, so cast a wide net.
+ */
+export interface SearchTools {
+  /**
+   * Keywords describing the capability you need, e.g. "linear issue" or "github list commits".
+   */
+  query: string;
+}
+/**
+ * Response from [`SearchTools`]: matching tools (name + description), not yet
+ * loaded.
+ */
+export interface SearchToolsResponse {
+  /**
+   * Tools matching the query. Call `LoadTools` with the names you want to use.
+   */
+  results: ToolMatch[];
 }
 /**
  * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
