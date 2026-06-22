@@ -31,14 +31,13 @@ import {
   createSignal,
   onCleanup,
   onMount,
-  Show,
   untrack,
 } from 'solid-js';
+import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { DocumentDiscussion } from './DocumentDiscussion';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
