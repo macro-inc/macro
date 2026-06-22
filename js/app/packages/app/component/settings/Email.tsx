@@ -425,13 +425,13 @@ function formatEta(seconds: number): string {
 }
 
 function BackfillProgressBar(props: { progress: BackfillProgress }) {
-  const percent = () =>
-    props.progress.total > 0
-      ? Math.min(
-          100,
-          Math.round((props.progress.completed / props.progress.total) * 100)
-        )
-      : 0;
+  const percent = () => {
+    if (props.progress.total <= 0) return 0;
+    // Only reach 100% at actual completion; floor otherwise so e.g. 999/1000
+    // doesn't round up and make the bar look finished early.
+    if (props.progress.completed >= props.progress.total) return 100;
+    return Math.floor((props.progress.completed / props.progress.total) * 100);
+  };
   const etaLabel = createMemo(() => {
     const seconds = estimateEtaSeconds(props.progress);
     return seconds === undefined ? undefined : formatEta(seconds);
