@@ -342,11 +342,11 @@ export function InlineItemPreview(props: ItemEntity) {
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
-              <span class="inline-flex items-baseline gap-1 align-baseline">
+              <span class="inline-flex min-w-0 max-w-full items-baseline gap-1 align-baseline">
                 <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0">
                   <ItemEntityIcon size="fill" />
                 </span>
-                <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                <span class="min-w-0 truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
                   {truncateString(name(), 80)}
                 </span>
               </span>

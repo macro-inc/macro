@@ -172,7 +172,7 @@ function HeaderLeading(props: {
       <NotificationSenderIcon notification={props.notification} size="sm" />
       <span
         class={cn(
-          'ph-no-capture truncate min-w-0 text-xs text-ink',
+          'ph-no-capture min-w-0 shrink truncate text-xs text-ink',
           props.unread && 'font-medium'
         )}
       >
@@ -235,7 +235,7 @@ function CompactBody(props: BodyProps) {
         ("Gabriel mentioned you") + timestamp already tell the story. Hide
         below the container's md breakpoint.
       */}
-      <span class="hidden @md/notif-row:flex flex-1 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+      <span class="hidden @md/notif-row:flex flex-1 min-w-0 overflow-hidden ph-no-capture truncate text-xs text-ink-muted/60">
         {props.contentOverride ?? (
           <NotificationRowContent
             notification={props.notification}
@@ -260,12 +260,12 @@ function ExpandedBody(props: BodyProps) {
         props.class
       )}
     >
-      <div class="flex items-center gap-2.5 min-w-0">
+      <div class="flex items-center gap-2.5 min-w-0 overflow-hidden">
         <HeaderLeading
           notification={props.notification}
           unread={props.unread}
         />
-        <span class="flex-1" />
+        <span class="min-w-0 flex-1" />
         <HeaderTrailing
           notification={props.notification}
           canMarkDone={props.canMarkDone}
