@@ -78,6 +78,8 @@ export function useUserNotificationsQuery(args?: { limit?: number }) {
         UserNotificationsPageParam
       >
     ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
+    // Always refetch in the case of a stale browser tab
+    refetchOnWindowFocus: 'always',
   }));
 }
 
