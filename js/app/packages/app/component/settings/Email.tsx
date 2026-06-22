@@ -12,6 +12,7 @@ import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import {
+  type BackfillJob,
   BackfillJobStatus,
   type Link as EmailLink,
   SyncStatus,
@@ -55,18 +56,24 @@ export function Email() {
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
 
-  // Fires when the Email settings open. Used only to surface COMPLETED
-  // backfills; in-progress state comes from the live connection-gateway store.
+  // Fires when the Email settings open. Used only to surface the COMPLETED
+  // state; in-progress state comes from the live connection-gateway store.
   const backfillJobsQuery = useBackfillJobsQuery();
-  const completedBackfillLinkIds = createMemo(() => {
-    const ids = new Set<string>();
+  // Latest job per link. The query returns newest-first, so the first job seen
+  // for a link_id is its latest — we key the settled label off the current job,
+  // not any historical completed one (a later fail/cancel must not still read
+  // as "complete").
+  const latestBackfillByLinkId = createMemo(() => {
+    const latest = new Map<string, BackfillJob>();
     for (const job of backfillJobsQuery.data?.jobs ?? []) {
-      if (job.status === BackfillJobStatus.Complete && job.link_id) {
-        ids.add(job.link_id);
+      if (job.link_id && !latest.has(job.link_id)) {
+        latest.set(job.link_id, job);
       }
     }
-    return ids;
+    return latest;
   });
+  const hasCompletedBackfill = (linkId: string): boolean =>
+    latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: () => toast.success('Inbox removed'),
@@ -236,9 +243,7 @@ export function Email() {
                   link={primary()}
                   isPrimary
                   isOwn={primary().macro_id === userId()}
-                  hasCompletedBackfill={completedBackfillLinkIds().has(
-                    primary().id
-                  )}
+                  hasCompletedBackfill={hasCompletedBackfill(primary().id)}
                   resyncing={resyncingIds().has(primary().id)}
                   onResync={() => handleResyncInbox(primary().id)}
                   onReconnect={() => void startAddInbox()}
@@ -264,7 +269,7 @@ export function Email() {
                   link={link}
                   isPrimary={false}
                   isOwn={link.macro_id === userId()}
-                  hasCompletedBackfill={completedBackfillLinkIds().has(link.id)}
+                  hasCompletedBackfill={hasCompletedBackfill(link.id)}
                   resyncing={resyncingIds().has(link.id)}
                   onResync={() => handleResyncInbox(link.id)}
                   onReconnect={() => void startAddInbox()}
@@ -522,7 +527,7 @@ function InboxRow(props: {
                 props.hasCompletedBackfill
               }
             >
-              <span class="text-xs text-ink-muted">Backfill complete</span>
+              <span class="text-xs text-ink-muted">Initial sync complete</span>
             </Match>
           </Switch>
         </Show>

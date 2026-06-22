@@ -164,9 +164,11 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
     Ok(jobs)
 }
 
-/// Retrieves every backfill job for a given fusionauth user id, newest first.
-/// Spans all of the user's links and all statuses; `link_id` is intentionally
-/// not used so jobs survive a link being deleted and recreated.
+/// Retrieves a user's most recent backfill jobs, newest first. Spans all of the
+/// user's links and all statuses; `link_id` is intentionally not used so jobs
+/// survive a link being deleted and recreated. Capped at 100 so frequent
+/// resyncs can't grow the response unbounded — the settings UI only needs the
+/// current per-link state, which the newest jobs cover.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_all_jobs_by_fusionauth_user_id(
     pool: &PgPool,
@@ -188,6 +190,7 @@ pub async fn get_all_jobs_by_fusionauth_user_id(
         FROM email_backfill_jobs
         WHERE fusionauth_user_id = $1
         ORDER BY created_at DESC
+        LIMIT 100
         "#,
         fusionauth_user_id
     )

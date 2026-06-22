@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import { useQuery } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
@@ -72,4 +73,15 @@ export function useBackfillJobsQuery() {
     queryFn: async () =>
       throwOnErr(async () => await emailClient.listBackfillJobs()),
   }));
+}
+
+/**
+ * Refetch the backfill jobs list. Call on terminal backfill events so the
+ * settled "completed" state updates even while the email settings stay open
+ * (the query otherwise only fires on mount).
+ */
+export function invalidateBackfillJobs() {
+  queryClient.invalidateQueries({
+    queryKey: emailKeys.backfillJobs.queryKey,
+  });
 }
