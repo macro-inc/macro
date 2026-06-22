@@ -963,25 +963,60 @@ function NotificationInboxList(props: {
                   Dev filters
                 </Button>
                 <Show when={showDevFilters()}>
-                  <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
-                    <For each={devNotificationFilters}>
-                      {(filter) => {
-                        const hidden = () =>
-                          props.hiddenFilterIds.includes(filter.id);
+                  <div class="flex flex-col gap-2 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
+                    <div class="flex items-center gap-2">
+                      <span class="shrink-0 px-1 text-xs font-medium text-ink-extra-muted">
+                        Layout
+                      </span>
+                      <Dropdown placement="bottom-start" gutter={4}>
+                        <Dropdown.Trigger
+                          class="h-7 bg-surface text-ink-muted capitalize"
+                          depth={2}
+                          size="sm"
+                          variant="base"
+                        >
+                          {props.layoutMode === 'inline' ? 'Inline' : 'Action'}
+                        </Dropdown.Trigger>
+                        <Dropdown.Content>
+                          <Dropdown.Group>
+                            <For each={['inline', 'action-location'] as const}>
+                              {(mode) => (
+                                <Dropdown.Item
+                                  class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
+                                  onSelect={() =>
+                                    props.onLayoutModeChange(mode)
+                                  }
+                                >
+                                  {mode === 'inline'
+                                    ? 'Inline'
+                                    : 'Action/location'}
+                                </Dropdown.Item>
+                              )}
+                            </For>
+                          </Dropdown.Group>
+                        </Dropdown.Content>
+                      </Dropdown>
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                      <For each={devNotificationFilters}>
+                        {(filter) => {
+                          const hidden = () =>
+                            props.hiddenFilterIds.includes(filter.id);
 
-                        return (
-                          <Button
-                            class="h-7 bg-surface"
-                            depth={2}
-                            size="sm"
-                            variant={hidden() ? 'active' : 'base'}
-                            onClick={() => props.onToggleFilter(filter.id)}
-                          >
-                            {hidden() ? 'Show' : 'Hide'} {filter.label}
-                          </Button>
-                        );
-                      }}
-                    </For>
+                          return (
+                            <Button
+                              class="h-7 bg-surface"
+                              depth={2}
+                              size="sm"
+                              variant={hidden() ? 'active' : 'base'}
+                              onClick={() => props.onToggleFilter(filter.id)}
+                            >
+                              {hidden() ? 'Show' : 'Hide'} {filter.label}
+                            </Button>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </div>
                 </Show>
               </Popover.Content>
@@ -1013,30 +1048,6 @@ function NotificationInboxList(props: {
                       onSelect={() => props.onInboxModeChange(mode)}
                     >
                       {mode}
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-          <Dropdown placement="bottom-start" gutter={4}>
-            <Dropdown.Trigger
-              class="h-7 bg-surface text-ink-muted capitalize"
-              depth={2}
-              size="sm"
-              variant="base"
-            >
-              {props.layoutMode === 'inline' ? 'Inline' : 'Action'}
-            </Dropdown.Trigger>
-            <Dropdown.Content>
-              <Dropdown.Group>
-                <For each={['inline', 'action-location'] as const}>
-                  {(mode) => (
-                    <Dropdown.Item
-                      class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
-                      onSelect={() => props.onLayoutModeChange(mode)}
-                    >
-                      {mode === 'inline' ? 'Inline' : 'Action/location'}
                     </Dropdown.Item>
                   )}
                 </For>
