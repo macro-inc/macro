@@ -16,6 +16,15 @@
       "non_empty",
       "workspace-hack"
     ],
+    "ai_projections": [
+      "ai_projections",
+      "cowlike",
+      "macro_user_id",
+      "macro_uuid",
+      "model-error-response",
+      "model_user",
+      "workspace-hack"
+    ],
     "ai_tools": [
       "agent",
       "ai_tools",
@@ -1012,6 +1021,7 @@
     ],
     "document_cognition_service": [
       "agent",
+      "ai_projections",
       "ai_tools",
       "ai_toolset",
       "ai_usage",
