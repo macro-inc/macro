@@ -88,7 +88,6 @@ import {
   cn,
   Dropdown,
   HoverCard,
-  Scroll,
   SendButton,
   Surface,
   Tooltip,
@@ -1639,7 +1638,7 @@ export function BaseInput(props: {
           </div>
         </Show>
         <div
-          class="relative h-18 overflow-hidden w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1 [&_.text-ink-placeholder]:left-0 [&_.text-ink-placeholder>p]:my-0"
+          class="relative min-h-18 max-h-[calc(60*var(--dvh,1dvh))] mobile:max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1"
           onclick={() => {
             editor()?.focus();
           }}
@@ -1675,101 +1674,97 @@ export function BaseInput(props: {
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
-          <Scroll>
-            <MarkdownTextarea
-              autoLinkMatchMode="common-tlds"
-              captureEditor={(editor) => {
-                setEditor(editor);
-                form().setCapturedEditor(editor);
-              }}
-              class={cn(
-                'ph-no-capture cursor-text text-sm wrap-break-word text-ink h-auto overflow-visible',
-                isDragging() && 'blur'
+          <MarkdownTextarea
+            autoLinkMatchMode="common-tlds"
+            captureEditor={(editor) => {
+              setEditor(editor);
+              form().setCapturedEditor(editor);
+            }}
+            class={cn(
+              'ph-no-capture cursor-text text-sm wrap-break-word text-ink h-auto overflow-visible',
+              isDragging() && 'blur'
+            )}
+            editable={() => !sendMutation.isPending}
+            initialValue={props.preloadedBody}
+            initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
+            placeholder="Reply — @mention to share or cc people"
+            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
+            onChange={handleChange}
+            onDocumentMention={(item) => {
+              makeAttachmentPublic(item.id);
+              scheduleDraftSave();
+            }}
+            onUserMention={handleUserMention}
+            portalScope="split"
+            formatState={formatState}
+            setFormatState={setFormatState}
+            domRef={props.markdownDomRef}
+            onPasteFilesAndDirs={(files, directories) => {
+              const editor_ = editor();
+              if (!editor_) return;
+              handleFileFolderDrop(
+                files,
+                directories,
+                createFilesReadyHandler(
+                  editor_,
+                  blockId,
+                  'email',
+                  undefined,
+                  (uploadedItemIds) => {
+                    uploadedItemIds.forEach((itemId) => {
+                      makeAttachmentPublic(itemId);
+                    });
+                    scheduleDraftSave();
+                  },
+                  { width: 542, height: 542 }
+                )
+              );
+            }}
+          />
+          <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
+            <For each={form().attachments.list()}>
+              {(attachment) => (
+                <Switch>
+                  <Match when={attachment.type === 'local' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().file.name,
+                          mimeType: attachment().file.type,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'remote' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                </Switch>
               )}
-              editable={() => !sendMutation.isPending}
-              initialValue={props.preloadedBody}
-              initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
-              placeholder="Reply — @mention to share or cc people"
-              watermark={
-                !hasPaidAccess() ? <MacroSignatureButton /> : undefined
-              }
-              onChange={handleChange}
-              onDocumentMention={(item) => {
-                makeAttachmentPublic(item.id);
-                scheduleDraftSave();
-              }}
-              onUserMention={handleUserMention}
-              portalScope="split"
-              formatState={formatState}
-              setFormatState={setFormatState}
-              domRef={props.markdownDomRef}
-              onPasteFilesAndDirs={(files, directories) => {
-                const editor_ = editor();
-                if (!editor_) return;
-                handleFileFolderDrop(
-                  files,
-                  directories,
-                  createFilesReadyHandler(
-                    editor_,
-                    blockId,
-                    'email',
-                    undefined,
-                    (uploadedItemIds) => {
-                      uploadedItemIds.forEach((itemId) => {
-                        makeAttachmentPublic(itemId);
-                      });
-                      scheduleDraftSave();
-                    },
-                    { width: 542, height: 542 }
-                  )
-                );
-              }}
-            />
-            <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
-              <For each={form().attachments.list()}>
-                {(attachment) => (
-                  <Switch>
-                    <Match when={attachment.type === 'local' && attachment}>
-                      {(attachment) => (
-                        <EmailAttachmentPill
-                          attachment={{
-                            fileName: attachment().file.name,
-                            mimeType: attachment().file.type,
-                          }}
-                          removable
-                          onRemove={() => handleRemoveAttachment(attachment())}
-                        />
-                      )}
-                    </Match>
-                    <Match when={attachment.type === 'remote' && attachment}>
-                      {(attachment) => (
-                        <EmailAttachmentPill
-                          attachment={{
-                            fileName: attachment().fileName,
-                            mimeType: attachment().contentType,
-                          }}
-                          removable
-                          onRemove={() => handleRemoveAttachment(attachment())}
-                        />
-                      )}
-                    </Match>
-                    <Match when={attachment.type === 'forwarded' && attachment}>
-                      {(attachment) => (
-                        <EmailAttachmentPill
-                          attachment={{
-                            fileName: attachment().fileName,
-                            mimeType: attachment().mimeType,
-                          }}
-                          removable
-                          onRemove={() => handleRemoveAttachment(attachment())}
-                        />
-                      )}
-                    </Match>
-                  </Switch>
-                )}
-              </For>
-            </div>
-          </Scroll>
+            </For>
+          </div>
         </div>
         <div class="flex flex-row w-full h-9 justify-between items-end px-2 pb-2 pt-0.5 space-x-2">
           <div class="flex flex-row items-center gap-1">
