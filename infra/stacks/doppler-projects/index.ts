@@ -9,6 +9,7 @@ const SERVICE_NAMES = [
   'search-processing-service',
   'unfurl-service',
   'static-file-service',
+  'image-proxy-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {
