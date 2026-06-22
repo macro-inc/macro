@@ -14,7 +14,6 @@ axum = [
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = [
-  "dep:macro_uuid",
   "dep:sqlx",
   "ports",
 ]
@@ -42,7 +41,6 @@ model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
-macro_uuid = { path = "../macro_uuid", optional = true }
 sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]

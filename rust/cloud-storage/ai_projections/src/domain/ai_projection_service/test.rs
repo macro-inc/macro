@@ -49,7 +49,6 @@ impl AiProjectionRepository for MockRepo {
         prompt_hash: &str,
     ) -> Result<UserAiProjection, AiProjectionError> {
         let target_projection = UserAiProjection {
-            id: macro_uuid::generate_uuid_v7(),
             ai_projection_id: ai_projection_id.to_string(),
             target_id: target_id.to_string(),
             prompt_hash: prompt_hash.to_string(),
@@ -150,7 +149,7 @@ async fn upsert_projection_creates_cold_target_instance_for_user() {
 
 #[tokio::test]
 async fn upsert_projection_resolves_team_target_from_user() {
-    let team_id = macro_uuid::generate_uuid_v7();
+    let team_id = uuid::Uuid::new_v4();
     let repo = MockRepo {
         team_ids: vec![team_id],
         ..Default::default()
@@ -195,10 +194,7 @@ async fn upsert_projection_team_target_errors_without_exactly_one_team() {
 
     // Multiple teams -> ambiguous bad request.
     let service = AiProjectionServiceImpl::new(MockRepo {
-        team_ids: vec![
-            macro_uuid::generate_uuid_v7(),
-            macro_uuid::generate_uuid_v7(),
-        ],
+        team_ids: vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         ..Default::default()
     });
     let err = service

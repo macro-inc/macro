@@ -29,7 +29,6 @@ impl AiProjectionService for MockService {
         params: UpsertProjectionParams,
     ) -> Result<UserAiProjection, UpsertProjectionError> {
         Ok(UserAiProjection {
-            id: macro_uuid::generate_uuid_v7(),
             ai_projection_id: params.id,
             target_id: user_id.as_ref().to_string(),
             prompt_hash: "hash".to_string(),

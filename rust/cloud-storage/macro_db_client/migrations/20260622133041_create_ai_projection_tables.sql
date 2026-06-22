@@ -19,10 +19,12 @@ CREATE TABLE ai_projection (
 
 -- Per-target cached instances of an AI projection. `target_id` holds either a
 -- user id or a team id, interpreted via the parent projection's `target_type`.
--- Keyed by (ai_projection_id, target_id, prompt_hash) so a projection is
--- cached, refreshed, and expired independently per target and prompt version.
+-- Keyed by (target_id, ai_projection_id) so a projection is cached, refreshed,
+-- and expired independently per target and is directly addressable without a
+-- surrogate id. `prompt_hash` records the projection's prompt version at
+-- materialization time (the definition's prompt is immutable, so it is not part
+-- of the key).
 CREATE TABLE user_ai_projection (
-    id                UUID        NOT NULL,
     ai_projection_id  TEXT        NOT NULL REFERENCES ai_projection (id) ON DELETE CASCADE,
     target_id         TEXT        NOT NULL,
     prompt_hash       TEXT        NOT NULL,
@@ -35,11 +37,9 @@ CREATE TABLE user_ai_projection (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT user_ai_projection_pkey PRIMARY KEY (id),
-    CONSTRAINT user_ai_projection_cache_key UNIQUE (ai_projection_id, target_id, prompt_hash),
+    CONSTRAINT user_ai_projection_pkey PRIMARY KEY (target_id, ai_projection_id),
     CONSTRAINT user_ai_projection_status_check
         CHECK (status IN ('loading', 'cold', 'ready', 'refreshing', 'error'))
 );
 
-CREATE INDEX user_ai_projection_target_idx ON user_ai_projection (target_id);
 CREATE INDEX user_ai_projection_projection_idx ON user_ai_projection (ai_projection_id);

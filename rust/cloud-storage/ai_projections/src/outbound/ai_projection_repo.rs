@@ -90,15 +90,12 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         target_id: &str,
         prompt_hash: &str,
     ) -> Result<UserAiProjection, AiProjectionError> {
-        let id = macro_uuid::generate_uuid_v7();
-
         sqlx::query!(
             r#"
-            INSERT INTO user_ai_projection (id, ai_projection_id, target_id, prompt_hash, status)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (ai_projection_id, target_id, prompt_hash) DO NOTHING
+            INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (target_id, ai_projection_id) DO NOTHING
             "#,
-            id,
             ai_projection_id,
             target_id,
             prompt_hash,
@@ -110,21 +107,19 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
 
         let row = sqlx::query!(
             r#"
-            SELECT id, ai_projection_id, target_id, prompt_hash, status,
+            SELECT ai_projection_id, target_id, prompt_hash, status,
                    result, error, generated_at, stale_at
             FROM user_ai_projection
-            WHERE ai_projection_id = $1 AND target_id = $2 AND prompt_hash = $3
+            WHERE ai_projection_id = $1 AND target_id = $2
             "#,
             ai_projection_id,
             target_id,
-            prompt_hash,
         )
         .fetch_one(&self.pool)
         .await
         .map_err(sqlx_err)?;
 
         Ok(UserAiProjection {
-            id: row.id,
             ai_projection_id: row.ai_projection_id,
             target_id: row.target_id,
             prompt_hash: row.prompt_hash,

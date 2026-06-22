@@ -104,7 +104,6 @@ dependencies = [
  "http-body-util",
  "macro_db_migrator",
  "macro_user_id",
- "macro_uuid",
  "model-error-response",
  "model_user",
  "serde",

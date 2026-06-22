@@ -72,17 +72,13 @@ async fn get_or_create_target_projection_is_idempotent(pool: Pool<Postgres>) -> 
         .get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
         .await?;
 
-    assert_eq!(first.id, second.id);
+    // Same (target_id, ai_projection_id) -> the same row is returned, not a new
+    // one. The composite primary key guarantees no duplicate can be inserted.
+    assert_eq!(first, second);
     assert_eq!(first.ai_projection_id, "inbox/important");
     assert_eq!(first.target_id, "macro|pro@user.com");
     assert_eq!(first.status, ProjectionStatus::Cold);
     assert!(first.result.is_none());
-
-    // A new prompt version creates a separate instance.
-    let other_version = repo
-        .get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v2")
-        .await?;
-    assert_ne!(first.id, other_version.id);
 
     Ok(())
 }

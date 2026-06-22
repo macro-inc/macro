@@ -199,11 +199,10 @@ pub struct AiProjection {
     pub updated_at: DateTime<Utc>,
 }
 
-/// A per-user cached instance of an [`AiProjection`].
+/// A per-target cached instance of an [`AiProjection`], identified by its
+/// `(target_id, ai_projection_id)` pair.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserAiProjection {
-    /// The surrogate id of the instance.
-    pub id: uuid::Uuid,
     /// The id of the projection definition this instance materializes.
     pub ai_projection_id: String,
     /// The target this instance belongs to (a user id or a team id, per the

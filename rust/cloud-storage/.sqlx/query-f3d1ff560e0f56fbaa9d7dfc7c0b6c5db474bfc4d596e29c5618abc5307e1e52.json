@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (target_id, ai_projection_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f3d1ff560e0f56fbaa9d7dfc7c0b6c5db474bfc4d596e29c5618abc5307e1e52"
+}
