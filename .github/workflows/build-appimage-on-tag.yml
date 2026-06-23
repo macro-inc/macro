@@ -1,0 +1,89 @@
+name: Build AppImage on Tag
+
+on:
+  push:
+    tags:
+      - '*'
+  create:
+
+concurrency:
+  group: appimage-${{ github.event.ref_type == 'tag' && github.event.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-appimage:
+    name: Build AppImage
+    if: ${{ github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag') }}
+    runs-on: namespace-profile-linux-mid
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          path: /nix
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Derive artifact metadata
+        id: metadata
+        shell: bash
+        env:
+          RAW_REF: ${{ github.event.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build AppImage with Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+          cachix_pid=
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+            cachix_pid=$!
+            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+          fi
+          nix build --print-build-logs ".#tauri-desktop-appimage"
+
+      - name: Collect AppImage artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          shopt -s nullglob
+          appimages=(result/*.AppImage)
+          if [ "${#appimages[@]}" -eq 0 ]; then
+            echo "No AppImage files found in nix build result" >&2
+            find -L result -maxdepth 2 -type f -print >&2 || true
+            exit 1
+          fi
+          cp -v "${appimages[@]}" artifacts/
+          chmod 0755 artifacts/*.AppImage
+          (cd artifacts && sha256sum *.AppImage > SHA256SUMS)
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
