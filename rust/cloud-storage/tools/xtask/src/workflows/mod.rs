@@ -21,27 +21,31 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use gh_workflow::Workflow;
 
-/// A generated workflow.
+/// A generated workflow. `slug` is the snake_case identifier shared by the
+/// source module (`<slug>.rs`) and the output file (`<slug>.yml`) — one source
+/// of truth, mirroring Zed's one-module-per-workflow naming. (Required status
+/// checks key on a job *name*, not the filename, so renaming files is safe.)
 struct WorkflowFile {
-    /// File written under `.github/workflows/`. Kept stable so branch
-    /// protection's required status checks keep matching.
-    filename: &'static str,
-    /// Source module (for the "do not edit" header), e.g. `code_check_cloud_storage`.
-    source: &'static str,
+    slug: &'static str,
     /// Builds the workflow definition.
     build: fn() -> Workflow,
+}
+
+impl WorkflowFile {
+    /// Output file under `.github/workflows/`.
+    fn file_name(&self) -> String {
+        format!("{}.yml", self.slug)
+    }
 }
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
-        filename: "code-check-cloud-storage.yml",
-        source: "code_check_cloud_storage",
+        slug: "code_check_cloud_storage",
         build: code_check_cloud_storage::code_check_cloud_storage,
     },
     WorkflowFile {
-        filename: "check-generated-workflows.yml",
-        source: "check_generated",
+        slug: "check_generated",
         build: check_generated::check_generated_workflows,
     },
 ];
@@ -50,7 +54,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
 pub fn generate() -> Result<()> {
     let dir = workflows_dir()?;
     for workflow in WORKFLOWS {
-        let path = dir.join(workflow.filename);
+        let path = dir.join(workflow.file_name());
         fs::write(&path, render(workflow)?)
             .with_context(|| format!("writing {}", path.display()))?;
         println!("generated {}", path.display());
@@ -63,11 +67,11 @@ pub fn check() -> Result<()> {
     let dir = workflows_dir()?;
     let mut stale = Vec::new();
     for workflow in WORKFLOWS {
-        let path = dir.join(workflow.filename);
+        let path = dir.join(workflow.file_name());
         let on_disk =
             fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
         if on_disk != render(workflow)? {
-            stale.push(workflow.filename);
+            stale.push(workflow.file_name());
         }
     }
     if !stale.is_empty() {
@@ -84,8 +88,8 @@ pub fn check() -> Result<()> {
 fn render(workflow: &WorkflowFile) -> Result<String> {
     let yaml = (workflow.build)()
         .to_string()
-        .map_err(|e| anyhow::anyhow!("serializing {}: {e:?}", workflow.filename))?;
-    Ok(format!("{}{yaml}", disclaimer(workflow.source)))
+        .map_err(|e| anyhow::anyhow!("serializing {}: {e:?}", workflow.file_name()))?;
+    Ok(format!("{}{yaml}", disclaimer(workflow.slug)))
 }
 
 /// The header every generated file starts with.

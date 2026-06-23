@@ -133,7 +133,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '.github/services-config.json'
                   - '.github/scripts/build-cloud-storage-lambdas.sh'
                   - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
-                  - .github/workflows/code-check-cloud-storage.yml
+                  - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))
 }
