@@ -279,6 +279,12 @@ export const MarkdownShell: Component<
                   builderConfig.actions.ignoreActionIds) ||
                 undefined
               }
+              actionContext={{
+                sourceDocumentId: builderConfig.mentions?.sourceDocumentId,
+                sourceBlockName: builderConfig.mentions?.block,
+                disableMentionTracking:
+                  builderConfig.mentions?.disableMentionTracking,
+              }}
               portalScope={props.portalScope}
             />
           )}

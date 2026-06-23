@@ -25,6 +25,7 @@ import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ClockIcon from '@phosphor/clock.svg';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
@@ -46,7 +47,6 @@ import { cn, InlineCheckbox } from '@ui';
 import {
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   onCleanup,
@@ -439,24 +439,12 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReferencesSectionConditional(props: { documentId: string }) {
-  const [references] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.documentId,
-    async (id) => {
-      const response = await storageServiceClient.attachmentReferences({
-        entity_type: 'document',
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return [];
-      }
-
-      return response.value.references;
-    }
+    () => 'document'
   );
 
-  const count = createMemo(() => references()?.length ?? 0);
+  const count = createMemo(() => references.data?.length ?? 0);
 
   return (
     <Show when={count() > 0}>
