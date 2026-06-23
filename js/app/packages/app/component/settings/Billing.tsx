@@ -94,7 +94,7 @@ export const Billing = () => {
   return (
     <section class="p-8 flex flex-col gap-8">
       <header class="flex flex-col">
-        <h1 class="text-2xl text-ink font-medium">Billing</h1>
+        <h1 class="text-2xl text-ink font-semibold">Billing</h1>
         <p class="text-ink-extra-muted text-sm">
           For questions about billing,{' '}
           <a
@@ -114,7 +114,7 @@ export const Billing = () => {
           <header class="flex items-cetner gap-2">
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-2">
-                <h1 class="text-base font-medium text-ink">
+                <h1 class="text-lg font-medium text-ink">
                   <Show when={!hasPaid()} fallback={'Premium plan'}>
                     Free plan
                   </Show>
@@ -162,8 +162,8 @@ export const Billing = () => {
           <section class="flex flex-col gap-4">
             <header class="flex items-center gap-2">
               <div class="flex flex-col">
-                <h1 class="text-base font-medium text-ink">Premium</h1>
-                <p class="text-ink-extra-muted text-xs">$40 per month</p>
+                <h1 class="text-lg font-medium text-ink">Premium</h1>
+                <p class="text-ink-extra-muted text-xs">$40 per seat / month</p>
               </div>
 
               <Button
