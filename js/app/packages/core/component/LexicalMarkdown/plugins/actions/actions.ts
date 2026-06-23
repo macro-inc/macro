@@ -58,11 +58,7 @@ async function trackSlashTaskMention(
     return undefined;
   }
 
-  return await trackMention(
-    context.sourceDocumentId,
-    'document',
-    documentId
-  );
+  return await trackMention(context.sourceDocumentId, 'document', documentId);
 }
 
 export const ACTIONS: Action[] = [
