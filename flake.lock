@@ -15,6 +15,21 @@
         "type": "github"
       }
     },
+    "crane-tauri": {
+      "locked": {
+        "lastModified": 1781984549,
+        "narHash": "sha256-iu/qgh21OB3C7MlI8cMPOltegTc0QTRHhbyqKdy21Yo=",
+        "owner": "JPHutchins",
+        "repo": "crane-tauri",
+        "rev": "072afbfc844bd66f258b8380a5a3161ce9d83b4e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "JPHutchins",
+        "repo": "crane-tauri",
+        "type": "github"
+      }
+    },
     "fenix": {
       "inputs": {
         "nixpkgs": [
@@ -121,6 +136,7 @@
     "root": {
       "inputs": {
         "crane": "crane",
+        "crane-tauri": "crane-tauri",
         "fenix": "fenix",
         "flake-parts": "flake-parts",
         "flake-utils": "flake-utils",
