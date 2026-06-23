@@ -6,6 +6,7 @@ mod build_context;
 mod display_results;
 mod schemas;
 pub mod search;
+mod search_tools;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
@@ -21,6 +22,7 @@ use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::read;
+use search_tools::{LoadTools, SearchTools};
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
@@ -83,6 +85,8 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
         .add_tool::<Subagent, ToolServiceContext>()
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>()
         .add_tool::<DisplayResults, ToolServiceContext>();
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt {

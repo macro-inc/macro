@@ -148,7 +148,7 @@ where
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         self.require_paid_subscription(&user_id).await?;
 
-        let request_context = RequestContext { user_id };
+        let request_context = RequestContext::new(user_id);
 
         let arguments = request
             .arguments

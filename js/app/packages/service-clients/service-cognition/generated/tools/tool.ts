@@ -46,6 +46,7 @@ type ToolParserMap = {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
   };
+  LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -82,6 +83,7 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -142,6 +144,7 @@ const toolParserMap = {
     call: schemas.ListTeamMembers,
     response: schemas.ListTeamMembersResponse,
   },
+  LoadTools: { call: schemas.LoadTools, response: schemas.LoadToolsResponse },
   MarkNotificationsDone: {
     call: schemas.MarkNotificationsDone,
     response: schemas.MarkNotificationsResponse,
@@ -183,6 +186,10 @@ const toolParserMap = {
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
+  },
+  SearchTools: {
+    call: schemas.SearchTools,
+    response: schemas.SearchToolsResponse,
   },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
@@ -249,6 +256,7 @@ type ToolDataMap = {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
   };
+  LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -285,6 +293,7 @@ type ToolDataMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
+  SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

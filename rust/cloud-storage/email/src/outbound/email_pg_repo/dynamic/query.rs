@@ -39,6 +39,16 @@ enum ThreadCandidateSource {
     Shared,
 }
 
+/// `email_user_history` (`uh`) only drives ordering/cursoring for the
+/// viewed-based sort modes. For every other mode it supplies just the
+/// `viewed_at` output column, so the join can be deferred until after the
+/// candidate `LIMIT` — joining once per returned row instead of once per
+/// candidate thread. Returns true when the join must stay in the candidate
+/// stage (i.e. it cannot be deferred).
+fn sort_uses_view_history(sort_method_str: &str) -> bool {
+    matches!(sort_method_str, "viewed_at" | "viewed_updated")
+}
+
 /// Pushes the `user_source_ids AS (…), SharedEmailThreads AS (…)` CTE pair
 /// (without the leading `WITH` keyword and without trailing comma) into the
 /// builder. Caller is responsible for emitting the `WITH` keyword and any
@@ -83,6 +93,8 @@ fn push_thread_candidate_select(
     sort_ts_field: &str,
     source: ThreadCandidateSource,
 ) {
+    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
+
     builder.push(
         r#"
                 SELECT
@@ -95,25 +107,39 @@ fn push_thread_candidate_select(
         "#,
     );
 
-    builder.push(format!(
-        r#"
+    if defer_uh {
+        // viewed-history isn't the sort key here, so `viewed_at` is projected
+        // by the deferred outer join (see build_query) and effective_ts
+        // collapses to the plain sort field — no `uh` reference in the
+        // candidate stage.
+        builder.push(format!(
+            r#"
+                    {field} AS created_at,
+                    t.updated_at AS updated_at,
+                    {field} AS effective_ts"#,
+            field = sort_ts_field
+        ));
+    } else {
+        builder.push(format!(
+            r#"
                     {} AS created_at,
                     t.updated_at AS updated_at,
                     uh.updated_at AS viewed_at,
                     CASE "#,
-        sort_ts_field
-    ));
+            sort_ts_field
+        ));
 
-    builder.push_bind(params.sort_method_str.clone());
+        builder.push_bind(params.sort_method_str.clone());
 
-    builder.push(format!(
-        r#"
+        builder.push(format!(
+            r#"
                         WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
                         WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
                         ELSE {}
                     END AS effective_ts"#,
-        sort_ts_field, sort_ts_field
-    ));
+            sort_ts_field, sort_ts_field
+        ));
+    }
 
     // Team-scoped queries return one thread copy per team member on the
     // same conversation. Dedupe on the root message's RFC-822 Message-ID
@@ -140,13 +166,22 @@ fn push_thread_candidate_select(
         builder.push(") AS is_own_link");
     }
 
-    builder.push(
-        r#"
+    if defer_uh {
+        builder.push(
+            r#"
+                FROM email_threads t
+                WHERE
+                    "#,
+        );
+    } else {
+        builder.push(
+            r#"
                 FROM email_threads t
                 LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
                 WHERE
                     "#,
-    );
+        );
+    }
 
     match source {
         ThreadCandidateSource::Owned => match params.team_id {
@@ -224,6 +259,28 @@ fn push_thread_candidate_select(
         return;
     }
 
+    if defer_uh {
+        // effective_ts == sort_ts_field for these modes, so the cursor
+        // compares the plain sort field directly — no `uh` reference.
+        builder.push(
+            r#"
+                  -- Cursor logic
+                  AND (("#,
+        );
+        builder.push_bind(params.cursor_timestamp);
+        builder.push(format!(
+            r#"::timestamptz IS NULL) OR (({}, t.id) < ("#,
+            sort_ts_field
+        ));
+        builder.push_bind(params.cursor_timestamp);
+        builder.push("::timestamptz, ");
+        builder.push_bind(params.cursor_id_str.clone());
+        // Three closes: right row operand, the grouped row-comparison, the
+        // outer AND-group opened by `AND ((`.
+        builder.push("::uuid)))");
+        return;
+    }
+
     builder.push(
         r#"
                   -- Cursor logic
@@ -264,6 +321,10 @@ fn build_query(
 ) -> QueryBuilder<'static, Postgres> {
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_message_filter = build_view_message_filter(view);
+    // When viewed-history isn't the sort key, the `email_user_history` join is
+    // pushed past the candidate `LIMIT` so it runs once per returned row
+    // instead of once per candidate thread (see `sort_uses_view_history`).
+    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
     // When the candidate stage pushes a full per-message EXISTS (importance,
@@ -305,7 +366,20 @@ fn build_query(
             t.effective_ts AS sort_ts,
             t.created_at,
             t.updated_at,
-            t.viewed_at,
+            "#,
+    );
+
+    // viewed_at comes from the deferred outer join (added below) when the sort
+    // mode allowed deferral; otherwise it was computed per candidate as
+    // `t.viewed_at`.
+    if defer_uh {
+        builder.push("uh.updated_at AS viewed_at,");
+    } else {
+        builder.push("t.viewed_at,");
+    }
+
+    builder.push(
+        r#"
             t.project_id,
             lmp.subject AS name,
             lmp.snippet,
@@ -460,7 +534,22 @@ fn build_query(
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID
         JOIN email_links el ON t.link_id = el.id
-        ORDER BY t.effective_ts DESC, t.id DESC
+        "#,
+    );
+
+    // Step 5 (deferred): attach the caller's per-thread viewed_at. Kept out of
+    // the candidate stage so it runs once per returned row rather than once per
+    // candidate thread. `email_user_history` is unique per (link_id, thread_id),
+    // so this LEFT JOIN can neither drop nor duplicate rows.
+    if defer_uh {
+        builder.push(
+            r#"        LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
+        "#,
+        );
+    }
+
+    builder.push(
+        r#"        ORDER BY t.effective_ts DESC, t.id DESC
         "#,
     );
 
@@ -481,7 +570,28 @@ pub(super) fn debug_build_query_sql_with_resolved(
     email_filter: &Expr<EmailLiteral>,
     resolved: ResolvedFilters,
 ) -> String {
-    debug_build_query_sql_inner(view, email_filter, resolved, None)
+    debug_build_query_sql_inner(
+        view,
+        email_filter,
+        resolved,
+        None,
+        SimpleSortMethod::UpdatedAt,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn debug_build_query_sql_with_sort(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    sort_method: SimpleSortMethod,
+) -> String {
+    debug_build_query_sql_inner(
+        view,
+        email_filter,
+        ResolvedFilters::empty(),
+        None,
+        sort_method,
+    )
 }
 
 #[cfg(test)]
@@ -494,6 +604,7 @@ pub(super) fn debug_build_query_sql_team_scoped(
         email_filter,
         ResolvedFilters::empty(),
         Some(Uuid::nil()),
+        SimpleSortMethod::UpdatedAt,
     )
 }
 
@@ -503,6 +614,7 @@ fn debug_build_query_sql_inner(
     email_filter: &Expr<EmailLiteral>,
     resolved: ResolvedFilters,
     team_id: Option<Uuid>,
+    sort_method: SimpleSortMethod,
 ) -> String {
     use sqlx::Execute;
 
@@ -517,7 +629,7 @@ fn debug_build_query_sql_inner(
         email_filter,
         QueryParams {
             link_ids: vec![Uuid::nil()],
-            sort_method_str: SimpleSortMethod::UpdatedAt.to_string(),
+            sort_method_str: sort_method.to_string(),
             query_limit: 50,
             cursor_timestamp: None,
             cursor_id_str: None,
