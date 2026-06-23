@@ -9,7 +9,6 @@
         crane
         crane-tauri
         ;
-      nixAppimage = inputs."nix-appimage";
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
@@ -201,11 +200,228 @@
         meta.mainProgram = "app";
       };
 
-      tauriDesktopAppImage = nixAppimage.lib.${system}.mkAppImage {
-        program = lib.getExe wrappedTauriDesktop;
-        pname = "macro-tauri-desktop";
-        name = "Macro-${appVersion}-${system}.AppImage";
+      tauriBundlerSource = pkgs.cargo-tauri.src;
+      tauriAppRun = pkgs.fetchurl {
+        url = "https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64";
+        hash = "sha256-8wFApDoKWeRtshve/fdJuenyxpRukq+rus+YuK5z+08=";
       };
+      tauriLinuxdeployWrapper = pkgs.stdenv.mkDerivation {
+        pname = "tauri-linuxdeploy-wrapper";
+        version = "1";
+        dontUnpack = true;
+        buildPhase = ''
+          cat > linuxdeploy-wrapper.c <<'EOF'
+          #include <dirent.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <unistd.h>
+
+          static int has_suffix(const char *value, const char *suffix) {
+            size_t value_len = strlen(value);
+            size_t suffix_len = strlen(suffix);
+            return value_len >= suffix_len && strcmp(value + value_len - suffix_len, suffix) == 0;
+          }
+
+          static void remove_if_exists(const char *path) {
+            if (access(path, F_OK) == 0) {
+              unlink(path);
+            }
+          }
+
+          static void sanitize_appdir(const char *appdir) {
+            if (appdir == NULL) return;
+            DIR *dir = opendir(appdir);
+            if (dir == NULL) return;
+
+            size_t appdir_len = strlen(appdir);
+            char *dir_icon = malloc(appdir_len + strlen("/.DirIcon") + 1);
+            sprintf(dir_icon, "%s/.DirIcon", appdir);
+            remove_if_exists(dir_icon);
+            free(dir_icon);
+
+            struct dirent *entry;
+            while ((entry = readdir(dir)) != NULL) {
+              if (has_suffix(entry->d_name, ".desktop")) {
+                char *path = malloc(appdir_len + 1 + strlen(entry->d_name) + 1);
+                sprintf(path, "%s/%s", appdir, entry->d_name);
+                remove_if_exists(path);
+                free(path);
+              }
+            }
+            closedir(dir);
+          }
+
+          int main(int argc, char **argv) {
+            const char *appdir = NULL;
+            for (int i = 1; i < argc; i++) {
+              if (strcmp(argv[i], "--appdir") == 0 && i + 1 < argc) {
+                appdir = argv[i + 1];
+              } else if (strncmp(argv[i], "--appdir=", 9) == 0) {
+                appdir = argv[i] + 9;
+              }
+            }
+            sanitize_appdir(appdir);
+
+            char *slash = strrchr(argv[0], '/');
+            if (slash != NULL) {
+              size_t dir_len = (size_t)(slash - argv[0]);
+              char *dir = strndup(argv[0], dir_len);
+              char *old_path = getenv("PATH");
+              size_t path_len = dir_len + 1 + (old_path ? strlen(old_path) : 0) + 1;
+              char *path = malloc(path_len);
+              snprintf(path, path_len, "%s:%s", dir, old_path ? old_path : "");
+              setenv("PATH", path, 1);
+            }
+
+            char **args = calloc((size_t)argc + 1, sizeof(char *));
+            args[0] = "${pkgs.linuxdeploy}/bin/linuxdeploy";
+            int out = 1;
+            for (int i = 1; i < argc; i++) {
+              if (strcmp(argv[i], "--appimage-extract-and-run") == 0) {
+                continue;
+              }
+              if (strcmp(argv[i], "--plugin") == 0 && i + 1 < argc && strcmp(argv[i + 1], "gtk") == 0) {
+                i++;
+                continue;
+              }
+              if (strcmp(argv[i], "--plugin=gtk") == 0) {
+                continue;
+              }
+              args[out++] = argv[i];
+            }
+            args[out] = NULL;
+            execv(args[0], args);
+            perror("execv linuxdeploy");
+            return 127;
+          }
+          EOF
+          $CC linuxdeploy-wrapper.c -o linuxdeploy-x86_64.AppImage
+        '';
+        installPhase = ''
+          install -Dm0755 linuxdeploy-x86_64.AppImage "$out/bin/linuxdeploy-x86_64.AppImage"
+        '';
+      };
+      tauriAppImageRuntime = pkgs.fetchurl {
+        url = "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64";
+        hash = "sha256-okGdzkdWg5WuecAf+ppaNB3TOVgTUv8QTQc1J1Qxd+U=";
+      };
+      tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
+        url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage";
+        hash = "sha256-4BKbgHDgx7NxUQJ+Run6RP6X6injaScFosXP83cdMSE=";
+      };
+      tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
+        pname = "linuxdeploy-plugin-appimage";
+        version = "continuous";
+        src = tauriLinuxdeployAppimagePluginSource;
+      };
+      tauriLinuxdeployAppimagePlugin = pkgs.stdenvNoCC.mkDerivation {
+        pname = "linuxdeploy-plugin-appimage-patched";
+        version = "continuous";
+        dontUnpack = true;
+        installPhase = ''
+          mkdir -p "$out/lib/linuxdeploy-plugin-appimage" "$out/bin"
+          cp -a ${tauriLinuxdeployAppimagePluginExtracted}/. "$out/lib/linuxdeploy-plugin-appimage/"
+          chmod -R u+w "$out/lib/linuxdeploy-plugin-appimage"
+          patchShebangs "$out/lib/linuxdeploy-plugin-appimage"
+          printf '%s\n' \
+            '#!${pkgs.runtimeShell}' \
+            'exec "'$out'/lib/linuxdeploy-plugin-appimage/AppRun" "$@"' \
+            > "$out/bin/linuxdeploy-plugin-appimage.AppImage"
+          chmod 0755 "$out/bin/linuxdeploy-plugin-appimage.AppImage"
+        '';
+      };
+      tauriRuntimeLibraries = [
+        pkgs.webkitgtk_4_1
+        pkgs.libsoup_3
+        pkgs.gtk3
+        pkgs.glib
+        pkgs.cairo
+        pkgs.pango
+        pkgs.gdk-pixbuf
+        pkgs.atk
+        pkgs.librsvg
+        pkgs.libayatana-appindicator
+        pkgs.openssl
+      ];
+      tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
+      tauriRuntimeClosure = pkgs.closureInfo {
+        rootPaths = tauriRuntimeLibraries ++ tauri.commonArgs.buildInputs;
+      };
+      tauriAppImageConfig = builtins.toJSON {
+        build = {
+          frontendDist = "${frontend}";
+          beforeBuildCommand = "";
+        };
+        bundle = {
+          active = true;
+          targets = [ "appimage" ];
+          useLocalToolsDir = true;
+          linux.appimage.files = {
+            "/usr/bin/xdg-mime" = "${pkgs.xdg-utils}/bin/xdg-mime";
+            "/usr/bin/xdg-open" = "${pkgs.xdg-utils}/bin/xdg-open";
+          };
+        };
+      };
+      tauriDesktopAppImage = craneLib.mkCargoDerivation (
+        tauri.commonArgs
+        // {
+          cargoArtifacts = tauri.cargoArtifacts;
+          pname = "macro-tauri-desktop-appimage";
+          TAURI_CONFIG = tauriAppImageConfig;
+          nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [
+            pkgs.cargo-tauri
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.diffutils
+            pkgs.file
+            pkgs.findutils
+            pkgs.gawk
+            pkgs.gnugrep
+            pkgs.gnused
+            pkgs.patchelf
+            pkgs.which
+          ];
+          LD_LIBRARY_PATH = tauriRuntimeLibraryPath;
+          LDAI_RUNTIME_FILE = tauriAppImageRuntime;
+          preBuild = ''
+            ${tauri.commonArgs.preBuild or ""}
+
+            runtime_library_path="$(while IFS= read -r store_path; do
+              if [ -d "$store_path/lib" ]; then
+                printf '%s:' "$store_path/lib"
+              fi
+            done < ${tauriRuntimeClosure}/store-paths)"
+            export LD_LIBRARY_PATH="$runtime_library_path$LD_LIBRARY_PATH"
+
+            mkdir -p target/.tauri
+            install -m 0755 ${tauriAppRun} target/.tauri/AppRun-x86_64
+            install -m 0755 ${tauriLinuxdeployWrapper}/bin/linuxdeploy-x86_64.AppImage target/.tauri/linuxdeploy-x86_64.AppImage
+            install -m 0755 ${tauriLinuxdeployAppimagePlugin}/bin/linuxdeploy-plugin-appimage.AppImage target/.tauri/linuxdeploy-plugin-appimage.AppImage
+            install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gtk.sh target/.tauri/linuxdeploy-plugin-gtk.sh
+            install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gstreamer.sh target/.tauri/linuxdeploy-plugin-gstreamer.sh
+            patchShebangs target/.tauri/*.sh target/.tauri/linuxdeploy-plugin-appimage.AppImage
+          '';
+          buildPhaseCargoCommand = ''
+            cargo tauri build --bundles appimage \
+              --features tauri/custom-protocol \
+              --config "$TAURI_CONFIG"
+          '';
+          installPhaseCommand = ''
+            appimagePath=$(find target -type f -path '*/release/bundle/appimage/*.AppImage' -print -quit)
+            if [ -z "$appimagePath" ]; then
+              echo "failed to locate built AppImage" >&2
+              find target -path '*/bundle/*' -print >&2 || true
+              exit 1
+            fi
+
+            mkdir -p "$out"
+            cp "$appimagePath" "$out/Macro-${appVersion}-${system}.AppImage"
+            chmod 0755 "$out/Macro-${appVersion}-${system}.AppImage"
+          '';
+          doInstallCargoArtifacts = false;
+        }
+      );
     in
     {
       apps = lib.optionalAttrs isLinux {
