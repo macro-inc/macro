@@ -1,8 +1,26 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { PLAN_FEATURES, type PlanTier } from '@app/component/paywall/plans';
 import { useHasPaidAccess } from '@core/auth';
+import CheckIcon from '@phosphor/check.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
+
+const PlanFeatures = (props: { tier: PlanTier }) => (
+  <ul class="grid grid-cols-1 gap-2 text-sm text-ink-muted sm:grid-cols-3">
+    <For each={PLAN_FEATURES}>
+      {(feature) => (
+        <li class="grid grid-cols-[auto_1fr] gap-x-2 rounded-md">
+          <CheckIcon class="mt-1 size-3 text-success" />
+          <span class="text-ink">{feature.label}</span>
+          <span class="col-start-2 text-ink-extra-muted text-sm">
+            {feature.values[props.tier]}
+          </span>
+        </li>
+      )}
+    </For>
+  </ul>
+);
 
 export const Billing = () => {
   const analytics = useAnalytics();
@@ -32,7 +50,6 @@ export const Billing = () => {
   return (
     <section class="p-8 flex flex-col gap-8">
       <header class="flex flex-col">
-        {/* Header */}
         <h1 class="text-xl text-ink font-medium">Billing</h1>
         <p class="text-ink-extra-muted text-sm">
           For questions about billing, <span class="text-ink">contact us</span>
@@ -40,8 +57,7 @@ export const Billing = () => {
       </header>
 
       <Surface class="flex flex-col rounded-lg p-4" depth={2}>
-        {/* Current plan */}
-        <section>
+        <section class="flex flex-col gap-4">
           <header class="flex items-center gap-2">
             <h1 class="text-base font-medium text-ink">
               <Show when={!hasPaid()} fallback={'Premium'}>
@@ -54,24 +70,26 @@ export const Billing = () => {
                 Current
               </span>
             </Layer>
-            <Button
-              class="ml-auto rounded-full bg-active"
-              size="sm"
-              depth={2}
-              variant="base"
-              onClick={handleManage}
-            >
-              Manage
-            </Button>
+            <Show when={hasPaid()}>
+              <Button
+                class="ml-auto rounded-full bg-active"
+                size="sm"
+                depth={2}
+                variant="base"
+                onClick={handleManage}
+              >
+                Manage
+              </Button>
+            </Show>
           </header>
-          <div>{/* Plan details/features with checks */}</div>
+          <div class="border-t border-t-edge-muted pt-3">
+            <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
+          </div>
         </section>
       </Surface>
       <Show when={!hasPaid()}>
         <Surface class="flex flex-col rounded-lg p-4" depth={2}>
-          {/* Upgrade plan and details */}
-
-          <section>
+          <section class="flex flex-col gap-4">
             <header class="flex items-center gap-2">
               <div class="flex flex-col">
                 <h1 class="text-base font-medium text-ink">Premium</h1>
@@ -87,7 +105,9 @@ export const Billing = () => {
                 Upgrade
               </Button>
             </header>
-            <div>{/* Plan details/features with checks */}</div>
+            <div class="border-t border-t-edge-muted pt-3">
+              <PlanFeatures tier="premium" />
+            </div>
           </section>
         </Surface>
       </Show>
