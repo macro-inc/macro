@@ -13,7 +13,7 @@ use crate::workflows::vars;
 /// building values imperatively.
 pub trait FluentBuilder: Sized {
     /// Apply `f` to `self`.
-    fn map(self, f: impl FnOnce(Self) -> Self) -> Self {
+    fn map<U>(self, f: impl FnOnce(Self) -> U) -> U {
         f(self)
     }
     /// Apply `f` only when `cond` holds.

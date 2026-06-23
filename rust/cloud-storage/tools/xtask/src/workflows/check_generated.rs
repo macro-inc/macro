@@ -22,7 +22,7 @@ pub fn check_generated_workflows() -> Workflow {
 /// Regenerate in `--check` mode and fail on any difference.
 fn check_workflows() -> Job {
     Job::default()
-        .runs_on(runners::LINUX_SMALL)
+        .runs_on(runners::Runner::LinuxSmall.to_string())
         .add_step(steps::checkout(false))
         .add_step(steps::setup_rust_light())
         .add_step(

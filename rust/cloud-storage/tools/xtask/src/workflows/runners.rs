@@ -1,17 +1,29 @@
 //! GitHub Actions runner labels.
 //!
 //! We run on Namespace (namespace.so) hosted runners, selected by the dashboard
-//! *profile* name — the same convention the deploy workflows already use
-//! (`namespace-profile-linux-mid`, etc.). Each profile's persisted cache volume
-//! is configured in the Namespace dashboard; that volume is what backs the
-//! sccache + cargo caches (see [`crate::workflows::steps::mount_cache_volume`]).
-//!
-//! `runs_on` accepts any `&str`, so these are plain consts — greppable, and the
-//! whole runner set lives in this one file.
+//! *profile* name — the same convention the deploy workflows already use. Each
+//! profile's persisted cache volume is configured in the Namespace dashboard;
+//! that volume backs the sccache + cargo caches (see
+//! [`crate::workflows::steps::mount_cache_volume`]).
 
-/// Small profile for light jobs (path filtering, status aggregation).
-pub const LINUX_SMALL: &str = "namespace-profile-linux-small";
+use std::fmt;
 
-/// Mid profile for the heavy compile + test jobs. Has a cache volume configured,
-/// which is what makes the persisted sccache cache possible.
-pub const LINUX_MID: &str = "namespace-profile-linux-mid";
+/// A Namespace runner profile. The set of profiles we're allowed to target is
+/// closed; `Display` renders the `runs-on` label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Runner {
+    /// Small profile for light jobs (path filtering, status aggregation).
+    LinuxSmall,
+    /// Mid profile for the heavy compile + test jobs. Has a cache volume
+    /// configured, which is what makes the persisted sccache cache possible.
+    LinuxMid,
+}
+
+impl fmt::Display for Runner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Runner::LinuxSmall => "namespace-profile-linux-small",
+            Runner::LinuxMid => "namespace-profile-linux-mid",
+        })
+    }
+}
