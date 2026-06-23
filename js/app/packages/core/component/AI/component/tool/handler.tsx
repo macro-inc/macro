@@ -10,6 +10,7 @@ import { displayResultsHandler } from './DisplayResults';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
+import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import {
@@ -50,6 +51,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
+  ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListNotifications: listNotificationsHandler,
   ListTeamMembers: listTeamMembersHandler,

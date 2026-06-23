@@ -343,6 +343,15 @@ override the default when the user explicitly asks for a specific mailbox or lab
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 
+    /// Restrict email results to a single connected inbox.
+    #[schemars(description = "\
+Restrict email results to a single connected inbox, given as that inbox's email address. Omit \
+to span every inbox the user can access (their own plus any delegated to them). Only set this \
+when the user scopes the request to a specific mailbox (e.g. \"my work inbox\", \"the shared \
+inbox\"); call ListInboxes first to get the exact address. Only affects email results.")]
+    #[serde(default)]
+    pub inbox: Option<String>,
+
     /// Maximum number of items to return.
     #[schemars(description = "Maximum number of items to return. Defaults to 50; max 500.")]
     #[serde(default)]
@@ -481,17 +490,30 @@ where
             .unwrap_or(RESULT_LIMIT)
             .clamp(1, MAX_RESULT_LIMIT);
 
-        let link_ids: Vec<uuid::Uuid> = service_context
+        let inboxes = service_context
             .email_service
             .get_inboxes_for_macro_id(request_context.user_id.copied())
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to resolve email links: {e}"),
                 internal_error: e.into(),
-            })?
-            .into_iter()
-            .map(|link| link.id)
-            .collect();
+            })?;
+
+        // An explicit inbox selector narrows to that one link; it's resolved
+        // against the accessible set so a caller can't scope to an inbox they
+        // don't have (soup trusts link_ids without an independent check).
+        let link_ids: Vec<uuid::Uuid> = match self.inbox.as_deref() {
+            Some(inbox) => {
+                let caller_macro_id = request_context.user_id.to_string();
+                let link = email::inbound::toolset::resolve_inbox_selector(
+                    &inboxes,
+                    &caller_macro_id,
+                    Some(inbox),
+                )?;
+                vec![link.id]
+            }
+            None => inboxes.iter().map(|link| link.id).collect(),
+        };
 
         let result = service_context
             .service

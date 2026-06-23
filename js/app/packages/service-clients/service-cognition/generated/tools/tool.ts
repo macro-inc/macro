@@ -37,6 +37,7 @@ type ToolParserMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -125,6 +126,10 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListInboxes: {
+    call: schemas.ListInboxes,
+    response: schemas.ListInboxesResponse,
   },
   ListLabels: {
     call: schemas.ListLabels,
@@ -232,6 +237,7 @@ type ToolDataMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;

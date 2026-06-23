@@ -84,6 +84,7 @@ export const ContentSearch = z.object({
       ])
     )
     .default([]),
+  inbox: z.union([z.string(), z.null()]).default(null),
   query: z.string(),
 });
 
@@ -586,6 +587,7 @@ export const ListEntities = z.object({
   emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
   emailView: z.union([z.string(), z.null()]).default(null),
   fef: z.any().default(null),
+  inbox: z.union([z.string(), z.null()]).default(null),
   includeTypes: z
     .union([
       z.array(
@@ -717,7 +719,23 @@ export const ListEntitiesResponse = z.object({
   summary: z.string(),
 });
 
-export const ListLabels = z.record(z.any());
+export const ListInboxes = z.record(z.any());
+
+export const ListInboxesResponse = z.object({
+  inboxes: z.array(
+    z.object({
+      emailAddress: z.string(),
+      isDelegated: z.boolean(),
+      isPrimary: z.boolean(),
+    })
+  ),
+  summary: z.string(),
+});
+
+export const ListLabels = z.object({
+  inbox: z.union([z.string(), z.null()]).default(null),
+  thread_id: z.union([z.string().uuid(), z.null()]).default(null),
+});
 
 export const ListLabelsResponse = z.object({
   labels: z.array(
@@ -822,6 +840,7 @@ export const NameSearch = z.object({
       ])
     )
     .default([]),
+  inbox: z.union([z.string(), z.null()]).default(null),
   name: z.string(),
 });
 

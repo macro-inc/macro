@@ -2,7 +2,9 @@ use super::context::SearchToolContext;
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{
     MatchType,
     unified::{UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include},
@@ -27,6 +29,12 @@ pub struct NameSearch {
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,
+
+    #[schemars(
+        description = "Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results."
+    )]
+    #[serde(default)]
+    pub inbox: Option<String>,
 }
 
 #[async_trait]
@@ -48,11 +56,29 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             });
         }
 
+        let mut email_filters = EmailFilters {
+            importance: Some(true),
+            ..Default::default()
+        };
+        if let Some(inbox) = self.inbox.as_deref() {
+            let inboxes = search_context
+                .email_service
+                .get_inboxes_for_macro_id(MacroUserIdStr((*request_context.user_id).clone()))
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Failed to resolve inboxes: {e}"),
+                    internal_error: e.into(),
+                })?;
+            let caller_macro_id = request_context.user_id.to_string();
+            let link = email::inbound::toolset::resolve_inbox_selector(
+                &inboxes,
+                &caller_macro_id,
+                Some(inbox),
+            )?;
+            email_filters.link_ids = vec![link.id.to_string()];
+        }
         let base_filters = EntityFilters {
-            email_filters: EmailFilters {
-                importance: Some(true),
-                ..Default::default()
-            },
+            email_filters,
             ..Default::default()
         };
         let search_request = UnifiedSearchRequest {
