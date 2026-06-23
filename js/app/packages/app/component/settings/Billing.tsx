@@ -7,7 +7,8 @@ import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useUserTeamsQuery } from '@queries/team';
-import { useUserId } from '@core/context/user';
+import { usePermissions, useUserId } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   free: ['Access to Haiku', '5 GB storage', 'Multiple email inboxes'],
@@ -36,12 +37,17 @@ const PlanFeatures = (props: { tier: PlanTier }) => (
 );
 
 export const Billing = () => {
+  const permissions = usePermissions();
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
 
   const userId = useUserId();
 
   const userTeamsQuery = useUserTeamsQuery();
+
+  const canManageSubscription = createMemo(() => {
+    return permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION);
+  });
 
   const userTeam = createMemo(() => {
     const teams = userTeamsQuery.data;
@@ -128,7 +134,13 @@ export const Billing = () => {
               </Show>
             </div>
 
-            <Show when={hasPaid() && (!teamRole() || teamRole() === 'owner')}>
+            <Show
+              when={
+                canManageSubscription() &&
+                hasPaid() &&
+                (!teamRole() || teamRole() === 'owner')
+              }
+            >
               <Button
                 class="ml-auto rounded-full bg-active"
                 size="sm"
