@@ -157,7 +157,13 @@ export const Billing = () => {
           </ul>
         </section>
       </Surface>
-      <Show when={!hasPaid()}>
+      <Show
+        when={
+          !hasPaid() &&
+          canManageSubscription() &&
+          (!teamRole() || teamRole() === 'owner')
+        }
+      >
         <Surface class="flex flex-col rounded-lg p-4" depth={2}>
           <section class="flex flex-col gap-4">
             <header class="flex items-center gap-2">
