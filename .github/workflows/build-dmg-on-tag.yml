@@ -5,21 +5,27 @@ on:
     tags:
       - '*'
   create:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, or SHA). Defaults to the selected workflow ref.
+        required: false
+        type: string
 
 concurrency:
-  group: dmg-${{ github.event.ref_type == 'tag' && github.event.ref || github.ref_name }}
+  group: dmg-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
   cancel-in-progress: true
 
 jobs:
   build-dmg:
     name: Build macOS DMG
-    if: ${{ github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag') }}
     runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.ref_type == 'tag' && github.event.ref || github.ref }}
+          ref: ${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref) }}
 
       - name: Assert arm64 runner
         shell: bash
@@ -99,7 +105,7 @@ jobs:
         id: metadata
         shell: bash
         env:
-          RAW_REF: ${{ github.event.ref || github.ref_name }}
+          RAW_REF: ${{ inputs.ref || github.event.ref || github.ref_name }}
         run: |
           set -euo pipefail
           tag="${RAW_REF#refs/tags/}"
