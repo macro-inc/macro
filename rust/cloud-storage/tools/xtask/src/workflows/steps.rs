@@ -118,10 +118,7 @@ pub fn show_sccache_stats() -> Step<Run> {
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
-        // TEMP: the draft gate (`&& github.event.pull_request.draft == false`) is
-        // dropped so check/test run on this draft PR while we validate the
-        // workflow. Restore it before merging.
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
+    ))
 }
