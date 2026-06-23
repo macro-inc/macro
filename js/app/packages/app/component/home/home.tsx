@@ -21,8 +21,20 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { AnimatedEmailIcon } from '@icon/wide-email';
+import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { AnimatedSearchIcon } from '@icon/wide-search';
 import { Navigate } from '@solidjs/router';
-import { createMemo } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  type JSX,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { HomeStatusSection } from './home-backfill-progress';
 import { HomeSectionBoundary } from './home-section-boundary';
 
 const MACRO_LOGO_PATH =
@@ -56,6 +68,51 @@ function AnimatedHeroLogo(props: { class?: string }) {
     </svg>
   );
 }
+
+function XIcon(props: { class?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={props.class}
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+type HomeExample = {
+  icon: (props: { class?: string; triggerAnimation?: boolean }) => JSX.Element;
+  title: string;
+  description: string;
+  prompt: string;
+};
+
+const HOME_EXAMPLES: HomeExample[] = [
+  {
+    icon: AnimatedFileMdIcon,
+    title: 'Draft a document',
+    description: 'Start from an idea',
+    prompt: 'Help me draft a document about ',
+  },
+  {
+    icon: AnimatedEmailIcon,
+    title: 'Draft an email',
+    description: 'Reply or compose',
+    prompt: 'Help me draft an email to ',
+  },
+  {
+    icon: AnimatedSearchIcon,
+    title: 'Search & research',
+    description: 'Across your workspace',
+    prompt: 'Research and summarize everything we have about ',
+  },
+];
 
 export function Home() {
   return (
@@ -111,9 +168,13 @@ function HomeContent() {
             transform-origin: left center;
             animation: home-hero-logo-fill 550ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
           }
+          .home-examples {
+            animation: home-hero-fade-up 250ms ease-out 260ms both;
+          }
           @media (prefers-reduced-motion: reduce) {
             .home-hero-stagger > *,
-            .home-logo-fill-clip {
+            .home-logo-fill-clip,
+            .home-examples {
               animation: none;
             }
           }
@@ -123,7 +184,7 @@ function HomeContent() {
       <div class="@container/home size-full p-2 mobile:pb-[calc(var(--mobile-content-inset-bottom)+1rem)] sm:pb-10 md:p-4">
         <HomeSectionBoundary title="hero">
           <section class="relative flex flex-col size-full">
-            <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-2xl size-full">
+            <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-2xl min-h-full w-full py-10">
               <div class="flex flex-col sm:flex-row w-full items-center gap-3 justify-center my-auto sm:m-0">
                 <AnimatedHeroLogo class="size-6 text-accent" />
                 <div class="flex flex-col gap-1 items-center">
@@ -134,6 +195,10 @@ function HomeContent() {
               </div>
 
               <HomeChatInput />
+
+              <HomeSectionBoundary title="home-status">
+                <HomeStatusSection />
+              </HomeSectionBoundary>
             </div>
           </section>
         </HomeSectionBoundary>
@@ -147,6 +212,8 @@ const HomeChatInput = () => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
+  const [showExamples, setShowExamples] = createSignal(true);
+
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 
   const editor = buildChatEditor().withMentions({
@@ -157,6 +224,20 @@ const HomeChatInput = () => {
     },
     block: 'chat',
     showOpenTabs: true,
+  });
+
+  const applyDraft = (text: string) => {
+    editor.controls.setMarkdown(text);
+    requestAnimationFrame(() => editor.controls.focus());
+  };
+
+  // Drafts requested from outside the input (example cards, suggested actions).
+  createEffect(() => {
+    const draft = input.pendingDraft();
+    if (draft != null) {
+      applyDraft(draft);
+      input.setPendingDraft(null);
+    }
   });
 
   registerHotkey({
@@ -222,6 +303,10 @@ const HomeChatInput = () => {
     }
   };
 
+  const [hovered, setHovered] = createSignal<number | null>(null);
+
+  const applyExample = (example: HomeExample) => applyDraft(example.prompt);
+
   return (
     <div class="w-full max-w-3xl">
       <div class="pointer-events-auto">
@@ -237,6 +322,54 @@ const HomeChatInput = () => {
           autoFocusOnMount={true}
         />
       </div>
+
+      <Show when={showExamples()}>
+        <div class="home-examples pointer-events-auto mt-6">
+          <div class="mb-2.5 flex items-center justify-between px-1">
+            <span class="text-sm text-ink-muted">
+              Get started with some examples
+            </span>
+            <button
+              type="button"
+              class="rounded-md p-1 text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted"
+              aria-label="Dismiss examples"
+              onClick={() => setShowExamples(false)}
+            >
+              <XIcon class="size-3.5" />
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <For each={HOME_EXAMPLES}>
+              {(example, i) => (
+                <button
+                  type="button"
+                  class="group flex flex-col gap-1 rounded-xl border border-edge-muted bg-active p-3 text-left transition-colors hover:bg-hover"
+                  onClick={() => applyExample(example)}
+                  onMouseEnter={() => setHovered(i())}
+                  onMouseLeave={() =>
+                    setHovered((prev) => (prev === i() ? null : prev))
+                  }
+                >
+                  <div class="flex items-center gap-2">
+                    <Dynamic
+                      component={example.icon}
+                      triggerAnimation={hovered() === i()}
+                      class="size-4 shrink-0 text-ink-muted transition-colors group-hover:text-accent"
+                    />
+                    <span class="text-sm font-medium text-ink">
+                      {example.title}
+                    </span>
+                  </div>
+                  <span class="truncate text-xs text-ink-muted">
+                    {example.description}
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 };
