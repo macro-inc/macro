@@ -13,6 +13,11 @@ name = "connection_gateway_service"
 path = "src/main.rs"
 
 [[bin]]
+name = "connection_gateway_doppler_config"
+path = "src/doppler_config.rs"
+
+
+[[bin]]
 name = "stale_connections"
 path = "scripts/stale_connections.rs"
 
@@ -76,6 +81,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
