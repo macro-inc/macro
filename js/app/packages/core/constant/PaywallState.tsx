@@ -13,6 +13,7 @@ export enum PaywallKey {
   SAVED_PROMPT = 'SAVED_PROMPT',
   REMOVE_SIGNATURE = 'REMOVE_SIGNATURE',
   MULTI_INBOX = 'MULTI_INBOX',
+  TEAMS = 'TEAMS',
 }
 
 export type PaywallMessageMetadata = {
@@ -82,6 +83,12 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
     description: 'Upgrade to manage multiple email inboxes from one workspace.',
     learnMoreUrl: 'https://docs.macro.com/product/inbox',
     learnMoreSubject: 'multiple inboxes',
+  },
+  [PaywallKey.TEAMS]: {
+    title: 'Collaborate with your team',
+    description: 'Upgrade to create a team, invite members, and manage access together.',
+    learnMoreUrl: 'https://docs.macro.com/account/teams',
+    learnMoreSubject: 'teams',
   },
 };
 
