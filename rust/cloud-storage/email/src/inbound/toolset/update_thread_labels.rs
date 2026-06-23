@@ -83,9 +83,24 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!("Update thread labels");
 
+        // Resolve the inbox from the thread itself rather than defaulting to the
+        // caller's primary inbox, so label operations work on threads that live
+        // in a delegated or secondary inbox.
         let link = service_context
-            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
-            .await?;
+            .service
+            .get_owned_link_for_thread(
+                MacroUserIdStr((*request_context.user_id).clone()),
+                self.thread_id,
+            )
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to resolve inbox for thread: {e}"),
+                internal_error: e.into(),
+            })?
+            .ok_or_else(|| ToolCallError {
+                description: "No accessible inbox owns this thread.".to_string(),
+                internal_error: anyhow::anyhow!("no owned link for thread"),
+            })?;
 
         let access_token = service_context.resolve_access_token(&link).await?;
 
