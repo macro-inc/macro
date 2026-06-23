@@ -1,11 +1,13 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
+import { useUserId } from '@core/context/user';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
+import { useUserTeamsQuery } from '@queries/team';
 import { stripeServiceClient } from '@service-stripe/client';
-import { Button } from '@ui';
-import { For, Show } from 'solid-js';
+import { Button, Tooltip } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 
 export interface PaywallProps {
   cb: () => Promise<void> | void;
@@ -44,6 +46,20 @@ const PremiumFeatures = () => (
 const PaywallComponent = (props: PaywallProps) => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+  const userId = useUserId();
+  const userTeamsQuery = useUserTeamsQuery();
+
+  const teamRole = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams?.length || !uid) return;
+
+    // Assume the user can only be on one team.
+    const firstTeam = teams[0];
+    return firstTeam.owner_id === uid ? 'owner' : 'member';
+  });
+
+  const upgradeDisabled = createMemo(() => teamRole() === 'member');
 
   const handleCheckout = async () => {
     try {
@@ -74,6 +90,8 @@ const PaywallComponent = (props: PaywallProps) => {
   };
 
   const handleContinue = () => {
+    if (upgradeDisabled()) return;
+
     if (hasPaid()) {
       manageSubscription();
       return;
@@ -138,13 +156,33 @@ const PaywallComponent = (props: PaywallProps) => {
           >
             Dismiss
           </Button>
-          <Button
-            variant={hasPaid() ? 'base' : 'cta'}
-            class="rounded-full sm:w-auto px-3 py-1.5"
-            onClick={handleContinue}
+          <Show
+            when={upgradeDisabled()}
+            fallback={
+              <Button
+                variant={hasPaid() ? 'base' : 'cta'}
+                class="rounded-full sm:w-auto px-3 py-1.5"
+                onClick={handleContinue}
+              >
+                {ctaLabel()}
+              </Button>
+            }
           >
-            {ctaLabel()}
-          </Button>
+            <Tooltip
+              label="Your subscription is managed by your team owner. Contact them to make changes."
+              placement="top"
+            >
+              <span>
+                <Button
+                  variant={hasPaid() ? 'base' : 'cta'}
+                  class="rounded-full sm:w-auto px-3 py-1.5"
+                  disabled
+                >
+                  {ctaLabel()}
+                </Button>
+              </span>
+            </Tooltip>
+          </Show>
         </div>
       </div>
     </section>
