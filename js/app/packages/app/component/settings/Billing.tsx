@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { PlanTier } from '@app/component/paywall/plans';
 import { useHasPaidAccess } from '@core/auth';
 import CheckIcon from '@phosphor/check.svg';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
 import { For, Show } from 'solid-js';
@@ -61,7 +62,16 @@ export const Billing = () => {
       <header class="flex flex-col">
         <h1 class="text-2xl text-ink font-medium">Billing</h1>
         <p class="text-ink-extra-muted text-sm">
-          For questions about billing, <span class="text-ink">contact us</span>
+          For questions about billing,{' '}
+          <a
+            class="text-ink inline-flex items-center hover:text-accent"
+            href="https://cal.com/team/macro/macro-demo-call"
+            target="_blank"
+            rel="noopener"
+          >
+            contact us
+            <ArrowSquareOutIcon class="size-4 inline mx-1" />
+          </a>
         </p>
       </header>
 
