@@ -183,9 +183,18 @@
             } \
             --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
         '';
+        meta.mainProgram = "app";
       };
     in
     {
+      apps = lib.optionalAttrs isLinux {
+        tauri-desktop = {
+          type = "app";
+          program = "${wrappedTauriDesktop}/bin/app";
+          meta.description = "Run the Macro Tauri desktop app";
+        };
+      };
+
       packages = lib.optionalAttrs isLinux {
         tauri-frontend = frontend;
         tauri-desktop = wrappedTauriDesktop;
