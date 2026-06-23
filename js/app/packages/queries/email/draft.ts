@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -64,6 +64,8 @@ export function useSaveDraftMutation(
 
 type DeleteDraftParams = {
   draftId: string;
+  /** Thread the draft belonged to, refetched so it leaves the drafts tab. */
+  threadId?: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
 };
@@ -91,7 +93,13 @@ export function useDeleteDraftMutation(
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
-          invalidateSoupEntity(vars.draftId);
+          // Refetch the thread (not the deleted draft) so it drops from the
+          // drafts tab without a manual refresh. No-op for compose drafts,
+          // whose thread is deleted along with the draft, so the refetch
+          // finds nothing to update.
+          if (vars.threadId) {
+            refetchSoupEntity(vars.threadId, 'emailThread');
+          }
         },
       },
       callbacks

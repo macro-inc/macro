@@ -717,6 +717,7 @@ export function BaseInput(props: {
       if (draftId) {
         await deleteDraftMutation.mutateAsync({
           draftId,
+          threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
         });
         refetchThreadMessages();
@@ -1089,6 +1090,7 @@ export function BaseInput(props: {
       if (draftId) {
         await deleteDraftMutation.mutateAsync({
           draftId,
+          threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
         });
         refetchThreadMessages();
