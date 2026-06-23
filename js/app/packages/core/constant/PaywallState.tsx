@@ -86,7 +86,8 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   },
   [PaywallKey.TEAMS]: {
     title: 'Collaborate with your team',
-    description: 'Upgrade to create a team, invite members, and manage access together.',
+    description:
+      'Upgrade to create a team, invite members, and manage access together.',
     learnMoreUrl: 'https://docs.macro.com/account/teams',
     learnMoreSubject: 'teams',
   },

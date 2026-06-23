@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
-import LogoIcon from '@icon/macro-logo.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { stripeServiceClient } from '@service-stripe/client';
@@ -30,7 +29,7 @@ const PAYWALL_PREMIUM_FEATURES = [
 ];
 
 const PremiumFeatures = () => (
-  <ul class="flex flex-wrap gap-4 text-sm text-ink-muted">
+  <ul class="grid grid-cols-1 gap-x-4 gap-y-3 text-sm text-ink-muted sm:grid-cols-3">
     <For each={PAYWALL_PREMIUM_FEATURES}>
       {(label) => (
         <li class="flex items-center gap-2">
@@ -91,27 +90,23 @@ const PaywallComponent = (props: PaywallProps) => {
       <div class="grid grid-cols-1 gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] p-6 sm:px-8 sm:pt-8 sm:pb-4">
         <section class="flex flex-col gap-4">
           <div class="flex flex-col gap-2">
-            <LogoIcon class="size-8 text-accent" />
-            <div class="flex flex-col gap-1">
-              <h2 class="text-2xl text-ink font-medium">
-                {paywallMetadata()?.title ?? 'Upgrade to Premium'}
-              </h2>
-
-              <p class="text-sm text-ink-extra-muted">
-                {paywallMetadata()?.description ??
-                  'Unlock stronger agents, more context, and the premium tools built for teams.'}
-              </p>
-            </div>
+            <h2 class="text-2xl text-ink font-semibold">
+              Unlock Premium features
+            </h2>
+            <p class="text-sm text-ink-extra-muted">
+              {paywallMetadata()?.description ??
+                'Upgrade your workspace with more AI power, team collaboration, and room to grow.'}
+            </p>
             <Show when={paywallMetadata()?.learnMoreUrl}>
               {(learnMoreUrl) => (
                 <a
-                  class="mt-10 inline-flex items-center gap-1 text-sm text-ink-extra-muted hover:text-accent"
+                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-ink-extra-muted hover:text-accent"
                   href={learnMoreUrl()}
                   target="_blank"
                   rel="noopener"
                 >
                   Learn more about{' '}
-                  {paywallMetadata()?.learnMoreSubject ?? 'Premium'}
+                  {paywallMetadata()!.learnMoreSubject ?? 'Premium'}
                   <ArrowSquareOutIcon class="size-4" />
                 </a>
               )}
@@ -119,30 +114,38 @@ const PaywallComponent = (props: PaywallProps) => {
           </div>
         </section>
 
-        <section class="flex flex-col gap-4 rounded-lg bg-active p-4">
-          <div class="flex flex-col">
-            <h3 class="text-sm text-ink">Premium features</h3>
+        <section class="h-full flex flex-col gap-3">
+          <div class="flex flex-1 flex-col gap-4 rounded-lg bg-active p-4">
+            <div class="flex flex-col">
+              <h3 class="text-sm text-ink">Premium features</h3>
+            </div>
+            <PremiumFeatures />
           </div>
-          <PremiumFeatures />
         </section>
       </div>
 
-      <div class="border-t border-t-edge px-8 py-4 flex flex-col justify-end gap-2 sm:flex-row">
-        <Button
-          variant="ghost"
-          depth={3}
-          class="rounded-full sm:w-auto px-3 py-1.5"
-          onClick={props.cb}
-        >
-          Dismiss
-        </Button>
-        <Button
-          variant={hasPaid() ? 'base' : 'cta'}
-          class="rounded-full sm:w-auto px-3 py-1.5"
-          onClick={handleContinue}
-        >
-          {ctaLabel()}
-        </Button>
+      <div class="border-t border-t-edge px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-baseline gap-1.5 text-xs text-ink/60">
+          <span class="text-ink font-semibold text-xl leading-6">$40</span>
+          <span>per seat / month</span>
+        </div>
+        <div class="flex flex-col justify-end gap-2 sm:flex-row">
+          <Button
+            variant="ghost"
+            depth={3}
+            class="rounded-full sm:w-auto px-3 py-1.5"
+            onClick={props.cb}
+          >
+            Dismiss
+          </Button>
+          <Button
+            variant={hasPaid() ? 'base' : 'cta'}
+            class="rounded-full sm:w-auto px-3 py-1.5"
+            onClick={handleContinue}
+          >
+            {ctaLabel()}
+          </Button>
+        </div>
       </div>
     </section>
   );
