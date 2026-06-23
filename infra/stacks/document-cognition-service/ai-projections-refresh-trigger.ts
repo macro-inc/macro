@@ -3,19 +3,21 @@ import * as pulumi from '@pulumi/pulumi';
 import { Lambda } from '../../packages/lambda';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
-const LAMBA_BASE_NAME = 'ai_projections_refresh_handler';
+const LAMBDA_BASE_NAME = 'ai_projections_refresh_handler';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/bootstrap.zip`;
+const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 // Each cadence maps to its own schedule frequency. The lambda is invoked once
 // per cadence with a constant input identifying which projections to sweep, so
 // `refresh_cadence` controls how often a cadence's projections are checked.
-const CADENCE_SCHEDULES: { cadence: 'high' | 'medium' | 'low'; rate: string }[] =
-  [
-    { cadence: 'high', rate: 'rate(6 hours)' },
-    { cadence: 'medium', rate: 'rate(1 day)' },
-    { cadence: 'low', rate: 'rate(3 days)' },
-  ];
+const CADENCE_SCHEDULES: {
+  cadence: 'high' | 'medium' | 'low';
+  rate: string;
+}[] = [
+  { cadence: 'high', rate: 'rate(6 hours)' },
+  { cadence: 'medium', rate: 'rate(1 day)' },
+  { cadence: 'low', rate: 'rate(3 days)' },
+];
 
 export type AiProjectionsRefreshTriggerEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
@@ -50,7 +52,7 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
     this.tags = tags;
 
     const sqsPolicy = new aws.iam.Policy(
-      `${LAMBA_BASE_NAME}-sqs-policy`,
+      `${LAMBDA_BASE_NAME}-sqs-policy`,
       {
         policy: pulumi.output({
           Version: '2012-10-17',
@@ -68,9 +70,9 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
     );
 
     this.role = new aws.iam.Role(
-      `${LAMBA_BASE_NAME}-role`,
+      `${LAMBDA_BASE_NAME}-role`,
       {
-        name: `${LAMBA_BASE_NAME}-role-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-role-${stack}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -97,9 +99,9 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
 
     const aiProjectionsRefreshLambda =
       new Lambda<AiProjectionsRefreshTriggerEnvVars>(
-        `${LAMBA_BASE_NAME}-lambda`,
+        `${LAMBDA_BASE_NAME}-lambda`,
         {
-          baseName: LAMBA_BASE_NAME,
+          baseName: LAMBDA_BASE_NAME,
           handlerBase: CLOUD_STORAGE_BASE,
           zipLocation: ZIP_LOCATION,
           vpc,
@@ -117,9 +119,9 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
     // the handler which cadence's projections to sweep.
     for (const { cadence, rate } of CADENCE_SCHEDULES) {
       const triggerRule = new aws.cloudwatch.EventRule(
-        `${LAMBA_BASE_NAME}-${cadence}-rule`,
+        `${LAMBDA_BASE_NAME}-${cadence}-rule`,
         {
-          name: `${LAMBA_BASE_NAME}-${cadence}-rule-${stack}`,
+          name: `${LAMBDA_BASE_NAME}-${cadence}-rule-${stack}`,
           scheduleExpression: rate,
           tags: this.tags,
         },
@@ -127,7 +129,7 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
       );
 
       new aws.cloudwatch.EventTarget(
-        `${LAMBA_BASE_NAME}-${cadence}-target-${stack}`,
+        `${LAMBDA_BASE_NAME}-${cadence}-target-${stack}`,
         {
           rule: triggerRule.name,
           arn: this.lambda.arn,
@@ -137,7 +139,7 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
       );
 
       new aws.lambda.Permission(
-        `${LAMBA_BASE_NAME}-${cadence}-permission-${stack}`,
+        `${LAMBDA_BASE_NAME}-${cadence}-permission-${stack}`,
         {
           action: 'lambda:InvokeFunction',
           function: this.lambda.name,
@@ -153,9 +155,9 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
 
   setupLambdaAlarms() {
     new aws.cloudwatch.MetricAlarm(
-      `${LAMBA_BASE_NAME}-throttle-alarm`,
+      `${LAMBDA_BASE_NAME}-throttle-alarm`,
       {
-        name: `${LAMBA_BASE_NAME}-throttle-count-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-throttle-count-${stack}`,
         metricName: 'Throttles',
         namespace: 'AWS/Lambda',
         statistic: 'Sum',
@@ -166,7 +168,7 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
         dimensions: {
           FunctionName: this.lambda.name,
         },
-        alarmDescription: `Alarm when ${LAMBA_BASE_NAME} lambda experiences throttling.`,
+        alarmDescription: `Alarm when ${LAMBDA_BASE_NAME} lambda experiences throttling.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
@@ -175,9 +177,9 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
     );
 
     new aws.cloudwatch.MetricAlarm(
-      `${LAMBA_BASE_NAME}-error-alarm`,
+      `${LAMBDA_BASE_NAME}-error-alarm`,
       {
-        name: `${LAMBA_BASE_NAME}-error-count-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-error-count-${stack}`,
         metricName: 'Errors',
         namespace: 'AWS/Lambda',
         statistic: 'Sum',
@@ -188,7 +190,7 @@ export class AiProjectionsRefreshTrigger extends pulumi.ComponentResource {
         dimensions: {
           FunctionName: this.lambda.name,
         },
-        alarmDescription: `Alarm when ${LAMBA_BASE_NAME} lambda experiences errors.`,
+        alarmDescription: `Alarm when ${LAMBDA_BASE_NAME} lambda experiences errors.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
