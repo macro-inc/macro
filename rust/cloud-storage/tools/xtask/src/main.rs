@@ -16,8 +16,10 @@
 //! the regenerate mode; CI runs `--check` and fails on drift.
 
 mod closures;
+mod doppler_bins;
 mod hakari_ops;
 mod nextest_filter;
+mod workflows;
 
 use std::path::Path;
 
@@ -34,8 +36,14 @@ fn main() -> Result<()> {
             let graph = build_graph(false)?;
             nextest_filter::run(&graph, Path::new(changed_files_path))
         }
+        ["doppler-bins", changed_files_path] => {
+            let graph = build_graph(false)?;
+            doppler_bins::run(&graph, Path::new(changed_files_path))
+        }
+        ["workflows"] => workflows::generate(),
+        ["workflows", "--check"] => workflows::check(),
         _ => bail!(
-            "usage:\n  cargo run -p xtask -- deps [--check]\n  cargo run -p xtask -- nextest-filter <changed-files-path>"
+            "usage (from rust/cloud-storage):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x workflows [--check]"
         ),
     }
 }
