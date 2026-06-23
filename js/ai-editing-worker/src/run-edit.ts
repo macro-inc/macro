@@ -16,7 +16,9 @@ import { SyncEngine } from "../../app/packages/core/collab/engine";
 import { LoroManager } from "../../app/packages/core/collab/manager";
 import { InMemoryWALStore, WALSyncer } from "../../app/packages/core/collab/wal";
 import type { RawUpdate } from "../../app/packages/core/collab/shared";
-import { MARKDOWN_LORO_SCHEMA } from "../../lexical-core/markdown-loro-schema";
+import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "../../lexical-core/markdown-loro-schema";
+import type { InferType } from "@loro-mirror/packages/core/src";
+import { $updateAllNodeIds } from "../../lexical-core/plugins/nodeIdPlugin";
 import { createWorkerAwareness, WorkerSyncSource } from "./sync-source";
 
 /** How many distinct loro peers the AI's edits are spread across. */
@@ -59,8 +61,7 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 	// this deferral for free via a Solid effect; here we do it by hand.)
 	let engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown> | undefined;
 	const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, {
-		liveSyncSource: () => source,
-		wasDirty: false,
+		documentId: args.documentId,
 	});
 	manager.onStateChange((u) =>
 		queueMicrotask(() => engine?.onStateUpdate(u)),
@@ -119,12 +120,12 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 				manager.doc.commit();
 				manager.doc.setPeerId(peer);
 			}
-			const snap = toSnapshot(session) as any;
-			const snapBlocks = snap?.root?.children;
-			if (Array.isArray(snapBlocks)) {
-				console.log('[loro-debug] syncStateToLoro snapshot block types:', snapBlocks.map((b: any) => `${b?.type}/${b?.$?.id}`));
-			}
-			await engine!.syncStateToLoro(snap as never);
+			// Prism creates code-highlight nodes without ids (skipTransforms).
+			// Stamp ids before snapshotting so the Loro mirror matches them by id
+			// instead of re-inserting duplicates on every sync.
+			session.editor.update(() => $updateAllNodeIds(session.ids), { discrete: true });
+			const snap = toSnapshot(session);
+			await engine!.syncStateToLoro(snap as unknown as InferType<MarkdownLoroSchemaType>);
 		});
 	};
 
@@ -152,6 +153,9 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 			searchContacts: args.searchContacts ?? (() => Promise.resolve([])),
 		});
 
+		// A final propagate catches any Prism tokenization that settled after the
+		// last edit's propagate (its code-highlight nodes are otherwise unsynced).
+		propagate();
 		// Drain the last queued propagate + ensure every commit reached the server
 		// before we disconnect.
 		await chain;

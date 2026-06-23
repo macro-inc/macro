@@ -10,11 +10,17 @@ export type TraceMeta = {
 
 type Usage = { inputTokens: number; outputTokens: number };
 
-function formatDispatchArgs(args: { edits: Array<{ editing_instruction: string; context?: { start_line: number; end_line: number } }> }): string {
+function formatDispatchArgs(args: { edits: Array<{ editing_instruction: string; context?: { start_line: number; end_line: number }; snippets?: Record<string, string> }> }): string {
 	return args.edits
 		.map((e, i) => {
 			const range = e.context ? ` [lines ${e.context.start_line}-${e.context.end_line}]` : "";
-			return `${i + 1}. ${e.editing_instruction}${range}`;
+			let out = `${i + 1}. ${e.editing_instruction}${range}`;
+			if (e.snippets && Object.keys(e.snippets).length > 0) {
+				for (const [key, value] of Object.entries(e.snippets)) {
+					out += `\n   snippets.${key}:\n   \`\`\`\n${value.split("\n").map(l => `   ${l}`).join("\n")}\n   \`\`\``;
+				}
+			}
+			return out;
 		})
 		.join("\n");
 }
@@ -23,7 +29,7 @@ function formatToolCall(call: { toolName: string; input: unknown }, output: unkn
 	const lines: string[] = [];
 
 	if (call.toolName === "dispatch") {
-		const { edits } = call.input as { edits: Array<{ editing_instruction: string; context?: { start_line: number; end_line: number } }> };
+		const { edits } = call.input as { edits: Array<{ editing_instruction: string; context?: { start_line: number; end_line: number }; snippets?: Record<string, string> }> };
 		lines.push(`**dispatch** — ${edits.length} edit(s)`);
 		lines.push("");
 		lines.push(formatDispatchArgs({ edits }));

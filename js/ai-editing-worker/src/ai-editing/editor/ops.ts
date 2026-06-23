@@ -40,7 +40,7 @@ export type NodeSpec =
   | { block: 'paragraph'; text?: string }
   | { block: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; text?: string }
   | { block: 'quote'; text?: string }
-  | { block: 'code'; language?: string; text?: string }
+  | { block: 'code'; language: string; text?: string }
   | { block: 'list'; list: ListKind; items: string[] }
   | { block: 'table'; rows: string[][] } // row 0 is the header
   | { block: 'divider' }

@@ -1,3 +1,4 @@
+import { registerCodeHighlighting } from '@lexical/code';
 import { $convertFromMarkdownString } from '@lexical/markdown';
 import {
   $getRoot,
@@ -24,14 +25,16 @@ export function createEditingSession(): Session {
     nodeKeyToIdMap: new Map(),
   };
   const editor = createEditor({
-    // NodeReplacements activates CodeNode → CustomCodeNode substitution so that
-    // $createCodeNode() yields 'custom-code', consistent with documents from Loro.
-    nodes: [...SupportedNodeTypes, ...NodeReplacements],
+    nodes: [...SupportedNodeTypes, ...NodeReplacements], // code becomes custom code like how we do it on main frontend
     onError: (error) => {
       throw error;
     },
   });
   nodeIdPlugin({ nodes: SupportedNodeTypes, mappings: ids })(editor);
+  // prism tokenizes code blocks into code-highlight nodes so highlighting is
+  // baked into the doc even when no browser is connected (if a browser is
+  // connected it will observe a lexical update and swap with tokenized).
+  registerCodeHighlighting(editor);
   return { editor, ids };
 }
 

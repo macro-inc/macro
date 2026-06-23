@@ -17,6 +17,7 @@ import {
 } from 'lexical';
 import { match } from 'ts-pattern';
 import { $getId, $setId, type NodeIdMappings } from '../../../../lexical-core/plugins/nodeIdPlugin';
+import { $isCustomCodeNode } from '../../../../lexical-core/nodes/CustomCodeNode';
 import type { Session } from './session';
 import { collectTextNodes } from './tree';
 
@@ -66,6 +67,13 @@ export function $setBlockType(
 
 /** Rewrite a block's inline content to plain text, keeping its type and id. Always strips any inline formatting (bold, italic, underline, etc.) on the kept node. */
 export function $setText(block: ElementNode, text: string): void {
+  // A code block's children are code-highlight nodes (re-tokenized from the
+  // block's text by Prism), so we use `setCode`, which splices the whole
+  // content in one shot, keeping the language.
+  if ($isCustomCodeNode(block)) {
+    block.setCode(block.getLanguage(), text);
+    return;
+  }
   const children = block.getChildren();
   const existing = children.find($isTextNode) as TextNode | undefined;
   if (existing) {

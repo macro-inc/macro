@@ -117,13 +117,14 @@ After:
 
 ## Block Type Conversion
 
-- `convertToParagraph(id)` · `convertToHeading(id, level)` · `convertToQuote(id)` · `convertToCodeBlock(id, language?)`
+- `convertToParagraph(id)` · `convertToHeading(id, level)` · `convertToQuote(id)` · `convertToCodeBlock(id, language)` · `setLanguage(id, language)`
 
 ```ts
 editor.convertToHeading('b1', 2);
 editor.convertToQuote('b2');
 editor.convertToCodeBlock('b3', 'ts');
 editor.convertToParagraph('b4');
+editor.setLanguage('b3', 'python');
 ```
 
 Before:
@@ -143,7 +144,7 @@ After:
 <doc>
   <h2 id="b1"><t id="t1">Title</t></h2>
   <blockquote id="b2"><t id="t2">A quote</t></blockquote>
-  <custom-code id="b3" direction="null" format="" indent="0" version="1" language="ts"><t id="t3">code here</t></custom-code>
+  <custom-code id="b3" direction="null" format="" indent="0" version="1" language="python"><t id="t3">code here</t></custom-code>
   <p id="b4"><t id="t4">Back to paragraph</t></p>
 </doc>
 ```
@@ -190,7 +191,7 @@ After:
 
 - `insertParagraphAfter(id, text?)` · `insertParagraphBefore(id, text?)`
 - `insertHeadingAfter(id, level, text?)` · `insertHeadingBefore(id, level, text?)`
-- `insertQuoteAfter(id, text?)` · `insertCodeBlockAfter(id, language?, text?)`
+- `insertQuoteAfter(id, text?)` · `insertCodeBlockAfter(id, language, text?)`
 - `insertBlockAfter(id, spec)` · `insertBlockBefore(id, spec)`
 - `appendParagraph(text?)` · `prependParagraph(text?)` · `appendBlock(spec)` · `prependBlock(spec)`
 - `move(id, position)` where `position` is `{ after: id }`, `{ before: id }`, `{ appendToRoot: true }`, or `{ prependToRoot: true }`
@@ -368,7 +369,7 @@ After:
 - `{ block: 'paragraph', text? }`
 - `{ block: 'heading', level, text? }`
 - `{ block: 'quote', text? }`
-- `{ block: 'code', language?, text? }`
+- `{ block: 'code', language, text? }`
 - `{ block: 'list', list: 'bullet'|'number'|'check', items: string[] }`
 - `{ block: 'table', rows }`
 - `{ block: 'divider' }`

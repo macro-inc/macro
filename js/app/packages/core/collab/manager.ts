@@ -17,10 +17,8 @@ import {
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
-import { DocInitMachine } from './document-init-machine';
 import { logSyncService } from './logger';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { LiveSyncSource } from './source';
 
 export enum LoroManagerError {
   ImportFailed = 'IMPORT_FAILED',
@@ -55,14 +53,7 @@ export type SnapshotIngest =
   | { kind: 'dss'; snapshot: RawUpdate };
 
 export type LoroManagerOptions = {
-  /** Accessor returning the live sync source. Required because the init
-   *  state machine may need to call `requestUpdatesSince` on it. */
-  liveSyncSource: () => LiveSyncSource;
   documentId: string;
-  /** True if the WAL had undelivered entries at the start of this session.
-   *  Read synchronously from `BrowserWALStore.isDirtyHint(documentId)` —
-   *  determines which path the init state machine takes. */
-  wasDirty: boolean;
 };
 
 /**
@@ -129,7 +120,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   private _state?: StateUpdate<S>;
 
   private mirrorUnsub?: () => void;
-  private readonly initMachine: ReturnType<typeof DocInitMachine.create>;
   private readonly options: LoroManagerOptions;
 
   private readonly stateListeners = new Set<(u: StateUpdate<S>) => void>();
@@ -138,7 +128,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   constructor(schema: S, options: LoroManagerOptions) {
     this.schema = schema;
     this.options = options;
-    this.initMachine = DocInitMachine.create(options.wasDirty);
   }
 
   // ── reads ─────────────────────────────────────────────────────────────────
@@ -529,12 +518,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     return true;
   }
 
-  /** Feed a snapshot from any source, driving the init state machine: it decides
-   *  whether to apply, ignore, or chain a `requestUpdatesSince` follow-up. */
   async ingest(input: SnapshotIngest): Promise<void> {
-    const instruction = this.initMachine.receive(input.kind);
-    if (instruction === 'ignore') return;
-
     const applied = await this.applySnapshot(input.snapshot, input.kind);
     if (!applied) return;
 
@@ -543,25 +527,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       if (replayResult.isErr()) {
         logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): WAL replay failed` });
       }
-    }
-
-    if (instruction !== 'applyThenRequestDelta') return;
-
-    // Local was dirty — fetch the precise delta from the live source.
-    const liveSource = this.options.liveSyncSource();
-    const deltaResult = await liveSource.requestUpdatesSince(
-      this._doc.version()
-    );
-    if (deltaResult.isErr()) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): requestUpdatesSince failed` });
-      return;
-    }
-    const requestedInstruction = this.initMachine.receive('requested');
-    if (requestedInstruction !== 'apply') return;
-
-    const deltaImport = this.importUpdate(deltaResult.value);
-    if (deltaImport.isErr()) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): failed to apply requested delta` });
     }
   }
 

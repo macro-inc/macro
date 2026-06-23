@@ -116,7 +116,6 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   const setBlockError = blockErrorSignal.set;
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
-    liveSyncSource: () => getSyncSource()!,
     documentId: blockId,
   });
 

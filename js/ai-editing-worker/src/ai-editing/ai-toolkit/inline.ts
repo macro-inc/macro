@@ -108,6 +108,8 @@ export function $setAllFormat(block: ElementNode, format?: InlineFormat): void {
  * highlight/animate the exact changed span. Like the formatting helpers it
  * works per text node, so a needle straddling two nodes isn't matched.
  */
+// TODO(wolf): unreliable on code blocks -- their children are per-token
+// code-highlight nodes, so a `find` can span a Prism token boundary
 export function $replaceString(
   block: ElementNode,
   find: string,

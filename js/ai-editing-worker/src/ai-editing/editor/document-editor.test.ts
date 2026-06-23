@@ -68,6 +68,7 @@ describe('DocumentEditor — text / block / list → ops', () => {
     expect(ed().convertToHeading('b1', 2).drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 });
     expect(ed().convertToQuote('b1').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'quote' });
     expect(ed().convertToCodeBlock('b1', 'ts').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'code', language: 'ts' });
+    expect(ed().setLanguage('b1', 'python').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'code', language: 'python' });
   });
 
   it('list toggles accept a single id or a list of ids', () => {
@@ -236,7 +237,8 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
     ['convertToParagraph', (e) => e.convertToParagraph('nope')],
     ['convertToHeading', (e) => e.convertToHeading('nope', 2)],
     ['convertToQuote', (e) => e.convertToQuote('nope')],
-    ['convertToCodeBlock', (e) => e.convertToCodeBlock('nope')],
+    ['convertToCodeBlock', (e) => e.convertToCodeBlock('nope', 'ts')],
+    ['setLanguage', (e) => e.setLanguage('nope', 'ts')],
     ['bulletList', (e) => e.bulletList('nope')],
     ['numberedList(array)', (e) => e.numberedList(['nope'])],
     ['checklist', (e) => e.checklist('nope')],
@@ -269,7 +271,7 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
     ['insertParagraphBefore', (e) => e.insertParagraphBefore('nope')],
     ['insertHeadingAfter', (e) => e.insertHeadingAfter('nope', 1)],
     ['insertQuoteAfter', (e) => e.insertQuoteAfter('nope')],
-    ['insertCodeBlockAfter', (e) => e.insertCodeBlockAfter('nope')],
+    ['insertCodeBlockAfter', (e) => e.insertCodeBlockAfter('nope', 'ts')],
     ['insertTableAfter', (e) => e.insertTableAfter('nope', [['a']])],
     ['insertTableBefore', (e) => e.insertTableBefore('nope', [['a']])],
   ];
@@ -321,6 +323,17 @@ describe('DocumentEditor — heading level bounds', () => {
     expect(() => ed().convertToHeading('b1', 0)).toThrow(/1-6/);
     expect(() => ed().convertToHeading('b1', 7)).toThrow(/1-6/);
     expect(() => ed().convertToHeading('b1', -1)).toThrow(/1-6/);
+  });
+});
+
+describe('DocumentEditor — code block language validation', () => {
+  it('requires a non-empty language for code block conversion and insertion', () => {
+    expect(() => ed().convertToCodeBlock('b1', '')).toThrow(/language is required/);
+    expect(() => ed().convertToCodeBlock('b1', undefined as unknown as string)).toThrow(/language is required/);
+    expect(() => ed().setLanguage('b1', '')).toThrow(/language is required/);
+    expect(() => ed().setLanguage('b1', undefined as unknown as string)).toThrow(/language is required/);
+    expect(() => ed().insertCodeBlockAfter('b1', '')).toThrow(/language is required/);
+    expect(() => ed().insertCodeBlockAfter('b1', undefined as unknown as string)).toThrow(/language is required/);
   });
 });
 

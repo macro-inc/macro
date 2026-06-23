@@ -451,7 +451,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Get the current state from the loroManager
           // At this point, the loroManager should be initialized and should
           // have the initial state from the sync service
-          const state = untrack(loroManager.state);
+          const state = untrack(() => loroManager.state);
           const empty = state
             ? isStateEmpty(state.state as unknown as SerializedEditorState)
             : null;
