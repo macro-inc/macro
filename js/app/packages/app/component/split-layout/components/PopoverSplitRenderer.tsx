@@ -88,6 +88,7 @@ function PopoverSplitModal(props: {
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
+    captureEntryState: () => {},
     currentEntryState: () => undefined,
   };
 

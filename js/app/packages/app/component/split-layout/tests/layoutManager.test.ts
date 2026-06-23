@@ -3,7 +3,7 @@ import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSplitLayout, type SplitContent } from '../layoutManager';
 
-vi.mock('../componentRegistry.tsx', () => ({
+vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
     type: 'mock-component',
     id,
@@ -11,7 +11,10 @@ vi.mock('../componentRegistry.tsx', () => ({
   })),
 }));
 
-vi.mock('zod', () => ({ z: undefined }));
+vi.mock('@core/constant/allBlocks', () => ({
+  isBlockAlias: vi.fn(() => false),
+  resolveBlockAlias: vi.fn((type: string) => type),
+}));
 
 beforeAll(() => {
   // Mock window.matchMedia for tests
@@ -113,6 +116,39 @@ describe('layoutManager', () => {
 
         expect(manager.splits()).toHaveLength(3);
         expect(manager.splits().map((s) => s.content)).toEqual(ORIGINAL_SPLITS);
+
+        dispose();
+      });
+    });
+  });
+
+  describe('entry state', () => {
+    it('captures registered entry state and merges with existing state', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          {
+            type: 'component',
+            id: 'unified-list',
+            state: { existing: true },
+          },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.registerEntryStateCaptor('soup.listState', () => ({
+          scrollOffset: 120,
+          focus: 'entity-1',
+        }));
+
+        split.captureEntryState();
+
+        expect(split.currentEntryState()).toEqual({
+          existing: true,
+          'soup.listState': {
+            scrollOffset: 120,
+            focus: 'entity-1',
+          },
+        });
+        expect(split.history()[0].state).toEqual(split.currentEntryState());
 
         dispose();
       });
