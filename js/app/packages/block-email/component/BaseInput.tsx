@@ -686,6 +686,13 @@ export function BaseInput(props: {
       );
       return null;
     }
+    // A freshly opened reply/forward prefills recipients (and a "Re:"/"Fwd:"
+    // subject) the user hasn't touched. Don't create a draft until they change
+    // something. Once a draft exists (savedDraftId), keep saving/deleting it via
+    // hasDraftContent so edits and emptying still work.
+    if (!savedDraftId() && !form().hasUserEdits(prepared.bodyText)) {
+      return null;
+    }
     if (
       !hasDraftContent(
         prepared.bodyText,

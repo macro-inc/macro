@@ -74,6 +74,29 @@ const EMPTY_FORM_STATE: EmailFormState = {
   markdownBody: '',
 };
 
+// Snapshot of the prefilled state a reply/forward opens with, used to tell
+// whether the user actually changed anything. Auto-derived recipients and a
+// "Re:"/"Fwd:" subject must not, on their own, count as a draft worth saving.
+type DirtyBaseline = {
+  to: Set<string>;
+  cc: Set<string>;
+  bcc: Set<string>;
+  subject: string;
+  attachments: Set<string>;
+  sendTime: number | null;
+};
+
+const recipientEmailSet = (list: EmailRecipient[]): Set<string> =>
+  new Set(list.map((r) => r.data.email.trim().toLowerCase()));
+
+const attachmentKey = (a: DraftFormAttachment): string =>
+  a.type === 'local'
+    ? `local:${a.file.name}:${a.file.size}`
+    : `${a.type}:${a.attachmentID}`;
+
+const sameStringSet = (a: Set<string>, b: Set<string>): boolean =>
+  a.size === b.size && [...a].every((value) => b.has(value));
+
 /**
  * Creates a state object for the email form.
  * @param purpose - The purpose of the form. Are we managing the state of a draft reply or just a draft message
@@ -213,6 +236,46 @@ export function createEmailFormState(
     })) ?? []),
   ]);
 
+  const captureBaseline = (): DirtyBaseline => ({
+    to: recipientEmailSet(state.recipients.to),
+    cc: recipientEmailSet(state.recipients.cc),
+    bcc: recipientEmailSet(state.recipients.bcc),
+    subject: state.subject.trim(),
+    attachments: new Set(attachments().map(attachmentKey)),
+    sendTime: state.sendTime?.getTime() ?? null,
+  });
+
+  const [dirtyBaseline, setDirtyBaseline] = createSignal<DirtyBaseline>(
+    captureBaseline()
+  );
+
+  // Re-snapshot the baseline whenever the prefill is recomputed programmatically
+  // (reply-type switch, from-inbox switch, reset) so those don't read as edits.
+  const resetDirtyBaseline = () => setDirtyBaseline(captureBaseline());
+
+  // Whether the user has changed anything from the prefilled state. The body
+  // text is passed in because it lives in the Lexical editor, not this store.
+  const hasUserEdits = (currentBodyText: string): boolean => {
+    if (currentBodyText.trim() !== '') return true;
+    const base = dirtyBaseline();
+    if (state.subject.trim() !== base.subject) return true;
+    if (!sameStringSet(recipientEmailSet(state.recipients.to), base.to))
+      return true;
+    if (!sameStringSet(recipientEmailSet(state.recipients.cc), base.cc))
+      return true;
+    if (!sameStringSet(recipientEmailSet(state.recipients.bcc), base.bcc))
+      return true;
+    if (
+      !sameStringSet(
+        new Set(attachments().map(attachmentKey)),
+        base.attachments
+      )
+    )
+      return true;
+    if ((state.sendTime?.getTime() ?? null) !== base.sendTime) return true;
+    return false;
+  };
+
   const setRecipients = (
     field: keyof EmailFormRecipients,
     value: EmailRecipient[]
@@ -285,6 +348,7 @@ export function createEmailFormState(
     }
 
     callDirty();
+    resetDirtyBaseline();
     setLastReplyTypeApplied(rt);
     onReplyTypeAppliedCb()?.(rt);
     return rt;
@@ -302,6 +366,7 @@ export function createEmailFormState(
     setRecipients('to', recalculated.to ?? []);
     setRecipients('cc', recalculated.cc ?? []);
     setRecipients('bcc', recalculated.bcc ?? []);
+    resetDirtyBaseline();
   };
 
   const setSendTime = (date: Date | null) => {
@@ -323,6 +388,7 @@ export function createEmailFormState(
     setShouldFocusInput(false);
 
     setAttachments([]);
+    resetDirtyBaseline();
 
     // Mark as dirty to propagate change
     callDirty();
@@ -339,6 +405,7 @@ export function createEmailFormState(
     setShouldFocusInput(false);
 
     setAttachments([]);
+    resetDirtyBaseline();
 
     // Mark as dirty to propagate change
     callDirty();
@@ -360,6 +427,7 @@ export function createEmailFormState(
     setShouldFocusInput,
     sendTime: () => state.sendTime,
     setSendTime,
+    hasUserEdits,
     reset,
     clear,
     setOnDirty: (cb?: () => void) => {
