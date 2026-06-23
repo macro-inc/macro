@@ -9,12 +9,16 @@ use macro_middleware::tracking::ClientIp;
 use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
+use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
 use crate::api::{
     context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
 };
+
+#[cfg(test)]
+mod test;
 
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
@@ -36,7 +40,6 @@ pub enum InitGmailLinkError {
     TooManyInProgressLinks,
     /// The user lacks the subscription required to link an additional inbox
     #[error("a professional subscription is required to link an additional inbox")]
-    #[allow(dead_code)]
     PaymentRequired,
     /// Internal error
     #[error("internal error occurred")]
@@ -91,20 +94,21 @@ pub(crate) struct InitGmailLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context, _permissions), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, user_context, permissions), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
 pub async fn init_gmail_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGmailLinkQueryParams>,
     ip_context: ClientIp,
     user_context: MacroUserExtractor,
-    PermissionsExtractor(_permissions): PermissionsExtractor,
+    PermissionsExtractor(permissions): PermissionsExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
 
-    // NOTE: removed to fix issue of free users not being able to link their gmail account.
-    // if !permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
-    //     return Err(InitGmailLinkError::PaymentRequired);
-    // }
+    enforce_inbox_paywall(
+        permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
+        || macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id),
+    )
+    .await?;
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
@@ -155,6 +159,26 @@ pub async fn init_gmail_link_handler(
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+/// Enforces the inbox paywall. The first inbox is free, so the existing-inbox
+/// check only runs for users without professional features, and only such a user
+/// who already has an inbox needs a professional subscription.
+async fn enforce_inbox_paywall<F, Fut>(
+    has_professional_features: bool,
+    check_existing_inbox: F,
+) -> Result<(), InitGmailLinkError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<bool>>,
+{
+    if !has_professional_features {
+        let has_own_inbox = check_existing_inbox().await?;
+        if has_own_inbox {
+            return Err(InitGmailLinkError::PaymentRequired);
+        }
+    }
+    Ok(())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
