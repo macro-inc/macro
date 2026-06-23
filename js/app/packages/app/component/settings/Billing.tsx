@@ -1,21 +1,30 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { PLAN_FEATURES, type PlanTier } from '@app/component/paywall/plans';
+import type { PlanTier } from '@app/component/paywall/plans';
 import { useHasPaidAccess } from '@core/auth';
 import CheckIcon from '@phosphor/check.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
 import { For, Show } from 'solid-js';
 
+const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
+  free: ['Access to Haiku', '5 GB storage'],
+  premium: [
+    'All agents',
+    'All models',
+    'No watermark',
+    'MCP access',
+    'AI projections',
+    '1 TB storage',
+  ],
+};
+
 const PlanFeatures = (props: { tier: PlanTier }) => (
-  <ul class="grid grid-cols-1 gap-2 text-sm text-ink-muted sm:grid-cols-3">
-    <For each={PLAN_FEATURES}>
-      {(feature) => (
-        <li class="grid grid-cols-[auto_1fr] gap-x-2 rounded-md">
-          <CheckIcon class="mt-1 size-3 text-success" />
-          <span class="text-ink">{feature.label}</span>
-          <span class="col-start-2 text-ink-extra-muted text-sm">
-            {feature.values[props.tier]}
-          </span>
+  <ul class="flex flex-wrap gap-6 text-sm text-ink-muted">
+    <For each={BILLING_PLAN_FEATURES[props.tier]}>
+      {(label) => (
+        <li class="flex items-center gap-2">
+          <CheckIcon class="size-3 text-success" />
+          <span class="text-ink-muted text-xs">{label}</span>
         </li>
       )}
     </For>
@@ -50,7 +59,7 @@ export const Billing = () => {
   return (
     <section class="p-8 flex flex-col gap-8">
       <header class="flex flex-col">
-        <h1 class="text-xl text-ink font-medium">Billing</h1>
+        <h1 class="text-2xl text-ink font-medium">Billing</h1>
         <p class="text-ink-extra-muted text-sm">
           For questions about billing, <span class="text-ink">contact us</span>
         </p>
@@ -82,9 +91,11 @@ export const Billing = () => {
               </Button>
             </Show>
           </header>
-          <div class="border-t border-t-edge-muted pt-3">
-            <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
-          </div>
+          <Show when={!hasPaid()}>
+            <div class="border-t border-t-edge-muted pt-4">
+              <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
+            </div>
+          </Show>
         </section>
       </Surface>
       <Show when={!hasPaid()}>
@@ -102,10 +113,10 @@ export const Billing = () => {
                 variant="cta"
                 onClick={handleCheckout}
               >
-                Upgrade
+                Upgrade now
               </Button>
             </header>
-            <div class="border-t border-t-edge-muted pt-3">
+            <div class="border-t border-t-edge-muted pt-4">
               <PlanFeatures tier="premium" />
             </div>
           </section>
