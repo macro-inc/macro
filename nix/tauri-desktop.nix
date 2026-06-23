@@ -155,6 +155,7 @@
         '';
         craneArgs.preBuild = ''
           mkdir -p ../packages/app
+          cp ${../js/app/packages/app/package.json} ../packages/app/package.json
           rm -rf ../packages/app/dist
           cp -r ${frontend} ../packages/app/dist
         '';
