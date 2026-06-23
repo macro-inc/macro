@@ -1,24 +1,33 @@
-import { envsafe, makeValidator, num, str } from "envsafe";
+import { envsafe, str } from "envsafe";
+import { createMiddleware } from "hono/factory";
 
-const provider = makeValidator<"anthropic" | "openai" | "cerebras">((input) => {
-	if (input === "anthropic" || input === "openai" || input === "cerebras")
-		return input;
-	throw new Error(`must be one of: anthropic, openai, cerebras`);
-});
+export type Bindings = {
+	ANTHROPIC_API_KEY: string | undefined;
+	CEREBRAS_API_KEY: string | undefined;
+	OPENAI_API_KEY: string | undefined;
+	SYNC_WS_BASE: string;
+};
 
-export const env = envsafe({
-	PORT: num({ devDefault: 8932 }),
-	SYNC_WS_BASE: str({
-		devDefault: "ws://localhost:8787",
-	}),
+export type Env = ReturnType<typeof validateEnv>;
 
-	SUPERVISOR_PROVIDER: provider({ devDefault: "anthropic" }),
-	SUPERVISOR_MODEL: str({ allowEmpty: false, devDefault: "claude-sonnet-4-6" }),
+function validateEnv(rawEnv: Bindings) {
+	return envsafe(
+		{
+			ANTHROPIC_API_KEY: str({ allowEmpty: false }),
+			CEREBRAS_API_KEY: str({ allowEmpty: false }),
+			OPENAI_API_KEY: str({ allowEmpty: false }),
+			SYNC_WS_BASE: str({ allowEmpty: false }),
+		},
+		{ env: rawEnv as Record<string, string | undefined> },
+	);
+}
 
-	CHILD_PROVIDER: provider({ allowEmpty: true, devDefault: "anthropic" }),
-	CHILD_MODEL: str({ allowEmpty: true, devDefault: "" }),
+export type EnvVariables = { env: Env };
 
-	ANTHROPIC_API_KEY: str(),
-	OPENAI_API_KEY: str({ allowEmpty: true, devDefault: "" }),
-	CEREBRAS_API_KEY: str({ allowEmpty: true, devDefault: "" }),
+export const envMiddleware = createMiddleware<{
+	Bindings: Bindings;
+	Variables: EnvVariables;
+}>(async (c, next) => {
+	c.set("env", validateEnv(c.env));
+	await next();
 });

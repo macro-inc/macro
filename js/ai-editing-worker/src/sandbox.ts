@@ -1,12 +1,17 @@
 import { newQuickJSWASMModuleFromVariant, newVariant } from "quickjs-emscripten-core";
 import releaseSync from "@jitl/quickjs-wasmfile-release-sync";
-// Wrangler compiles .wasm files at bundle time via the CompiledWasm rule in wrangler.jsonc.
-// We pass the pre-compiled module directly so workerd never tries to fetch it at runtime.
 import wasmModule from "@jitl/quickjs-wasmfile-release-sync/dist/emscripten-module.wasm";
-import type { DocumentOp } from "../../lexical-core/ai-editing/editor/ops";
+import type { DocumentOp } from "./ai-editing/editor/ops";
 import { SANDBOX_CODE } from "./editor-sandbox-code";
 
+
+// Verbatim from their docs:
+// Create a new variant by overriding how Emscripten obtains the WebAssembly
+// module. This may be necessary in Cloudflare Workers, which can’t compile
+// WebAssembly modules from binary data.
+// Magic that makes cloudflare happy :)
 const variant = newVariant(releaseSync, { wasmModule });
+
 let _qjs: Awaited<ReturnType<typeof newQuickJSWASMModuleFromVariant>> | null = null;
 
 async function qjs() {
@@ -17,13 +22,14 @@ async function qjs() {
 export async function runInSandbox(
 	validIds: Set<string>,
 	code: string,
+	snippets?: Record<string, string>,
 ): Promise<DocumentOp[]> {
 	const QuickJS = await qjs();
 	const ctx = QuickJS.newContext();
 	try {
 		const init = ctx.unwrapResult(
 			ctx.evalCode(
-				`${SANDBOX_CODE}\nconst editor = new DocumentEditor(${JSON.stringify([...validIds])});`,
+				`${SANDBOX_CODE}\nconst editor = new DocumentEditor({ validIds: ${JSON.stringify([...validIds])} });\nconst snippets = ${JSON.stringify(snippets ?? {})};`,
 			),
 		);
 		init.dispose();

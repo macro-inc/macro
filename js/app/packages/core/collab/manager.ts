@@ -16,7 +16,7 @@ import {
   type VersionVector,
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { onCleanup } from 'solid-js';
 import { DocInitMachine } from './document-init-machine';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
@@ -36,191 +36,6 @@ export enum LoroStateTag {
   Initialize = 'INITIALIZE',
   FromManager = 'FROM_MANAGER',
 }
-
-/**
- * The LoroManager is responsible for managing the state of the LoroDoc
- * It does this by syncing arbitrary json state to and from the LoroDoc
- * via the Mirror. The mirror will incrementally diff the incoming json state
- * and correctly apply it to the LoroDoc.
- *
- * ┌────────────┬──────────────────────────────────────┐
- * │  Manager   │                                      │
- * ├────────────┘                                      │
- * │                                                   │
- * │                    .───────.                      │
- * │                   ╱         ╲                     │
- * │                  (   State   )◀─┐                 │
- * │                   `.       ,'   │                 │
- * │                     │─────'     │                 │
- * │        ┌───┬────────┴───────────┘                 │
- * │        │   │                                      │
- * │        │   ▼                                      │
- * │    ┌──────────────┐          ┌──────────────┐     │
- * │    │              │          │              │     │
- * │    │              │◀─────────┤              │     │
- * │    │    Mirror    │          │   LoroDoc    │     │
- * │    │              ├─────────▶│              │     │
- * │    │              │          │              │     │
- * │    └──────────────┘          └──────────────┘     │
- * │                                                   │
- * │                                                   │
- * └───────────────────────────────────────────────────┘
- */
-export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
-  /**
-   * Accessor to the inner LoroDoc
-   * Only use this if you know what you're doing
-   * Most operations should be done through the manager directly
-   *
-   * @returns The LoroDoc
-   **/
-  getDoc: Accessor<LoroDoc>;
-
-  /**
-   * Accessor to the inner Mirror
-   * Only use this if you know what you're doing
-   * Most operations should be done through the manager directly
-   *
-   * @returns The Mirror
-   **/
-  getMirror: Accessor<Mirror<S> | undefined>;
-
-  /** The current schema of the manager */
-  schema: S;
-
-  /** The current mirrored state of the loro doc
-   *
-   * ┌─────────────┐
-   * │ Local State │                    ┌─────────────┐
-   * │   Update    │                    │Remote Import│
-   * └─────────────┘                    └─────────────┘
-   *       │                                  │
-   *       │                                  │
-   *       ▼                                  ▼
-   * ┌──────────┐      ┌ ─ ─ ─ ─ ┐      ┌──────────┐      ┌ ─ ─ ─ ─ ─ ┐
-   * │  Mirror  │─────▶   Diff          │ LoroDoc  │─────▶ exportJSON
-   * └──────────┘      └ ─ ─ ─ ─ ┘      └──────────┘      └ ─ ─ ─ ─ ─ ┘
-   *                         │                                   │
-   *                         │                                   │
-   *                         ▼                                   ▼
-   *                   ┌───────────┐                       ┌───────────┐
-   *                   │  LoroDoc  │                       │   State   │
-   *                   └───────────┘                       └───────────┘
-   * */
-  state: Accessor<StateUpdate<S> | undefined>;
-
-  /* Signal containing the errors */
-  error: Accessor<LoroManagerError[]>;
-
-  /** Signal containing the initialized state of the manager */
-  isInitialized: Accessor<boolean>;
-
-  /** Syncs the infered state from the schema to the loro doc via the Mirror
-   *
-   *
-   * ┌─────────────┐
-   * │ Local State │
-   * │   Update    │
-   * └─────────────┘
-   *       │
-   *       │
-   *       ▼
-   * ┌──────────┐      ┌ ─ ─ ─ ─ ┐
-   * │  Mirror  │─────▶   Diff
-   * └──────────┘      └ ─ ─ ─ ─ ┘
-   *                         │
-   *                         │
-   *                         ▼
-   *                   ┌───────────┐
-   *                   │  LoroDoc  │
-   *                   └───────────┘
-   *
-   * @param state - The state to sync to loro
-   * @returns result - The error if syncing to loro failed
-   *
-   * */
-  syncToLoro(
-    state: InferType<S>
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
-
-  /** Retrieve all loro container ids */
-  getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]>;
-
-  /**  Retrieve a LoroUpdate with all relavent events/data since the given version vector
-   *
-   * @param lastVersionVector - The last version vector to sync from
-   * @returns result - The update if it exists, or an error if it doesn't
-   * */
-  getUpdateSince(
-    lastVersionVector: VersionVector
-  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]>;
-
-  /** Initializes the manager from a snapshot
-   *
-   * If this is successful, it will set isInitialized to true
-   *
-   * @param snapshot - The snapshot to initialize from
-   * @returns result - The error if initializing from the snapshot failed
-   * */
-  initializeFromSnapshot(
-    snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
-
-  /** Imports a single loro update
-   *
-   * @param update - The update to import
-   * @returns result - The error if importing the update failed
-   * */
-  importUpdate(
-    update: LoroRawUpdate
-  ): Result<boolean, ResultError<LoroManagerError>[]>;
-
-  /** Imports multiple loro updates at once
-   *
-   * @param updates - The updates to import
-   * @returns result - The error if importing the updates failed
-   * */
-  importBatchUpdates(
-    updates: LoroRawUpdate[]
-  ): Result<boolean, ResultError<LoroManagerError>[]>;
-
-  /** Resets the manager to a new state
-   *
-   * @param snapshot - The snapshot to reset to
-   * @returns result - The error if resetting the manager failed
-   * */
-  reset(
-    snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
-
-  /** Returns the current version of the manager */
-  getVersion(): VersionVector;
-
-  /** Returns the current state of the manager */
-  getPeerId(): bigint;
-
-  getPeerIdStr(): PeerID;
-
-  /** Returns the container with the given id if it exists */
-  getContainerById(
-    id: ContainerID
-  ): Result<Container | undefined, ResultError<LoroManagerError>[]>;
-
-  /** Feed a snapshot from any source. The init state machine internally
-   *  decides whether to apply, ignore, or chain a `requestUpdatesSince`
-   *  follow-up against the live sync source. */
-  ingest(input: SnapshotIngest): Promise<void>;
-
-  /** Returns the current cursor position for the given LoroCursor within its container */
-  getCursorPos(cursor: Cursor): Result<
-    {
-      update?: Cursor;
-      offset: number;
-      side: Side;
-    },
-    ResultError<LoroManagerError>[]
-  >;
-};
 
 export type StateUpdate<S extends GenericRootSchema> = {
   state: InferType<S>;
@@ -248,120 +63,245 @@ export type LoroManagerOptions = {
   wasDirty: boolean;
 };
 
-/** Creates a new [LoroManager] instance
- *
- * @param schema - The schema to use for the manager
- * @param options - Optional dependencies (e.g. live sync source for catch-up)
- * @returns The new manager [LoroManager]
- * */
-export function createLoroManager<S extends GenericRootSchema>(
-  schema: S,
-  options: LoroManagerOptions
-): LoroManager<S> {
-  const [initialized, setInitialized] = createSignal<boolean>(false);
-  const [loroDoc, setLoroDoc] = createSignal<LoroDoc>(createLoroDoc());
-  const [mirror, setMirror] = createSignal<Mirror<S>>();
-  const [error, setError] = createSignal<LoroManagerError[]>([]);
-  const [state, setState] = createSignal<StateUpdate<S>>();
-
-  const initMachine = DocInitMachine.create(options.wasDirty);
-
-  /** Util for awaiting the sync of the mirror to finish */
-  const awaitMirrorSync = async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-  };
-
-  const pushError = (error: LoroManagerError) => {
-    setError((prev) => [...prev, error]);
-  };
-
-  const importUpdate = (
+/**
+ * The slice of {@link LoroManager} that {@link SyncEngine} depends on. This lean
+ * interface is the DI seam: it lets the engine be unit-tested against a mock
+ * (which can't satisfy the concrete class's `private` fields), while the real
+ * `LoroManager` and any future stub both fit it structurally.
+ */
+export interface SyncEngineManager<
+  S extends GenericRootSchema = GenericRootSchema,
+> {
+  readonly doc: LoroDoc;
+  readonly initialized: boolean;
+  readonly peerId: bigint;
+  importUpdate(
     update: LoroRawUpdate
-  ): Result<boolean, ResultError<LoroManagerError>[]> => {
-    let importStatus;
-
-    try {
-      importStatus = loroDoc().import(update);
-    } catch (e) {
-      console.error('Failed to import update', e);
-      pushError(LoroManagerError.ImportFailed);
-      return err([
-        {
-          code: LoroManagerError.ImportFailed,
-          message: `Failed to import update: ${e}`,
-        },
-      ]);
-    }
-
-    const didChange = Object.keys(importStatus.success).length > 0;
-
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      pushError(LoroManagerError.ImportFailed);
-      return err([
-        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
-      ]);
-    }
-
-    return ok(didChange);
-  };
-
-  const importBatchUpdates = (
-    updates: LoroRawUpdate[]
-  ): Result<boolean, ResultError<LoroManagerError>[]> => {
-    let importStatus;
-
-    try {
-      importStatus = loroDoc().importBatch(updates);
-    } catch (e) {
-      console.error('Failed to import update', e);
-      pushError(LoroManagerError.ImportFailed);
-      return err([
-        {
-          code: LoroManagerError.ImportFailed,
-          message: `Failed to import update: ${e}`,
-        },
-      ]);
-    }
-
-    const didChange = Object.keys(importStatus.success).length > 0;
-
-    if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      pushError(LoroManagerError.ImportFailed);
-      return err([
-        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
-      ]);
-    }
-
-    return ok(didChange);
-  };
-
-  const initializeFromSnapshot = async (
+  ): Result<boolean, ResultError<LoroManagerError>[]>;
+  syncToLoro(
+    state: InferType<S>
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
+  reset(
     snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
-    const importResult = importUpdate(snapshot);
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
+}
+
+/**
+ * The LoroManager manages the state of a LoroDoc by syncing arbitrary JSON
+ * state to and from it via the {@link Mirror}, which incrementally diffs the
+ * incoming JSON state and applies it to the LoroDoc.
+ *
+ * ┌────────────┬──────────────────────────────────────┐
+ * │  Manager   │                                      │
+ * ├────────────┘                                      │
+ * │                    .───────.                      │
+ * │                   ╱         ╲                     │
+ * │                  (   State   )◀─┐                 │
+ * │                   `.       ,'   │                 │
+ * │                     │─────'     │                 │
+ * │        ┌───┬────────┴───────────┘                 │
+ * │        │   ▼                                      │
+ * │    ┌──────────────┐          ┌──────────────┐     │
+ * │    │              │◀─────────┤              │     │
+ * │    │    Mirror    │          │   LoroDoc    │     │
+ * │    │              ├─────────▶│              │     │
+ * │    └──────────────┘          └──────────────┘     │
+ * └───────────────────────────────────────────────────┘
+ *
+ * This is a pure, Solid-free class: reads are plain getters and changes are
+ * announced through the `onStateChange` / `onInitializedChange` subscriptions
+ * (the same callback shape `SyncEngine` uses for `onRunningChange`). The browser
+ * wraps it with {@link createLoroManager} to bridge those into signals; headless
+ * callers (the AI worker) construct and subscribe to it directly.
+ */
+export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
+  implements SyncEngineManager<S>
+{
+  /** The current schema of the manager. */
+  readonly schema: S;
+
+  private _initialized = false;
+  private _doc: LoroDoc = createLoroDoc();
+  private _mirror?: Mirror<S>;
+  private _errors: LoroManagerError[] = [];
+  private _state?: StateUpdate<S>;
+
+  private mirrorUnsub?: () => void;
+  private readonly initMachine: ReturnType<typeof DocInitMachine.create>;
+  private readonly options: LoroManagerOptions;
+
+  private readonly stateListeners = new Set<(u: StateUpdate<S>) => void>();
+  private readonly initListeners = new Set<(v: boolean) => void>();
+
+  constructor(schema: S, options: LoroManagerOptions) {
+    this.schema = schema;
+    this.options = options;
+    this.initMachine = DocInitMachine.create(options.wasDirty);
+  }
+
+  // ── reads ─────────────────────────────────────────────────────────────────
+  /** The inner LoroDoc. Only touch this if you know what you're doing. */
+  get doc(): LoroDoc {
+    return this._doc;
+  }
+  /** The inner Mirror, once initialized. */
+  get mirror(): Mirror<S> | undefined {
+    return this._mirror;
+  }
+  /** The latest mirrored state + the metadata of the update that produced it. */
+  get state(): StateUpdate<S> | undefined {
+    return this._state;
+  }
+  /** Errors accumulated over this manager's life. */
+  get errors(): LoroManagerError[] {
+    return this._errors;
+  }
+  /** Whether the manager has been initialized from a snapshot. */
+  get initialized(): boolean {
+    return this._initialized;
+  }
+  get peerId(): bigint {
+    return this._doc.peerId;
+  }
+  get peerIdStr(): PeerID {
+    return this._doc.peerIdStr;
+  }
+  get version(): VersionVector {
+    return this._doc.version();
+  }
+
+  // ── change notification ─────────────────────────────────────────────────
+  /** Subscribe to state changes (both directions, with metadata). Returns an
+   *  unsubscribe fn. */
+  onStateChange(listener: (update: StateUpdate<S>) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
+  }
+
+  /** Subscribe to `initialized` flips. Returns an unsubscribe fn. */
+  onInitializedChange(listener: (initialized: boolean) => void): () => void {
+    this.initListeners.add(listener);
+    return () => this.initListeners.delete(listener);
+  }
+
+  private setInitialized(value: boolean) {
+    if (this._initialized === value) return;
+    this._initialized = value;
+    for (const listener of this.initListeners) listener(value);
+  }
+
+  private emitState(update: StateUpdate<S>) {
+    this._state = update;
+    for (const listener of this.stateListeners) listener(update);
+  }
+
+  private pushError(error: LoroManagerError) {
+    this._errors = [...this._errors, error];
+  }
+
+  /** Subscribe to the given mirror, dropping any prior subscription. The mirror
+   *  fires for every state change (both directions, with metadata). */
+  private subscribeMirror(mirror: Mirror<S>) {
+    this.mirrorUnsub?.();
+    this._mirror = mirror;
+    this.mirrorUnsub = mirror.subscribe((update, metadata) => {
+      this.emitState({ state: update, metadata });
+    });
+  }
+
+  /** Util for awaiting the sync of the mirror to finish. */
+  private async awaitMirrorSync() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  // ── operations ──────────────────────────────────────────────────────────
+  importUpdate(
+    update: LoroRawUpdate
+  ): Result<boolean, ResultError<LoroManagerError>[]> {
+    let importStatus;
+
+    try {
+      importStatus = this._doc.import(update);
+    } catch (e) {
+      console.error('Failed to import update', e);
+      this.pushError(LoroManagerError.ImportFailed);
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: `Failed to import update: ${e}`,
+        },
+      ]);
+    }
+
+    const didChange = Object.keys(importStatus.success).length > 0;
+
+    if (Object.keys(importStatus.pending ?? {}).length > 0) {
+      this.pushError(LoroManagerError.ImportFailed);
+      return err([
+        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
+      ]);
+    }
+
+    return ok(didChange);
+  }
+
+  importBatchUpdates(
+    updates: LoroRawUpdate[]
+  ): Result<boolean, ResultError<LoroManagerError>[]> {
+    let importStatus;
+
+    try {
+      importStatus = this._doc.importBatch(updates);
+    } catch (e) {
+      console.error('Failed to import update', e);
+      this.pushError(LoroManagerError.ImportFailed);
+      return err([
+        {
+          code: LoroManagerError.ImportFailed,
+          message: `Failed to import update: ${e}`,
+        },
+      ]);
+    }
+
+    const didChange = Object.keys(importStatus.success).length > 0;
+
+    if (Object.keys(importStatus.pending ?? {}).length > 0) {
+      this.pushError(LoroManagerError.ImportFailed);
+      return err([
+        { code: LoroManagerError.ImportFailed, message: 'Import failed' },
+      ]);
+    }
+
+    return ok(didChange);
+  }
+
+  async initializeFromSnapshot(
+    snapshot: LoroRawUpdate
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    const importResult = this.importUpdate(snapshot);
 
     if (importResult.isErr()) {
       const [error] = importResult.error;
       return err([{ code: error.code, message: error.message }]);
     }
 
-    const mirror_ = createMirror(loroDoc(), schema);
+    const mirror_ = createMirror(this._doc, this.schema);
 
     try {
-      await awaitMirrorSync();
+      await this.awaitMirrorSync();
       const mirrorState = mirror_.getState();
-      setState(() => ({
+      this.emitState({
         state: mirrorState,
         metadata: {
           direction: SyncDirection.TO_LORO,
           tags: ['INITIALIZE'],
         },
-      }));
+      });
     } catch (e) {
       console.error('Failed to sync mirror', e);
-      pushError(LoroManagerError.InitializeFailed);
+      this.pushError(LoroManagerError.InitializeFailed);
       return err([
         {
           code: LoroManagerError.InitializeFailed,
@@ -370,23 +310,21 @@ export function createLoroManager<S extends GenericRootSchema>(
       ]);
     }
 
-    setInitialized(true);
-    setMirror(mirror_);
+    this.setInitialized(true);
+    this.subscribeMirror(mirror_);
 
     return ok(undefined);
-  };
+  }
 
-  const getUpdateSince = (
+  getUpdateSince(
     lastVersionVector: VersionVector
-  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> => {
-    const mirror_ = mirror();
-
-    if (!initialized() || !mirror_) {
+  ): Result<Uint8Array | undefined, ResultError<LoroManagerError>[]> {
+    if (!this._initialized || !this._mirror) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
       ]);
     }
-    const currentVersionVector = loroDoc().version();
+    const currentVersionVector = this._doc.version();
     /** Comparison between the current state, and the last synced state */
     const vvDiff = lastVersionVector.compare(currentVersionVector);
 
@@ -394,19 +332,19 @@ export function createLoroManager<S extends GenericRootSchema>(
       return ok(undefined);
     }
 
-    const spans = loroDoc().findIdSpansBetween(
-      loroDoc().vvToFrontiers(lastVersionVector),
-      loroDoc().vvToFrontiers(currentVersionVector)
+    const spans = this._doc.findIdSpansBetween(
+      this._doc.vvToFrontiers(lastVersionVector),
+      this._doc.vvToFrontiers(currentVersionVector)
     );
 
     const localSpans = spans.forward.filter(
-      (span) => span.peer === loroDoc().peerIdStr
+      (span) => span.peer === this._doc.peerIdStr
     );
 
     let update;
 
     try {
-      update = loroDoc().export({
+      update = this._doc.export({
         mode: 'updates-in-range',
         spans: localSpans.map((span) => ({
           id: { peer: span.peer, counter: span.counter },
@@ -415,7 +353,7 @@ export function createLoroManager<S extends GenericRootSchema>(
       });
     } catch (e) {
       console.error('Failed to export update', e);
-      pushError(LoroManagerError.ExportFailed);
+      this.pushError(LoroManagerError.ExportFailed);
       return err([
         {
           code: LoroManagerError.ExportFailed,
@@ -425,37 +363,33 @@ export function createLoroManager<S extends GenericRootSchema>(
     }
 
     return ok(update);
-  };
+  }
 
-  const getAllContainerIds = (): Result<
-    ContainerID[],
-    ResultError<LoroManagerError>[]
-  > => {
-    if (!initialized() || !mirror()) {
+  getAllContainerIds(): Result<ContainerID[], ResultError<LoroManagerError>[]> {
+    if (!this._initialized || !this._mirror) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
       ]);
     }
 
-    return ok(mirror()!.getContainerIds());
-  };
+    return ok(this._mirror.getContainerIds());
+  }
 
-  const syncToLoro = async (
+  async syncToLoro(
     state: InferType<S>
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
-    const mirror_ = mirror();
-    if (!initialized() || !mirror_) {
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    if (!this._initialized || !this._mirror) {
       return err([
         { code: LoroManagerError.NotInitialized, message: 'Not initialized' },
       ]);
     }
 
     try {
-      mirror_.setState(state, {
+      this._mirror.setState(state, {
         tags: LoroStateTag.FromManager,
       });
 
-      await awaitMirrorSync();
+      await this.awaitMirrorSync();
     } catch (e) {
       console.error('Failed to sync to loro', e);
       return err([
@@ -467,23 +401,25 @@ export function createLoroManager<S extends GenericRootSchema>(
     }
 
     return ok(undefined);
-  };
+  }
 
-  const reset = async (
+  async reset(
     snapshot: LoroRawUpdate
-  ): Promise<Result<void, ResultError<LoroManagerError>[]>> => {
-    mirror()?.dispose();
-    loroDoc().free();
+  ): Promise<Result<void, ResultError<LoroManagerError>[]>> {
+    this.mirrorUnsub?.();
+    this.mirrorUnsub = undefined;
+    this._mirror?.dispose();
+    this._doc.free();
 
     const newDoc = createLoroDoc();
-    setLoroDoc(newDoc);
+    this._doc = newDoc;
 
     let importStatus;
     try {
       importStatus = newDoc.import(snapshot);
     } catch (e) {
       console.error('Failed to import snapshot', e);
-      pushError(LoroManagerError.ImportFailed);
+      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -493,7 +429,7 @@ export function createLoroManager<S extends GenericRootSchema>(
     }
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      pushError(LoroManagerError.ImportFailed);
+      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -502,13 +438,13 @@ export function createLoroManager<S extends GenericRootSchema>(
       ]);
     }
 
-    const newMirror = createMirror(newDoc, schema);
-    setMirror(newMirror);
+    const newMirror = createMirror(newDoc, this.schema);
+    this.subscribeMirror(newMirror);
 
-    await awaitMirrorSync();
+    await this.awaitMirrorSync();
 
     const state = newMirror.getState();
-    setState({
+    this.emitState({
       state,
       metadata: {
         direction: SyncDirection.TO_LORO,
@@ -516,42 +452,40 @@ export function createLoroManager<S extends GenericRootSchema>(
       },
     });
 
-    setInitialized(true);
+    this.setInitialized(true);
 
     return ok(undefined);
-  };
+  }
 
-  const getContainerById = (
+  getContainerById(
     id: ContainerID
-  ): Result<Container | undefined, ResultError<LoroManagerError>[]> => {
+  ): Result<Container | undefined, ResultError<LoroManagerError>[]> {
     let container: Container | undefined;
 
     try {
-      container = loroDoc().getContainerById(id);
+      container = this._doc.getContainerById(id);
     } catch (e) {
       console.error('Failed to get container', e);
-      pushError(LoroManagerError.GetContainerByIdFailed);
+      this.pushError(LoroManagerError.GetContainerByIdFailed);
       return err([
-        { code: LoroManagerError.GetContainerByIdFailed, message: e },
+        { code: LoroManagerError.GetContainerByIdFailed, message: String(e) },
       ]);
     }
 
     return ok(container);
-  };
+  }
 
-  const getCursorPos = (
-    cursor: Cursor
-  ): Result<
+  getCursorPos(cursor: Cursor): Result<
     {
       update?: Cursor;
       offset: number;
       side: Side;
     },
     ResultError<LoroManagerError>[]
-  > => {
+  > {
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {
-      pos = loroDoc().getCursorPos(cursor);
+      pos = this._doc.getCursorPos(cursor);
       if (!pos) {
         return err([
           {
@@ -562,37 +496,23 @@ export function createLoroManager<S extends GenericRootSchema>(
       }
     } catch (e) {
       console.error('Failed to get cursor pos', e);
-      pushError(LoroManagerError.GetCursorPosFailed);
-      return err([{ code: LoroManagerError.GetCursorPosFailed, message: e }]);
+      this.pushError(LoroManagerError.GetCursorPosFailed);
+      return err([
+        { code: LoroManagerError.GetCursorPosFailed, message: String(e) },
+      ]);
     }
 
     return ok(pos);
-  };
-
-  createEffect(() => {
-    if (mirror()) {
-      mirror()?.subscribe((update, metadata) => {
-        setState(() => ({
-          state: update,
-          metadata,
-        }));
-      });
-    }
-  });
-
-  onCleanup(() => {
-    mirror()?.dispose();
-    loroDoc().free();
-  });
+  }
 
   /** Apply a snapshot to the loro doc — initialize on first touch, otherwise
    *  merge as an update. Errors are logged and surfaced via the return. */
-  const applySnapshot = async (
+  private async applySnapshot(
     snapshot: RawUpdate,
     context: string
-  ): Promise<boolean> => {
-    if (!initialized()) {
-      const initResult = await initializeFromSnapshot(snapshot);
+  ): Promise<boolean> {
+    if (!this._initialized) {
+      const initResult = await this.initializeFromSnapshot(snapshot);
       if (initResult.isErr()) {
         console.error(
           `LoroManager.ingest(${context}): initializeFromSnapshot failed`,
@@ -602,7 +522,7 @@ export function createLoroManager<S extends GenericRootSchema>(
       }
       return true;
     }
-    const importResult = importUpdate(snapshot);
+    const importResult = this.importUpdate(snapshot);
     if (importResult.isErr()) {
       console.error(
         `LoroManager.ingest(${context}): importUpdate failed`,
@@ -611,20 +531,19 @@ export function createLoroManager<S extends GenericRootSchema>(
       return false;
     }
     return true;
-  };
+  }
 
-  /**
-   * Internal helper: drive the init state machine for a given snapshot kind
-   */
-  const ingest = async (input: SnapshotIngest): Promise<void> => {
-    const instruction = initMachine.receive(input.kind);
+  /** Feed a snapshot from any source, driving the init state machine: it decides
+   *  whether to apply, ignore, or chain a `requestUpdatesSince` follow-up. */
+  async ingest(input: SnapshotIngest): Promise<void> {
+    const instruction = this.initMachine.receive(input.kind);
     if (instruction === 'ignore') return;
 
-    const applied = await applySnapshot(input.snapshot, input.kind);
+    const applied = await this.applySnapshot(input.snapshot, input.kind);
     if (!applied) return;
 
     if (input.kind === 'local' && input.walUpdates?.length) {
-      const replayResult = importBatchUpdates(input.walUpdates);
+      const replayResult = this.importBatchUpdates(input.walUpdates);
       if (replayResult.isErr()) {
         console.error(
           `LoroManager.ingest(${input.kind}): WAL replay failed`,
@@ -636,9 +555,9 @@ export function createLoroManager<S extends GenericRootSchema>(
     if (instruction !== 'applyThenRequestDelta') return;
 
     // Local was dirty — fetch the precise delta from the live source.
-    const liveSource = options.liveSyncSource();
+    const liveSource = this.options.liveSyncSource();
     const deltaResult = await liveSource.requestUpdatesSince(
-      loroDoc().version()
+      this._doc.version()
     );
     if (deltaResult.isErr()) {
       console.error(
@@ -647,39 +566,42 @@ export function createLoroManager<S extends GenericRootSchema>(
       );
       return;
     }
-    const requestedInstruction = initMachine.receive('requested');
+    const requestedInstruction = this.initMachine.receive('requested');
     if (requestedInstruction !== 'apply') return;
 
-    const deltaImport = importUpdate(deltaResult.value);
+    const deltaImport = this.importUpdate(deltaResult.value);
     if (deltaImport.isErr()) {
       console.error(
         `LoroManager.ingest(${input.kind}): failed to apply requested delta`,
         deltaImport.error
       );
     }
-  };
+  }
 
-  return {
-    getDoc: loroDoc,
-    getMirror: mirror,
-    schema,
-    state,
-    error,
-    isInitialized: initialized,
-    getAllContainerIds,
-    getUpdateSince,
-    initializeFromSnapshot,
-    importUpdate,
-    importBatchUpdates,
-    syncToLoro,
-    reset,
-    ingest,
-    getVersion: () => loroDoc().version(),
-    getPeerId: () => loroDoc().peerId,
-    getPeerIdStr: () => loroDoc().peerIdStr,
-    getContainerById,
-    getCursorPos,
-  };
+  /** Tear down subscriptions and free the underlying doc. */
+  dispose() {
+    this.mirrorUnsub?.();
+    this.mirrorUnsub = undefined;
+    this.stateListeners.clear();
+    this.initListeners.clear();
+    this._mirror?.dispose();
+    this._doc.free();
+  }
+}
+
+/**
+ * Solid-scoped factory for a {@link LoroManager}: constructs one and ties its
+ * teardown to the owning reactive scope via `onCleanup`. Consumers that need
+ * reactivity subscribe through `onStateChange` / `onInitializedChange`. Mirrors
+ * `createSyncEngine`.
+ */
+export function createLoroManager<S extends GenericRootSchema>(
+  schema: S,
+  options: LoroManagerOptions
+): LoroManager<S> {
+  const manager = new LoroManager(schema, options);
+  onCleanup(() => manager.dispose());
+  return manager;
 }
 
 export function createLoroDoc(): LoroDoc {

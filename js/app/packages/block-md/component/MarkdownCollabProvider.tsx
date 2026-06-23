@@ -67,7 +67,6 @@ import {
   onCleanup,
   type Setter,
 } from 'solid-js';
-import { untrack } from 'solid-js/web';
 import { CollabStatus } from './CollabStatus';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
@@ -102,7 +101,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   if (!syncSource()) return null;
 
   const awareness = createAwareness(
-    loroManager.getPeerIdStr(),
+    loroManager.peerIdStr,
     userId(),
     lexicalSelectionCodec,
     {
@@ -175,7 +174,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           props.editor.getEditorState().toJSON(),
           state,
           props.mappings,
-          () => loroManager.getPeerIdStr()
+          () => loroManager.peerIdStr
         );
 
         // Queue microtask after this `editor.update` to ensure that all the nodeIds are updated
@@ -422,10 +421,17 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     props.pluginManager.use(lexicalStateSyncPlugin);
   }
 
+  // The manager is a plain class now (no reactive accessors), so mirror its
+  // `initialized` flag into a signal to drive the start-sync effect below.
+  const [managerInitialized, setManagerInitialized] = createSignal(
+    loroManager.initialized
+  );
+  onCleanup(loroManager.onInitializedChange(setManagerInitialized));
+
   /** Initializes the loroManager and starts the sync engine */
   createEffect(
     on(
-      () => loroManager.isInitialized() ?? false,
+      () => managerInitialized() ?? false,
       (isInitialized) => {
         if (!isInitialized) {
           console.warn('loro manager not initialized');
@@ -438,7 +444,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Get the current state from the loroManager
           // At this point, the loroManager should be initialized and should
           // have the initial state from the sync service
-          const state = untrack(loroManager.state);
+          const state = loroManager.state;
 
           //TODO: some more descriptive user facing error should be displayed here
           if (!state) {
@@ -456,7 +462,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
             const initError = initializeEditorWithVersionedState(
               props.editor,
               state.state as unknown as SerializedEditorState,
-              loroManager.getPeerIdStr
+              () => loroManager.peerIdStr
             );
             if (initError !== null) {
               props.setEditorError(initError);

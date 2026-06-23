@@ -3,17 +3,16 @@ import {
 	FromPeer,
 	FromRemote,
 } from "../../app/packages/service-clients/service-sync/generated/schema";
-import { LoroPeerPool } from "../../lexical-core/ai-editing/loro/loro-peer-pool";
-import { MARKDOWN_LORO_SCHEMA } from "../../lexical-core/markdown-loro-schema";
-import { Mirror } from "../../loro-mirror/packages/core/src";
+import { LoroPeerPool } from "./ai-editing/loro/loro-peer-pool";
+import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "../../lexical-core/markdown-loro-schema";
+import { Mirror } from "@loro-mirror/packages/core/src";
 
 /** How many distinct loro peers the AI's edits are spread across. */
 const PEER_POOL_SIZE = 8;
 
 export type Peer = {
 	doc: LoroDoc;
-	// biome-ignore lint/suspicious/noExplicitAny: schema is not known at this layer
-	mirror: Mirror<any>;
+	mirror: Mirror<MarkdownLoroSchemaType>;
 	/** Bounded set of loro peer ids the applied edits are attributed to. */
 	peerPool: LoroPeerPool;
 	/** Broadcast an ephemeral awareness blob (AI cursors) to the room. */

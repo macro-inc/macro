@@ -16,7 +16,13 @@
 		"module": "es2022",
 		"noEmit": true,
 		"lib": ["es2022", "dom"],
-		"types": ["./worker-configuration.d.ts", "@types/node"]
+		"types": ["./worker-configuration.d.ts", "@types/node", "bun-types"],
+		"baseUrl": ".",
+		"paths": {
+			"@loro-mirror/*": ["../loro-mirror/*"],
+			"@core/*": ["../app/packages/core/*"],
+			"@observability/logger": ["./src/logger-shim"]
+		}
 	},
 	"exclude": [
 		"node_modules",
@@ -24,5 +30,5 @@
 		"../lexical-core/transformers",
 		"../loro-mirror"
 	],
-	"include": ["src", "worker-configuration.d.ts", "prompts.d.ts"]
+	"include": ["src", "scripts", "worker-configuration.d.ts", "prompts.d.ts"]
 }

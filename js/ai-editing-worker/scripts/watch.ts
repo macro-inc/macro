@@ -7,10 +7,10 @@ import {
 	FromPeer,
 	FromRemote,
 } from "../../app/packages/service-clients/service-sync/generated/schema";
-import { createEditingSession, loadSnapshot } from "../../lexical-core/ai-editing/ai-toolkit";
+import { createEditingSession, loadSnapshot } from "../src/ai-editing/ai-toolkit";
 import { $getId } from "../../lexical-core/plugins/nodeIdPlugin";
 import { MARKDOWN_LORO_SCHEMA } from "../../lexical-core/markdown-loro-schema";
-import { Mirror } from "../../loro-mirror/packages/core/src";
+import { Mirror } from "@loro-mirror/packages/core/src";
 
 const { wssUrl: wsUrl } = await args("$0 <wss-url>");
 

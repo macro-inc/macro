@@ -7,14 +7,14 @@ import {
 	createEditingSession,
 	loadSnapshot,
 	toSnapshot,
-} from "../../lexical-core/ai-editing/ai-toolkit";
-import { Doc } from "../../lexical-core/ai-editing/doc/doc";
+} from "../src/ai-editing/ai-toolkit";
+import { Doc } from "../src/ai-editing/doc/doc";
 import {
 	AI_NAMES,
 	COLORS,
 	realAwarenessSource,
-} from "../../lexical-core/ai-editing/awareness/awareness-source";
-import { runEditorCode } from "../../lexical-core/ai-editing/runtime";
+} from "../src/ai-editing/awareness/awareness-source";
+import { runEditorCode } from "../src/ai-editing/runtime";
 import { connectPeer } from "../src/peer";
 
 const { wssUrl } = await args("$0 <wss-url>");

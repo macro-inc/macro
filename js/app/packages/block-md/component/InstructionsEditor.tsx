@@ -160,7 +160,7 @@ export function InstructionsEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     return createPeerIdValidator(peerId, true);
   };
 
@@ -213,7 +213,7 @@ export function InstructionsEditor(props: {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     plugins.use(
       peerIdPlugin({
         peerId,

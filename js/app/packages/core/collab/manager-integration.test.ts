@@ -17,7 +17,7 @@ const TEST_SCHEMA = schema({
 });
 
 function paragraphTexts(manager: LoroManager<typeof TEST_SCHEMA>): string[] {
-  return manager.state()?.state.paragraphs.map((p) => p.text) ?? [];
+  return manager.state?.state.paragraphs.map((p) => p.text) ?? [];
 }
 
 async function buildSnapshot(
@@ -39,7 +39,7 @@ function pushToServer(
   manager: LoroManager<typeof TEST_SCHEMA>,
   server: TestServer
 ) {
-  server.applyUpdate(manager.getDoc().export({ mode: 'update' }));
+  server.applyUpdate(manager.doc.export({ mode: 'update' }));
 }
 
 describe('LoroManager + DocInitMachine — two-client merge', () => {
@@ -74,13 +74,11 @@ describe('LoroManager + DocInitMachine — two-client merge', () => {
       await clientB.syncToLoro({
         paragraphs: [{ id: 'p1', text: 'X online-B offline-B ' }],
       });
-      const offlineSnapshotFromB = clientB
-        .getDoc()
-        .export({ mode: 'snapshot' });
-      const bVvAfterOffline = clientB.getDoc().version();
+      const offlineSnapshotFromB = clientB.doc.export({ mode: 'snapshot' });
+      const bVvAfterOffline = clientB.doc.version();
 
       // ── A receives B's online-B from server (via full update import) ─
-      clientA.getDoc().import(server.doc.export({ mode: 'update' }));
+      clientA.doc.import(server.doc.export({ mode: 'update' }));
       // ── A makes its own edit and pushes ───────────────────────────────
       await clientA.syncToLoro({
         paragraphs: [{ id: 'p1', text: 'X online-B online-A ' }],
