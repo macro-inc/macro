@@ -111,7 +111,7 @@ export const Billing = () => {
 
       <Surface class="flex flex-col rounded-lg p-4" depth={2}>
         <section class="flex flex-col gap-4">
-          <header class="flex items-cetner gap-2">
+          <header class="flex items-center gap-2">
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-2">
                 <h1 class="text-lg font-medium text-ink">
