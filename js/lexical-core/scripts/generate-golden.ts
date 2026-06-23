@@ -23,12 +23,10 @@ const GOLDEN_FILENAME = 'markdown-golden.1.bin';
 // Copies need to land in multiple places because each Rust crate's Docker
 // build context is its own directory — include_bytes! can't reach outside
 // the context, so the file has to be physically present inside each one.
-// The app/public copy is what the browser preloads via index.html.
 const OUT_PATHS = [
   `${import.meta.dir}/../${GOLDEN_FILENAME}`,
   `${import.meta.dir}/../../../rust/cloud-storage/${GOLDEN_FILENAME}`,
   `${import.meta.dir}/../../../rust/sync-service/${GOLDEN_FILENAME}`,
-  `${import.meta.dir}/../../app/packages/app/public/${GOLDEN_FILENAME}`,
 ];
 
 for (const outPath of OUT_PATHS) {
