@@ -129,6 +129,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_projections_refresh_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-sqs",
+ "aws-smithy-types",
+ "chrono",
+ "futures",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "models_ai_projection",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [

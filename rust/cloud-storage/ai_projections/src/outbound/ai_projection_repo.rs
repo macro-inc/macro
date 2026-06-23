@@ -90,11 +90,18 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         target_id: &str,
         prompt_hash: &str,
     ) -> Result<UserAiProjection, AiProjectionError> {
+        // A request for a projection bumps `last_requested_at` so the background
+        // refresh handler can tell active instances apart from abandoned ones
+        // (which it eventually deletes once they fall outside their expiry
+        // window). The prompt and status are intentionally left untouched on
+        // conflict: the definition's prompt is immutable and the materialization
+        // lifecycle is owned by the worker.
         sqlx::query!(
             r#"
             INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (target_id, ai_projection_id) DO NOTHING
+            ON CONFLICT (target_id, ai_projection_id)
+            DO UPDATE SET last_requested_at = NOW(), updated_at = NOW()
             "#,
             ai_projection_id,
             target_id,

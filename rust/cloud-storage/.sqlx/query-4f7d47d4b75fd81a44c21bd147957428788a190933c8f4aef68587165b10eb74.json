@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (target_id, ai_projection_id)\n            DO UPDATE SET last_requested_at = NOW(), updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f7d47d4b75fd81a44c21bd147957428788a190933c8f4aef68587165b10eb74"
+}

@@ -87,6 +87,68 @@ async fn get_or_create_target_projection_is_idempotent(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("ai_projections"))
 )]
+async fn get_or_create_target_projection_bumps_last_requested_at(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool.clone());
+    let user = MacroUserIdStr::parse_from_str("macro|pro@user.com")?;
+
+    repo.get_or_create_projection(
+        "inbox/important",
+        "What is important?",
+        "hash_v1",
+        TargetType::User,
+        RefreshCadence::High,
+        Expiry::Day,
+    )
+    .await?;
+
+    repo.get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
+        .await?;
+
+    // Backdate the instance so a fresh request must visibly move the timestamp
+    // forward (deterministic, no sleeps).
+    sqlx::query!(
+        r#"
+        UPDATE user_ai_projection
+        SET last_requested_at = NOW() - INTERVAL '10 days'
+        WHERE ai_projection_id = $1 AND target_id = $2
+        "#,
+        "inbox/important",
+        user.as_ref(),
+    )
+    .execute(&pool)
+    .await?;
+
+    // A subsequent request bumps last_requested_at back to ~now, marking the
+    // instance as active so the refresh handler won't reap it.
+    repo.get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
+        .await?;
+
+    let last_requested_at: chrono::DateTime<chrono::Utc> = sqlx::query_scalar!(
+        r#"
+        SELECT last_requested_at
+        FROM user_ai_projection
+        WHERE ai_projection_id = $1 AND target_id = $2
+        "#,
+        "inbox/important",
+        user.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(
+        last_requested_at > chrono::Utc::now() - chrono::Duration::minutes(1),
+        "expected last_requested_at to be bumped to ~now, got {last_requested_at}"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
 async fn get_or_create_target_projection_supports_team_targets(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

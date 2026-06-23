@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_ai_projection u\n        SET status = 'refreshing', updated_at = NOW()\n        FROM ai_projection p\n        WHERE u.ai_projection_id = p.id\n          AND p.refresh_cadence = $1\n          AND u.stale_at IS NOT NULL\n          AND u.stale_at < NOW()\n          AND u.last_requested_at >= NOW() - (\n                CASE p.expiry\n                    WHEN 'day'   THEN INTERVAL '1 day'\n                    WHEN 'week'  THEN INTERVAL '7 days'\n                    WHEN 'month' THEN INTERVAL '30 days'\n                END)\n          AND (\n                u.status IN ('ready', 'error')\n                OR (u.status = 'refreshing' AND u.updated_at < NOW() - INTERVAL '15 minutes')\n              )\n        RETURNING u.ai_projection_id, u.target_id, p.prompt_hash\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ai_projection_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "target_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "prompt_hash",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a1c2f53a2400350d4ccde0d3a07e4f2d85893cdbdda343830d4e4ff721e183b9"
+}
