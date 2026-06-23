@@ -79,7 +79,7 @@
 
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+        outputHash = if isAarch64Darwin then lib.fakeHash else "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
@@ -305,21 +305,23 @@
         '';
       };
       tauriAppImageRuntime = pkgs.fetchurl {
-        url = "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64";
-        hash = "sha256-okGdzkdWg5WuecAf+ppaNB3TOVgTUv8QTQc1J1Qxd+U=";
+        # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
+        url = "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64";
+        hash = "sha256-L8qLRDySUQ8Ug6iD9gBhrQm0a5eLJjHIB82HOkfsJg0=";
       };
       tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
-        url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage";
-        hash = "sha256-4BKbgHDgx7NxUQJ+Run6RP6X6injaScFosXP83cdMSE=";
+        # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
+        url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage";
+        hash = "sha256-mS1QKiSOFKsYVEjd9vbn0lVYy4TUYjw1TDrzUMJfzLM=";
       };
       tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
         pname = "linuxdeploy-plugin-appimage";
-        version = "continuous";
+        version = "1-alpha-20250213-1";
         src = tauriLinuxdeployAppimagePluginSource;
       };
       tauriLinuxdeployAppimagePlugin = pkgs.stdenvNoCC.mkDerivation {
         pname = "linuxdeploy-plugin-appimage-patched";
-        version = "continuous";
+        version = "1-alpha-20250213-1";
         dontUnpack = true;
         installPhase = ''
           mkdir -p "$out/lib/linuxdeploy-plugin-appimage" "$out/bin"

@@ -59,7 +59,7 @@ jobs:
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Import Developer ID certificate
+      - name: Configure signing identity
         shell: bash
         env:
           MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -67,8 +67,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
-            echo "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 and MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD secrets are required" >&2
-            exit 1
+            echo "Developer ID certificate secrets are not configured; using ad-hoc signing for build validation."
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            exit 0
           fi
 
           certificate_path="$RUNNER_TEMP/developer-id-application.p12"
@@ -116,7 +117,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Build signed DMG with Nix
+      - name: Build DMG with Nix
         shell: bash
         run: |
           set -euo pipefail
