@@ -10,13 +10,16 @@ import { useUserTeamsQuery } from '@queries/team';
 import { useUserId } from '@core/context/user';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
-  free: ['Access to Haiku', '5 GB storage'],
+  free: ['Access to Haiku', '5 GB storage', 'Multiple email inboxes'],
   premium: [
     'All agents',
     'All models',
     'No watermark',
     'MCP access',
     'AI projections',
+    'Multiple email inboxes',
+    'Calls',
+    'Teams',
     '1 TB storage',
   ],
 };
@@ -137,7 +140,7 @@ export const Billing = () => {
               </Button>
             </Show>
           </header>
-          <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-6 text-sm text-ink-muted">
+          <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
             <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
           </ul>
         </section>
@@ -160,7 +163,7 @@ export const Billing = () => {
                 Upgrade now
               </Button>
             </header>
-            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-6 text-sm text-ink-muted">
+            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
               <PlanFeatures tier="premium" />
             </ul>
           </section>
