@@ -19,6 +19,11 @@ secret!(DOPPLER_TOKEN);
 /// smaller.
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
+/// Explicit Namespace cache tag for the heavy compile jobs (check + test). A
+/// fixed tag (instead of the default per-branch scoping) makes the cache volume
+/// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
+pub const CI_CACHE_TAG: &str = "sccache-ci";
+
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.
 pub const SCCACHE_VOLUME_DIR: &str = "/sccache";

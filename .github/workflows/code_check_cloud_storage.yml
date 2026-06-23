@@ -110,7 +110,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-rust-ci
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
@@ -193,7 +193,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-rust-ci
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
       NEXTEST_TEST_THREADS: '32'
@@ -265,7 +265,9 @@ jobs:
       run: |
         cd rust/cloud-storage
 
-        args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
+        # --no-tests=pass: a package filter (e.g. an xtask/tooling-only PR -> rdeps(=xtask))
+        # can legitimately select zero tests; treat that as success, not nextest's default error.
+        args=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
         if [ -n "$NEXTEST_FILTER" ]; then
           args+=(-E "$NEXTEST_FILTER")
         fi
