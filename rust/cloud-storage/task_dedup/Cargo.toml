@@ -30,6 +30,7 @@ default = ["backfill"]
 
 [dependencies]
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }

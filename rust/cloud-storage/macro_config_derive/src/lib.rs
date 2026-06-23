@@ -118,6 +118,7 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
     let finalizers = field_data.iter().map(|field| {
         let FieldData {
             ident,
+            ty,
             key,
             default,
             is_option,
@@ -132,9 +133,10 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
                 let #ident = #ident.unwrap_or(None);
             },
             None => quote! {
-                let #ident = #ident.ok_or_else(|| {
-                    <V::Error as ::macro_config::__serde::de::Error>::missing_field(#key)
-                })?;
+                let #ident = match #ident {
+                    Some(value) => value,
+                    None => ::macro_config::__deserialize_missing_field::<#ty, V::Error>(#key)?,
+                };
             },
         }
     });

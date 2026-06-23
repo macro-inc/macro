@@ -17,6 +17,10 @@ path = "src/bin/generate_keys.rs"
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "authentication_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [features]
 default = ["rate_limit"]
 local = []

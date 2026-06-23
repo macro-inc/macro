@@ -1,5 +1,5 @@
+use channels::domain::models::ChannelType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::ChannelType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use utoipa::ToSchema;

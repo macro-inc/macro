@@ -66,6 +66,39 @@ export type Content =
   | {
       markdown: MarkdownNode[];
     };
+/**
+ * A single node of a markdown document as seen by the AI.
+ */
+export type MarkdownNode =
+  | {
+      /**
+       * Human readable content
+       */
+      content: string;
+      /**
+       * The node id
+       */
+      nodeId: string;
+      /**
+       * The style on the node, h1, paragraph, code, etc.
+       */
+      tag: string;
+      type: 'generic';
+    }
+  | {
+      type: 'staticImage';
+      /**
+       * URL the image can be fetched from.
+       */
+      url: string;
+    }
+  | {
+      /**
+       * The DSS id of the image. Use the read tool with this id to read it.
+       */
+      id: string;
+      type: 'dssImage';
+    };
 export type UnifiedSearchIndex =
   | 'documents'
   | 'chats'
@@ -98,42 +131,106 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  */
 export type DocumentSubType = 'task' | 'snippet';
 export type EmailPreset = 'signal';
+/**
+ * Item returned by the list entities AI tool.
+ */
 export type EntityItem =
   | {
+      /**
+       * Document id.
+       */
       id: string;
+      /**
+       * Document name.
+       */
       name: string;
       type: 'document';
     }
   | {
+      /**
+       * Chat id.
+       */
       id: string;
+      /**
+       * Chat name.
+       */
       name: string;
       type: 'aiChat';
     }
   | {
+      /**
+       * Project id.
+       */
       id: string;
+      /**
+       * Project name.
+       */
       name: string;
       type: 'project';
     }
   | {
+      /**
+       * Email thread id.
+       */
       id: string;
+      /**
+       * Email subject, when present.
+       */
       subject?: string | null;
       type: 'email';
     }
   | {
+      /**
+       * Channel id.
+       */
       id: string;
+      /**
+       * Channel name, when present.
+       */
       name?: string | null;
       type: 'channel';
     }
   | {
+      /**
+       * Channel id containing the thread.
+       */
+      channelId: string;
+      /**
+       * Parent message id for the thread.
+       */
+      id: string;
+      type: 'channelThread';
+    }
+  | {
+      /**
+       * User or actor that created the call.
+       */
       createdBy: string;
+      /**
+       * Call id.
+       */
       id: string;
       type: 'call';
     }
   | {
+      /**
+       * Provider-specific foreign entity id.
+       */
       foreignEntityId: string;
+      /**
+       * Provider/source name for the foreign entity.
+       */
       foreignEntitySource: string;
+      /**
+       * Foreign entity row id.
+       */
       id: string;
-      metadata: unknown;
+      /**
+       * Foreign entity metadata.
+       */
+      metadata: {
+        [k: string]: unknown;
+      };
       type: 'foreignEntity';
     };
 export type ToolEntityType =
@@ -144,14 +241,21 @@ export type ToolEntityType =
   | 'thread'
   | 'channel'
   | 'user';
+/**
+ * Entity types that can be returned by the list entities AI tool.
+ */
 export type ItemType =
   | 'document'
   | 'ai_chat'
   | 'project'
   | 'email'
   | 'channel'
+  | 'channel_thread'
   | 'call'
   | 'foreign_entity';
+/**
+ * Sort order for the list entities AI tool.
+ */
 export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
@@ -743,27 +847,6 @@ export interface Thread {
   updatedAt?: string | null;
 }
 /**
- * Markdown node
- */
-export interface MarkdownNode {
-  /**
-   * Human readable content
-   */
-  content: string;
-  /**
-   * The node id
-   */
-  nodeId: string;
-  /**
-   * Json respresentation
-   */
-  rawContent: string;
-  /**
-   * The style on the node, H1, em, code, etc.
-   */
-  type: string;
-}
-/**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
@@ -878,6 +961,20 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
+ */
+export interface DisplayResults {
+  /**
+   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
+   */
+  view: {
+    [k: string]: unknown;
+  };
+}
+export interface DisplayResultsResponse {
+  message: string;
 }
 /**
  * API-visible content lifecycle and location metadata.
@@ -1284,6 +1381,12 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
+   * Full soup AST channel thread filter (cthf).
+   */
+  cthf?: {
+    [k: string]: unknown;
+  };
+  /**
    * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
@@ -1333,8 +1436,17 @@ export interface ListEntities {
   };
   sortBy?: SortBy;
 }
+/**
+ * Response returned by the list entities AI tool.
+ */
 export interface ListEntitiesResponse {
+  /**
+   * Items returned for the request.
+   */
   items: EntityItem[];
+  /**
+   * Human-readable summary of the returned items.
+   */
   summary: string;
 }
 /**
@@ -2326,11 +2438,41 @@ export interface ReadThread {
    */
   messagesSince?: string | null;
 }
+/**
+ * Rename a document. Requires edit access to the document.
+ */
+export interface RenameDocument {
+  /**
+   * The id of the document you want to rename.
+   */
+  documentId: string;
+  /**
+   * The new name for the document without the file extension.
+   */
+  documentName: string;
+}
+/**
+ * The rename document response.
+ */
+export interface RenameDocumentResponse {
+  /**
+   * The id of the renamed document.
+   */
+  documentId: string;
+  /**
+   * A human-readable result message.
+   */
+  message: string;
+  /**
+   * Whether the rename succeeded.
+   */
+  success: boolean;
+}
 export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
 }
 /**
- * Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**

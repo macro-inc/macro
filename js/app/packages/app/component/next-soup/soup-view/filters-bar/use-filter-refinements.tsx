@@ -9,6 +9,10 @@ import {
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
 import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+} from '@app/component/next-soup/filters/configs/document-type-query';
+import {
   defineQueryFilters,
   type Query,
   queryStateFrom,
@@ -30,6 +34,10 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import type { SearchableOption } from './searchable-multi-select';
+import {
+  TASK_STATUS_FILTER_IDS,
+  useTaskStatusFilter,
+} from './task-status-filter';
 import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
@@ -68,6 +76,7 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
+  const taskStatus = useTaskStatusFilter();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -111,10 +120,14 @@ export function useFilterRefinements() {
 
     // Check if there are any external filters set (normalize undefined vs {} for comparison)
     const currentFilterData = filterData();
-    const presetFilters = preset.filters;
+    const presetFilters = queryStateFrom(preset.filters);
     const hasQueryFilterDiff =
-      !deepEqual(currentFilterData.include, presetFilters.include ?? {}) ||
-      !deepEqual(currentFilterData.exclude, presetFilters.exclude ?? {}) ||
+      !deepEqual(currentFilterData.include, presetFilters.include) ||
+      !deepEqual(currentFilterData.exclude, presetFilters.exclude) ||
+      !deepEqual(
+        currentFilterData.documentWhere,
+        presetFilters.documentWhere
+      ) ||
       currentFilterData.emailView !== presetFilters.emailView;
 
     const hasSubFilters = assigneeFilter().length > 0;
@@ -295,6 +308,9 @@ export function useFilterRefinements() {
     >();
 
     for (const category of viewCategories()) {
+      // Status has a dedicated chip below.
+      if (view === 'tasks' && category.id === 'status') continue;
+
       const activeValues: FilterValue[] = [];
       const allOptions: FilterValue[] = [];
 
@@ -360,6 +376,12 @@ export function useFilterRefinements() {
           onToggleValue: (id) => {
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
             batch(() => {
               soup.predicates.toggle({ or: [id as FilterID] });
 
@@ -368,6 +390,18 @@ export function useFilterRefinements() {
                   .filter((option) => soup.predicates.isActive(option.id))
                   .map((option) => option.id);
                 queryFilters.replace(getInboxTypeQuery(activeTypeIds) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
                 return;
               }
 
@@ -386,6 +420,12 @@ export function useFilterRefinements() {
             const currentValues = getActiveValues();
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
             batch(() => {
               for (const value of currentValues) {
                 soup.predicates.toggle({ or: [value.id as FilterID] });
@@ -393,6 +433,18 @@ export function useFilterRefinements() {
 
               if (isInboxTypeFilter) {
                 queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
                 return;
               }
 
@@ -405,6 +457,43 @@ export function useFilterRefinements() {
         }))
       );
     }
+
+    // Dedicated chip: the generic builder would hide the preset-seeded default.
+    const pushTaskStatusChip = () => {
+      if (view !== 'tasks') return;
+      const statusCategory = viewCategories().find((c) => c.id === 'status');
+      if (!statusCategory) return;
+
+      const allOptions: FilterValue[] = statusCategory.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        icon: o.icon,
+      }));
+
+      const getActiveValues = (): FilterValue[] =>
+        allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
+
+      // No chip when not narrowed (empty, or all selected = no filter).
+      const activeCount = getActiveValues().length;
+      if (activeCount === 0 || activeCount === allOptions.length) return;
+
+      const key = 'status';
+      seenKeys.add(key);
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => ({
+          key,
+          categoryLabel: 'Status',
+          categoryLabelPlural: 'Statuses',
+          values: getActiveValues,
+          availableOptions: allOptions,
+          multiple: true,
+          isValueActive: (id) => taskStatus.isActive(id as FilterID),
+          onToggleValue: (id) => taskStatus.toggle(id as FilterID),
+          onRemoveAll: () => taskStatus.clear(),
+        }))
+      );
+    };
 
     // Assignee filter (consolidated) - using searchable approach
     const pushAssigneeConsolidatedChip = () => {
@@ -454,6 +543,7 @@ export function useFilterRefinements() {
       );
     };
 
+    pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
 
     // Evict stale chips
@@ -565,10 +655,16 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
+    // "Clear all" empties the status filter rather than restoring the default subset.
+    const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
+      TASK_STATUS_FILTER_IDS.includes(id as FilterID)
+    );
+
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };
 

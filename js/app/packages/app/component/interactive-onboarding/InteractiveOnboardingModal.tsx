@@ -1,3 +1,8 @@
+import { useAnalytics } from '@app/component/analytics-context';
+import {
+  SIGNUP_LEAD_VALUE_BY_TIER,
+  SIGNUP_LEAD_VALUE_DEFAULT,
+} from '@app/lib/analytics/leadValues';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';
@@ -290,11 +295,37 @@ export function InteractiveOnboardingModal(
     props.defaultOpen ?? false
   );
   const completeTutorial = useCompleteTutorialMutation();
+  const analytics = useAnalytics();
 
   const open = () => props.open ?? internalOpen();
 
+  // Closing the modal is the single chokepoint every completion path routes
+  // through (finish lessons, skip tutorial, or dismiss), so the signup
+  // conversion fires here rather than on lesson completion — the tour is
+  // optional and most users skip it. Guarded because we send no dedup id.
+  let signupConversionFired = false;
+  const fireSignupConversion = () => {
+    if (signupConversionFired || !props.isFirstTimeOnboarding) return;
+    signupConversionFired = true;
+
+    // `type` is set on the Stripe success redirect (see
+    // use-onboarding-checkout.ts). Free users skip Stripe so the param is
+    // absent — default to 'free'.
+    const tier =
+      new URLSearchParams(window.location.search).get('type') ?? 'free';
+    const value = SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT;
+    analytics.trackMeta('CompleteRegistration', {
+      content_name: 'onboarding_launch',
+      content_category: tier,
+      value,
+      currency: 'USD',
+    });
+    analytics.trackGoogleConversion('signup', { value, currency: 'USD' });
+  };
+
   const setOpen = (nextOpen: boolean) => {
     if (!nextOpen) {
+      fireSignupConversion();
       completeTutorial.mutate(undefined);
     }
     setInternalOpen(nextOpen);

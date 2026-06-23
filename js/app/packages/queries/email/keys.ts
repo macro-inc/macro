@@ -5,6 +5,8 @@ export const emailKeys = createQueryKeys('email', {
   all: null,
   labels: null,
   links: null,
+  linksHealthProbe: null,
+  backfillJobs: null,
   threads: null,
   thread: (threadId: string) => ({
     queryKey: [threadId],

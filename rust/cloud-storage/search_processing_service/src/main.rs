@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
+    config::DatabaseUrlReadonly,
     domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
     outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
@@ -14,7 +15,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
-use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret, SecretManager};
+use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -30,36 +31,28 @@ mod process;
 /// agnostic of which adapters back it.
 pub type BackfillServiceImpl = BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher>;
 
-/// Resolve a read-replica macrodb URL via [`OptionalLocalOrRemoteSecret`] and
+/// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
-/// blank, fails to fetch from Secrets Manager, or is unreachable. Failures
+/// blank. Failures
 /// are intentionally warning-level rather than fatal: the readonly pool is a
 /// contention optimisation, not a correctness requirement (e.g. local laptop
 /// dev cannot reach the VPC-gated read replica).
-async fn resolve_readonly_pool(
-    raw: Option<String>,
-    secrets: &secretsmanager_client::SecretsManager,
-) -> Option<PgPool> {
-    let raw = raw.filter(|s| !s.is_empty());
-    let resolved = match OptionalLocalOrRemoteSecret::new_from_secret_manager(raw, secrets).await {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!(error=?e, "unable to fetch readonly db secret; backfills will use primary");
-            return None;
+async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<PgPool> {
+    if let Some(url) = read_only_db_url.value() {
+        match PgPoolOptions::new()
+            .min_connections(1)
+            .max_connections(10)
+            .connect(url)
+            .await
+        {
+            Ok(pool) => Some(pool),
+            Err(e) => {
+                tracing::warn!(error=?e, "could not connect to readonly macrodb; backfills will use primary");
+                None
+            }
         }
-    };
-    let url = resolved.as_str()?;
-    match PgPoolOptions::new()
-        .min_connections(1)
-        .max_connections(10)
-        .connect(url)
-        .await
-    {
-        Ok(pool) => Some(pool),
-        Err(e) => {
-            tracing::warn!(error=?e, "could not connect to readonly macrodb; backfills will use primary");
-            None
-        }
+    } else {
+        None
     }
 }
 
@@ -83,28 +76,6 @@ async fn main() -> anyhow::Result<()> {
 
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
-    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&aws_config),
-    );
-
-    let database_url = match config.environment {
-        Environment::Local => config.database_url.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.database_url)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
-    let opensearch_password = match config.environment {
-        Environment::Local => config.opensearch_password.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.opensearch_password)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 50),
         Environment::Develop => (1, 25),
@@ -114,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&database_url)
+        .connect(config.database_url.as_ref())
         .await
         .context("could not connect to db")?;
 
@@ -125,9 +96,9 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let opensearch_client = OpensearchClient::new(
-        config.opensearch_url.clone(),
-        config.opensearch_username.clone(),
-        opensearch_password,
+        config.opensearch_url.to_string(),
+        config.opensearch_username.to_string(),
+        config.opensearch_password.as_ref().to_string(),
     )
     .context("unable to create opensearch client")?;
 
@@ -142,24 +113,21 @@ async fn main() -> anyhow::Result<()> {
     // contend with writes on the primary. Queue workers always read from the
     // primary because replica lag would cause them to miss rows they are
     // meant to index.
-    let backfill_db =
-        match resolve_readonly_pool(config.database_url_readonly.clone(), &secretsmanager_client)
-            .await
-        {
-            Some(pool) => {
-                tracing::info!("using read-replica pool for backfill reads");
-                pool
-            }
-            None => {
-                tracing::info!("backfills will read from the primary pool");
-                db.clone()
-            }
-        };
+    let backfill_db = match resolve_readonly_pool(config.database_url_readonly.clone()).await {
+        Some(pool) => {
+            tracing::info!("using read-replica pool for backfill reads");
+            pool
+        }
+        None => {
+            tracing::info!("backfills will read from the primary pool");
+            db.clone()
+        }
+    };
 
     let sqs_client = Arc::new(sqs_client);
 
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgBackfillSource::new(backfill_db, config.backfill_page_sizes),
+        PgBackfillSource::new(backfill_db, config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 
@@ -181,14 +149,14 @@ async fn main() -> anyhow::Result<()> {
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.search_event_queue.clone(),
+            config.search_event_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
         let ctx = SearchProcessingContext {
             db: db.clone(),
             worker: Arc::new(worker.clone()),
-            document_storage_bucket: config.document_storage_bucket.clone(),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
             s3_client: Arc::new(s3_client),
             opensearch_client: Arc::new(opensearch_client.clone()),
             lexical_client: Arc::new(lexical_client),
@@ -199,8 +167,8 @@ async fn main() -> anyhow::Result<()> {
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
         dynamodb_client,
-        config.backfill_jobs_table.clone(),
-        std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
+        config.backfill_jobs_table.to_string(),
+        std::time::Duration::from_secs(config.backfill_job_ttl_seconds()?),
     );
     if matches!(config.environment, Environment::Local) {
         backfill_jobs

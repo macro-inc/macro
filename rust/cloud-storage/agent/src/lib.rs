@@ -9,6 +9,7 @@ mod convert;
 mod error;
 mod hook;
 mod model;
+mod provider_env;
 mod stream;
 /// Structured output via prompted JSON generation.
 pub mod structured_output;

@@ -2,8 +2,6 @@
 use anyhow::Context;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use secretsmanager_client::SecretManager;
 
 mod api;
 mod config;
@@ -21,9 +19,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
+    let environment = config.environment;
+    let config = config
+        .resolve_remote_secrets(environment, &secretsmanager_client)
+        .await
+        .context("failed to resolve config secrets")?;
+    let internal_api_secret = config.internal_api_secret_key.clone();
 
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)

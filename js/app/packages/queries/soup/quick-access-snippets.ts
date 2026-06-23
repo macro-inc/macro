@@ -1,4 +1,4 @@
-import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_SNIPPETS_FLAG,
@@ -20,9 +20,8 @@ const STALE_TIME = 5 * 60 * 1000;
  * this one widens the pool so the `;` menu lists team snippets the user has
  * never opened.
  *
- * Every other entity type is filtered out via the nil-uuid sentinel pattern
- * (see `quick-access-crm-companies.ts`); documents are narrowed to the
- * snippet sub type.
+ * Every other entity type is filtered out by extending `QUERY_FILTERS_BASE`;
+ * documents are narrowed to the snippet sub type.
  */
 export function useQuickAccessSnippetsQuery() {
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
@@ -36,14 +35,8 @@ export function useQuickAccessSnippetsQuery() {
         sort_method: 'viewed_updated',
       },
       body: {
-        call_filters: { call_ids: [NIL_UUID] },
-        channel_filters: { channel_ids: [NIL_UUID] },
-        chat_filters: { chat_ids: [NIL_UUID] },
-        crm_company_filters: { company_ids: [NIL_UUID] },
+        ...QUERY_FILTERS_BASE,
         document_filters: { sub_types: ['snippet'] },
-        email_filters: { email_thread_ids: [NIL_UUID] },
-        foreign_entity_filters: { ids: [NIL_UUID] },
-        project_filters: { project_ids: [NIL_UUID] },
       },
     }),
     () => ({ staleTime: STALE_TIME, enabled: snippetsFlag().enabled })

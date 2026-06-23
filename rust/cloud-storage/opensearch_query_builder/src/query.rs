@@ -8,6 +8,7 @@ mod has_child;
 mod match_phrase;
 mod match_phrase_prefix;
 mod match_query;
+mod nested;
 mod range;
 mod regexp;
 mod simple_query_string;
@@ -25,6 +26,7 @@ pub use has_child::{HasChildQuery, InnerHits};
 pub use match_phrase::MatchPhraseQuery;
 pub use match_phrase_prefix::MatchPhrasePrefixQuery;
 pub use match_query::MatchQuery;
+pub use nested::NestedQuery;
 pub use range::{RangeQuery, RangeQueryBuilder};
 pub use regexp::{RegexpQuery, RegexpQueryFlags};
 use serde_json::Value;
@@ -61,6 +63,8 @@ pub enum QueryType<'a> {
     SimpleQueryString(SimpleQueryStringQuery<'a>),
     /// has_child join query (returns parents whose children match)
     HasChild(HasChildQuery<'a>),
+    /// nested query (returns parents whose nested objects match)
+    Nested(NestedQuery<'a>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -78,6 +82,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::Regexp(regexp_query) => regexp_query.to_json(),
             QueryType::SimpleQueryString(simple_query_string) => simple_query_string.to_json(),
             QueryType::HasChild(has_child) => has_child.to_json(),
+            QueryType::Nested(nested) => nested.to_json(),
         }
     }
 }
@@ -165,6 +170,7 @@ impl<'a> QueryType<'a> {
             QueryType::WildCard(wildcard) => QueryType::WildCard(wildcard.to_owned()),
             QueryType::SimpleQueryString(sqs) => QueryType::SimpleQueryString(sqs.to_owned()),
             QueryType::HasChild(has_child) => QueryType::HasChild(has_child.to_owned()),
+            QueryType::Nested(nested) => QueryType::Nested(nested.to_owned()),
         }
     }
 }

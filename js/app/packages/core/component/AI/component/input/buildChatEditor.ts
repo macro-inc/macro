@@ -14,7 +14,7 @@ export function buildChatEditor() {
   return buildConfig('chat')
     .namespace('chat-markdown-area')
     .withEmojis()
-    .withLinks({ floatingMenu: true })
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()

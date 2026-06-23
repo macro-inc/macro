@@ -19,6 +19,11 @@ import {
   type GroupMentionNode,
 } from '../nodes/GroupMentionNode';
 import {
+  $isPullRequestMentionNode,
+  type PullRequestMentionInfo,
+  type PullRequestMentionNode,
+} from '../nodes/PullRequestMentionNode';
+import {
   $isUserMentionNode,
   type UserMentionInfo,
   type UserMentionNode,
@@ -39,6 +44,7 @@ export type MentionNode =
   | DocumentMentionNode
   | ContactMentionNode
   | DateMentionNode
+  | PullRequestMentionNode
   | GroupMentionNode;
 
 export function $isMentionNode(node: LexicalNode): node is MentionNode {
@@ -47,6 +53,7 @@ export function $isMentionNode(node: LexicalNode): node is MentionNode {
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
+    $isPullRequestMentionNode(node) ||
     $isGroupMentionNode(node)
   );
 }
@@ -65,6 +72,7 @@ export function $extractAllMentions(): MentionNode[] {
 export type MentionInfo =
   | (UserMentionInfo & { type: 'user' })
   | (DocumentMentionInfo & { type: 'document' })
+  | (PullRequestMentionInfo & { type: 'pr' })
   | (ContactMentionInfo & { type: 'contact' })
   | (DateMentionInfo & { type: 'date' });
 
@@ -74,6 +82,8 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-user-mention', dropKey(info, 'type'));
     case 'document':
       return wrapXml('m-document-mention', dropKey(info, 'type'));
+    case 'pr':
+      return wrapXml('m-pr-mention', dropKey(info, 'type'));
     case 'contact':
       return wrapXml('m-contact-mention', dropKey(info, 'type'));
     case 'date':
@@ -89,5 +99,6 @@ export {
   parseDocumentMentions,
   parseGroupMentions,
   parseLinks,
+  parsePullRequestMentions,
   parseUserMentions,
 } from './parsers';

@@ -8,7 +8,9 @@ export function HtmlPreview() {
   });
 
   return (
-    <div class="size-full bg-surface overflow-auto">
+    // Static pads on mobile: the iframe scrolls internally, so its content
+    // can't under-scroll the floating chrome — the viewport sits between it.
+    <div class="size-full bg-surface overflow-auto mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
       <iframe
         title="HTML preview"
         class="size-full border-0"

@@ -242,6 +242,7 @@ describe('buildSingleEntityFilter', () => {
       'document_filters',
       'chat_filters',
       'channel_filters',
+      'channel_thread_filters',
       'project_filters',
       'call_filters',
     ].filter((k) => k !== filterKey);

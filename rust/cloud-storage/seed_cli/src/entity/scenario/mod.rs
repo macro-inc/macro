@@ -215,6 +215,7 @@ impl ScenarioArgs {
     }
 }
 
+#[allow(clippy::disallowed_methods, reason = "Only used when running locally")]
 fn validate_local_e2e_environment(database_url: &str) -> anyhow::Result<()> {
     ensure!(
         std::env::var("LOCAL_E2E_SEED").as_deref() == Ok("true"),

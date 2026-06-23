@@ -119,13 +119,15 @@ const CALL_NAME_SUMMARY_CHAR_CAP: usize = 4_000;
 const CALL_NAME_MAX_CHARS: usize = 80;
 
 /// AI-powered [`CallSummarizer`] that delegates to [`agent::complete`].
-#[derive(Debug, Default, Clone, Copy)]
-pub struct AiCallSummarizer;
+#[derive(Clone)]
+pub struct AiCallSummarizer {
+    recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
+}
 
 impl AiCallSummarizer {
-    /// Create a new [`AiCallSummarizer`].
-    pub fn new() -> Self {
-        Self
+    /// Create a new [`AiCallSummarizer`] that records usage via `recorder`.
+    pub fn new(recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>) -> Self {
+        Self { recorder }
     }
 }
 
@@ -144,6 +146,8 @@ impl CallSummarizer for AiCallSummarizer {
             SUMMARIZATION_MODEL,
             SUMMARIZATION_SYSTEM_PROMPT,
             &user_message,
+            self.recorder.as_ref(),
+            ai_usage::UsageContext::system(ai_usage::AiFeature::CallSummary),
         )
         .await
         .inspect_err(|e| {
@@ -176,11 +180,17 @@ impl CallSummarizer for AiCallSummarizer {
 
         let user_message = format!("Summary:\n\n{summary_for_prompt}");
 
-        let raw = agent::complete(SUMMARIZATION_MODEL, CALL_NAME_SYSTEM_PROMPT, &user_message)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, %call_id, "ai call naming failed");
-            })?;
+        let raw = agent::complete(
+            SUMMARIZATION_MODEL,
+            CALL_NAME_SYSTEM_PROMPT,
+            &user_message,
+            self.recorder.as_ref(),
+            ai_usage::UsageContext::system(ai_usage::AiFeature::CallSummary),
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error = ?e, %call_id, "ai call naming failed");
+        })?;
 
         Ok(sanitize_call_name(&raw))
     }
@@ -210,6 +220,8 @@ impl CallSummarizer for AiCallSummarizer {
             SUMMARIZATION_MODEL,
             CUSTOM_SPEAKER_SYSTEM_PROMPT,
             &user_message,
+            self.recorder.as_ref(),
+            ai_usage::UsageContext::system(ai_usage::AiFeature::CallSummary),
         )
         .await
         .inspect_err(|e| {

@@ -14,9 +14,7 @@ export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
 /** Signup Lead value per subscription tier. */
 export const SIGNUP_LEAD_VALUE_BY_TIER: Record<string, number> = {
   free: 20,
-  haiku: 175,
-  sonnet: 300,
-  opus: 450,
+  premium: 300,
 };
 
 /** Fallback used when the tier query param is unrecognized. */

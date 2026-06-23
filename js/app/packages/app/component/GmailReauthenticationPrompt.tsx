@@ -1,6 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useAddInboxFlow } from '@core/email-link';
-import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useInboxHealthProbeQuery,
+} from '@queries/email/link';
 import { createEffect, onCleanup } from 'solid-js';
 
 /**
@@ -13,6 +16,10 @@ import { createEffect, onCleanup } from 'solid-js';
 export function GmailReauthenticationPrompt() {
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
+
+  // Probe inbox grants on mount and on window focus so a grant that died while the
+  // user was away surfaces here instead of only after the daily refresh.
+  useInboxHealthProbeQuery();
 
   // One persistent toast per broken inbox, keyed by link id.
   const toastIds = new Map<string, number>();

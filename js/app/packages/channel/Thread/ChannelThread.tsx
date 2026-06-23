@@ -233,6 +233,7 @@ export function ChannelThread(props: ThreadProps) {
                 actions={props.getMessageActions?.(props.data())}
                 listMeta={props.listMeta}
                 messageEditor={props.messageEditor}
+                participants={props.participants}
                 onClick={selectThreadMessage}
                 highlighted={isSelected() && !isThreadFocused()}
                 selectionState={
@@ -260,6 +261,7 @@ export function ChannelThread(props: ThreadProps) {
                       replies={displayReplies()}
                       getMessageActions={props.getMessageActions}
                       messageEditor={props.messageEditor}
+                      participants={props.participants}
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
                       selectedReplyId={replySelection.selectedId}

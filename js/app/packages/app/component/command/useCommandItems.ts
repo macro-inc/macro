@@ -83,6 +83,19 @@ function isAskAiItem(item: CommandMenuItem): item is AskAiItem {
   return item.kind === 'ask-ai';
 }
 
+/**
+ * Entities shown in the no-query recency list. Unopened CRM companies (no
+ * `viewedAt`) are excluded so the recency view sorts companies purely by when
+ * the user last opened them — without this they'd fall back to `updatedAt` and
+ * surface companies the user has never touched. They stay reachable via search.
+ */
+function showInRecencyList(item: CommandMenuItem): boolean {
+  if (item.bucket === 'crm_company') {
+    return item.timestamps.viewedAt != null;
+  }
+  return true;
+}
+
 /** Categories that surface a "Search for [query]" row in the command menu */
 const SEARCHABLE_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
   'all',
@@ -375,7 +388,9 @@ export function useCommandItems(
     const q = query();
     const items = categoryItems();
 
-    const ranked = q ? search()(items, q).map((result) => result.item) : items;
+    const ranked = q
+      ? search()(items, q).map((result) => result.item)
+      : items.filter(showInRecencyList);
 
     if (shouldShowSearchRow(q)) {
       // With no direct results the menu would only offer search, so also

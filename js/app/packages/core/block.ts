@@ -64,6 +64,7 @@ export const BlockRegistry = [
   'contact',
   'company',
   'automation',
+  'pr',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -99,6 +100,7 @@ export const NonDocumentBlockTypes = [
   'contact',
   'company',
   'automation',
+  'pr',
 ] as const as (BlockName | BlockAlias)[];
 
 /**
@@ -153,6 +155,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   snippet: allBlockNames,
   automation: allBlockNames,
   csv: allBlockNames,
+  pr: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -176,6 +179,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   snippet: new Set([]),
   automation: new Set([]),
   csv: new Set([]),
+  pr: new Set([]),
 };
 
 export const LoadErrors = {

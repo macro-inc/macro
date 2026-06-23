@@ -40,7 +40,7 @@ describe('channel attachment queries', () => {
     const signal = new AbortController().signal;
 
     await expect(
-      channelAttachmentsQueryOptions('channel-1', 'static').queryFn({
+      channelAttachmentsQueryOptions('channel-1', 'static', 50).queryFn({
         pageParam: 'cursor-1',
         signal,
       })
@@ -48,7 +48,7 @@ describe('channel attachment queries', () => {
 
     expect(storageServiceClient.getChannelAttachments).toHaveBeenCalledWith({
       channel_id: 'channel-1',
-      limit: 100,
+      limit: 50,
       cursor: 'cursor-1',
       attachment_type: 'static',
       signal,

@@ -6,6 +6,10 @@ use thiserror::Error;
 const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
 
 #[allow(dead_code)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "macro_env_var is the sanctioned wrapper around std::env::var"
+)]
 fn read_std_env(s: &'static str) -> Result<String, std::env::VarError> {
     std::env::var(s)
 }
@@ -24,21 +28,42 @@ where
     }
 }
 
-fn read_env_with<F>(s: &'static str, read_var: F) -> Result<String, VarNameErr>
+fn read_env_var_with<F>(s: &'static str, read_var: F) -> Result<String, std::env::VarError>
 where
     F: Fn(&'static str) -> Result<String, std::env::VarError>,
 {
     match read_from_app_secrets_json_with(s, &read_var) {
         Some(value) => Ok(value),
-        None => read_var(s).map_err(|err| VarNameErr { var_name: s, err }),
+        None => read_var(s),
     }
+}
+
+fn optional_read_env_var_with<F>(
+    s: &'static str,
+    read_var: F,
+) -> Result<Option<String>, std::env::VarError>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    match read_env_var_with(s, read_var) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+fn read_env_with<F>(s: &'static str, read_var: F) -> Result<String, VarNameErr>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    read_env_var_with(s, read_var).map_err(|err| VarNameErr { var_name: s, err })
 }
 
 fn maybe_read_env_with<F>(s: &'static str, read_var: F) -> Option<String>
 where
     F: Fn(&'static str) -> Result<String, std::env::VarError>,
 {
-    read_from_app_secrets_json_with(s, &read_var).or_else(|| read_var(s).ok())
+    optional_read_env_var_with(s, read_var).ok().flatten()
 }
 
 #[cfg(test)]
@@ -46,7 +71,10 @@ mod tests;
 
 #[cfg(test)]
 mod testing_harness {
-    use super::{VarNameErr, maybe_read_env_with, read_env_with};
+    use super::{
+        VarNameErr, maybe_read_env_with, optional_read_env_var_with, read_env_var_with,
+        read_env_with,
+    };
     use std::cell::Cell;
 
     type MockValue = Cell<Option<Box<dyn Fn(&'static str) -> Result<String, std::env::VarError>>>>;
@@ -62,6 +90,10 @@ mod testing_harness {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "test harness falls back to the same sanctioned std::env::var wrapper behavior"
+    )]
     fn get_env(s: &'static str) -> Result<String, std::env::VarError> {
         let cur_getter = MOCK_VAR_GETTER.replace(None);
         match cur_getter {
@@ -82,6 +114,16 @@ mod testing_harness {
         maybe_read_env_with(s, get_env)
     }
 
+    pub(crate) fn read_env_var(s: &'static str) -> Result<String, std::env::VarError> {
+        read_env_var_with(s, get_env)
+    }
+
+    pub(crate) fn optional_read_env_var(
+        s: &'static str,
+    ) -> Result<Option<String>, std::env::VarError> {
+        optional_read_env_var_with(s, get_env)
+    }
+
     pub(crate) fn with_mock_env<F, Cb, U>(f: F, cb: Cb) -> U
     where
         F: Fn(&'static str) -> Result<String, std::env::VarError> + 'static,
@@ -96,11 +138,33 @@ mod testing_harness {
 #[cfg(test)]
 pub(crate) use testing_harness::maybe_read_env;
 #[cfg(test)]
+pub(crate) use testing_harness::optional_read_env_var;
+#[cfg(test)]
 pub(crate) use testing_harness::read_env;
+#[cfg(test)]
+pub(crate) use testing_harness::read_env_var;
 
 #[cfg(not(test))]
 pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
     read_env_with(s, read_std_env)
+}
+
+/// Read an environment variable from `APP_SECRETS_JSON` or the process environment.
+///
+/// This uses the same lookup order as generated [`env_var!`] types, but returns the raw
+/// [`std::env::VarError`] so callers can map errors into their own error types.
+#[cfg(not(test))]
+pub fn read_env_var(s: &'static str) -> Result<String, std::env::VarError> {
+    read_env_var_with(s, read_std_env)
+}
+
+/// Read an optional environment variable from `APP_SECRETS_JSON` or the process environment.
+///
+/// Missing variables return `Ok(None)`. Values present in `APP_SECRETS_JSON` take precedence over
+/// process environment variables. Non-Unicode process environment values are returned as errors.
+#[cfg(not(test))]
+pub fn optional_read_env_var(s: &'static str) -> Result<Option<String>, std::env::VarError> {
+    optional_read_env_var_with(s, read_std_env)
 }
 
 /// Read an environment variable, returning `None` if it is not present.

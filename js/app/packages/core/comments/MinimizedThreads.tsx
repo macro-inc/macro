@@ -97,26 +97,21 @@ export function MinimizedThread(props: {
         <Layer depth={2}>
           <div
             class={cn(
-              'flex flex-row justify-between p-0.5 gap-1 bg-surface transition-transform shadow-md shadow-drop-shadow items-center text-ink-muted ring-edge ring relative overflow-clip rounded-sm pointer-events-auto',
+              'transition-transform flex items-center group text-ink-extra-muted pointer-events-auto',
               props.isActive && '-translate-x-4'
             )}
             onClick={clickHandler}
           >
             <div
-              class={cn(
-                'size-6 flex items-center justify-center rounded-xs',
-                props.isActive
-                  ? 'bg-comment text-surface'
-                  : 'bg-comment-bg text-comment-fg'
-              )}
+              class={cn('inline-flex items-center gap-1 px-1 rounded-lg', {
+                'group-hover:bg-hover': !props.isActive,
+                'bg-comment/10 group-hover:bg-comment/20': props.isActive,
+              })}
             >
-              <ChatTeardrop
-                class="size-5 pointer-events-auto"
-                onClick={clickHandler}
-              />
-            </div>
-            <div class="flex items-center px-1 h-6 pointer-events-none">
-              <span class="text-xs text-center">{commentCount()}</span>
+              <ChatTeardrop class="size-4" onClick={clickHandler} />
+              <div class="flex items-center px-1 h-6">
+                <span class="text-xs text-center">{commentCount()}</span>
+              </div>
             </div>
           </div>
         </Layer>

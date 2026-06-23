@@ -40,7 +40,7 @@ fn test_compute_next_cursor_search_is_done_returns_done() {
         Some(&make_tagged_hit(
             Uuid::new_v4(),
             Some(ts(1000)),
-            SearchSource::DocumentName,
+            SearchSource::ProjectName,
         )),
         &SearchCursorOption::NotDone(None),
     );
@@ -54,7 +54,7 @@ fn test_compute_next_cursor_excluded_results_with_included_generates_cursor() {
     // generate cursor from the last included hit
     let entity_id = Uuid::new_v4();
     let timestamp = ts(1000);
-    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::DocumentName);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::ProjectName);
 
     let result = compute_next_cursor(
         &SearchCursorOption::NotDone(None), // search says not done
@@ -207,12 +207,12 @@ fn test_find_last_of_source_finds_correct_source() {
     let doc2_id = Uuid::new_v4();
 
     let results = vec![
-        make_tagged_hit(doc_id, Some(ts(1000)), SearchSource::DocumentName),
+        make_tagged_hit(doc_id, Some(ts(1000)), SearchSource::ProjectName),
         make_tagged_hit(chat_id, Some(ts(2000)), SearchSource::ChatName),
-        make_tagged_hit(doc2_id, Some(ts(3000)), SearchSource::DocumentName),
+        make_tagged_hit(doc2_id, Some(ts(3000)), SearchSource::ProjectName),
     ];
 
-    let last_doc = find_last_of_source(&results, SearchSource::DocumentName);
+    let last_doc = find_last_of_source(&results, SearchSource::ProjectName);
     assert!(last_doc.is_some());
     assert_eq!(last_doc.unwrap().hit.entity_id, doc2_id);
 
@@ -224,7 +224,7 @@ fn test_find_last_of_source_finds_correct_source() {
 #[test]
 fn test_find_last_of_source_returns_none_when_not_found() {
     let results = vec![
-        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::DocumentName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::ProjectName),
         make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::ChatName),
     ];
 
@@ -235,7 +235,7 @@ fn test_find_last_of_source_returns_none_when_not_found() {
 #[test]
 fn test_find_last_of_source_empty_results() {
     let results: Vec<TaggedSearchHit> = vec![];
-    let result = find_last_of_source(&results, SearchSource::DocumentName);
+    let result = find_last_of_source(&results, SearchSource::ProjectName);
     assert!(result.is_none());
 }
 
@@ -245,7 +245,7 @@ fn test_find_last_of_source_empty_results() {
 fn test_cursor_from_tagged_with_timestamp() {
     let entity_id = Uuid::new_v4();
     let timestamp = ts(1000);
-    let hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::DocumentName);
+    let hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::ProjectName);
 
     let cursor = cursor_from_tagged(&hit);
     assert!(cursor.is_some());
@@ -271,51 +271,63 @@ fn test_cursor_from_tagged_without_timestamp() {
 #[test]
 fn test_cursor_logic_pagination_scenario() {
     // Simulate a pagination scenario where:
-    // - Search returned 10 documents
+    // - Search returned 10 projects
     // - Only 3 made it into the final page (others had newer timestamps from other sources)
-    // - The cursor should point to the last included document
+    // - The cursor should point to the last included project
 
-    let doc_ids: Vec<Uuid> = (0..10).map(|_| Uuid::new_v4()).collect();
+    let project_ids: Vec<Uuid> = (0..10).map(|_| Uuid::new_v4()).collect();
     let timestamps: Vec<chrono::DateTime<Utc>> = (0..10).map(|i| ts(1000 + i * 100)).collect();
 
     // Create the final tagged results (simulating merged & sorted output)
     let final_tagged: Vec<TaggedSearchHit> = vec![
         make_tagged_hit(Uuid::new_v4(), Some(ts(5000)), SearchSource::ChatName),
-        make_tagged_hit(doc_ids[9], Some(timestamps[9]), SearchSource::DocumentName),
+        make_tagged_hit(
+            project_ids[9],
+            Some(timestamps[9]),
+            SearchSource::ProjectName,
+        ),
         make_tagged_hit(Uuid::new_v4(), Some(ts(4000)), SearchSource::Content),
-        make_tagged_hit(doc_ids[8], Some(timestamps[8]), SearchSource::DocumentName),
-        make_tagged_hit(doc_ids[7], Some(timestamps[7]), SearchSource::DocumentName),
+        make_tagged_hit(
+            project_ids[8],
+            Some(timestamps[8]),
+            SearchSource::ProjectName,
+        ),
+        make_tagged_hit(
+            project_ids[7],
+            Some(timestamps[7]),
+            SearchSource::ProjectName,
+        ),
     ];
 
-    let doc_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
-        entity_id: doc_ids[6],
+    let project_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: project_ids[6],
         updated_at: timestamps[6],
     }));
 
-    let included_doc_names = final_tagged
+    let included_project_names = final_tagged
         .iter()
-        .filter(|h| h.source == SearchSource::DocumentName)
+        .filter(|h| h.source == SearchSource::ProjectName)
         .count();
-    let doc_name_count = 10; // Original fetch returned 10
+    let project_name_count = 10; // Original fetch returned 10
 
-    let new_doc_cursor = compute_next_cursor(
-        &doc_next_cursor,
-        included_doc_names,
-        doc_name_count,
-        find_last_of_source(&final_tagged, SearchSource::DocumentName),
+    let new_project_cursor = compute_next_cursor(
+        &project_next_cursor,
+        included_project_names,
+        project_name_count,
+        find_last_of_source(&final_tagged, SearchSource::ProjectName),
         &SearchCursorOption::NotDone(None),
     );
 
-    // Should generate cursor from last included doc (doc_ids[7])
-    match new_doc_cursor {
+    // Should generate cursor from last included project (project_ids[7])
+    match new_project_cursor {
         SearchCursorOption::NotDone(Some(cursor)) => {
             let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
-            assert_eq!(id, doc_ids[7]);
+            assert_eq!(id, project_ids[7]);
             assert_eq!(ts, timestamps[7]);
         }
         _ => panic!(
-            "Expected cursor from last included doc, got {:?}",
-            new_doc_cursor
+            "Expected cursor from last included project, got {:?}",
+            new_project_cursor
         ),
     }
 }
@@ -323,27 +335,27 @@ fn test_cursor_logic_pagination_scenario() {
 #[test]
 fn test_cursor_logic_source_exhausted_scenario() {
     // Simulate when a source is exhausted (returned fewer than requested)
-    // - Search returned 3 documents (less than page_size of 10)
+    // - Search returned 3 projects (less than page_size of 10)
     // - All 3 made it into the final page
     // - Cursor should be Done since source is exhausted
 
     let final_tagged: Vec<TaggedSearchHit> = vec![
-        make_tagged_hit(Uuid::new_v4(), Some(ts(3000)), SearchSource::DocumentName),
-        make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::DocumentName),
-        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::DocumentName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(3000)), SearchSource::ProjectName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::ProjectName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::ProjectName),
     ];
 
-    let doc_next_cursor = SearchCursorOption::Done; // Search says done
+    let project_next_cursor = SearchCursorOption::Done; // Search says done
 
-    let new_doc_cursor = compute_next_cursor(
-        &doc_next_cursor,
+    let new_project_cursor = compute_next_cursor(
+        &project_next_cursor,
         3, // all included
         3, // all returned
-        find_last_of_source(&final_tagged, SearchSource::DocumentName),
+        find_last_of_source(&final_tagged, SearchSource::ProjectName),
         &SearchCursorOption::NotDone(None),
     );
 
-    assert!(new_doc_cursor.is_done());
+    assert!(new_project_cursor.is_done());
 }
 
 // ==================== CRM source cursor scenarios ====================
@@ -365,7 +377,7 @@ fn test_cursor_logic_crm_starved_preserves_cursor() {
 
     // Final page: all non-CRM (CRM starved out by newer doc/chat hits).
     let final_tagged: Vec<TaggedSearchHit> = vec![
-        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::DocumentName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::ProjectName),
         make_tagged_hit(Uuid::new_v4(), Some(ts(8000)), SearchSource::ChatName),
     ];
 
@@ -408,7 +420,7 @@ fn test_cursor_logic_crm_included_advances_cursor() {
     let crm_id = Uuid::new_v4();
     let crm_ts = ts(7000);
     let final_tagged: Vec<TaggedSearchHit> = vec![
-        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::DocumentName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::ProjectName),
         make_tagged_hit(crm_id, Some(crm_ts), SearchSource::CrmCompany),
     ];
 

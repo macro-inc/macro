@@ -5,6 +5,15 @@ publish = false
 version = "0.1.0"
 
 [features]
+attachment = [
+  "dep:attachment",
+  "dep:entity_access",
+  "dep:futures",
+  "dep:model-entity",
+  "dep:non_empty",
+  "entity_access/ports",
+  "ports",
+]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
@@ -23,7 +32,19 @@ inbound = [
   "models_pagination/axum",
   "ports",
 ]
+list = [
+  "dep:filter_ast",
+  "dep:frecency",
+  "dep:item_filters",
+  "dep:model-entity",
+  "dep:recursion",
+  "dep:rootcause",
+  "dep:serde_json",
+  "frecency/ports",
+  "ports",
+]
 outbound = [
+  "list",
   "ports",
   "dep:connection_gateway_client",
   "dep:contacts",
@@ -45,6 +66,7 @@ ports = ["dep:tokio"]
 
 [dependencies]
 anyhow = { workspace = true }
+attachment = { path = "../attachment", optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true }
@@ -52,6 +74,9 @@ connection_gateway_client = { path = "../connection_gateway_client", optional = 
 contacts = { path = "../contacts", default-features = false, features = ["outbound"], optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+filter_ast = { path = "../filter_ast", optional = true }
+frecency = { path = "../frecency", optional = true }
+futures = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
@@ -60,12 +85,16 @@ model_notifications = { path = "../model_notifications", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
+item_filters = { path = "../item_filters", optional = true }
+non_empty = { path = "../non_empty", optional = true }
 notification_hex = { path = "../notification", package = "notification", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["search"], optional = true }
+recursion = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"], optional = true }
 tracing = { workspace = true }

@@ -742,6 +742,7 @@ async fn test_send_notification_success() {
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -763,6 +764,7 @@ async fn test_sender_excluded_from_recipients() {
     let sender = test_user_id("sender@example.com");
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -788,6 +790,7 @@ async fn test_muted_user_excluded() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -813,6 +816,7 @@ async fn test_unsubscribed_user_excluded() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -838,6 +842,7 @@ async fn test_type_disabled_user_excluded() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -863,6 +868,7 @@ async fn test_queue_message_conn_gateway_only() {
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -894,6 +900,7 @@ async fn test_queue_message_email_per_recipient() {
     let recipient2 = test_user_id("user2@example.com");
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -929,6 +936,7 @@ async fn test_queue_message_multiple_channels() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -996,6 +1004,7 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_123"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "You were mentioned".to_string(),
         },
@@ -1090,6 +1099,7 @@ async fn test_apns_collapse_key_stored_on_create() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -1122,6 +1132,7 @@ async fn test_no_apns_collapse_key_when_apns_not_enabled() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello".to_string(),
         },
@@ -2321,6 +2332,7 @@ async fn test_sqs_notification_ingress_publishes_to_queue() {
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
         notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello via queue".to_string(),
         },
@@ -2350,6 +2362,7 @@ async fn test_process_from_queue_with_value_types() {
     // Build a typed request, then type-erase it through IngressQueueMessage
     let typed_request = SendNotificationRequestBuilder {
         notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello from queue".to_string(),
         },

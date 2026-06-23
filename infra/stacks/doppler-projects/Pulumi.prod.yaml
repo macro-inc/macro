@@ -4,4 +4,4 @@ config:
   doppler-projects:doppler_secrets_manager_integration_id:
     secure: AAABAH2bDAIjSwi83Nj6L5LVc4u/+RVp63kK/XxjC+YF/hMIHpHJ5bKthb1X1YBZKO46FktEvztGhzCCKvj+sR/Y3Ak=
   doppler:dopplerToken:
-    secure: AAABACy9/cdqGE3ErYm91DTYBI6Ci3/B741AotvmPi7a9VjLlUu7KWRtzLHjXlXJpLup1HRnfc/1GskYJGs5C3Y5ZAIyMpJLGSuPID2hjyut
+    secure: AAABAN/PSOOeZluaT/lAdwTw0STWzVfN83Fmv9NlCjmDSz0AjubvbnRpj4ZqxKLr1VlrTVDTxj+7uMiu/2N5+NCQQf5ubTb2ZbHVZ2KVq1eZ

@@ -17,7 +17,7 @@ default = ["all"]
 local_auth = ["decode_jwt/local_auth"]
 macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
 tracking = ["dep:ip_extractor"]
-user_permissions = ["dep:macro_user_id", "dep:user_quota", "macro_db_client"]
+user_permissions = ["dep:macro_user_id", "macro_db_client"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -46,7 +46,6 @@ tokio = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, optional = true }
-user_quota = { path = "../user_quota", optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

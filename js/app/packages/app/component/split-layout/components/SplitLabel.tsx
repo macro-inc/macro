@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
+import { useSidePanel } from '@app/component/side-panel/SidePanel';
 import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   EntityIcon,
@@ -6,6 +7,7 @@ import {
   isArchiveType,
 } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -15,9 +17,13 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type BuildEntityDataArgs, buildEntityData } from '@entity';
+import ArticleIcon from '@phosphor/article.svg';
+import InfoIcon from '@phosphor/info.svg';
 import { cn, Tooltip } from '@ui';
 import { type Accessor, createEffect, type JSX, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
+import { HeaderIsland } from './HeaderIsland';
+import { HeaderTitleMenu, type HeaderTitleMenuItem } from './HeaderTitleMenu';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -32,26 +38,28 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   return (
-    <div
-      class={cn(
-        'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
-        props.class
-      )}
-    >
-      <Show when={props.iconType}>
-        <EntityIcon
-          class="shrink-0"
-          targetType={props.iconType}
-          size="xs"
-          theme={props.colorIcon ? undefined : 'monochrome'}
-        />
-      </Show>
-      <Show when={props.icon}>
-        <div class="shrink-0">{props.icon}</div>
-      </Show>
-      <Show when={props.badges}>{props.badges}</Show>
-      <span class="inline-block text-sm truncate">{props.label}</span>
-    </div>
+    <HeaderIsland class="shrink">
+      <div
+        class={cn(
+          'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
+          props.class
+        )}
+      >
+        <Show when={props.iconType}>
+          <EntityIcon
+            class="shrink-0"
+            targetType={props.iconType}
+            size="xs"
+            theme={props.colorIcon ? undefined : 'monochrome'}
+          />
+        </Show>
+        <Show when={props.icon}>
+          <div class="shrink-0">{props.icon}</div>
+        </Show>
+        <Show when={props.badges}>{props.badges}</Show>
+        <span class="inline-block text-sm truncate">{props.label}</span>
+      </div>
+    </HeaderIsland>
   );
 }
 
@@ -173,14 +181,43 @@ export function BlockItemSplitLabel(props: {
     panel.handle.setDisplayName(displayName());
   });
 
+  const sidePanel = useSidePanel();
+
   return (
-    <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
-      <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
-      <Show when={props.badges}>{props.badges}</Show>
-      <SplitLabel
-        label={displayName() ?? ''}
-        lockRename={!isOwner() || props.lockRename}
-      />
-    </div>
+    <HeaderIsland class="shrink">
+      <Show
+        when={isMobile() && sidePanel?.hasSections()}
+        fallback={
+          <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
+            <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
+            <Show when={props.badges}>{props.badges}</Show>
+            <SplitLabel
+              label={displayName() ?? ''}
+              lockRename={!isOwner() || props.lockRename}
+            />
+          </div>
+        }
+      >
+        {/* Mobile: the side-panel tabs hide behind the title — tapping it
+            opens a menu switching between Content and Info. */}
+        <HeaderTitleMenu
+          items={SIDE_PANEL_VIEWS}
+          active={sidePanel?.isOpen() ? 'info' : 'content'}
+          onSelect={(value) => sidePanel?.setIsOpen(value === 'info')}
+        >
+          <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
+          <Show when={props.badges}>{props.badges}</Show>
+          <SplitLabel
+            label={displayName() ?? ''}
+            lockRename={!isOwner() || props.lockRename}
+          />
+        </HeaderTitleMenu>
+      </Show>
+    </HeaderIsland>
   );
 }
+
+const SIDE_PANEL_VIEWS: HeaderTitleMenuItem[] = [
+  { value: 'content', label: 'Content', icon: ArticleIcon },
+  { value: 'info', label: 'Info', icon: InfoIcon },
+];

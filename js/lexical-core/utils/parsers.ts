@@ -48,6 +48,17 @@ export function parseDocumentMentions(text: string): string {
   );
 }
 
+export function parsePullRequestMentions(text: string): string {
+  return text.replace(/<m-pr-mention>(.*?)<\/m-pr-mention>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.label || data.id || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseLinks(text: string): string {
   return text.replace(/<m-link>(.*?)<\/m-link>/g, (_, json) => {
     try {
@@ -120,9 +131,13 @@ export function markdownToPlainText(markdown: string): string {
   return parseLinks(
     parseDocumentCards(
       parseSnapshots(
-        parseDocumentMentions(
-          parseGroupMentions(
-            parseDateMentions(parseContactMentions(parseUserMentions(markdown)))
+        parsePullRequestMentions(
+          parseDocumentMentions(
+            parseGroupMentions(
+              parseDateMentions(
+                parseContactMentions(parseUserMentions(markdown))
+              )
+            )
           )
         )
       )
@@ -139,6 +154,7 @@ type MentionTagPayload = {
   documentName?: string;
   blockName?: string;
   blockParams?: { channel_message_id?: string };
+  label?: string;
   url?: string;
   text?: string;
   alt?: string;
@@ -161,16 +177,13 @@ function replaceJsonTag(
   tag: string,
   render: (data: MentionTagPayload) => string
 ): string {
-  return text.replace(
-    new RegExp(`<${tag}>(.*?)</${tag}>`, 'gs'),
-    (_, json) => {
-      try {
-        return render(JSON.parse(json));
-      } catch {
-        return '';
-      }
+  return text.replace(new RegExp(`<${tag}>(.*?)</${tag}>`, 'gs'), (_, json) => {
+    try {
+      return render(JSON.parse(json));
+    } catch {
+      return '';
     }
-  );
+  });
 }
 
 function documentRefToEmbeddingText(data: MentionTagPayload): string {
@@ -261,6 +274,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   // Leaf tags.
   text = replaceJsonTag(text, 'm-document-mention', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-document-card', documentRefToEmbeddingText);
+  text = replaceJsonTag(text, 'm-pr-mention', (data) =>
+    data.id
+      ? `[${data.label || 'Pull request'}](pr:${data.id})`
+      : data.label || ''
+  );
   text = replaceJsonTag(text, 'm-link', (data) =>
     data.url ? `[${data.text || data.url}](${data.url})` : data.text || ''
   );
@@ -273,15 +291,27 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-video', (data) =>
     data.url ? `[video](${data.url})` : ''
   );
-  text = replaceJsonTag(text, 'm-katex-equation', (data) => data.equation || '');
+  text = replaceJsonTag(
+    text,
+    'm-katex-equation',
+    (data) => data.equation || ''
+  );
   text = replaceJsonTag(text, 'm-user-mention', (data) => data.email || '');
   text = replaceJsonTag(
     text,
     'm-contact-mention',
     (data) => data.name || data.emailOrDomain || ''
   );
-  text = replaceJsonTag(text, 'm-date-mention', (data) => data.displayFormat || '');
-  text = replaceJsonTag(text, 'm-group-mention', (data) => `@${data.groupAlias || ''}`);
+  text = replaceJsonTag(
+    text,
+    'm-date-mention',
+    (data) => data.displayFormat || ''
+  );
+  text = replaceJsonTag(
+    text,
+    'm-group-mention',
+    (data) => `@${data.groupAlias || ''}`
+  );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(text, 'm-watermark', () => '');

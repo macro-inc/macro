@@ -31,6 +31,7 @@ import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
 import { InlineSearchNode } from './nodes/InlineSearchNode';
+import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
 import { ThemeMentionNode } from './nodes/ThemeMentionNode';
@@ -73,6 +74,7 @@ export const SupportedNodeTypes = [
   UserMentionNode,
   ContactMentionNode,
   DateMentionNode,
+  PullRequestMentionNode,
   GroupMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,

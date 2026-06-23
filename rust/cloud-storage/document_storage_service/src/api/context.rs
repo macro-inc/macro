@@ -19,10 +19,11 @@ use call::{
 };
 use channels::{
     domain::{
+        list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
-    inbound::axum_router::ChannelsRouterState,
+    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
@@ -31,11 +32,6 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
-};
-use comms::{
-    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
-    inbound::router::CommsRouterState,
-    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -112,7 +108,7 @@ type DssSoupState = SoupRouterState<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         ReadonlyEmailPreviewAdapter<DssEmailService>,
-        CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
+        ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
         DssCrmService,
         ForeignEntityServiceType,
@@ -208,12 +204,12 @@ pub(crate) type DocumentService = DocumentServiceImpl<
 /// Type alias for the documents router state.
 pub(crate) type DocumentsState = DocumentRouterState<DocumentService, EntityAccessService>;
 
-/// Type alias for the ChannelServiceImpl used by comms
-pub(crate) type CommsChannelService =
-    CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>;
+/// Type alias for the legacy channel list service.
+pub(crate) type DssChannelListService =
+    ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>;
 
-/// Type alias for the CommsRouterState
-pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
+/// Type alias for the legacy channel list router state.
+pub(crate) type DssChannelListState = ChannelListRouterState<DssChannelListService>;
 
 /// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelService = ChannelServiceImpl<
@@ -322,9 +318,10 @@ pub(crate) struct ApiContext {
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,
-    // Comms service fields
+    // Shared frecency storage.
     pub frecency_storage: FrecencyPgStorage,
-    pub comms_state: CommsState,
+    /// Legacy channel list router state.
+    pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,

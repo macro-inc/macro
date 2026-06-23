@@ -32,7 +32,13 @@ import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, onCleanup } from 'solid-js';
-import { themes } from '../../theme/signals/themeSignals';
+import {
+  setDarkModeTheme,
+  setLightModeTheme,
+  setThemeShouldMatchSystem,
+  themeShouldMatchSystem,
+  themes,
+} from '../../theme/signals/themeSignals';
 
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
@@ -309,6 +315,65 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
     });
+  });
+
+  const setPreferredLightScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default light theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredLightScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setLightModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  const setPreferredDarkScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default dark theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredDarkScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setDarkModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: () =>
+      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
+    keyDownHandler: () => {
+      setThemeShouldMatchSystem((prev) => !prev);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({

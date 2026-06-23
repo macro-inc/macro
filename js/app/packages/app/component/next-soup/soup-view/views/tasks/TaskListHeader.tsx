@@ -15,7 +15,10 @@ import {
 import './list-property-value.css';
 import { Tooltip } from '@ui';
 
-const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
+// `size-3` at wide/medium (shown beside the label), upsizing to `size-4` on
+// narrow containers to match the row's collapsed status/priority icons
+// (`@max-[840px]/u-list:size-4` in list-property-value.tsx).
+const HEADER_ICON_CLASS = 'size-3 @max-[840px]/u-list:size-4 text-ink-muted';
 
 /** Map column IDs to their icons for narrow mode */
 const COLUMN_ICONS: Record<string, () => JSX.Element> = {

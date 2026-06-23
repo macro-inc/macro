@@ -1,8 +1,18 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { batch } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { compileToAst, type TargetAstMap } from './compile';
+import {
+  compileToAst,
+  normalizeDocumentWhere,
+  type TargetAstMap,
+} from './compile';
 import { addFieldValues, removeFieldValues } from './field-values';
-import type { FieldFilters, Query, QueryState } from './types';
+import type {
+  DocumentFilterExpression,
+  FieldFilters,
+  Query,
+  QueryState,
+} from './types';
 
 export type { Query } from './types';
 
@@ -13,6 +23,7 @@ type QueryStoreOptions = {
 const emptyQueryState = (): QueryState => ({
   include: {},
   exclude: {},
+  documentWhere: undefined,
   emailView: undefined,
 });
 
@@ -53,8 +64,29 @@ const partialFieldUpdate = (updates: FieldFilters): Record<string, unknown> => {
 export const mergeQuery = (base: QueryState, query: Query): QueryState => ({
   include: addFieldValues(base.include, query.include),
   exclude: addFieldValues(base.exclude, query.exclude),
+  documentWhere: query.documentWhere
+    ? [
+        ...(base.documentWhere ?? []),
+        ...normalizeDocumentWhere(query.documentWhere)!,
+      ]
+    : base.documentWhere,
   emailView: query.emailView ?? base.emailView,
 });
+
+const removeDocumentWhere = (
+  existing: DocumentFilterExpression[] | undefined,
+  remove: Query['documentWhere']
+): DocumentFilterExpression[] | undefined => {
+  if (!existing || !remove) return existing;
+
+  const next = [...existing];
+  for (const expression of normalizeDocumentWhere(remove) ?? []) {
+    const index = next.findIndex((expr) => deepEqual(expr, expression));
+    if (index !== -1) next.splice(index, 1);
+  }
+
+  return next.length ? next : undefined;
+};
 
 export function createQueryStore(options: QueryStoreOptions = {}) {
   const { initial } = options;
@@ -73,6 +105,10 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
     setState((prev) => ({
       include: removeFieldValues(prev.include, query.include),
       exclude: removeFieldValues(prev.exclude, query.exclude),
+      documentWhere: removeDocumentWhere(
+        prev.documentWhere,
+        query.documentWhere
+      ),
       emailView:
         query.emailView && prev.emailView === query.emailView
           ? undefined
@@ -89,6 +125,7 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
       reconcile({
         include: compactedFields({}, query.include),
         exclude: compactedFields({}, query.exclude),
+        documentWhere: normalizeDocumentWhere(query.documentWhere),
         emailView: query.emailView,
       })
     );
@@ -101,6 +138,12 @@ export function createQueryStore(options: QueryStoreOptions = {}) {
       }
       if (query.exclude) {
         setState('exclude', partialFieldUpdate(query.exclude));
+      }
+      if (query.documentWhere) {
+        setState('documentWhere', [
+          ...(state.documentWhere ?? []),
+          ...normalizeDocumentWhere(query.documentWhere)!,
+        ]);
       }
       if (query.emailView !== undefined) {
         setState('emailView', query.emailView);

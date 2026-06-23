@@ -39,6 +39,7 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
+  type AutoLinkMatchMode,
   type ILinkInfo,
   INSERT_LINK_COMMAND,
   linksPlugin,
@@ -55,7 +56,10 @@ false && clickOutside;
 const MENU_ID = 'floating-link-menu';
 const HOVER_ID = 'floating-link-hover';
 
-export function FloatingLinkMenu(props: { closePopup?: () => void }) {
+export function FloatingLinkMenu(props: {
+  closePopup?: () => void;
+  autoLinkMatchMode?: AutoLinkMatchMode;
+}) {
   const { plugins, editor } = useContext(LexicalWrapperContext) ?? {};
   if (!plugins || !editor) {
     console.error(
@@ -241,6 +245,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       onHoverLink,
       onClickLink,
       onCreateLink,
+      autoLinkMatchMode: props.autoLinkMatchMode,
     })
   );
 

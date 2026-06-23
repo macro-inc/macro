@@ -67,7 +67,9 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   const hasMultipleSenders = () => additionalSenderCount() > 0;
 
   const primarySenderNameParts = () =>
-    useDisplayNameParts(tryMacroId(primarySenderId() ?? ''));
+    useDisplayNameParts(tryMacroId(primarySenderId() ?? ''), {
+      emailFallback: 'local-part',
+    });
 
   const primarySenderFirstName = () => {
     const firstName = primarySenderNameParts().firstName();
@@ -75,7 +77,9 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   };
 
   const secondarySenderNameParts = () =>
-    useDisplayNameParts(tryMacroId(senderIds()[1] ?? ''));
+    useDisplayNameParts(tryMacroId(senderIds()[1] ?? ''), {
+      emailFallback: 'local-part',
+    });
 
   const secondarySenderFirstName = () => {
     const firstName = secondarySenderNameParts().firstName();

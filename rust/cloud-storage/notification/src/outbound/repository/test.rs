@@ -142,6 +142,7 @@ async fn test_create_notification(pool: Pool<Postgres>) {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
         }),
@@ -175,12 +176,54 @@ async fn test_create_notification(pool: Pool<Postgres>) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_create_notification_stores_secondary_entity(pool: Pool<Postgres>) {
+    let recipient = test_user("recipient@test.com");
+    let notification_id = uuid::Uuid::new_v4();
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: Some(EntityType::Channel.with_entity_str("channel-1")),
+        notification: TaggedContent::new(TestNotification {
+            message: "hello".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient]),
+    };
+
+    pool.create_notification(request, notification_id, "test_service", None)
+        .await
+        .unwrap();
+
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            event_item_id,
+            event_item_type,
+            secondary_event_item_id,
+            secondary_event_item_type
+        FROM notification
+        WHERE id = $1
+        "#,
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(row.event_item_id, "doc-1");
+    assert_eq!(row.event_item_type, "document");
+    assert_eq!(row.secondary_event_item_id.as_deref(), Some("channel-1"));
+    assert_eq!(row.secondary_event_item_type.as_deref(), Some("channel"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_create_notification_returns_timestamps(pool: Pool<Postgres>) {
     let recipient = test_user("recipient@test.com");
     let notification_id = uuid::Uuid::new_v4();
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
         }),
@@ -583,6 +626,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     let github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
             .with_entity_string(foreign_entity_id.clone()),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestGithubNotification {
             message: "github".to_string(),
         }),
@@ -596,6 +640,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     let check_run_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
             .with_entity_string(check_run_foreign_entity_id.clone()),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestGithubCheckRunNotification {
             message: "check run".to_string(),
         }),
@@ -614,6 +659,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     let non_github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
             .with_entity_string(foreign_entity_id.clone()),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "foreign entity".to_string(),
         }),
@@ -835,6 +881,7 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
         }),
@@ -845,6 +892,7 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     // First creation should succeed
     let request2 = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
         }),
@@ -895,6 +943,7 @@ async fn test_create_notification_stores_bare_metadata(pool: Pool<Postgres>) {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        secondary_notification_entity: None,
         notification: TaggedContent::new(TestNotification {
             message: "hello".to_string(),
         }),

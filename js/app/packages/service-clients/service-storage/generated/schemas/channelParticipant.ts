@@ -7,10 +7,18 @@
 import type { ChannelParticipantLeftAt } from './channelParticipantLeftAt';
 import type { ParticipantRole } from './participantRole';
 
+/**
+ * A user's membership in a channel.
+ */
 export interface ChannelParticipant {
+  /** Channel id for the participant membership. */
   channel_id: string;
+  /** Timestamp when the participant joined the channel. */
   joined_at: string;
+  /** Timestamp when the participant left the channel, if any. */
   left_at?: ChannelParticipantLeftAt;
+  /** Participant role in the channel. */
   role: ParticipantRole;
+  /** Participant user id. */
   user_id: string;
 }

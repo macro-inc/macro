@@ -15,6 +15,7 @@ import type {
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
+  ListBackfillJobsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -261,6 +262,14 @@ export const emailClient = {
     ).map((result) => result);
   },
 
+  async listBackfillJobs() {
+    return (
+      await emailFetch<ListBackfillJobsResponse>('/email/backfill/gmail', {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
   async deleteLink(args: { linkId: string }) {
     const { linkId } = args;
     return (
@@ -282,6 +291,14 @@ export const emailClient = {
           method: 'POST',
         }
       )
+    ).map((result) => result);
+  },
+
+  async healthCheckLinks() {
+    return (
+      await emailFetch<EmptyResponse>('/email/links/health-check', {
+        method: 'POST',
+      })
     ).map((result) => result);
   },
 

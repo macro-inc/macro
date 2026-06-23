@@ -1,5 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
-import { SendButton } from '@ui';
+import { cn, SendButton } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import { useInput, useInputCommands } from './context';
 import { hasSendableInputContent } from './utils/sendable-content';
@@ -34,7 +34,8 @@ export function SendAction(props: SendActionProps) {
       pending={isBlockedByPending()}
       disabled={isDisabled()}
       hidden={isMobile() && isBlockedByEmptyInput()}
-      class={local.class}
+      // Full-frame mobile: pill rounding to match the dock/accessory islands.
+      class={cn('mobile:rounded-full', local.class)}
       onPointerDown={(event) => {
         event.preventDefault();
         void commands.send();

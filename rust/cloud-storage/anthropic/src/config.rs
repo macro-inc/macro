@@ -1,7 +1,11 @@
+use macro_env_var::env_vars;
 use reqwest::header::HeaderMap;
 
 const ANTHROPIC_ROUTER_BASE_URL: &str = "https://api.anthropic.com";
-const ANTHROPIC_API_KEY: &str = "ANTHROPIC_API_KEY";
+
+env_vars! {
+    struct AnthropicApiKey;
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
@@ -11,7 +15,7 @@ pub struct Config {
 
 impl Config {
     pub fn dangrously_try_from_env() -> Self {
-        let api_key = std::env::var(ANTHROPIC_API_KEY).expect("api key");
+        let api_key = AnthropicApiKey::new().expect("api key");
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", api_key.parse().expect("good config"));
         headers.insert(

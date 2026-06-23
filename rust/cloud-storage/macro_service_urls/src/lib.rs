@@ -76,6 +76,10 @@ pub use testing_harness::read_override_env;
 /// Read an override environment variable for a service URL.
 #[cfg(not(test))]
 #[doc(hidden)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Used when running locally to override service urls"
+)]
 pub fn read_override_env(var_name: &'static str) -> Result<Option<String>, ServiceUrlVarErr> {
     std::env::var(var_name).map(Some).or_else(|err| match err {
         std::env::VarError::NotPresent => Ok(None),
@@ -578,7 +582,7 @@ service_url! {
         pub LexicalServiceUrl {
             local: "http://localhost:8096",
             dev: "https://lexical-service-dev.macroverse.workers.dev",
-            prod: "https://lexical-service.macroverse.workers.dev",
+            prod: "https://lexical-service-prod.macroverse.workers.dev",
         },
         /// Sync service API URL.
         pub SyncServiceUrl {

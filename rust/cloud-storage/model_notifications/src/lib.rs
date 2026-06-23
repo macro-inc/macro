@@ -10,12 +10,12 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    AiResponseMetadata, CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
+    CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -193,6 +193,13 @@ define_notif_event!(
         /// Someone replied to a thread in a channel that the user is part of.
         ChannelMessageReply(ChannelReplyMetadata),
 
+        /// A call has started in a channel the user is a member of.
+        ///
+        /// The `call-started` alias keeps rows persisted before the type name
+        /// was normalized to snake_case (`call_started`) deserializable.
+        #[serde(alias = "call-started")]
+        CallStarted(CallStartedMetadata),
+
         /// A new email has been sent to the user.
         NewEmail(NewEmailMetadata),
 
@@ -256,6 +263,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_title(sender_id)
             }
+            NotifEvent::CallStarted(call_started_metadata) => {
+                call_started_metadata.format_title(sender_id)
+            }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_title(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
@@ -308,6 +318,9 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_body(sender_id)
+            }
+            NotifEvent::CallStarted(call_started_metadata) => {
+                call_started_metadata.format_body(sender_id)
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_body(sender_id),

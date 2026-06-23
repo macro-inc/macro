@@ -73,6 +73,7 @@ import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
+  INSERT_PR_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
   type ItemMention,
   mentionsPlugin,
@@ -153,7 +154,14 @@ describe('mentionsPlugin callbacks', () => {
     });
     flush();
 
-    expect(created).toHaveLength(5);
+    editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
+      id: 'foreign-1',
+      label: 'macro/macro#123',
+      mentionUuid: 'uuid-pr',
+    });
+    flush();
+
+    expect(created).toHaveLength(6);
     expect(created).toContainEqual(
       expect.objectContaining({ itemType: 'document', itemId: 'doc-1' })
     );
@@ -173,6 +181,14 @@ describe('mentionsPlugin callbacks', () => {
         groupAlias: 'engineering',
       })
     );
+    expect(created).toContainEqual(
+      expect.objectContaining({
+        itemType: 'foreign',
+        itemId: 'foreign-1',
+        fileType: 'github_pull_request',
+        documentName: 'macro/macro#123',
+      })
+    );
 
     // Clear editor to trigger destroy mutations.
     created.length = 0;
@@ -185,7 +201,7 @@ describe('mentionsPlugin callbacks', () => {
     );
     flush();
 
-    expect(removed).toHaveLength(5);
+    expect(removed).toHaveLength(6);
     expect(removed).toContainEqual(
       expect.objectContaining({ itemType: 'document', itemId: 'doc-1' })
     );
@@ -203,6 +219,14 @@ describe('mentionsPlugin callbacks', () => {
         itemType: 'group',
         itemId: 'engineering',
         groupAlias: 'engineering',
+      })
+    );
+    expect(removed).toContainEqual(
+      expect.objectContaining({
+        itemType: 'foreign',
+        itemId: 'foreign-1',
+        fileType: 'github_pull_request',
+        documentName: 'macro/macro#123',
       })
     );
 

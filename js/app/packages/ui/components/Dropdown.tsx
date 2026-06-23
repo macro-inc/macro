@@ -26,7 +26,7 @@ import { Surface, type SurfaceProps } from './Surface';
 // trigger and the shared signal closes the sibling.
 */
 
-// const DROPDOWN_CONTENT_CLASS = 'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] p-1.5';
+// const DROPDOWN_CONTENT_CLASS = 'z-action-menu bg-surface rounded-xl ring-1 ring-edge shadow-menu p-1.5';
 // const DROPDOWN_ITEM_CLASS = 'rounded-md hover:bg-ink/3 focus:bg-ink/3 data-[highlighted]:bg-ink/3';
 
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];

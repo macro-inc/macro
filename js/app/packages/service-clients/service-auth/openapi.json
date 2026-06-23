@@ -1680,6 +1680,9 @@
               }
             }
           },
+          "204": {
+            "description": ""
+          },
           "400": {
             "description": "",
             "content": {

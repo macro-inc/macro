@@ -34,15 +34,23 @@ impl AsyncTool<ToolServiceContext> for Subagent {
     #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
-        _service_context: ServiceContext<ToolServiceContext>,
+        service_context: ServiceContext<ToolServiceContext>,
         _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let result = agent::complete(SUBAGENT_MODEL, SUBAGENT_PROMPT, &self.task)
-            .await
-            .map_err(|e| ToolCallError {
-                description: "subagent encountered an error".to_string(),
-                internal_error: e,
-            })?;
+        // Subagents have no feature of their own — their usage rolls up into the
+        // feature that spawned them, carried on the service context.
+        let result = agent::complete(
+            SUBAGENT_MODEL,
+            SUBAGENT_PROMPT,
+            &self.task,
+            service_context.recorder.as_ref(),
+            service_context.usage_context.clone(),
+        )
+        .await
+        .map_err(|e| ToolCallError {
+            description: "subagent encountered an error".to_string(),
+            internal_error: e,
+        })?;
 
         Ok(SubagentResponse { result })
     }

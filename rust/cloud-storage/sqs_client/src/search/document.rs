@@ -7,6 +7,16 @@ pub struct DocumentId {
     pub document_id: String,
 }
 
+/// A request to refresh only the indexed properties of a document (e.g. after
+/// a status / assignee / tag change), without re-extracting its content.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+pub struct DocumentPropertiesUpdate {
+    /// The document (entity) whose indexed properties should be refreshed.
+    pub document_id: String,
+    /// The property entity type the values are keyed under (e.g. "TASK").
+    pub entity_type: String,
+}
+
 /// Search text extractor message
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct SearchExtractorMessage {

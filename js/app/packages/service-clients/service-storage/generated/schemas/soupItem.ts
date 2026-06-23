@@ -9,10 +9,14 @@ import type { SoupItemOneOfFive } from './soupItemOneOfFive';
 import type { SoupItemOneOfNine } from './soupItemOneOfNine';
 import type { SoupItemOneOfOnefive } from './soupItemOneOfOnefive';
 import type { SoupItemOneOfOneone } from './soupItemOneOfOneone';
+import type { SoupItemOneOfOneseven } from './soupItemOneOfOneseven';
 import type { SoupItemOneOfOnethree } from './soupItemOneOfOnethree';
 import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
 import type { SoupItemOneOfThree } from './soupItemOneOfThree';
 
+/**
+ * A single item in the Soup feed.
+ */
 export type SoupItem =
   | SoupItemOneOf
   | SoupItemOneOfThree
@@ -21,4 +25,5 @@ export type SoupItem =
   | SoupItemOneOfNine
   | SoupItemOneOfOneone
   | SoupItemOneOfOnethree
-  | SoupItemOneOfOnefive;
+  | SoupItemOneOfOnefive
+  | SoupItemOneOfOneseven;

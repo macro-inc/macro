@@ -1,6 +1,7 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  mcp-server:app_base_url: https://macro.com
   mcp-server:fusionauth_base_url: https://auth.macro.com
   mcp-server:fusionauth_client_id: fusionauth-client-id-key-prod
   mcp-server:fusionauth_client_secret: fusionauth-client-secret-prod

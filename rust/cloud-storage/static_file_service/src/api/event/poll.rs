@@ -10,8 +10,15 @@ enum PollError {
 // very important that long polling on the sqs queue is enabled
 pub async fn poll_s3_events(context: AppState) {
     loop {
-        if let Err(PollError::PollingError) =
-            poll(context.config.s3_event_queue_url.clone(), context.clone()).await
+        if let Err(PollError::PollingError) = poll(
+            context
+                .config
+                .static_file_service_s3_event_queue_url
+                .as_ref()
+                .to_owned(),
+            context.clone(),
+        )
+        .await
         {
             tokio::time::sleep(time::Duration::from_secs(20)).await;
         }

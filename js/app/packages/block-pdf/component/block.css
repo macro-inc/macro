@@ -299,3 +299,14 @@ tspan {
 
   pointer-events: none;
 }
+
+/* Full-frame mobile (mirrors the `mobile` Tailwind variant): the floating
+   chrome overlays the panel, so the document scroller carries both insets
+   itself — pages rest between the chrome but under-scroll it, and the end
+   of the document can scroll clear of the bottom chrome. */
+@media (max-width: 639px) {
+  html[data-touch-device='true'] .pdfViewerContainer {
+    padding-top: var(--mobile-content-inset-top, 0px);
+    padding-bottom: var(--mobile-content-inset-bottom, 0px);
+  }
+}

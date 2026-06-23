@@ -1,0 +1,12 @@
+lambda_name := file_name(justfile_directory())
+
+mod ci '../ci.just'
+
+test:
+    cargo test --all-features
+
+build compiler="":
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip
+
+check:
+  SQLX_OFFLINE=true cargo check

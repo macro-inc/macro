@@ -12,7 +12,9 @@ use uuid::Uuid;
 
 use super::error::PropertiesErr;
 use super::model::EntityPropertyInfo;
-use super::ports::{NotificationService, PermissionService, PropertiesRepo};
+use std::sync::Arc;
+
+use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
@@ -28,6 +30,7 @@ where
     repository: R,
     permission_service: Option<P>,
     notification_service: Option<N>,
+    search_indexer: Option<Arc<dyn PropertySearchIndexer>>,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -46,6 +49,32 @@ where
             repository,
             permission_service,
             notification_service,
+            search_indexer: None,
+        }
+    }
+
+    /// Attach a search-reindex publisher so property mutations refresh the
+    /// search index. Builder-style so existing constructions are unaffected.
+    pub fn with_search_indexer(mut self, search_indexer: Arc<dyn PropertySearchIndexer>) -> Self {
+        self.search_indexer = Some(search_indexer);
+        self
+    }
+
+    /// Best-effort publish of a property reindex for entities that live in
+    /// the documents search index (tasks/documents). Logs and continues on
+    /// failure so a missed reindex never fails the mutation itself.
+    async fn enqueue_property_upsert(&self, entity_id: &str, entity_type: EntityType) {
+        let Some(search_indexer) = self.search_indexer.as_ref() else {
+            return;
+        };
+        if !matches!(entity_type, EntityType::Task | EntityType::Document) {
+            return;
+        }
+        if let Err(error) = search_indexer
+            .enqueue_upsert(entity_id.to_string(), entity_type)
+            .await
+        {
+            tracing::warn!(error = ?error, entity_id = %entity_id, "failed to enqueue search reindex for property change");
         }
     }
 
@@ -114,6 +143,8 @@ where
             )
             .await
             .map_err(anyhow::Error::from)?;
+
+        self.enqueue_property_upsert(entity_id, entity_type).await;
 
         Ok(())
     }
@@ -290,6 +321,8 @@ where
             )
             .await
             .map_err(anyhow::Error::from)?;
+
+        self.enqueue_property_upsert(entity_id, entity_type).await;
 
         Ok(())
     }

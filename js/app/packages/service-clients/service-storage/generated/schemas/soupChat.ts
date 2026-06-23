@@ -9,6 +9,9 @@ import type { SoupChatProjectId } from './soupChatProjectId';
 import type { SoupChatViewedAt } from './soupChatViewedAt';
 import type { SoupProperty } from './soupProperty';
 
+/**
+ * A chat as displayed in Soup.
+ */
 export interface SoupChat {
   /** The time the chat was created */
   createdAt: string;

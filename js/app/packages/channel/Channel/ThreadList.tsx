@@ -59,6 +59,13 @@ export type ThreadListScrollState = {
   viewportSize: number;
 };
 
+export type FullFrameThreadListScrollInsets = {
+  /** Space reserved before the first message (e.g. status bar + floating header). */
+  start: number;
+  /** Space reserved after the last message (e.g. floating input + dock). */
+  end: number;
+};
+
 type ThreadListProps = {
   keys: Accessor<string[]>;
   children: (item: { id: string }) => JSX.Element;
@@ -69,6 +76,12 @@ type ThreadListProps = {
   onScrollStateChange?: (state: ThreadListScrollState) => void;
   shift?: Accessor<boolean>;
   prepend?: Accessor<boolean>;
+  /**
+   * For full-frame insets where the scroll surface spans the whole screen and content
+   * scrolls behind the floating chrome. Rendered as scroll-content padding and fed to
+   * virtua via `startMargin` + per-align scroll offsets.
+   */
+  fullFrameScrollInsets?: Accessor<FullFrameThreadListScrollInsets>;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -97,11 +110,35 @@ export function getTargetAlign(
   }
 }
 
+const NO_SCROLL_INSETS: FullFrameThreadListScrollInsets = { start: 0, end: 0 };
+
 export function ThreadList(props: ThreadListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [didInitialScroll, setDidInitialScroll] = createSignal(false);
   const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
+
+  const insets = () => props.fullFrameScrollInsets?.() ?? NO_SCROLL_INSETS;
+
+  /**
+   * Correction so alignment targets the inset-adjusted usable viewport
+   * (below the floating header, above the floating bottom chrome) instead
+   * of the physical scroll viewport. Derived against virtua's scrollToIndex
+   * math with `startMargin = insets().start`.
+   */
+  const insetAlignOffset = (align: ScrollAlignment): number => {
+    const { start, end } = insets();
+    switch (align) {
+      case 'start':
+        return -start;
+      case 'end':
+        return end;
+      case 'center':
+        return (end - start) / 2;
+      default:
+        return 0;
+    }
+  };
 
   let scrollRef: HTMLDivElement | undefined;
   let nearTopFired = false;
@@ -147,12 +184,22 @@ export function ThreadList(props: ThreadListProps) {
   ): boolean => {
     const index = resolveTargetIndex(target);
     if (index < 0) return false;
-    handle.scrollToIndex(index, { align: getTargetAlign(target) });
+    const align = getTargetAlign(target);
+    handle.scrollToIndex(index, { align, offset: insetAlignOffset(align) });
     return true;
   };
 
-  const getDistanceFromBottom = (handle: VirtualizerHandle): number =>
-    handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+  // DOM-based so the scroll insets are accounted for — virtua's scrollSize
+  // only covers its own items, not the inset padding around them.
+  const getDistanceFromBottom = (handle: VirtualizerHandle): number => {
+    if (scrollRef) {
+      return Math.max(
+        0,
+        scrollRef.scrollHeight - scrollRef.clientHeight - scrollRef.scrollTop
+      );
+    }
+    return handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+  };
 
   const isScrollPositionCorrect = (
     handle: VirtualizerHandle,
@@ -167,7 +214,9 @@ export function ThreadList(props: ThreadListProps) {
       case 'index': {
         const targetIndex = resolveTargetIndex(target);
         if (targetIndex < 0) return true; // target gone, nothing to verify
-        const currentIndex = handle.findItemIndex(handle.scrollOffset);
+        const currentIndex = handle.findItemIndex(
+          handle.scrollOffset + insets().start
+        );
         // Consider correct if the target is within a reasonable range of
         // the current viewport (within ±5 items accounts for alignment).
         return Math.abs(currentIndex - targetIndex) <= 5;
@@ -178,7 +227,11 @@ export function ThreadList(props: ThreadListProps) {
   const getCurrentIndex = (handle: VirtualizerHandle): number => {
     const itemCount = props.keys().length;
     if (!itemCount) return -1;
-    return clamp(handle.findItemIndex(handle.scrollOffset), 0, itemCount - 1);
+    return clamp(
+      handle.findItemIndex(handle.scrollOffset + insets().start),
+      0,
+      itemCount - 1
+    );
   };
 
   const emitScrollState = (
@@ -414,6 +467,11 @@ export function ThreadList(props: ThreadListProps) {
           'flex-direction': 'column',
         }}
       >
+        {/* Spacer div for full-frame inset. */}
+        <div
+          aria-hidden
+          style={{ height: `${insets().start}px`, 'flex-shrink': 0 }}
+        />
         <div style="flex-grow: 1" />
         <Virtualizer
           ref={(ref) => {
@@ -426,6 +484,7 @@ export function ThreadList(props: ThreadListProps) {
             scrollOnMount(ref);
           }}
           scrollRef={scrollRef}
+          startMargin={insets().start}
           itemSize={BASE_ITEM_SIZE}
           bufferSize={BASE_BUFFER_SIZE}
           data={props.keys()}
@@ -435,6 +494,11 @@ export function ThreadList(props: ThreadListProps) {
         >
           {(key) => props.children({ id: key })}
         </Virtualizer>
+        {/* Spacer div for full-frame inset. */}
+        <div
+          aria-hidden
+          style={{ height: `${insets().end}px`, 'flex-shrink': 0 }}
+        />
       </div>
       <CustomScrollbar scrollContainer={scrollEl} />
     </>

@@ -11,6 +11,7 @@ chrono = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Sender display name for the preview.
+ */
 export type SoupEmailThreadPreviewSenderName = string | null;

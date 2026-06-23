@@ -30,6 +30,7 @@ import type {
   GetThreadResponse,
   InitResponse,
   InitUserParams,
+  ListBackfillJobsResponse,
   ListBlockedResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
@@ -192,6 +193,62 @@ export const getAttachmentDocumentId = async (
     status: res.status,
     headers: res.headers,
   } as getAttachmentDocumentIdResponse;
+};
+
+/**
+ * @summary List all backfill jobs for the authenticated user, across every link they
+own. Scoped by the user's fusionauth id from the request context rather than
+a single resolved link.
+ */
+export type listBackfillGmailResponse200 = {
+  data: ListBackfillJobsResponse;
+  status: 200;
+};
+
+export type listBackfillGmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listBackfillGmailResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listBackfillGmailResponseSuccess = listBackfillGmailResponse200 & {
+  headers: Headers;
+};
+export type listBackfillGmailResponseError = (
+  | listBackfillGmailResponse401
+  | listBackfillGmailResponse500
+) & {
+  headers: Headers;
+};
+
+export type listBackfillGmailResponse =
+  | listBackfillGmailResponseSuccess
+  | listBackfillGmailResponseError;
+
+export const getListBackfillGmailUrl = () => {
+  return `/email/backfill/gmail`;
+};
+
+export const listBackfillGmail = async (
+  options?: RequestInit
+): Promise<listBackfillGmailResponse> => {
+  const res = await fetch(getListBackfillGmailUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBackfillGmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBackfillGmailResponse;
 };
 
 /**
@@ -1753,6 +1810,68 @@ export const listLinks = async (
     status: res.status,
     headers: res.headers,
   } as listLinksResponse;
+};
+
+/**
+ * Probes run in the background and the response returns immediately to stay off the
+load path; each persisted flag is picked up by the next links read. Probes are
+throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
+collapse to one refresh per window.
+ * @summary Probes the live auth state of each of the caller's inboxes (owned and delegated)
+against the auth service and records the result on each link. A grant that died
+while the caller was inactive is detected here within minutes instead of waiting on
+the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
+the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+ */
+export type healthCheckLinksResponse202 = {
+  data: EmptyResponse;
+  status: 202;
+};
+
+export type healthCheckLinksResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type healthCheckLinksResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type healthCheckLinksResponseSuccess = healthCheckLinksResponse202 & {
+  headers: Headers;
+};
+export type healthCheckLinksResponseError = (
+  | healthCheckLinksResponse401
+  | healthCheckLinksResponse500
+) & {
+  headers: Headers;
+};
+
+export type healthCheckLinksResponse =
+  | healthCheckLinksResponseSuccess
+  | healthCheckLinksResponseError;
+
+export const getHealthCheckLinksUrl = () => {
+  return `/email/links/health-check`;
+};
+
+export const healthCheckLinks = async (
+  options?: RequestInit
+): Promise<healthCheckLinksResponse> => {
+  const res = await fetch(getHealthCheckLinksUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: healthCheckLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthCheckLinksResponse;
 };
 
 /**

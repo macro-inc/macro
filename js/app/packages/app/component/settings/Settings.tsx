@@ -1,12 +1,12 @@
 import { For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { useLogout } from '@core/auth/logout';
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
 import { Admin } from './Admin';
 import { Appearance } from './Appearance';
-import { MobileTabs } from '@core/component/MobileTabs';
 import { Account } from './Account';
 import { Email } from './Email';
 import { GitHub } from './GitHub';
@@ -14,29 +14,25 @@ import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { FloatRegion } from '../mobile/float-regions/FloatRegion';
+import { PillTabs } from '../mobile/PillTabs';
+import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { Button, SideNav } from '@ui';
 import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CloseIcon from '@phosphor/x.svg';
+import SignOutIcon from '@phosphor/sign-out.svg';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
-import { SettingsButton } from './SettingsButton';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'modal';
 
 export function SettingsPanelComponentWrapper() {
   return (
-    <>
-      <Show when={isMobile()}>
-        <SplitHeaderRight>
-          <SettingsButton />
-        </SplitHeaderRight>
-      </Show>
       <SettingsPanel />
-    </>
   )
 }
 
@@ -56,6 +52,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     setActiveTabId,
   } = useSettingsState();
   const { groups, flatTabs, isAvailable } = useSettingsTabs();
+  const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
 
@@ -158,16 +155,15 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-      <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex">
-        <div class="flex-1 min-w-0 h-full">
-          <MobileTabs
-            list={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+      <FloatRegion region="accessory">
+        <div class="flex items-center px-(--mobile-chrome-gutter)">
+          <PillTabs
+            items={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
             value={activeTabId()}
-            defaultValue="Account"
             onChange={handleTabChange}
           />
         </div>
-      </div>
+      </FloatRegion>
     );
   }
 
@@ -181,11 +177,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
     >
       <Show when={variant() === 'split'}>
         <SplitHeaderLeft>
-          <div class="h-full flex gap-3 items-center">
-            <h1 class="font-semibold text-ink select-none text-sm shrink-0">
-              Settings
-            </h1>
-          </div>
+          <HeaderIsland>
+            <div class="h-full flex gap-3 items-center">
+              <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+                Settings
+              </h1>
+            </div>
+          </HeaderIsland>
         </SplitHeaderLeft>
         {/* Pop the split back out into the modal (desktop only). */}
         <Show when={!isMobile()}>
@@ -228,7 +226,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       <div class="flex grow min-h-1 overflow-hidden">
         <Show when={!isMobile()}>
-          <SideNav>
+          <SideNav class="w-[clamp(168px,22%,220px)]">
             <For each={groups()}>
               {(group) => (
                 <SideNav.Group label={group.label}>
@@ -246,10 +244,20 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </SideNav.Group>
               )}
             </For>
+            <div class="mt-auto border-t border-edge-muted pt-2">
+              <button
+                type="button"
+                onClick={() => logout()}
+                class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm text-ink-extra-muted cursor-default hover:bg-ink/3 hover:text-ink"
+              >
+                <SignOutIcon class="size-4 shrink-0" />
+                <span class="whitespace-nowrap">Log out</span>
+              </button>
+            </div>
           </SideNav>
         </Show>
 
-        <div class="relative grow min-h-1 min-w-0 overflow-auto">
+        <div class="relative grow min-h-1 min-w-0 overflow-auto mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
           <Show when={isCurrentTab('Account')}>
             <Suspense>
               <Account />
@@ -288,9 +296,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </div>
       </div>
 
-      <Show when={isMobile()}>
-        <BottomTabs />
-      </Show>
+      <BottomTabs />
     </div>
   );
 }

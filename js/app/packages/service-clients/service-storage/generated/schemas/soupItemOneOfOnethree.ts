@@ -4,10 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupCrmCompany } from './soupCrmCompany';
+import type { SoupCallRecord } from './soupCallRecord';
 import type { SoupItemOneOfOnethreeTag } from './soupItemOneOfOnethreeTag';
 
+/**
+ * Call record item.
+ */
 export type SoupItemOneOfOnethree = {
-  data: SoupCrmCompany;
+  /** Call record item. */
+  data: SoupCallRecord;
   tag: SoupItemOneOfOnethreeTag;
 };

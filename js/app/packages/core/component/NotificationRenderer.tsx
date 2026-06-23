@@ -20,7 +20,9 @@ export function NotificationRenderer(props: NotificationRendererProps) {
   const time = () => formatDate(props.notification.created_at);
   const actorId = () => props.notification.sender_id ?? '';
   const macroId = () => tryMacroId(actorId());
-  const [actorName] = useDisplayName(macroId());
+  const [actorName] = useDisplayName(macroId(), {
+    emailFallback: 'local-part',
+  });
   const emailFallback = () => {
     const mid = macroId();
     return mid ? macroIdToEmail(mid) : actorId() || undefined;
@@ -44,18 +46,22 @@ export function NotificationRenderer(props: NotificationRendererProps) {
       {(_metadata) => {
         if (props.mode === 'preview') {
           return (
-            <div class="truncate flex items-baseline gap-[0.2em] text-xs text-ink-muted font-medium font-sans">
-              <span class="font-medium text-ink">{displayName()}</span>
-              <span class="font-normal">{action()}</span>
+            <div class="flex min-w-0 max-w-full items-baseline gap-[0.2em] overflow-hidden text-xs text-ink-muted font-medium font-sans">
+              <span class="shrink-0 max-w-[8rem] truncate font-medium text-ink">
+                {displayName()}
+              </span>
+              <span class="shrink-0 font-normal">{action()}</span>
               <Show when={showTarget() && isChannel() && entityId()}>
-                <div class="self-center max-h-lh">
+                <div class="min-w-0 flex-1 self-center max-h-lh overflow-hidden">
                   <InlineItemPreview id={entityId()} type="channel" />
                 </div>
               </Show>
               <Show when={showTarget() && targetName() && !isChannel()}>
-                <span class="font-medium text-ink">{targetName()}</span>
+                <span class="min-w-0 flex-1 truncate font-medium text-ink">
+                  {targetName()}
+                </span>
               </Show>
-              <span class="text-ink-extra-muted ml-2 font-mono uppercase font-normal">
+              <span class="shrink-0 ml-auto text-ink-extra-muted font-mono uppercase font-normal">
                 {time()}
               </span>
             </div>
@@ -64,13 +70,20 @@ export function NotificationRenderer(props: NotificationRendererProps) {
 
         return (
           <>
-            <div class="text-sm text-ink inline-flex items-center gap-1">
-              <span class="font-medium">{displayName()}</span> {action()}{' '}
+            <div class="text-sm text-ink inline-flex min-w-0 max-w-full items-center gap-1 overflow-hidden">
+              <span class="shrink-0 max-w-[10rem] truncate font-medium">
+                {displayName()}
+              </span>
+              <span class="shrink-0">{action()}</span>
               <Show when={showTarget() && isChannel() && entityId()}>
-                <InlineItemPreview id={entityId()} type="channel" />
+                <span class="min-w-0 flex-1 overflow-hidden">
+                  <InlineItemPreview id={entityId()} type="channel" />
+                </span>
               </Show>
               <Show when={showTarget() && targetName() && !isChannel()}>
-                <span class="font-medium">{targetName()}</span>
+                <span class="min-w-0 flex-1 truncate font-medium">
+                  {targetName()}
+                </span>
               </Show>
             </div>
 

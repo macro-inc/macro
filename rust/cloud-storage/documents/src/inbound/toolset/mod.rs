@@ -3,6 +3,7 @@
 mod create_document;
 mod read_content;
 mod read_metadata;
+mod rename_document;
 
 #[cfg(test)]
 mod test;
@@ -13,6 +14,7 @@ use crate::{
     domain::ports::create::DocumentCreationService,
     inbound::toolset::{
         create_document::CreateDocument, read_content::ReadContent, read_metadata::ReadMetadata,
+        rename_document::RenameDocument,
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -105,4 +107,5 @@ where
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc>>()
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc>>()
+        .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc>>()
 }

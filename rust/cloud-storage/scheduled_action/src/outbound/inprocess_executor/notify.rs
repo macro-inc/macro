@@ -25,6 +25,7 @@ pub fn notify_completion(
     tokio::spawn(async move {
         let req = SendNotificationRequestBuilder {
             notification_entity: EntityType::Chat.with_entity_string(chat_id.clone()),
+            secondary_notification_entity: None,
             notification: AiResponseMetadata {
                 summary: assistant_text,
                 message_id,

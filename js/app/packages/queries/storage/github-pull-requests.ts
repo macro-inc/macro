@@ -14,6 +14,7 @@ import type { Accessor } from 'solid-js';
 import { documentGithubPullRequestsKeys } from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
+
 type DocumentIdInput =
   | string
   | null
@@ -36,6 +37,16 @@ function readEnabled(enabled: EnabledInput | undefined): boolean {
   return typeof enabled === 'function' ? enabled() : enabled;
 }
 
+/**
+ * Storage pull request extended with enrichment-only fields. The documents
+ * service doesn't expose body/author yet, so they only arrive via the live
+ * enrich merge and must stay optional.
+ */
+export type GithubPullRequestWithDetails = GithubPullRequest & {
+  description?: string | null;
+  authorLogin?: string | null;
+};
+
 function toGithubPullRequestRef(
   pullRequest: GithubPullRequest
 ): GithubPullRequestRef {
@@ -51,10 +62,12 @@ function toGithubPullRequestRef(
 
 function toStorageGithubPullRequest(
   pullRequest: EnrichedGithubPullRequest,
-  fallbackPullRequest: GithubPullRequest | undefined
-): GithubPullRequest {
+  fallbackPullRequest: GithubPullRequestWithDetails | undefined
+): GithubPullRequestWithDetails {
   return {
     additions: pullRequest.additions ?? fallbackPullRequest?.additions,
+    authorLogin: pullRequest.authorLogin ?? fallbackPullRequest?.authorLogin,
+    description: pullRequest.description ?? fallbackPullRequest?.description,
     checks: pullRequest.checks ?? fallbackPullRequest?.checks,
     comments: pullRequest.comments ?? fallbackPullRequest?.comments,
     deletions: pullRequest.deletions ?? fallbackPullRequest?.deletions,
@@ -97,10 +110,14 @@ function hasStoredEnrichedGithubPullRequests(
   return response.pullRequests.some(hasStoredEnrichedGithubPullRequestData);
 }
 
+export type GithubPullRequestsWithDetailsResponse = {
+  pullRequests: GithubPullRequestWithDetails[];
+};
+
 export async function fetchDocumentGithubPullRequests(
   documentId: string,
   options?: FetchDocumentGithubPullRequestsOptions
-): Promise<GithubPullRequestsResponse> {
+): Promise<GithubPullRequestsWithDetailsResponse> {
   const rawResponse = await throwOnErr(() =>
     storageServiceClient.getDocumentGithubPullRequests({ documentId })
   );
@@ -125,7 +142,7 @@ export async function fetchDocumentGithubPullRequests(
     rawResponse.pullRequests
   );
 
-  return {
+  const mergedResponse = {
     pullRequests: enrichedResponse.value.pullRequests.map(
       (pullRequest, index) =>
         toStorageGithubPullRequest(
@@ -135,6 +152,7 @@ export async function fetchDocumentGithubPullRequests(
         )
     ),
   };
+  return mergedResponse;
 }
 
 export function useDocumentGithubPullRequestsQuery(
@@ -145,6 +163,7 @@ export function useDocumentGithubPullRequestsQuery(
 
   return useQuery(() => {
     const currentDocumentId = readDocumentId(documentId);
+    const currentEnabled = !!currentDocumentId && readEnabled(enabled);
     const queryKey = currentDocumentId
       ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
       : documentGithubPullRequestsKeys.list._def;
@@ -164,7 +183,7 @@ export function useDocumentGithubPullRequestsQuery(
         });
       },
       staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
-      enabled: !!currentDocumentId && readEnabled(enabled),
+      enabled: currentEnabled,
     };
   });
 }

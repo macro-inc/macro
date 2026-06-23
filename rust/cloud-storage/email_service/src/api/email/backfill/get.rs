@@ -130,3 +130,60 @@ impl IntoResponse for GetActiveBackfillError {
             .into_response()
     }
 }
+
+/// The response returned from the list backfill jobs endpoint
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+pub struct ListBackfillJobsResponse {
+    pub jobs: Vec<BackfillJob>,
+}
+
+/// List all backfill jobs for the authenticated user, across every link they
+/// own. Scoped by the user's fusionauth id from the request context rather than
+/// a single resolved link.
+#[utoipa::path(
+    get,
+    tag = "Init",
+    path = "/email/backfill/gmail",
+    operation_id = "list_backfill_gmail",
+    responses(
+            (status = 200, body=ListBackfillJobsResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
+pub async fn list_handler(
+    State(ctx): State<ApiContext>,
+    user_context: Extension<UserContext>,
+) -> Result<Response, ListBackfillJobsError> {
+    let jobs = email_db_client::backfill::job::get::get_all_jobs_by_fusionauth_user_id(
+        &ctx.db,
+        &user_context.fusion_user_id,
+    )
+    .await
+    .map_err(ListBackfillJobsError::QueryError)?;
+
+    Ok(Json(ListBackfillJobsResponse { jobs }).into_response())
+}
+
+#[derive(Debug, Error, AsRefStr)]
+pub enum ListBackfillJobsError {
+    #[error("Failed to list backfill jobs from database")]
+    QueryError(#[from] anyhow::Error),
+}
+
+impl IntoResponse for ListBackfillJobsError {
+    fn into_response(self) -> Response {
+        let status_code = match self {
+            ListBackfillJobsError::QueryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: self.to_string().into(),
+            }),
+        )
+            .into_response()
+    }
+}

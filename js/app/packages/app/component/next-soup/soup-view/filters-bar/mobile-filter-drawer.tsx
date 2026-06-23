@@ -3,10 +3,16 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@app/component/mobile/MobileDrawer';
+import { pressPulse } from '@app/component/mobile/pressPulse';
 import {
   type FilterContext,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
+import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+  isDocumentTypeFilterId,
+} from '@app/component/next-soup/filters/configs/document-type-query';
 import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
@@ -156,7 +162,22 @@ export const MobileFilterDrawer = () => {
 
   const toggleFilter = (optionId: FilterOption['id']) => {
     const wasActive = soup.predicates.isActive(optionId);
+    const previousDocumentTypeIds =
+      currentView() === 'documents' && isDocumentTypeFilterId(optionId)
+        ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+        : undefined;
+
     soup.predicates.toggle({ or: [optionId] });
+
+    if (previousDocumentTypeIds) {
+      const previousQuery = buildDocumentTypeQuery(previousDocumentTypeIds);
+      const nextQuery = buildDocumentTypeQuery(
+        getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+      );
+      if (previousQuery) queryFilters.remove(previousQuery);
+      if (nextQuery) queryFilters.add(nextQuery);
+      return;
+    }
 
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return;
@@ -244,7 +265,9 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          class="rounded-xs [&_svg]:size-6 relative h-full"
+          depth={3}
+          class="island pointer-events-auto relative size-10 shrink-0 rounded-full bg-surface [&_svg]:size-5"
+          ref={pressPulse}
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>

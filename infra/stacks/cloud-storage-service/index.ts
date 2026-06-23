@@ -30,12 +30,6 @@ const tags = {
   project: 'cloud-storage-service',
 };
 
-const DATABASE_URL = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_db_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
 const MACRO_CACHE = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_cache_secret_key`),
@@ -45,18 +39,6 @@ const MACRO_CACHE = aws.secretsmanager
 const DATABASE_URL_PROXY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
-const DATABASE_URL_READONLY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_db_readonly_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
-const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get(`document_storage_service_auth_key`) ?? '',
   })
   .apply((secret) => secret.secretString);
 
@@ -84,15 +66,6 @@ const syncServiceAuthKeyArn: pulumi.Output<string> =
   syncServiceAuthSecret.apply((secret) => secret.arn);
 const syncServiceAuthKeyValue: pulumi.Output<string> =
   syncServiceAuthSecret.apply((secret) => secret.secretString);
-
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
-
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 
 const DOCUMENT_STORAGE_PERMISSIONS_KEY = config.require(
   `document_storage_permissions_key`
@@ -124,21 +97,6 @@ export const jobUpdateHandlerLambdaName = jobUpdateHandlerLambdaArn.apply(
   }
 );
 
-const opensearchStack = new pulumi.StackReference('opensearch-stack', {
-  name: `macro-inc/opensearch/${stack}`,
-});
-
-const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
-  .getOutput('domainEndpoint')
-  .apply((domainEndpoint) => `https://${domainEndpoint}`);
-
-const OPENSEARCH_USERNAME = 'macrouser';
-const OPENSEARCH_PASSWORD = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('opensearch_password_key'),
-  })
-  .apply((secret) => secret.secretString);
-
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -159,18 +117,6 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const linksharingStack = new pulumi.StackReference('linksharing-stack', {
-  name: `macro-inc/link-sharing/${stack}`,
-});
-
-const cloudfronDistributionUrl: pulumi.Output<string> = linksharingStack
-  .getOutput('cloudfrontDistributionUrl')
-  .apply((url) => url as string);
-
-const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
-  .getOutput('cloudfrontDistributionPublicKeyId')
-  .apply((key) => key as string);
-
 // Retrieve name of queue used Contacts Service
 const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
   'contacts-service-stack',
@@ -178,10 +124,6 @@ const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
     name: `macro-inc/contacts-service/${stack}`,
   }
 );
-
-const contactsQueueName: pulumi.Output<string> = contactsServiceStack
-  .getOutput('contactsQueueName')
-  .apply((arn) => arn as string);
 
 // Get ARN to allow sending messages to contacts Queue
 const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
@@ -192,24 +134,14 @@ const emailServiceStack = new pulumi.StackReference('email-service-stack', {
   name: `macro-inc/email-service/${stack}`,
 });
 
-const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
-  .getOutput('scheduledQueueName')
-  .apply((name) => name as string);
-
 const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
   .getOutput('scheduledQueueArn')
   .apply((arn) => arn as string);
 
 const {
-  notificationIngressQueueName,
   notificationIngressQueueArn,
   notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
 } = getMacroNotify();
-
-const appleBundleId = config.require('apple_bundle_id');
-const APPLE_BUNDLE_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: appleBundleId })
-  .apply((secret) => secret.secretString);
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
 // aws secretsmanager delete-secret --secret-id ${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME} --force-delete-without-recovery
@@ -221,7 +153,7 @@ const cloudfrontPrivateKeySecretArn: pulumi.Output<string> = aws.secretsmanager
   })
   .apply((secret) => secret.arn);
 
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 const docxUploadBucket = createBucket({
   id: `docx-upload-${stack}`,
@@ -278,8 +210,6 @@ export const deleteChatQueueName = deleteChatHandler.queue.name;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
-const GITHUB_SYNC_APP_URL = config.require('github_sync_app_url');
-
 const GITHUB_WEBHOOK_SECRET_KEY = config.require('github_webhook_secret_key');
 const githubWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GITHUB_WEBHOOK_SECRET_KEY })
@@ -289,40 +219,6 @@ const GITHUB_SYNC_APP_PEM_SECRET_KEY = config.require('github_sync_app_pem');
 const githubSyncAppPemArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GITHUB_SYNC_APP_PEM_SECRET_KEY })
   .apply((secret) => secret.arn);
-
-const GITHUB_SYNC_APP_CLIENT_ID = config.require('github_sync_app_client_id');
-
-const LIVEKIT_SERVER_URL = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('livekit_server_url') })
-  .apply((secret) => secret.secretString);
-
-const LIVEKIT_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('livekit_api_key') })
-  .apply((secret) => secret.secretString);
-
-const LIVEKIT_API_SECRET = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('livekit_api_secret') })
-  .apply((secret) => secret.secretString);
-
-const INTERNAL_CALL_SECRET = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('call_internal_secret') })
-  .apply((secret) => secret.secretString);
-
-const ANTHROPIC_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('anthropic_api_key') ?? '',
-  })
-  .apply((secret) => {
-    return secret.secretString;
-  });
-
-// OpenAI key used by task duplicate-detection embeddings (task_dedup). Resolved
-// at deploy time and baked into the task definition, like ANTHROPIC_API_KEY.
-const OPENAI_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('openai_api_key') ?? '',
-  })
-  .apply((secret) => secret.secretString);
 
 // Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
 const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
@@ -338,12 +234,6 @@ const calEventTypeContentNamesKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: CAL_EVENT_TYPE_CONTENT_NAMES_KEY })
   .apply((secret) => secret.arn);
 
-// Meta Conversions API — feeds cal → Meta "Lead" events.
-const META_PIXEL_ID = config.require('meta_pixel_id');
-const META_ACCESS_TOKEN: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('meta_access_token') })
-  .apply((secret) => secret.secretString);
-
 const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
   name: `macro-inc/call-recording/${stack}`,
 });
@@ -351,31 +241,6 @@ const callRecordingStack = new pulumi.StackReference('call-recording-stack', {
 const callRecordingCrudPolicyArn: pulumi.Output<string> = callRecordingStack
   .getOutput('crudPolicyArn')
   .apply((t) => t as string);
-
-const CALL_RECORDING_S3_BUCKET: pulumi.Output<string> = callRecordingStack
-  .getOutput('callRecordingBucketId')
-  .apply((t) => t as string);
-
-const CALL_RECORDING_S3_REGION = 'us-east-1';
-const callRecordingServiceUserSecretId: pulumi.Output<string> =
-  callRecordingStack.getOutput('serviceUserSecretId').apply((t) => t as string);
-
-const callRecordingCreds = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: callRecordingServiceUserSecretId })
-  .apply(
-    (secret) =>
-      JSON.parse(secret.secretString) as {
-        accessKey: string;
-        secretAccessKey: string;
-      }
-  );
-
-const CALL_RECORDING_S3_ACCESS_KEY = callRecordingCreds.apply(
-  (c) => c.accessKey
-);
-const CALL_RECORDING_S3_SECRET = callRecordingCreds.apply(
-  (c) => c.secretAccessKey
-);
 
 const cloudStorageService = new CloudStorageService(
   `cloud-storage-service-${stack}`,
@@ -413,256 +278,6 @@ const cloudStorageService = new CloudStorageService(
     callRecordingCrudPolicyArn,
     snsPlatformArns: [snsApnsVoipPlatformArn],
     containerEnvVars: [
-      {
-        name: 'CALL_RECORDING_S3_BUCKET',
-        value: pulumi.interpolate`${CALL_RECORDING_S3_BUCKET}`,
-      },
-      {
-        name: 'CALL_RECORDING_S3_REGION',
-        value: CALL_RECORDING_S3_REGION,
-      },
-      {
-        name: 'CALL_RECORDING_S3_ACCESS_KEY',
-        value: CALL_RECORDING_S3_ACCESS_KEY,
-      },
-      {
-        name: 'CALL_RECORDING_S3_SECRET',
-        value: CALL_RECORDING_S3_SECRET,
-      },
-      {
-        name: 'INTERNAL_CALL_SECRET',
-        value: pulumi.interpolate`${INTERNAL_CALL_SECRET}`,
-      },
-      {
-        name: 'ANTHROPIC_API_KEY',
-        value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
-      },
-      {
-        name: 'OPENAI_API_KEY',
-        value: pulumi.interpolate`${OPENAI_API_KEY}`,
-      },
-      {
-        name: 'LIVEKIT_SERVER_URL',
-        value: pulumi.interpolate`${LIVEKIT_SERVER_URL}`,
-      },
-      {
-        name: 'LIVEKIT_API_KEY',
-        value: pulumi.interpolate`${LIVEKIT_API_KEY}`,
-      },
-      {
-        name: 'LIVEKIT_API_SECRET',
-        value: pulumi.interpolate`${LIVEKIT_API_SECRET}`,
-      },
-      {
-        name: 'LIVEKIT_TRANSCRIPTION_AGENT_NAME',
-        value: config.require('livekit_transcription_agent_name'),
-      },
-      {
-        name: 'OPENSEARCH_URL',
-        value: OPENSEARCH_URL,
-      },
-      {
-        name: 'OPENSEARCH_USERNAME',
-        value: OPENSEARCH_USERNAME,
-      },
-      {
-        name: 'OPENSEARCH_PASSWORD',
-        value: OPENSEARCH_PASSWORD,
-      },
-      {
-        name: 'DATABASE_URL',
-        value: pulumi.interpolate`${DATABASE_URL}`,
-      },
-      {
-        name: 'DATABASE_URL_READONLY',
-        value: pulumi.interpolate`${DATABASE_URL_READONLY}`,
-      },
-      {
-        name: 'REDIS_URI',
-        value: pulumi.interpolate`redis://${MACRO_CACHE}`,
-      },
-      {
-        name: 'ENVIRONMENT',
-        value: stack,
-      },
-      {
-        name: 'RUST_LOG',
-        value: 'info,github=trace',
-      },
-      {
-        name: 'DOCUMENT_STORAGE_BUCKET',
-        value: pulumi.interpolate`${documentStorageBucketId}`,
-      },
-      {
-        name: 'DOCX_DOCUMENT_UPLOAD_BUCKET',
-        value: pulumi.interpolate`${docxUploadBucketName}`,
-      },
-      {
-        name: 'DOCUMENT_DELETE_QUEUE',
-        value: pulumi.interpolate`${deleteDocumentQueueName}`,
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_AUTH_KEY',
-        value: pulumi.interpolate`${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}`,
-      },
-      {
-        name: 'DOCUMENT_LIMIT',
-        value: stack === 'prod' ? '5000' : '5000',
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS',
-        value: '900',
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS',
-        value: '840',
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
-        value: pulumi.interpolate`${cloudfronDistributionUrl}`,
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-        value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
-        value: pulumi.interpolate`${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}`,
-      },
-      {
-        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
-        value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
-      },
-      { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
-      {
-        name: 'JWT_SECRET_KEY',
-        value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-      },
-      {
-        name: 'AUDIENCE',
-        value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-      },
-      {
-        name: 'NOTIFICATION_QUEUE',
-        value: pulumi.interpolate`${notificationIngressQueueName}`,
-      },
-      {
-        name: 'SEARCH_EVENT_QUEUE',
-        value: pulumi.interpolate`${searchEventQueueName}`,
-      },
-      {
-        name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
-        value: pulumi.interpolate`${DOCUMENT_STORAGE_PERMISSIONS_KEY}`,
-      },
-      {
-        name: 'INTERNAL_API_SECRET_KEY',
-        value: pulumi.interpolate`${INTERNAL_API_SECRET_KEY}`,
-      },
-      {
-        name: ServiceUrl.CONNECTION_GATEWAY_URL,
-        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-      },
-      {
-        name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
-      },
-      {
-        name: ServiceUrl.EMAIL_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
-      },
-      {
-        name: ServiceUrl.STATIC_FILE_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
-      },
-      {
-        name: 'BULK_UPLOAD_REQUESTS_TABLE',
-        // TODO: this should be interpolated from the bulk upload resource
-        value: `bulk-upload-${stack}`,
-      },
-      {
-        name: 'UPLOAD_STAGING_BUCKET',
-        // TODO: this should be interpolated from the bulk upload resource
-        value: `bulk-upload-staging-${stack}`,
-      },
-      {
-        name: 'SYNC_SERVICE_AUTH_KEY',
-        value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
-      },
-      {
-        name: 'EMAIL_SCHEDULED_QUEUE',
-        value: pulumi.interpolate`${emailScheduledQueueName}`,
-      },
-      {
-        name: ServiceUrl.SYNC_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
-      },
-      {
-        name: ServiceUrl.LEXICAL_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.LEXICAL_SERVICE_URL),
-      },
-      {
-        name: 'MACRO_API_TOKEN_ISSUER',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-      },
-      {
-        name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-      },
-      {
-        name: 'FRECENCY_TABLE_NAME',
-        value: `frecency-${stack}`,
-      },
-      {
-        name: 'CONTACTS_QUEUE',
-        value: pulumi.interpolate`${contactsQueueName}`,
-      },
-      {
-        name: 'GITHUB_WEBHOOK_SECRET_KEY',
-        value: GITHUB_WEBHOOK_SECRET_KEY,
-      },
-      {
-        name: 'GITHUB_SYNC_APP_URL',
-        value: GITHUB_SYNC_APP_URL,
-      },
-      {
-        name: 'GITHUB_SYNC_APP_PEM_SECRET_KEY',
-        value: GITHUB_SYNC_APP_PEM_SECRET_KEY,
-      },
-      {
-        name: 'GITHUB_SYNC_APP_CLIENT_ID',
-        value: GITHUB_SYNC_APP_CLIENT_ID,
-      },
-      // Cal.com webhook + Meta analytics
-      {
-        name: 'CAL_WEBHOOK_SECRET_KEY',
-        value: CAL_WEBHOOK_SECRET_KEY,
-      },
-      {
-        name: 'CAL_EVENT_TYPE_CONTENT_NAMES_KEY',
-        value: CAL_EVENT_TYPE_CONTENT_NAMES_KEY,
-      },
-      {
-        name: 'META_PIXEL_ID',
-        value: META_PIXEL_ID,
-      },
-      {
-        name: 'META_ACCESS_TOKEN',
-        value: pulumi.interpolate`${META_ACCESS_TOKEN}`,
-      },
-      {
-        name: 'APPLE_BUNDLE_ID',
-        value: pulumi.interpolate`${APPLE_BUNDLE_ID}`,
-      },
-      {
-        name: 'SNS_APNS_VOIP_PLATFORM_ARN',
-        value: pulumi.interpolate`${snsApnsVoipPlatformArn}`,
-      },
-      {
-        // Public base URL native clients use to poll call ring status
-        // while the CallKit incoming-call UI is showing.
-        name: 'CALL_RING_STATUS_BASE_URL',
-        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
-      },
       // OpenTelemetry / Datadog tracing configuration
       {
         name: 'DD_SERVICE',

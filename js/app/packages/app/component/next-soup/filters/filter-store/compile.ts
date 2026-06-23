@@ -1,5 +1,7 @@
 import type {
   DateRangeFilter,
+  DocumentFieldFilters,
+  DocumentFilterExpression,
   EmailView,
   FieldFilters,
   FieldName,
@@ -20,6 +22,7 @@ type QueryTarget =
   | 'df'
   | 'ef'
   | 'chanf'
+  | 'cthf'
   | 'cf'
   | 'pf'
   | 'callf'
@@ -101,6 +104,7 @@ const FIELD_CONFIG: Record<
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
+  channelThreadId: { target: 'cthf', field: 'ThreadId' },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
@@ -116,6 +120,7 @@ const FIELD_CONFIG: Record<
   callStatus: { target: 'callf', field: 'Status' },
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
+  foreignEntitySource: { target: 'fef', field: 'fes' },
   foreignEntitySeen: { target: 'fef', field: 'ns' },
   foreignEntityDone: { target: 'fef', field: 'nd' },
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
@@ -156,29 +161,45 @@ const propertyToAst = (p: PropertyFilter): BackendAst =>
 const propertyEquals = (a: PropertyFilter, b: PropertyFilter): boolean =>
   a.propertyId === b.propertyId && a.type === b.type && a.value === b.value;
 
+export const normalizeDocumentWhere = (
+  documentWhere: Query['documentWhere']
+): DocumentFilterExpression[] | undefined => {
+  if (!documentWhere) return undefined;
+  return Array.isArray(documentWhere) ? documentWhere : [documentWhere];
+};
+
 export const queryStateFrom = (query: Query): QueryState => ({
   include: { ...(query.include ?? {}) },
   exclude: { ...(query.exclude ?? {}) },
+  documentWhere: normalizeDocumentWhere(query.documentWhere),
   emailView: query.emailView,
 });
 
-export function compileToAst(state: QueryState): TargetAstMap {
-  const byTarget: Record<QueryTarget, BackendAst[]> = {
-    df: [],
-    ef: [],
-    chanf: [],
-    cf: [],
-    pf: [],
-    callf: [],
-    fef: [],
-    ccf: [],
-    propf: [],
-  };
+const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
+  df: [],
+  ef: [],
+  chanf: [],
+  cthf: [],
+  cf: [],
+  pf: [],
+  callf: [],
+  fef: [],
+  ccf: [],
+  propf: [],
+});
 
+function pushFieldFiltersToTargets(
+  byTarget: Record<QueryTarget, BackendAst[]>,
+  include: FieldFilters,
+  exclude: FieldFilters,
+  options: { onlyTarget?: QueryTarget } = {}
+) {
   for (const fieldName of Object.keys(FIELD_CONFIG) as CompiledFieldName[]) {
     const config = FIELD_CONFIG[fieldName];
-    const includeVal = state.include[fieldName];
-    const excludeVal = state.exclude[fieldName];
+    if (options.onlyTarget && config.target !== options.onlyTarget) continue;
+
+    const includeVal = include[fieldName];
+    const excludeVal = exclude[fieldName];
 
     if (config.unit) {
       if (includeVal === true) {
@@ -226,6 +247,83 @@ export function compileToAst(state: QueryState): TargetAstMap {
       }
     }
   }
+}
+
+function pushDateRangeFiltersToTargets(
+  byTarget: Record<QueryTarget, BackendAst[]>,
+  include: FieldFilters,
+  exclude: FieldFilters,
+  options: { onlyTarget?: QueryTarget } = {}
+) {
+  for (const [fieldName, config] of Object.entries(DATE_RANGE_FIELDS)) {
+    if (options.onlyTarget && config.target !== options.onlyTarget) continue;
+
+    const includeVal = include[fieldName as FieldName] as
+      | DateRangeFilter
+      | undefined;
+    const excludeVal = exclude[fieldName as FieldName] as
+      | DateRangeFilter
+      | undefined;
+
+    if (includeVal) {
+      byTarget[config.target].push(
+        ...expandDateRange(config.field, includeVal)
+      );
+    }
+    if (excludeVal) {
+      const expanded = expandDateRange(config.field, excludeVal);
+      if (expanded.length) {
+        byTarget[config.target].push(AST.not(AST.and(expanded)));
+      }
+    }
+  }
+}
+
+function compileDocumentClauseToAst(clause: {
+  include?: DocumentFieldFilters;
+  exclude?: DocumentFieldFilters;
+}): BackendAst | undefined {
+  const byTarget = emptyTargetAstLists();
+  pushFieldFiltersToTargets(
+    byTarget,
+    clause.include ?? {},
+    clause.exclude ?? {},
+    { onlyTarget: 'df' }
+  );
+  pushDateRangeFiltersToTargets(
+    byTarget,
+    clause.include ?? {},
+    clause.exclude ?? {},
+    { onlyTarget: 'df' }
+  );
+
+  return byTarget.df.length ? AST.and(byTarget.df) : undefined;
+}
+
+export function compileDocumentExpressionToAst(
+  expression: DocumentFilterExpression
+): BackendAst | undefined {
+  if ('op' in expression) {
+    if (expression.op === 'not') {
+      const child = compileDocumentExpressionToAst(expression.clause);
+      return child ? AST.not(child) : undefined;
+    }
+
+    const clauses = expression.clauses
+      .map(compileDocumentExpressionToAst)
+      .filter((ast): ast is BackendAst => ast !== undefined);
+
+    if (clauses.length === 0) return undefined;
+    return expression.op === 'and' ? AST.and(clauses) : AST.or(clauses);
+  }
+
+  return compileDocumentClauseToAst(expression);
+}
+
+export function compileToAst(state: QueryState): TargetAstMap {
+  const byTarget = emptyTargetAstLists();
+
+  pushFieldFiltersToTargets(byTarget, state.include, state.exclude);
 
   const includeProps = state.include.properties ?? [];
   const excludeProps = state.exclude.properties ?? [];
@@ -272,25 +370,11 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
-  for (const [fieldName, config] of Object.entries(DATE_RANGE_FIELDS)) {
-    const includeVal = state.include[fieldName as FieldName] as
-      | DateRangeFilter
-      | undefined;
-    const excludeVal = state.exclude[fieldName as FieldName] as
-      | DateRangeFilter
-      | undefined;
+  pushDateRangeFiltersToTargets(byTarget, state.include, state.exclude);
 
-    if (includeVal) {
-      byTarget[config.target].push(
-        ...expandDateRange(config.field, includeVal)
-      );
-    }
-    if (excludeVal) {
-      const expanded = expandDateRange(config.field, excludeVal);
-      if (expanded.length) {
-        byTarget[config.target].push(AST.not(AST.and(expanded)));
-      }
-    }
+  for (const expression of state.documentWhere ?? []) {
+    const ast = compileDocumentExpressionToAst(expression);
+    if (ast) byTarget.df.push(ast);
   }
 
   const result: TargetAstMap = {};
@@ -299,6 +383,11 @@ export function compileToAst(state: QueryState): TargetAstMap {
       result[target as QueryTarget] = AST.and(asts);
     }
   }
+
+  // Channel-thread soup items are not displayable in the frontend. Always
+  // exclude them at the AST layer so hidden rows do not consume page limits or
+  // grouped counts.
+  result.cthf ??= AST.literal('ThreadId', NIL_UUID);
 
   if (state.emailView) {
     result.emailView = state.emailView;
@@ -311,6 +400,7 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   df: 'documentId',
   ef: 'threadId',
   chanf: 'channelId',
+  cthf: 'channelThreadId',
   cf: 'chatId',
   pf: 'folderId',
   callf: 'callId',
@@ -325,6 +415,10 @@ type DefineQueryFiltersOptions = {
 
 const extractQueryTargets = (query: Query): QueryTarget[] => {
   const targets = new Set<QueryTarget>();
+
+  if (query.documentWhere) {
+    targets.add('df');
+  }
 
   for (const field of Object.keys(query.include ?? {})) {
     if (field in FIELD_CONFIG) {
