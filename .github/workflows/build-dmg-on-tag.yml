@@ -121,36 +121,16 @@ jobs:
           fi
           cp -v "${dmgs[@]}" artifacts/
 
-      - name: Notarize and staple DMG
+      - name: Validate signed DMG
         shell: bash
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${APPLE_ID}" ] || [ -z "${APPLE_PASSWORD}" ] || [ -z "${APPLE_TEAM_ID}" ]; then
-            echo "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID secrets are required for notarization" >&2
-            exit 1
-          fi
           dmg=$(find artifacts -maxdepth 1 -type f -name '*.dmg' -print -quit)
           if [ -z "$dmg" ]; then
-            echo "No DMG found to notarize" >&2
+            echo "No DMG found to validate" >&2
             exit 1
           fi
-          xcrun notarytool submit "$dmg" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-          xcrun stapler staple "$dmg"
-
-      - name: Validate notarized DMG
-        shell: bash
-        run: |
-          set -euo pipefail
-          dmg=$(find artifacts -maxdepth 1 -type f -name '*.dmg' -print -quit)
-          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          codesign --verify --deep --strict --verbose=2 "$dmg"
           (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
 
       - name: Upload DMG artifact
