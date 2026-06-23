@@ -23,7 +23,12 @@ export interface EmptyStatePanelProps {
    */
   documentationUrl?: string;
   documentationLabel?: string;
-  align?: 'left' | 'center';
+  /**
+   * Centered, vertically-balanced variant for very simple states (e.g. "no
+   * results") that are just a graphic and a line of text. Defaults to the
+   * left-aligned column that stacks with the chat input.
+   */
+  centered?: boolean;
   children?: JSXElement;
   class?: string;
 }
@@ -31,27 +36,24 @@ export interface EmptyStatePanelProps {
 const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
 
 export function EmptyStatePanel(props: EmptyStatePanelProps) {
-  const isCentered = () => props.align === 'center';
-
   return (
     <div
       role="status"
       class={cn(
-        'flex size-full flex-col overflow-y-auto px-8 pb-8',
-        '@max-sm:px-4 @max-sm:text-center @max-sm:items-center',
-        isCentered()
-          ? 'items-center text-center'
-          : 'items-center pt-24 @max-sm:pt-12',
+        'flex size-full flex-col overflow-y-auto px-2 pb-8',
+        // Default: left-aligned column sized to the chat input (px-2 + max-w-3xl)
+        // so the empty state stacks into one column with the input at the bottom
+        // of the block. Centered: a simple, vertically-balanced graphic + text.
+        props.centered
+          ? 'items-center justify-center pt-8 text-center'
+          : 'pt-24 @max-sm:pt-12',
         props.class
       )}
     >
-      <Show when={isCentered()}>
-        <div class="min-h-12 flex-1" aria-hidden="true" />
-      </Show>
       <div
         class={cn(
-          'flex w-full max-w-xl flex-col gap-4 @max-sm:items-center',
-          isCentered() ? 'items-center' : 'items-start'
+          'mx-auto flex w-full flex-col gap-4',
+          props.centered ? 'max-w-md items-center' : 'max-w-3xl items-start'
         )}
       >
         <Show when={props.graphic}>
@@ -60,7 +62,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
               aria-hidden="true"
               class={cn(
                 DEFAULT_GRAPHIC_CLASS,
-                '-mb-8 opacity-70',
+                'empty-state-graphic -mb-8 opacity-70',
                 props.graphicClass
               )}
             >
@@ -77,9 +79,8 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         <Show when={props.primaryAction || props.documentationUrl}>
           <div
             class={cn(
-              'mt-2 flex flex-wrap gap-2',
-              isCentered() ? 'justify-center' : 'justify-start',
-              '@max-sm:w-full @max-sm:flex-col @max-sm:justify-center'
+              'mt-2 flex flex-wrap gap-2 @max-sm:w-full @max-sm:flex-col',
+              props.centered ? 'justify-center' : 'justify-start'
             )}
           >
             <Show when={props.primaryAction}>
@@ -116,9 +117,6 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         </Show>
         <Show when={props.children}>{props.children}</Show>
       </div>
-      <Show when={isCentered()}>
-        <div class="flex-[2]" aria-hidden="true" />
-      </Show>
     </div>
   );
 }

@@ -8,9 +8,11 @@ import EmptyStateAiIcon from '@design/empty-state-ai.svg';
 import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
 import EmptyStateCallsIcon from '@design/empty-state-calls.svg';
 import EmptyStateChannelsIcon from '@design/empty-state-channels.svg';
+import EmptyStateCompaniesIcon from '@design/empty-state-companies.svg';
 import EmptyStateDocIcon from '@design/empty-state-doc.svg';
 import EmptyStateEmailIcon from '@design/empty-state-email.svg';
 import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
+import EmptyStateInboxTrayIcon from '@design/empty-state-inbox-tray.svg';
 import EmptyStateInboxZeroIcon from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchIcon from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg';
@@ -61,16 +63,6 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   search: { plural: 'items' },
 };
 
-function InboxZeroNumber(props: { class?: string }) {
-  return (
-    <div
-      class={`flex items-center justify-center font-mono text-[9rem] font-thin leading-none text-ink-muted ${props.class ?? ''}`}
-    >
-      0
-    </div>
-  );
-}
-
 export function EmptyState(props: {
   listView?: ListView;
   search?: boolean;
@@ -90,7 +82,7 @@ export function EmptyState(props: {
     <Switch>
       <Match when={props.search}>
         <EmptyStatePanel
-          align="center"
+          centered
           graphic={EmptyStateNoSearchMatchIcon}
           title={
             soup.searchText().trim().length > 0
@@ -104,7 +96,7 @@ export function EmptyState(props: {
 
       <Match when={props.hasRefinementsFromBase}>
         <EmptyStatePanel
-          align="center"
+          centered
           graphic={EmptyStateNoFilterMatchIcon}
           title="No items matching the filters"
           description="Try adjusting or clearing your filters to see more results."
@@ -168,8 +160,7 @@ export function EmptyState(props: {
                   };
           return (
             <EmptyStatePanel
-              align="center"
-              graphic={InboxZeroNumber}
+              graphic={EmptyStateInboxTrayIcon}
               title={title}
               description={description}
               documentationUrl={`${DOCS_BASE}/product/inbox`}
@@ -180,8 +171,7 @@ export function EmptyState(props: {
 
       <Match when={props.listView === 'mail' && emailActive()}>
         <EmptyStatePanel
-          align="center"
-          graphic={InboxZeroNumber}
+          graphic={EmptyStateInboxTrayIcon}
           title="Inbox zero"
           description="You're all caught up. New email will appear here as it arrives."
           documentationUrl={`${DOCS_BASE}/product/email`}
@@ -190,7 +180,6 @@ export function EmptyState(props: {
 
       <Match when={props.listView === 'tasks'}>
         <EmptyStatePanel
-          align="center"
           graphic={EmptyStateTasksIcon}
           graphicClass="h-36 w-36"
           title="Nothing to do"
@@ -208,7 +197,6 @@ export function EmptyState(props: {
         when={props.listView === 'agents' && soup.activeTab() === 'automations'}
       >
         <EmptyStatePanel
-          align="center"
           graphic={EmptyStateAutomationsIcon}
           title="No automations to show"
           description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
@@ -227,8 +215,7 @@ export function EmptyState(props: {
 
       <Match when={props.listView === 'companies'}>
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateInboxZeroIcon}
+          graphic={EmptyStateCompaniesIcon}
           title="No companies"
           description="Companies you add or sync into your CRM will appear here."
         />
@@ -258,7 +245,6 @@ export function EmptyState(props: {
           };
           return (
             <EmptyStatePanel
-              align="center"
               graphic={fallback.graphic ?? EmptyStateInboxZeroIcon}
               title={`No ${fallback.plural} to show`}
               description={fallback.description}
@@ -282,8 +268,7 @@ export function EmptyState(props: {
 }
 
 function AgentsEmptyState() {
-  // Shares the left-aligned EmptyStatePanel layout with the folders / connect-email
-  // empty states; the MCP setup cards render below the actions as panel children.
+  // The MCP setup cards render below the actions as panel children.
   return (
     <div class="size-full" data-soup-empty-state>
       <EmptyStatePanel
