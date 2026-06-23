@@ -127,6 +127,8 @@ jobs:
           /sccache
           /nix
       continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-cachix'
       with:
@@ -224,6 +226,8 @@ jobs:
           /sccache
           /nix
       continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-cachix'
       with:

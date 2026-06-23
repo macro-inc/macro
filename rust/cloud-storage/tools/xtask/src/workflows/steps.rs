@@ -60,9 +60,17 @@ pub fn setup_rust_light() -> Step<Use> {
         .add_with(("rust-cache", "false"))
 }
 
+/// Install + initialise Nix on the runner. Namespace profiles don't ship Nix,
+/// so this must run before [`setup_dev_shell`] (which shells out to `nix`). The
+/// `/nix` cache volume mounted by [`mount_cache_volume`] keeps the store warm,
+/// so it re-inits the daemon rather than doing a full install.
+pub fn setup_nix() -> Step<Use> {
+    uses_local("Setup Nix", "./.github/actions/setup-nix")
+}
+
 /// Enter the repo's Nix dev shell (toolchain, mold, just, the sccache binary,
 /// and `RUSTC_WRAPPER=sccache`). We pass NO `sccache-bucket`, so sccache runs in
-/// local-disk mode instead of talking to S3.
+/// local-disk mode instead of talking to S3. Requires [`setup_nix`] first.
 pub fn setup_dev_shell() -> Step<Use> {
     uses_local("Setup Nix dev shell", "./.github/actions/setup-cachix")
         .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
