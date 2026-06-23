@@ -4,8 +4,10 @@ import type { NotificationStack } from '@notifications';
 import type { Notification } from '../types/notification';
 import {
   getActionVerb,
+  getGithubSenderLogin,
   getTypeNoun,
   getTypePreposition,
+  getUniqueGithubLogins,
   getUniqueSenderIds,
 } from './notification-description-helpers';
 
@@ -43,79 +45,67 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     return 1;
   };
 
-  const primarySenderId = () => {
-    if (props.notification?.sender_id) {
-      return props.notification.sender_id;
+  const macroFirstName = (id: string) => {
+    const parts = useDisplayNameParts(tryMacroId(id), {
+      emailFallback: 'local-part',
+    });
+    return parts.firstName() || parts.fullName();
+  };
+
+  // Sender display labels for the notification/stack. Macro senders resolve to
+  // their display name; GitHub PR senders (who usually aren't Macro users and so
+  // have no `sender_id`) fall back to the GitHub login carried in the
+  // notification metadata.
+  const senderLabels = (): string[] => {
+    if (props.notification) {
+      if (props.notification.sender_id) {
+        return [macroFirstName(props.notification.sender_id)];
+      }
+      const login = getGithubSenderLogin(props.notification);
+      return login ? [login] : [];
     }
     if (props.stack) {
-      const senderIds = getUniqueSenderIds(props.stack.notifications);
-      return senderIds[0];
+      const macroIds = getUniqueSenderIds(props.stack.notifications);
+      if (macroIds.length > 0) {
+        return macroIds.map(macroFirstName);
+      }
+      return getUniqueGithubLogins(props.stack.notifications);
     }
-    return undefined;
+    return [];
   };
 
-  const senderIds = () => {
-    if (!props.stack) return [];
-    return getUniqueSenderIds(props.stack.notifications);
-  };
-
-  const additionalSenderCount = () => {
-    if (!props.stack) return 0;
-    return Math.max(0, senderIds().length - 1);
-  };
-
+  const primarySenderLabel = () => senderLabels()[0];
+  const secondarySenderLabel = () => senderLabels()[1];
+  const additionalSenderCount = () => Math.max(0, senderLabels().length - 1);
   const hasMultipleSenders = () => additionalSenderCount() > 0;
-
-  const primarySenderNameParts = () =>
-    useDisplayNameParts(tryMacroId(primarySenderId() ?? ''), {
-      emailFallback: 'local-part',
-    });
-
-  const primarySenderFirstName = () => {
-    const firstName = primarySenderNameParts().firstName();
-    return firstName || primarySenderNameParts().fullName();
-  };
-
-  const secondarySenderNameParts = () =>
-    useDisplayNameParts(tryMacroId(senderIds()[1] ?? ''), {
-      emailFallback: 'local-part',
-    });
-
-  const secondarySenderFirstName = () => {
-    const firstName = secondarySenderNameParts().firstName();
-    return firstName || secondarySenderNameParts().fullName();
-  };
 
   const description = () => {
     const type = notificationType();
-    const senderId = primarySenderId();
+    const sender = primarySenderLabel();
 
     if (!type) return '';
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
-      if (senderId && type !== 'ai_response') {
-        return `${primarySenderFirstName()} ${getActionVerb(type)}`;
+      if (sender && type !== 'ai_response') {
+        return `${sender} ${getActionVerb(type)}`;
       }
       return getActionVerb(type);
     }
 
     // Stack with multiple senders
     if (hasMultipleSenders()) {
-      if (senderId) {
-        const senderCount = senderIds().length;
-        if (senderCount === 2) {
-          return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${primarySenderFirstName()} and ${secondarySenderFirstName()}`;
-        }
-        // Three or more senders: "13 messages from Peter and 5 others"
-        return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${primarySenderFirstName()} and ${additionalSenderCount()} ${additionalSenderCount() === 1 ? 'other' : 'others'}`;
+      const senderCount = senderLabels().length;
+      if (senderCount === 2) {
+        return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${sender} and ${secondarySenderLabel()}`;
       }
-      return `${count()} ${getTypeNoun(type, count())}`;
+      // Three or more senders: "13 messages from Peter and 5 others"
+      return `${count()} ${getTypeNoun(type, count())} ${getTypePreposition(type)} ${sender} and ${additionalSenderCount()} ${additionalSenderCount() === 1 ? 'other' : 'others'}`;
     }
 
     // Stack with single sender: "Peter: 13 messages"
-    if (senderId) {
-      return `${primarySenderFirstName()}: ${count()} ${getTypeNoun(type, count())}`;
+    if (sender) {
+      return `${sender}: ${count()} ${getTypeNoun(type, count())}`;
     }
     return `${count()} ${getTypeNoun(type, count())}`;
   };
