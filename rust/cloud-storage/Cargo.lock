@@ -2530,6 +2530,7 @@ dependencies = [
  "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",

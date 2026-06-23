@@ -858,6 +858,8 @@
       "last_online_tracker",
       "macro_auth",
       "macro_aws_config",
+      "macro_config",
+      "macro_config_derive",
       "macro_db_client",
       "macro_entrypoint",
       "macro_env",

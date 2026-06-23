@@ -7,7 +7,7 @@ mod model;
 mod service;
 use std::{sync::Arc, time::Duration};
 
-use crate::{api::router, config::EnvVars, context::AppState};
+use crate::{api::router, context::AppState};
 use anyhow::{Context, Result};
 use axum::http::{
     Method,
@@ -30,7 +30,7 @@ use last_online_tracker::{
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_env_var::env_var;
+use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
@@ -39,23 +39,22 @@ use sqlx::postgres::PgPoolOptions;
 use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
 use tower_http::cors::CorsLayer;
 
-env_var!(
-    struct MacroDbUrl;
-);
-
 #[tokio::main]
 #[tracing::instrument(ret, err)]
 async fn main() -> Result<()> {
     MacroEntrypoint::default().init();
-
-    // Parse our configuration from the environment.
-    let config = Arc::new(Config::from_env(EnvVars::unwrap_new()));
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
+
+    // Parse our configuration from the environment.
+    let config = Config::from_env()?
+        .resolve_remote_secrets(Environment::new_or_prod(), &secretsmanager_client)
+        .await?;
+
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
@@ -103,14 +102,7 @@ async fn main() -> Result<()> {
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
-        .connect(
-            LocalOrRemoteSecret::new_from_secret_manager(
-                MacroDbUrl::new()?,
-                &secretsmanager_client,
-            )
-            .await?
-            .as_ref(),
-        )
+        .connect(config.macro_db_url.as_ref())
         .await?;
 
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
@@ -126,6 +118,8 @@ async fn main() -> Result<()> {
     };
 
     tokio::spawn(poll_messages(context.clone()));
+
+    let config = Arc::new(config);
 
     let app = router(AppState {
         context,
