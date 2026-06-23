@@ -15,7 +15,7 @@
       };
       inherit (pkgs) lib;
       isLinux = pkgs.stdenv.hostPlatform.isLinux;
-      isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+      isAarch64Darwin = system == "aarch64-darwin";
 
       appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
@@ -497,7 +497,7 @@
           tauri-desktop-unwrapped = tauri.app;
           tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
         }
-        // lib.optionalAttrs isDarwin {
+        // lib.optionalAttrs isAarch64Darwin {
           tauri-frontend = frontend;
           tauri-desktop-dmg = tauriDesktopDmg;
           tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;

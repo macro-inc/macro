@@ -14,12 +14,21 @@ jobs:
   build-dmg:
     name: Build macOS DMG
     if: ${{ github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag') }}
-    runs-on: macos-15-intel
+    runs-on: macos-15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.ref_type == 'tag' && github.event.ref || github.ref }}
+
+      - name: Assert arm64 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(uname -m)" != "arm64" ]; then
+            echo "macOS DMG builds must run on an arm64/aarch64 runner, got $(uname -m)" >&2
+            exit 1
+          fi
 
       - name: Install Nix
         shell: bash
@@ -105,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix build --impure --option sandbox false --print-build-logs ".#tauri-desktop-dmg"
+          nix build --impure --option sandbox false --print-build-logs ".#packages.aarch64-darwin.tauri-desktop-dmg"
 
       - name: Collect DMG artifact
         shell: bash
