@@ -11,7 +11,7 @@ import { usePermissions, useUserId } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
-  free: ['Access to Haiku', '5 GB storage', 'Multiple email inboxes'],
+  free: ['Access to Haiku', '5 GB storage'],
   premium: [
     'All agents',
     'All models',
