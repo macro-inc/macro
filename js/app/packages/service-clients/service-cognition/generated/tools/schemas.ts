@@ -1887,6 +1887,17 @@ export const ReadMetadataResponse = z.object({
   userAccessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
 });
 
+export const RenameDocument = z.object({
+  documentId: z.string().uuid(),
+  documentName: z.string(),
+});
+
+export const RenameDocumentResponse = z.object({
+  documentId: z.string().uuid(),
+  message: z.string(),
+  success: z.boolean(),
+});
+
 export const SendEmail = z.object({
   bcc: z
     .array(

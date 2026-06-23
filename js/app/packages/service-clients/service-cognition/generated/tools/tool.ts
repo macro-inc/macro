@@ -78,6 +78,10 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -176,6 +180,10 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  RenameDocument: {
+    call: schemas.RenameDocument,
+    response: schemas.RenameDocumentResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -273,6 +281,10 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

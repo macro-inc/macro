@@ -2438,6 +2438,36 @@ export interface ReadThread {
    */
   messagesSince?: string | null;
 }
+/**
+ * Rename a document. Requires edit access to the document.
+ */
+export interface RenameDocument {
+  /**
+   * The id of the document you want to rename.
+   */
+  documentId: string;
+  /**
+   * The new name for the document without the file extension.
+   */
+  documentName: string;
+}
+/**
+ * The rename document response.
+ */
+export interface RenameDocumentResponse {
+  /**
+   * The id of the renamed document.
+   */
+  documentId: string;
+  /**
+   * A human-readable result message.
+   */
+  message: string;
+  /**
+   * Whether the rename succeeded.
+   */
+  success: boolean;
+}
 export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
 }

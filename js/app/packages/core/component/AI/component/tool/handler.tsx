@@ -31,6 +31,7 @@ import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readThreadHandler } from './ReadThread';
+import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { sendEmailHandler } from './SendEmail';
 import { subagentHandler } from './Subagent';
@@ -69,6 +70,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  RenameDocument: renameDocumentHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   Subagent: subagentHandler,
