@@ -27,7 +27,11 @@ export function getGithubSenderLogin(
 ): string | undefined {
   const metadata = notification.notification_metadata;
   const content = (metadata as { content?: unknown }).content;
-  if (content && typeof content === 'object' && 'senderGithubLogin' in content) {
+  if (
+    content &&
+    typeof content === 'object' &&
+    'senderGithubLogin' in content
+  ) {
     const login = (content as { senderGithubLogin?: string | null })
       .senderGithubLogin;
     return login ?? undefined;
