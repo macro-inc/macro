@@ -88,25 +88,3 @@ impl AsyncTool<SearchToolContext> for NameSearch {
         Ok(SearchToolResponse { results })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ai_toolset::schema::generate_validated_input_schema;
-
-    #[test]
-    fn test_name_search_schema_validation() {
-        let result = generate_validated_input_schema::<NameSearch>();
-        assert!(result.is_ok(), "{:?}", result);
-
-        let validated = result.unwrap();
-        assert_eq!(
-            validated.name, "NameSearch",
-            "Tool name should match the schemars title"
-        );
-        assert!(
-            validated.description.contains("Search items by their name"),
-            "Description should contain expected text"
-        );
-    }
-}

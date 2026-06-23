@@ -7,7 +7,6 @@
 mod extract;
 mod one_of;
 mod recursive;
-mod strict;
 
 use super::error::ValidationError;
 use extract::Extract;
@@ -15,7 +14,6 @@ use schemars::Schema;
 
 pub use one_of::ValidateNoOneOf;
 pub use recursive::RecursiveValidate;
-pub use strict::{ValidateAdditionalProperties, ValidateEnumPrimitives, ValidateNoRefs};
 
 /// A validating visitor similar to [`Transform`](schemars::transform::Transform)
 ///
@@ -50,9 +48,6 @@ pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), Validat
     }
 
     RecursiveValidate(ValidateNoOneOf).validate(schema)?;
-    RecursiveValidate(ValidateNoRefs).validate(schema)?;
-    RecursiveValidate(ValidateAdditionalProperties).validate(schema)?;
-    RecursiveValidate(ValidateEnumPrimitives).validate(schema)?;
 
     Ok((name, description))
 }

@@ -2,6 +2,10 @@
 
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
+
+#[cfg(test)]
+mod test;
+
 mod build_context;
 mod display_results;
 mod schemas;
