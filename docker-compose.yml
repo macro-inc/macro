@@ -203,6 +203,27 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # email_pubsub_workers (local worker)
+  # Consumes the email SQS queues (backfill, scheduled, gmail sync/ops, sfs,
+  # link manager). Runs as its own deployment in prod; locally it's its own
+  # container alongside email_service. No HTTP port — pure SQS consumer.
+  # ============================================================================
+  email_pubsub_workers:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/pubsub_workers"]
+    depends_on:
+      - postgres
+      - redis
+      - authentication-service
+      - document_storage_service
+      - connection_gateway
+      - static_file_service
+      - email_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
