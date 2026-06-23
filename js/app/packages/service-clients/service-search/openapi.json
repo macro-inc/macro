@@ -623,6 +623,33 @@
         "description": "Sort key for channel content search results.",
         "enum": ["message", "thread"]
       },
+      "ChannelThreadFilters": {
+        "type": "object",
+        "description": "The channel thread filters used to filter down channel-thread entities.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
+          },
+          "root_sender_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sender IDs for the root thread message. Empty to include all root senders."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel thread parent message IDs to include. Empty to include all accessible threads."
+          }
+        }
+      },
       "ChatFilters": {
         "type": "object",
         "description": "The chat filters used to filter down what chats you search over.",
@@ -1572,6 +1599,10 @@
           "channel_filters": {
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"
+          },
+          "channel_thread_filters": {
+            "$ref": "#/components/schemas/ChannelThreadFilters",
+            "description": "the bundled [ChannelThreadFilters]"
           },
           "chat_filters": {
             "$ref": "#/components/schemas/ChatFilters",

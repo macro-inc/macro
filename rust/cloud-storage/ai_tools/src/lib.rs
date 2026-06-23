@@ -3,6 +3,7 @@
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
 mod build_context;
+mod display_results;
 mod schemas;
 pub mod search;
 pub mod serde_utils;
@@ -14,6 +15,7 @@ use anthropic::toolset::anthropic_toolset;
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
+use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use notification::inbound::ai_tool::notification_toolset;
@@ -80,7 +82,8 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
-        .add_tool::<Subagent, ToolServiceContext>();
+        .add_tool::<Subagent, ToolServiceContext>()
+        .add_tool::<DisplayResults, ToolServiceContext>();
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt {
         toolset,

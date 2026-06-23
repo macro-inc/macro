@@ -4,10 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupCallRecord } from './soupCallRecord';
+import type { SoupChannelThread } from './soupChannelThread';
 import type { SoupItemOneOfOneoneTag } from './soupItemOneOfOneoneTag';
 
+/**
+ * Channel thread item.
+ */
 export type SoupItemOneOfOneone = {
-  data: SoupCallRecord;
+  /** Channel thread item. */
+  data: SoupChannelThread;
   tag: SoupItemOneOfOneoneTag;
 };

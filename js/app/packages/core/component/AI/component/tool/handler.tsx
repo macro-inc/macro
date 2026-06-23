@@ -6,6 +6,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { displayResultsHandler } from './DisplayResults';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
@@ -30,6 +31,7 @@ import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readThreadHandler } from './ReadThread';
+import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { sendEmailHandler } from './SendEmail';
 import { subagentHandler } from './Subagent';
@@ -55,6 +57,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
   BashCodeExecution: bashCodeExecutionHandler,
+  DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   GetThread: getThreadHandler,
@@ -67,6 +70,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadThread: readThreadHandler,
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
+  RenameDocument: renameDocumentHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   Subagent: subagentHandler,

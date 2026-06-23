@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::SoupProperty;
 
+/// A chat as displayed in Soup.
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

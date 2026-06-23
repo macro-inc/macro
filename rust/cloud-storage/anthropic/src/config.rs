@@ -1,16 +1,16 @@
-use macro_env_var::env_var;
+use macro_env_var::env_vars;
 use reqwest::header::HeaderMap;
 
 const ANTHROPIC_ROUTER_BASE_URL: &str = "https://api.anthropic.com";
+
+env_vars! {
+    struct AnthropicApiKey;
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     pub api_base: String,
     pub headers: HeaderMap,
-}
-
-env_var! {
-    pub struct AnthropicApiKey;
 }
 
 impl Config {

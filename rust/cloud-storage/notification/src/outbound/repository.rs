@@ -551,6 +551,14 @@ impl NotificationDbOps for PgPool {
         apns_collapse_key: Option<&str>,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         let entity_type: &str = request.notification_entity.entity_type.into();
+        let secondary_entity_id = request
+            .secondary_notification_entity
+            .as_ref()
+            .map(|entity| entity.entity_id.as_ref());
+        let secondary_entity_type: Option<&str> = request
+            .secondary_notification_entity
+            .as_ref()
+            .map(|entity| entity.entity_type.into());
         let metadata = serde_json::to_value(&request.notification.content)?;
 
         let mut tx = self.begin().await?;
@@ -561,8 +569,19 @@ impl NotificationDbOps for PgPool {
         // Insert notification
         let result = sqlx::query!(
             r#"
-            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id, apns_collapse_key)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO notification (
+                id,
+                notification_event_type,
+                event_item_id,
+                event_item_type,
+                service_sender,
+                metadata,
+                sender_id,
+                apns_collapse_key,
+                secondary_event_item_id,
+                secondary_event_item_type
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (id) DO NOTHING
             "#,
             notification_id,
@@ -572,7 +591,9 @@ impl NotificationDbOps for PgPool {
             service_name,
             metadata as serde_json::Value,
             sender_id,
-            apns_collapse_key
+            apns_collapse_key,
+            secondary_entity_id,
+            secondary_entity_type
         )
         .execute(&mut *tx)
         .await?;

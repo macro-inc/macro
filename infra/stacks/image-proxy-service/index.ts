@@ -30,14 +30,6 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
-
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const secretKeyArns = [
@@ -62,32 +54,6 @@ const imageProxyService = new ImageProxyService(
       {
         name: 'ENVIRONMENT',
         value: stack,
-      },
-      {
-        name: 'RUST_LOG',
-        value: `image_proxy_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=debug`,
-      },
-      {
-        name: 'JWT_SECRET_KEY',
-        value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-      },
-      {
-        name: 'AUDIENCE',
-        value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-      },
-      {
-        name: 'ISSUER',
-        value: pulumi.interpolate`${FUSIONAUTH_ISSUER}`,
-      },
-      {
-        name: 'MACRO_API_TOKEN_ISSUER',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-      },
-      {
-        name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

@@ -1,3 +1,4 @@
+use super::context::SearchToolContext;
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -7,9 +8,7 @@ use models_search::{
     unified::{UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include},
 };
 use schemars::JsonSchema;
-use search_service_client::SearchServiceClient;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -31,13 +30,13 @@ pub struct NameSearch {
 }
 
 #[async_trait]
-impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
+impl AsyncTool<SearchToolContext> for NameSearch {
     type Output = SearchToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        search_client: ServiceContext<Arc<SearchServiceClient>>,
+        search_context: ServiceContext<SearchToolContext>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "Name search params");
@@ -65,7 +64,8 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             collapse: None,
         };
 
-        let response = search_client
+        let response = search_context
+            .search_client
             .search_unified(
                 (*request_context.user_id).as_ref(),
                 search_request,
@@ -78,9 +78,14 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
                 internal_error: e,
             })?;
 
-        Ok(SearchToolResponse {
-            results: response.results,
-        })
+        // Drop the chat the agent is currently running inside so it never
+        // surfaces itself in its own search results.
+        let mut results = response.results;
+        if let Some(self_chat_id) = search_context.self_chat_id {
+            results.retain(|item| item.entity_id() != self_chat_id);
+        }
+
+        Ok(SearchToolResponse { results })
     }
 }
 

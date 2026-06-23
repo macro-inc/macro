@@ -12,11 +12,19 @@ import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import {
+  type BackfillJob,
+  BackfillJobStatus,
   type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type BackfillProgress,
+  estimateEtaSeconds,
+  getBackfillProgress,
+  useBackfillJobsQuery,
+} from '@queries/email/backfill';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import {
   useAddInboxFlow,
   useEmailLinks,
@@ -44,12 +52,30 @@ export function Email() {
 
   const {
     query: emailLinksQuery,
-    connect: connectEmail,
     disconnect: disconnectEmail,
     resyncInbox,
   } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
+
+  // Fires when the Email settings open. Used only to surface the COMPLETED
+  // state; in-progress state comes from the live connection-gateway store.
+  const backfillJobsQuery = useBackfillJobsQuery();
+  // Latest job per link. The query returns newest-first, so the first job seen
+  // for a link_id is its latest — we key the settled label off the current job,
+  // not any historical completed one (a later fail/cancel must not still read
+  // as "complete").
+  const latestBackfillByLinkId = createMemo(() => {
+    const latest = new Map<string, BackfillJob>();
+    for (const job of backfillJobsQuery.data?.jobs ?? []) {
+      if (job.link_id && !latest.has(job.link_id)) {
+        latest.set(job.link_id, job);
+      }
+    }
+    return latest;
+  });
+  const hasCompletedBackfill = (linkId: string): boolean =>
+    latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: () => toast.success('Inbox removed'),
@@ -79,15 +105,18 @@ export function Email() {
   });
 
   const hasAdditionalInboxes = createMemo(() => inboxes().others.length > 0);
+  const hasConnectedInboxes = createMemo(
+    () => inboxes().primary != null || inboxes().others.length > 0
+  );
 
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
     setIsEmailActionPending(true);
-    await connectEmail().match(
-      () => {},
-      () => toast.failure('Failed to connect email')
-    );
-    setIsEmailActionPending(false);
+    try {
+      await startAddInbox();
+    } finally {
+      setIsEmailActionPending(false);
+    }
   };
 
   const onDisconnectEmail = async () => {
@@ -193,46 +222,30 @@ export function Email() {
             </ConnectionHero>
           }
         >
-          <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
-            <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
-              <WideEmailIcon class="size-5 text-ink" />
-            </div>
-            <div class="flex flex-col gap-1 min-w-0">
-              <div class="text-base font-semibold text-ink">
-                Connected inboxes
+          <Show when={!hasConnectedInboxes()}>
+            <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
+              <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
+                <WideEmailIcon class="size-5 text-ink" />
               </div>
-              <p class="text-sm text-ink-muted">
-                Gmail accounts Macro can read and act on.
-              </p>
+              <div class="flex flex-1 flex-col gap-1 min-w-0">
+                <div class="text-base font-semibold text-ink">
+                  Connected inboxes
+                </div>
+                <p class="text-sm text-ink-muted">
+                  Gmail accounts Macro can read and act on.
+                </p>
+              </div>
             </div>
-            <Show when={multiInboxFlag().enabled}>
-              <Show
-                when={!emailLinksQuery.isLoading}
-                fallback={
-                  <span class="ml-auto text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Button
-                  variant="active"
-                  size="sm"
-                  depth={3}
-                  class="ml-auto shrink-0"
-                  onClick={() => guardAddInbox(openAddInboxDialog)}
-                >
-                  <PlusIcon class="size-4" />
-                  Add inbox
-                </Button>
-              </Show>
-            </Show>
-          </div>
+          </Show>
 
-          <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+          <div class="grid settings-row-dividers">
             <Show when={inboxes().primary}>
               {(primary) => (
                 <InboxRow
                   link={primary()}
                   isPrimary
                   isOwn={primary().macro_id === userId()}
+                  hasCompletedBackfill={hasCompletedBackfill(primary().id)}
                   resyncing={resyncingIds().has(primary().id)}
                   onResync={() => handleResyncInbox(primary().id)}
                   onReconnect={() => void startAddInbox()}
@@ -258,6 +271,7 @@ export function Email() {
                   link={link}
                   isPrimary={false}
                   isOwn={link.macro_id === userId()}
+                  hasCompletedBackfill={hasCompletedBackfill(link.id)}
                   resyncing={resyncingIds().has(link.id)}
                   onResync={() => handleResyncInbox(link.id)}
                   onReconnect={() => void startAddInbox()}
@@ -271,6 +285,26 @@ export function Email() {
                 />
               )}
             </For>
+            <Show when={multiInboxFlag().enabled}>
+              <div class="px-6 py-4 flex justify-center">
+                <Show
+                  when={!emailLinksQuery.isLoading}
+                  fallback={
+                    <span class="text-sm text-ink-muted">Loading…</span>
+                  }
+                >
+                  <Button
+                    variant="active"
+                    size="sm"
+                    depth={3}
+                    onClick={() => guardAddInbox(openAddInboxDialog)}
+                  >
+                    <PlusIcon class="size-4" />
+                    Add inbox
+                  </Button>
+                </Show>
+              </div>
+            </Show>
           </div>
         </Show>
       </Show>
@@ -376,6 +410,54 @@ function syncStatusLabel(status: SyncStatus): string {
     .exhaustive();
 }
 
+// Live backfill progress bar. `completed`/`total` are the connection-gateway
+// counters; render the ratio rather than the raw counts since the priority pass
+// can inflate both slightly above the real mailbox size.
+// Rough "time left" from the recent backfill rate. Rounds up and bins into
+// s / m / h so the estimate doesn't visibly jitter between progress events.
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `~${Math.max(1, Math.ceil(seconds))}s left`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `~${minutes}m left`;
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  return remMinutes > 0 ? `~${hours}h ${remMinutes}m left` : `~${hours}h left`;
+}
+
+function BackfillProgressBar(props: { progress: BackfillProgress }) {
+  const percent = () => {
+    if (props.progress.total <= 0) return 0;
+    // Only reach 100% at actual completion; floor otherwise so e.g. 999/1000
+    // doesn't round up and make the bar look finished early.
+    if (props.progress.completed >= props.progress.total) return 100;
+    return Math.floor((props.progress.completed / props.progress.total) * 100);
+  };
+  const etaLabel = createMemo(() => {
+    const seconds = estimateEtaSeconds(props.progress);
+    return seconds === undefined ? undefined : formatEta(seconds);
+  });
+  return (
+    <div class="flex w-60 flex-col gap-2">
+      <span class="flex items-center gap-1.5 text-xs text-ink-muted">
+        <ArrowsClockwiseIcon class="size-3 shrink-0 animate-spin" />
+        Backfilling…
+      </span>
+      <div class="flex items-center gap-6 whitespace-nowrap text-xs text-ink-muted">
+        <span>
+          {props.progress.completed}/{props.progress.total}
+        </span>
+        <Show when={etaLabel()}>{(label) => <span>{label()}</span>}</Show>
+      </div>
+      <div class="h-1 w-full overflow-hidden rounded-full bg-edge-muted">
+        <div
+          class="h-full rounded-full bg-ink transition-[width] duration-300"
+          style={{ width: `${percent()}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Chip(props: { label: string }) {
   return (
     <span class="shrink-0 rounded bg-edge-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
@@ -411,13 +493,14 @@ function InboxRow(props: {
   link: EmailLink;
   isPrimary: boolean;
   isOwn: boolean;
+  hasCompletedBackfill: boolean;
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
   onRemove: () => void;
 }) {
   return (
-    <div class="bg-surface flex items-center justify-between gap-3 h-15.25 px-6">
+    <div class="bg-surface flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
       <div class="min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <span class="ph-no-capture text-sm truncate">
@@ -430,28 +513,44 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <Show
-          when={
-            ENABLE_INBOX_SYNC_STATUS &&
-            props.link.sync_status !== SyncStatus.UP_TO_DATE
-          }
-        >
-          <span
-            class="flex items-center gap-1 text-xs"
-            classList={{
-              'text-failure':
-                props.link.sync_status === SyncStatus.ERROR ||
-                props.link.sync_status === SyncStatus.NEEDS_REAUTH,
-              'text-ink-muted':
-                props.link.sync_status !== SyncStatus.ERROR &&
-                props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
-            }}
+        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+          <Switch
+            fallback={
+              <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                <span
+                  class="flex items-center gap-1 text-xs"
+                  classList={{
+                    'text-failure':
+                      props.link.sync_status === SyncStatus.ERROR ||
+                      props.link.sync_status === SyncStatus.NEEDS_REAUTH,
+                    'text-ink-muted':
+                      props.link.sync_status !== SyncStatus.ERROR &&
+                      props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
+                  }}
+                >
+                  <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+                    <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                  </Show>
+                  {syncStatusLabel(props.link.sync_status)}
+                </span>
+              </Show>
+            }
           >
-            <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-              <ArrowsClockwiseIcon class="size-3 animate-spin" />
-            </Show>
-            {syncStatusLabel(props.link.sync_status)}
-          </span>
+            {/* Live backfill progress (connection gateway) wins over the coarse
+                sync_status while a backfill is actively running. */}
+            <Match when={getBackfillProgress(props.link.id)}>
+              {(progress) => <BackfillProgressBar progress={progress()} />}
+            </Match>
+            {/* Settled inbox with a completed backfill from the BE list. */}
+            <Match
+              when={
+                props.link.sync_status === SyncStatus.UP_TO_DATE &&
+                props.hasCompletedBackfill
+              }
+            >
+              <span class="text-xs text-ink-muted">Initial sync complete</span>
+            </Match>
+          </Switch>
         </Show>
       </div>
       <div class="flex items-center gap-2 shrink-0">

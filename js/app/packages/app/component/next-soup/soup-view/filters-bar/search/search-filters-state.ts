@@ -8,8 +8,10 @@ import {
   type CallStatus,
   callStatusFromAttended,
   type FieldFilters,
+  type PropertyFilter,
 } from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { batch, createMemo } from 'solid-js';
 
 export type SearchIndexId =
@@ -45,6 +47,12 @@ export type SearchFiltersSections = {
   email: { importance: boolean | undefined; inboxIds: string[] | undefined };
   channels: { in: string[]; from: string[] };
   calls: { in: string[]; from: string[]; status: CallStatus | undefined };
+  task: {
+    status: string[];
+    priority: string[];
+    assignees: string[];
+    createdBy: string[];
+  };
 };
 
 export type SearchFiltersState = SearchFiltersSections & {
@@ -55,6 +63,7 @@ export const DEFAULT_SECTIONS: SearchFiltersSections = {
   email: { importance: undefined, inboxIds: undefined },
   channels: { in: [], from: [] },
   calls: { in: [], from: [], status: undefined },
+  task: { status: [], priority: [], assignees: [], createdBy: [] },
 };
 
 /**
@@ -97,6 +106,28 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
     if (state.calls.status !== undefined) {
       include.callStatus = state.calls.status;
     }
+  } else if (state.type === 'task') {
+    const properties: PropertyFilter[] = [
+      ...state.task.status.map((value) => ({
+        propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+        type: 'select' as const,
+        value,
+      })),
+      ...state.task.priority.map((value) => ({
+        propertyId: SYSTEM_PROPERTY_IDS.PRIORITY,
+        type: 'select' as const,
+        value,
+      })),
+      ...state.task.assignees.map((value) => ({
+        propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        type: 'entity' as const,
+        value,
+      })),
+    ];
+    if (properties.length) include.properties = properties;
+    if (state.task.createdBy.length) {
+      include.documentOwnerId = state.task.createdBy;
+    }
   }
 
   return { include, exclude };
@@ -135,10 +166,29 @@ export function createSearchFiltersController() {
   const callStatus = () =>
     include().callStatus ?? callStatusFromAttended(include().callAttended);
 
+  const taskProperty = (propertyId: string) =>
+    (include().properties ?? [])
+      .filter((p) => p.propertyId === propertyId)
+      .map((p) => p.value);
+  const taskStatus = createMemo(() => taskProperty(SYSTEM_PROPERTY_IDS.STATUS));
+  const taskPriority = createMemo(() =>
+    taskProperty(SYSTEM_PROPERTY_IDS.PRIORITY)
+  );
+  const taskAssignees = createMemo(() =>
+    taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES)
+  );
+  const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
+
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
     channels: { in: channelIn(), from: channelFrom() },
     calls: { in: callIn(), from: callFrom(), status: callStatus() },
+    task: {
+      status: taskStatus(),
+      priority: taskPriority(),
+      assignees: taskAssignees(),
+      createdBy: taskCreatedBy(),
+    },
   });
 
   // Per-index values are remembered for the lifetime of the view: switching
@@ -172,6 +222,16 @@ export function createSearchFiltersController() {
       stash = {
         ...stash,
         calls: { in: callIn(), from: callFrom(), status: callStatus() },
+      };
+    } else if (current === 'task') {
+      stash = {
+        ...stash,
+        task: {
+          status: taskStatus(),
+          priority: taskPriority(),
+          assignees: taskAssignees(),
+          createdBy: taskCreatedBy(),
+        },
       };
     }
 
@@ -208,6 +268,46 @@ export function createSearchFiltersController() {
     callStatus,
     setCallStatus: (status: CallStatus | undefined) =>
       applySections({ calls: { in: callIn(), from: callFrom(), status } }),
+    taskStatus,
+    setTaskStatus: (ids: string[]) =>
+      applySections({
+        task: {
+          status: ids,
+          priority: taskPriority(),
+          assignees: taskAssignees(),
+          createdBy: taskCreatedBy(),
+        },
+      }),
+    taskPriority,
+    setTaskPriority: (ids: string[]) =>
+      applySections({
+        task: {
+          status: taskStatus(),
+          priority: ids,
+          assignees: taskAssignees(),
+          createdBy: taskCreatedBy(),
+        },
+      }),
+    taskAssignees,
+    setTaskAssignees: (ids: string[]) =>
+      applySections({
+        task: {
+          status: taskStatus(),
+          priority: taskPriority(),
+          assignees: ids,
+          createdBy: taskCreatedBy(),
+        },
+      }),
+    taskCreatedBy,
+    setTaskCreatedBy: (ids: string[]) =>
+      applySections({
+        task: {
+          status: taskStatus(),
+          priority: taskPriority(),
+          assignees: taskAssignees(),
+          createdBy: ids,
+        },
+      }),
   };
 }
 

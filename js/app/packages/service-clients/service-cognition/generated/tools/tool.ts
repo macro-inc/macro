@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
   };
+  DisplayResults: {
+    call: types.DisplayResults;
+    response: types.DisplayResultsResponse;
+  };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
@@ -74,6 +78,10 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -104,6 +112,10 @@ const toolParserMap = {
   CreateDocument: {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
+  },
+  DisplayResults: {
+    call: schemas.DisplayResults,
+    response: schemas.DisplayResultsResponse,
   },
   GetEntityProperties: {
     call: schemas.GetEntityProperties,
@@ -168,6 +180,10 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  RenameDocument: {
+    call: schemas.RenameDocument,
+    response: schemas.RenameDocumentResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -206,6 +222,10 @@ type ToolDataMap = {
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
+  };
+  DisplayResults: {
+    call: types.DisplayResults;
+    response: types.DisplayResultsResponse;
   };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -261,6 +281,10 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

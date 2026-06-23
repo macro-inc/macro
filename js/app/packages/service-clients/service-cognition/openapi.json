@@ -112,6 +112,65 @@
         }
       }
     },
+    "/ai-projections": {
+      "post": {
+        "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
+        "summary": "Gets or creates an ai projection and the requesting user's cold instance.",
+        "operationId": "upsert_ai_projection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/attachments/{attachment_id}/chats": {
       "get": {
         "tags": ["get_chats_for_attachment"],
@@ -1550,7 +1609,8 @@
           "dynamic_completions_api",
           "chat_rename",
           "call_summary",
-          "channel_bot"
+          "channel_bot",
+          "ai_projection"
         ]
       },
       "AssistantMessagePart": {
@@ -2348,6 +2408,7 @@
           "user",
           "chat",
           "channel",
+          "channel_message",
           "document",
           "project",
           "email_thread",
@@ -2380,6 +2441,11 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "Expiry": {
+        "type": "string",
+        "description": "How long a projection remains active without being requested.",
+        "enum": ["day", "week", "month"]
       },
       "FeatureUsage": {
         "type": "object",
@@ -3154,6 +3220,45 @@
           }
         }
       },
+      "ProjectionStateResponse": {
+        "type": "object",
+        "description": "The current state of a user's projection instance.",
+        "required": ["id", "status"],
+        "properties": {
+          "data": {
+            "type": ["string", "null"],
+            "description": "The cached result, if any."
+          },
+          "generated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the result was generated."
+          },
+          "id": {
+            "type": "string",
+            "description": "The projection id."
+          },
+          "stale_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the result becomes stale."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectionStatus",
+            "description": "The materialization status."
+          }
+        }
+      },
+      "ProjectionStatus": {
+        "type": "string",
+        "description": "The materialization status of a user's projection instance.",
+        "enum": ["loading", "cold", "ready", "refreshing", "error"]
+      },
+      "RefreshCadence": {
+        "type": "string",
+        "description": "How frequently an active projection is regenerated.",
+        "enum": ["high", "medium", "low"]
+      },
       "RejectToolCallRequest": {
         "type": "object",
         "description": "Request body for rejecting a pending tool call.",
@@ -3472,6 +3577,11 @@
           "result": {}
         }
       },
+      "TargetType": {
+        "type": "string",
+        "description": "The kind of entity a projection is materialized for.",
+        "enum": ["user", "team"]
+      },
       "ToolSet": {
         "oneOf": [
           {
@@ -3605,6 +3715,39 @@
           "toolCallId": {
             "type": "string",
             "description": "The tool call ID whose response should be updated."
+          }
+        }
+      },
+      "UpsertProjectionRequest": {
+        "type": "object",
+        "description": "Request body for getting or creating an ai projection. The concrete target\nid is resolved from the authenticated user, so only the target type is sent.",
+        "required": [
+          "id",
+          "prompt",
+          "target_type",
+          "refresh_cadence",
+          "expiry"
+        ],
+        "properties": {
+          "expiry": {
+            "$ref": "#/components/schemas/Expiry",
+            "description": "How long the projection remains active without being requested."
+          },
+          "id": {
+            "type": "string",
+            "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt used to materialize the projection."
+          },
+          "refresh_cadence": {
+            "$ref": "#/components/schemas/RefreshCadence",
+            "description": "How frequently the projection should be regenerated."
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/TargetType",
+            "description": "Whether the projection is materialized for the requesting user or their team."
           }
         }
       },

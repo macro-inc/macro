@@ -191,8 +191,8 @@ where
                 .map(|a| a.access_level)),
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
-            // These entity types don't have access checks implemented yet.
-            EntityType::Team | EntityType::User => Ok(None),
+            // These entity types either don't have access checks implemented yet, or they should not have access checks.
+            EntityType::Team | EntityType::User | EntityType::ChannelMessage => Ok(None),
         }
     }
 

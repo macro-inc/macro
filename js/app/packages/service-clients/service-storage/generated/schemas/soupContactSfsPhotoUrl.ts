@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Contact photo URL from SFS, if available.
+ */
 export type SoupContactSfsPhotoUrl = string | null;

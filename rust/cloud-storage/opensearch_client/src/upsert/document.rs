@@ -11,6 +11,27 @@ const PARENT_RELATION: &str = "document";
 /// Relation name for child (chunk) docs in the join field.
 const CHILD_RELATION: &str = "chunk";
 
+/// A denormalized entity property indexed on the parent doc so search can
+/// filter by it. `values` holds every equality-filterable value (select
+/// options, entity refs, links, text, bool); `number_value`/`date_value`
+/// are split out only because they need range + sort semantics that keyword
+/// can't provide. Always queried scoped by `definition_id`.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct IndexedProperty {
+    /// The property definition id this value belongs to.
+    pub definition_id: String,
+    /// Every equality-filterable value as a keyword: select-option UUIDs,
+    /// entity-reference ids, links, text, bool as "true"/"false".
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
+    /// Numeric value (e.g. story points) — range + sort.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number_value: Option<f64>,
+    /// Date value as epoch milliseconds (e.g. due date) — range + sort.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_value: Option<i64>,
+}
+
 /// The arguments for upserting a document into the opensearch index
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertDocumentArgs {
@@ -41,6 +62,10 @@ pub struct UpsertDocumentArgs {
     /// The sub type of the document (e.g. task)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<String>,
+    /// Denormalized parent entity properties (status, priority, assignees,
+    /// custom) used for search filtering. Empty for documents without
+    /// properties.
+    pub properties: Vec<IndexedProperty>,
 }
 
 /// Resolve `index_override` to the physical/alias name we'll write to.
@@ -63,6 +88,11 @@ fn parent_doc_body(any_chunk: &UpsertDocumentArgs) -> serde_json::Value {
     });
     if let Some(sub_type) = &any_chunk.sub_type {
         doc["sub_type"] = serde_json::Value::String(sub_type.clone());
+    }
+    if !any_chunk.properties.is_empty()
+        && let Ok(properties) = serde_json::to_value(&any_chunk.properties)
+    {
+        doc["properties"] = properties;
     }
     doc
 }
@@ -330,6 +360,82 @@ pub(crate) async fn update_document_metadata(
     Err(OpensearchClientError::Unknown {
         details: body,
         method: Some("update_document_metadata".to_string()),
+    })
+}
+
+/// Update only the denormalized `properties` on an existing parent doc,
+/// without touching content. Used when an entity's properties change
+/// independently of its body. A missing doc (404) is treated as a no-op —
+/// the next full index will include the properties.
+pub(crate) async fn update_document_properties(
+    client: &opensearch::OpenSearch,
+    document_id: &str,
+    properties: &[IndexedProperty],
+    index_override: Option<&str>,
+) -> Result<()> {
+    use serde_json::json;
+
+    let index = resolve_destination(index_override);
+    let properties_value =
+        serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
+            details: err.to_string(),
+            method: Some("update_document_properties".to_string()),
+        })?;
+    let body = json!({ "doc": { "properties": properties_value } });
+
+    let response = client
+        .update(opensearch::UpdateParts::IndexId(index, document_id))
+        .routing(document_id)
+        .body(body)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            method: Some("update_document_properties".to_string()),
+        })?;
+
+    let status_code = response.status_code();
+    if status_code.is_success() {
+        tracing::trace!(document_id=%document_id, "document properties updated");
+        return Ok(());
+    }
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_document_properties".to_string()),
+            })?;
+
+    // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
+    // next full index will include its properties. A *missing index* 404
+    // (`index_not_found_exception`) is a real outage and must propagate. The
+    // type is read from the error body the same way `parse_bulk_response`
+    // reads `error.reason`.
+    if status_code.as_u16() == 404 {
+        let error_type = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|value| value["error"]["type"].as_str().map(str::to_owned));
+        if error_type.as_deref() == Some("document_missing_exception") {
+            tracing::debug!(
+                document_id=%document_id,
+                "document not indexed yet; skipping property update"
+            );
+            return Ok(());
+        }
+    }
+
+    tracing::error!(
+        status_code=?status_code,
+        body=?body,
+        document_id=%document_id,
+        "error updating document properties",
+    );
+
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        method: Some("update_document_properties".to_string()),
     })
 }
 

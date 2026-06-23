@@ -30,7 +30,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 # For building ToolServiceContext
-comms = { path = "../comms" }
+channels = { path = "../channels", features = ["outbound"] }
 crm = { path = "../crm" }
 documents = { path = "../documents" }
 email = { path = "../email" }

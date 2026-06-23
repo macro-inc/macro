@@ -2,11 +2,12 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    CallFilters, ChannelFilters, ChatFilters, CrmCompanyFilters, DocumentFilters, EmailFilters,
-    EntityFilters, ForeignEntityFilters, ProjectFilters, PropertyFilter,
+    CallFilters, ChannelFilters, ChannelThreadFilters, ChatFilters, CrmCompanyFilters,
+    DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters, ProjectFilters,
+    PropertyFilter,
     ast::{
         call::CallLiteral,
-        channel::{ChannelLiteral, ChannelTypeFilter},
+        channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
@@ -195,6 +196,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "chanf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to the channel-thread entity
+    #[serde(default, rename = "cthf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub channel_thread_filter: LiteralTree<ChannelThreadLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -241,6 +246,10 @@ impl EntityFilterAst {
             },
             channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
                 .map(Arc::new),
+            channel_thread_filter: ChannelThreadFilters::expand_ast(
+                entity_filter.channel_thread_filters,
+            )?
+            .map(Arc::new),
             call_filter: CallFilters::expand_ast(entity_filter.call_filters)?.map(Arc::new),
             crm_company_filter: CrmCompanyFilters::expand_ast(entity_filter.crm_company_filters)?
                 .map(Arc::new),
@@ -262,6 +271,7 @@ impl EntityFilterAst {
             chat_filter: None,
             email_filter: EmailFilterAst::default(),
             channel_filter: None,
+            channel_thread_filter: None,
             call_filter: None,
             crm_company_filter: None,
             foreign_entity_filter: None,
@@ -278,6 +288,7 @@ impl IsEmpty for EntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            channel_thread_filter,
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
@@ -288,6 +299,7 @@ impl IsEmpty for EntityFilterAst {
             && chat_filter.is_none()
             && email_filter.is_empty()
             && channel_filter.is_none()
+            && channel_thread_filter.is_none()
             && call_filter.is_none()
             && crm_company_filter.is_none()
             && foreign_entity_filter.is_none()

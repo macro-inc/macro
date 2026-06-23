@@ -4,13 +4,13 @@ use crate::hook::{StreamBridge, ToolRouter};
 use crate::model::AgentModel;
 use crate::model::router::{AllModelsRouter, RoutedModel};
 use crate::model::types::Model;
+use crate::provider_env;
 use crate::stream::{ChatCompletionStream, StreamPart};
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use rig_core::agent::{Agent, MultiTurnStreamItem};
-use rig_core::client::ProviderClient;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
@@ -39,7 +39,7 @@ pub struct AgentLoop {
 }
 
 impl AgentLoop {
-    /// Create an `AgentLoop` with provider clients from the environment and
+    /// Create an `AgentLoop` with provider clients from `APP_SECRETS_JSON` or the environment and
     /// the default model (Opus 4.7).
     ///
     /// `recorder` is the [`UsageRecorder`] every session created from this loop
@@ -47,9 +47,11 @@ impl AgentLoop {
     ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
-        let anthropic =
-            Arc::new(anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set"));
-        let openai = Arc::new(openai::Client::from_env().expect("OPENAI_API_KEY must be set"));
+        let anthropic = Arc::new(
+            provider_env::anthropic_client_from_env().expect("ANTHROPIC_API_KEY must be set"),
+        );
+        let openai =
+            Arc::new(provider_env::openai_client_from_env().expect("OPENAI_API_KEY must be set"));
         Self {
             anthropic,
             openai,

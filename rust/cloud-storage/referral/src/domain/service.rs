@@ -132,6 +132,7 @@ impl<
                 SendNotificationRequestBuilder {
                     notification_entity: EntityType::User
                         .with_entity_string(sending_user.as_ref().to_string()),
+                    secondary_notification_entity: None,
                     notification,
                     sender_id: Some(sending_user),
                     recipient_ids: HashSet::from([MacroUserIdStr::try_from_email(

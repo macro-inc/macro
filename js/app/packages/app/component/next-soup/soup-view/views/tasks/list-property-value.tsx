@@ -39,7 +39,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
-          <Property.EditTrigger class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 inline-flex items-center gap-1 px-2 py-1.5 leading-tight text-left hover:ring ring-edge ring-inset @max-[840px]/u-list:hover:ring-0 @max-[840px]/u-list:px-1">
+          <Property.EditTrigger class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 inline-flex items-center gap-1 px-2 py-1.5 leading-tight text-left @max-[840px]/u-list:px-1">
             <Show
               when={!isEmpty()}
               fallback={

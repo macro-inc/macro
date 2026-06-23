@@ -9,6 +9,7 @@ mod tool_service;
 use anyhow::Context;
 use context::build_context;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::maybe_env_vars;
 use mcp_auth_proxy::domain::service::McpAuthProxyService;
 use mcp_auth_proxy::inbound::axum_router::mcp_router;
 use rmcp::transport::streamable_http_server::{
@@ -20,12 +21,29 @@ use tool_service::AuthenticatedToolService;
 
 const AUTH_PROXY_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 
+maybe_env_vars! {
+    struct Port;
+}
+
+macro_env_var::env_var! {
+    /// Base URL of the Macro web app (e.g. `https://macro.com`), used to build
+    /// links to Macro items in MCP responses. Read from `APP_BASE_URL`.
+    pub struct AppBaseUrl;
+}
+
 #[tokio::main]
 #[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     let context = build_context().await?;
+
+    // Base URL of the Macro web app, used to build links to Macro items in MCP
+    // responses. Loaded from the `APP_BASE_URL` environment variable via the
+    // macro_env_var infra.
+    let item_base_url = AppBaseUrl::new()
+        .context("failed to read APP_BASE_URL")?
+        .to_string();
 
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
@@ -35,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 tools.toolset,
                 context.tool_context.clone(),
                 context.db.clone(),
+                item_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),
@@ -64,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = mcp_router(context.auth_proxy, context.jwt_args, mcp_service);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8090".to_string());
+    let port = Port::new()
+        .map(|port| port.to_string())
+        .unwrap_or_else(|| "8090".to_string());
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await

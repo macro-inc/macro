@@ -1,5 +1,8 @@
 import { openChatWithInput } from '@app/component/ChatWithAgentButton';
+import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@app/component/mobile/float-regions/float-region-state';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import type { ChannelInputProps } from '@channel/Input/ChannelInput';
@@ -16,6 +19,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelActivity, useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import type { DateValue } from '@core/util/date';
 import {
   extractUserMentions,
@@ -109,6 +113,19 @@ export type ChannelHandle = {
 
 export function Channel(props: ChannelProps) {
   const userId = useUserId();
+  const splitPanel = useSplitPanel();
+
+  // Full-frame mobile: the thread list spans the whole screen and messages
+  // scroll behind the floating header islands (top) and the floating
+  // input + dock (bottom). contentOffsetTop already includes the safe area.
+  const threadListScrollInsets = () =>
+    isMobile()
+      ? {
+          start: splitPanel?.contentOffsetTop() ?? 0,
+          // '4' here is a magic offset so that the ThreadRail correctly hits the the curved edge of the floating input. Not idea, but low impact and it works.
+          end: FloatRegions.hostHeight() - 4,
+        }
+      : { start: 0, end: 0 };
 
   const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
@@ -349,25 +366,6 @@ export function Channel(props: ChannelProps) {
     targetMessageController.goToMessage(messageId, replyId);
   };
 
-  // Navigating to a message highlights it by selecting it. When the target
-  // isn't in the initially loaded page (e.g. opening an old message from
-  // search), that selection is auto-cleared by create-message-selection before
-  // the load-around resolves. Re-assert it once the target message has loaded.
-  // Tracked per-target so it applies only to the active navigation, not after
-  // the user selects something else.
-  let highlightedNavigationTarget: string | undefined;
-  createEffect(() => {
-    const targetId = targetMessageController.activeTargetMessageId();
-    if (!targetId || targetMessageController.activeTargetMessageReplyId()) {
-      highlightedNavigationTarget = undefined;
-      return;
-    }
-    if (highlightedNavigationTarget === targetId) return;
-    if (!messageIndex.keys.includes(targetId)) return;
-    highlightedNavigationTarget = targetId;
-    selectMessage(targetId);
-  });
-
   const findBar = createChannelFindBar({
     channelId: () => props.channelId,
     goToMessage,
@@ -476,7 +474,7 @@ export function Channel(props: ChannelProps) {
               >
                 <Show when={findBar.isOpen()}>
                   <FindBar
-                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)]"
+                    class="absolute top-2 right-3 z-10 w-80 max-w-[calc(100%-1.5rem)] mobile:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]"
                     controller={findBar}
                     direction="desc"
                   />
@@ -486,6 +484,7 @@ export function Channel(props: ChannelProps) {
                     <ThreadList
                       keys={() => messageIndex.keys}
                       initialScrollTarget={threadListInitialScrollTarget()}
+                      fullFrameScrollInsets={threadListScrollInsets}
                       shift={shift}
                       prepend={threadPaginator.isPrepending}
                       onScrollNearTop={threadPaginator.shiftPaginate}
@@ -528,6 +527,7 @@ export function Channel(props: ChannelProps) {
                                 setReplyInputHandle={state.setReplyInputHandle}
                                 listMeta={listMetaByMessageId()[item.id]}
                                 messageEditor={messageEditor}
+                                participants={participants.users}
                                 threadActions={{
                                   onDismissNewMessages:
                                     activityTracker.dismissNewMessages,
@@ -547,6 +547,7 @@ export function Channel(props: ChannelProps) {
                       <ScrollToBottomOverlay
                         scrollState={threadListScrollState}
                         onScrollToBottom={handleScrollToBottom}
+                        class="mobile:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
                       />
                     </Show>
                   </div>
@@ -554,51 +555,54 @@ export function Channel(props: ChannelProps) {
                 <ActiveCallMessage channelId={props.channelId} />
               </div>
               <DebugSuspense name="Channel.input">
-                <ChannelInputContainer
-                  ref={(el) => {
-                    attachInputRef(el);
-                    setChannelInputEl(el);
-                  }}
-                  isHidden={isChannelInputHidden()}
-                >
-                  <ChannelInput
-                    autofocus={props.autofocus}
-                    collapsible
-                    input={{
-                      mode: 'channel',
-                      id: `channel-input-${props.channelId}`,
-                      placeholder: 'Message channel',
-                      isDraggingOverChannel: dragState.isDraggingOverChannel(),
-                      isValidChannelDrag: dragState.isValidChannelDrag(),
+                <FloatRegionOrInline region="accessory">
+                  <ChannelInputContainer
+                    ref={(el) => {
+                      attachInputRef(el);
+                      setChannelInputEl(el);
                     }}
-                    participants={participants.users}
-                    attachmentTracker={attachmentTracker}
-                    persistenceKey={makeInputValuePersistenceKey({
-                      channelId: props.channelId,
-                    })}
-                    onReady={(handle) => {
-                      dragState.setAttachFilesToChannel(handle.attachFiles);
-                      dragState.setEntityMentionInputHandlers(handle);
-                      setChannelInputHandle(handle);
-                    }}
-                    onChange={(snapshot) =>
-                      void setChannelInputSnapshot(snapshot)
-                    }
-                    onSend={onSend}
-                    onStartTyping={() =>
-                      typingMutation.mutate({
+                    isHidden={isChannelInputHidden()}
+                  >
+                    <ChannelInput
+                      autofocus={props.autofocus}
+                      collapsible
+                      input={{
+                        mode: 'channel',
+                        id: `channel-input-${props.channelId}`,
+                        placeholder: 'Message channel',
+                        isDraggingOverChannel:
+                          dragState.isDraggingOverChannel(),
+                        isValidChannelDrag: dragState.isValidChannelDrag(),
+                      }}
+                      participants={participants.users}
+                      attachmentTracker={attachmentTracker}
+                      persistenceKey={makeInputValuePersistenceKey({
                         channelId: props.channelId,
-                        action: 'start',
-                      })
-                    }
-                    onStopTyping={() =>
-                      typingMutation.mutate({
-                        channelId: props.channelId,
-                        action: 'stop',
-                      })
-                    }
-                  />
-                </ChannelInputContainer>
+                      })}
+                      onReady={(handle) => {
+                        dragState.setAttachFilesToChannel(handle.attachFiles);
+                        dragState.setEntityMentionInputHandlers(handle);
+                        setChannelInputHandle(handle);
+                      }}
+                      onChange={(snapshot) =>
+                        void setChannelInputSnapshot(snapshot)
+                      }
+                      onSend={onSend}
+                      onStartTyping={() =>
+                        typingMutation.mutate({
+                          channelId: props.channelId,
+                          action: 'start',
+                        })
+                      }
+                      onStopTyping={() =>
+                        typingMutation.mutate({
+                          channelId: props.channelId,
+                          action: 'stop',
+                        })
+                      }
+                    />
+                  </ChannelInputContainer>
+                </FloatRegionOrInline>
               </DebugSuspense>
             </ChannelDropZone>
           </MaybeMessageActionDrawerManager>

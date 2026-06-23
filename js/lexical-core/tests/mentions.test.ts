@@ -7,6 +7,7 @@ import {
   parseDocumentMentions,
   parseGroupMentions,
   parseLinks,
+  parsePullRequestMentions,
   parseUserMentions,
 } from '../utils/parsers';
 
@@ -99,6 +100,24 @@ describe('parseDocumentMentions', () => {
   });
 });
 
+describe('parsePullRequestMentions', () => {
+  it('extracts the label from a PR mention', () => {
+    const input =
+      '<m-pr-mention>{"id":"foreign-1","label":"macro/macro#123 Fix bug"}</m-pr-mention>';
+    expect(parsePullRequestMentions(input)).toBe('macro/macro#123 Fix bug');
+  });
+
+  it('falls back to the id when label is missing', () => {
+    const input = '<m-pr-mention>{"id":"foreign-1"}</m-pr-mention>';
+    expect(parsePullRequestMentions(input)).toBe('foreign-1');
+  });
+
+  it('returns empty string for invalid JSON', () => {
+    const input = '<m-pr-mention>???</m-pr-mention>';
+    expect(parsePullRequestMentions(input)).toBe('');
+  });
+});
+
 describe('parseLinks', () => {
   it('extracts text from link', () => {
     const input =
@@ -182,6 +201,12 @@ describe('markdownToPlainText', () => {
     expect(markdownToPlainText(input)).toBe('Hey @here, check this out!');
   });
 
+  it('handles text with PR mentions', () => {
+    const input =
+      'See <m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>.';
+    expect(markdownToPlainText(input)).toBe('See macro/macro#123.');
+  });
+
   it('returns original text when no mentions present', () => {
     const input = 'Just plain text here.';
     expect(markdownToPlainText(input)).toBe('Just plain text here.');
@@ -219,6 +244,14 @@ describe('markdownToEmbeddingText', () => {
     expect(markdownToEmbeddingText(input)).toBe('[Spec](md:doc-2)');
   });
 
+  it('keeps ids from PR mentions', () => {
+    const input =
+      'See <m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>.';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'See [macro/macro#123](pr:foreign-1).'
+    );
+  });
+
   it('keeps link urls', () => {
     const input =
       'See <m-link>{"url":"https://example.com","text":"this link"}</m-link>.';
@@ -254,9 +287,9 @@ describe('markdownToEmbeddingText', () => {
     const payload = btoa(
       '{"documentId":"doc-3","documentName":"Spec","blockName":"md"}'
     );
-    expect(
-      markdownToEmbeddingText(`<m-snapshot>${payload}</m-snapshot>`)
-    ).toBe('[Spec](md:doc-3)');
+    expect(markdownToEmbeddingText(`<m-snapshot>${payload}</m-snapshot>`)).toBe(
+      '[Spec](md:doc-3)'
+    );
   });
 
   it('keeps stable ids for dss images and urls for videos', () => {
@@ -289,9 +322,7 @@ describe('markdownToEmbeddingText', () => {
   it('unwraps email thread embeds and resolves mentions inside them', () => {
     const input =
       '<m-email-thread-embed>{"tag":"div","classes":["macro_quote"]}From <m-contact-mention>{"name":"Ness Chu"}</m-contact-mention>:\\nplease fix</m-email-thread-embed>';
-    expect(markdownToEmbeddingText(input)).toBe(
-      'From Ness Chu:\nplease fix'
-    );
+    expect(markdownToEmbeddingText(input)).toBe('From Ness Chu:\nplease fix');
   });
 
   it('drops watermarks and unrecognized m-* tags entirely', () => {

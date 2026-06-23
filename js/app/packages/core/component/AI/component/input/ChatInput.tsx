@@ -124,9 +124,12 @@ export function ChatInput(props: ChatInputComponentProps) {
   });
 
   const isEmptyInput = () => markdownText().trim().length === 0;
+  const hasAttachedFiles = () => attachments.attached().length > 0;
   const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
-    !isEmptyInput() && !generating() && !hasUploadingAttachments();
+    (!isEmptyInput() || hasAttachedFiles()) &&
+    !generating() &&
+    !hasUploadingAttachments();
 
   const LINE_HEIGHT_THRESHOLD = 40;
   let mdRef: undefined | HTMLDivElement;

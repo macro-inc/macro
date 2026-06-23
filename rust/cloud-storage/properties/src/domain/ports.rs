@@ -168,3 +168,19 @@ pub trait NotificationService: Send + Sync + 'static {
         >,
     ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
 }
+
+/// Port for keeping an entity's indexed properties in sync after a mutation.
+///
+/// Mirrors the per-domain `*SearchIndexer` ports (e.g. `CallSearchIndexer`):
+/// the domain calls it on a write and an SQS-backed adapter in the composition
+/// root publishes the upsert. `dyn`-compatible (boxed future) so it can be an
+/// optional collaborator on the service without adding a generic parameter.
+pub trait PropertySearchIndexer: Send + Sync + std::fmt::Debug {
+    /// Enqueue an upsert of the entity's indexed properties. Best-effort —
+    /// callers log and continue on error.
+    fn enqueue_upsert(
+        &self,
+        entity_id: String,
+        entity_type: EntityType,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>;
+}

@@ -9762,6 +9762,7 @@
       },
       "ApiEntityFilterAst": {
         "type": "object",
+        "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
           "callf": {
             "description": "the filters that should be applied to the call entity"
@@ -9774,6 +9775,9 @@
           },
           "chanf": {
             "description": "the filters that should be applied to the channel entity"
+          },
+          "cthf": {
+            "description": "the filters that should be applied to the channel-thread entity"
           },
           "df": {
             "description": "the filters that should be applied to the document entity"
@@ -10810,6 +10814,7 @@
       },
       "Channel": {
         "type": "object",
+        "description": "Channel metadata in soup payloads.",
         "required": [
           "id",
           "channel_type",
@@ -10819,34 +10824,42 @@
         ],
         "properties": {
           "channel_type": {
-            "$ref": "#/components/schemas/ChannelType"
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Channel type."
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Channel id."
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Channel display name."
           },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int32",
+            "description": "Organization id.",
             "minimum": 0
           },
           "owner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Channel owner."
           },
           "team_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Team id."
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },
@@ -10910,6 +10923,7 @@
       },
       "ChannelMessage": {
         "type": "object",
+        "description": "Lightweight channel message for soup payloads.",
         "required": [
           "message_id",
           "sender_id",
@@ -10920,37 +10934,44 @@
         ],
         "properties": {
           "content": {
-            "type": "string"
+            "type": "string",
+            "description": "Message content."
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp."
           },
           "deleted_at": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Deletion timestamp."
           },
           "mentions": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+            "description": "Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`."
           },
           "message_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Message id."
           },
           "sender_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Sender id."
           },
           "thread_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Thread parent id."
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },
@@ -10994,25 +11015,31 @@
       },
       "ChannelParticipant": {
         "type": "object",
+        "description": "A user's membership in a channel.",
         "required": ["channel_id", "user_id", "role", "joined_at"],
         "properties": {
           "channel_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Channel id for the participant membership."
           },
           "joined_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the participant joined the channel."
           },
           "left_at": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the participant left the channel, if any."
           },
           "role": {
-            "$ref": "#/components/schemas/ParticipantRole"
+            "$ref": "#/components/schemas/ParticipantRole",
+            "description": "Participant role in the channel."
           },
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Participant user id."
           }
         }
       },
@@ -11112,6 +11139,33 @@
           }
         }
       },
+      "ChannelThreadFilters": {
+        "type": "object",
+        "description": "The channel thread filters used to filter down channel-thread entities.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
+          },
+          "root_sender_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sender IDs for the root thread message. Empty to include all root senders."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel thread parent message IDs to include. Empty to include all accessible threads."
+          }
+        }
+      },
       "ChannelType": {
         "type": "string",
         "description": "Type of channel.",
@@ -11141,16 +11195,19 @@
       },
       "ChannelWithParticipants": {
         "type": "object",
+        "description": "Channel metadata together with its participants.",
         "required": ["channel", "participants"],
         "properties": {
           "channel": {
-            "$ref": "#/components/schemas/Channel"
+            "$ref": "#/components/schemas/Channel",
+            "description": "Channel metadata."
           },
           "participants": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ChannelParticipant"
-            }
+            },
+            "description": "Participants in the channel."
           }
         }
       },
@@ -13455,6 +13512,10 @@
             "$ref": "#/components/schemas/ChannelFilters",
             "description": "the bundled [ChannelFilters]"
           },
+          "channel_thread_filters": {
+            "$ref": "#/components/schemas/ChannelThreadFilters",
+            "description": "the bundled [ChannelThreadFilters]"
+          },
           "chat_filters": {
             "$ref": "#/components/schemas/ChatFilters",
             "description": "the bundled [ChatFilters]"
@@ -15090,7 +15151,8 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/GroupedSoupInitialPage"
+                "$ref": "#/components/schemas/GroupedSoupInitialPage",
+                "description": "Initial grouped response containing multiple groups."
               },
               {
                 "type": "object",
@@ -15102,12 +15164,14 @@
                   }
                 }
               }
-            ]
+            ],
+            "description": "Initial grouped response containing multiple groups."
           },
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/GroupedSoupGroupPage"
+                "$ref": "#/components/schemas/GroupedSoupGroupPage",
+                "description": "Follow-up response for one specific group."
               },
               {
                 "type": "object",
@@ -15119,7 +15183,8 @@
                   }
                 }
               }
-            ]
+            ],
+            "description": "Follow-up response for one specific group."
           }
         ],
         "description": "Response for grouped soup queries."
@@ -15212,6 +15277,7 @@
       },
       "LatestMessage": {
         "type": "object",
+        "description": "Latest-message bundle for soup payloads.",
         "properties": {
           "latest_message": {
             "oneOf": [
@@ -15219,7 +15285,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest message including thread replies."
               }
             ]
           },
@@ -15229,7 +15296,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest top-level non-thread message."
               }
             ]
           }
@@ -15404,6 +15472,7 @@
       },
       "Params": {
         "type": "object",
+        "description": "Query parameters shared by soup endpoints.",
         "properties": {
           "expand": {
             "type": ["boolean", "null"],
@@ -16059,7 +16128,8 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/PostGroupedSoupAstInitialRequest"
+                "$ref": "#/components/schemas/PostGroupedSoupAstInitialRequest",
+                "description": "Initial grouped soup request."
               },
               {
                 "type": "object",
@@ -16071,12 +16141,14 @@
                   }
                 }
               }
-            ]
+            ],
+            "description": "Initial grouped soup request."
           },
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/PostGroupedSoupAstGroupPageRequest"
+                "$ref": "#/components/schemas/PostGroupedSoupAstGroupPageRequest",
+                "description": "Request for a page within one group."
               },
               {
                 "type": "object",
@@ -16088,7 +16160,8 @@
                   }
                 }
               }
-            ]
+            ],
+            "description": "Request for a page within one group."
           }
         ],
         "description": "Request body for grouped soup queries with AST filters."
@@ -16182,7 +16255,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "Request body for the AST soup endpoint."
       },
       "PostSoupRequest": {
         "allOf": [
@@ -16201,7 +16275,8 @@
               }
             }
           }
-        ]
+        ],
+        "description": "Request body for the typed soup endpoint."
       },
       "PostTypingRequest": {
         "type": "object",
@@ -17175,10 +17250,12 @@
               }
             }
           }
-        ]
+        ],
+        "description": "API representation of a soup item with its frecency score."
       },
       "SoupApiSort": {
         "type": "string",
+        "description": "Sort options accepted by non-grouped soup API endpoints.",
         "enum": [
           "viewed_at",
           "created_at",
@@ -17189,35 +17266,44 @@
       },
       "SoupAttachment": {
         "type": "object",
+        "description": "An email attachment as displayed in Soup.",
         "required": ["id", "messageId", "createdAt"],
         "properties": {
           "contentId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Content id for inline attachments."
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the attachment was created."
           },
           "filename": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Attachment filename."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Attachment id."
           },
           "messageId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Message id that owns this attachment."
           },
           "mimeType": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Attachment MIME type."
           },
           "providerAttachmentId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Provider-specific attachment id."
           },
           "sizeBytes": {
             "type": ["integer", "null"],
-            "format": "int64"
+            "format": "int64",
+            "description": "Attachment size in bytes."
           }
         }
       },
@@ -17321,28 +17407,112 @@
       "SoupChannel": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/ChannelWithParticipants"
+            "$ref": "#/components/schemas/ChannelWithParticipants",
+            "description": "Channel metadata and participants."
           },
           {
-            "$ref": "#/components/schemas/LatestMessage"
+            "$ref": "#/components/schemas/LatestMessage",
+            "description": "Latest message metadata for the channel."
           },
           {
             "type": "object",
             "properties": {
               "interacted_at": {
                 "type": ["string", "null"],
-                "format": "date-time"
+                "format": "date-time",
+                "description": "Timestamp when the requesting user last interacted with this channel."
               },
               "viewed_at": {
                 "type": ["string", "null"],
-                "format": "date-time"
+                "format": "date-time",
+                "description": "Timestamp when the requesting user last viewed this channel."
               }
             }
           }
-        ]
+        ],
+        "description": "A channel as displayed in Soup."
+      },
+      "SoupChannelThread": {
+        "type": "object",
+        "description": "A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "sender",
+          "content",
+          "created_at",
+          "updated_at",
+          "thread",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupMessageAttachment"
+            },
+            "description": "Attachments on this message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Deletion timestamp."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Edit timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCountedReaction"
+            },
+            "description": "Reactions on this message."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/SoupMessageSender",
+            "description": "Structured sender identity."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender id."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/SoupThreadInfo",
+            "description": "Thread metadata and preview replies."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
       },
       "SoupChat": {
         "type": "object",
+        "description": "A chat as displayed in Soup.",
         "required": [
           "id",
           "name",
@@ -17406,24 +17576,48 @@
       },
       "SoupContact": {
         "type": "object",
+        "description": "A contact participating in an email thread as displayed in Soup.",
         "required": ["id", "linkId"],
         "properties": {
           "emailAddress": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Contact email address."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Contact id."
           },
           "linkId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Connected account link id for the contact."
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Contact display name."
           },
           "sfsPhotoUrl": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Contact photo URL from SFS, if available."
+          }
+        }
+      },
+      "SoupCountedReaction": {
+        "type": "object",
+        "description": "A reaction with emoji and user list.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "Emoji string."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User ids who added this reaction."
           }
         }
       },
@@ -17518,6 +17712,7 @@
       },
       "SoupDocument": {
         "type": "object",
+        "description": "A document as displayed in Soup.",
         "required": [
           "id",
           "documentVersionId",
@@ -17647,6 +17842,7 @@
       },
       "SoupEmailThreadPreview": {
         "type": "object",
+        "description": "Email thread preview data as displayed in Soup.",
         "required": [
           "id",
           "ownerId",
@@ -17661,66 +17857,84 @@
         "properties": {
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the thread was created."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Thread id."
           },
           "inboxVisible": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the thread should appear in the inbox."
           },
           "isDraft": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the thread contains a draft."
           },
           "isImportant": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the thread is marked important."
           },
           "isRead": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the thread has been read."
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Thread display name or subject."
           },
           "ownerId": {
-            "type": "string"
+            "type": "string",
+            "description": "Owner user id."
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Project id associated with the thread."
           },
           "providerId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Provider-specific thread id."
           },
           "senderEmail": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Sender email address for the preview."
           },
           "senderName": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Sender display name for the preview."
           },
           "senderPhotoUrl": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Sender photo URL for the preview."
           },
           "snippet": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Thread snippet."
           },
           "sortTs": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp used for email thread sorting."
           },
           "updatedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the thread was last updated."
           },
           "viewedAt": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the requesting user last viewed the thread."
           }
         }
       },
       "SoupEnrichedEmailThreadPreview": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/SoupEmailThreadPreview"
+            "$ref": "#/components/schemas/SoupEmailThreadPreview",
+            "description": "Base email thread preview."
           },
           {
             "type": "object",
@@ -17730,29 +17944,34 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupAttachment"
-                }
+                },
+                "description": "Attachments on the thread."
               },
               "labels": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupLabel"
-                }
+                },
+                "description": "Labels attached to the thread."
               },
               "participants": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupContact"
-                }
+                },
+                "description": "Contacts participating in the thread."
               },
               "properties": {
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupProperty"
-                }
+                },
+                "description": "Properties attached to the thread."
               }
             }
           }
-        ]
+        ],
+        "description": "Email thread preview enriched with related metadata for Soup."
       },
       "SoupForeignEntity": {
         "type": "object",
@@ -17809,10 +18028,12 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Document item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupDocument"
+                "$ref": "#/components/schemas/SoupDocument",
+                "description": "Document item."
               },
               "tag": {
                 "type": "string",
@@ -17822,10 +18043,12 @@
           },
           {
             "type": "object",
+            "description": "Chat item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupChat"
+                "$ref": "#/components/schemas/SoupChat",
+                "description": "Chat item."
               },
               "tag": {
                 "type": "string",
@@ -17835,10 +18058,12 @@
           },
           {
             "type": "object",
+            "description": "Project item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupProject"
+                "$ref": "#/components/schemas/SoupProject",
+                "description": "Project item."
               },
               "tag": {
                 "type": "string",
@@ -17848,10 +18073,12 @@
           },
           {
             "type": "object",
+            "description": "Email thread item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview"
+                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview",
+                "description": "Email thread item."
               },
               "tag": {
                 "type": "string",
@@ -17861,10 +18088,12 @@
           },
           {
             "type": "object",
+            "description": "Channel item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupChannel"
+                "$ref": "#/components/schemas/SoupChannel",
+                "description": "Channel item."
               },
               "tag": {
                 "type": "string",
@@ -17874,10 +18103,27 @@
           },
           {
             "type": "object",
+            "description": "Channel thread item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupCallRecord"
+                "$ref": "#/components/schemas/SoupChannelThread",
+                "description": "Channel thread item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channelThread"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Call record item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCallRecord",
+                "description": "Call record item."
               },
               "tag": {
                 "type": "string",
@@ -17887,10 +18133,12 @@
           },
           {
             "type": "object",
+            "description": "CRM company item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupCrmCompany"
+                "$ref": "#/components/schemas/SoupCrmCompany",
+                "description": "CRM company item."
               },
               "tag": {
                 "type": "string",
@@ -17900,10 +18148,12 @@
           },
           {
             "type": "object",
+            "description": "Foreign entity item.",
             "required": ["data", "tag"],
             "properties": {
               "data": {
-                "$ref": "#/components/schemas/SoupForeignEntity"
+                "$ref": "#/components/schemas/SoupForeignEntity",
+                "description": "Foreign entity item."
               },
               "tag": {
                 "type": "string",
@@ -17911,10 +18161,12 @@
               }
             }
           }
-        ]
+        ],
+        "description": "A single item in the Soup feed."
       },
       "SoupLabel": {
         "type": "object",
+        "description": "An email label as displayed in Soup.",
         "required": [
           "id",
           "linkId",
@@ -17928,47 +18180,122 @@
         "properties": {
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Timestamp when the label was created."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Label id."
           },
           "labelListVisibility": {
-            "$ref": "#/components/schemas/SoupLabelListVisibility"
+            "$ref": "#/components/schemas/SoupLabelListVisibility",
+            "description": "Label visibility in label lists."
           },
           "linkId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Connected account link id for the label."
           },
           "messageListVisibility": {
-            "$ref": "#/components/schemas/SoupMessageListVisibility"
+            "$ref": "#/components/schemas/SoupMessageListVisibility",
+            "description": "Label visibility in message lists."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Label display name."
           },
           "providerLabelId": {
-            "type": "string"
+            "type": "string",
+            "description": "Provider-specific label id."
           },
           "type": {
-            "$ref": "#/components/schemas/SoupLabelType"
+            "$ref": "#/components/schemas/SoupLabelType",
+            "description": "Label type."
           }
         }
       },
       "SoupLabelListVisibility": {
         "type": "string",
+        "description": "Gmail-style label list visibility.",
         "enum": ["labelShow", "labelShowIfUnread", "labelHide"]
       },
       "SoupLabelType": {
         "type": "string",
+        "description": "Whether an email label is provider-created or user-created.",
         "enum": ["system", "user"]
+      },
+      "SoupMessageAttachment": {
+        "type": "object",
+        "description": "An attachment on a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height for images."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width for images."
+          }
+        }
       },
       "SoupMessageListVisibility": {
         "type": "string",
+        "description": "Gmail-style message list visibility for a label.",
         "enum": ["show", "hide"]
+      },
+      "SoupMessageSender": {
+        "type": "object",
+        "description": "Public sender identity for soup channel messages.",
+        "required": ["type", "id"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar URL for bot senders."
+          },
+          "id": {
+            "type": "string",
+            "description": "Sender id without the storage namespace prefix."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name for bot senders."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SoupMessageSenderType",
+            "description": "Sender type."
+          }
+        }
+      },
+      "SoupMessageSenderType": {
+        "type": "string",
+        "description": "Public sender type for soup channel messages.",
+        "enum": ["user", "bot"]
       },
       "SoupPage": {
         "type": "object",
+        "description": "Response page for non-grouped soup endpoints.",
         "required": ["items"],
         "properties": {
           "items": {
@@ -17984,6 +18311,7 @@
       },
       "SoupProject": {
         "type": "object",
+        "description": "A project as displayed in Soup.",
         "required": [
           "id",
           "name",
@@ -18059,6 +18387,92 @@
                 "description": "The property value, if set"
               }
             ]
+          }
+        }
+      },
+      "SoupThreadInfo": {
+        "type": "object",
+        "description": "Thread metadata and preview replies for soup channel messages.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp of the latest reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupThreadReply"
+            },
+            "description": "Preview replies."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total reply count."
+          }
+        }
+      },
+      "SoupThreadReply": {
+        "type": "object",
+        "description": "A thread reply shown in preview.",
+        "required": [
+          "id",
+          "sender_id",
+          "sender",
+          "content",
+          "created_at",
+          "updated_at",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupMessageAttachment"
+            },
+            "description": "Attachments on this reply."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reply content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Edit timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reply id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupCountedReaction"
+            },
+            "description": "Reactions on this reply."
+          },
+          "sender": {
+            "$ref": "#/components/schemas/SoupMessageSender",
+            "description": "Structured sender identity."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender id."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },

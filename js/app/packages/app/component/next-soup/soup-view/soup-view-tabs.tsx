@@ -3,6 +3,7 @@ import {
   type PresetContext,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
+import { PillTabs } from '@app/component/mobile/PillTabs';
 import type { FilterID } from '@app/component/next-soup/filters';
 import type { FilterContext } from '@app/component/next-soup/filters/configs';
 import {
@@ -15,7 +16,6 @@ import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-b
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { MobileTabs } from '@core/component/MobileTabs';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
@@ -283,23 +283,19 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-surface border-t border-edge-muted h-11 px-1 flex gap-1">
+    <div class="flex items-center px-(--mobile-chrome-gutter)">
       <MobileFilterDrawer />
-      <div class="flex-1 min-w-0 h-full">
-        <Switch>
-          <For
-            each={
-              Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
-            }
-          >
-            {(v) => (
-              <Match when={listView() === v}>
-                <MobileViewTabs view={v} />
-              </Match>
-            )}
-          </For>
-        </Switch>
-      </div>
+      <Switch>
+        <For
+          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+        >
+          {(v) => (
+            <Match when={listView() === v}>
+              <MobileViewTabs view={v} />
+            </Match>
+          )}
+        </For>
+      </Switch>
     </div>
   );
 };
@@ -310,12 +306,13 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const isTeamAdmin = useIsTeamAdmin();
   const list = () =>
     filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
+  const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
   return (
-    <MobileTabs
-      list={list()}
-      value={activeTab()}
-      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+    <PillTabs
+      class="pl-2"
+      items={list()}
+      value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
   );

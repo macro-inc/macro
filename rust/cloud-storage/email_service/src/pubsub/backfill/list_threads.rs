@@ -7,6 +7,7 @@ use models_email::email::service::backfill::{
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::email::service::thread::ListThreadsPayload;
+use models_email::gmail::labels::SystemLabelID;
 use models_email::gmail::operations::GmailApiOperation;
 use std::cmp::min;
 
@@ -18,6 +19,10 @@ const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 /// and sends a BackfillThread message for each thread_id in the batch. If there
 /// are still threads left to fetch, it will trigger another ListThreads message
 /// to be created, looping until all threads requiring population have been listed.
+///
+/// The very first ListThreads (enqueued by Init) is a `priority_pass`: it lists
+/// only the user's most important threads first, then hands off to this normal
+/// most-recent-to-least sweep.
 pub async fn list_threads(
     ctx: &PubSubContext,
     access_token: &str,
@@ -25,6 +30,10 @@ pub async fn list_threads(
     link: &link::Link,
     job: &BackfillJob,
 ) -> Result<(), ProcessingError> {
+    if scope.payload.priority_pass {
+        return list_priority_threads(ctx, access_token, scope, link, job).await;
+    }
+
     let p = &scope.payload;
     let total_threads = job.total_threads;
     let threads_retrieved_count = job.threads_retrieved_count;
@@ -49,6 +58,7 @@ pub async fn list_threads(
             access_token,
             num_threads_to_list as u32,
             p.next_page_token.as_deref(),
+            &[],
         )
         .await
     {
@@ -109,7 +119,10 @@ pub async fn list_threads(
             backfill_operation: BackfillOperation::ListThreads(JobScopedPayload {
                 link_id: scope.link_id,
                 job_id: scope.job_id,
-                payload: ListThreadsPayload { next_page_token },
+                payload: ListThreadsPayload {
+                    next_page_token,
+                    priority_pass: false,
+                },
             }),
         };
 
@@ -135,6 +148,130 @@ pub async fn list_threads(
             .await
             .inspect_err(|e| tracing::error!(error = ?e, "Failed to delete backfill job progress"));
     }
+
+    Ok(())
+}
+
+/// The priority first pass (see [`ListThreadsPayload::priority_pass`]). Does a
+/// single CATEGORY_PERSONAL-filtered listing of up to `BACKFILL_THREAD_BATCH_SIZE`
+/// threads, enqueues a BackfillThread for each, bumps the job's redis total to
+/// account for the normal sweep re-covering these same threads, then hands off
+/// to the normal sweep. Unlike the normal pass it does not paginate and does
+/// not touch `threads_retrieved_count` (that counter drives the normal sweep's
+/// batch math and must stay equal to the real mailbox count).
+async fn list_priority_threads(
+    ctx: &PubSubContext,
+    access_token: &str,
+    scope: &JobScopedPayload<ListThreadsPayload>,
+    link: &link::Link,
+    job: &BackfillJob,
+) -> Result<(), ProcessingError> {
+    // Never request more than the job's overall thread budget (which already
+    // accounts for any requested limit set at job creation).
+    let num_threads_to_list = min(BACKFILL_THREAD_BATCH_SIZE as i32, job.total_threads);
+
+    if num_threads_to_list > 0 {
+        check_gmail_rate_limit(CheckGmailRateLimitArgs {
+            redis_client: &ctx.redis_client,
+            link_id: link.id,
+            gmail_operation: GmailApiOperation::ThreadsList,
+            retryable: true,
+            is_backfill: true,
+        })
+        .await?;
+
+        // CATEGORY_PERSONAL is Gmail's "important to a human" bucket; seeding
+        // these first means a brand-new user sees signal immediately.
+        let thread_list = match ctx
+            .gmail_client
+            .list_threads(
+                access_token,
+                num_threads_to_list as u32,
+                None,
+                &[SystemLabelID::CategoryPersonal.as_str()],
+            )
+            .await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                return Err(ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::GmailApiFailed,
+                    source: e.context("Failed to list priority threads from Gmail API"),
+                }));
+            }
+        };
+
+        let threads = thread_list.threads;
+
+        // Bump the job total to cover these extra BackfillThread messages: the
+        // normal sweep re-covers the same threads and re-increments the
+        // completed counter via the skip path, so without this the
+        // `completed >= total` check would finalize the job early. Bump before
+        // enqueuing so no priority thread can complete against a stale total;
+        // after this only non-retryable enqueues remain, so a retry can't
+        // double-bump.
+        if !threads.is_empty() {
+            ctx.redis_client
+                .add_to_total_threads(scope.job_id, threads.len() as i32)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::RedisQueryFailed,
+                        source: e.context("Failed to bump total_threads for priority pass"),
+                    })
+                })?;
+        }
+
+        for thread in &threads {
+            let thread_sqs_msg = BackfillPubsubMessage {
+                backfill_operation: BackfillOperation::BackfillThread(JobScopedPayload {
+                    link_id: scope.link_id,
+                    job_id: scope.job_id,
+                    payload: BackfillThreadPayload {
+                        thread_provider_id: thread.provider_id.clone(),
+                    },
+                }),
+            };
+
+            ctx.sqs_client
+                .enqueue_email_backfill_message(thread_sqs_msg)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::SqsEnqueueFailed,
+                        source: e.context(format!(
+                            "Failed to enqueue priority thread {}",
+                            thread.provider_id
+                        )),
+                    })
+                })?;
+        }
+    }
+
+    // Hand off to the normal most-recent-to-least sweep from the beginning. This
+    // runs regardless of how many priority threads were found.
+    let list_thread_msg = BackfillPubsubMessage {
+        backfill_operation: BackfillOperation::ListThreads(JobScopedPayload {
+            link_id: scope.link_id,
+            job_id: scope.job_id,
+            payload: ListThreadsPayload {
+                next_page_token: None,
+                priority_pass: false,
+            },
+        }),
+    };
+
+    ctx.sqs_client
+        .enqueue_email_backfill_message(list_thread_msg)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e.context(
+                    "Failed to enqueue normal ListThreads after priority pass".to_string(),
+                ),
+            })
+        })?;
 
     Ok(())
 }

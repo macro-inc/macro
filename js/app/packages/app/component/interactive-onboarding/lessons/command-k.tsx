@@ -3,7 +3,6 @@ import { CommandMenuInner, CommandState } from '@app/component/command';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { IS_MAC } from '@core/constant/isMac';
 import { createFreshSearch } from '@core/util/freshSort';
-import { AnimatedCommandIcon } from '@icon/wide-command';
 import { Dialog } from '@kobalte/core/dialog';
 import {
   createEffect,
@@ -13,7 +12,7 @@ import {
   onMount,
 } from 'solid-js';
 import { MockAppChrome } from '../components/MockAppChrome';
-import { ClickCallout, HotkeyCallout } from '../components-lib';
+import { HotkeyCallout } from '../components-lib';
 import { OnboardingEntityList } from '../OnboardingEntityList';
 import {
   filteredSandboxEntities,
@@ -32,7 +31,7 @@ const CATEGORY_TO_BUCKETS: Record<CategoryFilter, string[] | null> = {
   all: null, // no filter
   channels: ['channel'],
   dms: ['dm'],
-  documents: ['note', 'document'],
+  documents: ['note', 'document', 'snippet'],
   tasks: ['task'],
   chats: ['chat'],
   projects: ['project'],
@@ -52,16 +51,6 @@ function CommandKContent(_props: LessonContentProps) {
           keys={[IS_MAC ? '⌘' : 'Ctrl', 'K']}
           separator="+"
           label=""
-          completed={completed()}
-        />
-        <div class="flex items-center gap-3 text-sm text-ink/40">
-          <div class="h-px w-8 bg-edge-muted" />
-          or
-          <div class="h-px flex-1 bg-edge-muted" />
-        </div>
-        <ClickCallout
-          icon={AnimatedCommandIcon}
-          label="in the sidebar (bottom)"
           completed={completed()}
         />
       </div>
@@ -146,11 +135,7 @@ function CommandKDemo(props: LessonContentProps) {
   return (
     <>
       {/* Entity list visible behind the modal */}
-      <MockAppChrome
-        onCommandClick={() => setCommandKOpen((v) => !v)}
-        highlightCommand
-        scopeId={props.scopeId}
-      >
+      <MockAppChrome scopeId={props.scopeId}>
         <OnboardingEntityList soup={soup} />
       </MockAppChrome>
 

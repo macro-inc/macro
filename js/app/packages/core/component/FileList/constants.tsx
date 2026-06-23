@@ -77,4 +77,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   task: defaultFileColor,
   snippet: 'bg-snippet/20 group/item',
   automation: defaultFileColor,
+  pr: defaultFileColor,
 };

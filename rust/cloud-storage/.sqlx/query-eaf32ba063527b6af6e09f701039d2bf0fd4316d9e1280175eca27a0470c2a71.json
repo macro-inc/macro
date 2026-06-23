@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            property_definition_id,\n            values as \"values: serde_json::Value\"\n        FROM entity_properties\n        WHERE entity_id = $1\n          AND entity_type = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "values: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "eaf32ba063527b6af6e09f701039d2bf0fd4316d9e1280175eca27a0470c2a71"
+}

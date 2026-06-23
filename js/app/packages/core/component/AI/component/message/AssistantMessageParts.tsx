@@ -50,7 +50,20 @@ type RenderItem =
       key: string;
       part: AssistantMessagePart;
       index: number;
+    }
+  | {
+      type: 'standaloneTool';
+      key: string;
+      part: Extract<AssistantMessagePart, { type: 'toolCall' }>;
+      index: number;
     };
+
+/**
+ * Tools rendered OUTSIDE the standard grouped tool chrome (no `Tool.Group`
+ * background) — they own their full presentation. The dashboard renders as a
+ * full-bleed view, not a tool row.
+ */
+const STANDALONE_TOOLS: ReadonlySet<string> = new Set(['DisplayResults']);
 
 export function AssistantMessageParts(props: {
   parts: AssistantMessagePart[];
@@ -136,6 +149,20 @@ export function AssistantMessageParts(props: {
     keyedParts().orderedKeys.forEach((key, index) => {
       const part = keyedParts().partsByKey.get(key);
       if (!part) return;
+
+      // Standalone tools (e.g. the dashboard) break out of the tool group and
+      // render full-bleed on their own.
+      if (part.type === 'toolCall' && STANDALONE_TOOLS.has(part.name)) {
+        flushToolGroup();
+        orderedKeys.push(key);
+        itemByKey.set(key, {
+          type: 'standaloneTool',
+          key,
+          part,
+          index,
+        });
+        return;
+      }
 
       if (part.type === 'toolCall' || part.type === 'mcpToolCall') {
         pendingToolEntries.push({ key, part, index });
@@ -244,6 +271,31 @@ export function AssistantMessageParts(props: {
     return <Tool.Group>{entries()}</Tool.Group>;
   }
 
+  /** Renders a standalone tool (e.g. the dashboard) with no group chrome. */
+  function StandaloneToolView(props: {
+    item: Accessor<Extract<RenderItem, { type: 'standaloneTool' }>>;
+  }) {
+    const part = () => props.item().part;
+    return (
+      <RenderTool
+        tool_id={part().id}
+        chat_id={chat.chatId()}
+        json={part().json}
+        name={part().name}
+        response={responseById().get(part().id)}
+        message_id={outer.message.id}
+        part_index={props.item().index}
+        isComplete={isCompleteSelector(part().id)}
+        renderContext={{
+          renderContext: {
+            isStreaming: outer.isStreaming,
+            grouped: false,
+          },
+        }}
+      />
+    );
+  }
+
   function PartView(props: {
     item: Accessor<Extract<RenderItem, { type: 'part' }>>;
   }) {
@@ -302,6 +354,15 @@ export function AssistantMessageParts(props: {
         <Match when={type() === 'part'}>
           <PartView
             item={props.item as Accessor<Extract<RenderItem, { type: 'part' }>>}
+          />
+        </Match>
+        <Match when={type() === 'standaloneTool'}>
+          <StandaloneToolView
+            item={
+              props.item as Accessor<
+                Extract<RenderItem, { type: 'standaloneTool' }>
+              >
+            }
           />
         </Match>
       </Switch>

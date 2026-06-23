@@ -33,8 +33,6 @@ on:
         required: true
       DD_API_KEY:
         required: true
-      DD_WEB_APP_ID:
-        required: true
       DD_WEB_APP_TOKEN:
         required: true
       SEGMENT_WRITE_KEY:
@@ -69,7 +67,6 @@ jobs:
         working-directory: js/app
         run: just build-${{ inputs.environment }}
         env:
-          VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
           VITE_DD_HASH: ${{ github.sha }}
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
@@ -79,12 +76,12 @@ jobs:
           cd infra
           bun install
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
         with:
           command: up
           stack-name: macro-inc/${{ inputs.environment }}

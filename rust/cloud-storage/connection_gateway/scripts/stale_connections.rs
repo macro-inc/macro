@@ -1,10 +1,16 @@
 //! This entrypoint is used to periodically clean up stale connections from the db
 use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, Utc};
+use macro_env_var::maybe_env_vars;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const DEFAULT_TIMEOUT_THRESHOLD: u64 = 60_000; // 60 seconds in milliseconds
+
+maybe_env_vars! {
+    struct ConnectionGatewayTable;
+    struct DeleteStale;
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code, unused)]
@@ -114,10 +120,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get table name from environment variable or command line argument
     let table_name = std::env::args()
         .nth(1)
-        .or_else(|| std::env::var("CONNECTION_GATEWAY_TABLE").ok())
+        .or_else(|| ConnectionGatewayTable::new().map(|table| table.to_string()))
         .expect("Please provide table name as argument or set CONNECTION_GATEWAY_TABLE env var");
 
-    let delete_mode = std::env::var("DELETE_STALE").is_ok();
+    let delete_mode = DeleteStale::new().is_some();
 
     println!("Scanning table: {}", table_name);
     println!(

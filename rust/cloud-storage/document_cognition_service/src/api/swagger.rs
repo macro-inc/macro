@@ -17,6 +17,10 @@ use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence, TargetType};
+use ai_projections::inbound::axum_router::upsert_projection::{
+    ProjectionStateResponse, UpsertProjectionRequest,
+};
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
@@ -86,6 +90,7 @@ use utoipa::OpenApi;
             memory_api::get_memory_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
+            ai_projections::inbound::axum_router::upsert_projection::handler::<crate::api::context::DcsAiProjectionService>,
             mcp_api::list_servers,
             mcp_api::add_server,
             mcp_api::update_server,
@@ -184,6 +189,14 @@ use utoipa::OpenApi;
                 ai_usage::Usage,
                 ai_usage::Price,
                 ai_usage::AiFeature,
+
+                // AI projections
+                UpsertProjectionRequest,
+                ProjectionStateResponse,
+                TargetType,
+                RefreshCadence,
+                Expiry,
+                ProjectionStatus,
 
                 // MCP
                 ServerResponse,

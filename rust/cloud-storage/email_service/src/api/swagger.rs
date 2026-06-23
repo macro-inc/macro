@@ -1,7 +1,9 @@
 use crate::api::email::attachments::get::GetAttachmentResponse;
 use crate::api::email::attachments::get_document_id::GetAttachmentDocumentIDResponse;
 use crate::api::email::backfill::cancel::CancelBackfillParams;
-use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfillJobResponse};
+use crate::api::email::backfill::get::{
+    GetActiveBackfillJobResponse, GetBackfillJobResponse, ListBackfillJobsResponse,
+};
 use crate::api::email::contacts::block_sender::BlockSenderRequest;
 use crate::api::email::contacts::list::ListContactsResponse;
 use crate::api::email::contacts::list_blocked::ListBlockedResponse;
@@ -65,6 +67,7 @@ use utoipa::OpenApi;
         email::backfill::cancel::handler,
         email::backfill::get::handler,
         email::backfill::get::active_handler,
+        email::backfill::get::list_handler,
         email::init::handler,
         inbound::axum::draft_router::create_draft_handler,
         email::drafts::delete::handler,
@@ -110,6 +113,7 @@ use utoipa::OpenApi;
             CancelBackfillParams,
             GetBackfillJobResponse,
             GetActiveBackfillJobResponse,
+            ListBackfillJobsResponse,
             BackfillJob,
             // Draft types
             HexCreateDraftRequest,

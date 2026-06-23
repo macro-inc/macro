@@ -35,4 +35,15 @@ pub enum RefreshEmailEvent {
     /// The self-contact photo for `link_id` finished uploading to static
     /// file storage, so the inbox's derived `photo_url` is now available.
     PhotoSynced { link_id: Uuid },
+    /// Live backfill progress for `link_id`, for driving a progress indicator on
+    /// the frontend: `completed_threads` out of `total_threads`, plus `status`.
+    /// Counts reflect the Redis progress counters; the priority pass may bump
+    /// both above the raw mailbox size, but in lockstep, so the ratio holds.
+    /// Appended last so existing variants keep their generated TS names.
+    BackfillProgress {
+        link_id: Uuid,
+        status: BackfillStatus,
+        completed_threads: i32,
+        total_threads: i32,
+    },
 }

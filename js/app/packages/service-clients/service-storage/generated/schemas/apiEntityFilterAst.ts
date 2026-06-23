@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Wire-format entity filter AST accepted by soup AST endpoints.
+ */
 export interface ApiEntityFilterAst {
   /** the filters that should be applied to the call entity */
   callf?: unknown;
@@ -15,6 +18,8 @@ Empty/omitted = team's full visible list. */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
   chanf?: unknown;
+  /** the filters that should be applied to the channel-thread entity */
+  cthf?: unknown;
   /** the filters that should be applied to the document entity */
   df?: unknown;
   /** CRM-scoped address filter (wire key: `eca`). Symmetric counterpart

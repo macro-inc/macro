@@ -43,7 +43,7 @@ type NodeAccessoryPluginProps<T extends LexicalNode> = {
   setStore: SetStoreFunction<AccessoryStore>;
 };
 
-function registerNodeAcessoryPlugin<T extends LexicalNode>(
+function registerNodeAccessoryPlugin<T extends LexicalNode>(
   editor: LexicalEditor,
   props: NodeAccessoryPluginProps<T>
 ) {
@@ -68,6 +68,7 @@ function registerNodeAcessoryPlugin<T extends LexicalNode>(
     editor.registerCommand(
       FORCE_REFRESH_ACCESSORIES_COMMAND,
       (payload) => {
+        console.log('FORCE_REFRESH_ACCESSORIES_COMMAND', payload);
         for (const key of payload) {
           if (key in props.store) {
             const temp = { ...unwrap(props.store[key]) };
@@ -89,7 +90,7 @@ function registerNodeAcessoryPlugin<T extends LexicalNode>(
  * in the editor you would have to define a custom paragraph class that manages rendering
  * itself and a decorator and then override the default paragraph node. With this approach
  * you can attach the menu to the existing paragraph node. In order to use it the containing
- * editor will also need have a <NodeAcessoryRenderer /> as a child.
+ * editor will also need have a <NodeAccessoryRenderer /> as a child.
  * @param props.klass The Lexical node class to bind to.
  * @param props.component The component to render for the node. This is a simple component
  *     that will only receive a ref to the editor and the node key of its attached node.
@@ -97,5 +98,5 @@ function registerNodeAcessoryPlugin<T extends LexicalNode>(
 export function nodeAccessoryPlugin<T extends LexicalNode>(
   props: NodeAccessoryPluginProps<T>
 ) {
-  return (editor: LexicalEditor) => registerNodeAcessoryPlugin(editor, props);
+  return (editor: LexicalEditor) => registerNodeAccessoryPlugin(editor, props);
 }

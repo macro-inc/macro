@@ -35,7 +35,8 @@ export function ChannelTopBarLiveIndicators() {
 
   return (
     <SplitHeaderRight>
-      <div class="-order-1">
+      {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
+      <div class="-order-1 mobile:hidden">
         <BlockLiveIndicators />
       </div>
     </SplitHeaderRight>

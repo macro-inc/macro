@@ -3,11 +3,11 @@ use macro_user_id::user_id::BorrowedUserIdStr;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, tag_no_case, take_till1},
+    bytes::complete::{tag, tag_no_case, take_till1, take_while1},
     character::complete::anychar,
-    combinator::{eof, peek, recognize},
+    combinator::{eof, peek, recognize, verify},
     multi::{many_till, many0},
-    sequence::delimited,
+    sequence::{delimited, preceded},
 };
 use serde::Deserialize;
 use std::{
@@ -151,6 +151,49 @@ fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
     .parse(s)
 }
 
+fn is_recognized_tag_name(name: &str) -> bool {
+    [
+        ParsedLink::TAG_NAME,
+        ParsedDocumentMention::TAG_NAME,
+        ParsedUserMention::TAG_NAME,
+        ParsedContactMention::TAG_NAME,
+        ParsedDateMention::TAG_NAME,
+        ParsedGroupMention::TAG_NAME,
+    ]
+    .iter()
+    .any(|recognized| recognized.eq_ignore_ascii_case(name))
+}
+
+/// Consumes and discards an unrecognized `<m-*>` tag, either self-closing
+/// (`<m-*/>`) or a `<m-*>…</m-*>` pair. Tags with a recognized name are rejected
+/// here so a recognized tag carrying malformed content still surfaces as a parse
+/// error.
+fn parse_unknown_xml_tag(s: &str) -> IResult<&str, ()> {
+    let (after_name, name) = preceded(
+        tag("<"),
+        verify(
+            recognize((
+                tag_no_case("m-"),
+                take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-'),
+            )),
+            |name: &str| !is_recognized_tag_name(name),
+        ),
+    )
+    .parse(s)?;
+
+    let (rest, _) = alt((
+        tag("/>").map(|_| ()),
+        (
+            tag(">"),
+            many_till(anychar, (tag("</"), tag_no_case(name), tag(">"))),
+        )
+            .map(|_| ()),
+    ))
+    .parse(after_name)?;
+
+    Ok((rest, ()))
+}
+
 #[derive(Debug)]
 pub enum TextSegment<'de> {
     Xml(XmlTag<'de>),
@@ -167,14 +210,15 @@ pub struct ParseErr(#[from] nom::error::Error<String>);
 impl<'de> ParsedXmlText<'de> {
     pub fn parse(s: &'de str) -> Result<Self, ParseErr> {
         let (_, (out, _)) = many0(alt((
-            parse_xml_tag.map(TextSegment::Xml),
-            take_till1(|c| c == '<').map(TextSegment::Plain),
+            parse_xml_tag.map(|xml| Some(TextSegment::Xml(xml))),
+            take_till1(|c| c == '<').map(|text| Some(TextSegment::Plain(text))),
+            parse_unknown_xml_tag.map(|()| None),
         )))
         .and(eof)
         .parse(s)
         .finish()
         .map_err(|e| e.cloned())?;
-        Ok(ParsedXmlText(out))
+        Ok(ParsedXmlText(out.into_iter().flatten().collect()))
     }
 }
 

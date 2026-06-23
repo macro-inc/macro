@@ -16,6 +16,7 @@ import {
 } from 'lexical';
 import {
   INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_PR_MENTION_COMMAND,
   INSERT_THEME_MENTION_COMMAND,
 } from '../mentions';
 
@@ -169,6 +170,13 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             return false;
 
           event.preventDefault();
+          if (parsedMacroAppUrl.block === 'pr') {
+            editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
+              id: parsedMacroAppUrl.id,
+            });
+            return true;
+          }
+
           editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
             documentId: parsedMacroAppUrl.id,
             documentName: '',

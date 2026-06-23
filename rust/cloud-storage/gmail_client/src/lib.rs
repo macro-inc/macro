@@ -77,15 +77,18 @@ impl GmailClient {
         }
     }
 
-    /// Lists the num_threads most recent threads for the user
+    /// Lists the num_threads most recent threads for the user, optionally
+    /// filtered to threads carrying all of the given Gmail label ids
+    /// (an empty slice applies no filter).
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn list_threads(
         &self,
         access_token: &str,
         num_threads: u32,
         next_page_token: Option<&str>,
+        label_ids: &[&str],
     ) -> anyhow::Result<ServiceThreadList> {
-        threads::list_threads(self, access_token, num_threads, next_page_token).await
+        threads::list_threads(self, access_token, num_threads, next_page_token, label_ids).await
     }
 
     // Returns a list containing the message ids belonging to the thread.

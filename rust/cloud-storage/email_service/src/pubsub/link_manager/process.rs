@@ -219,6 +219,7 @@ async fn handle_notify_reauth_required(
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::User.with_entity_string(link.macro_id.to_string()),
+        secondary_notification_entity: None,
         notification: InboxReauthRequiredMetadata {
             email_address: link.email_address.0.as_ref().to_string(),
         },

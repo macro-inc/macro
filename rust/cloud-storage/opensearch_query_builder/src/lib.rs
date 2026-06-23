@@ -14,7 +14,7 @@ mod util;
 pub use query::{
     BoolQuery, BoolQueryBuilder, BoostMode, DecayFunction, FieldValueFactor, FunctionScoreQuery,
     FunctionScoreQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    MatchQuery, QueryType, RandomScore, RangeQuery, RangeQueryBuilder, RegexpQuery,
+    MatchQuery, NestedQuery, QueryType, RandomScore, RangeQuery, RangeQueryBuilder, RegexpQuery,
     RegexpQueryFlags, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
     SimpleQueryStringQuery, TermQuery, TermsQuery, WildcardQuery,
 };

@@ -31,11 +31,20 @@ pub async fn setup_and_serve(
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let metadata_client = DynamodbClient::new(&aws_config, config.dynamodb_table.clone());
+    let metadata_client = DynamodbClient::new(
+        &aws_config,
+        config
+            .static_file_service_dynamodb_table_name
+            .as_ref()
+            .to_owned(),
+    );
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     let inner_client = macro_aws_config::s3_client().await;
-    let storage_client = S3Client::new(inner_client, config.storage_bucket_name.clone());
+    let storage_client = S3Client::new(
+        inner_client,
+        config.static_storage_bucket.as_ref().to_owned(),
+    );
 
     let state = AppState {
         metadata_client,

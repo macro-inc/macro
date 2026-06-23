@@ -34,6 +34,7 @@ impl SourceId {
         Self::new(id.to_string(), "team")
     }
 
+    #[allow(dead_code)]
     pub(crate) fn validate(&self) -> Result<(), ForeignEntityError> {
         validate_non_blank("sourceId.id", &self.id)?;
         validate_non_blank("sourceId.authEntity", &self.auth_entity)
@@ -113,6 +114,7 @@ pub enum ForeignEntityError {
 }
 
 impl CreateForeignEntity {
+    #[allow(dead_code)]
     pub(crate) fn validate(&self) -> Result<(), ForeignEntityError> {
         validate_non_blank("foreignEntityId", &self.foreign_entity_id)?;
         validate_non_blank("foreignEntitySource", &self.foreign_entity_source)?;
@@ -124,6 +126,7 @@ impl CreateForeignEntity {
 }
 
 impl PatchForeignEntity {
+    #[allow(dead_code)]
     pub(crate) fn validate(&self) -> Result<(), ForeignEntityError> {
         if self.is_empty() {
             return Err(ForeignEntityError::BadRequest(
@@ -142,6 +145,7 @@ impl PatchForeignEntity {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn is_empty(&self) -> bool {
         self.foreign_entity_id.is_none()
             && self.foreign_entity_source.is_none()
@@ -151,6 +155,7 @@ impl PatchForeignEntity {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn validate_foreign_entity_lookup(
     foreign_entity_id: &str,
     foreign_entity_source: Option<&str>,
@@ -163,6 +168,7 @@ fn default_metadata() -> Value {
     Value::Object(serde_json::Map::new())
 }
 
+#[allow(dead_code)]
 fn validate_optional_non_blank(
     field_name: &str,
     value: Option<&str>,
@@ -174,6 +180,7 @@ fn validate_optional_non_blank(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_non_blank(field_name: &str, value: &str) -> Result<(), ForeignEntityError> {
     if value.trim().is_empty() {
         return Err(ForeignEntityError::BadRequest(format!(

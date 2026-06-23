@@ -27,6 +27,7 @@ import type {
   MemoryResponse,
   ModelsResponse,
   PatchChatRequest,
+  ProjectionStateResponse,
   RejectToolCallRequest,
   SendChatMessageResponse,
   ServerResponse,
@@ -43,6 +44,7 @@ import type {
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
+  UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
 } from './schemas';
@@ -165,6 +167,70 @@ export const getUsageHandler = async (
     status: res.status,
     headers: res.headers,
   } as getUsageHandlerResponse;
+};
+
+/**
+ * @summary Gets or creates an ai projection and the requesting user's cold instance.
+ */
+export type upsertAiProjectionResponse200 = {
+  data: ProjectionStateResponse;
+  status: 200;
+};
+
+export type upsertAiProjectionResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type upsertAiProjectionResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type upsertAiProjectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type upsertAiProjectionResponseSuccess =
+  upsertAiProjectionResponse200 & {
+    headers: Headers;
+  };
+export type upsertAiProjectionResponseError = (
+  | upsertAiProjectionResponse400
+  | upsertAiProjectionResponse403
+  | upsertAiProjectionResponse500
+) & {
+  headers: Headers;
+};
+
+export type upsertAiProjectionResponse =
+  | upsertAiProjectionResponseSuccess
+  | upsertAiProjectionResponseError;
+
+export const getUpsertAiProjectionUrl = () => {
+  return `/ai-projections`;
+};
+
+export const upsertAiProjection = async (
+  upsertProjectionRequest: UpsertProjectionRequest,
+  options?: RequestInit
+): Promise<upsertAiProjectionResponse> => {
+  const res = await fetch(getUpsertAiProjectionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(upsertProjectionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertAiProjectionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertAiProjectionResponse;
 };
 
 export type getChatsForAttachmentHandlerResponse200 = {

@@ -24,10 +24,11 @@ use call::{
 };
 use channels::{
     domain::{
+        list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
-    inbound::axum_router::ChannelsRouterState,
+    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
@@ -36,11 +37,6 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
-};
-use comms::{
-    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
-    inbound::router::CommsRouterState,
-    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
 use connection::{
@@ -70,6 +66,7 @@ use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::maybe_env_vars;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -101,6 +98,11 @@ mod api;
 mod config;
 mod model;
 mod service;
+
+maybe_env_vars! {
+    struct AppleBundleId;
+    struct SnsApnsVoipPlatformArn;
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -274,26 +276,31 @@ async fn main() -> anyhow::Result<()> {
     let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
-    let properties_service = Arc::new(PropertiesServiceImpl::new(
-        PropertiesPgRepo::new(db.clone()),
-        Some(permission_checker),
-        Some(notification_service),
+    let properties_service = Arc::new(
+        PropertiesServiceImpl::new(
+            PropertiesPgRepo::new(db.clone()),
+            Some(permission_checker),
+            Some(notification_service),
+        )
+        .with_search_indexer(Arc::new(
+            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
+                sqs_client.clone(),
+            ),
+        )),
+    );
+
+    // Create the channel list service used by soup.
+    let channel_service_for_soup = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(readonly_db.clone()),
+        PgChannelsRepo::new(readonly_db.clone()),
+        frecency_storage.clone(),
+    );
+    // Create the legacy channel list router state for routes mounted under /comms.
+    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
+        frecency_storage.clone(),
     ));
-
-    // Create the comms ChannelServiceImpl instances.
-    let channel_service_for_soup = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        PgUserRepo::new(readonly_db.clone()),
-        frecency_storage.clone(),
-    );
-    let channel_service_for_comms = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
-        frecency_storage.clone(),
-    );
-
-    // Create the CommsRouterState for the comms hex routes mounted under /comms.
-    let comms_state = CommsRouterState::new(channel_service_for_comms);
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -483,10 +490,9 @@ async fn main() -> anyhow::Result<()> {
     //
     // Option<VoipPushServiceImpl<...>> is used as the type parameter so the
     // type stays stable regardless of whether VoIP push is configured.
-    let voip_sender = if let (Ok(bundle_id), Ok(voip_arn)) = (
-        std::env::var("APPLE_BUNDLE_ID"),
-        std::env::var("SNS_APNS_VOIP_PLATFORM_ARN"),
-    ) {
+    let voip_sender = if let (Some(bundle_id), Some(voip_arn)) =
+        (AppleBundleId::new(), SnsApnsVoipPlatformArn::new())
+    {
         if voip_arn.is_empty() {
             tracing::warn!("voip push disabled: SNS_APNS_VOIP_PLATFORM_ARN is set but empty");
             None
@@ -495,10 +501,14 @@ async fn main() -> anyhow::Result<()> {
                 notification::outbound::repository::DbNotificationRepository::new(db.clone());
             let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
-                apns_bundle_id: bundle_id.clone(),
-                voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+                apns_bundle_id: bundle_id.to_string(),
+                voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
             };
-            tracing::info!(bundle_id, voip_arn, "voip push enabled");
+            tracing::info!(
+                bundle_id = bundle_id.as_ref(),
+                voip_arn = voip_arn.as_ref(),
+                "voip push enabled"
+            );
             Some(notification::domain::service::VoipPushServiceImpl::new(
                 voip_repo,
                 voip_mobile,
@@ -635,9 +645,9 @@ async fn main() -> anyhow::Result<()> {
         opensearch_client: Arc::new(opensearch_client),
         jwt_validation_args,
         dss_auth_key,
-        // Comms service fields
+        // Shared frecency storage and legacy channel list routes.
         frecency_storage,
-        comms_state,
+        channel_list_state,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),

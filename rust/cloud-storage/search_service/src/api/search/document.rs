@@ -48,10 +48,10 @@ pub(in crate::api::search) async fn enrich_documents(
         .iter()
         .filter(|(_, info)| info.file_type.as_deref() == Some("md"))
         .map(|(id, info)| {
-            let entity_type = match info.sub_type {
-                Some(document_sub_type::DocumentSubType::Task) => EntityType::Task,
-                _ => EntityType::Document,
-            };
+            let entity_type = info
+                .sub_type
+                .map(EntityType::from)
+                .unwrap_or(EntityType::Document);
             EntityReference::new(id.clone(), entity_type)
         })
         .collect();

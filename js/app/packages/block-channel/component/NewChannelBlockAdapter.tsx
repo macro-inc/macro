@@ -1,5 +1,6 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -46,6 +47,7 @@ import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
+import { cn } from '@ui';
 import {
   createComputed,
   createSignal,
@@ -142,11 +144,22 @@ function NewTop(props: { channelId: string }) {
         activeTab={activeTab()}
         onTabChange={setActiveTab}
       />
-      <Show when={ENABLE_CALLS()}>
+      {/* Hidden once the user has joined — the call surface owns the UI. */}
+      <Show when={ENABLE_CALLS() && !call.isInThisChannel()}>
         <SplitHeaderRight>
-          <div class="flex items-center gap-1.5">
-            <ChannelCallButton channelId={props.channelId} />
-          </div>
+          <HeaderIsland
+            class={cn(
+              'px-1',
+              // Call in progress: tint the whole island, matching the call
+              // button's `success` variant.
+              !!activeCallQuery.data &&
+                'bg-success ring-success [&_button]:text-surface'
+            )}
+          >
+            <div class="flex items-center gap-1.5">
+              <ChannelCallButton channelId={props.channelId} />
+            </div>
+          </HeaderIsland>
         </SplitHeaderRight>
       </Show>
       <ChannelTopBarLiveIndicators />
@@ -308,7 +321,16 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}
         />
-        <div class="h-full flex flex-col px-2 mobile:px-0">
+        <div
+          class={cn(
+            'h-full flex flex-col px-2 mobile:px-0',
+            // The channel block is full-frame on mobile (messages scroll
+            // behind the chrome); the other tabs still need to start below
+            // the status bar + floating header.
+            activeTab() !== 'messages' &&
+              'mobile:pt-(--mobile-content-inset-top)'
+          )}
+        >
           <Switch>
             <Match when={activeTab() === 'messages'}>
               <NewChannel

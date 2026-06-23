@@ -70,6 +70,7 @@ fn test_ingress_queue_message_round_trip() {
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        secondary_notification_entity: None,
         notification: MyNotif {
             msg: "hello".to_string(),
         },

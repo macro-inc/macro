@@ -29,6 +29,7 @@ import {
   LexicalWrapperContext,
 } from '../../context/LexicalWrapperContext';
 import {
+  type AutoLinkMatchMode,
   autoRegister,
   awaitPlugin,
   codePlugin,
@@ -107,6 +108,7 @@ interface MarkdownTextareaProps {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  autoLinkMatchMode?: AutoLinkMatchMode;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -379,7 +381,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           useBlockBoundary={props.useBlockBoundary}
         />
         <FloatingMenuGroup>
-          <FloatingLinkMenu />
+          <FloatingLinkMenu autoLinkMatchMode={props.autoLinkMatchMode} />
         </FloatingMenuGroup>
       </div>
     </LexicalWrapperContext.Provider>

@@ -93,6 +93,7 @@ const getInboxSignalFilters = () => {
       // Referencing `fef` also opts them into the signal query (otherwise
       // defineQueryFilters excludes unreferenced entity types). Rendering is
       // still gated on the supported-foreign-entities flag client-side.
+      foreignEntitySource: ['github_pull_request'],
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
@@ -135,6 +136,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           // crm companies aren't surfaced outside the Companies view.
           include: {
             crmCompanyId: [NIL_UUID],
+            ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
+              ? { foreignEntitySource: ['github_pull_request'] }
+              : {}),
             foreignEntityIncludesMe: true,
           },
           exclude: {
@@ -464,14 +468,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. CRM rows are NIL-excluded the same way. `search-supported`
-        // mirrors these exclusions client-side so entities that enter the
-        // soup cache outside this query (e.g. websocket-driven inserts)
-        // don't surface in the search feed.
+        // them. CRM rows and non-displayable channel-thread rows are
+        // NIL-excluded the same way. `search-supported` mirrors these
+        // exclusions client-side so entities that enter the soup cache outside
+        // this query (e.g. websocket-driven inserts) don't surface in the
+        // search feed.
         filters: {
           include: {
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
+            channelThreadId: [NIL_UUID],
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

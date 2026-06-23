@@ -48,3 +48,19 @@ fn test_create_document_schema_validation() {
         "Description should contain expected text"
     );
 }
+
+#[test]
+fn test_rename_document_schema_validation() {
+    let result = generate_validated_input_schema::<RenameDocument>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "RenameDocument",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated.description.contains("Rename"),
+        "Description should contain expected text"
+    );
+}

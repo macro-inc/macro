@@ -1,20 +1,11 @@
-// Served from /public so the URL is stable and can be preloaded from index.html.
-const MARKDOWN_GOLDEN_URL = '/markdown-golden.1.bin';
-
 let goldenPromise: Promise<Uint8Array> | null = null;
 
 export async function getMarkdownGoldenBytes(): Promise<Uint8Array> {
   if (!goldenPromise) {
     goldenPromise = (async () => {
       try {
-        const res = await fetch(MARKDOWN_GOLDEN_URL);
-        if (!res.ok) {
-          throw new Error(
-            `failed to fetch markdown golden snapshot: ${res.status}`
-          );
-        }
-        const buf = await res.arrayBuffer();
-        return new Uint8Array(buf);
+        const { MARKDOWN_GOLDEN } = await import('./markdown-golden.1');
+        return MARKDOWN_GOLDEN;
       } catch (err) {
         // Allow retry on transient failure
         goldenPromise = null;
@@ -22,5 +13,6 @@ export async function getMarkdownGoldenBytes(): Promise<Uint8Array> {
       }
     })();
   }
-  return goldenPromise;
+  const golden = await goldenPromise;
+  return golden.slice();
 }

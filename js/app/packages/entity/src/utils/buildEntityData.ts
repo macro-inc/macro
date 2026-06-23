@@ -163,6 +163,8 @@ export function buildEntityData(
       })
       // CRM companies/contacts aren't constructed from block args; soup is the source.
       .with('company', 'contact', (): undefined => undefined)
+      // PRs are virtual blocks backed by GitHub, not Macro entities.
+      .with('pr', (): undefined => undefined)
       .exhaustive()
   );
 }

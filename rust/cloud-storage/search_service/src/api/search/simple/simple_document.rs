@@ -1,9 +1,6 @@
 use crate::api::search::simple::SearchError;
 use item_filters::DocumentFilters;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
-use opensearch_client::search::model::{Highlight, SearchHit};
-use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::context::SearchHandlerState;
 
@@ -122,60 +119,5 @@ pub(in crate::api::search) async fn filter_documents(
     Ok(FilterDocumentResponse {
         document_ids,
         ids_only,
-    })
-}
-
-/// Performs the name search over document names
-#[tracing::instrument(skip(db), err)]
-pub(in crate::api::search::simple) async fn search_names<'a>(
-    db: &Pool<Postgres>,
-    user_id: &MacroUserId<Lowercase<'a>>,
-    filter_document_response: &FilterDocumentResponse,
-    term: String,
-    limit: u32,
-    cursor: models_search_cursor::SearchCursorOption,
-) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
-    // If cursor is Done, no more results to fetch
-    let inner_cursor = match cursor {
-        models_search_cursor::SearchCursorOption::Done => {
-            return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
-        }
-        models_search_cursor::SearchCursorOption::NotDone(c) => c,
-    };
-
-    let document_uuids = filter_document_response
-        .document_ids
-        .iter()
-        .map(|d| d.parse().unwrap())
-        .collect::<Vec<Uuid>>();
-
-    name_search::search_document_names(
-        db,
-        user_id,
-        &document_uuids,
-        term,
-        filter_document_response.ids_only,
-        limit,
-        inner_cursor,
-    )
-    .await
-    .map_err(SearchError::NameSearch)
-    .map(|response| {
-        let hits = response
-            .items
-            .into_iter()
-            .map(|n| SearchHit {
-                entity_id: n.entity_id,
-                entity_type: n.entity_type,
-                score: None,
-                highlight: Highlight {
-                    name: Some(n.name),
-                    ..Default::default()
-                },
-                goto: None,
-                updated_at: Some(n.updated_at),
-            })
-            .collect();
-        (hits, response.cursor)
     })
 }

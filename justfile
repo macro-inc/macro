@@ -15,37 +15,19 @@ create_networks:
   docker volume create fusionauth_config 2>/dev/null || true
   echo "docker networks and volumes created"
 
-fix_environment *ARGS:
-  # Decrypt ignoring mac error
-  sops --input-type dotenv --output-type dotenv --ignore-mac -d .env-local{{ ARGS }}.enc > .env-local{{ ARGS }}.dec
-  # Encrypt the file
-  sops --input-type dotenv --output-type dotenv -e .env-local{{ ARGS}}.dec > .env-local{{ ARGS }}.enc
-  # Remove the decrypted file
-  rm -rf .env-local{{ ARGS }}.dec
-
-get_environment *ARGS:
+get_environment CONFIG="lcl":
   #!/usr/bin/env bash
   set -euo pipefail
-  sops --input-type dotenv --output-type dotenv -d ".env-local{{ ARGS }}.enc" > .env
-  if [ -n "{{ ARGS }}" ] && [ -f ~/.aws/credentials ]; then
-    AWS_KEY=$(awk -F'=' '/\[default\]/{found=1} found && /aws_access_key_id/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
-    AWS_SECRET=$(awk -F'=' '/\[default\]/{found=1} found && /aws_secret_access_key/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
-    if [ -n "$AWS_KEY" ] && [ -n "$AWS_SECRET" ]; then
-      if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
-        sed -i '' "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
-      else
-        sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
-        sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
-      fi
-      echo "Replaced AWS credentials from ~/.aws/credentials [default] profile"
-    else
-      echo "Warning: Could not read AWS credentials from ~/.aws/credentials [default] profile"
-    fi
-  fi
-
-edit_environment *ARGS:
-  sops --input-type dotenv --output-type dotenv .env-local{{ ARGS}}.enc
+  DOPPLER_CONFIG={{ quote(CONFIG + "_personal") }}
+  # Use JSON + jq so multiline secrets become single dotenv entries with escaped newlines.
+  doppler secrets download --project local --config "$DOPPLER_CONFIG" --format json --no-file \
+    | jq -r '
+      def trim_surrounding_newlines:
+        sub("^[\r\n]+"; "") | sub("[\r\n]+$"; "");
+      to_entries
+        | sort_by(.key)[]
+        | "\(.key)=\(.value | tostring | trim_surrounding_newlines | @json)"
+    ' > .env
 
 # Creates the docker networks then runs the databases
 # This is used when initializing your databases
