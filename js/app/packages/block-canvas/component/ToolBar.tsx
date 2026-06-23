@@ -181,7 +181,8 @@ export function ToolBar() {
 
   return (
     <ScopedPortal scope="block">
-      <div class="absolute left-1/2 bottom-2 flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
+      {/* Full-frame mobile: rest above the floating bottom chrome. */}
+      <div class="absolute left-1/2 bottom-2 mobile:bottom-[calc(var(--mobile-content-inset-bottom,0)+0.5rem)] flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
         <div
           class={cn(
             'flex flex-row items-center space-x-2',

@@ -5,9 +5,11 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_projection = ["dep:models_ai_projection"]
 chat = []
 convert = ["model"]
 default = [
+  "ai_projection",
   "chat",
   "convert",
   "document",
@@ -36,6 +38,7 @@ aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
 email = { path = "../email", features = ["ports"], optional = true }
 model = { path = "../model", optional = true }
+models_ai_projection = { path = "../models_ai_projection", optional = true }
 s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email", optional = true }
 serde = { workspace = true }

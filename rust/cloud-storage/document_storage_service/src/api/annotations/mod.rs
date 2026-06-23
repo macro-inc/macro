@@ -270,6 +270,7 @@ impl CommentNotifContext {
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            secondary_notification_entity: None,
             notification,
             sender_id: self.sender_id.clone(),
             recipient_ids,
@@ -293,6 +294,7 @@ impl CommentNotifContext {
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            secondary_notification_entity: None,
             notification,
             sender_id: self.sender_id.clone(),
             recipient_ids: participant_ids,
@@ -318,6 +320,7 @@ impl CommentNotifContext {
     ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            secondary_notification_entity: None,
             notification: self.commented_on_document_metadata(),
             sender_id: self.sender_id.clone(),
             recipient_ids: assignee_ids,
@@ -332,6 +335,7 @@ impl CommentNotifContext {
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),
+            secondary_notification_entity: None,
             notification: self.commented_on_document_metadata(),
             sender_id: self.sender_id.clone(),
             recipient_ids,

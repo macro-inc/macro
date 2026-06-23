@@ -95,6 +95,7 @@ export const searchSupportedFilter = config({
     include: {
       foreignEntityRecordId: [NIL_UUID],
       crmCompanyId: [NIL_UUID],
+      channelThreadId: [NIL_UUID],
     },
   },
 });

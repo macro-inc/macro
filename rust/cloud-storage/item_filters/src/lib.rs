@@ -472,6 +472,34 @@ impl IsEmpty for ChannelFilters {
     }
 }
 
+/// The channel thread filters used to filter down channel-thread entities.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct ChannelThreadFilters {
+    /// Channel thread parent message IDs to include. Empty to include all accessible threads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub thread_ids: Vec<String>,
+
+    /// Channel IDs containing the thread. Empty to include threads from all accessible channels.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_ids: Vec<String>,
+
+    /// Sender IDs for the root thread message. Empty to include all root senders.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub root_sender_ids: Vec<String>,
+}
+
+impl IsEmpty for ChannelThreadFilters {
+    fn is_empty(&self) -> bool {
+        let ChannelThreadFilters {
+            thread_ids,
+            channel_ids,
+            root_sender_ids,
+        } = self;
+        thread_ids.is_empty() && channel_ids.is_empty() && root_sender_ids.is_empty()
+    }
+}
+
 /// A single property-based filter condition.
 ///
 /// Each filter targets a specific property definition on entities of a given type,
@@ -585,6 +613,9 @@ pub struct EntityFilters {
     /// the bundled [ChannelFilters]
     #[serde(default)]
     pub channel_filters: ChannelFilters,
+    /// the bundled [ChannelThreadFilters]
+    #[serde(default)]
+    pub channel_thread_filters: ChannelThreadFilters,
     /// the bundled [CallFilters]
     #[serde(default)]
     pub call_filters: CallFilters,
@@ -609,6 +640,7 @@ impl IsEmpty for EntityFilters {
             document_filters,
             chat_filters,
             channel_filters,
+            channel_thread_filters,
             call_filters,
             email_filters,
             crm_company_filters,
@@ -619,6 +651,7 @@ impl IsEmpty for EntityFilters {
             && document_filters.is_empty()
             && chat_filters.is_empty()
             && channel_filters.is_empty()
+            && channel_thread_filters.is_empty()
             && call_filters.is_empty()
             && email_filters.is_empty()
             && crm_company_filters.is_empty()

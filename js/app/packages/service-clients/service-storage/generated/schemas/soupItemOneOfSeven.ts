@@ -7,7 +7,11 @@
 import type { SoupEnrichedEmailThreadPreview } from './soupEnrichedEmailThreadPreview';
 import type { SoupItemOneOfSevenTag } from './soupItemOneOfSevenTag';
 
+/**
+ * Email thread item.
+ */
 export type SoupItemOneOfSeven = {
+  /** Email thread item. */
   data: SoupEnrichedEmailThreadPreview;
   tag: SoupItemOneOfSevenTag;
 };

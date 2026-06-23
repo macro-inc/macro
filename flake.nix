@@ -171,10 +171,24 @@
           version = "0.1.0";
           strictDeps = true;
           buildInputs = libraries;
-          nativeBuildInputs = with pkgs; [ pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
+          # Cargo/crane need git in the sandbox to fetch git dependencies.
+          # Without this, CI can fall back to host /usr/lib/git-core helpers,
+          # which are not ABI-compatible with Nix-provided glibc.
+          nativeBuildInputs = with pkgs; [ git pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           OPENSSL_NO_VENDOR = "1";
           SQLX_OFFLINE = "true";
+          # Keep vendoring independent of the generated src derivation and pin
+          # git dependencies so Nix does not fall back to host git helpers in CI.
+          cargoVendorDir = craneLib.vendorCargoDeps {
+            src = ./rust/cloud-storage;
+            cargoLock = ./rust/cloud-storage/Cargo.lock;
+            outputHashes = {
+              "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" = "sha256-jllT52SAIiNpTPg7Vm3wmT79w/CIz9NnVKM81oQq8dM=";
+              "git+https://github.com/macro-inc/rig?branch=feat/responses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7" = "sha256-EcmlwqAVXGtbuvozzCOrygoSVipU99mBZK/MrQAIoYg=";
+              "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc" = "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=";
+            };
+          };
           RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
           # Build deps + workspace + bins in dev profile so the test job (which runs
           # `cargo nextest` outside the sandbox using the test profile, inheriting dev)
@@ -214,6 +228,70 @@
             RUSTDOCFLAGS = "-Dwarnings";
           }
         );
+
+        cloudStorageCargoToml = builtins.fromTOML (builtins.readFile ./rust/cloud-storage/Cargo.toml);
+        cloudStorageWorkspaceMembers =
+          cloudStorageCargoToml.workspace.members or (throw "rust/cloud-storage/Cargo.toml is missing workspace.members");
+
+        dopplerConfigBinNames =
+          let
+            dopplerConfigPath = "src/doppler_config.rs";
+            matchingDopplerBins =
+              member:
+              let
+                memberDir = ./rust/cloud-storage + "/${member}";
+                manifestFile = memberDir + "/Cargo.toml";
+                hasConfig = builtins.pathExists (memberDir + "/src/config.rs");
+                hasDopplerConfig = builtins.pathExists (memberDir + "/${dopplerConfigPath}");
+                manifest = builtins.fromTOML (builtins.readFile manifestFile);
+                matchingBins = builtins.filter (bin: (bin.path or null) == dopplerConfigPath) (manifest.bin or [ ]);
+                missingNameError =
+                  "cloud-storage workspace member '${member}' has a ${dopplerConfigPath} bin without a name";
+                matchingBinNames = map (bin: bin.name or (throw missingNameError)) matchingBins;
+              in
+              if !hasDopplerConfig then
+                [ ]
+              else if !(builtins.pathExists manifestFile) then
+                throw "cloud-storage workspace member '${member}' has ${dopplerConfigPath} but no Cargo.toml"
+              else if matchingBinNames == [ ] then
+                throw (
+                  "cloud-storage workspace member '${member}' has ${dopplerConfigPath} "
+                  + "but no [[bin]] with path = \"${dopplerConfigPath}\""
+                )
+              else if !hasConfig then
+                [ ]
+              else
+                matchingBinNames;
+          in
+          pkgs.lib.unique (pkgs.lib.concatMap matchingDopplerBins cloudStorageWorkspaceMembers);
+
+        dopplerConfigBinPackages = builtins.listToAttrs (
+          map (
+            binName:
+            pkgs.lib.nameValuePair "doppler-config-bin-${binName}" (
+              craneLib.buildPackage (
+                commonArgs
+                // {
+                  # Reuse the dependency-only layer, then compile only this
+                  # Doppler config binary and the local crates it actually uses.
+                  inherit cargoArtifacts;
+                  pname = "cloud-storage-doppler-config-${binName}";
+                  doCheck = false;
+                  cargoExtraArgs = pkgs.lib.concatStringsSep " " [
+                    "--locked"
+                    "--all-features"
+                    "--bin ${binName}"
+                  ];
+                }
+              )
+            )
+          ) dopplerConfigBinNames
+        );
+
+        dopplerConfigBins = pkgs.symlinkJoin {
+          name = "cloud-storage-doppler-config";
+          paths = builtins.attrValues dopplerConfigBinPackages;
+        };
 
         openApiBins = craneLib.buildPackage (
           commonArgs
@@ -617,12 +695,13 @@
             nodejs_24
             pulumi
             pulumiPackages.pulumi-nodejs
-            sops
+            doppler
             biome
             jq
             stripe-cli
             sccache
             rustToolchain
+            python3
           ]
           ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -740,6 +819,7 @@
               RUSTDOCFLAGS = "-Dwarnings";
             }
           );
+          doppler-config-bins = dopplerConfigBins;
           gen-api =
             let
               openApiFiles = pkgs.lib.cleanSourceWith {
@@ -787,10 +867,12 @@
             deployCargoArtifacts
             lambdaDeployCargoArtifacts
             openApiBins
+            dopplerConfigBins
             nextestArchive
             ;
           default = cargoArtifacts;
         }
+        // dopplerConfigBinPackages
         // deployServiceBinaryPackages
         // deployLambdaPackages;
 
@@ -801,7 +883,6 @@
               PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
               SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-              SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
               # Keep local cargo-lambda builds on the same aws-lc-sys path as
               # the Nix lambda derivations. The default cc builder rejects

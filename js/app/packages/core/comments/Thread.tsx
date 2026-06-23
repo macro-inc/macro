@@ -202,7 +202,7 @@ export function Thread(props: {
             <div
               // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
               // pointer-events: none vs. all inside the .pdfOverlayInner div.
-              class="shrink-0 bg-surface p-2 ring ring-edge shadow-md rounded-sm shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
+              class="shrink-0 bg-surface p-2 ring ring-edge shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"
               classList={{
                 'transition-transform duration-100': true,
                 '-translate-x-8': props.isActive,
@@ -245,7 +245,7 @@ export function Thread(props: {
                     <Show when={replyIds().length > 0 && lastReplyId()}>
                       <Show when={collapsedCount() > 0}>
                         <button
-                          class="text-xs text-ink-extra-muted hover:bg-hover hover:ring hover:ring-edge-muted text-left ml-5 rounded p-1 px-2 mb-2"
+                          class="text-xs text-ink-extra-muted hover:bg-hover text-left ml-5 rounded p-1 px-2 mb-2"
                           on:click={() => {
                             batch(() => {
                               setActiveThread(props.comment.threadId);

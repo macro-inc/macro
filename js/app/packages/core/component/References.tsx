@@ -98,14 +98,14 @@ function ReferenceRow(props: ReferenceRowProps) {
     >
       <div class="flex items-center gap-2 min-w-0 text-xs leading-5">
         <Show when={props.senderAvatar}>{props.senderAvatar}</Show>
-        <div class="min-w-0 flex items-center gap-1.5 overflow-hidden">
+        <div class="min-w-0 flex flex-1 items-center gap-1.5 overflow-hidden">
           <Show when={props.senderName}>
             <span class="ph-no-capture shrink-0 font-medium text-ink truncate max-w-[8rem]">
               {props.senderName}
             </span>
             <span class="shrink-0 text-ink-muted/70">in</span>
           </Show>
-          <div class="min-w-0 flex items-center overflow-hidden text-ink-muted">
+          <div class="min-w-0 flex flex-1 items-center overflow-hidden text-ink-muted">
             {props.source}
           </div>
         </div>
@@ -135,7 +135,8 @@ function ChannelReferenceRow(props: {
   onOpen: (e: KeyboardEvent | MouseEvent) => void;
 }) {
   const { firstName, fullName } = useDisplayNameParts(
-    tryMacroId(props.reference.sender_id)
+    tryMacroId(props.reference.sender_id),
+    { emailFallback: 'local-part' }
   );
   const senderName = () => firstName() || fullName();
   const hasContent = () => {
@@ -178,7 +179,9 @@ function GenericReferenceRow(props: {
   onOpen: (item: PreviewItem, e?: KeyboardEvent | MouseEvent) => void;
 }) {
   const userId = props.reference.user_id!;
-  const { firstName, fullName } = useDisplayNameParts(tryMacroId(userId));
+  const { firstName, fullName } = useDisplayNameParts(tryMacroId(userId), {
+    emailFallback: 'local-part',
+  });
   const senderName = () => firstName() || fullName();
   const [item] = useItemPreview(() => ({
     id: props.reference.source_entity_id,

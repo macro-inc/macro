@@ -5,6 +5,7 @@ import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
+  AutoLinkMatchMode,
   createAccessoryStore,
   createDraggableBlockStore,
   createDragInsertStore,
@@ -43,6 +44,7 @@ export type EmojisOptions = Record<string, never>;
 
 export interface LinksOptions {
   floatingMenu?: boolean;
+  autoLinkMatchMode?: AutoLinkMatchMode;
 }
 
 export interface HistoryOptions {

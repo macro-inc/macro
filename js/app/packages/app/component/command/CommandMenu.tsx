@@ -6,6 +6,7 @@ import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import {
   hotkeyScopeTree,
@@ -242,9 +243,15 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      // TODO(dev-rb/github): Route GitHub PRs to /pr.
       if (isGithubPrEntity(item.data)) {
-        openExternalUrl(item.data.metadata.url);
+        if (USE_MACRO_PR_SUMMARY_BLOCK) {
+          openWithSplit(
+            { type: 'pr', id: item.data.id },
+            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+          );
+        } else {
+          openExternalUrl(item.data.metadata.url);
+        }
         CommandState.close();
         CommandState.setQuery('');
         return;
@@ -308,6 +315,9 @@ export function CommandMenuInner(props: {
         {
           type: 'component',
           id: 'search',
+          // Opening search into an existing split otherwise drops these params
+          // and the field mounts empty. Entry state still wins on back/forward.
+          preserveParams: true,
           params: {
             initialQuery: item.query,
             initialFilters: filters,

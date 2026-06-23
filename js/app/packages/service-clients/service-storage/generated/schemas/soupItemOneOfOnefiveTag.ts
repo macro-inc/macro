@@ -10,5 +10,5 @@ export type SoupItemOneOfOnefiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfOnefiveTag = {
-  foreignEntity: 'foreignEntity',
+  crmCompany: 'crmCompany',
 } as const;

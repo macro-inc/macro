@@ -7,8 +7,8 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
+use channels::outbound::channel_name::batch_resolve_channel_names;
 use chrono::Utc;
-use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
 use item_filters::{

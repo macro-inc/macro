@@ -8,13 +8,16 @@ use std::cmp::min;
 // 500 is max allowed by gmail api
 pub const LIST_THREADS_BATCH_SIZE: u32 = 500;
 
-/// lists thread provider ids up to the requested number, or all if none specified
+/// lists thread provider ids up to the requested number, or all if none specified.
+/// `label_ids` restricts the result to threads carrying all of the given Gmail
+/// label ids; an empty slice applies no label filter.
 #[tracing::instrument(skip(client, access_token, next_page_token), err)]
 pub(crate) async fn list_threads(
     client: &GmailClient,
     access_token: &str,
     num_threads: u32,
     next_page_token: Option<&str>,
+    label_ids: &[&str],
 ) -> anyhow::Result<ThreadList> {
     if num_threads == 0 {
         return Ok(ThreadList {
@@ -34,6 +37,11 @@ pub(crate) async fn list_threads(
     // If a page token is provided, add it to the list of parameters.
     if let Some(token) = next_page_token {
         query_params.push(("pageToken", token.to_string()));
+    }
+
+    // `labelIds` is a repeatable param; a thread matches if it carries all of them.
+    for label_id in label_ids {
+        query_params.push(("labelIds", label_id.to_string()));
     }
 
     let response = http_client

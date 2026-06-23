@@ -155,6 +155,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
             {
               Action: [
                 'sqs:SendMessage',
+                'sqs:ReceiveMessage',
                 'sqs:DeleteMessage',
                 'sqs:GetQueueAttributes',
               ],

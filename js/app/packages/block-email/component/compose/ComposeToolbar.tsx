@@ -1,3 +1,4 @@
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
@@ -173,31 +174,32 @@ function MobileToolbar(props: {
 
   return (
     <SplitHeaderRight>
-      <div class="flex items-center gap-1 pl-2">
-        <div class="relative" ref={props.attachButtonRef}>
-          <Button
-            ref={(el) =>
-              fileSelector(el, () => ({
-                multiple: true,
-                onSelect: props.handleAddAttachments,
-              }))
-            }
-            tooltip="Attach"
-            size="icon-sm"
-            disabled={ctx.disabled()}
-          >
-            <PaperclipIcon />
-          </Button>
-        </div>
-        <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
-          <EmailDateSelector
-            sendTime={ctx.sendTime()}
-            onSendTimeChange={ctx.onSendTimeChange}
-            disabled={ctx.scheduleSendDisabled?.()}
-            compact
-          />
-        </Show>
-        <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
+      <HeaderIsland>
+        <div class="flex items-center gap-1 pl-2">
+          <Show when={!ctx.hideAttachments}>
+            <div class="relative" ref={props.attachButtonRef}>
+              <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: props.handleAddAttachments,
+                  }))
+                }
+                size="icon-sm"
+                disabled={ctx.disabled()}
+              >
+                <PaperclipIcon />
+              </Button>
+            </div>
+          </Show>
+          <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
+            <EmailDateSelector
+              sendTime={ctx.sendTime()}
+              onSendTimeChange={ctx.onSendTimeChange}
+              disabled={ctx.scheduleSendDisabled?.()}
+              compact
+            />
+          </Show>
           <Show when={ctx.onSaveDraft}>
             <Button
               variant="base"
@@ -219,10 +221,9 @@ function MobileToolbar(props: {
             }
             pending={ctx.isSending()}
             onClick={() => ctx.onSend()}
-            tooltip="Send email"
           />
-        </Tooltip>
-      </div>
+        </div>
+      </HeaderIsland>
     </SplitHeaderRight>
   );
 }

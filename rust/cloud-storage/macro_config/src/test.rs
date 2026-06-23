@@ -250,6 +250,21 @@ struct BareMaybeEnvVarConfig {
     null_optional_secret: OptionalConfigSecret,
 }
 
+#[derive(Debug, MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct SparseBareMaybeEnvVarConfig {
+    optional_config_secret: OptionalConfigSecret,
+    missing_optional_secret: OptionalConfigSecret,
+    null_optional_secret: OptionalConfigSecret,
+}
+
+#[derive(Debug, MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct SparseRequiredEnvVarConfig {
+    #[allow(dead_code)]
+    config_secret: ConfigSecret,
+}
+
 #[test]
 fn load_deserializes_bare_maybe_env_var_fields_without_option_wrapper() {
     let _lock = ENV_LOCK.lock().expect("env lock poisoned");
@@ -293,6 +308,30 @@ fn load_deserializes_bare_maybe_env_var_fields_from_app_secrets_json() {
     assert_eq!(config.optional_config_secret.value(), Some("from-json"));
     assert_eq!(config.missing_optional_secret.value(), None);
     assert_eq!(config.null_optional_secret.value(), None);
+}
+
+#[test]
+fn sparse_deserialization_treats_missing_bare_maybe_env_var_as_unset() {
+    let config = serde_json::from_value::<SparseBareMaybeEnvVarConfig>(serde_json::json!({
+        "OPTIONAL_CONFIG_SECRET": "from-map",
+        "NULL_OPTIONAL_SECRET": null,
+    }))
+    .expect("sparse config should deserialize");
+
+    assert_eq!(config.optional_config_secret.value(), Some("from-map"));
+    assert_eq!(config.missing_optional_secret.value(), None);
+    assert_eq!(config.null_optional_secret.value(), None);
+}
+
+#[test]
+fn sparse_deserialization_still_errors_for_missing_required_env_var() {
+    let error = serde_json::from_value::<SparseRequiredEnvVarConfig>(serde_json::json!({}))
+        .expect_err("missing required env var should still fail");
+
+    assert!(
+        error.to_string().contains("missing field `CONFIG_SECRET`"),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]

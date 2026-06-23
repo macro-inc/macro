@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "contacts_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "contacts_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -45,6 +49,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_env_var = { path = "../macro_env_var" }
 macro_config = { path = "../macro_config" }
 database_env_vars = { path = "../macro_env_vars/database_env_vars" }
+doppler-config = { workspace = true }
 
 [features]
 mock = []

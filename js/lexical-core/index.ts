@@ -22,6 +22,7 @@ export * from './nodes/HtmlRenderNode';
 export * from './nodes/ImageNode';
 export * from './nodes/InlineSearchNode';
 export * from './nodes/MediaNode';
+export * from './nodes/PullRequestMentionNode';
 export * from './nodes/SnapshotNode';
 export * from './nodes/ThemeMentionNode';
 export * from './nodes/UnknownMentionNode';

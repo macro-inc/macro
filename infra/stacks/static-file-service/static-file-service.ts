@@ -12,11 +12,16 @@ import {
   serviceLoadBalancer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
-import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '../../packages/shared';
+import {
+  BASE_DOMAIN,
+  MACRO_SUBDOMAIN_CERT,
+  DopplerEcsEnvironment,
+} from '../../packages/shared';
 import { StaticFileCloudFront } from './distribution';
 
 const stack = pulumi.getStack();
-export const SERVICE_NAME = 'static-file-service';
+export const BASE_NAME = pulumi.getProject();
+export const SERVICE_NAME = BASE_NAME;
 export const SERVICE_DOMAIN_NAME = `static-file-service${stack === 'prod' ? '' : `-${stack}`}`;
 export const SERVICE_URL = `https://${SERVICE_DOMAIN_NAME}.${BASE_DOMAIN}`;
 export const STATIC_FILE_BUCKET = `static-file-storage-${stack}`;
@@ -526,6 +531,13 @@ export class StaticFileService extends pulumi.ComponentResource {
         })
       ),
     });
+
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${SERVICE_NAME}`,
@@ -543,6 +555,9 @@ export class StaticFileService extends pulumi.ComponentResource {
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
+          },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
@@ -564,6 +579,7 @@ export class StaticFileService extends pulumi.ComponentResource {
                 },
                 ...(args.containerEnvVars ?? []),
               ],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

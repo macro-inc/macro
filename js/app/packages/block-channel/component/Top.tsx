@@ -1,4 +1,6 @@
 import { CollapsibleHeaderItem } from '@app/component/split-layout/components/CollapsibleHeaderItem';
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
+import { HeaderTitleMenu } from '@app/component/split-layout/components/HeaderTitleMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
@@ -84,53 +86,77 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
       };
     });
 
+  const hasTabsMenu = () => !!(props.tabs?.length && props.onTabChange);
+
   return (
     <SplitHeaderLeft>
-      <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
-        <TopIcon
-          channelType={props.channelType}
-          participants={props.participants}
-        />
-        <SplitLabel
-          label={channelName() ?? 'New Channel'}
-          lockRename={props.lockRename}
-          renameOverrides={{ channelType: props.channelType }}
-          maxDisplayLength={48}
-        />
-      </div>
-      <Show when={props.tabs && props.activeTab && props.onTabChange}>
-        <Show
-          when={!isMobile()}
-          fallback={
-            <div class="ph-no-capture flex items-center min-w-0 shrink-0 h-full mx-2">
-              <TabsInset
-                list={iconTabList()}
-                value={props.activeTab}
-                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+      <Show
+        when={isMobile() && hasTabsMenu()}
+        fallback={
+          <>
+            <HeaderIsland class="shrink">
+              <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
+                <TopIcon
+                  channelType={props.channelType}
+                  participants={props.participants}
+                />
+                <SplitLabel
+                  label={channelName() ?? 'New Channel'}
+                  lockRename={props.lockRename}
+                  renameOverrides={{ channelType: props.channelType }}
+                  maxDisplayLength={48}
+                />
+              </div>
+            </HeaderIsland>
+            <Show when={!isMobile() && hasTabsMenu() && props.activeTab}>
+              <CollapsibleHeaderItem
+                id="channel-tabs"
+                priority={1}
+                containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
+                expanded={() => (
+                  <TabsInset
+                    list={[...(props.tabs ?? [])]}
+                    value={props.activeTab}
+                    onChange={(value) =>
+                      props.onTabChange?.(value as ChannelTabId)
+                    }
+                  />
+                )}
+                collapsed={() => (
+                  <TabsInset
+                    list={iconTabList()}
+                    value={props.activeTab}
+                    onChange={(value) =>
+                      props.onTabChange?.(value as ChannelTabId)
+                    }
+                  />
+                )}
               />
-            </div>
-          }
-        >
-          <CollapsibleHeaderItem
-            id="channel-tabs"
-            priority={1}
-            containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
-            expanded={() => (
-              <TabsInset
-                list={[...(props.tabs ?? [])]}
-                value={props.activeTab}
-                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
-              />
-            )}
-            collapsed={() => (
-              <TabsInset
-                list={iconTabList()}
-                value={props.activeTab}
-                onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
-              />
-            )}
-          />
-        </Show>
+            </Show>
+          </>
+        }
+      >
+        {/* Mobile: the tabs hide behind the channel name — tapping the title
+            opens a menu of the tab views. */}
+        <HeaderIsland class="shrink">
+          <HeaderTitleMenu
+            items={(props.tabs ?? []).map((tab) => ({
+              value: tab.value,
+              label: tab.label,
+              icon: CHANNEL_TAB_ICONS[tab.value],
+            }))}
+            active={props.activeTab}
+            onSelect={(value) => props.onTabChange?.(value as ChannelTabId)}
+          >
+            <TopIcon
+              channelType={props.channelType}
+              participants={props.participants}
+            />
+            <span class="min-w-0 truncate text-sm font-medium">
+              {channelName() ?? 'New Channel'}
+            </span>
+          </HeaderTitleMenu>
+        </HeaderIsland>
       </Show>
     </SplitHeaderLeft>
   );

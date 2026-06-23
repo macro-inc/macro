@@ -12,8 +12,8 @@ use axum::{
     response::Json,
     routing::post,
 };
+use channels::domain::models::ChannelHistoryInfo;
 use macro_user_id::user_id::MacroUserId;
-use model::comms::ChannelHistoryInfo;
 use model::user::UserContext;
 use models_search::MatchType;
 use models_search::channel::{

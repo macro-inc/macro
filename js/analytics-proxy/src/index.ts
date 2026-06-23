@@ -1,5 +1,8 @@
 const PROVIDERS: Record<string, string> = {
   '/i/ph': 'us.i.posthog.com',
+  // Datadog browser logs intake for the us5 site (site: us5.datadoghq.com).
+  // The observability SDK's `proxy` option targets the `/i/dd` prefix.
+  '/i/dd': 'browser-intake-us5-datadoghq.com',
 };
 
 function getProvider(pathname: string): { apiHost: string; path: string } | null {

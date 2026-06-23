@@ -19,6 +19,7 @@ import {
 } from '@core/signal/blockElement';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
+import { cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -498,6 +499,22 @@ function EmailContent(props: EmailViewProps) {
     return { replyingTo: undefined, draft: latest };
   });
 
+  // The bottom reply area renders when the user can compose and there's a
+  // message to reply to or a draft to edit. Returns the reply info so it can
+  // drive the keyed <Show> around the reply area.
+  const replyArea = () =>
+    context.permissions().isOwner &&
+    context.drafts.initialDraftsSettled() &&
+    emailReplyInfo();
+
+  // The expanded compose input, as opposed to the collapsed reply buttons
+  // (which float in the mobile accessory region).
+  const replyInputOpen = () =>
+    context.messages.bottomReplyOpen() || emailReplyInfo()?.replyingTo == null;
+
+  // Whether the compose input is rendered in normal flow.
+  const replyInputInFlow = () => Boolean(replyArea() && replyInputOpen());
+
   return (
     <ModalsProvider subject={props.title}>
       <Show when={!isUserLoading()}>
@@ -509,7 +526,13 @@ function EmailContent(props: EmailViewProps) {
               emailReplyInfo()?.draft
             }
           >
-            {(draft) => <EmailCompose draftID={draft().db_id!} />}
+            {(draft) => (
+              // The email block is bottom-anchored (no default panel inset),
+              // so the compose branch pads around the chrome itself.
+              <div class="size-full mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                <EmailCompose draftID={draft().db_id!} />
+              </div>
+            )}
           </Match>
 
           <Match when={true}>
@@ -521,6 +544,8 @@ function EmailContent(props: EmailViewProps) {
                 onRecipientsChange: context.onRecipientsChange,
               }}
             >
+              {/* Edge-to-edge on mobile: the message list carries its own
+                  insets in-scroll and under-scrolls the floating chrome. */}
               <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar
                   id={props.threadId()}
@@ -556,31 +581,34 @@ function EmailContent(props: EmailViewProps) {
                     initialLoadComplete={context.initialLoadComplete()}
                     onScrollPositionChange={handleScrollPositionChange}
                     title={props.title}
+                    underScrollsBottom={!replyInputInFlow()}
                   />
                   <CustomScrollbar
                     reverse
                     scrollContainer={context.messagesListRef}
                   />
                 </div>
-                <Show
-                  when={
-                    context.permissions().isOwner &&
-                    context.drafts.initialDraftsSettled() &&
-                    emailReplyInfo()
-                  }
-                >
+                <Show when={replyArea()}>
                   {(info) => (
-                    <div class="shrink-0 w-full pb-4">
+                    <div
+                      class={cn(
+                        'shrink-0 w-full pb-4',
+                        // Edge-to-edge mobile: the in-flow input clears the
+                        // bottom chrome itself; when collapsed, the reply
+                        // buttons float in the accessory region instead and
+                        // this wrapper drops out of the layout.
+                        replyInputInFlow()
+                          ? 'mobile:pb-[calc(var(--mobile-content-inset-bottom,0)+1rem)]'
+                          : 'mobile:hidden'
+                      )}
+                    >
                       <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}
                           loadingText="Loading messages"
                         />
                         <Show
-                          when={
-                            context.messages.bottomReplyOpen() ||
-                            info().replyingTo == null
-                          }
+                          when={replyInputOpen()}
                           fallback={
                             <Show when={info().replyingTo}>
                               {(lastMessage) => (

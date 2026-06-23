@@ -18,6 +18,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+macro_env_var = { path = "../macro_env_var" }
 
 [dev-dependencies]
 cool_asserts = "2"

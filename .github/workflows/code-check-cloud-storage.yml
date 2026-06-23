@@ -22,6 +22,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       nextest_filter: ${{ steps.package-filter.outputs.nextest_filter }}
+      doppler_config_bins: ${{ steps.package-filter.outputs.doppler_config_bins }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -45,6 +46,8 @@ jobs:
               - '.github/actions/setup-sccache/**'
               - '.github/services-config.json'
               - '.github/scripts/build-cloud-storage-lambdas.sh'
+              - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
+              - '.github/scripts/changed-cloud-storage-doppler-config-bins.sh'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
         id: package-filter
@@ -66,6 +69,15 @@ jobs:
 
           changed_files="$(git diff --name-only "$compare_rev" "$GITHUB_SHA")"
           printf '%s\n' "$changed_files" > /tmp/changed-files
+
+          doppler_config_bins="$("$GITHUB_WORKSPACE/.github/scripts/changed-cloud-storage-doppler-config-bins.sh" /tmp/changed-files "$GITHUB_WORKSPACE")"
+          {
+            echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
+            if [ -n "$doppler_config_bins" ]; then
+              printf '%s\n' "$doppler_config_bins"
+            fi
+            echo '__DOPPLER_CONFIG_BINS__'
+          } >> "$GITHUB_OUTPUT"
 
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
           if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
@@ -106,6 +118,53 @@ jobs:
           shared-key: cloud-storage-check
           cache-on-failure: true
           cache-targets: false
+      - name: validate Doppler configs
+        if: needs.path-check.outputs.doppler_config_bins != ''
+        env:
+          DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DOPPLER_TOKEN:-}" ]; then
+            echo "DOPPLER_TOKEN secret is required to validate Doppler configs" >&2
+            exit 1
+          fi
+
+          if [ -z "${RUSTC_WRAPPER:-}" ]; then
+            echo "RUSTC_WRAPPER is required so Doppler config binaries build through sccache" >&2
+            exit 1
+          fi
+
+          bins=()
+          cargo_args=(build --locked --all-features)
+          while IFS= read -r bin; do
+            if [ -z "$bin" ]; then
+              continue
+            fi
+
+            bins+=("$bin")
+            cargo_args+=(--bin "$bin")
+          done <<< "$DOPPLER_CONFIG_BINS"
+
+          if [ "${#bins[@]}" -eq 0 ]; then
+            echo "No Doppler config binaries to validate"
+            exit 0
+          fi
+
+          echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          printf '  %s\n' "${bins[@]}"
+
+          (
+            cd rust/cloud-storage
+            cargo "${cargo_args[@]}"
+            for bin in "${bins[@]}"; do
+              "./target/debug/$bin"
+            done
+          )
       - name: fmt
         run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy

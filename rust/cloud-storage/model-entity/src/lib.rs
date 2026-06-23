@@ -38,6 +38,8 @@ pub enum EntityType {
     Chat,
     /// The entity is a channel (slack-like) conversation
     Channel,
+    /// The entity is a message in a channel
+    ChannelMessage,
     /// The entity is a document
     Document,
     /// The entity is a collection of other entities
@@ -65,7 +67,7 @@ impl EntityType {
         match self {
             EntityType::User => false,
             EntityType::Team => false,
-            EntityType::Channel => false,
+            EntityType::Channel | EntityType::ChannelMessage => false,
             EntityType::Chat => true,
             EntityType::Document => true,
             EntityType::Project => true,

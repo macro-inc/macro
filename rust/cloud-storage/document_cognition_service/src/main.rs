@@ -6,9 +6,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
 use config::{Config, EnvVars, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
@@ -88,7 +88,8 @@ async fn main() -> anyhow::Result<()> {
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
-        .search_event_queue(&config.search_event_queue);
+        .search_event_queue(&config.search_event_queue)
+        .ai_projection_queue(&config.ai_projection_queue);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -215,9 +216,9 @@ async fn main() -> anyhow::Result<()> {
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
@@ -297,8 +298,8 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
-        channel: comms::inbound::attachment::CommsAttachmentService::new(
-            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+            Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
         static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
@@ -385,6 +386,8 @@ async fn main() -> anyhow::Result<()> {
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        recorder: ai_usage::pg_recorder(db.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -401,6 +404,49 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     tracing::info!("initialized memory service");
+
+    // Build the AI cost service. It backs both the admin query/pricing router
+    // and the usage recorder threaded through the tool service context.
+    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+        ai_usage::outbound::PgUsageRepo::new(db.clone()),
+    ));
+
+    tracing::info!("initialized ai cost service");
+
+    // Generator that materializes projections by running their prompt through
+    // the shared AI toolset, attributed to the requesting user.
+    let projection_generator =
+        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+            tool_service_context.clone(),
+            ai_tools::all_tools(),
+        );
+    let ai_projections_service_impl =
+        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
+            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
+                db.clone(),
+            ),
+            sqs_client.clone(),
+            projection_generator,
+        );
+
+    // Spawn the inbound worker that polls ai_projection_queue and materializes
+    // projection instances. It owns its own clone of the service.
+    let ai_projection_worker = ai_projections::worker::AiProjectionWorker::new(
+        sqs_worker::SQSWorker::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.ai_projection_queue.clone(),
+            10,
+            10,
+        ),
+        ai_projections_service_impl.clone(),
+    );
+    tokio::spawn(async move {
+        ai_projection_worker.poll().await;
+    });
+
+    let ai_projections_service = Arc::new(ai_projections_service_impl);
+
+    tracing::info!("initialized ai projections service");
 
     let mcp_credentials_key_b64 = match config.environment {
         Environment::Local => config.mcp_credentials_key_secret_name.clone(),
@@ -448,6 +494,8 @@ async fn main() -> anyhow::Result<()> {
         stream_repo,
         document_tool_context,
         memory_service,
+        usage_service,
+        ai_projections_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
         call_tool_context,

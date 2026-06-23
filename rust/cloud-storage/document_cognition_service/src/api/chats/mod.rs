@@ -35,7 +35,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     );
 
     Router::new()
-        // Create route — needs ensure_user_exists + quota middleware, no ensure_chat_exists
+        // Create route — needs ensure_user_exists, no ensure_chat_exists.
+        // Note: free users are intentionally no longer capped by chat/document count,
+        // so no quota-enforcement middleware is applied here.
         .merge(
             chat_create_router(chat_state.clone()).layer(
                 ServiceBuilder::new()
@@ -46,10 +48,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),
                         macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::ai_chat_message_handler,
                     )),
             ),
         )

@@ -6,6 +6,7 @@
  */
 import type { CallFilters } from './callFilters';
 import type { ChannelFilters } from './channelFilters';
+import type { ChannelThreadFilters } from './channelThreadFilters';
 import type { ChatFilters } from './chatFilters';
 import type { CrmCompanyFilters } from './crmCompanyFilters';
 import type { DocumentFilters } from './documentFilters';
@@ -22,6 +23,8 @@ export interface EntityFilters {
   call_filters?: CallFilters;
   /** the bundled [ChannelFilters] */
   channel_filters?: ChannelFilters;
+  /** the bundled [ChannelThreadFilters] */
+  channel_thread_filters?: ChannelThreadFilters;
   /** the bundled [ChatFilters] */
   chat_filters?: ChatFilters;
   /** the bundled [CrmCompanyFilters] */

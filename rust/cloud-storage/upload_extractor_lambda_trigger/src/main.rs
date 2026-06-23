@@ -8,6 +8,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_vars;
 use models_bulk_upload::UploadFolderStatus;
 use serde::{Deserialize, Serialize};
 
@@ -85,20 +86,24 @@ async fn handler(
     Ok(())
 }
 
+env_vars! {
+    pub struct DynamodbTable;
+    pub struct UploadExtractorQueue;
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     MacroEntrypoint::default().init();
     tracing::info!("initiating lambda");
 
-    let dynamo_table_name =
-        std::env::var("DYNAMODB_TABLE").context("DYNAMODB_TABLE must be set")?;
+    let dynamo_table_name = DynamodbTable::new().context("DYNAMODB_TABLE must be set")?;
     let upload_extract_queue =
-        std::env::var("UPLOAD_EXTRACTOR_QUEUE").context("UPLOAD_EXTRACTOR_QUEUE must be set")?;
+        UploadExtractorQueue::new().context("UPLOAD_EXTRACTOR_QUEUE must be set")?;
 
     tracing::trace!("initialized env vars");
 
     let config = macro_aws_config::get_macro_aws_config().await;
-    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
+    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.to_string()));
 
     tracing::trace!("initialized dynamodb client");
 

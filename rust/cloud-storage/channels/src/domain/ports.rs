@@ -1,4 +1,6 @@
 use crate::domain::events::ChannelEvent;
+#[cfg(feature = "attachment")]
+use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
     Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
     BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
@@ -11,6 +13,12 @@ use crate::domain::models::{
     ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention,
     ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
+#[cfg(feature = "list")]
+use crate::domain::models::{
+    ChannelMessage, ChannelWithLatest, ChannelWithParticipants, GetChannelsParams,
+    GetChannelsRequest, GetThreadReplyRowsParams, GetThreadReplyRowsRequest, LatestMessage,
+    UserName,
+};
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
@@ -20,6 +28,92 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+/// Repository for channel list persistence and query data.
+#[cfg(feature = "list")]
+pub trait ChannelListRepo: Send + Sync + 'static {
+    /// Fetch channels visible to a user with their active participants.
+    fn get_user_channels_with_participants(
+        &self,
+        req: GetChannelsParams,
+    ) -> impl Future<Output = Result<Vec<ChannelWithParticipants>, rootcause::Report>> + Send;
+
+    /// Batch-fetch latest messages for channels.
+    fn get_latest_channel_messages_batch(
+        &self,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, LatestMessage>, rootcause::Report>> + Send;
+
+    /// Fetch recent activity for a user.
+    fn get_channel_list_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
+
+    /// Fetch top-level channel messages for Soup thread rendering.
+    fn get_thread_messages(
+        &self,
+        req: GetThreadReplyRowsParams,
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
+}
+
+/// Repository for user display names needed by channel list rendering.
+#[cfg(feature = "list")]
+pub trait ChannelListUserRepo: Send + Sync + 'static {
+    /// Fetch names for user ids.
+    fn get_names_for_ids(
+        &self,
+        names: HashSet<MacroUserIdStr<'_>>,
+    ) -> impl Future<Output = Result<Vec<UserName>, rootcause::Report>> + Send;
+}
+
+/// Service for legacy channel list APIs.
+#[cfg(feature = "list")]
+pub trait ChannelListService: Send + Sync + 'static {
+    /// Fetch channels visible to a user, enriched for list display.
+    fn get_channels(
+        &self,
+        req: GetChannelsRequest,
+    ) -> impl Future<Output = Result<Vec<ChannelWithLatest>, rootcause::Report>> + Send;
+
+    /// Fetch recent activity for a user.
+    fn get_activities(
+        &self,
+        user: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
+
+    /// Fetch top-level channel messages for Soup thread rendering.
+    fn get_thread_messages(
+        &self,
+        req: GetThreadReplyRowsRequest,
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
+
+    /// Fetch names for user ids.
+    fn get_names(
+        &self,
+        names: HashSet<MacroUserIdStr<'_>>,
+    ) -> impl Future<Output = Result<Vec<UserName>, rootcause::Report>> + Send;
+}
+
+/// Repository methods needed to render channels as AI attachments.
+#[cfg(feature = "attachment")]
+pub trait ChannelAttachmentRepo: Send + Sync + 'static {
+    /// Error type for repo operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Fetch the stored channel name, if one exists.
+    fn get_channel_name_for_attachment(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Fetch recent non-deleted channel messages, newest-first.
+    fn get_recent_messages_for_attachment(
+        &self,
+        channel_id: Uuid,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<RecentChannelMessage>, Self::Err>> + Send;
+}
 
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
@@ -463,7 +557,19 @@ pub trait ChannelService: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
-    /// Fetch all replies for the thread identified by `message_id`.
+    /// Fetch raw reply rows for the thread identified by `message_id`.
+    ///
+    /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
+    fn get_thread_reply_rows(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReplyRow>, ChannelMessagesErr>> + Send {
+        let _ = channel_id;
+        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
+
+    /// Fetch all enriched replies for the thread identified by `message_id`.
     ///
     /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
     fn get_thread_replies(

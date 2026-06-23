@@ -44,6 +44,7 @@ impl SoupDocumentSubType {
     }
 }
 
+/// A document as displayed in Soup.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

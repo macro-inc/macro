@@ -28,6 +28,7 @@ macro_uuid = { path = "../macro_uuid"}
 chrono = { workspace = true}
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 tokio = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }

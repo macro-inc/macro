@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Gmail-style message list visibility for a label.
+ */
 export type SoupMessageListVisibility =
   (typeof SoupMessageListVisibility)[keyof typeof SoupMessageListVisibility];
 

@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Sender photo URL for the preview.
+ */
 export type SoupEmailThreadPreviewSenderPhotoUrl = string | null;

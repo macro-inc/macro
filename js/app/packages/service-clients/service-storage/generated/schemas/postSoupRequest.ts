@@ -8,4 +8,7 @@ import type { EntityFilters } from './entityFilters';
 import type { Params } from './params';
 import type { PostSoupRequestAllOf } from './postSoupRequestAllOf';
 
+/**
+ * Request body for the typed soup endpoint.
+ */
 export type PostSoupRequest = EntityFilters & Params & PostSoupRequestAllOf;

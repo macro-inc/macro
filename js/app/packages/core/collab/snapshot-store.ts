@@ -1,4 +1,5 @@
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import { logSyncService } from './logger';
 import type { LoroManager } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
@@ -39,12 +40,27 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   public async save(snapshot: T): Promise<void> {
     const db = await this.db;
     await db.put(STORE, { scopeId: this.scopeId, snapshot });
+    logSyncService({
+      documentId: this.scopeId,
+      level: 'debug',
+      context: {},
+      message: 'snapshot-store: saved to IDB',
+    });
   }
 
   public async load(): Promise<T | null> {
     const db = await this.db;
     const row = await db.get(STORE, this.scopeId);
-    return row?.snapshot ?? null;
+    const found = row?.snapshot ?? null;
+    logSyncService({
+      documentId: this.scopeId,
+      level: 'debug',
+      context: {},
+      message: found
+        ? 'snapshot-store: loaded from IDB'
+        : 'snapshot-store: no snapshot found',
+    });
+    return found;
   }
 
   public async delete(): Promise<void> {
@@ -68,6 +84,12 @@ export async function loadCachedState<S extends GenericRootSchema>(
 
   const initResult = await loroManager.initializeFromSnapshot(snapshot);
   if (initResult.isErr()) {
+    logSyncService({
+      documentId: 'unknown',
+      level: 'warn',
+      context: {},
+      message: 'snapshot-store: failed to initialize from snapshot',
+    });
     // Stale or corrupt snapshot. We might just keep getting this error, so
     // let's drop it.
     await snapshotStore.delete();
@@ -81,9 +103,11 @@ export async function loadCachedState<S extends GenericRootSchema>(
       // Stop replaying. Skipped entries are safe: delivered ones are on the
       // server (server sync will bring them back) and undelivered ones are
       // still in the WAL (next edit or reconnect will flush them).
-      console.error('failed to replay WAL entry during cold load', {
-        entryId: entry.id,
-        err: importResult.error,
+      logSyncService({
+        documentId: 'unknown',
+        level: 'error',
+        context: { misc: { entryId: entry.id } },
+        message: 'snapshot-store: WAL replay failed during cold load',
       });
       break;
     }

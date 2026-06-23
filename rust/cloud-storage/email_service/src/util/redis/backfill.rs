@@ -7,6 +7,10 @@ use uuid::Uuid;
 pub struct BackfillJobProgress {
     /// Number of threads completed so far, including this increment.
     pub completed_threads: i32,
+    /// The job's target thread total — the denominator for progress. Reflects
+    /// the Redis counter, which the priority pass may have bumped above the raw
+    /// mailbox size; `completed_threads` is inflated to match, so the ratio holds.
+    pub total_threads: i32,
     /// Whether every thread in the job has now been processed.
     pub job_complete: bool,
 }
@@ -39,6 +43,27 @@ impl RedisClient {
                 &key,
                 &[("total_threads", total_threads), ("completed_threads", 0)],
             )
+            .await?;
+
+        Ok(())
+    }
+
+    /// Atomically add `delta` to a job's `total_threads`. Used by the priority
+    /// first pass to account for the extra BackfillThread messages it enqueues:
+    /// the normal sweep re-covers those same threads and re-increments the
+    /// completed counter via the already-exists skip path, so the total must
+    /// grow to match or the `completed >= total` check would complete the job early.
+    pub async fn add_to_total_threads(&self, job_id: Uuid, delta: i32) -> anyhow::Result<()> {
+        let key = Self::job_status_key(job_id);
+
+        let mut redis_connection = self
+            .inner
+            .get_multiplexed_async_connection()
+            .await
+            .context("unable to connect to redis")?;
+
+        redis_connection
+            .hincr::<&str, &str, i32, i32>(&key, "total_threads", delta)
             .await?;
 
         Ok(())
@@ -89,6 +114,7 @@ impl RedisClient {
 
         Ok(BackfillJobProgress {
             completed_threads,
+            total_threads,
             job_complete,
         })
     }

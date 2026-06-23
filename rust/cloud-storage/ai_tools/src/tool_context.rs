@@ -6,7 +6,7 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::domain::service::ChannelServiceImpl;
+use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
 use channels::inbound::toolset::ChannelToolContext;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::ChatServiceImpl;
@@ -62,10 +62,10 @@ pub type ToolEmailService = EmailServiceImpl<
 pub type ToolUserEmailService =
     EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS, ToolCrmService>;
 
-/// Type alias for the comms/channels service implementation
-pub type ToolCommsService = comms::domain::service::ChannelServiceImpl<
-    comms::outbound::postgres::comms_repo::PgCommsRepo,
-    comms::outbound::postgres::user_repo::PgUserRepo,
+/// Type alias for the channel list service implementation.
+pub type ToolCommsService = ChannelListServiceImpl<
+    PgChannelsRepo,
+    PgChannelsRepo,
     frecency::outbound::postgres::FrecencyPgStorage,
 >;
 
@@ -589,6 +589,12 @@ pub struct ToolServiceContext {
     pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
+    /// Records token usage / cost for AI calls made with this context.
+    pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
+    /// The usage context (feature/user/entity) of the request currently using
+    /// this context. Set per-session by the caller so AI calls made by tools
+    /// (e.g. subagents) are attributed to the feature that spawned them.
+    pub usage_context: ai_usage::UsageContext,
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

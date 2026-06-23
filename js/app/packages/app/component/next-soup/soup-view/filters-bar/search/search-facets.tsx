@@ -4,6 +4,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
@@ -64,6 +66,61 @@ const CALL_STATUS_LABELS: Record<CallStatus, string> = {
   MISSED: 'Missed',
   UNATTENDED: 'Unattended',
 };
+
+const optionIcon = (optionId: string) => () => (
+  <PropertyValueIcon optionId={optionId} class="size-3.5" />
+);
+
+const TASK_STATUS_OPTIONS: SearchableOption[] = [
+  {
+    id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+    label: 'Not Started',
+    icon: optionIcon(PROPERTY_OPTION_IDS.STATUS.NOT_STARTED),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+    label: 'In Progress',
+    icon: optionIcon(PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+    label: 'In Review',
+    icon: optionIcon(PROPERTY_OPTION_IDS.STATUS.IN_REVIEW),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+    label: 'Completed',
+    icon: optionIcon(PROPERTY_OPTION_IDS.STATUS.COMPLETED),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.STATUS.CANCELED,
+    label: 'Canceled',
+    icon: optionIcon(PROPERTY_OPTION_IDS.STATUS.CANCELED),
+  },
+];
+
+const TASK_PRIORITY_OPTIONS: SearchableOption[] = [
+  {
+    id: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
+    label: 'Urgent',
+    icon: optionIcon(PROPERTY_OPTION_IDS.PRIORITY.URGENT),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+    label: 'High',
+    icon: optionIcon(PROPERTY_OPTION_IDS.PRIORITY.HIGH),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
+    label: 'Medium',
+    icon: optionIcon(PROPERTY_OPTION_IDS.PRIORITY.MEDIUM),
+  },
+  {
+    id: PROPERTY_OPTION_IDS.PRIORITY.LOW,
+    label: 'Low',
+    icon: optionIcon(PROPERTY_OPTION_IDS.PRIORITY.LOW),
+  },
+];
 
 export type FacetOption = {
   id: string;
@@ -341,6 +398,46 @@ export function useSearchFacets(
       controller.setCallStatus(id === 'all' ? undefined : (id as CallStatus)),
   });
 
+  const taskStatus = multiFacet({
+    id: 'task-status',
+    label: 'Status',
+    neutralLabel: 'Any status',
+    placeholder: 'Filter by status...',
+    options: () => TASK_STATUS_OPTIONS,
+    activeIds: controller.taskStatus,
+    onChange: controller.setTaskStatus,
+  });
+
+  const taskPriority = multiFacet({
+    id: 'task-priority',
+    label: 'Priority',
+    neutralLabel: 'Any priority',
+    placeholder: 'Filter by priority...',
+    options: () => TASK_PRIORITY_OPTIONS,
+    activeIds: controller.taskPriority,
+    onChange: controller.setTaskPriority,
+  });
+
+  const taskAssignee = multiFacet({
+    id: 'task-assignee',
+    label: 'Assignee',
+    neutralLabel: 'Anyone',
+    placeholder: 'Search assignees...',
+    options: personOptions,
+    activeIds: controller.taskAssignees,
+    onChange: controller.setTaskAssignees,
+  });
+
+  const taskCreatedBy = multiFacet({
+    id: 'task-created-by',
+    label: 'Created by',
+    neutralLabel: 'Anyone',
+    placeholder: 'Search creators...',
+    options: personOptions,
+    activeIds: controller.taskCreatedBy,
+    onChange: controller.setTaskCreatedBy,
+  });
+
   return createMemo(() => {
     switch (controller.type()) {
       case 'email':
@@ -351,6 +448,8 @@ export function useSearchFacets(
         return [type, channelIn, channelFrom];
       case 'calls':
         return [type, callIn, callFrom, callStatus];
+      case 'task':
+        return [type, taskStatus, taskPriority, taskAssignee, taskCreatedBy];
       default:
         return [type];
     }

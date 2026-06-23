@@ -312,7 +312,9 @@ export const MarkdownShell: Component<
         {/* Floating Link Menu */}
         <Show when={builderConfig.links?.floatingMenu}>
           <FloatingMenuGroup>
-            <FloatingLinkMenu />
+            <FloatingLinkMenu
+              autoLinkMatchMode={builderConfig.links?.autoLinkMatchMode}
+            />
           </FloatingMenuGroup>
         </Show>
       </div>

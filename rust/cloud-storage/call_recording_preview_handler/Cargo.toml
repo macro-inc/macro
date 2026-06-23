@@ -17,6 +17,7 @@ tracing = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+macro_env_var = { path = "../macro_env_var" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

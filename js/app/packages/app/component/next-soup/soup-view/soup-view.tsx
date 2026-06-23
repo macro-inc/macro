@@ -4,6 +4,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
+import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -13,10 +14,8 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/component/next-soup/create-soup-state';
-import type {
-  Query,
-  QueryState,
-} from '@app/component/next-soup/filters/filter-store';
+import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
+import type { Query } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
@@ -34,12 +33,6 @@ import {
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
-import {
-  SoupViewMobileSearchBar,
-  SoupViewMobileSearchButton,
-} from '@app/component/next-soup/soup-view/soup-view-mobile-search';
-import { SoupViewMobileSettingsButton } from '@app/component/next-soup/soup-view/soup-view-mobile-settings-button';
 import {
   CollapsedSoupViewTabs,
   MobileSoupViewTabs,
@@ -63,7 +56,10 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import {
+  useSplitPanel,
+  useSplitPanelOrThrow,
+} from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -129,7 +125,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -149,11 +145,11 @@ export const SoupSectionHeader = (props: {
         onClick={props.onClick}
         data-highlighted={props.highlighted || undefined}
         class={cn(
-          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
           props.class,
-          props.highlighted && 'ring ring-edge bg-active ring-inset'
+          props.highlighted && 'bg-active'
         )}
       >
         {props.children}
@@ -186,15 +182,15 @@ const AssigneeGroupContent = (props: {
 
 const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:ring-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:ring-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:ring-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:ring-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:ring-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
 };
 
 const DefaultGroupHeader = (
@@ -289,7 +285,7 @@ const DefaultGroupHeader = (
  * the new soup query is still in flight.
  */
 const MobileTabLoadingBar = () => (
-  <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-accent/10">
+  <div class="pointer-events-none absolute inset-x-0 top-(--safe-top) z-10 h-0.5 overflow-hidden bg-accent/10">
     <div class="h-full w-2/5 rounded-full bg-accent animate-indeterminate-bar" />
   </div>
 );
@@ -367,7 +363,7 @@ const listStateCache = new Map<
 interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
-  initialFilters?: Partial<QueryState>;
+  initialFilters?: Query;
   initialSearchText?: string;
   /**
    * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
@@ -466,7 +462,9 @@ export const SoupView = (props: SoupViewProps) => {
   onMount(() => {
     if (contentId !== 'documents') return;
 
-    const markdownQuery: Query = { include: { fileAssoc: ['assoc:md'] } };
+    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
+    if (!markdownQuery) return;
+
     const dispose = registerDocumentsFilterSplit(panel.handle.id, {
       toggleMarkdownFilter: () => {
         if (soup.predicates.isActive('doc-markdown')) {
@@ -530,35 +528,6 @@ export const SoupView = (props: SoupViewProps) => {
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
-  const [floatingButtonsVisible, setFloatingButtonsVisible] =
-    createSignal(true);
-  let lastSoupScrollOffset = 0;
-  let upwardSoupScrollDistance = 0;
-
-  const resetFloatingButtonScrollTracking = (offset = 0) => {
-    lastSoupScrollOffset = Math.max(0, offset);
-    upwardSoupScrollDistance = 0;
-    setFloatingButtonsVisible(true);
-  };
-
-  const handleSoupScrollOffsetChange = (offset: number) => {
-    const nextOffset = Math.max(0, offset);
-    const delta = nextOffset - lastSoupScrollOffset;
-    lastSoupScrollOffset = nextOffset;
-
-    if (delta > 0) {
-      upwardSoupScrollDistance = 0;
-      setFloatingButtonsVisible(false);
-      return;
-    }
-
-    if (delta < 0) {
-      upwardSoupScrollDistance += Math.abs(delta);
-      if (upwardSoupScrollDistance > FLOATING_BUTTON_SCROLL_UP_THRESHOLD) {
-        setFloatingButtonsVisible(true);
-      }
-    }
-  };
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -713,37 +682,20 @@ export const SoupView = (props: SoupViewProps) => {
               </Show>
             </SplitHeaderRight>
           </Show>
-          <SoupFiltersBar />
         </div>
+        <SoupFiltersBar />
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
             <SoupViewFileDropzone>
-              <SoupViewList
-                onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
-                onScrollOffsetChange={handleSoupScrollOffsetChange}
-              />
+              <SoupViewList />
             </SoupViewFileDropzone>
           </Suspense>
           <Show when={isMobile()}>
-            <SoupViewMobileSettingsButton visible={floatingButtonsVisible} />
-            <SoupViewMobileSearchButton
-              open={mobileSearchOpen}
-              visible={floatingButtonsVisible}
-              onOpen={() => setMobileSearchOpen(true)}
-            />
-            <SoupViewMobileCreateButton
-              activeView={activeListView}
-              visible={floatingButtonsVisible}
-            />
-            <SoupViewMobileSearchBar
-              open={mobileSearchOpen}
-              onClose={() => setMobileSearchOpen(false)}
-            />
+            <FloatRegion region="accessory">
+              <MobileSoupViewTabs />
+            </FloatRegion>
           </Show>
         </div>
-        <Show when={isMobile()}>
-          <MobileSoupViewTabs />
-        </Show>
       </div>
       <Suspense>
         <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
@@ -757,8 +709,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  onScrollOffsetBaseline?: (offset: number) => void;
-  onScrollOffsetChange?: (offset: number) => void;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -1041,10 +991,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     HTMLDivElement | undefined
   >();
 
-  createEffect(() => {
-    if (rows().length === 0) props.onScrollOffsetBaseline?.(0);
-  });
-
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1121,12 +1067,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
       virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
-      props.onScrollOffsetBaseline?.(cached.scrollOffset ?? 0);
       registerFocusEffects(false);
       return;
     }
 
-    props.onScrollOffsetBaseline?.(0);
     registerFocusEffects();
   };
 
@@ -1193,7 +1137,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
               <StaticMarkdownContext>
                 <Switch>
                   <Match when={source.isFetching() && !rows().length}>
-                    <LoadingBlock />
+                    {/* Non-list states pad the chrome top themselves — the
+                        panel leaves list views unpadded so rows can
+                        under-scroll the status bar. */}
+                    <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                      <LoadingBlock />
+                    </div>
                   </Match>
                   <Match
                     when={
@@ -1201,7 +1150,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       !rows().length
                     }
                   >
-                    <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                    <div class="flex items-center gap-2 p-3 text-xs text-text-muted mobile:mt-(--mobile-content-inset-top) mobile:mb-(--mobile-content-inset-bottom)">
                       <Spinner class="size-3 animate-spin" />
                       Searching...
                     </div>
@@ -1212,13 +1161,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       forceEmptyState()
                     }
                   >
-                    <EmptyState
-                      listView={currentView()}
-                      search={!!searchText()}
-                      hasRefinementsFromBase={hasActiveRefinements()}
-                      hasHiddenItems={hasHiddenItems()}
-                      onClearFilters={resetToTabDefaults}
-                    />
+                    <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                      <EmptyState
+                        listView={currentView()}
+                        search={!!searchText()}
+                        hasRefinementsFromBase={hasActiveRefinements()}
+                        hasHiddenItems={hasHiddenItems()}
+                        onClearFilters={resetToTabDefaults}
+                      />
+                    </div>
                   </Match>
                   <Match when={rows().length}>
                     <ListLayoutProvider ref={localEntityListRef}>
@@ -1263,7 +1214,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
-                          onScrollOffsetChange={props.onScrollOffsetChange}
                           onScrollBottom={debouncedFetchMore}
                           scrollBottomOffset={300}
                           rows={rows()}
@@ -1338,7 +1288,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           class={cn(
                                             'my-1 rounded min-h-9 flex items-center justify-center',
                                             highlighted()
-                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 bg-active/60'
                                               : 'mx-auto'
                                           )}
                                         >
@@ -1479,7 +1429,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </div>
                                 </Show>
                                 <Show when={i() === rows().length - 1}>
-                                  <div class="h-15" />
+                                  {/* Desktop-only: mobile clearance comes
+                                      from the in-scroll trailing spacer. */}
+                                  <div class="h-15 mobile:hidden" />
                                 </Show>
                               </>
                             );
@@ -1537,7 +1489,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
 const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
-const FLOATING_BUTTON_SCROLL_UP_THRESHOLD = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
@@ -1557,9 +1508,15 @@ interface SoupListProps {
 const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
+  const splitPanel = useSplitPanel();
 
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+
+  // Full-frame mobile: rows under-scroll the status bar; this in-scroll
+  // spacer is their resting inset (safe-top — list views have no header).
+  const topInset = () =>
+    isMobile() ? (splitPanel?.contentOffsetTop() ?? 0) : 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1592,18 +1549,37 @@ const SoupList = (props: SoupListProps) => {
         props.class
       )}
     >
-      <VList
-        cache={props.cache}
-        ref={registerVirtualizerHandler}
+      {/* Hand-rolled VList (scroller + Virtualizer) so the full-frame mobile
+          insets can live inside the scroller: rows rest clear of the chrome
+          but still slide beneath it. `startMargin` keeps virtua's scroll
+          math correct for the leading spacer. */}
+      <div
         class={cn('overscroll-none', props.virtualizerClass)}
-        data={props.rows}
-        itemSize={itemSize()}
-        bufferSize={overscan() * itemSize()}
-        onScroll={handleScroll}
+        style={{
+          display: 'block',
+          'overflow-y': 'auto',
+          contain: 'strict',
+          width: '100%',
+          height: '100%',
+        }}
         {...soupListContainerAttribute}
       >
-        {(row, i) => props.children(row, i)}
-      </VList>
+        <div aria-hidden style={{ height: `${topInset()}px` }} />
+        <Virtualizer
+          cache={props.cache}
+          ref={registerVirtualizerHandler}
+          startMargin={topInset()}
+          data={props.rows}
+          itemSize={itemSize()}
+          bufferSize={overscan() * itemSize()}
+          onScroll={handleScroll}
+        >
+          {(row, i) => props.children(row, i)}
+        </Virtualizer>
+        <Show when={isMobile()}>
+          <div aria-hidden class="h-(--mobile-content-inset-bottom)" />
+        </Show>
+      </div>
     </div>
   );
 };

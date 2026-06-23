@@ -1,6 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -13,13 +14,16 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -481,6 +485,7 @@ function GithubSectionConditional(props: {
     props.documentId,
     props.isTask
   );
+  const { openWithSplit } = useSplitLayout();
 
   const pullRequests = createMemo((): GithubPullRequest[] => {
     if (!props.isTask || query.isLoading || query.isError) return [];
@@ -504,16 +509,32 @@ function GithubSectionConditional(props: {
                     <Show when={i() > 0}>
                       <span class="text-ink-extra-muted">,</span>
                     </Show>
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink"
+                    <button
+                      type="button"
+                      disabled={!pr.url}
+                      class={cn(
+                        'inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink',
+                        !pr.url &&
+                          'cursor-not-allowed text-ink-placeholder hover:text-ink-placeholder'
+                      )}
                       title={
                         pr.name?.trim()
                           ? `${pr.name.trim()} ${pr.displayName}`
                           : pr.displayName
                       }
+                      onClick={() => {
+                        if (USE_MACRO_PR_SUMMARY_BLOCK && pr.foreignEntityId) {
+                          openWithSplit(
+                            {
+                              type: 'pr',
+                              id: pr.foreignEntityId,
+                            },
+                            { referredFrom: null }
+                          );
+                          return;
+                        }
+                        if (pr.url) openExternalUrl(pr.url);
+                      }}
                     >
                       <GithubIcon
                         class="size-3 shrink-0 text-ink-extra-muted"
@@ -522,6 +543,15 @@ function GithubSectionConditional(props: {
                       <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current">
                         {pr.displayName}
                       </span>
+                    </button>
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open ${pr.displayName} on GitHub`}
+                      class="shrink-0 text-ink-extra-muted hover:text-ink"
+                    >
+                      <ArrowSquareOutIcon class="size-3" aria-hidden="true" />
                     </a>
                   </>
                 )}

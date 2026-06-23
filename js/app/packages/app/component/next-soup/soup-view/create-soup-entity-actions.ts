@@ -8,6 +8,8 @@ import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
+import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import {
   makeBlockSenderAction,
   makeCopyAction,
@@ -15,6 +17,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
+  makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
@@ -57,6 +60,8 @@ export function createSoupEntityActions(): {
   const analytics = useAnalytics();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
+  const isTeamAdmin = useIsTeamAdmin();
+  const hiddenMutation = useSetCompanyHiddenMutation();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -80,6 +85,11 @@ export function createSoupEntityActions(): {
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
+  const hideCompanyAction = makeHideCompanyAction({
+    isTeamAdmin: () => isTeamAdmin(),
+    setHidden: (companyId, hidden) =>
+      hiddenMutation.mutateAsync({ companyId, hidden }),
+  });
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -288,6 +298,21 @@ export function createSoupEntityActions(): {
       });
     }
 
+    // CRM group: Hide / Unhide (admin/owner only, single company)
+    const crmItems: SoupEntityActionItem[] = [];
+
+    const singleEntity = entities.length === 1 ? entities[0] : undefined;
+    if (
+      singleEntity?.type === 'crm_company' &&
+      hideCompanyAction.canExecute(singleEntity)
+    ) {
+      crmItems.push({
+        id: 'hide-company',
+        label: singleEntity.hidden ? 'Unhide' : 'Hide',
+        onClick: handle(hideCompanyAction.executeWithSoup),
+      });
+    }
+
     // Delete group
     const deleteItems: SoupEntityActionItem[] = [];
 
@@ -300,7 +325,7 @@ export function createSoupEntityActions(): {
       });
     }
 
-    return [topItems, middleItems, senderItems, deleteItems]
+    return [topItems, middleItems, senderItems, crmItems, deleteItems]
       .filter((items) => items.length > 0)
       .map((items) => ({ items }));
   };

@@ -4,7 +4,6 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "lexical-service",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-07-22",
 	"alias": {
@@ -13,22 +12,20 @@
 	"observability": {
 		"enabled": true
 	},
-	"services": [
-		{
-			"binding": "SYNC_SERVICE",
-			"service": "sync-service-prod2"
-		}
-	],
-	"vars": {
-		"SYNC_SERVICE_URL": "https://sync-service-prod2.macroverse.workers.dev"
-	},
 	"env": {
 		"local": {
+			"services": [
+				{
+					"binding": "SYNC_SERVICE",
+					"service": "sync-service-dev3"
+				}
+			],
 			"vars": {
 				"SYNC_SERVICE_URL": "https://sync-service-dev3.macroverse.workers.dev"
 			}
 		},
 		"dev": {
+			"name": "lexical-service-dev",
 			"services": [
 				{
 					"binding": "SYNC_SERVICE",
@@ -40,6 +37,7 @@
 			}
 		},
 		"prod": {
+			"name": "lexical-service-prod",
 			"services": [
 				{
 					"binding": "SYNC_SERVICE",

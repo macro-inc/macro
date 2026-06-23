@@ -8,6 +8,7 @@ import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
+import { PullRequestMentionNode } from '../nodes/PullRequestMentionNode';
 import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 
@@ -237,6 +238,17 @@ function cleanHostname(rawHostname: string): string {
   return hostname;
 }
 
+function currentBrowserHostname(): string | null {
+  if (
+    typeof window === 'undefined' ||
+    !window.location ||
+    !window.location.hostname
+  ) {
+    return null;
+  }
+  return cleanHostname(window.location.hostname);
+}
+
 export const E_DOCUMENT_MENTION: ElementTransformer = {
   dependencies: [DocumentMentionNode],
   type: 'element',
@@ -255,6 +267,69 @@ export const E_DOCUMENT_MENTION: ElementTransformer = {
     const hostname = cleanHostname(window.location.hostname);
     const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
     return `[${documentName}](${documentUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Pull Request Mentions
+
+export const I_PR_MENTION: TextMatchTransformer = {
+  dependencies: [PullRequestMentionNode],
+  type: 'text-match',
+  regExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
+  importRegExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
+  export: (node) => {
+    if (!(node instanceof PullRequestMentionNode)) return null;
+    const data = JSON.stringify({
+      id: node.getId(),
+      label: node.getLabel(),
+      mentionUuid: node.getMentionUuid(),
+    });
+    return `<m-pr-mention>${data}</m-pr-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('id' in data) || typeof data.id !== 'string') {
+        throw new Error('Missing field id');
+      }
+      const prMentionNode = new PullRequestMentionNode(
+        data.id,
+        typeof data.label === 'string' ? data.label : undefined,
+        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined
+      );
+      node.replace(prMentionNode);
+    } catch (e) {
+      console.error('Error in I_PR_MENTION replace:', e);
+    }
+  },
+};
+
+// External Pull Request Mentions
+
+export const E_PR_MENTION: ElementTransformer = {
+  dependencies: [PullRequestMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof PullRequestMentionNode)) return null;
+
+    const id = node.getId();
+    if (!id) return null;
+
+    const label = node.getLabel() || 'Pull request';
+    const hostname = currentBrowserHostname();
+    if (!hostname) return label;
+
+    const prUrl = `https://${hostname}/app/pr/${id}`;
+    return `[${label}](${prUrl})`;
   },
   replace: (
     _parentNode: ElementNode,

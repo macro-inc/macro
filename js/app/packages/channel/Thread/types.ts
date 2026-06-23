@@ -1,6 +1,7 @@
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
+import type { IUser } from '@core/user/types';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Accessor, Setter } from 'solid-js';
 import type {
@@ -38,6 +39,7 @@ export type ThreadProps = {
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
+  participants?: Accessor<IUser[]>;
   targetThreadId?: string;
   /** One-shot scroll target. Caller must clear via `onTargetReplyScrolled`. */
   targetReplyId?: string;

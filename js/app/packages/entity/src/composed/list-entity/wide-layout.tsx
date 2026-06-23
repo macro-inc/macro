@@ -39,31 +39,40 @@ export function WideLayout(props: LayoutProps) {
     <Entity.Layout
       class={cn(
         'w-full min-h-[inherit] items-center text-sm px-2',
-        'gap-2 grid grid-cols-[1rem_1fr_auto_8ch] grid-rows-[1fr]',
+        'gap-2 grid grid-rows-[1fr]',
+        // Drop the indicator column entirely when the checkbox is hidden so the
+        // content isn't indented by an empty 1rem gutter.
+        props.hideCheckbox
+          ? 'grid-cols-[1fr_auto_8ch]'
+          : 'grid-cols-[1rem_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{
-        'grid-template-areas': '"indicator content meta timestamp"',
+        'grid-template-areas': props.hideCheckbox
+          ? '"content meta timestamp"'
+          : '"indicator content meta timestamp"',
       }}
     >
-      <Entity.Slot placement="indicator" class="relative size-full group">
-        <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
-          <UnreadIndicator active={props.unread} />
-        </div>
-        <div
-          class={cn(
-            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
-            {
-              'opacity-100': props.checked,
-            }
-          )}
-        >
-          <MultiSelectCheckbox
-            checked={props.checked}
-            onChecked={props.onChecked}
-          />
-        </div>
-      </Entity.Slot>
+      <Show when={!props.hideCheckbox}>
+        <Entity.Slot placement="indicator" class="relative size-full group">
+          <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">
+            <UnreadIndicator active={props.unread} />
+          </div>
+          <div
+            class={cn(
+              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
+              {
+                'opacity-100': props.checked,
+              }
+            )}
+          >
+            <MultiSelectCheckbox
+              checked={props.checked}
+              onChecked={props.onChecked}
+            />
+          </div>
+        </Entity.Slot>
+      </Show>
       <Entity.Slot
         placement="content"
         class="ph-no-capture font-semibold truncate items-center gap-2 flex"

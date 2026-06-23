@@ -2,6 +2,7 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isMobile } from '@core/mobile/isMobile';
+import { cn } from '@ui';
 import { createMemo, createSelector, Index, Show } from 'solid-js';
 import { MessageContainer } from './MessageContainer';
 
@@ -9,6 +10,12 @@ interface MessageListProps {
   initialLoadComplete: boolean;
   onScrollPositionChange?: (scrollFromTop: number) => void;
   title?: string;
+  /**
+   * Full-frame mobile: when nothing is in flow below the list (the collapsed
+   * reply buttons float in the accessory region), the list carries the bottom
+   * inset in-scroll so the last message rests above the floating chrome.
+   */
+  underScrollsBottom?: boolean;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -25,7 +32,14 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5"
+      class={cn(
+        'pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5',
+        // In-scroll top inset: messages rest below the floating split chrome
+        // but under-scroll it.
+        'mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
+        props.underScrollsBottom &&
+          'mobile:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
+      )}
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Since the list is reversed, calculate scroll from visual top

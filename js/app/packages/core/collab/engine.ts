@@ -1,5 +1,4 @@
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
-import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
@@ -13,6 +12,7 @@ import {
 import { match } from 'ts-pattern';
 import type { Awareness } from './awareness';
 import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
+import { logSyncService } from './logger';
 import {
   type LoroManager,
   LoroStateTag,
@@ -101,13 +101,24 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.makeChatter = makeChatter;
   }
 
+  private log(
+    level: Parameters<typeof logSyncService>[0]['level'],
+    message: string,
+    extra?: Record<string, unknown>
+  ) {
+    logSyncService({
+      documentId: this.syncs.live.documentId,
+      level,
+      context: extra ? { misc: extra } : {},
+      message,
+    });
+  }
+
   public start(): boolean {
     if (this._isRunning) return true; // already running — idempotent
 
     if (!this.loroManager.initialized) {
-      logger.warn('Loro manager not initialized, engine will not start', {
-        documentId: this.syncs.live.documentId,
-      });
+      this.log('warn', 'engine.start: manager not initialized, aborting');
       return false;
     }
 
@@ -168,12 +179,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const syncResult = await this.loroManager.syncToLoro(state);
 
       if (syncResult.isErr()) {
-        logger.error('failed to sync state to remote', {
-          resolution: 'reset engine',
-          scope: 'sync_engine',
-          err: syncResult,
-          documentId: this.syncs.live.documentId,
-        });
+        this.log('error', 'syncStateToLoro: failed, resetting engine', { err: syncResult });
         this.reset();
       }
     });
@@ -196,23 +202,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     await this.syncLock.runExclusive(async () => {
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (snapshot.isErr()) {
-        logger.error('failed to get snapshot from source', {
-          resolution: 'fail',
-          scope: 'sync_engine',
-          err: snapshot.error,
-          documentId: this.syncs.live.documentId,
-        });
+        this.log('error', 'engine.reset: failed to get snapshot', { err: snapshot.error });
         return;
       }
 
       const resetResult = await this.loroManager.reset(snapshot.value);
       if (resetResult.isErr()) {
-        logger.error('failed to reset engine or loro manager', {
-          resolution: 'fail',
-          scope: 'sync_engine',
-          err: resetResult,
-          documentId: this.syncs.live.documentId,
-        });
+        this.log('error', 'engine.reset: loro manager reset failed', { err: resetResult });
         return;
       }
     });
@@ -254,6 +250,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     try {
       const doc = this.loroManager.doc;
+      this.log('debug', 'engine: persisting snapshot', { doc: doc.toJSON() });
       const snapshot = doc.export({
         mode: 'shallow-snapshot',
         frontiers: doc.oplogFrontiers(),
@@ -263,14 +260,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       // after the save succeeds so that we can always recover fully.
       await this.syncs.wal.pruneDelivered();
     } catch (err) {
-      // DOMException's name/message aren't own-enumerable, so logging the
-      // bare object hides everything but the type. Pull them out by hand.
-      logger.error('failed to persist snapshot', {
-        scope: 'sync_engine',
-        documentId: this.syncs.live.documentId,
+      this.log('error', 'engine: failed to persist snapshot', {
         errName: err instanceof Error ? err.name : undefined,
         errMessage: err instanceof Error ? err.message : String(err),
-        err,
       });
     }
   }
@@ -280,13 +272,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const importResult = this.loroManager.importUpdate(update);
       await Promise.resolve();
       if (importResult.isErr()) {
-        logger.error('failed to import remote update', {
-          resolution: 'reset engine',
-          scope: 'sync_engine',
-          err: importResult,
-          documentId: this.syncs.live.documentId,
-        });
-        console.error(importResult);
+        this.log('error', 'engine: failed to import remote update, resetting', { err: importResult });
         this.reset();
         return;
       }
@@ -304,13 +290,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       case 'incremental_snapshot':
         this.handleRemoteUpdate(event.snapshot);
         break;
-      case 'reconnect': {
-        logger.log('reconnecting, requesting updates since current version', {
-          documentId: this.syncs.live.documentId,
-        });
+      case 'reconnect':
+        this.log('info', 'engine: reconnect, requesting updates since current version');
         this.requestAndHandleUpdatesSince(this.loroManager.doc.version());
         break;
-      }
     }
   }
 
@@ -320,10 +303,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   ) {
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
-      console.error(
-        'failed to request updates since',
-        'error' in updates ? updates.error : 'update is undefined'
-      );
+      this.log('error', 'engine: requestUpdatesSince failed', {
+        err: 'error' in updates ? updates.error : 'update is undefined',
+      });
       if (updates.isErr() && attempt < REQUEST_UPDATES_MAX_ATTEMPTS) {
         await new Promise((resolve) =>
           setTimeout(resolve, REQUEST_UPDATES_RETRY_DELAY_MS)

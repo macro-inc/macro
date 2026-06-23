@@ -1,4 +1,13 @@
+use anyhow::Context;
+
 pub use macro_env::Environment;
+use macro_env_var::env_vars;
+
+env_vars! {
+    struct RedisUri;
+    struct DatabaseUrl;
+    struct DocumentStorageBucket;
+}
 
 /// The configuration parameters for the application.
 ///
@@ -38,15 +47,15 @@ impl Config {
     }
 
     pub fn from_env() -> anyhow::Result<Self> {
-        let redis_uri = std::env::var("REDIS_URI").expect("REDIS_URI must be provided");
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be provided");
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .expect("DOCUMENT_STORAGE_BUCKET must be provided");
+        let redis_uri = RedisUri::new().context("REDIS_URI must be provided")?;
+        let database_url = DatabaseUrl::new().context("DATABASE_URL must be provided")?;
+        let document_storage_bucket =
+            DocumentStorageBucket::new().context("DOCUMENT_STORAGE_BUCKET must be provided")?;
         let environment = Environment::new_or_prod();
         Ok(Config::new(
-            redis_uri.as_str(),
-            database_url.as_str(),
-            document_storage_bucket.as_str(),
+            redis_uri.as_ref(),
+            database_url.as_ref(),
+            document_storage_bucket.as_ref(),
             environment,
         ))
     }

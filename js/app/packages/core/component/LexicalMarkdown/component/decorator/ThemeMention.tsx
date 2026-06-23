@@ -1,12 +1,12 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
-import { ThemeChips } from '@theme/components/ThemeChips';
+import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { isThemeV2 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
-import { Show, useContext } from 'solid-js';
+import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
@@ -39,22 +39,15 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   };
 
   return (
-    <button
+    <ThemeChipPill
+      type="button"
+      onClick={handleClick}
       class={cn(
-        'pointer-events-auto mx-0.5 inline-flex items-stretch gap-0.75 align-baseline overflow-hidden py-0 pl-0 pr-1 rounded-md border border-edge-muted bg-transparent',
+        'pointer-events-auto mx-0.5 align-baseline',
         isSelectedAsNode() && 'bg-active'
       )}
-      onClick={handleClick}
-      type="button"
-    >
-      <Show when={theme()}>
-        {(t) => (
-          <span class="rounded-md inline-flex self-stretch [&>span]:h-full [&>span]:border-0 [&>span]:rounded-[5px]">
-            <ThemeChips theme={t()} size="sm" />
-          </span>
-        )}
-      </Show>
-      <span class="mx-0.5 flex items-center cursor-default">{props.name}</span>
-    </button>
+      theme={theme()}
+      name={props.name}
+    />
   );
 }

@@ -33,6 +33,7 @@ export const VIDEO_EXTENSIONS = [
 
 export const isEmail = { exclude: { threadId: [NIL_UUID] } };
 export const isAgent = { exclude: { chatId: [NIL_UUID] } };
+export const isForeign = { exclude: { foreignEntityRecordId: [NIL_UUID] } };
 export const isTask = { include: { subType: ['task'] } };
 export const isNotTask = { exclude: { subType: ['task'] } };
 export const isEmailAttachment = { include: { isEmailAttachment: true } };

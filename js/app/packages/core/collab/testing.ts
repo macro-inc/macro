@@ -75,8 +75,6 @@ export class MockWALStore<T> implements WALStore<T> {
     return this.entries.length;
   }
 
-  public markClean(): void {}
-
   /** Test helper: seed an entry with an explicit createdAt timestamp. */
   public seedEntry(update: T, createdAt: number, delivered = false): number {
     const id = this.nextId++;

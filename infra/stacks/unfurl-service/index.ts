@@ -38,12 +38,6 @@ const unfurlService = new UnfurlService(`unfurl-service-${stack}`, {
       name: 'ENVIRONMENT',
       value: stack,
     },
-    {
-      name: 'RUST_LOG',
-      value: `unfurl_service=${
-        stack === 'prod' ? 'debug' : 'trace'
-      },tower_http=debug`,
-    },
     // OpenTelemetry / Datadog tracing configuration
     {
       name: 'DD_SERVICE',

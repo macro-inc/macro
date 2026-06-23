@@ -1991,6 +1991,11 @@ export type getTeamResponse200 = {
   status: 200;
 };
 
+export type getTeamResponse204 = {
+  data: void;
+  status: 204;
+};
+
 export type getTeamResponse400 = {
   data: ErrorResponse;
   status: 400;
@@ -2011,7 +2016,10 @@ export type getTeamResponse500 = {
   status: 500;
 };
 
-export type getTeamResponseSuccess = getTeamResponse200 & {
+export type getTeamResponseSuccess = (
+  | getTeamResponse200
+  | getTeamResponse204
+) & {
   headers: Headers;
 };
 export type getTeamResponseError = (

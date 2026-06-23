@@ -7,7 +7,11 @@
 import type { SoupChannel } from './soupChannel';
 import type { SoupItemOneOfNineTag } from './soupItemOneOfNineTag';
 
+/**
+ * Channel item.
+ */
 export type SoupItemOneOfNine = {
+  /** Channel item. */
   data: SoupChannel;
   tag: SoupItemOneOfNineTag;
 };

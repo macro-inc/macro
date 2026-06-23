@@ -133,6 +133,7 @@ export function ListEntity(props: ListEntityProps) {
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     checked: props.checked,
+    hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
     unread: unread(),
     isShared: isShared(),
@@ -201,10 +202,10 @@ export function ListEntity(props: ListEntityProps) {
         {
           'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
-          'ring ring-edge bg-active/60 ring-inset':
+          'bg-accent/16': props.checked && props.highlighted,
+          'bg-hover/30':
             props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-active/30':
+          'hover:bg-hover/30':
             !props.highlighted && !props.checked && !isTouchDevice(),
         }
       )}

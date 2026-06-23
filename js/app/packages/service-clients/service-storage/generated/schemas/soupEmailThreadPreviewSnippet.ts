@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Thread snippet.
+ */
 export type SoupEmailThreadPreviewSnippet = string | null;

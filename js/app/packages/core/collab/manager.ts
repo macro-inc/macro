@@ -18,6 +18,7 @@ import {
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import { DocInitMachine } from './document-init-machine';
+import { logSyncService } from './logger';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
 
@@ -57,6 +58,7 @@ export type LoroManagerOptions = {
   /** Accessor returning the live sync source. Required because the init
    *  state machine may need to call `requestUpdatesSince` on it. */
   liveSyncSource: () => LiveSyncSource;
+  documentId: string;
   /** True if the WAL had undelivered entries at the start of this session.
    *  Read synchronously from `BrowserWALStore.isDirtyHint(documentId)` —
    *  determines which path the init state machine takes. */
@@ -225,7 +227,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     try {
       importStatus = this._doc.import(update);
     } catch (e) {
-      console.error('Failed to import update', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `importUpdate failed: ${e}` });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -255,7 +257,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     try {
       importStatus = this._doc.importBatch(updates);
     } catch (e) {
-      console.error('Failed to import update', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `importBatchUpdates failed: ${e}` });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -300,7 +302,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         },
       });
     } catch (e) {
-      console.error('Failed to sync mirror', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `initializeFromSnapshot: mirror sync failed: ${e}` });
       this.pushError(LoroManagerError.InitializeFailed);
       return err([
         {
@@ -352,7 +354,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         })),
       });
     } catch (e) {
-      console.error('Failed to export update', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getUpdateSince: export failed: ${e}` });
       this.pushError(LoroManagerError.ExportFailed);
       return err([
         {
@@ -391,7 +393,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
       await this.awaitMirrorSync();
     } catch (e) {
-      console.error('Failed to sync to loro', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `syncToLoro failed: ${e}` });
       return err([
         {
           code: LoroManagerError.SyncFailed,
@@ -418,7 +420,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     try {
       importStatus = newDoc.import(snapshot);
     } catch (e) {
-      console.error('Failed to import snapshot', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `reset: snapshot import failed: ${e}` });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -465,7 +467,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     try {
       container = this._doc.getContainerById(id);
     } catch (e) {
-      console.error('Failed to get container', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getContainerById failed: ${e}` });
       this.pushError(LoroManagerError.GetContainerByIdFailed);
       return err([
         { code: LoroManagerError.GetContainerByIdFailed, message: String(e) },
@@ -495,7 +497,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         ]);
       }
     } catch (e) {
-      console.error('Failed to get cursor pos', e);
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getCursorPos failed: ${e}` });
       this.pushError(LoroManagerError.GetCursorPosFailed);
       return err([
         { code: LoroManagerError.GetCursorPosFailed, message: String(e) },
@@ -514,20 +516,14 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     if (!this._initialized) {
       const initResult = await this.initializeFromSnapshot(snapshot);
       if (initResult.isErr()) {
-        console.error(
-          `LoroManager.ingest(${context}): initializeFromSnapshot failed`,
-          initResult.error
-        );
+        logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `applySnapshot(${context}): initializeFromSnapshot failed` });
         return false;
       }
       return true;
     }
     const importResult = this.importUpdate(snapshot);
     if (importResult.isErr()) {
-      console.error(
-        `LoroManager.ingest(${context}): importUpdate failed`,
-        importResult.error
-      );
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `applySnapshot(${context}): importUpdate failed` });
       return false;
     }
     return true;
@@ -545,10 +541,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     if (input.kind === 'local' && input.walUpdates?.length) {
       const replayResult = this.importBatchUpdates(input.walUpdates);
       if (replayResult.isErr()) {
-        console.error(
-          `LoroManager.ingest(${input.kind}): WAL replay failed`,
-          replayResult.error
-        );
+        logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): WAL replay failed` });
       }
     }
 
@@ -560,10 +553,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       this._doc.version()
     );
     if (deltaResult.isErr()) {
-      console.error(
-        `LoroManager.ingest(${input.kind}): requestUpdatesSince failed`,
-        deltaResult.error
-      );
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): requestUpdatesSince failed` });
       return;
     }
     const requestedInstruction = this.initMachine.receive('requested');
@@ -571,10 +561,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
     const deltaImport = this.importUpdate(deltaResult.value);
     if (deltaImport.isErr()) {
-      console.error(
-        `LoroManager.ingest(${input.kind}): failed to apply requested delta`,
-        deltaImport.error
-      );
+      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): failed to apply requested delta` });
     }
   }
 

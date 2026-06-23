@@ -1,5 +1,5 @@
 use crate::model::SimpleMention;
-use model::comms::{ChannelMessage, ChannelType, GetChannelMessageResponse};
+use channels::domain::models::{ChannelType, GetChannelMessageResponse, RecentChannelMessage};
 use uuid::Uuid;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -81,7 +81,7 @@ pub async fn get_channel_message_by_id(
         name: channel_message_info.name,
         channel_type: channel_message_info.channel_type,
         org_id: channel_message_info.org_id,
-        channel_message: ChannelMessage {
+        channel_message: RecentChannelMessage {
             message_id: channel_message_info.message_id,
             thread_id: channel_message_info.thread_id,
             sender_id: channel_message_info.sender_id,

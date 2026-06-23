@@ -213,6 +213,7 @@ where
 
                 let request = SendNotificationRequestBuilder {
                     notification_entity: notification_entity.clone(),
+                    secondary_notification_entity: None,
                     notification: metadata,
                     sender_id: Some(assigned_by.clone()),
                     recipient_ids: HashSet::from([recipient_id.copied()]),

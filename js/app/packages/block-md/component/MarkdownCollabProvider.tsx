@@ -66,7 +66,9 @@ import {
   on,
   onCleanup,
   type Setter,
+  untrack,
 } from 'solid-js';
+import { logSyncService } from '@core/collab/logger';
 import { CollabStatus } from './CollabStatus';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
@@ -434,7 +436,12 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       () => managerInitialized() ?? false,
       (isInitialized) => {
         if (!isInitialized) {
-          console.warn('loro manager not initialized');
+          logSyncService({
+            documentId: syncSource()?.documentId ?? 'unknown',
+            level: 'debug',
+            context: {},
+            message: 'MarkdownCollabProvider: manager not yet initialized',
+          });
           return;
         }
 
@@ -444,7 +451,18 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Get the current state from the loroManager
           // At this point, the loroManager should be initialized and should
           // have the initial state from the sync service
-          const state = loroManager.state;
+          const state = untrack(loroManager.state);
+          const empty = state
+            ? isStateEmpty(state.state as unknown as SerializedEditorState)
+            : null;
+
+          logSyncService({
+            documentId: syncSource()!.documentId,
+            level: 'info',
+            context: { misc: { hasState: !!state, isEmpty: empty } },
+            message:
+              'MarkdownCollabProvider: manager initialized, initializing editor',
+          });
 
           //TODO: some more descriptive user facing error should be displayed here
           if (!state) {

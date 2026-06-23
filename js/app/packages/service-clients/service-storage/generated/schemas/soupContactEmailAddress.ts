@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Contact email address.
+ */
 export type SoupContactEmailAddress = string | null;

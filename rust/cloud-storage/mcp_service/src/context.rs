@@ -5,9 +5,9 @@ use ai_tools::{
     NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
 use documents::{
     domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
@@ -183,9 +183,9 @@ async fn build_tool_context(
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
@@ -337,6 +337,8 @@ async fn build_tool_context(
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        recorder: ai_usage::pg_recorder(db.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 
     tracing::info!("initialized tool context");

@@ -34,6 +34,7 @@ import { useListNavigation } from '../use-list-navigation';
 
 const BLOCK_TO_SANDBOX: Record<string, SandboxEntityType> = {
   md: 'md',
+  snippet: 'snippet',
   email: 'email',
   task: 'task',
   channel: 'channel',

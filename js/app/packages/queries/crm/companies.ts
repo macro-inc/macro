@@ -4,7 +4,7 @@ import type { CrmCompanyEntity } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
@@ -83,6 +83,47 @@ function responseToEntity(response: CrmCompanyResponse): CrmCompanyEntity {
   };
 }
 
+// Matches the company-email soup queries built by `useCompanyEmailsQuery`
+// (packages/companies/Company): the Team view's `ecd` domain widener and the
+// Me view's `ef` tree, both keyed on the company's email domains. astItems key
+// shape is ['soup', 'astItems', params, body, groupBy], so the body is at [3].
+function isCompanyEmailQueryKey(
+  queryKey: QueryKey,
+  domains: string[]
+): boolean {
+  const body = queryKey[3] as { ecd?: unknown; ef?: unknown } | undefined;
+  if (!body) return false;
+  if (
+    Array.isArray(body.ecd) &&
+    body.ecd.some((d) => domains.includes(d as string))
+  ) {
+    return true;
+  }
+  if (body.ef != null) {
+    const serialized = JSON.stringify(body.ef);
+    // Quote-wrap each domain so "example.com" can't match "sub.example.com".
+    return domains.some((d) => serialized.includes(JSON.stringify(d)));
+  }
+  return false;
+}
+
+// Wipe (not just invalidate) the company's cached email threads. Invalidate
+// keeps serving the stale rows — and won't refetch once the panel navigates
+// away on hide — so toggling hidden/email-sync left old emails on screen until
+// a full refresh. Removing forces a cold reload, the same as that refresh did.
+function wipeCompanyEmailCache(companyId: string): void {
+  const company = queryClient.getQueryData<CrmCompanyResponse>(
+    crmKeys.company(companyId).queryKey
+  );
+  const domains = company?.domains.map((d) => d.domain) ?? [];
+  if (domains.length === 0) return;
+
+  queryClient.removeQueries({
+    queryKey: soupKeys.astItems._def,
+    predicate: (query) => isCompanyEmailQueryKey(query.queryKey, domains),
+  });
+}
+
 /**
  * Toggles `crm_companies.hidden` via `PUT /crm/companies/{id}/hidden`. Hiding
  * also disables `email_sync` and soft-hides the company's contacts; un-hide
@@ -102,13 +143,15 @@ export function useSetCompanyHiddenMutation() {
       throwOnErr(() =>
         storageServiceClient.setCompanyHidden({ companyId, hidden })
       ),
-    onSuccess: (_data, { companyId }) =>
-      Promise.all([
+    onSuccess: (_data, { companyId }) => {
+      wipeCompanyEmailCache(companyId);
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: soupKeys._def }),
         queryClient.invalidateQueries({
           queryKey: crmKeys.company(companyId).queryKey,
         }),
-      ]),
+      ]);
+    },
   }));
 }
 
@@ -130,16 +173,20 @@ export function useSetEmailSyncMutation() {
       throwOnErr(() =>
         storageServiceClient.setEmailSync({ companyId, emailSync })
       ),
-    // Return the invalidation promise so the mutation stays pending until the
-    // refetches resolve — the company entity, empty-state message, and emails
-    // list flip in one beat. Soup carries the team-wide email visibility change;
-    // the company detail query backs the panel's `emailSync` empty-state text.
-    onSuccess: (_data, { companyId }) =>
-      Promise.all([
+    // Wipe the cached email threads first so disabling sync can't leave stale
+    // rows on screen, then return the invalidation promise so the mutation stays
+    // pending until the refetches resolve — the company entity, empty-state
+    // message, and emails list flip in one beat. Soup carries the team-wide
+    // email visibility change; the company detail query backs the panel's
+    // `emailSync` empty-state text.
+    onSuccess: (_data, { companyId }) => {
+      wipeCompanyEmailCache(companyId);
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: soupKeys._def }),
         queryClient.invalidateQueries({
           queryKey: crmKeys.company(companyId).queryKey,
         }),
-      ]),
+      ]);
+    },
   }));
 }

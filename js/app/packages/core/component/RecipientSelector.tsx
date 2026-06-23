@@ -17,7 +17,6 @@ import {
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
-import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
 import type { CollectionNode } from '@kobalte/core';
 import {
@@ -160,6 +159,9 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
 
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
 
+const RECIPIENT_OPTION_HEIGHT_PX = 36;
+const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
+
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
@@ -181,7 +183,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
     <Combobox.Item
       item={props}
       class={cn(
-        'flex flex-row p-2 mb-1 rounded-md justify-between items-center data-highlighted:bg-hover',
+        'flex flex-row h-9 px-2 rounded-lg justify-between items-center data-highlighted:bg-hover/50',
         props.disabled && 'hover:bg-hover'
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
@@ -208,7 +210,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
 
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
-                <UserIcon id={iconId ?? ''} size="md" isDeleted={false} />
+                <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
                 <p
                   class={cn(
                     'ph-no-capture truncate my-auto',
@@ -724,7 +726,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
         <Combobox.Portal>
           <Layer depth={2}>
-            <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-1 rounded-lg shadow-lg shadow-drop-shadow ring ring-edge">
+            <Combobox.Content class="z-modal-content bg-surface translate-y-1 border-edge p-2 rounded-xl shadow-lg shadow-drop-shadow ring ring-edge">
               <Combobox.Listbox
                 ref={setListboxRef}
                 class="flex flex-col gap-1"
@@ -734,7 +736,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 {(items) => {
                   const arr = Array.from(items());
                   const count = arr.length;
-                  const height = clamp(count, 0, 6) * 36;
+                  const visibleCount = Math.min(
+                    count,
+                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
+                  );
+                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
 
                   const [handle, setHandle] =
                     createSignal<VirtualizerHandle | null>(null);
@@ -754,6 +760,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   return (
                     <VList
                       data={arr}
+                      itemSize={RECIPIENT_OPTION_HEIGHT_PX}
                       style={{
                         height: `${height}px`,
                       }}

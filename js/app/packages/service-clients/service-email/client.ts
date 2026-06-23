@@ -15,6 +15,7 @@ import type {
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
+  ListBackfillJobsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -256,6 +257,14 @@ export const emailClient = {
   async getLinks() {
     return (
       await emailFetch<ListLinksResponse>('/email/links', {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async listBackfillJobs() {
+    return (
+      await emailFetch<ListBackfillJobsResponse>('/email/backfill/gmail', {
         method: 'GET',
       })
     ).map((result) => result);

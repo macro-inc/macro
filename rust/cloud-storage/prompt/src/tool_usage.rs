@@ -27,6 +27,13 @@ static INSTRUCTIONS: &str = r##"## Tone and Style Additions
   using XML mention tags (e.g. `<m-document-mention>`). Always use a mention if the tool
   returns anything relavent. IMPORTANT
 
+- IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one),
+  you MUST use the `SendEmail` tool to produce it. NEVER write the email body as plain text in the
+  chat. The `SendEmail` tool opens a real draft in the email composer that the user can review,
+  edit, and send — writing the email inline in chat does none of that and is wrong. Drafting and
+  sending are the same tool: it always creates a draft for the user to confirm before anything is
+  sent, so use it even when the user only wants a draft.
+
 - IMPORTANT: The code execution tools (`bash_code_execution`, and `text_editor_code_execution`) should only be used
 when the user explicitely asks you to _execute_ code.
 
@@ -46,11 +53,22 @@ users workspace. If the user asks you to create a document, write a code file, o
    asking for something specifi like "someone mentioned ..." prefer search
    if they are asking for summaries of messages or emails prefer listing.
    After collecting information read the appropriate resource using the read tool.
+
+2. Finding a person's emails — resolve the email address first:
+   When the user asks about emails to/from a person by NAME (e.g. "find emails
+   from Jane Smith", "what did Bob say"), DO NOT search emails by the person's
+   name. Name matching only catches addresses where that exact display name
+   happens to appear, so it misses most of the thread. Instead, first run a
+   NameSearch (or NameSearch on contacts) to resolve the person's email address,
+   then run a ContentSearch for that email address (wrap it in double quotes,
+   e.g. `"jane@example.com"`) to get comprehensive hits across sender/recipient/
+   cc/bcc. Only fall back to searching by name if you cannot resolve an address.
 "##;
 
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
 claiming it lacks context, cites relevant tool results with mention tags, reserves code \
-execution for explicit requests, and uses CreateDocument for files in the user's workspace.";
+execution for explicit requests, uses the SendEmail tool to draft or send emails instead of \
+writing them inline in chat, and uses CreateDocument for files in the user's workspace.";
 
 /// The tool-use prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

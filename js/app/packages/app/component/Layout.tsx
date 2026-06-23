@@ -16,7 +16,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { makePersisted } from '@solid-primitives/storage';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
-import { cn, Layer } from '@ui';
+import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -40,7 +40,10 @@ import { ItemDndProvider } from './ItemDragAndDrop';
 import { IosShareSheet } from './ios-share-sheet/IosShareSheet';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
+import { FloatRegion } from './mobile/float-regions/FloatRegion';
+import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
 import { MobileDock } from './mobile/MobileDock';
+import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
 import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
@@ -87,12 +90,7 @@ function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
-  const shouldUsePanelSafeAreaBackground = createMemo(
-    () =>
-      isMobile() &&
-      isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname)
-  );
+
   useAppSquishHandlers();
 
   // save last_path to cookie
@@ -125,17 +123,9 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
-        {
-          'pb-(--safe-bottom)': !virtualKeyboardVisible(),
-        }
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
-      <Show when={shouldUsePanelSafeAreaBackground()}>
-        <Layer depth={1}>
-          <div class="pointer-events-none absolute inset-x-0 top-0 h-(--safe-top) bg-surface" />
-        </Layer>
-      </Show>
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
@@ -198,12 +188,15 @@ function LayoutInner(props: RouteSectionProps) {
       <Show
         when={
           isMobile() &&
-          !virtualKeyboardVisible() &&
           isAuthenticated() &&
           !AUTH_URLS.includes(location.pathname)
         }
       >
-        <MobileDock />
+        <FloatRegionHost />
+        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
+          <MobileBottomEdgeFade />
+          <MobileDock />
+        </FloatRegion>
       </Show>
       <Show when={isMobile()}>
         <MobileSearchOuter />

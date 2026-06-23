@@ -30,7 +30,11 @@ export const zTopBarLayout = above + zViewerNotificationModal;
 export const zSidePanelLayout = above + zTopBarLayout; // Side Panel Layout (LHS Recent Files + RHS AI Side Panel)
 export const zItemOptionsMenu = above + zSidePanelLayout;
 export const zActionMenu = zItemOptionsMenu;
-export const zMobileNavBar = above + zActionMenu;
+// Full-frame mobile search results: full-screen surface that sits below the
+// mobile nav bar / float host, so the search input (dock region) and category
+// tabs (accessory region) float over it.
+export const zMobileSearch = above + zActionMenu;
+export const zMobileNavBar = above + zMobileSearch;
 export const zSidePanelSearchAndFilter = above + zMobileNavBar;
 
 // Modal

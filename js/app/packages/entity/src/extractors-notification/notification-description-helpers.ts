@@ -40,7 +40,7 @@ export function getActionVerb(type: NotificationType): string {
     .with('github_pr_comment', () => 'commented on a pull request')
     .with('github_pr_mention', () => 'mentioned you on a pull request')
     .with('github_pr_review', () => 'reviewed your pull request')
-    .with('call-started', () => 'started a call')
+    .with('call_started', () => 'started a call')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
@@ -79,7 +79,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_comment', () => (count === 1 ? 'comment' : 'comments'))
     .with('github_pr_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('github_pr_review', () => (count === 1 ? 'review' : 'reviews'))
-    .with('call-started', () => (count === 1 ? 'call' : 'calls'))
+    .with('call_started', () => (count === 1 ? 'call' : 'calls'))
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .exhaustive();
 }

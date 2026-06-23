@@ -18,12 +18,14 @@ pub struct DynamicSchema {
 
 /// Run a completion with conversation history and return a JSON value
 /// conforming to `schema`.
-#[tracing::instrument(skip(model, system_prompt, messages, schema), err)]
+#[tracing::instrument(skip(model, system_prompt, messages, schema, recorder, ctx), err)]
 pub async fn dynamic_structured_completion<M: ToString>(
     model: M,
     system_prompt: &str,
     messages: Vec<Message>,
     schema: DynamicSchema,
+    recorder: &dyn ai_usage::UsageRecorder,
+    ctx: ai_usage::UsageContext,
 ) -> anyhow::Result<serde_json::Value> {
     let structured_prompt = format!(
         "{system_prompt}\n\n\
@@ -41,8 +43,14 @@ pub async fn dynamic_structured_completion<M: ToString>(
         schema_json = serde_json::to_string_pretty(&schema.schema)?,
     );
 
-    let response =
-        crate::completion::complete_with_history(model, &structured_prompt, messages).await?;
+    let response = crate::completion::complete_with_history(
+        model,
+        &structured_prompt,
+        messages,
+        recorder,
+        ctx,
+    )
+    .await?;
 
     let trimmed = response.trim();
     let json_str = if let Some(rest) = trimmed.strip_prefix("```") {
