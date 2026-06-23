@@ -5,7 +5,9 @@ import CheckIcon from '@phosphor/check.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
-import { For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
+import { useUserTeamsQuery } from '@queries/team';
+import { useUserId } from '@core/context/user';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   free: ['Access to Haiku', '5 GB storage'],
@@ -20,21 +22,44 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
 };
 
 const PlanFeatures = (props: { tier: PlanTier }) => (
-  <ul class="flex flex-wrap gap-6 text-sm text-ink-muted">
-    <For each={BILLING_PLAN_FEATURES[props.tier]}>
-      {(label) => (
-        <li class="flex items-center gap-2">
-          <CheckIcon class="size-3 text-success" />
-          <span class="text-ink-muted text-xs">{label}</span>
-        </li>
-      )}
-    </For>
-  </ul>
+  <For each={BILLING_PLAN_FEATURES[props.tier]}>
+    {(label) => (
+      <li class="flex items-center gap-2">
+        <CheckIcon class="size-3 text-success" />
+        <span class="text-ink-muted text-xs">{label}</span>
+      </li>
+    )}
+  </For>
 );
 
 export const Billing = () => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+
+  const userId = useUserId();
+
+  const userTeamsQuery = useUserTeamsQuery();
+
+  const userTeam = createMemo(() => {
+    const teams = userTeamsQuery.data;
+    const uid = userId();
+    if (!teams || !uid) return;
+
+    // Assume the user can only be on one team
+    // This is the case atm
+    const firstTeam = teams[0];
+
+    return firstTeam;
+  });
+
+  const teamRole = createMemo(() => {
+    const uid = userId();
+    const team = userTeam();
+
+    if (!team) return;
+
+    return team.owner_id === uid ? 'owner' : 'member';
+  });
 
   const handleCheckout = async () => {
     try {
@@ -77,19 +102,30 @@ export const Billing = () => {
 
       <Surface class="flex flex-col rounded-lg p-4" depth={2}>
         <section class="flex flex-col gap-4">
-          <header class="flex items-center gap-2">
-            <h1 class="text-base font-medium text-ink">
-              <Show when={!hasPaid()} fallback={'Premium'}>
-                Free plan
-              </Show>
-            </h1>
+          <header class="flex items-cetner gap-2">
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <h1 class="text-base font-medium text-ink">
+                  <Show when={!hasPaid()} fallback={'Premium plan'}>
+                    Free plan
+                  </Show>
+                </h1>
 
-            <Layer depth={3}>
-              <span class="text-xs text-ink-muted px-1.5 py-0.5 border border-edge-muted rounded-md bg-active">
-                Current
-              </span>
-            </Layer>
-            <Show when={hasPaid()}>
+                <Layer depth={3}>
+                  <span class="text-xs text-ink-muted px-1.5 py-0.25 border border-edge-muted rounded-md bg-active">
+                    Current
+                  </span>
+                </Layer>
+              </div>
+              <Show when={teamRole() === 'member'}>
+                <p class="text-ink-extra-muted text-xs">
+                  Your subscription is managed by your team owner. Contact them
+                  to make changes.
+                </p>
+              </Show>
+            </div>
+
+            <Show when={hasPaid() && (!teamRole() || teamRole() === 'owner')}>
               <Button
                 class="ml-auto rounded-full bg-active"
                 size="sm"
@@ -101,11 +137,9 @@ export const Billing = () => {
               </Button>
             </Show>
           </header>
-          <Show when={!hasPaid()}>
-            <div class="border-t border-t-edge-muted pt-4">
-              <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
-            </div>
-          </Show>
+          <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-6 text-sm text-ink-muted">
+            <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
+          </ul>
         </section>
       </Surface>
       <Show when={!hasPaid()}>
@@ -126,9 +160,9 @@ export const Billing = () => {
                 Upgrade now
               </Button>
             </header>
-            <div class="border-t border-t-edge-muted pt-4">
+            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-6 text-sm text-ink-muted">
               <PlanFeatures tier="premium" />
-            </div>
+            </ul>
           </section>
         </Surface>
       </Show>
