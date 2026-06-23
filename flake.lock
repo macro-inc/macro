@@ -141,25 +141,7 @@
         "flake-parts": "flake-parts",
         "flake-utils": "flake-utils",
         "import-tree": "import-tree",
-        "nixpkgs": "nixpkgs",
-        "rs-libreoffice-bindings": "rs-libreoffice-bindings"
-      }
-    },
-    "rs-libreoffice-bindings": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1777577693,
-        "narHash": "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=",
-        "owner": "macro-inc",
-        "repo": "rs-libreoffice-bindings",
-        "rev": "056a40ddfac1d9650be30b9f0b4b934e9266c7dc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "macro-inc",
-        "ref": "dev",
-        "repo": "rs-libreoffice-bindings",
-        "type": "github"
+        "nixpkgs": "nixpkgs"
       }
     },
     "rust-analyzer-src": {
