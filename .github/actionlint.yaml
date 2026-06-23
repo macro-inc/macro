@@ -4,3 +4,4 @@ self-hosted-runner:
     - linux-latest-middy
     - namespace-profile-linux-mid
     - namespace-profile-linux-small
+    - namespace-profile-linux-rust-ci

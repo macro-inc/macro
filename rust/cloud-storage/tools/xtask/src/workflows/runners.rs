@@ -14,16 +14,17 @@ use std::fmt;
 pub enum Runner {
     /// Small profile for light jobs (path filtering, status aggregation).
     LinuxSmall,
-    /// Mid profile for the heavy compile + test jobs. Has a cache volume
-    /// configured, which is what makes the persisted sccache cache possible.
-    LinuxMid,
+    /// Dedicated CI profile for the heavy compile + test jobs. Has its own
+    /// cache volume, isolated from the deploy profiles so deploy's churn can't
+    /// evict the CI sccache/cargo caches.
+    LinuxRustCi,
 }
 
 impl fmt::Display for Runner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Runner::LinuxSmall => "namespace-profile-linux-small",
-            Runner::LinuxMid => "namespace-profile-linux-mid",
+            Runner::LinuxRustCi => "namespace-profile-linux-rust-ci",
         })
     }
 }

@@ -110,7 +110,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-mid
+    runs-on: namespace-profile-linux-rust-ci
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
       RUSTDOCFLAGS: '-Dwarnings'
@@ -193,7 +193,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: namespace-profile-linux-mid
+    runs-on: namespace-profile-linux-rust-ci
     env:
       NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
       NEXTEST_TEST_THREADS: '32'
