@@ -690,10 +690,7 @@ export function BaseInput(props: {
       !hasDraftContent(
         prepared.bodyText,
         form().subject(),
-        form().attachments.list().length,
-        form().recipients().to.length +
-          form().recipients().cc.length +
-          form().recipients().bcc.length
+        form().attachments.list().length
       )
     ) {
       return null;
