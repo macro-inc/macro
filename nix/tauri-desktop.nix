@@ -15,6 +15,7 @@
       };
       inherit (pkgs) lib;
       isLinux = pkgs.stdenv.hostPlatform.isLinux;
+      isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
 
       appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
@@ -364,6 +365,61 @@
           };
         };
       };
+      tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
+      tauriDesktopDmgConfig = builtins.toJSON (
+        lib.recursiveUpdate
+          {
+            build = {
+              frontendDist = "${frontend}";
+              beforeBuildCommand = "";
+            };
+            bundle = {
+              active = true;
+              targets = [ "dmg" ];
+            };
+          }
+          (
+            lib.optionalAttrs (tauriDesktopDmgSigningIdentity != "") {
+              bundle.macOS.signingIdentity = tauriDesktopDmgSigningIdentity;
+            }
+          )
+      );
+      tauriDesktopDmg = craneLib.mkCargoDerivation (
+        tauri.commonArgs
+        // {
+          cargoArtifacts = tauri.cargoArtifacts;
+          pname = "macro-tauri-desktop-dmg";
+          TAURI_CONFIG = tauriDesktopDmgConfig;
+          APPLE_SIGNING_IDENTITY = tauriDesktopDmgSigningIdentity;
+          nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
+          preBuild = ''
+            if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+              echo "APPLE_SIGNING_IDENTITY must be set when building the signed macOS DMG; use nix build --impure." >&2
+              exit 1
+            fi
+            export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+            ${tauri.commonArgs.preBuild or ""}
+          '';
+          buildPhaseCargoCommand = ''
+            cargo tauri build --bundles dmg \
+              --features tauri/custom-protocol \
+              --config "$TAURI_CONFIG"
+          '';
+          installPhaseCommand = ''
+            dmgPath=$(find target -type f -path '*/release/bundle/dmg/*.dmg' -print -quit)
+            if [ -z "$dmgPath" ]; then
+              echo "failed to locate built DMG" >&2
+              find target -path '*/bundle/*' -print >&2 || true
+              exit 1
+            fi
+
+            mkdir -p "$out"
+            cp "$dmgPath" "$out/Macro-${appVersion}-${system}.dmg"
+          '';
+          doInstallCargoArtifacts = false;
+        }
+      );
+
       tauriDesktopAppImage = craneLib.mkCargoDerivation (
         tauri.commonArgs
         // {
@@ -433,12 +489,18 @@
         };
       };
 
-      packages = lib.optionalAttrs isLinux {
-        tauri-frontend = frontend;
-        tauri-desktop = wrappedTauriDesktop;
-        tauri-desktop-appimage = tauriDesktopAppImage;
-        tauri-desktop-unwrapped = tauri.app;
-        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-      };
+      packages =
+        lib.optionalAttrs isLinux {
+          tauri-frontend = frontend;
+          tauri-desktop = wrappedTauriDesktop;
+          tauri-desktop-appimage = tauriDesktopAppImage;
+          tauri-desktop-unwrapped = tauri.app;
+          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+        }
+        // lib.optionalAttrs isDarwin {
+          tauri-frontend = frontend;
+          tauri-desktop-dmg = tauriDesktopDmg;
+          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+        };
     };
 }

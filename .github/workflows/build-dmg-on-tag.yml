@@ -1,0 +1,162 @@
+name: Build macOS DMG on Tag
+
+on:
+  push:
+    tags:
+      - '*'
+  create:
+
+concurrency:
+  group: dmg-${{ github.event.ref_type == 'tag' && github.event.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-dmg:
+    name: Build macOS DMG
+    if: ${{ github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag') }}
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.ref_type == 'tag' && github.event.ref || github.ref }}
+
+      - name: Install Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v nix >/dev/null 2>&1; then
+            curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+              --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+              sh -s -- install macos --no-confirm \
+              --extra-conf "experimental-features = nix-command flakes" \
+              --extra-conf "sandbox = false" \
+              --extra-conf "trusted-users = root runner"
+          fi
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+          echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          export NIX_REMOTE=daemon
+          nix --version
+
+      - name: Configure Cachix fallback
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Import Developer ID certificate
+        shell: bash
+        env:
+          MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
+            echo "MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 and MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD secrets are required" >&2
+            exit 1
+          fi
+
+          certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+          printf '%s' "$MACOS_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path" 2>/dev/null \
+            || printf '%s' "$MACOS_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 -D > "$certificate_path"
+
+          # Nix's macOS daemon builds as _nixbld users, not the runner user.
+          # Put the Developer ID identity in the system keychain so codesign can
+          # find it from inside the Nix build without embedding certificate
+          # secrets into the derivation.
+          sudo security import "$certificate_path" \
+            -k /Library/Keychains/System.keychain \
+            -P "$MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD" \
+            -A \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          sudo security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "" \
+            /Library/Keychains/System.keychain || true
+
+          identity=$(security find-identity -v -p codesigning /Library/Keychains/System.keychain \
+            | awk -F '"' '/Developer ID Application/ { print $2; exit }')
+          if [ -z "$identity" ]; then
+            echo "No Developer ID Application identity found in System.keychain" >&2
+            security find-identity -v -p codesigning /Library/Keychains/System.keychain >&2 || true
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "Using signing identity: $identity"
+
+      - name: Derive artifact metadata
+        id: metadata
+        shell: bash
+        env:
+          RAW_REF: ${{ github.event.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed DMG with Nix
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix build --impure --option sandbox false --print-build-logs ".#tauri-desktop-dmg"
+
+      - name: Collect DMG artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          shopt -s nullglob
+          dmgs=(result/*.dmg)
+          if [ "${#dmgs[@]}" -eq 0 ]; then
+            echo "No DMG files found in nix build result" >&2
+            find -L result -maxdepth 2 -type f -print >&2 || true
+            exit 1
+          fi
+          cp -v "${dmgs[@]}" artifacts/
+
+      - name: Notarize and staple DMG
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_ID}" ] || [ -z "${APPLE_PASSWORD}" ] || [ -z "${APPLE_TEAM_ID}" ]; then
+            echo "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID secrets are required for notarization" >&2
+            exit 1
+          fi
+          dmg=$(find artifacts -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          if [ -z "$dmg" ]; then
+            echo "No DMG found to notarize" >&2
+            exit 1
+          fi
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg"
+
+      - name: Validate notarized DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg=$(find artifacts -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30

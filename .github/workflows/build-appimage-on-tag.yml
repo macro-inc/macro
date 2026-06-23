@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.ref_type == 'tag' && github.event.ref || github.ref }}
 
       - name: Mount /nix cache volume
         continue-on-error: true
@@ -74,7 +76,7 @@ jobs:
           fi
           cp -v "${appimages[@]}" artifacts/
           chmod 0755 artifacts/*.AppImage
-          (cd artifacts && sha256sum *.AppImage > SHA256SUMS)
+          (cd artifacts && sha256sum -- *.AppImage > SHA256SUMS)
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
