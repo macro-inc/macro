@@ -1,6 +1,7 @@
 import type { NotificationType } from '@core/types';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import type { NotificationStack } from '@notifications';
+import { createMemo } from 'solid-js';
 import type { Notification } from '../types/notification';
 import {
   getActionVerb,
@@ -56,7 +57,10 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   // their display name; GitHub PR senders (who usually aren't Macro users and so
   // have no `sender_id`) fall back to the GitHub login carried in the
   // notification metadata.
-  const senderLabels = (): string[] => {
+  // Memoized so the per-sender name resolution (which has side effects: it
+  // queues a fetch and registers a reactive effect) runs once per dependency
+  // change rather than on every call from the description() formatters.
+  const senderLabels = createMemo((): string[] => {
     if (props.notification) {
       if (props.notification.sender_id) {
         return [macroFirstName(props.notification.sender_id)];
@@ -72,7 +76,7 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       return getUniqueGithubLogins(props.stack.notifications);
     }
     return [];
-  };
+  });
 
   const primarySenderLabel = () => senderLabels()[0];
   const secondarySenderLabel = () => senderLabels()[1];
