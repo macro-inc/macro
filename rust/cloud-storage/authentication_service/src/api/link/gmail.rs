@@ -101,9 +101,10 @@ pub async fn init_gmail_link_handler(
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
 
-    if !permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
-        return Err(InitGmailLinkError::PaymentRequired);
-    }
+    // NOTE: removed to fix issue of free users not being able to link their gmail account.
+    // if !permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
+    //     return Err(InitGmailLinkError::PaymentRequired);
+    // }
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
