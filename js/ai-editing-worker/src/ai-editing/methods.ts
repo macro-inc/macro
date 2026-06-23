@@ -1,10 +1,10 @@
-import type { LanguageModel } from 'ai';
 import type { SerializedEditorState } from 'lexical';
 import { runAgent, type SearchContacts } from './agents/supervisor';
 import { createEditingSession, loadSnapshot, toSnapshot } from './ai-toolkit';
 import type { AwarenessSource } from './awareness/awareness-source';
 import type { DocumentOpQueueParams } from './queue/types';
 import type { CodeRunner } from './runtime';
+import type { ResolvedModels } from '../run-edit';
 
 export type Usage = { inputTokens: number; outputTokens: number };
 
@@ -13,8 +13,6 @@ export type EditOptions = {
   runner: CodeRunner;
   /** Run an intent-interpretation pass before editing. */
   interpret?: boolean;
-  /** Model for child (writer) agents. Defaults to the top-level model if omitted. */
-  childModel?: LanguageModel;
   /** Build a writer's live cursor identity (name + color). */
   makeAwareness: (name: string, color: string) => AwarenessSource;
   /** Serialization format fed to the agents. Default 'xml'. */
@@ -37,20 +35,19 @@ export type EditOptions = {
 export type EditMethod = (
   snapshot: SerializedEditorState,
   request: string,
-  model: LanguageModel,
+  models: ResolvedModels,
   commit: (next: SerializedEditorState) => void,
   opts: EditOptions
 ) => Promise<Usage>;
 
 /** Edit via the coder agent (declarative `editor` ops on a Lexical session). */
-export const editViaCode: EditMethod = async (snapshot, request, model, commit, opts) => {
+export const editViaCode: EditMethod = async (snapshot, request, models, commit, opts) => {
   const session = createEditingSession();
   loadSnapshot(session, snapshot);
-  const { totalUsage } = await runAgent(session, request, model, {
+  const { totalUsage } = await runAgent(session, request, models, {
     propagate: () => commit(toSnapshot(session)),
     runner: opts.runner,
     makeAwareness: opts.makeAwareness,
-    childModel: opts.childModel,
     interpret: opts.interpret,
     docFormat: opts.docFormat,
     params: opts.params,

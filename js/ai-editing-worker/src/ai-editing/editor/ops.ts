@@ -88,6 +88,9 @@ export type DocumentOp =
   | { kind: 'removeBlock'; id: NodeId }
   | { kind: 'mergeBlocks'; ids: NodeId[]; separator: string }
   | { kind: 'splitBlock'; id: NodeId; atText: string }
+  | { kind: 'insertListItemAfter'; ref: Ref; id: NodeId; text: string; list: ListKind }
+  | { kind: 'insertListItemBefore'; ref: Ref; id: NodeId; text: string; list: ListKind }
+  | { kind: 'removeListItem'; id: NodeId }
   | { kind: 'setCell'; table: NodeId; row: number; col: number; content: string }
   | { kind: 'addRow'; table: NodeId; at?: number }
   | { kind: 'addColumn'; table: NodeId; at?: number }

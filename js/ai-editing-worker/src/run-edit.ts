@@ -10,7 +10,6 @@ import {
 } from "./ai-editing/ai-toolkit";
 import { realAwarenessSource } from "./ai-editing/awareness/awareness-source";
 import type { DocumentOp } from "./ai-editing/editor/ops";
-import { LoroPeerPool } from "./ai-editing/loro/loro-peer-pool";
 import type { CodeRunner } from "./ai-editing/runtime";
 import { SyncEngine } from "../../app/packages/core/collab/engine";
 import { LoroManager } from "../../app/packages/core/collab/manager";
@@ -21,17 +20,29 @@ import type { InferType } from "@loro-mirror/packages/core/src";
 import { $updateAllNodeIds } from "../../lexical-core/plugins/nodeIdPlugin";
 import { createWorkerAwareness, WorkerSyncSource } from "./sync-source";
 
-/** How many distinct loro peers the AI's edits are spread across. */
-const PEER_POOL_SIZE = 8;
+
+export type Model = {
+	provider: "anthropic" | "cerebras" | "openai";
+	model: string;
+};
+
+export type Models = {
+	supervisor: Model;
+	interpret: Model;
+	coding: Model;
+};
+
+export type ResolvedModels = {
+	supervisor: LanguageModel;
+	interpret: LanguageModel;
+	coding: LanguageModel;
+};
 
 export type RunEditArgs = {
 	wsUrl: string;
 	documentId: string;
 	prompt: string;
-	model: LanguageModel;
-	childModel?: LanguageModel;
-	/** 1M-context model the supervisor falls back to for large documents. */
-	largeModel?: LanguageModel;
+	models: ResolvedModels;
 	/** Snippet runner — QuickJS sandbox in prod, `new Function` in local dev. */
 	runner?: CodeRunner;
 	typingAnimations?: boolean;
@@ -98,28 +109,20 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 	});
 	engine.start();
 
-	// Attribute the AI's commits to a bounded pool of distinct peer ids so the
-	// doc history reads as several collaborators. Register every pooled id up
-	// front (the server maps each to this connection/user).
-	const peerPool = LoroPeerPool.fromSeed(
-		manager.peerId as unknown as bigint,
-		PEER_POOL_SIZE,
-	);
-	for (const peerid of peerPool.peerIds()) source.registerPeerId(peerid);
-
 	// Each `propagate` syncs the *current* session state through the engine. We
 	// serialize on a promise chain (the executor calls `propagate` synchronously
 	// between animated ops) and snapshot inside the task so it reflects any
-	// remote reconcile that landed since — then rotate the peer id before the
-	// commit, flushing pending ops to the prior peer first.
+	// remote reconcile that landed since — then switch to a fresh random peer id
+	// before the commit so each edit batch is attributed to a distinct author.
 	let chain: Promise<void> = Promise.resolve();
 	const propagate = () => {
 		chain = chain.then(async () => {
-			const peer = peerPool.rotate();
-			if (peer !== undefined) {
-				manager.doc.commit();
-				manager.doc.setPeerId(peer);
-			}
+			const buf = new Uint8Array(8);
+			crypto.getRandomValues(buf);
+			const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
+			manager.doc.commit();
+			manager.doc.setPeerId(newPeer);
+			source.registerPeerId(newPeer);
 			// Prism creates code-highlight nodes without ids (skipTransforms).
 			// Stamp ids before snapshotting so the Loro mirror matches them by id
 			// instead of re-inserting duplicates on every sync.
@@ -133,7 +136,7 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 	const startedAt = new Date();
 	const initialDocument = args.debug ? serializeWithXml(session) : undefined;
 	try {
-		const { totalUsage, steps, intent } = await runAgent(session, args.prompt, args.model, {
+		const { totalUsage, steps, intent } = await runAgent(session, args.prompt, args.models, {
 			propagate,
 			makeAwareness: (name, color) =>
 				realAwarenessSource({
@@ -143,8 +146,6 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 					name,
 					color,
 				}),
-			childModel: args.childModel,
-			largeModel: args.largeModel,
 			typingAnimations: args.typingAnimations,
 			signal: args.signal,
 			interpret: args.interpret,

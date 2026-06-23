@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DocReader } from '../doc/interfaces';
+import type { DocReader, DocWriter } from '../doc/interfaces';
 import type { DocumentOp } from '../editor/ops';
 import { DEFAULT_QUEUE_PARAMS } from './types';
 import { applyEdit, describe as describeOp, runQueue, summarize, type OpResult } from './runner';
 import { mockRandomSource } from './random-source';
-import type { Edit } from './types';
+import type { Awareness, Edit } from './types';
 import { recordingWriter, recordingAwareness } from './_testUtils';
 
 const reader = (over: Partial<DocReader> = {}): DocReader => ({
@@ -43,12 +43,12 @@ describe('runQueue -- happy path', () => {
     expect(awareness.seen.length).toBeGreaterThan(0); // cursors/highlights were pumped
   });
 
-  it('expands a setText op into remove + per-char insert edits', async () => {
+  it('expands a setText op into remove + chunked insert edits', async () => {
     const { w, calls } = recordingWriter();
+    // typeText emits TYPE_CHUNK (3) chars per keystroke, so "Hi" is one insert.
     await run([{ kind: 'setText', id: 'b1', text: 'Hi' }], w, { docReader: reader({ textLength: () => 4 }) });
-    expect(calls.map((c) => c.fn)).toEqual(['removeText', 'insertText', 'insertText']);
-    expect(calls[1]!.args).toEqual(['b1', 0, 'H']);
-    expect(calls[2]!.args).toEqual(['b1', 1, 'i']);
+    expect(calls.map((c) => c.fn)).toEqual(['removeText', 'insertText']);
+    expect(calls[1]!.args).toEqual(['b1', 0, 'Hi']);
   });
 
   it('awaits pauses through the injected sleep', async () => {
@@ -77,7 +77,7 @@ describe('runQueue -- error handling', () => {
       w
     );
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
-    const failed = results[1];
+    const failed = results[1]!;
     expect(failed.ok).toBe(false);
     if (!failed.ok) expect(failed.error).toBe('boom');
   });
@@ -145,10 +145,10 @@ describe('runQueue -- error in the middle keeps neighbors', () => {
       w
     );
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
-    expect(results[1].ok).toBe(false);
-    if (!results[1].ok) {
-      expect(results[1].error).toBe('cannot move');
-      expect(results[1].op.kind).toBe('moveBlock');
+    expect(results[1]!.ok).toBe(false);
+    if (!results[1]!.ok) {
+      expect(results[1]!.error).toBe('cannot move');
+      expect(results[1]!.op.kind).toBe('moveBlock');
     }
   });
 
@@ -180,10 +180,10 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
     });
     const { results } = await run([{ kind: 'formatText', id: 'g', match: 'x', format: 'bold', on: true, scope: {} }], w, { docReader });
     expect(results).toHaveLength(1);
-    expect(results[0].ok).toBe(false);
-    if (!results[0].ok) {
-      expect(results[0].op.kind).toBe('formatText');
-      expect(results[0].error).toBe('locate failed');
+    expect(results[0]!.ok).toBe(false);
+    if (!results[0]!.ok) {
+      expect(results[0]!.op.kind).toBe('formatText');
+      expect(results[0]!.error).toBe('locate failed');
     }
   });
 
@@ -225,11 +225,10 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
 describe('runQueue -- awareness ordering & sleep', () => {
   it('awareness is pumped in the exact step order', async () => {
     const { w } = recordingWriter();
-    // appendText: cursor(end) then per-char cursor. textLength 5, text "ab".
+    // appendText: cursor(end) then one chunked cursor (TYPE_CHUNK 3 > "ab").
     const { awareness } = await run([{ kind: 'appendText', id: 'b', text: 'ab' }], w, { docReader: reader({ textLength: () => 5 }) });
     expect(awareness.seen).toEqual<Awareness[]>([
       { type: 'cursor', node: 'b', at: 5 },
-      { type: 'cursor', node: 'b', at: 6 },
       { type: 'cursor', node: 'b', at: 7 },
     ]);
   });
@@ -331,6 +330,9 @@ describe('applyEdit -- every fn routes to its method', () => {
     [{ fn: 'removeNode', node: 'b' }, { fn: 'removeNode', args: ['b'] }],
     [{ fn: 'mergeBlocks', nodes: ['a', 'b'], separator: '-' }, { fn: 'mergeBlocks', args: [['a', 'b'], '-'] }],
     [{ fn: 'splitBlock', node: 'b', atText: 'x' }, { fn: 'splitBlock', args: ['b', 'x'] }],
+    [{ fn: 'insertListItemAfter', ref: 'r', node: 'b', text: 't', list: 'number' }, { fn: 'insertListItemAfter', args: ['r', 'b', 't', 'number'] }],
+    [{ fn: 'insertListItemBefore', ref: 'r', node: 'b', text: 't', list: 'bullet' }, { fn: 'insertListItemBefore', args: ['r', 'b', 't', 'bullet'] }],
+    [{ fn: 'removeListItem', node: 'b' }, { fn: 'removeListItem', args: ['b'] }],
     [{ fn: 'addRow', table: 't', at: 1 }, { fn: 'addRow', args: ['t', 1] }],
     [{ fn: 'addColumn', table: 't', at: undefined }, { fn: 'addColumn', args: ['t', undefined] }],
     [{ fn: 'removeRow', table: 't', row: 0 }, { fn: 'removeRow', args: ['t', 0] }],

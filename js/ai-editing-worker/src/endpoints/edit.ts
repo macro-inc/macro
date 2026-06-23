@@ -5,31 +5,40 @@ import { zValidator } from "@hono/zod-validator";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import * as z from "zod";
-import { runEditSession } from "../run-edit";
+import { runEditSession, type Model } from "../run-edit";
 import { runInSandbox } from "../sandbox";
 import type { Bindings, EnvVariables } from "../env";
 
 type Provider = "anthropic" | "cerebras" | "openai";
 
 const PROVIDERS = {
-	anthropic: { key: "ANTHROPIC_API_KEY" as const, model: "claude-sonnet-4-6", create: createAnthropic },
-	cerebras: { key: "CEREBRAS_API_KEY" as const, model: "gpt-oss-120b", create: createCerebras },
-	openai: { key: "OPENAI_API_KEY" as const, model: "gpt-4o", create: createOpenAI },
-} satisfies Record<Provider, { key: keyof Bindings; model: string; create: (opts: { apiKey: string }) => (modelId: string) => LanguageModel }>;
+	anthropic: { key: "ANTHROPIC_API_KEY" as const, defaultModel: "claude-sonnet-4-6", create: createAnthropic },
+	cerebras: { key: "CEREBRAS_API_KEY" as const, defaultModel: "gpt-oss-120b", create: createCerebras },
+	openai: { key: "OPENAI_API_KEY" as const, defaultModel: "gpt-4o", create: createOpenAI },
+} satisfies Record<Provider, { key: keyof Bindings; defaultModel: string; create: (opts: { apiKey: string }) => (modelId: string) => LanguageModel }>;
 
-function createModel(provider: Provider, modelId: string, apiKey: string): LanguageModel {
-	return PROVIDERS[provider].create({ apiKey })(modelId);
-}
+const DEFAULT_PROVIDER = "anthropic" satisfies Provider;
 
-// our default "large" fallback model, TODO(wolf): maybe we want something else?
-const FALLBACK_MODEL_ID = "claude-sonnet-4-6";
+const ModelSchema: z.ZodType<Model> = z.object({
+	provider: z.enum(["anthropic", "cerebras", "openai"]),
+	model: z.string(),
+});
+
+const DEFAULT_MODELS = {
+	supervisor: { provider: DEFAULT_PROVIDER, model: PROVIDERS[DEFAULT_PROVIDER].defaultModel },
+	interpret: { provider: DEFAULT_PROVIDER, model: PROVIDERS[DEFAULT_PROVIDER].defaultModel },
+	coding: { provider: DEFAULT_PROVIDER, model: PROVIDERS[DEFAULT_PROVIDER].defaultModel },
+} satisfies Record<string, Model>;
 
 const EditBody = z.object({
 	token: z.string(),
 	documentId: z.string(),
 	prompt: z.string(),
-	provider: z.enum(["anthropic", "cerebras", "openai"]).default("anthropic"),
-	model: z.string().optional(),
+	models: z.object({
+		supervisor: ModelSchema.optional(),
+		interpret: ModelSchema.optional(),
+		coding: ModelSchema.optional(),
+	}).optional(),
 	typingAnimations: z.boolean().optional(),
 	interpret: z.boolean().default(true),
 	debug: z.boolean().default(false),
@@ -39,14 +48,14 @@ const edit = new Hono<{ Bindings: Bindings; Variables: EnvVariables }>();
 
 edit.post("/", zValidator("json", EditBody), async (c) => {
 	const env = c.var.env;
-	const { token, documentId, prompt, provider, model: modelOverride, typingAnimations, interpret, debug } = c.req.valid("json");
+	const { token, documentId, prompt, models: modelsSpec, typingAnimations, interpret, debug } = c.req.valid("json");
 
-	const apiKey = env[PROVIDERS[provider].key];
-	const modelId = modelOverride ?? PROVIDERS[provider].model;
+	const resolveModel = ({ provider, model }: Model): LanguageModel => {
+		const apiKey = env[PROVIDERS[provider].key];
+		return PROVIDERS[provider].create({ apiKey })(model);
+	};
+
 	const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${token}`;
-	const model = createModel(provider, modelId, apiKey);
-	const anthropicKey = env[PROVIDERS.anthropic.key];
-	const largeModel = anthropicKey ? createModel("anthropic", FALLBACK_MODEL_ID, anthropicKey) : undefined;
 	const signal = c.req.raw.signal;
 
 	try {
@@ -54,8 +63,11 @@ edit.post("/", zValidator("json", EditBody), async (c) => {
 			wsUrl,
 			documentId,
 			prompt,
-			model,
-			largeModel,
+			models: {
+				supervisor: resolveModel(modelsSpec?.supervisor ?? DEFAULT_MODELS.supervisor),
+				interpret: resolveModel(modelsSpec?.interpret ?? DEFAULT_MODELS.interpret),
+				coding: resolveModel(modelsSpec?.coding ?? DEFAULT_MODELS.coding),
+			},
 			typingAnimations,
 			interpret,
 			debug,

@@ -19,6 +19,7 @@ The writer has the complete API reference. Use this compact list to plan native 
 ## Lists
 
 - `bulletList`, `numberedList`, `checklist`, `setListType`, `check`, `uncheck`, `setChecked`, `indent`, `outdent`, `setIndent`, `sortList`
+- Add/remove items in an existing list: `insertListItemAfter(liId, text, list?)`, `insertListItemBefore(liId, text, list?)`, `removeListItem(liId)`. `list` is `'bullet'`|`'number'`|`'check'` (default `'bullet'`); a differing kind nests a sublist. Pass an existing `<li>` id — NOT the `<ul>`/`<ol>` id.
 
 ## Structure
 

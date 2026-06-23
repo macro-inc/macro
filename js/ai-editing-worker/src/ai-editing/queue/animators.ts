@@ -220,6 +220,23 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       return steps;
     })
     // put the caret at the split point before cleaving the block.
+    .with({ kind: 'insertListItemAfter' }, (o) => [
+      ...insertLead({ after: o.id }, ctx),
+      edit({ fn: 'insertListItemAfter', ref: o.ref, node: o.id, text: '', list: o.list }),
+      cursor(o.ref, 0),
+      ...typeText(o.ref, o.text, 0, ctx),
+    ])
+    .with({ kind: 'insertListItemBefore' }, (o) => [
+      ...insertLead({ before: o.id }, ctx),
+      edit({ fn: 'insertListItemBefore', ref: o.ref, node: o.id, text: '', list: o.list }),
+      cursor(o.ref, 0),
+      ...typeText(o.ref, o.text, 0, ctx),
+    ])
+    .with({ kind: 'removeListItem' }, (o) => [
+      ...selectAll(o.id, ctx),
+      { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.preDeletePauseMs) },
+      edit({ fn: 'removeListItem', node: o.id }),
+    ])
     .with({ kind: 'splitBlock' }, (o) => {
       const at = ctx.docReader.locate(o.id, o.atText, {})[0];
       const lead = at ? [cursor(at.node, at.start), { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) } as DocumentOpStep] : focus(o.id, ctx);

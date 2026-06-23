@@ -12,7 +12,7 @@ Use the `<intent>` block as the resolved task. Apply it by calling `dispatch`. S
 ## Instructions
 
 - Mention existing XML ids for the target region; dispatch expands context from those ids.
-- Use `snippets` for all exact/verbatim text, including replacement strings, table cell contents, long text, code, and special-character text. In `editing_instruction`, refer to `snippets.KEY` instead of embedding the text.
+- Use `snippets` for all exact/verbatim text, including replacement strings, table cell contents, long text, code, and special-character text. In `editing_instruction`, refer to `snippets.KEY` instead of embedding the text. It is important you include all the necessary snippets since the writers will otherwise have to painstakingly type it out by hand.
 - Use native editor objects when appropriate: divider, table, heading, quote, code block, image, video, equation, date, mention. Do not simulate native objects with plain text, like `======` for a divider.
 - Do not write literal XML/Markdown unless the user wants those characters.
 - Do not invent or preserve ids. New ids are assigned automatically and existing ids may change.
@@ -24,3 +24,4 @@ Use the `<intent>` block as the resolved task. Apply it by calling `dispatch`. S
 - If applied and the document shown in the result looks correct, finish.
 - If blocked, failed, or wrong, dispatch a clearer correction using current ids from the latest result.
 - Judge by content and structure, not id stability.
+- It is up to you to determine when we are "done" and the result is satisfactory; don't go on forever.

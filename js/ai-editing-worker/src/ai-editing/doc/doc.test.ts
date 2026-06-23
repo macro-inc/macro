@@ -4,8 +4,8 @@ import { $isMarkNode } from '@lexical/mark';
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { edit, read, setup } from '../ai-toolkit/_test-helpers';
-import { serializeWithIds } from '../utils';
-import { applyEdit } from '../queue/run';
+import { serializeWithIds, serializeWithXml } from '../utils';
+import { applyEdit } from '../queue/runner';
 import type { Session } from '../ai-toolkit/session';
 import { Doc, buildNode } from './doc';
 
@@ -154,6 +154,51 @@ describe('Doc — structure & refs', () => {
   it('appendListItem rejects a non-list target', () => {
     const { s, ids } = setup('para');
     expect(() => new Doc(s).appendListItem('x', ids[0]!)).toThrow(/not a list/);
+  });
+
+  it('insertListItemAfter/Before add same-kind siblings into an existing list', () => {
+    const { s, ids } = setup('intro');
+    const doc = new Doc(s);
+    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.appendListItem('L~li-0', 'L');
+    doc.setText('L~li-0', 'middle');
+    doc.insertListItemAfter('after', 'L~li-0', 'last', 'bullet');
+    doc.insertListItemBefore('before', 'L~li-0', 'first', 'bullet');
+    const xml = serializeWithXml(s);
+    // One list, three plain items in order, no nesting.
+    expect((xml.match(/<ul/g) ?? []).length).toBe(1);
+    expect(xml.indexOf('first')).toBeLessThan(xml.indexOf('middle'));
+    expect(xml.indexOf('middle')).toBeLessThan(xml.indexOf('last'));
+  });
+
+  it('insertListItemAfter with a differing kind nests a sublist', () => {
+    const { s, ids } = setup('intro');
+    const doc = new Doc(s);
+    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.appendListItem('L~li-0', 'L');
+    doc.setText('L~li-0', 'bullet item');
+    doc.insertListItemAfter('nested', 'L~li-0', 'numbered item', 'number');
+    const xml = serializeWithXml(s);
+    // The numbered item lives in an <ol> wrapped inside the bullet <ul>.
+    expect(xml).toMatch(/<ul[\s\S]*<ol[\s\S]*numbered item[\s\S]*<\/ol>[\s\S]*<\/ul>/);
+  });
+
+  it('removeListItem drops a single item, keeping the rest', () => {
+    const { s, ids } = setup('intro');
+    const doc = new Doc(s);
+    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.appendListItem('L~li-0', 'L');
+    doc.setText('L~li-0', 'keep');
+    doc.insertListItemAfter('drop', 'L~li-0', 'drop', 'bullet');
+    doc.removeListItem('drop');
+    const out = plain(s);
+    expect(out).toContain('keep');
+    expect(out).not.toContain('drop');
+  });
+
+  it('removeListItem rejects a non-list-item target', () => {
+    const { s, ids } = setup('para');
+    expect(() => new Doc(s).removeListItem(ids[0]!)).toThrow(/not a list item/);
   });
 
   it('insertNode then a table cell edit', () => {

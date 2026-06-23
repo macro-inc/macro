@@ -57,6 +57,9 @@ export interface DocWriter {
   removeNode(node: NodeRef): void;
   mergeBlocks(nodes: NodeRef[], separator: string): void;
   splitBlock(node: NodeRef, atText: string): void;
+  insertListItemAfter(ref: string, node: NodeRef, text: string, list: ListKind): void;
+  insertListItemBefore(ref: string, node: NodeRef, text: string, list: ListKind): void;
+  removeListItem(node: NodeRef): void;
   setCell(table: NodeRef, row: number, col: number, text: string): void;
   addRow(table: NodeRef, at?: number): void;
   addColumn(table: NodeRef, at?: number): void;

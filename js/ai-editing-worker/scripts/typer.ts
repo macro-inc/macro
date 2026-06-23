@@ -15,22 +15,31 @@ import {
 	realAwarenessSource,
 } from "../src/ai-editing/awareness/awareness-source";
 import { runEditorCode } from "../src/ai-editing/runtime";
-import { connectPeer } from "../src/peer";
+import { LoroDoc } from "loro-crdt";
+import { Mirror } from "@loro-mirror/packages/core/src";
+import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "../../lexical-core/markdown-loro-schema";
+import { WorkerSyncSource } from "../src/sync-source";
 
 const { wssUrl } = await args("$0 <wss-url>");
 
-const { doc, mirror, peerPool, sendAwareness, disconnect } =
-	await connectPeer(wssUrl);
+const source = new WorkerSyncSource(wssUrl, "", undefined);
+const { snapshot } = await source.waitForInitialSync();
+
+const doc = new LoroDoc();
+const mirror = new Mirror<MarkdownLoroSchemaType>({ doc, schema: MARKDOWN_LORO_SCHEMA });
+doc.import(snapshot);
+doc.subscribeLocalUpdates((update) => source.pushUpdate([update]));
 
 const session = createEditingSession();
 loadSnapshot(session, mirror.getState() as SerializedEditorState);
 
 const propagate = () => {
-	const peer = peerPool.rotate();
-	if (peer !== undefined) {
-		doc.commit();
-		doc.setPeerId(peer);
-	}
+	const buf = new Uint8Array(8);
+	crypto.getRandomValues(buf);
+	const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
+	doc.commit();
+	doc.setPeerId(newPeer);
+	source.registerPeerId(newPeer);
 	mirror.setState(toSnapshot(session) as never);
 };
 
@@ -49,7 +58,7 @@ const paragraphs = [
 const awareness = realAwarenessSource({
 	mirror,
 	doc,
-	send: sendAwareness,
+	send: (bytes) => source.pushAwareness(bytes),
 	name: AI_NAMES[0]!,
 	color: COLORS[0]!,
 });
@@ -71,4 +80,4 @@ await runEditorCode({
 });
 
 awareness.clear();
-disconnect();
+source.cleanup();

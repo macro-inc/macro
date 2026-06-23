@@ -226,6 +226,25 @@ export class DocumentEditor {
     return this.push({ kind: 'sortList', id, order });
   }
 
+  public insertListItemAfter(id: NodeId, text: string, list: ListKind = 'bullet'): Ref {
+    this.requireId(id);
+    const ref = this.mintRef();
+    this.push({ kind: 'insertListItemAfter', ref, id, text, list });
+    return ref;
+  }
+
+  public insertListItemBefore(id: NodeId, text: string, list: ListKind = 'bullet'): Ref {
+    this.requireId(id);
+    const ref = this.mintRef();
+    this.push({ kind: 'insertListItemBefore', ref, id, text, list });
+    return ref;
+  }
+
+  public removeListItem(id: NodeId): this {
+    this.requireId(id);
+    return this.push({ kind: 'removeListItem', id });
+  }
+
   private insert(spec: NodeSpec, at: Position): Ref {
     this.requireAt(at);
     const ref = this.mintRef();

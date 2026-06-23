@@ -9,7 +9,7 @@
 import { $createLineBreakNode, $createParagraphNode, $createTextNode, $getRoot, $isElementNode, type ElementNode, type LexicalNode, type TextNode } from 'lexical';
 import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from '@lexical/rich-text';
 import { $createCodeNode } from '@lexical/code';
-import { $createListItemNode, $createListNode, $isListNode, type ListType } from '@lexical/list';
+import { $createListItemNode, $createListNode, $isListItemNode, $isListNode, type ListType } from '@lexical/list';
 import { $createTableCellNode, $createTableRowNode, $isTableCellNode, $isTableNode, $isTableRowNode, TableCellHeaderStates, type TableNode } from '@lexical/table';
 import { match } from 'ts-pattern';
 import { $createHorizontalRuleNode } from '../../../../lexical-core/nodes/HorizontalRuleNode';
@@ -297,6 +297,48 @@ export class Doc implements DocReader, DocWriter {
 
   public splitBlock(node: NodeRef, atText: string): void {
     this.tx(() => $splitBlock(this.block(node), atText));
+  }
+
+  public insertListItemAfter(ref: string, node: NodeRef, text: string, list: ListKind): void {
+    this.tx(() => this.insertListItem(ref, node, text, list, 'after'));
+  }
+
+  public insertListItemBefore(ref: string, node: NodeRef, text: string, list: ListKind): void {
+    this.tx(() => this.insertListItem(ref, node, text, list, 'before'));
+  }
+
+  public removeListItem(node: NodeRef): void {
+    this.tx(() => {
+      const li = $byId(this.s, this.id(node));
+      if (!$isListItemNode(li)) throw new EditError(`{${this.id(node)}} is not a list item`);
+      li.remove();
+    });
+  }
+
+  /** Insert a new list item adjacent to an existing one. When `list` matches the
+   *  surrounding list it lands as a plain sibling; when it differs, the new item
+   *  is wrapped in a sublist of that kind (a numbered list inside a bullet list,
+   *  etc.) — Lexical nests via a ListItemNode that holds the child ListNode. */
+  private insertListItem(ref: string, node: NodeRef, text: string, list: ListKind, where: 'after' | 'before'): void {
+    const target = $byId(this.s, this.id(node));
+    if (!$isListItemNode(target)) throw new EditError(`{${this.id(node)}} is not a list item`);
+    const newLi = $createListItemNode(list === 'check' ? false : undefined);
+    newLi.append($createTextNode(text));
+
+    const parent = target.getParent();
+    const sameKind = $isListNode(parent) && parent.getListType() === (list as ListType);
+    if (sameKind) {
+      if (where === 'after') target.insertAfter(newLi);
+      else target.insertBefore(newLi);
+    } else {
+      const sublist = $createListNode(list as ListType);
+      sublist.append(newLi);
+      const host = $createListItemNode();
+      host.append(sublist);
+      if (where === 'after') target.insertAfter(host);
+      else target.insertBefore(host);
+    }
+    this.assignRef(ref, newLi);
   }
 
   public setCell(table: NodeRef, row: number, col: number, text: string): void {

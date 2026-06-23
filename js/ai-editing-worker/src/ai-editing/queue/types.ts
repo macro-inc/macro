@@ -49,6 +49,9 @@ export type Edit =
   | { fn: 'removeNode'; node: NodeRef }
   | { fn: 'mergeBlocks'; nodes: NodeRef[]; separator: string }
   | { fn: 'splitBlock'; node: NodeRef; atText: string }
+  | { fn: 'insertListItemAfter'; ref: string; node: NodeRef; text: string; list: ListKind }
+  | { fn: 'insertListItemBefore'; ref: string; node: NodeRef; text: string; list: ListKind }
+  | { fn: 'removeListItem'; node: NodeRef }
   | { fn: 'setCell'; table: NodeRef; row: number; col: number; text: string }
   | { fn: 'addRow'; table: NodeRef; at?: number }
   | { fn: 'addColumn'; table: NodeRef; at?: number }

@@ -13,7 +13,7 @@ import type { AwarenessSource } from './awareness/awareness-source';
 import type { Doc } from './doc/doc';
 import { EditError } from './editor/errors';
 import type { DocumentOp } from './editor/ops';
-import { applyOp, runQueue, describe, type OpResult } from './queue/run';
+import { applyOp, runQueue, describe, type OpResult } from './queue/runner';
 import { DEFAULT_QUEUE_PARAMS, type DocumentOpQueueParams } from './queue/types';
 import { realRandomSource } from './queue/random-source';
 

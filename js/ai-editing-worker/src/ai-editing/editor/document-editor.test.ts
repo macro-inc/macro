@@ -91,6 +91,24 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('sortList defaults to asc', () => {
     expect(ed().sortList('b1').drain()[0]).toEqual({ kind: 'sortList', id: 'b1', order: 'asc' });
   });
+
+  it('insertListItemAfter defaults to a bullet item and returns a usable ref', () => {
+    const e = ed();
+    const ref = e.insertListItemAfter('b1', 'next');
+    e.setText(ref, 'NEXT'); // would throw if ref were not registered valid
+    const ops = e.drain();
+    expect(ops[0]).toEqual({ kind: 'insertListItemAfter', ref, id: 'b1', text: 'next', list: 'bullet' });
+  });
+
+  it('insertListItemBefore carries an explicit list kind for nesting', () => {
+    const e = ed();
+    const ref = e.insertListItemBefore('b1', 'sub', 'number');
+    expect(e.drain()[0]).toEqual({ kind: 'insertListItemBefore', ref, id: 'b1', text: 'sub', list: 'number' });
+  });
+
+  it('removeListItem targets a single item', () => {
+    expect(ed().removeListItem('b1').drain()[0]).toEqual({ kind: 'removeListItem', id: 'b1' });
+  });
 });
 
 describe('DocumentEditor — structure & refs', () => {
@@ -250,6 +268,9 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
     ['outdent', (e) => e.outdent('nope')],
     ['setIndent', (e) => e.setIndent('nope', 1)],
     ['sortList', (e) => e.sortList('nope')],
+    ['insertListItemAfter', (e) => e.insertListItemAfter('nope', 'x')],
+    ['insertListItemBefore', (e) => e.insertListItemBefore('nope', 'x')],
+    ['removeListItem', (e) => e.removeListItem('nope')],
     ['move(self)', (e) => e.move('nope', { after: 'b1' })],
     ['remove', (e) => e.remove('nope')],
     ['removeMany', (e) => e.removeMany(['nope'])],

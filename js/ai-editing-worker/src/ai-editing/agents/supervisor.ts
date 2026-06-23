@@ -2,7 +2,7 @@ import SHARED from '../prompts/SHARED.md';
 import SUPERVISOR from '../prompts/SUPERVISOR.md';
 import INTERPRET from '../prompts/INTERPRET.md';
 import API_COMPACT from '../prompts/API_COMPACT.md';
-import { type LanguageModel, generateText, stepCountIs } from 'ai';
+import { generateText, stepCountIs } from 'ai';
 import { type Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
 import { sharedPeerPool, type Peer } from '../awareness/peer-pool';
@@ -15,15 +15,10 @@ import { type Counters, type Writer, createDispatchTool } from '../tools/dispatc
 import { createSearchContactsTool } from '../tools/search-contacts';
 import { interpret } from './interpreter';
 import { runTask } from './coder';
+import type { ResolvedModels } from '../../run-edit';
 
 const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}\n${API_COMPACT}`;
 const INTERPRET_SYSTEM = `${SHARED}\n${INTERPRET}`;
-
-/** Above this estimated document size, run the supervisor on the 1M-context
- *  fallback model. The supervisor re-sends the whole document on every step
- *  (initial prompt + each dispatch result echoes it), so a large doc multiplies
- *  fast and overflows a small provider window (e.g. Cerebras' 131k). */
-const DOC_TOKEN_FALLBACK_THRESHOLD = 50_000;
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,12 +38,6 @@ export type RunAgentOptions = {
   makeAwareness: (name: string, color: string) => AwarenessSource;
   /** Resolve a name query to contact/user results. */
   searchContacts: SearchContacts;
-  /** Model for the writer (child) agents; defaults to the supervisor model. */
-  childModel?: LanguageModel;
-  /** 1M-context model the supervisor falls back to when the document is large
-   *  enough to risk overflowing the primary model's context window. Child
-   *  writers keep using the primary model (they only see windowed context). */
-  largeModel?: LanguageModel;
   /** Document serialization fed to the agents. Default 'xml'. */
   docFormat?: 'markdown' | 'xml';
   /** Run an intent-interpretation pass first. */
@@ -62,7 +51,7 @@ export type RunAgentOptions = {
   onOps?: (ops: DocumentOp[]) => void;
 };
 
-export async function runAgent(s: Session, request: string, model: LanguageModel, opts: RunAgentOptions) {
+export async function runAgent(s: Session, request: string, models: ResolvedModels, opts: RunAgentOptions) {
   const serialize =
     opts.docFormat === 'markdown' ? serializeWithIds : (sess: Session) => numberLines(serializeWithXml(sess));
   const counters: Counters = { inputTokens: 0, outputTokens: 0 };
@@ -89,15 +78,9 @@ export async function runAgent(s: Session, request: string, model: LanguageModel
   const initialText = serialize(s);
   const docContext = `<document>\n${initialText}\n</document>`;
 
-  // a pretty "dumb" probably awful estimate, but we lean on the side of caution on choosing a bigger model for huge documents
-  // TODO(wolf): probably dont want to send the entire context anyway
-  const estimatedDocTokens = Math.ceil(initialText.length / 4);
-  const supervisorModel =
-    opts.largeModel && estimatedDocTokens > DOC_TOKEN_FALLBACK_THRESHOLD ? opts.largeModel : model;
-
   let intent = '';
   if (opts.interpret) {
-    const interpretation = await interpret(docContext, request, supervisorModel, INTERPRET_SYSTEM);
+    const interpretation = await interpret(docContext, request, models.interpret, INTERPRET_SYSTEM);
     counters.inputTokens += interpretation.totalUsage.inputTokens ?? 0;
     counters.outputTokens += interpretation.totalUsage.outputTokens ?? 0;
     intent = interpretation.text;
@@ -109,7 +92,7 @@ export async function runAgent(s: Session, request: string, model: LanguageModel
     dispatch: createDispatchTool({
       s,
       doc,
-      childModel: opts.childModel ?? model,
+      childModel: models.coding,
       counters,
       params: opts.params,
       typingAnimations: opts.typingAnimations,
@@ -128,7 +111,7 @@ export async function runAgent(s: Session, request: string, model: LanguageModel
 
   try {
     const result = await generateText({
-      model: supervisorModel,
+      model: models.supervisor,
       stopWhen: stepCountIs(10),
       system: MASTER_SYSTEM,
       prompt,

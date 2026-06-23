@@ -1,9 +1,8 @@
-import { type GenerateTextResult, type LanguageModel, tool } from 'ai';
+import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import { type Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
 import type { Doc } from '../doc/doc';
-import type { RunTaskDeps } from '../agents/coder';
 import type { DocumentOpQueueParams } from '../queue/types';
 import type { RunCodeToolOptions } from './run-code';
 import { numberLines, serializeWithXml } from '../utils';
@@ -11,7 +10,7 @@ import { numberLines, serializeWithXml } from '../utils';
 export type Counters = { inputTokens: number; outputTokens: number };
 
 type BlockedReport = { reason: string; suggestedContext?: { start_line: number; end_line: number } };
-type ContextRange = { startLine: number; endLine: number; rootIds: string[]; ids: string[]; source: 'ids' | 'provided' | 'full-document' };
+type ContextRange = { startLine: number; endLine: number; rootIds: string[]; ids: string[]; source: 'ids' | 'full-document' };
 
 const ID_PATTERN = /[A-Za-z0-9_-]{6,}/g;
 const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'li', 'table', 'ul', 'ol']);
@@ -26,7 +25,7 @@ type XmlNodeRange = {
 };
 
 /** Pull a writer's `reportBlocked` payload out of its run, if it bailed. */
-function findBlocked(res: GenerateTextResult<any, any>): BlockedReport | null {
+function findBlocked(res: Awaited<ReturnType<typeof import('../agents/coder').runTask>>): BlockedReport | null {
   for (const step of res.steps) {
     for (const call of step.toolCalls) {
       if (call.toolName === 'reportBlocked') return call.input as BlockedReport;
@@ -101,7 +100,7 @@ function containingRoot(node: XmlNodeRange): XmlNodeRange {
   return node;
 }
 
-function computeContextRange(xml: string, instruction: string, provided?: { start_line: number; end_line: number }): ContextRange {
+function computeContextRange(xml: string, instruction: string): ContextRange {
   const { lines, byId } = indexXmlRanges(xml);
   const ids = [...new Set(instruction.match(ID_PATTERN) ?? [])].filter((id) => byId.has(id));
   if (ids.length > 0) {
@@ -114,9 +113,6 @@ function computeContextRange(xml: string, instruction: string, provided?: { star
       ids,
       source: 'ids',
     };
-  }
-  if (provided) {
-    return { startLine: provided.start_line, endLine: provided.end_line, rootIds: [], ids, source: 'provided' };
   }
   return { startLine: 1, endLine: lines.length, rootIds: [], ids, source: 'full-document' };
 }
@@ -148,7 +144,7 @@ export type DispatchToolOptions = {
   typingAnimations?: boolean;
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
-  runTask: (s: Session, task: string, model: LanguageModel, deps: RunTaskDeps) => Promise<GenerateTextResult<any, any>>;
+  runTask: typeof import('../agents/coder').runTask;
   serialize?: (s: Session) => string;
   onOps?: RunCodeToolOptions['onOps'];
 };
@@ -158,22 +154,16 @@ export function createDispatchTool(opts: DispatchToolOptions) {
   const serialize = opts.serialize ?? serializeWithXml;
   let round = 0;
   return tool({
-    description:
-      'Spawn one writer per edit instruction; each carries out its edit and animates it live as a distinct cursor. Returns each writer\'s summary plus the updated document. ' +
-      'Edits in one call run in PARALLEL against the same document with no conflict reconciliation: only batch them when you are confident they cannot conflict (disjoint regions). If two edits touch the same or adjacent blocks, or depend on each other, dispatch them one at a time across separate calls.',
+    description: "spawn a writer to carry out an edit instruction on the document",
     inputSchema: z.object({
       edits: z
         .array(
           z.object({
-            editing_instruction: z.string().describe('one mechanical change'),
-            context: z.object({
-              start_line: z.number().int().describe('first line of the document region the writer needs to see (1-indexed)'),
-              end_line: z.number().int().describe('last line of the document region the writer needs to see (1-indexed, inclusive)'),
-            }).optional().describe('optional fallback line range; dispatch normally computes context by parsing node ids from the instruction'),
+            editing_instruction: z.string().describe('mechanical changes you want applied to the document'),
             snippets: z
               .record(z.string(), z.string())
               .optional()
-              .describe('verbatim text values injected as a `snippets` JS object the coder can use directly (e.g. `editor.setText(id, snippets.s1)`). Use for multi-line or special-character content like code blocks to avoid escaping errors.'),
+              .describe('verbatim text values injected as a `snippets` JS object the coder can use directly. all verbatim text goes here, so that the writer can paste it in'),
           })
         )
         .describe('edit instructions to run as one parallel batch'),
@@ -181,7 +171,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     execute: async ({ edits }) => {
       round += 1;
       const xml = serializeWithXml(s);
-      const contexts = edits.map((e) => computeContextRange(xml, e.editing_instruction, e.context));
+      const contexts = edits.map((e) => computeContextRange(xml, e.editing_instruction));
       console.log(
         `\n[round ${round}] ${edits.length} edit(s):\n${edits
           .map((e, i) => `  ${i + 1}. ${e.editing_instruction} [${describeContextRange(contexts[i]!)}]`)

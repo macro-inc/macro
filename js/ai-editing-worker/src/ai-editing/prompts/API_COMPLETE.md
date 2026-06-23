@@ -155,6 +155,9 @@ After:
 - `check(id)` · `uncheck(id)` · `setChecked(id, bool)`
 - `indent(id, by?)` · `outdent(id, by?)` · `setIndent(id, level)`
 - `sortList(id, order?)`
+- `insertListItemAfter(liId, text, list?)` · `insertListItemBefore(liId, text, list?)` · `removeListItem(liId)`
+
+To add or remove items in an *existing* list, pass the id of a sibling `<li>` — never the `<ul>`/`<ol>` id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind. The insert methods return a handle to the new `<li>`.
 
 ```ts
 editor.checklist(['b1', 'b2']);
@@ -163,6 +166,31 @@ editor.indent('b2');
 editor.outdent('b2');
 editor.setChecked('b2', false);
 editor.sortList('list1', 'asc');
+const li = editor.insertListItemAfter('li1', 'second item');
+editor.insertListItemAfter(li, 'nested', 'number');
+editor.removeListItem('li2');
+```
+
+Before:
+
+```xml
+<doc>
+  <ul id="list1"><li id="li1"><t id="t1">first item</t></li><li id="li2" value="2"><t id="t2">old item</t></li></ul>
+</doc>
+```
+
+After:
+
+```xml
+<doc>
+  <ul id="list1">
+    <li id="li1"><t id="t1">first item</t></li>
+    <li id="b1" value="2"><t id="t3">second item</t></li>
+    <li id="b2" value="3">
+      <ol id="b3"><li id="b4"><t id="t4">nested</t></li></ol>
+    </li>
+  </ul>
+</doc>
 ```
 
 Before:
