@@ -43,7 +43,7 @@ import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
-import { type Action, type ActionContext, ActionCategory } from './types';
+import { type Action, ActionCategory, type ActionContext } from './types';
 
 async function trackSlashTaskMention(
   context: ActionContext | undefined,

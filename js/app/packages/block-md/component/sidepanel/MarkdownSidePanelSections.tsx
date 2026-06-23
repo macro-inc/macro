@@ -25,11 +25,11 @@ import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ClockIcon from '@phosphor/clock.svg';
-import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import {
@@ -37,10 +37,7 @@ import {
   useSetDocumentTeamShareMutation,
 } from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import {
-  blockNameToItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
