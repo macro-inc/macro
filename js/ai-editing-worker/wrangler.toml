@@ -1,0 +1,38 @@
+name = "ai-editing-worker"
+main = "src/index.ts"
+compatibility_date = "2025-07-22"
+compatibility_flags = ["nodejs_compat"]
+
+[alias]
+"loro-crdt" = "loro-crdt/bundler"
+"@observability/logger" = "./src/logger-shim.ts"
+"@core" = "../app/packages/core"
+"@loro-mirror" = "../loro-mirror"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
+[observability]
+enabled = true
+
+[vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+
+[dev]
+port = 8933
+
+[env.local.vars]
+SYNC_WS_BASE = "ws://localhost:8787"
+
+[env.dev.vars]
+SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+
+[env.prod.vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"

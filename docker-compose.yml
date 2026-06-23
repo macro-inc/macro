@@ -112,6 +112,10 @@ services:
       - static_file_service
       - sync_service
       - lexical_service
+      - ai_editing_worker
+    environment:
+      - OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://document-storage-service:8080
+      - OVERRIDE_AI_EDITING_WORKER_URL=http://ai-editing-worker:8933
     networks:
       databases:
       services:
@@ -380,6 +384,27 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # ============================================================================
+  # ai_editing_worker (Port 8933)
+  # AI-powered document editing Cloudflare Worker (local wrangler dev)
+  # ============================================================================
+  ai_editing_worker:
+    <<: *common-env
+    build:
+      context: ./js/ai-editing-worker
+      dockerfile: Dockerfile
+    ports:
+      - "8933:8933"
+    volumes:
+      - ./js:/app
+      - /app/ai-editing-worker/.wrangler
+    depends_on:
+      - sync_service
+    networks:
+      services:
+        aliases:
+          - ai-editing-worker
 
   # ============================================================================
   # lexical_service (Port 8096)

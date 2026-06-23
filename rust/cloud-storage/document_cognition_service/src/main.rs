@@ -386,6 +386,17 @@ async fn main() -> anyhow::Result<()> {
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        editing_tool_context: documents::inbound::toolset::EditDocumentToolContext {
+            dss_url: macro_service_urls::DocumentStorageServiceUrl::new()
+                .expect("failed to resolve DocumentStorageServiceUrl")
+                .to_string(),
+            dss_auth_key: std::env::var("DOCUMENT_STORAGE_SERVICE_AUTH_KEY")
+                .expect("DOCUMENT_STORAGE_SERVICE_AUTH_KEY not set"),
+            worker_url: macro_service_urls::AiEditingWorkerUrl::new()
+                .expect("failed to resolve AiEditingWorkerUrl")
+                .to_string(),
+            client: std::sync::Arc::new(reqwest::Client::new()),
+        },
         recorder: ai_usage::pg_recorder(db.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };

@@ -1,12 +1,15 @@
 //! Toolset inbound adapter for Documents.
 
 mod create_document;
+mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
 
 #[cfg(test)]
 mod test;
+
+pub use edit_document::{EditDocumentToolContext, edit_document_toolset};
 
 use crate::{
     domain::create::DocumentCreator,

@@ -89,18 +89,6 @@ export function $stripFormat(block: ElementNode): void {
   }
 }
 
-/** Set (or clear) formatting on every text node in a block. Omit `format` to strip all formatting. */
-export function $setAllFormat(block: ElementNode, format?: InlineFormat): void {
-  for (const node of collectTextNodes(block)) {
-    if (format) {
-      const fmt = FORMAT_MAP[format];
-      if (!node.hasFormat(fmt)) node.toggleFormat(fmt);
-    } else {
-      node.setFormat(0);
-    }
-  }
-}
-
 /**
  * Literal text replace. Mutates matched text nodes IN PLACE (via
  * `setTextContent`) so their durable ids survive — the diff then sees a clean

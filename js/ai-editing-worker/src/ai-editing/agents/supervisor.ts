@@ -11,7 +11,8 @@ import type { DocumentOpQueueParams } from '../queue/types';
 import type { RunCodeToolOptions } from '../tools/run-code';
 import type { DocumentOp } from '../editor/ops';
 import { numberLines, serializeWithIds, serializeWithXml } from '../utils';
-import { type Counters, type Writer, createDispatchTool } from '../tools/dispatch';
+import { TokenTracker } from '../token-tracker';
+import { type Writer, createDispatchTool } from '../tools/dispatch';
 import { createSearchContactsTool } from '../tools/search-contacts';
 import { interpret } from './interpreter';
 import { runTask } from './coder';
@@ -54,7 +55,7 @@ export type RunAgentOptions = {
 export async function runAgent(s: Session, request: string, models: ResolvedModels, opts: RunAgentOptions) {
   const serialize =
     opts.docFormat === 'markdown' ? serializeWithIds : (sess: Session) => numberLines(serializeWithXml(sess));
-  const counters: Counters = { inputTokens: 0, outputTokens: 0 };
+  const tracker = new TokenTracker();
   const doc = new Doc(s, opts.propagate);
 
   // One writer identity per dispatched edit. Borrow a unique peer (name/color)
@@ -81,8 +82,7 @@ export async function runAgent(s: Session, request: string, models: ResolvedMode
   let intent = '';
   if (opts.interpret) {
     const interpretation = await interpret(docContext, request, models.interpret, INTERPRET_SYSTEM);
-    counters.inputTokens += interpretation.totalUsage.inputTokens ?? 0;
-    counters.outputTokens += interpretation.totalUsage.outputTokens ?? 0;
+    tracker.add(models.interpret as { modelId: string }, interpretation.totalUsage);
     intent = interpretation.text;
     console.log(`\n[intent]\n${intent}`);
     await delay(300);
@@ -93,7 +93,7 @@ export async function runAgent(s: Session, request: string, models: ResolvedMode
       s,
       doc,
       childModel: models.coding,
-      counters,
+      tracker,
       params: opts.params,
       typingAnimations: opts.typingAnimations,
       signal: opts.signal,
@@ -118,9 +118,8 @@ export async function runAgent(s: Session, request: string, models: ResolvedMode
       tools,
       abortSignal: opts.signal,
     });
-    counters.inputTokens += result.totalUsage.inputTokens ?? 0;
-    counters.outputTokens += result.totalUsage.outputTokens ?? 0;
-    return { text: result.text || 'Applied edits.', totalUsage: counters, steps: result.steps, intent };
+    tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
+    return { text: result.text || 'Applied edits.', totalUsage: tracker, steps: result.steps, intent };
   } finally {
     // Safety net: per-writer .finally(release) is the primary path; clean up
     // anything still outstanding (e.g. on abort/throw).

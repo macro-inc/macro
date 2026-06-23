@@ -1,4 +1,5 @@
 import type { StepResult, ToolSet } from "ai";
+import type { UsageEntry } from "./ai-editing/token-tracker";
 
 export type TraceMeta = {
 	documentId: string;
@@ -8,7 +9,7 @@ export type TraceMeta = {
 	intent?: string;
 };
 
-type Usage = { inputTokens: number; outputTokens: number };
+type Usage = UsageEntry[];
 
 function formatDispatchArgs(args: { edits: Array<{ editing_instruction: string; context?: { start_line: number; end_line: number }; snippets?: Record<string, string> }> }): string {
 	return args.edits
@@ -122,16 +123,10 @@ function formatTrace(meta: TraceMeta, steps: StepResult<ToolSet>[], usage: Usage
 		sections.push(formatStep(steps[i]!, i));
 	}
 
-	sections.push(
-		"",
-		"---",
-		"",
-		"## Usage",
-		"| | |",
-		"|---|---|",
-		`| input | ${usage.inputTokens.toLocaleString()} |`,
-		`| output | ${usage.outputTokens.toLocaleString()} |`,
-	);
+	sections.push("", "---", "", "## Usage", "| model | input | output |", "|---|---|---|");
+	for (const u of usage) {
+		sections.push(`| ${u.model} | ${u.inputTokens.toLocaleString()} | ${u.outputTokens.toLocaleString()} |`);
+	}
 
 	return sections.join("\n");
 }

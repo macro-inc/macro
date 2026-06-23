@@ -23,6 +23,7 @@ use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
+use documents::inbound::toolset::{EditDocumentToolContext, edit_document_toolset};
 use subagent::Subagent;
 use teams::inbound::toolset::team_toolset;
 
@@ -82,6 +83,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
+        .add_subtoolset::<EditDocumentToolContext>(edit_document_toolset())
         .add_tool::<Subagent, ToolServiceContext>()
         .add_tool::<DisplayResults, ToolServiceContext>();
     let toolset = Arc::new(toolset);
@@ -107,6 +109,7 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+        .add_subtoolset::<EditDocumentToolContext>(edit_document_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt {

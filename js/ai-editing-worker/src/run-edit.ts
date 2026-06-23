@@ -10,6 +10,7 @@ import {
 } from "./ai-editing/ai-toolkit";
 import { realAwarenessSource } from "./ai-editing/awareness/awareness-source";
 import type { DocumentOp } from "./ai-editing/editor/ops";
+import type { UsageEntry } from "./ai-editing/token-tracker";
 import type { CodeRunner } from "./ai-editing/runtime";
 import { SyncEngine } from "../../app/packages/core/collab/engine";
 import { LoroManager } from "../../app/packages/core/collab/manager";
@@ -55,8 +56,10 @@ export type RunEditArgs = {
 	searchContacts?: SearchContacts;
 };
 
+export type { UsageEntry };
+
 export type RunEditResult = {
-	usage: { inputTokens: number; outputTokens: number };
+	usage: UsageEntry[];
 	ops: DocumentOp[];
 	trace?: string;
 };
@@ -167,10 +170,7 @@ export async function runEditSession(args: RunEditArgs): Promise<RunEditResult> 
 		}
 		await wal.flush();
 
-		const usage = {
-			inputTokens: totalUsage.inputTokens ?? 0,
-			outputTokens: totalUsage.outputTokens ?? 0,
-		};
+		const usage = totalUsage.toEntries();
 
 		const trace = args.debug
 			? buildTraceLog(

@@ -209,6 +209,7 @@ dependencies = [
  "rand 0.9.4",
  "readonly_pool",
  "remote_env_var",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "search_service_client",

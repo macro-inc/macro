@@ -1,13 +1,15 @@
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
-import { type Session } from '../ai-toolkit';
+import type { Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
 import type { Doc } from '../doc/doc';
 import type { DocumentOpQueueParams } from '../queue/types';
-import type { RunCodeToolOptions } from './run-code';
 import { numberLines, serializeWithXml } from '../utils';
+import type { RunCodeToolOptions } from './run-code';
 
-export type Counters = { inputTokens: number; outputTokens: number };
+export type { UsageEntry } from '../token-tracker';
+export { TokenTracker } from '../token-tracker';
+import { TokenTracker } from '../token-tracker';
 
 type BlockedReport = { reason: string; suggestedContext?: { start_line: number; end_line: number } };
 type ContextRange = { startLine: number; endLine: number; rootIds: string[]; ids: string[]; source: 'ids' | 'full-document' };
@@ -138,7 +140,7 @@ export type DispatchToolOptions = {
   s: Session;
   doc: Doc;
   childModel: LanguageModel;
-  counters: Counters;
+  tracker: TokenTracker;
   runner: RunCodeToolOptions['runner'];
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
@@ -150,7 +152,7 @@ export type DispatchToolOptions = {
 };
 
 export function createDispatchTool(opts: DispatchToolOptions) {
-  const { s, doc, childModel, counters, params, typingAnimations, signal, makeWriter, runTask, runner, onOps } = opts;
+  const { s, doc, childModel, tracker, params, typingAnimations, signal, makeWriter, runTask, runner, onOps } = opts;
   const serialize = opts.serialize ?? serializeWithXml;
   let round = 0;
   return tool({
@@ -201,8 +203,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         })
       );
       const summaries = results.map((res, i) => {
-        counters.inputTokens += res.totalUsage.inputTokens ?? 0;
-        counters.outputTokens += res.totalUsage.outputTokens ?? 0;
+        tracker.add(childModel as { modelId: string }, res.totalUsage);
         const blocked = findBlocked(res);
         if (blocked) {
           console.log(`[round ${round}] writer ${i + 1} BLOCKED: ${blocked.reason}`);

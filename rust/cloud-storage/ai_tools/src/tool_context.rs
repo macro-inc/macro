@@ -589,6 +589,7 @@ pub struct ToolServiceContext {
     pub team_tool_context: ToolTeamToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
+    pub editing_tool_context: documents::inbound::toolset::EditDocumentToolContext,
     /// Records token usage / cost for AI calls made with this context.
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
