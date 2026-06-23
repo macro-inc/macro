@@ -407,6 +407,25 @@ async fn create_new_chat(
     Ok((chat, new_chat_id))
 }
 
+/// Map an [`agent::AgentError`] to the well-typed [`StreamError`] sent to the
+/// client. Provider outages and context overflows get their own variants so
+/// the frontend can react specifically (e.g. prompt the user to switch
+/// models); anything else falls back to a generic internal error.
+fn stream_error_for(err: &agent::AgentError, stream_id: &str, model: &str) -> StreamError {
+    match err.failure_kind() {
+        agent::FailureKind::ProviderOutage => StreamError::ProviderError {
+            stream_id: stream_id.to_string(),
+            model: model.to_string(),
+        },
+        agent::FailureKind::ContextOverflow => StreamError::ModelContextOverflow {
+            stream_id: stream_id.to_string(),
+        },
+        agent::FailureKind::Internal => StreamError::InternalError {
+            stream_id: stream_id.to_string(),
+        },
+    }
+}
+
 /// For every `ToolCall` in `parts` that has no matching response, insert a
 /// synthetic `ToolCallErr { description: "cancelled", .. }` immediately after
 /// it. Used on cancellation so the persisted assistant message stays
@@ -532,9 +551,7 @@ fn stream_and_save_message(
             Ok(stream) => stream,
             Err(e) => {
                 tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to create AI stream");
-                let stream_error = StreamError::InternalError {
-                    stream_id: stream_id.clone(),
-                };
+                let stream_error = stream_error_for(&e, &stream_id, &model);
                 if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
                 }
@@ -609,9 +626,7 @@ fn stream_and_save_message(
                         break;
                     }
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    let stream_error = StreamError::InternalError {
-                        stream_id: stream_id.clone(),
-                    };
+                    let stream_error = stream_error_for(&e, &stream_id, &model);
                     if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
                     }

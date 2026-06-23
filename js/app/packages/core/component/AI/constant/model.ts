@@ -71,3 +71,51 @@ export function defaultModelForPlan(hasPaidAccess: boolean): TModel {
 export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
   return hasPaidAccess ? PAID_MODELS : FREE_MODELS;
 }
+
+/** Provider serving each model — mirrors the backend `provider` field. */
+export const MODEL_PROVIDER: ExhaustiveMap = {
+  'anthropic/claude-opus-4-8': 'anthropic',
+  'anthropic/claude-haiku-4-5': 'anthropic',
+  'anthropic/claude-sonnet-4-6': 'anthropic',
+  'openai/gpt-5.5': 'openai',
+  'openai/gpt-5-mini': 'openai',
+} as const;
+
+/** Options for {@link alternateProviderModel}. */
+export type AlternateProviderModelOptions = {
+  /**
+   * The user's available models (in display order). The suggestion is drawn
+   * only from these so we never propose a model the user can't use. When
+   * omitted/empty, the full static model list is used.
+   */
+  candidates?: readonly TModel[];
+  /**
+   * Providers known to be failing this session. The suggestion avoids all of
+   * them — so once Anthropic *and* OpenAI have failed we stop bouncing the user
+   * between them and return `undefined` instead.
+   */
+  failedProviders?: Iterable<string>;
+};
+
+/**
+ * Pick a model from a provider other than `current`'s — and other than any
+ * provider already known to be failing this session — for recovering from a
+ * provider outage. Returns `undefined` when no accessible model on a healthy
+ * provider remains.
+ */
+export function alternateProviderModel(
+  current: TModel,
+  options?: AlternateProviderModelOptions
+): TModel | undefined {
+  // Exclude the current provider (always switch *away* from it) plus every
+  // provider that has already failed this session.
+  const excluded = new Set<string>(options?.failedProviders ?? []);
+  excluded.add(MODEL_PROVIDER[current]);
+
+  const candidates = options?.candidates;
+  const pool =
+    candidates && candidates.length > 0
+      ? candidates
+      : (Object.values(Model) as readonly TModel[]);
+  return pool.find((id) => !excluded.has(MODEL_PROVIDER[id]));
+}
