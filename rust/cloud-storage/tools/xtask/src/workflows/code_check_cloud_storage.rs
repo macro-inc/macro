@@ -118,7 +118,11 @@ fn status_check() -> Job {
 /// Detect whether cloud-storage-relevant paths changed.
 fn paths_filter() -> Step<gh_workflow::Use> {
     Step::new("Filter changed paths")
-        .uses("dorny", "paths-filter", "v3")
+        .uses(
+            "dorny",
+            "paths-filter",
+            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
+        ) // v3.0.3
         .id("filter")
         .add_with((
             "filters",

@@ -37,7 +37,7 @@ jobs:
         rust-cache: 'false'
     - id: filter
       name: Filter changed paths
-      uses: dorny/paths-filter@v3
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
         filters: |
           should_run:
