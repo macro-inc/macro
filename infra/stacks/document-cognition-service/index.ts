@@ -33,6 +33,13 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+// NOTE: NEVER EVER EVER EXPORT THIS. ITS A SECRET VALUE
+const PROXY_DATABASE_URL = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_proxy_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
@@ -180,7 +187,7 @@ const aiProjectionsRefreshTrigger = new AiProjectionsRefreshTrigger(
   {
     envVars: {
       AI_PROJECTION_QUEUE: pulumi.interpolate`${aiProjectionQueue.queue.name}`,
-      DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
+      DATABASE_URL: pulumi.interpolate`${PROXY_DATABASE_URL}`,
       ENVIRONMENT: stack,
       RUST_LOG: 'ai_projections_refresh_handler=trace,sqs_client=trace',
     },
