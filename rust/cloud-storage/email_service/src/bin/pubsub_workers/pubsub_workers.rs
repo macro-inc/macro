@@ -6,9 +6,11 @@ use email_service::pubsub::CrmMetadataResolver;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::{
+    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
+};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
-use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -34,15 +36,6 @@ async fn main() -> anyhow::Result<()> {
         .resolve_remote_secrets(env, &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
-
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config.auth_service_secret_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(config.auth_service_secret_key.clone())
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (3, 15),
@@ -89,20 +82,20 @@ async fn main() -> anyhow::Result<()> {
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            config.contacts_queue.clone(),
+            config.contacts_queue.to_string(),
         ),
     });
 
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.link_manager_queue.clone(),
+        config.link_manager_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
 
     let scheduled_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.email_scheduled_queue.clone(),
+        config.email_scheduled_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -111,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.sfs_uploader_queue.clone(),
+                config.sfs_uploader_queue.to_string(),
                 config.queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -120,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
 
     let sfs_delete_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.sfs_delete_queue.clone(),
+        config.sfs_delete_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -129,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.backfill_queue.clone(),
+                config.backfill_queue.to_string(),
                 config.backfill_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -140,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_ops_queue.clone(),
+                config.gmail_ops_queue.to_string(),
                 config.gmail_ops_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -151,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_ops_retry_queue.clone(),
+                config.gmail_ops_retry_queue.to_string(),
                 config.gmail_ops_retry_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -162,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_queue.clone(),
+                config.gmail_inbox_sync_queue.to_string(),
                 config.inbox_sync_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -173,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_retry_queue.clone(),
+                config.gmail_inbox_sync_retry_queue.to_string(),
                 config.inbox_sync_retry_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -181,13 +174,16 @@ async fn main() -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
-        auth_service_secret_key,
-        config.auth_service_url.clone(),
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
     );
 
-    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.clone());
+    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.to_string());
 
-    let redis_inner_client = redis::Client::open(config.redis_uri.as_str())
+    let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
         .inspect(|client| {
             client
                 .get_connection()
@@ -201,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
+        config.notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
@@ -218,17 +214,17 @@ async fn main() -> anyhow::Result<()> {
 
     let sfs_client = StaticFileServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.static_file_service_url.clone(),
+        StaticFileServiceUrl::new()?.to_string(),
     );
 
     let dss_client = DocumentStorageServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.document_storage_service_url.clone(),
+        DocumentStorageServiceUrl::new()?.to_string(),
     );
 
     let connection_gateway_client = connection_gateway_client::client::ConnectionGatewayClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
+        ConnectionGatewayUrl::new()?.to_string(),
     );
 
     let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
@@ -253,27 +249,17 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let metadata_resolver = if config.use_apollo_crm_enrichment {
-        // Apollo key: `config.apollo_api_key` is the key itself locally, or
-        // the name of the Secrets Manager secret holding it in deployed envs
-        // (resolved here).
-        let apollo_api_key = match config.environment {
-            Environment::Local => config.apollo_api_key.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(config.apollo_api_key.clone())
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "failed to load apollo api key secret"))
-                .map(|k| k.to_string())
-                .unwrap_or_default(),
-        };
         // No usable key (missing/unreadable secret, or unset locally): fall
         // back to unfurl rather than running Apollo with an empty key, which
         // would no-op and pollute the directory with negative-cache rows.
-        if apollo_api_key.is_empty() {
+        if config.apollo_api_key.as_ref().is_empty() {
             tracing::warn!("apollo api key unavailable; falling back to unfurl CRM enrichment");
             build_unfurl()?
         } else {
             CrmMetadataResolver::Apollo(
-                crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver::new(apollo_api_key),
+                crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver::new(
+                    config.apollo_api_key.as_ref().to_string(),
+                ),
             )
         }
     } else {
@@ -491,7 +477,7 @@ async fn main() -> anyhow::Result<()> {
     let auth_service_client_scheduled = auth_service_client.clone();
     let redis_client_scheduled = redis_client.clone();
     let s3_client_scheduled = s3_client.clone();
-    let attachment_bucket_scheduled = config.attachment_bucket.clone();
+    let attachment_bucket_scheduled = config.attachment_bucket.to_string();
     // send scheduled emails
     tokio::spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker(
