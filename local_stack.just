@@ -54,13 +54,17 @@ purge_queues:
   #!/usr/bin/env bash
   set -euo pipefail
   queues=$(aws --endpoint-url=http://localhost:4566 sqs list-queues --query 'QueueUrls[]' --output text)
-  if [ -z "$queues" ]; then
+  # `--output text` emits the literal "None" (not empty) when there are no queues.
+  if [ -z "$queues" ] || [ "$queues" = "None" ]; then
     echo "No SQS queues found"
     exit 0
   fi
   for queue_url in $queues; do
-    aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url "$queue_url" || true
-    echo "Purged $queue_url"
+    if aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url "$queue_url"; then
+      echo "Purged $queue_url"
+    else
+      echo "Failed to purge $queue_url" >&2
+    fi
   done
   echo "All SQS queues purged"
 

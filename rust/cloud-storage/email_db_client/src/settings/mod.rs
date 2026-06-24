@@ -5,7 +5,8 @@ use sqlx::types::Uuid;
 /// Applies a partial update to a user's settings. Fields left `None` in the
 /// patch keep their existing value (COALESCE); on a fresh insert, an omitted
 /// `signature_on_replies_forwards` is written as FALSE and `signature` as NULL.
-#[tracing::instrument(skip(pool), err)]
+// skip `patch` — it carries the user's signature HTML, which shouldn't hit traces.
+#[tracing::instrument(skip(pool, patch), err)]
 pub async fn patch_settings(
     pool: &PgPool,
     patch: service::settings::SettingsPatch,
