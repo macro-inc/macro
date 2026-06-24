@@ -79,7 +79,11 @@
 
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = if isAarch64Darwin then lib.fakeHash else "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+        outputHash =
+          if isAarch64Darwin then
+            "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
+          else
+            "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {

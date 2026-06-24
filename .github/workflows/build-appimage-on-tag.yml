@@ -61,6 +61,9 @@ jobs:
             trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
           fi
           nix build --print-build-logs ".#tauri-desktop-appimage"
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push AppImage result closure to Cachix."
+          fi
 
       - name: Collect AppImage artifact
         shell: bash
