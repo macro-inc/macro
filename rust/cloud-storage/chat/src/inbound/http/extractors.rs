@@ -33,7 +33,7 @@ impl ChatModelAccess {
     }
 
     /// The default model for this user — the best one they're entitled to.
-    pub fn model(&self) -> &'static str {
+    pub fn best_model(&self) -> &'static str {
         if self.professional {
             "anthropic/claude-opus-4-8"
         } else {
@@ -113,7 +113,7 @@ mod test {
     #[test]
     fn free_user_defaults_to_haiku_and_only_has_haiku() {
         let free = access(&[]);
-        assert_eq!(free.model(), FREE_MODEL);
+        assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));
         assert!(!free.has_access("anthropic/claude-opus-4-8"));
     }
@@ -121,7 +121,7 @@ mod test {
     #[test]
     fn professional_user_defaults_to_smart_and_has_everything() {
         let pro = access(&[PermissionId::ReadProfessionalFeatures]);
-        assert_eq!(pro.model(), "anthropic/claude-opus-4-8");
+        assert_eq!(pro.best_model(), "anthropic/claude-opus-4-8");
         assert!(pro.has_access("anthropic/claude-opus-4-8"));
         assert!(pro.has_access(FREE_MODEL));
         assert!(pro.has_access("openai/gpt-5.5"));
@@ -130,7 +130,7 @@ mod test {
     // Permission strings unrelated to the professional flag don't grant access.
     #[test]
     fn unrelated_permissions_stay_free() {
-        let acc = access(&[PermissionId::WriteHaiku, PermissionId::WriteOpus]);
+        let acc = access(&[PermissionId::WriteEmailTool, PermissionId::ReadDocxEditor]);
         assert!(!acc.professional());
         assert!(!acc.has_access("anthropic/claude-opus-4-8"));
     }

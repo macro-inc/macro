@@ -72,7 +72,7 @@ pub async fn structured_completion(
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
-    let model = model_access.model();
+    let model = model_access.best_model();
 
     let user_id = MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| {
         StructuredCompletionError {

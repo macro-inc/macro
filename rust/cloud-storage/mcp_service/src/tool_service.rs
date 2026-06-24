@@ -81,9 +81,7 @@ impl<Context> AuthenticatedToolService<Context> {
             rmcp::ErrorData::internal_error("failed to check permissions", None)
         })?;
 
-        let is_paid = permissions.contains(&PermissionId::WriteOpus.to_string())
-            || permissions.contains(&PermissionId::WriteSonnet.to_string())
-            || permissions.contains(&PermissionId::WriteHaiku.to_string());
+        let is_paid = permissions.contains(&PermissionId::WriteProAi.to_string());
 
         if !is_paid {
             return Err(rmcp::ErrorData::new(
