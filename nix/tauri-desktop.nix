@@ -480,7 +480,7 @@
             patchShebangs target/.tauri/*.sh target/.tauri/linuxdeploy-plugin-appimage.AppImage
           '';
           buildPhaseCargoCommand = ''
-            cargo tauri build --bundles appimage \
+            cargo tauri build --verbose --bundles appimage \
               --features tauri/custom-protocol \
               --config "$TAURI_CONFIG"
           '';

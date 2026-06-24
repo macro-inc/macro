@@ -61,7 +61,11 @@ jobs:
             cachix_pid=$!
             trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
           fi
-          nix build --print-build-logs ".#tauri-desktop-appimage"
+          # Force a hermetic Nix sandbox for linuxdeploy. Namespace's restored
+          # Nix daemon can otherwise run unsandboxed under /nix/var/nix/builds,
+          # where linuxdeploy sees host libraries/tools and can fail with only
+          # `failed to run linuxdeploy` in Tauri's default output.
+          nix build --option sandbox true --option sandbox-build-dir /build --print-build-logs ".#tauri-desktop-appimage"
           if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
             cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push AppImage result closure to Cachix."
           fi
