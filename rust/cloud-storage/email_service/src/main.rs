@@ -10,7 +10,6 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -40,13 +39,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
-        .await?;
-
-    // Parse our configuration from the environment.
-    let config = email_service::config::Config::from_env(cloudfront_signer_private_key)
-        .context("expected to be able to generate config")?;
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = email_service::config::Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     let auth_service_secret_key = match config.environment {
         Environment::Local => config.auth_service_secret_key.clone(),

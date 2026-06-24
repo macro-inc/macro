@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
+use email_service::config::Config;
 use email_service::pubsub::CrmMetadataResolver;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
@@ -28,13 +28,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
-        .await?;
-
-    // Parse our configuration from the environment.
-    let config = Config::from_env(cloudfront_signer_private_key)
-        .context("expected to be able to generate config")?;
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     let auth_service_secret_key = match config.environment {
         Environment::Local => config.auth_service_secret_key.clone(),

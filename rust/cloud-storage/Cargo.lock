@@ -4334,6 +4334,7 @@ dependencies = [
  "lol_html",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
