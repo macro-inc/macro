@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { SearchContacts } from '../agents/supervisor';
+import type { SearchContacts } from '../agents/types';
 
 export function createSearchContactsTool(searchContacts: SearchContacts) {
   return tool({

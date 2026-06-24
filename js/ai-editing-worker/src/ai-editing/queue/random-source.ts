@@ -5,7 +5,7 @@
  * (unbiased rejection-sampled integers); the mock replays chosen values, making a
  * full `DocumentOpAction` deterministic and assertable.
  */
-import { Random, nativeMath } from 'random-js';
+import { nativeMath, Random } from 'random-js';
 
 export type Direction = 'left' | 'right';
 export type Range = [min: number, max: number];

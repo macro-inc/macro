@@ -154,7 +154,6 @@ After:
 - `bulletList(idOrIds)` · `numberedList(idOrIds)` · `checklist(idOrIds)` · `setListType(id, kind)`
 - `check(id)` · `uncheck(id)` · `setChecked(id, bool)`
 - `indent(id, by?)` · `outdent(id, by?)` · `setIndent(id, level)`
-- `sortList(id, order?)`
 - `insertListItemAfter(liId, text, list?)` · `insertListItemBefore(liId, text, list?)` · `removeListItem(liId)`
 
 To add or remove items in an *existing* list, pass the id of a sibling `<li>` — never the `<ul>`/`<ol>` id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind. The insert methods return a handle to the new `<li>`.
@@ -165,7 +164,6 @@ editor.check('b1');
 editor.indent('b2');
 editor.outdent('b2');
 editor.setChecked('b2', false);
-editor.sortList('list1', 'asc');
 const li = editor.insertListItemAfter('li1', 'second item');
 editor.insertListItemAfter(li, 'nested', 'number');
 editor.removeListItem('li2');
@@ -223,7 +221,7 @@ After:
 - `insertBlockAfter(id, spec)` · `insertBlockBefore(id, spec)`
 - `appendParagraph(text?)` · `prependParagraph(text?)` · `appendBlock(spec)` · `prependBlock(spec)`
 - `move(id, position)` where `position` is `{ after: id }`, `{ before: id }`, `{ appendToRoot: true }`, or `{ prependToRoot: true }`
-- `remove(id)` · `removeMany(ids)` · `merge(ids, separator?)` · `split(id, atText)`
+- `remove(id)` · `removeMany(ids)` · `merge(ids, separator?)`
 
 ```ts
 editor.insertHeadingBefore('b1', 1, 'Title');

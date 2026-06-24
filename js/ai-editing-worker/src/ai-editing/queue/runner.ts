@@ -1,13 +1,13 @@
 import { match } from 'ts-pattern';
-import type { DocumentOp, NodeRef, NodeSpec } from '../editor/ops';
-import type { DocWriter, DocReader } from '../doc/interfaces';
-import type { RandomSource } from './random-source';
+import type { DocReader, DocWriter } from '../doc/interfaces';
+import type { DocumentOp, Edit, NodeRef } from '../editor/ops';
 import { animate } from './animators';
-import type { Awareness, DocumentOpStep, Edit } from './types';
+import type { RandomSource } from './random-source';
+import type { Awareness, DocumentOpStep } from './types';
 import { DEFAULT_QUEUE_PARAMS, type DocumentOpQueueParams } from './types';
 
 export type OpResult =
-  | { ok: true; op: DocumentOp; summary: string }
+  | { ok: true; op: DocumentOp }
   | { ok: false; op: DocumentOp; error: string };
 
 const defaultSleep = (ms: number) =>
@@ -56,10 +56,10 @@ export async function runQueue(args: RunQueueArgs): Promise<OpResult[]> {
           .with({ kind: 'awareness' }, ({ x }) =>
             awarenessSource.apply({ ...x, node: resolveNode(x.node) })
           )
-          .with({ kind: 'edit' }, ({ y }) => applyEdit(docWriter, y))
+          .with({ kind: 'edit' }, ({ y }) => docWriter.apply(y))
           .exhaustive();
       }
-      results.push({ ok: true, op, summary: describe(op) });
+      results.push({ ok: true, op });
     } catch (e) {
       results.push({ ok: false, op, error: toMessage(e) });
     }
@@ -68,257 +68,201 @@ export async function runQueue(args: RunQueueArgs): Promise<OpResult[]> {
   return results;
 }
 
-/** Apply a DocumentOp directly to a DocWriter — no animation, pauses, or cursor movement. */
+/** Apply a DocumentOp directly to a DocWriter with no animation, pauses, or cursor movement. */
 export function applyOp(w: DocWriter, op: DocumentOp): void {
-  match(op)
-    .with({ kind: 'formatText' }, (o) =>
-      w.formatText(o.id, o.match, o.format, o.on, o.scope)
-    )
-    .with({ kind: 'markText' }, (o) => w.markText(o.id, o.match, o.on, o.scope))
-    .with({ kind: 'linkText' }, (o) =>
-      w.linkText(o.id, o.match, o.url, o.scope)
-    )
-    .with({ kind: 'replaceText' }, (o) =>
-      w.replaceText(o.id, o.find, o.to, o.scope)
-    )
-    .with({ kind: 'clearFormat' }, (o) => w.clearFormat(o.id, o.match, o.scope))
-    .with({ kind: 'formatNode' }, (o) => w.formatNode(o.textId, o.format, o.on))
-    .with({ kind: 'clearNodeFormat' }, (o) => w.clearNodeFormat(o.textId))
-    .with({ kind: 'setText' }, (o) => w.setText(o.id, o.text))
-    .with({ kind: 'setEquation' }, (o) => w.setEquation(o.id, o.tex))
-    .with({ kind: 'appendText' }, (o) => w.appendText(o.id, o.text))
-    .with({ kind: 'prependText' }, (o) => w.prependText(o.id, o.text))
-    .with({ kind: 'setBlockType' }, (o) =>
-      w.setBlockType(o.id, o.block, { level: o.level, language: o.language })
-    )
-    .with({ kind: 'setListType' }, (o) => w.setListType(o.ids, o.list))
-    .with({ kind: 'setChecked' }, (o) => w.setChecked(o.id, o.checked))
-    .with({ kind: 'setIndent' }, (o) => w.setIndent(o.id, o.indent))
-    .with({ kind: 'sortList' }, (o) => w.sortList(o.id, o.order))
-    .with({ kind: 'insertBlock' }, (o) => w.insertNode(o.ref, o.spec, o.at))
-    .with({ kind: 'insertInline' }, (o) =>
-      w.insertInline(o.ref, o.id, o.at, o.spec)
-    )
-    .with({ kind: 'moveBlock' }, (o) => w.moveNode(o.id, o.at))
-    .with({ kind: 'removeBlock' }, (o) => w.removeNode(o.id))
-    .with({ kind: 'mergeBlocks' }, (o) => w.mergeBlocks(o.ids, o.separator))
-    .with({ kind: 'splitBlock' }, (o) => w.splitBlock(o.id, o.atText))
-    .with({ kind: 'insertListItemAfter' }, (o) =>
-      w.insertListItemAfter(o.ref, o.id, o.text, o.list)
-    )
-    .with({ kind: 'insertListItemBefore' }, (o) =>
-      w.insertListItemBefore(o.ref, o.id, o.text, o.list)
-    )
-    .with({ kind: 'removeListItem' }, (o) => w.removeListItem(o.id))
-    .with({ kind: 'setCell' }, (o) =>
-      w.setCell(o.table, o.row, o.col, o.content)
-    )
-    .with({ kind: 'addRow' }, (o) => w.addRow(o.table, o.at))
-    .with({ kind: 'addColumn' }, (o) => w.addColumn(o.table, o.at))
-    .with({ kind: 'removeRow' }, (o) => w.removeRow(o.table, o.row))
-    .with({ kind: 'removeColumn' }, (o) => w.removeColumn(o.table, o.col))
-    .with({ kind: 'setImageAlt' }, (o) => w.setImageAlt(o.id, o.alt))
-    .with({ kind: 'setImageUrl' }, (o) => w.setImageUrl(o.id, o.url))
-    .with({ kind: 'setVideoUrl' }, (o) => w.setVideoUrl(o.id, o.url))
-    .with({ kind: 'setVideoControls' }, (o) =>
-      w.setVideoControls(o.id, o.controls)
-    )
-    .with({ kind: 'setDate' }, (o) => w.setDate(o.id, o.date, o.displayFormat))
+  const edit: Edit = match(op)
+    .with({ kind: 'formatText' }, (o) => ({
+      fn: 'formatText' as const,
+      node: o.id,
+      match: o.match,
+      format: o.format,
+      on: o.on,
+      scope: o.scope,
+    }))
+    .with({ kind: 'markText' }, (o) => ({
+      fn: 'markText' as const,
+      node: o.id,
+      match: o.match,
+      on: o.on,
+      scope: o.scope,
+    }))
+    .with({ kind: 'linkText' }, (o) => ({
+      fn: 'linkText' as const,
+      node: o.id,
+      match: o.match,
+      url: o.url,
+      scope: o.scope,
+    }))
+    .with({ kind: 'replaceText' }, (o) => ({
+      fn: 'replaceText' as const,
+      node: o.id,
+      find: o.find,
+      to: o.to,
+      scope: o.scope,
+    }))
+    .with({ kind: 'clearFormat' }, (o) => ({
+      fn: 'clearFormat' as const,
+      node: o.id,
+      match: o.match,
+      scope: o.scope,
+    }))
+    .with({ kind: 'formatNode' }, (o) => ({
+      fn: 'formatNode' as const,
+      node: o.textId,
+      format: o.format,
+      on: o.on,
+    }))
+    .with({ kind: 'clearNodeFormat' }, (o) => ({
+      fn: 'clearNodeFormat' as const,
+      node: o.textId,
+    }))
+    .with({ kind: 'setText' }, (o) => ({
+      fn: 'setText' as const,
+      node: o.id,
+      text: o.text,
+    }))
+    .with({ kind: 'setEquation' }, (o) => ({
+      fn: 'setEquation' as const,
+      node: o.id,
+      tex: o.tex,
+    }))
+    .with({ kind: 'appendText' }, (o) => ({
+      fn: 'appendText' as const,
+      node: o.id,
+      text: o.text,
+    }))
+    .with({ kind: 'prependText' }, (o) => ({
+      fn: 'prependText' as const,
+      node: o.id,
+      text: o.text,
+    }))
+    .with({ kind: 'setBlockType' }, (o) => ({
+      fn: 'setBlockType' as const,
+      node: o.id,
+      block: o.block,
+      level: o.level,
+      language: o.language,
+    }))
+    .with({ kind: 'setListType' }, (o) => ({
+      fn: 'setListType' as const,
+      nodes: o.ids,
+      list: o.list,
+    }))
+    .with({ kind: 'setChecked' }, (o) => ({
+      fn: 'setChecked' as const,
+      node: o.id,
+      checked: o.checked,
+    }))
+    .with({ kind: 'setIndent' }, (o) => ({
+      fn: 'setIndent' as const,
+      node: o.id,
+      indent: o.indent,
+    }))
+    .with({ kind: 'insertBlock' }, (o) => ({
+      fn: 'insertNode' as const,
+      ref: o.ref,
+      spec: o.spec,
+      at: o.at,
+    }))
+    .with({ kind: 'insertInline' }, (o) => ({
+      fn: 'insertInline' as const,
+      ref: o.ref,
+      node: o.id,
+      at: o.at,
+      spec: o.spec,
+    }))
+    .with({ kind: 'moveBlock' }, (o) => ({
+      fn: 'moveNode' as const,
+      node: o.id,
+      at: o.at,
+    }))
+    .with({ kind: 'removeBlock' }, (o) => ({
+      fn: 'removeNode' as const,
+      node: o.id,
+    }))
+    .with({ kind: 'mergeBlocks' }, (o) => ({
+      fn: 'mergeBlocks' as const,
+      nodes: o.ids,
+      separator: o.separator,
+    }))
+    .with({ kind: 'insertListItemAfter' }, (o) => ({
+      fn: 'insertListItemAfter' as const,
+      ref: o.ref,
+      node: o.id,
+      text: o.text,
+      list: o.list,
+    }))
+    .with({ kind: 'insertListItemBefore' }, (o) => ({
+      fn: 'insertListItemBefore' as const,
+      ref: o.ref,
+      node: o.id,
+      text: o.text,
+      list: o.list,
+    }))
+    .with({ kind: 'removeListItem' }, (o) => ({
+      fn: 'removeListItem' as const,
+      node: o.id,
+    }))
+    .with({ kind: 'setCell' }, (o) => ({
+      fn: 'setCell' as const,
+      table: o.table,
+      row: o.row,
+      col: o.col,
+      text: o.content,
+    }))
+    .with({ kind: 'addRow' }, (o) => ({
+      fn: 'addRow' as const,
+      table: o.table,
+      at: o.at,
+    }))
+    .with({ kind: 'addColumn' }, (o) => ({
+      fn: 'addColumn' as const,
+      table: o.table,
+      at: o.at,
+    }))
+    .with({ kind: 'removeRow' }, (o) => ({
+      fn: 'removeRow' as const,
+      table: o.table,
+      row: o.row,
+    }))
+    .with({ kind: 'removeColumn' }, (o) => ({
+      fn: 'removeColumn' as const,
+      table: o.table,
+      col: o.col,
+    }))
+    .with({ kind: 'setImageAlt' }, (o) => ({
+      fn: 'setImageAlt' as const,
+      node: o.id,
+      alt: o.alt,
+    }))
+    .with({ kind: 'setImageUrl' }, (o) => ({
+      fn: 'setImageUrl' as const,
+      node: o.id,
+      url: o.url,
+    }))
+    .with({ kind: 'setVideoUrl' }, (o) => ({
+      fn: 'setVideoUrl' as const,
+      node: o.id,
+      url: o.url,
+    }))
+    .with({ kind: 'setVideoControls' }, (o) => ({
+      fn: 'setVideoControls' as const,
+      node: o.id,
+      controls: o.controls,
+    }))
+    .with({ kind: 'setDate' }, (o) => ({
+      fn: 'setDate' as const,
+      node: o.id,
+      date: o.date,
+      displayFormat: o.displayFormat,
+    }))
     .exhaustive();
-}
-
-/** Map a structured `Edit` (Y) onto its `DocWriter` method. */
-export function applyEdit(w: DocWriter, y: Edit): void {
-  match(y)
-    .with({ fn: 'insertText' }, (e) => w.insertText(e.node, e.at, e.text))
-    .with({ fn: 'removeText' }, (e) => w.removeText(e.node, e.at, e.len))
-    .with({ fn: 'setText' }, (e) => w.setText(e.node, e.text))
-    .with({ fn: 'setEquation' }, (e) => w.setEquation(e.node, e.tex))
-    .with({ fn: 'appendText' }, (e) => w.appendText(e.node, e.text))
-    .with({ fn: 'prependText' }, (e) => w.prependText(e.node, e.text))
-    .with({ fn: 'replaceText' }, (e) =>
-      w.replaceText(e.node, e.find, e.to, e.scope)
-    )
-    .with({ fn: 'formatText' }, (e) =>
-      w.formatText(e.node, e.match, e.format, e.on, e.scope)
-    )
-    .with({ fn: 'clearFormat' }, (e) => w.clearFormat(e.node, e.match, e.scope))
-    .with({ fn: 'markText' }, (e) => w.markText(e.node, e.match, e.on, e.scope))
-    .with({ fn: 'linkText' }, (e) =>
-      w.linkText(e.node, e.match, e.url, e.scope)
-    )
-    .with({ fn: 'formatNode' }, (e) => w.formatNode(e.node, e.format, e.on))
-    .with({ fn: 'clearNodeFormat' }, (e) => w.clearNodeFormat(e.node))
-    .with({ fn: 'setBlockType' }, (e) =>
-      w.setBlockType(e.node, e.block, { level: e.level, language: e.language })
-    )
-    .with({ fn: 'setListType' }, (e) => w.setListType(e.nodes, e.list))
-    .with({ fn: 'appendListItem' }, (e) =>
-      w.appendListItem(e.ref, e.node, e.checked)
-    )
-    .with({ fn: 'setChecked' }, (e) => w.setChecked(e.node, e.checked))
-    .with({ fn: 'setIndent' }, (e) => w.setIndent(e.node, e.indent))
-    .with({ fn: 'sortList' }, (e) => w.sortList(e.node, e.order))
-    .with({ fn: 'insertNode' }, (e) => w.insertNode(e.ref, e.spec, e.at))
-    .with({ fn: 'insertInline' }, (e) =>
-      w.insertInline(e.ref, e.node, e.at, e.spec)
-    )
-    .with({ fn: 'moveNode' }, (e) => w.moveNode(e.node, e.at))
-    .with({ fn: 'removeNode' }, (e) => w.removeNode(e.node))
-    .with({ fn: 'mergeBlocks' }, (e) => w.mergeBlocks(e.nodes, e.separator))
-    .with({ fn: 'splitBlock' }, (e) => w.splitBlock(e.node, e.atText))
-    .with({ fn: 'insertListItemAfter' }, (e) =>
-      w.insertListItemAfter(e.ref, e.node, e.text, e.list)
-    )
-    .with({ fn: 'insertListItemBefore' }, (e) =>
-      w.insertListItemBefore(e.ref, e.node, e.text, e.list)
-    )
-    .with({ fn: 'removeListItem' }, (e) => w.removeListItem(e.node))
-    .with({ fn: 'setCell' }, (e) => w.setCell(e.table, e.row, e.col, e.text))
-    .with({ fn: 'addRow' }, (e) => w.addRow(e.table, e.at))
-    .with({ fn: 'addColumn' }, (e) => w.addColumn(e.table, e.at))
-    .with({ fn: 'removeRow' }, (e) => w.removeRow(e.table, e.row))
-    .with({ fn: 'removeColumn' }, (e) => w.removeColumn(e.table, e.col))
-    .with({ fn: 'setImageAlt' }, (e) => w.setImageAlt(e.node, e.alt))
-    .with({ fn: 'setImageUrl' }, (e) => w.setImageUrl(e.node, e.url))
-    .with({ fn: 'setVideoUrl' }, (e) => w.setVideoUrl(e.node, e.url))
-    .with({ fn: 'setVideoControls' }, (e) =>
-      w.setVideoControls(e.node, e.controls)
-    )
-    .with({ fn: 'setDate' }, (e) => w.setDate(e.node, e.date, e.displayFormat))
-    .exhaustive();
-}
-
-/** A concise, semantic summary line for the model — the replacement for a diff. */
-export function describe(op: DocumentOp): string {
-  return match(op)
-    .returnType<string>()
-    .with(
-      { kind: 'formatText' },
-      (o) => `${o.on ? '' : 'un'}${o.format} "${o.match}" in {${o.id}}`
-    )
-    .with({ kind: 'clearFormat' }, (o) =>
-      o.match
-        ? `cleared formatting on "${o.match}" in {${o.id}}`
-        : `cleared all formatting in {${o.id}}`
-    )
-    .with(
-      { kind: 'formatNode' },
-      (o) => `${o.on ? '' : 'un'}${o.format} {${o.textId}}`
-    )
-    .with(
-      { kind: 'clearNodeFormat' },
-      (o) => `cleared formatting on {${o.textId}}`
-    )
-    .with(
-      { kind: 'markText' },
-      (o) =>
-        `${o.on ? 'highlighted' : 'unhighlighted'} "${o.match}" in {${o.id}}`
-    )
-    .with({ kind: 'linkText' }, (o) =>
-      o.url
-        ? `linked "${o.match}" → ${o.url} in {${o.id}}`
-        : `unlinked "${o.match}" in {${o.id}}`
-    )
-    .with(
-      { kind: 'setText' },
-      (o) => `set {${o.id}} text to "${truncate(o.text)}"`
-    )
-    .with(
-      { kind: 'setEquation' },
-      (o) => `set {${o.id}} equation to "${truncate(o.tex)}"`
-    )
-    .with(
-      { kind: 'replaceText' },
-      (o) => `replaced "${o.find}" → "${o.to}" in {${o.id}}`
-    )
-    .with(
-      { kind: 'appendText' },
-      (o) => `appended "${truncate(o.text)}" to {${o.id}}`
-    )
-    .with(
-      { kind: 'prependText' },
-      (o) => `prepended "${truncate(o.text)}" to {${o.id}}`
-    )
-    .with(
-      { kind: 'setBlockType' },
-      (o) => `{${o.id}} → ${o.block}${o.level ? ` h${o.level}` : ''}`
-    )
-    .with(
-      { kind: 'setListType' },
-      (o) => `{${o.ids.join(', ')}} → ${o.list} list`
-    )
-    .with(
-      { kind: 'setChecked' },
-      (o) => `{${o.id}} ${o.checked ? 'checked' : 'unchecked'}`
-    )
-    .with({ kind: 'setIndent' }, (o) => `{${o.id}} indent ${o.indent}`)
-    .with({ kind: 'sortList' }, (o) => `sorted list {${o.id}} ${o.order}`)
-    .with(
-      { kind: 'insertBlock' },
-      (o) => `inserted ${specLabel(o.spec)} (${o.ref})`
-    )
-    .with(
-      { kind: 'insertInline' },
-      (o) => `inserted ${specLabel(o.spec)} in {${o.id}} @${o.at}`
-    )
-    .with({ kind: 'moveBlock' }, (o) => `moved {${o.id}}`)
-    .with({ kind: 'removeBlock' }, (o) => `removed {${o.id}}`)
-    .with({ kind: 'mergeBlocks' }, (o) => `merged {${o.ids.join(', ')}}`)
-    .with({ kind: 'splitBlock' }, (o) => `split {${o.id}} at "${o.atText}"`)
-    .with(
-      { kind: 'insertListItemAfter' },
-      (o) =>
-        `inserted ${o.list} list item after {${o.id}}: "${truncate(o.text)}"`
-    )
-    .with(
-      { kind: 'insertListItemBefore' },
-      (o) =>
-        `inserted ${o.list} list item before {${o.id}}: "${truncate(o.text)}"`
-    )
-    .with({ kind: 'removeListItem' }, (o) => `removed list item {${o.id}}`)
-    .with(
-      { kind: 'setCell' },
-      (o) => `set cell [${o.row}, ${o.col}] of {${o.table}}`
-    )
-    .with({ kind: 'addRow' }, (o) => `added row to {${o.table}}`)
-    .with({ kind: 'addColumn' }, (o) => `added column to {${o.table}}`)
-    .with({ kind: 'removeRow' }, (o) => `removed row ${o.row} of {${o.table}}`)
-    .with(
-      { kind: 'removeColumn' },
-      (o) => `removed column ${o.col} of {${o.table}}`
-    )
-    .with(
-      { kind: 'setImageAlt' },
-      (o) => `set {${o.id}} image alt to "${truncate(o.alt)}"`
-    )
-    .with(
-      { kind: 'setImageUrl' },
-      (o) => `set {${o.id}} image url to "${truncate(o.url)}"`
-    )
-    .with(
-      { kind: 'setVideoUrl' },
-      (o) => `set {${o.id}} video url to "${truncate(o.url)}"`
-    )
-    .with(
-      { kind: 'setVideoControls' },
-      (o) => `set {${o.id}} video controls ${o.controls}`
-    )
-    .with({ kind: 'setDate' }, (o) => `set {${o.id}} date to "${o.date}"`)
-    .exhaustive();
+  w.apply(edit);
 }
 
 function toMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   throw e;
-}
-
-function specLabel(spec: NodeSpec): string {
-  return 'block' in spec ? spec.block : `${spec.inline}`;
-}
-
-function truncate(s: string, n = 40): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
 /** Render only failures; successful ops intentionally produce no detail. */

@@ -23,7 +23,7 @@ editor.bold('b5', 'Bluejay');
   ```
 - Pass **plain text only** — never XML/markdown syntax. `editor.setText(id, '# x')`
   inserts the literal characters `# x`, it does not make a heading. We do not support or understand Markdown or XML in our editor.
-- **`setText(id, text)` fully replaces a node's content** — use it whenever you want to overwrite a text node entirely. `replace(id, find, to)` is only for partial substitutions where `find` is a known substring.
+- **`setText(id, text)` fully replaces a node's content and clears all inline formatting** — use it whenever you want to overwrite a text node entirely with plain text. `replace(id, find, to)` is only for partial substitutions where `find` is a known substring and you want to preserve surrounding formatting.
 - **For a code block, always rewrite its whole body with `setText` — never use `replace` on a code block.**
 - When the task provides a **`snippets` object**, use `snippets.KEY` directly rather than re-embedding its value as a string literal — `editor.setText(id, snippets.code)`. This avoids escaping errors on special characters.
 - If a call references an id that doesn't exist, you get an error back naming it —

@@ -9,6 +9,7 @@
  * `direction`), so a fixed mock makes the whole action reproducible.
  */
 import { match } from 'ts-pattern';
+import type { DocReader } from '../doc/interfaces';
 import type {
   DocumentOp,
   NodeRef,
@@ -17,7 +18,6 @@ import type {
   Position,
   Scope,
 } from '../editor/ops';
-import type { DocReader } from '../doc/interfaces';
 import type { RandomSource } from './random-source';
 import type { DocumentOpStep, Edit, RandomRanges } from './types';
 
@@ -392,10 +392,6 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         ...focus(o.id, ctx),
         edit({ fn: 'setIndent', node: o.id, indent: o.indent }),
       ])
-      .with({ kind: 'sortList' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'sortList', node: o.id, order: o.order }),
-      ])
       // structure
       .with({ kind: 'insertBlock' }, (o) => animateInsertBlock(o, ctx))
       // caret to the offset, brief pause, the inline node appears.
@@ -443,7 +439,6 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         );
         return steps;
       })
-      // put the caret at the split point before cleaving the block.
       .with({ kind: 'insertListItemAfter' }, (o) => [
         ...insertLead({ after: o.id }, ctx),
         edit({
@@ -476,22 +471,6 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         },
         edit({ fn: 'removeListItem', node: o.id }),
       ])
-      .with({ kind: 'splitBlock' }, (o) => {
-        const at = ctx.docReader.locate(o.id, o.atText, {})[0];
-        const lead = at
-          ? [
-              cursor(at.node, at.start),
-              {
-                kind: 'pause',
-                ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs),
-              } as DocumentOpStep,
-            ]
-          : focus(o.id, ctx);
-        return [
-          ...lead,
-          edit({ fn: 'splitBlock', node: o.id, atText: o.atText }),
-        ];
-      })
       // tables
       .with({ kind: 'setCell' }, (o) =>
         retype(ctx.docReader.cellNode(o.table, o.row, o.col), o.content, ctx)

@@ -1,38 +1,38 @@
-import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import {
   $isListItemNode,
   $isListNode,
   type ListItemNode,
   type ListNode,
 } from '@lexical/list';
+import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import { serializeWithIds } from '../utils';
+import { serializeWithXml } from '../utils';
+import { edit, read, setup, topLevelIds } from './_test-helpers';
 import {
   $indent,
   $outdent,
   $setChecked,
   $setListType,
-  $sortList,
   $toggleList,
 } from './lists';
 import { $allById, $blockById, $byId } from './locate';
 import { createEditingSession, loadMarkdown, type Session } from './session';
-import { edit, read, setup, topLevelIds } from './_test-helpers';
 
-// ============================================================================
 describe('deferred: lists', () => {
   it('$toggleList creates one list block (fresh id); items get fresh ids', () => {
-    const { s, ids } = setup('todo a\n\ntodo b');
-    const list = edit(s, () => $toggleList($allById(s, ids), 'check'));
+    const { session, ids } = setup('todo a\n\ntodo b');
+    const list = edit(session, () =>
+      $toggleList($allById(session, ids), 'check')
+    );
     // single top-level block now
-    const top = topLevelIds(s);
+    const top = topLevelIds(session);
     expect(top).toHaveLength(1);
-    const listId = read(s, () => $getId(list));
+    const listId = read(session, () => $getId(list));
     expect(listId).toBe(top[0]);
     expect(ids).not.toContain(listId); // fresh list id
 
-    const items = read(s, () => {
+    const items = read(session, () => {
       const ln = $getRoot().getFirstChild() as ListNode;
       expect($isListNode(ln)).toBe(true);
       return (ln.getChildren() as ListItemNode[]).map((it) => ({
@@ -51,21 +51,24 @@ describe('deferred: lists', () => {
       expect(iid).toBeTruthy();
       expect(ids).not.toContain(iid);
     }
-    // serialized as a checklist, each item carrying its own id
-    expect(serializeWithIds(s)).toBe(
-      `1 | - [ ] todo a {${itemIds[0]}|listitem}\n2 | - [ ] todo b {${itemIds[1]}|listitem}`
-    );
+    // serialized as a checklist, each item carrying its own id in XML
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<ul');
+    expect(xml).toContain(`id="${itemIds[0]}"`);
+    expect(xml).toContain(`id="${itemIds[1]}"`);
+    expect(xml).toContain('todo a');
+    expect(xml).toContain('todo b');
   });
 
   it('$setChecked checks a list item', () => {
-    const { s, ids } = setup('todo a\n\ntodo b');
-    edit(s, () => $toggleList($allById(s, ids), 'check'));
-    const firstItemId = read(s, () => {
+    const { session, ids } = setup('todo a\n\ntodo b');
+    edit(session, () => $toggleList($allById(session, ids), 'check'));
+    const firstItemId = read(session, () => {
       const ln = $getRoot().getFirstChild() as ListNode;
       return $getId(ln.getFirstChild());
     });
-    edit(s, () => $setChecked($byId(s, firstItemId!), true));
-    const checked = read(s, () => {
+    edit(session, () => $setChecked($byId(session, firstItemId!), true));
+    const checked = read(session, () => {
       const ln = $getRoot().getFirstChild() as ListNode;
       return (ln.getChildren() as ListItemNode[]).map((it) => it.getChecked());
     });
@@ -73,57 +76,60 @@ describe('deferred: lists', () => {
   });
 
   it('$setChecked throws EditError on a non-list-item', () => {
-    const { s, ids } = setup('plain paragraph');
-    edit(s, () => {
-      expect(() => $setChecked($blockById(s, ids[0]), true)).toThrowError(
+    const { session, ids } = setup('plain paragraph');
+    edit(session, () => {
+      expect(() => $setChecked($blockById(session, ids[0]), true)).toThrowError(
         Error
       );
     });
   });
 
   it('$indent nests a list item one level deeper (assert via getIndent)', () => {
-    const { s, ids } = setup('- parent\n- child');
-    const childId = read(s, () => {
+    const { session } = setup('- parent\n- child');
+    const childId = read(session, () => {
       const ln = $getRoot().getFirstChild() as ListNode;
       return $getId(ln.getChildren()[1]);
     });
-    edit(s, () => $indent($byId(s, childId!)));
-    const indent = read(s, () =>
-      ($byId(s, childId!) as ListItemNode).getIndent()
+    edit(session, () => $indent($byId(session, childId!)));
+    const indent = read(session, () =>
+      ($byId(session, childId!) as ListItemNode).getIndent()
     );
     expect(indent).toBe(1);
   });
 
   it('$outdent un-nests a list item one level', () => {
-    const { s, ids } = setup('- parent\n- child');
-    const childId = read(s, () => {
+    const { session } = setup('- parent\n- child');
+    const childId = read(session, () => {
       const ln = $getRoot().getFirstChild() as ListNode;
       return $getId(ln.getChildren()[1]);
     });
-    edit(s, () => $indent($byId(s, childId!)));
+    edit(session, () => $indent($byId(session, childId!)));
     expect(
-      read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())
+      read(session, () =>
+        ($byId(session, childId!) as ListItemNode).getIndent()
+      )
     ).toBe(1);
-    edit(s, () => $outdent($byId(s, childId!)));
+    edit(session, () => $outdent($byId(session, childId!)));
     expect(
-      read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())
+      read(session, () =>
+        ($byId(session, childId!) as ListItemNode).getIndent()
+      )
     ).toBe(0);
   });
 
   it('$indent / $outdent throw EditError on a non-list-item', () => {
-    const { s, ids } = setup('plain paragraph');
-    edit(s, () => {
-      expect(() => $indent($blockById(s, ids[0]))).toThrowError(Error);
-      expect(() => $outdent($blockById(s, ids[0]))).toThrowError(Error);
+    const { session, ids } = setup('plain paragraph');
+    edit(session, () => {
+      expect(() => $indent($blockById(session, ids[0]))).toThrowError(Error);
+      expect(() => $outdent($blockById(session, ids[0]))).toThrowError(Error);
     });
   });
 });
 
-// ============================================================================
 describe('$setListType / $toggleList separation', () => {
   // find the deepest list item with the given text
-  const deepItemId = (s: Session, text: string) =>
-    read(s, () => {
+  const deepItemId = (session: Session, text: string) =>
+    read(session, () => {
       let target: ListItemNode | undefined;
       const walk = (n: LexicalNode) => {
         if ($isListItemNode(n) && n.getTextContent() === text) target = n;
@@ -134,12 +140,12 @@ describe('$setListType / $toggleList separation', () => {
     });
 
   it('$setListType retypes a NESTED list in place, preserving indent + id', () => {
-    const s = createEditingSession();
-    loadMarkdown(s, '- deeply\n  - nested\n    - list\n      - items');
-    const itemId = deepItemId(s, 'items');
-    edit(s, () => $setListType($byId(s, itemId!), 'number'));
-    read(s, () => {
-      const item = $byId(s, itemId!) as ListItemNode;
+    const session = createEditingSession();
+    loadMarkdown(session, '- deeply\n  - nested\n    - list\n      - items');
+    const itemId = deepItemId(session, 'items');
+    edit(session, () => $setListType($byId(session, itemId!), 'number'));
+    read(session, () => {
+      const item = $byId(session, itemId!) as ListItemNode;
       expect(item.getType()).toBe('listitem');
       expect(item.getIndent()).toBe(3); // still deeply nested, not hoisted
       expect($isListNode(item.getParent())).toBe(true);
@@ -149,46 +155,14 @@ describe('$setListType / $toggleList separation', () => {
   });
 
   it('$toggleList refuses an existing list item (points to $setListType)', () => {
-    const { s } = setup('- a\n- b');
-    const itemId = read(s, () =>
+    const { session } = setup('- a\n- b');
+    const itemId = read(session, () =>
       $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0])
     );
-    edit(s, () => {
-      expect(() => $toggleList([$byId(s, itemId!)], 'number')).toThrowError(
-        Error
-      );
-    });
-  });
-});
-
-// ============================================================================
-describe('$sortList', () => {
-  const itemTexts = (s: Session) =>
-    read(s, () =>
-      ($getRoot().getFirstChild() as ListNode)
-        .getChildren()
-        .map((i) => i.getTextContent())
-    );
-
-  it('sorts the enclosing list ascending (resolving from any item)', () => {
-    const { s } = setup('- banana\n- apple\n- cherry');
-    const itemId = read(s, () =>
-      $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0])
-    );
-    edit(s, () => $sortList($byId(s, itemId!)));
-    expect(itemTexts(s)).toEqual(['apple', 'banana', 'cherry']);
-  });
-
-  it('supports descending order and accepts the list node directly', () => {
-    const { s } = setup('- apple\n- banana\n- cherry');
-    edit(s, () => $sortList($getRoot().getFirstChild()!, { order: 'desc' }));
-    expect(itemTexts(s)).toEqual(['cherry', 'banana', 'apple']);
-  });
-
-  it('throws EditError when there is no enclosing list', () => {
-    const { s, ids } = setup('just a paragraph');
-    edit(s, () => {
-      expect(() => $sortList($blockById(s, ids[0]))).toThrowError(Error);
+    edit(session, () => {
+      expect(() =>
+        $toggleList([$byId(session, itemId!)], 'number')
+      ).toThrowError(Error);
     });
   });
 });

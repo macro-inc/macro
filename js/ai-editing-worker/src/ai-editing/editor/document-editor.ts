@@ -68,7 +68,7 @@ export class DocumentEditor {
     match: string,
     format: Format,
     on = true,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     this.requireMatch(match);
@@ -119,7 +119,7 @@ export class DocumentEditor {
   public clearFormat(
     id: NodeId,
     match?: string,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     if (match !== undefined) this.requireMatch(match);
@@ -132,7 +132,7 @@ export class DocumentEditor {
   public highlight(
     id: NodeId,
     match: string,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     this.requireMatch(match);
@@ -141,7 +141,7 @@ export class DocumentEditor {
   public unhighlight(
     id: NodeId,
     match: string,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     this.requireMatch(match);
@@ -152,13 +152,17 @@ export class DocumentEditor {
     id: NodeId,
     match: string,
     url: string,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'linkText', id, match, url, scope });
   }
-  public unlink(id: NodeId, match: string, scope: Scope = { all: true }): this {
+  public unlink(
+    id: NodeId,
+    match: string,
+    scope: Scope = { kind: 'all' }
+  ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'linkText', id, match, url: null, scope });
@@ -205,7 +209,7 @@ export class DocumentEditor {
     id: NodeId,
     find: string,
     to: string,
-    scope: Scope = { all: true }
+    scope: Scope = { kind: 'all' }
   ): this {
     this.requireId(id);
     if (find.length === 0) throw new EditError('find string is empty');
@@ -303,11 +307,6 @@ export class DocumentEditor {
       throw new EditError(`indent level must be >= 0, got ${level}`);
     return this.push({ kind: 'setIndent', id, indent: level });
   }
-  public sortList(id: NodeId, order: 'asc' | 'desc' = 'asc'): this {
-    this.requireId(id);
-    return this.push({ kind: 'sortList', id, order });
-  }
-
   public insertListItemAfter(
     id: NodeId,
     text: string,
@@ -422,12 +421,6 @@ export class DocumentEditor {
     for (const id of ids) this.requireId(id);
     return this.push({ kind: 'mergeBlocks', ids, separator });
   }
-  public split(id: NodeId, atText: string): this {
-    this.requireId(id);
-    this.requireMatch(atText);
-    return this.push({ kind: 'splitBlock', id, atText });
-  }
-
   public insertTableAfter(id: NodeId, rows: string[][]): Ref {
     return this.buildTable(rows, { after: id });
   }

@@ -15,13 +15,23 @@
 		"moduleResolution": "Bundler",
 		"module": "es2022",
 		"noEmit": true,
-		"lib": ["es2022", "dom"],
-		"types": ["./worker-configuration.d.ts", "@types/node", "bun-types"],
+		"lib": [
+			"es2022",
+			"dom"
+		],
+		"types": [
+			"./worker-configuration.d.ts",
+			"@types/node",
+			"bun-types"
+		],
 		"baseUrl": ".",
 		"paths": {
-			"@loro-mirror/*": ["../loro-mirror/*"],
-			"@core/*": ["../app/packages/core/*"],
-			"@observability/logger": ["./src/logger-shim"]
+			"@loro-mirror/*": [
+				"../loro-mirror/*"
+			],
+			"@core/*": [
+				"../app/packages/core/*"
+			]
 		}
 	},
 	"exclude": [
@@ -30,5 +40,10 @@
 		"../lexical-core/transformers",
 		"../loro-mirror"
 	],
-	"include": ["src", "scripts", "worker-configuration.d.ts", "prompts.d.ts"]
+	"include": [
+		"src",
+		"scripts",
+		"worker-configuration.d.ts",
+		"prompts.d.ts"
+	]
 }

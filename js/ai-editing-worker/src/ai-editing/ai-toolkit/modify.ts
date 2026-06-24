@@ -58,16 +58,16 @@ function $asListItem(node: LexicalNode, id: string) {
  * retyped) primary node.
  */
 export function $modifyNode(
-  s: Session,
+  session: Session,
   target: string | LexicalNode,
   change: NodeChange
 ): LexicalNode {
-  const node = typeof target === 'string' ? $byId(s, target) : target;
+  const node = typeof target === 'string' ? $byId(session, target) : target;
   const label = typeof target === 'string' ? target : node.getType();
   return match(change)
     .returnType<LexicalNode>()
     .with({ op: 'blockType' }, (c) =>
-      $setBlockType(s, $asBlock(node, label), () => $blockNode(c.block))
+      $setBlockType(session, $asBlock(node, label), () => $blockNode(c.block))
     )
     .with({ op: 'text' }, (c) => {
       const block = $asBlock(node, label);
@@ -81,7 +81,7 @@ export function $modifyNode(
       node.setEquation(c.tex);
       return node;
     })
-    .with({ op: 'listType' }, (c) => $setListType(node, c.list, s))
+    .with({ op: 'listType' }, (c) => $setListType(node, c.list, session))
     .with({ op: 'checked' }, (c) => {
       const item = $asListItem(node, label);
       item.setChecked(c.checked);

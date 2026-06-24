@@ -1,15 +1,3 @@
-/**
- * Hands out unique cursor identities (name + color) to concurrently-running
- * writer agents. Borrow for a writer's lifetime, release when it finishes; a
- * name is never duplicated among outstanding borrows. Colors prefer to be
- * distinct but may repeat once the palette is exhausted. If every base name is
- * checked out the pool grows a fresh suffixed name rather than colliding.
- *
- * The pool caps concurrent borrows at `max` (default 6) via an internal p-queue
- * used as a semaphore: `borrow()` resolves immediately while slots are free, and
- * otherwise awaits until a `release()` opens one — so callers queue rather than
- * minting unbounded identities.
- */
 import PQueue from 'p-queue';
 import { AI_NAMES, COLORS } from './awareness-source';
 
@@ -41,20 +29,20 @@ export class PeerPool {
           new Promise<void>((freeSlot) => {
             const peer = this.free.pop() ?? this.mint();
             this.out.add(peer);
-            this.releasers.set(peer, freeSlot);
-            handOut(peer);
+            this.releasers.set(peer, freeSlot); // this.releasers.get()... .release() will release us
+            handOut(peer); // okay, now we can hand out the peer
           })
       );
     });
   }
 
   release(p: Peer): void {
-    if (!this.out.delete(p)) return; // unknown / double-release → no-op
+    if (!this.out.delete(p)) return; // unknown / double-release -> no-op
     this.free.push(p);
     const freeSlot = this.releasers.get(p);
     if (freeSlot) {
       this.releasers.delete(p);
-      freeSlot(); // opens the slot for the next waiting borrow
+      freeSlot(); // opens the slot for the next waiting borrow (resolves the promise)
     }
   }
 
@@ -84,10 +72,6 @@ export class PeerPool {
 }
 
 /**
- * Process-wide pool. The concurrency cap is GLOBAL — shared across every
- * `runAgent` turn and session in this isolate, so the total number of AI writers
- * editing at once is bounded regardless of how many requests are in flight. Use
- * this rather than constructing a pool per turn (which would cap each turn
- * independently, letting concurrent turns exceed the limit).
+ * Process-wide pool.
  */
 export const sharedPeerPool = new PeerPool();

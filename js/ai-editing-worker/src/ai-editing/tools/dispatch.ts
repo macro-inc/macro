@@ -1,15 +1,16 @@
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
+import type { coder } from '../agents/coder';
 import type { Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
 import type { Doc } from '../doc/doc';
 import type { DocumentOpQueueParams } from '../queue/types';
+import type { TokenTracker } from '../token-tracker';
 import { numberLines, serializeWithXml } from '../utils';
 import type { RunCodeToolOptions } from './run-code';
 
 export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
-import { TokenTracker } from '../token-tracker';
 
 type BlockedReport = {
   reason: string;
@@ -48,9 +49,9 @@ type XmlNodeRange = {
   ancestors: XmlNodeRange[];
 };
 
-/** Pull a writer's `reportBlocked` payload out of its run, if it bailed. */
+/** Pull a writer'session `reportBlocked` payload out of its run, if it bailed. */
 function findBlocked(
-  res: Awaited<ReturnType<typeof import('../agents/coder').runTask>>
+  res: Awaited<ReturnType<typeof coder>>
 ): BlockedReport | null {
   for (const step of res.steps) {
     for (const call of step.toolCalls) {
@@ -60,7 +61,9 @@ function findBlocked(
   return null;
 }
 
-function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
+export function mergeRanges(
+  ranges: Array<[number, number]>
+): Array<[number, number]> {
   const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
   const merged: Array<[number, number]> = [];
   for (const range of sorted) {
@@ -71,7 +74,7 @@ function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
   return merged;
 }
 
-function indexXmlRanges(xml: string): {
+export function indexXmlRanges(xml: string): {
   lines: string[];
   byId: Map<string, XmlNodeRange>;
 } {
@@ -129,7 +132,10 @@ function containingRoot(node: XmlNodeRange): XmlNodeRange {
   return node;
 }
 
-function computeContextRange(xml: string, instruction: string): ContextRange {
+export function computeContextRange(
+  xml: string,
+  instruction: string
+): ContextRange {
   const { lines, byId } = indexXmlRanges(xml);
   const ids = [...new Set(instruction.match(ID_PATTERN) ?? [])].filter((id) =>
     byId.has(id)
@@ -176,7 +182,7 @@ function describeContextRange(range: ContextRange): string {
 export type Writer = { awarenessSource: AwarenessSource; release: () => void };
 
 export type DispatchToolOptions = {
-  s: Session;
+  session: Session;
   doc: Doc;
   childModel: LanguageModel;
   tracker: TokenTracker;
@@ -185,14 +191,14 @@ export type DispatchToolOptions = {
   typingAnimations?: boolean;
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
-  runTask: typeof import('../agents/coder').runTask;
-  serialize?: (s: Session) => string;
+  runTask: typeof coder;
+  serialize?: (session: Session) => string;
   onOps?: RunCodeToolOptions['onOps'];
 };
 
 export function createDispatchTool(opts: DispatchToolOptions) {
   const {
-    s,
+    session,
     doc,
     childModel,
     tracker,
@@ -228,12 +234,12 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     }),
     execute: async ({ edits }) => {
       round += 1;
-      const xml = serializeWithXml(s);
+      const xml = serializeWithXml(session);
       const contexts = edits.map((e) =>
         computeContextRange(xml, e.editing_instruction)
       );
       console.log(
-        `\n[round ${round}] ${edits.length} edit(s):\n${edits
+        `\n[round ${round}] ${edits.length} edit(session):\n${edits
           .map(
             (e, i) =>
               `  ${i + 1}. ${e.editing_instruction} [${describeContextRange(contexts[i]!)}]`
@@ -247,7 +253,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
           const writer = await makeWriter();
           const { awarenessSource } = writer;
           try {
-            return await runTask(s, editing_instruction, childModel, {
+            return await runTask(session, editing_instruction, childModel, {
               doc,
               awarenessSource,
               context: xmlWindow(xml, contexts[i]!),
@@ -274,7 +280,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         }
         return `${i + 1}. ✓ APPLIED`;
       });
-      return `${summaries.join('\n')}\n\n<document>\n${serialize(s)}\n</document>`;
+      return `${summaries.join('\n')}\n\n<document>\n${serialize(session)}\n</document>`;
     },
   });
 }

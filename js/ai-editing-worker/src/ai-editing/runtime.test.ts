@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { $getRoot } from 'lexical';
+import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../lexical-core/plugins/nodeIdPlugin';
 import { mockAwarenessSource } from './awareness/awareness-source';
 import { Doc } from './doc/doc';
-import { docIds, runEditorCode, type CodeRunner } from './runtime';
 import { DocumentEditor } from './editor/document-editor';
+import { type CodeRunner, docIds, runEditorCode } from './runtime';
 
 const newFunctionRunner: CodeRunner = (validIds, code) => {
   const editor = new DocumentEditor({ validIds });
@@ -12,27 +12,25 @@ const newFunctionRunner: CodeRunner = (validIds, code) => {
   new Function('editor', code)(editor);
   return editor.drain();
 };
-import { createEditingSession, loadMarkdown } from './ai-toolkit/session';
-import { serializeWithIds } from './utils';
-import type { Session } from './ai-toolkit/session';
 
-function plain(s: Session): string {
-  return serializeWithIds(s)
-    .split('\n')
-    .map((l) => l.replace(/^\d+ \| /, ''))
-    .join('\n');
+import type { Session } from './ai-toolkit/session';
+import { createEditingSession, loadMarkdown } from './ai-toolkit/session';
+import { serializeWithXml } from './utils';
+
+function plain(session: Session): string {
+  return serializeWithXml(session);
 }
 
-function build(md: string): { s: Session; ids: string[] } {
-  const s = createEditingSession();
-  loadMarkdown(s, md);
-  const ids = [...docIds(s)];
-  return { s, ids };
+function build(md: string): { session: Session; ids: string[] } {
+  const session = createEditingSession();
+  loadMarkdown(session, md);
+  const ids = [...docIds(session)];
+  return { session, ids };
 }
 
 /** Top-level block ids in document order. */
-function topIds(s: Session): string[] {
-  return s.editor.getEditorState().read(() =>
+function topIds(session: Session): string[] {
+  return session.editor.getEditorState().read(() =>
     $getRoot()
       .getChildren()
       .map((c) => $getId(c) ?? '?')
@@ -40,10 +38,10 @@ function topIds(s: Session): string[] {
 }
 
 /** Run a snippet end-to-end (editor → ops → queue → real Doc), no timers/awareness delay. */
-async function runCode(s: Session, code: string): Promise<string> {
+async function runCode(session: Session, code: string): Promise<string> {
   return runEditorCode({
-    session: s,
-    doc: new Doc(s),
+    session,
+    doc: new Doc(session),
     code,
     runner: newFunctionRunner,
     awarenessSource: mockAwarenessSource(),
@@ -53,60 +51,65 @@ async function runCode(s: Session, code: string): Promise<string> {
 
 describe('runtime — end to end against real Lexical', () => {
   it('applies a multi-op snippet and returns compact success output', async () => {
-    const { s } = build('Notes\n\nthe Bluejay launched');
-    const [h, p] = topIds(s);
+    const { session } = build('Notes\n\nthe Bluejay launched');
+    const [headingId, paragraphId] = topIds(session);
     const summary = await runCode(
-      s,
-      `editor.convertToHeading('${h}', 2); editor.bold('${p}', 'Bluejay');`
+      session,
+      `editor.convertToHeading('${headingId}', 2); editor.bold('${paragraphId}', 'Bluejay');`
     );
     expect(summary).toBe('ok');
-    const out = plain(s);
-    expect(out).toContain('## Notes');
-    expect(out).toContain('**Bluejay**');
+    const out = plain(session);
+    expect(out).toContain('<h2');
+    expect(out).toContain('Notes');
+    expect(out).toContain('Bluejay');
   });
 
   it('types new content char-by-char into a created block (ref resolves)', async () => {
-    const { s, ids } = build('first');
+    const { session, ids } = build('first');
     const summary = await runCode(
-      s,
+      session,
       `const p = editor.insertParagraphAfter('${ids[0]}', 'hello'); editor.bold(p, 'hello');`
     );
     expect(summary).toBe('ok');
-    expect(plain(s)).toContain('**hello**');
+    expect(plain(session)).toContain('hello');
   });
 
   it('reports an eager EditError and applies nothing', async () => {
-    const { s, ids } = build('untouched');
-    const summary = await runCode(s, `editor.bold('does-not-exist', 'x');`);
+    const { session } = build('untouched');
+    const summary = await runCode(
+      session,
+      `editor.bold('does-not-exist', 'x');`
+    );
     expect(summary).toMatch(/error: unknown id/);
-    expect(plain(s)).toBe(`untouched {${ids[0]}|paragraph}`); // unchanged
+    expect(plain(session)).toContain('untouched'); // unchanged
   });
 
   it('reports compact success for an empty snippet', async () => {
-    const { s } = build('hi');
-    expect(await runCode(s, '/* nothing */')).toBe('ok');
+    const { session } = build('hi');
+    expect(await runCode(session, '/* nothing */')).toBe('ok');
   });
 
   it('continues independent ops when one fails at apply time', async () => {
-    const { s } = build('alpha\n\nbeta');
-    const [alpha, beta] = topIds(s);
+    const { session } = build('alpha\n\nbeta');
+    const [alpha, beta] = topIds(session);
     // first op fails (setCell on a non-table block); the heading op still applies.
     const summary = await runCode(
-      s,
+      session,
       `editor.setCell('${alpha}', 9, 9, 'x'); editor.convertToHeading('${beta}', 3);`
     );
     expect(summary).toBe('error: setCell: no enclosing table');
-    expect(plain(s)).toContain('### beta');
+    expect(plain(session)).toContain('<h3');
+    expect(plain(session)).toContain('beta');
   });
 });
 
 describe('runtime — awareness ref resolution', () => {
   it('points cursors at the real inserted node id, never the placeholder ref', async () => {
-    const { s, ids } = build('first');
+    const { session, ids } = build('first');
     const awareness = mockAwarenessSource();
     await runEditorCode({
-      session: s,
-      doc: new Doc(s),
+      session,
+      doc: new Doc(session),
       code: `editor.insertParagraphAfter('${ids[0]}', 'hi');`,
       runner: newFunctionRunner,
       awarenessSource: awareness,
@@ -120,8 +123,8 @@ describe('runtime — awareness ref resolution', () => {
 
 describe('docIds', () => {
   it('collects every durable id including nested list items', () => {
-    const { s } = build('- one\n- two');
-    const ids = docIds(s);
+    const { session } = build('- one\n- two');
+    const ids = docIds(session);
     expect(ids.size).toBeGreaterThanOrEqual(3); // list + 2 items
   });
 });

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { DocReader, Match } from '../doc/interfaces';
 import type { DocumentOp } from '../editor/ops';
+import { animate } from './animators';
 import { mockRandomSource, type RandomSource } from './random-source';
 import { DEFAULT_RANGES, type DocumentOpStep } from './types';
-import { animate } from './animators';
 
 /** Mock reader: canned answers, no Lexical. */
 function reader(over: Partial<DocReader> = {}): DocReader {
@@ -64,7 +64,7 @@ describe('formatText animator — full flow', () => {
         match: 'Bluejay',
         format: 'bold',
         on: true,
-        scope: { all: true },
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({ integer: [30, 3, 75, 75, 75, 145] }),
@@ -105,7 +105,7 @@ describe('formatText animator — full flow', () => {
           match: 'Bluejay',
           format: 'bold',
           on: true,
-          scope: { all: true },
+          scope: { kind: 'all' },
         },
       },
     ]);
@@ -119,7 +119,7 @@ describe('formatText animator — full flow', () => {
         match: 'x',
         format: 'italic',
         on: true,
-        scope: { all: true },
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -155,7 +155,7 @@ describe('formatText animator — full flow', () => {
         match: 'frog',
         format: 'bold',
         on: true,
-        scope: { all: true },
+        scope: { kind: 'all' },
       },
       { docReader: reader({ locate: () => matches }) }
     );
@@ -178,7 +178,7 @@ describe('highlight sweep count honors ranges (0–5)', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
@@ -195,7 +195,7 @@ describe('highlight sweep count honors ranges (0–5)', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -522,31 +522,19 @@ describe('enriched structural animations', () => {
     ]);
   });
 
-  it('splitBlock puts the caret at the split point', () => {
-    const steps = run(
-      { kind: 'splitBlock', id: 'b1', atText: 'half' },
-      {
-        docReader: reader({ locate: () => [{ node: 't9', start: 5, end: 9 }] }),
-      }
-    ).steps;
-    expect(steps[0]).toEqual({
-      kind: 'awareness',
-      x: { type: 'cursor', node: 't9', at: 5 },
-    });
-    expect(steps.at(-1)).toEqual({
-      kind: 'edit',
-      y: { fn: 'splitBlock', node: 'b1', atText: 'half' },
-    });
-  });
-
   it('clearFormat (whole block) selects all then clears', () => {
     const steps = run(
-      { kind: 'clearFormat', id: 'b1', scope: { all: true } },
+      { kind: 'clearFormat', id: 'b1', scope: { kind: 'all' } },
       { docReader: reader({ textLength: () => 8 }) }
     ).steps;
     expect(highlights(steps).length).toBeGreaterThan(0);
     expect(onlyEdits(steps)).toEqual([
-      { fn: 'clearFormat', node: 'b1', match: undefined, scope: { all: true } },
+      {
+        fn: 'clearFormat',
+        node: 'b1',
+        match: undefined,
+        scope: { kind: 'all' },
+      },
     ]);
   });
 
@@ -584,28 +572,49 @@ describe('every op kind has an animation that ends in the right edit', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       'formatText',
     ],
-    [{ kind: 'clearFormat', id: 'b1', match: 'x', scope: {} }, 'clearFormat'],
-    [{ kind: 'clearFormat', id: 'b1', scope: {} }, 'clearFormat'],
+    [
+      { kind: 'clearFormat', id: 'b1', match: 'x', scope: { kind: 'all' } },
+      'clearFormat',
+    ],
+    [{ kind: 'clearFormat', id: 'b1', scope: { kind: 'all' } }, 'clearFormat'],
     [
       { kind: 'formatNode', textId: 't1', format: 'italic', on: true },
       'formatNode',
     ],
     [{ kind: 'clearNodeFormat', textId: 't1' }, 'clearNodeFormat'],
     [
-      { kind: 'markText', id: 'b1', match: 'x', on: true, scope: {} },
+      {
+        kind: 'markText',
+        id: 'b1',
+        match: 'x',
+        on: true,
+        scope: { kind: 'all' },
+      },
       'markText',
     ],
     [
-      { kind: 'linkText', id: 'b1', match: 'x', url: 'u', scope: {} },
+      {
+        kind: 'linkText',
+        id: 'b1',
+        match: 'x',
+        url: 'u',
+        scope: { kind: 'all' },
+      },
       'linkText',
     ],
     [{ kind: 'setText', id: 'b1', text: 'a' }, 'insertText'],
     [
-      { kind: 'replaceText', id: 'b1', find: 'a', to: 'b', scope: {} },
+      {
+        kind: 'replaceText',
+        id: 'b1',
+        find: 'a',
+        to: 'b',
+        scope: { kind: 'all' },
+      },
       'replaceText',
     ],
     [{ kind: 'appendText', id: 'b1', text: 'a' }, 'insertText'],
@@ -617,7 +626,6 @@ describe('every op kind has an animation that ends in the right edit', () => {
     [{ kind: 'setListType', ids: ['b1'], list: 'bullet' }, 'setListType'],
     [{ kind: 'setChecked', id: 'b1', checked: true }, 'setChecked'],
     [{ kind: 'setIndent', id: 'b1', indent: 'in' }, 'setIndent'],
-    [{ kind: 'sortList', id: 'b1', order: 'asc' }, 'sortList'],
     [
       {
         kind: 'insertBlock',
@@ -640,7 +648,6 @@ describe('every op kind has an animation that ends in the right edit', () => {
     [{ kind: 'moveBlock', id: 'b1', at: { before: 'b2' } }, 'moveNode'],
     [{ kind: 'removeBlock', id: 'b1' }, 'removeNode'],
     [{ kind: 'mergeBlocks', ids: ['b1', 'b2'], separator: ' ' }, 'mergeBlocks'],
-    [{ kind: 'splitBlock', id: 'b1', atText: 'x' }, 'splitBlock'],
     [
       { kind: 'setCell', table: 't', row: 0, col: 0, content: 'a' },
       'insertText',
@@ -681,13 +688,11 @@ describe('every op kind has an animation that ends in the right edit', () => {
       'setListType',
       'setChecked',
       'setIndent',
-      'sortList',
       'insertBlock',
       'insertInline',
       'moveBlock',
       'removeBlock',
       'mergeBlocks',
-      'splitBlock',
       'setCell',
       'addRow',
       'addColumn',
@@ -711,7 +716,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -739,7 +744,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -768,7 +773,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -795,7 +800,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -821,7 +826,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -845,7 +850,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -873,7 +878,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
@@ -891,7 +896,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({ integer: [30, 3, 75, 75, 75, 145] }),
@@ -909,7 +914,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
         match: 'x',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       {
         randomSource: mockRandomSource({
@@ -1066,7 +1071,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
         match: 'nope',
         format: 'bold',
         on: true,
-        scope: {},
+        scope: { kind: 'all' },
       },
       { docReader: reader({ locate: () => [] }) }
     );
@@ -1079,7 +1084,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
           match: 'nope',
           format: 'bold',
           on: true,
-          scope: {},
+          scope: { kind: 'all' },
         },
       },
     ]);
@@ -1094,7 +1099,13 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     // 0 sweeps per group; each group = cursor + preSelect pause + final highlight + settle(90).
     // integer draws per group: preSelect(30), sweeps(0), settle(90); betweenNodes(180) before groups 2 & 3.
     const action = run(
-      { kind: 'markText', id: 'b', match: 'x', on: true, scope: { all: true } },
+      {
+        kind: 'markText',
+        id: 'b',
+        match: 'x',
+        on: true,
+        scope: { kind: 'all' },
+      },
       {
         randomSource: mockRandomSource({
           integer: [30, 0, 90, 180, 30, 0, 90, 180, 30, 0, 90],
@@ -1111,7 +1122,13 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
       't3',
     ]);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'markText', node: 'b', match: 'x', on: true, scope: { all: true } },
+      {
+        fn: 'markText',
+        node: 'b',
+        match: 'x',
+        on: true,
+        scope: { kind: 'all' },
+      },
     ]);
   });
 
@@ -1122,7 +1139,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
         id: 'b',
         find: 'cat',
         to: 'dog',
-        scope: { nth: 1 },
+        scope: { kind: 'nth', n: 1 },
       },
       {
         docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 3 }] }),
@@ -1134,20 +1151,32 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
         node: 'b',
         find: 'cat',
         to: 'dog',
-        scope: { nth: 1 },
+        scope: { kind: 'nth', n: 1 },
       },
     ]);
   });
 
   it('linkText carries the url into the edit', () => {
     const action = run(
-      { kind: 'linkText', id: 'b', match: 'here', url: 'http://x', scope: {} },
+      {
+        kind: 'linkText',
+        id: 'b',
+        match: 'here',
+        url: 'http://x',
+        scope: { kind: 'all' },
+      },
       {
         docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 4 }] }),
       }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'linkText', node: 'b', match: 'here', url: 'http://x', scope: {} },
+      {
+        fn: 'linkText',
+        node: 'b',
+        match: 'here',
+        url: 'http://x',
+        scope: { kind: 'all' },
+      },
     ]);
   });
 });
@@ -1155,19 +1184,19 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
 describe('clearFormat animator — match vs whole-block branches', () => {
   it('with a match → sweepEachThen (per-occurrence selection)', () => {
     const action = run(
-      { kind: 'clearFormat', id: 'b', match: 'x', scope: {} },
+      { kind: 'clearFormat', id: 'b', match: 'x', scope: { kind: 'all' } },
       {
         docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 1 }] }),
       }
     );
     expect(highlights(action.steps).length).toBeGreaterThan(0);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'clearFormat', node: 'b', match: 'x', scope: {} },
+      { fn: 'clearFormat', node: 'b', match: 'x', scope: { kind: 'all' } },
     ]);
   });
   it('without a match → selectAll over the whole block then one clear', () => {
     const action = run(
-      { kind: 'clearFormat', id: 'b', scope: { all: true } },
+      { kind: 'clearFormat', id: 'b', scope: { kind: 'all' } },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
         docReader: reader({ textLength: () => 6 }),
@@ -1177,7 +1206,12 @@ describe('clearFormat animator — match vs whole-block branches', () => {
     expect(hl).toHaveLength(1);
     expect([hl[0]!.x.span.start, hl[0]!.x.span.end]).toEqual([0, 6]);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'clearFormat', node: 'b', match: undefined, scope: { all: true } },
+      {
+        fn: 'clearFormat',
+        node: 'b',
+        match: undefined,
+        scope: { kind: 'all' },
+      },
     ]);
   });
 });
@@ -1309,24 +1343,6 @@ describe('insertBlock animator — typed vs whole', () => {
       node: 'r',
       checked: false,
     });
-  });
-});
-
-describe('splitBlock animator — caret fallback', () => {
-  it('falls back to focus(id) when atText is not located', () => {
-    const action = run(
-      { kind: 'splitBlock', id: 'b1', atText: 'gone' },
-      {
-        randomSource: mockRandomSource({ integer: [90] }),
-        docReader: reader({ locate: () => [] }),
-      }
-    );
-    // focus = cursor(0) + settle pause(90); then the edit
-    expect(action.steps).toEqual<DocumentOpStep[]>([
-      { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 0 } },
-      { kind: 'pause', ms: 90 },
-      { kind: 'edit', y: { fn: 'splitBlock', node: 'b1', atText: 'gone' } },
-    ]);
   });
 });
 

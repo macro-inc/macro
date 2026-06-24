@@ -5,100 +5,14 @@
  * (Y) are atomic and 1:1 with `DocWriter` methods; awareness (X) is one of two
  * shapes that map straight onto a cursor/selection broadcast.
  */
-import type {
-  BlockType,
-  Format,
-  ListKind,
-  NodeRef,
-  NodeSpec,
-  Offset,
-  Position,
-  Scope,
-  Span,
-} from '../editor/ops';
+import type { Edit, NodeRef, Offset, Span } from '../editor/ops';
+
+export type { Edit } from '../editor/ops';
 
 /** Awareness payload. */
 export type Awareness =
   | { type: 'cursor'; node: NodeRef; at?: Offset }
   | { type: 'highlight'; node: NodeRef; span?: Span };
-
-/** One atomic edit, which is 1:1 with a `DocWriter` method. */
-export type Edit =
-  | { fn: 'insertText'; node: NodeRef; at: Offset; text: string }
-  | { fn: 'removeText'; node: NodeRef; at: Offset; len: number }
-  | { fn: 'setText'; node: NodeRef; text: string }
-  | { fn: 'setEquation'; node: NodeRef; tex: string }
-  | { fn: 'appendText'; node: NodeRef; text: string }
-  | { fn: 'prependText'; node: NodeRef; text: string }
-  | { fn: 'replaceText'; node: NodeRef; find: string; to: string; scope: Scope }
-  | {
-      fn: 'formatText';
-      node: NodeRef;
-      match: string;
-      format: Format;
-      on: boolean;
-      scope: Scope;
-    }
-  | { fn: 'clearFormat'; node: NodeRef; match?: string; scope: Scope }
-  | { fn: 'markText'; node: NodeRef; match: string; on: boolean; scope: Scope }
-  | {
-      fn: 'linkText';
-      node: NodeRef;
-      match: string;
-      url: string | null;
-      scope: Scope;
-    }
-  | { fn: 'formatNode'; node: NodeRef; format: Format; on: boolean }
-  | { fn: 'clearNodeFormat'; node: NodeRef }
-  | {
-      fn: 'setBlockType';
-      node: NodeRef;
-      block: BlockType;
-      level?: number;
-      language?: string;
-    }
-  | { fn: 'setListType'; nodes: NodeRef[]; list: ListKind }
-  | { fn: 'appendListItem'; ref: string; node: NodeRef; checked?: boolean }
-  | { fn: 'setChecked'; node: NodeRef; checked: boolean }
-  | { fn: 'setIndent'; node: NodeRef; indent: number | 'in' | 'out' }
-  | { fn: 'sortList'; node: NodeRef; order: 'asc' | 'desc' }
-  | { fn: 'insertNode'; ref: string; spec: NodeSpec; at: Position }
-  | {
-      fn: 'insertInline';
-      ref: string;
-      node: NodeRef;
-      at: Offset;
-      spec: NodeSpec;
-    }
-  | { fn: 'moveNode'; node: NodeRef; at: Position }
-  | { fn: 'removeNode'; node: NodeRef }
-  | { fn: 'mergeBlocks'; nodes: NodeRef[]; separator: string }
-  | { fn: 'splitBlock'; node: NodeRef; atText: string }
-  | {
-      fn: 'insertListItemAfter';
-      ref: string;
-      node: NodeRef;
-      text: string;
-      list: ListKind;
-    }
-  | {
-      fn: 'insertListItemBefore';
-      ref: string;
-      node: NodeRef;
-      text: string;
-      list: ListKind;
-    }
-  | { fn: 'removeListItem'; node: NodeRef }
-  | { fn: 'setCell'; table: NodeRef; row: number; col: number; text: string }
-  | { fn: 'addRow'; table: NodeRef; at?: number }
-  | { fn: 'addColumn'; table: NodeRef; at?: number }
-  | { fn: 'removeRow'; table: NodeRef; row: number }
-  | { fn: 'removeColumn'; table: NodeRef; col: number }
-  | { fn: 'setImageAlt'; node: NodeRef; alt: string }
-  | { fn: 'setImageUrl'; node: NodeRef; url: string }
-  | { fn: 'setVideoUrl'; node: NodeRef; url: string }
-  | { fn: 'setVideoControls'; node: NodeRef; controls: boolean }
-  | { fn: 'setDate'; node: NodeRef; date: string; displayFormat?: string };
 
 export type DocumentOpStep =
   | { kind: 'awareness'; x: Awareness }

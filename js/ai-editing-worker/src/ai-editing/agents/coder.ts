@@ -7,35 +7,19 @@ import {
 } from 'ai';
 import { z } from 'zod';
 import type { Session } from '../ai-toolkit';
-import type { AwarenessSource } from '../awareness/awareness-source';
-import type { Doc } from '../doc/doc';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
-import type { DocumentOpQueueParams } from '../queue/types';
-import { createRunCodeTool, type RunCodeToolOptions } from '../tools/run-code';
+import { createRunCodeTool } from '../tools/run-code';
+import type { RunTaskDeps } from './types';
+
+export type { RunTaskDeps } from './types';
 
 export const CHILD_SYSTEM = `${SHARED}\n${CODER}\n${API_COMPLETE}`;
 
-export type RunTaskDeps = {
-  /** Shared document writer/reader (one per session). */
-  doc: Doc;
-  /** This writer's own cursor identity. */
-  awarenessSource: AwarenessSource;
-  runner: RunCodeToolOptions['runner'];
-  /** Already-windowed document context the writer needs to see. */
-  context: string;
-  /** Verbatim text values available as `snippets.KEY` in the coder's JS execution context. */
-  snippets?: Record<string, string>;
-  params?: DocumentOpQueueParams;
-  typingAnimations?: boolean;
-  signal?: AbortSignal;
-  onOps?: RunCodeToolOptions['onOps'];
-};
-
 /** One writer: carry out a single edit instruction via the `editor` surface. */
-export async function runTask(
-  s: Session,
+export async function coder(
+  session: Session,
   task: string,
   model: LanguageModel,
   deps: RunTaskDeps
@@ -49,7 +33,7 @@ export async function runTask(
     prompt: buildPrompt(task, deps.context, deps.snippets),
     tools: {
       runCode: createRunCodeTool({
-        session: s,
+        session: session,
         doc: deps.doc,
         awarenessSource: deps.awarenessSource,
         snippets: deps.snippets,
@@ -60,7 +44,7 @@ export async function runTask(
       }),
       reportBlocked: tool({
         description:
-          'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. Include suggestedContext when you can identify the wider line range needed. Ends your task; do not also call runCode.',
+          'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. This ends your task.',
         inputSchema: z.object({
           reason: z.string().describe('what stopped you, in one line'),
         }),
@@ -71,15 +55,20 @@ export async function runTask(
   });
 }
 
-function buildPrompt(task: string, context: string, snippets?: Record<string, string>): string {
-  const snippetBlock = snippets && Object.keys(snippets).length > 0
-    ? [
-        '\n\nSnippets (access as `snippets.KEY` in your code -- do NOT re-embed as string literals):',
-        '```js',
-        `const snippets = \n${JSON.stringify(snippets, null, 2)}`,
-        '```',
-      ].join('\n')
-    : '';
+function buildPrompt(
+  task: string,
+  context: string,
+  snippets?: Record<string, string>
+): string {
+  const snippetBlock =
+    snippets && Object.keys(snippets).length > 0
+      ? [
+          '\n\nSnippets (access as `snippets.KEY` in your code -- do NOT re-embed as string literals):',
+          '```js',
+          `const snippets = \n${JSON.stringify(snippets, null, 2)}`,
+          '```',
+        ].join('\n')
+      : '';
   const contextBlock = `\n\nRelevant region of the document:\n<document>\n${context}\n</document>`;
   return `Carry out this edit task in full:\n${task}${snippetBlock}${contextBlock}`;
 }

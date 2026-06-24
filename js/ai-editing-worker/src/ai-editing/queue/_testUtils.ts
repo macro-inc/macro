@@ -1,7 +1,8 @@
 import type { DocWriter } from '../doc/interfaces';
+import type { Edit } from '../editor/ops';
 import type { Awareness } from './types';
 
-/** Records every DocWriter call; can be told to throw on a given fn (or several). */
+/** Records every DocWriter apply call; can be told to throw on a given fn (or several). */
 export function recordingWriter(
   throwOn?: { fn: string; error: string } | Array<{ fn: string; error: string }>
 ) {
@@ -10,20 +11,15 @@ export function recordingWriter(
       ? throwOn
       : [throwOn]
     : [];
-  const calls: Array<{ fn: string; args: unknown[] }> = [];
-  const w = new Proxy(
-    {},
-    {
-      get:
-        (_t, fn: string) =>
-        (...args: unknown[]) => {
-          const t = throwers.find((x) => x.fn === fn);
-          if (t) throw new Error(t.error);
-          calls.push({ fn, args });
-        },
-    }
-  ) as DocWriter;
-  return { w, calls };
+  const edits: Edit[] = [];
+  const w: DocWriter = {
+    apply(edit: Edit) {
+      const t = throwers.find((x) => x.fn === edit.fn);
+      if (t) throw new Error(t.error);
+      edits.push(edit);
+    },
+  };
+  return { w, edits };
 }
 
 export function recordingAwareness() {

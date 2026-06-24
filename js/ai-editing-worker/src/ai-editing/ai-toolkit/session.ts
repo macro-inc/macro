@@ -12,8 +12,8 @@ import {
 } from '../../../../lexical-core/node-list';
 import {
   $updateAllNodeIds,
-  nodeIdPlugin,
   type NodeIdMappings,
+  nodeIdPlugin,
 } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '../../../../lexical-core/transformers';
 
@@ -42,8 +42,8 @@ export function createEditingSession(): Session {
 }
 
 /** Load a document from markdown, replacing any existing content. */
-export function loadMarkdown(s: Session, md: string): void {
-  s.editor.update(
+export function loadMarkdown(session: Session, md: string): void {
+  session.editor.update(
     () => {
       $getRoot().clear();
       $convertFromMarkdownString(md, INTERNAL_TRANSFORMERS);
@@ -52,27 +52,30 @@ export function loadMarkdown(s: Session, md: string): void {
   );
   // Ensure every node has an id (and is in the mappings) even if a transform
   // somehow missed it.
-  s.editor.update(
+  session.editor.update(
     () => {
-      $updateAllNodeIds(s.ids);
+      $updateAllNodeIds(session.ids);
     },
     { discrete: true }
   );
 }
 
 /** Load a document from a serialized editor-state snapshot. */
-export function loadSnapshot(s: Session, raw: SerializedEditorState): void {
-  const state = s.editor.parseEditorState(raw);
-  s.editor.setEditorState(state);
-  s.editor.update(
+export function loadSnapshot(
+  session: Session,
+  raw: SerializedEditorState
+): void {
+  const state = session.editor.parseEditorState(raw);
+  session.editor.setEditorState(state);
+  session.editor.update(
     () => {
-      $updateAllNodeIds(s.ids);
+      $updateAllNodeIds(session.ids);
     },
     { discrete: true }
   );
 }
 
 /** Export the current document as a serialized editor-state snapshot. */
-export function toSnapshot(s: Session): SerializedEditorState {
-  return s.editor.getEditorState().toJSON();
+export function toSnapshot(session: Session): SerializedEditorState {
+  return session.editor.getEditorState().toJSON();
 }

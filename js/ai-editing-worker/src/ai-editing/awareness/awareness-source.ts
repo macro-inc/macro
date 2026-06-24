@@ -7,15 +7,16 @@
  * cursor at the offset, and sends. Each writer gets its own source (distinct
  * name + color → distinct peer → distinct cursor).
  */
+
+import type { Mirror } from '@loro-mirror/packages/core/src';
 import {
-  EphemeralStore,
   type Container,
+  EphemeralStore,
   type LoroDoc,
   type LoroMap,
   type LoroText,
 } from 'loro-crdt';
 import { match } from 'ts-pattern';
-import type { Mirror } from '@loro-mirror/packages/core/src';
 import type { MarkdownLoroSchemaType } from '../../../../lexical-core/markdown-loro-schema';
 import type { Awareness } from '../queue/types';
 

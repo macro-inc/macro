@@ -1,17 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DocReader, DocWriter } from '../doc/interfaces';
 import type { DocumentOp } from '../editor/ops';
-import { DEFAULT_QUEUE_PARAMS } from './types';
-import {
-  applyEdit,
-  describe as describeOp,
-  runQueue,
-  summarize,
-  type OpResult,
-} from './runner';
+import { recordingAwareness, recordingWriter } from './_testUtils';
 import { mockRandomSource } from './random-source';
-import type { Awareness, Edit } from './types';
-import { recordingWriter, recordingAwareness } from './_testUtils';
+import { type OpResult, runQueue, summarize } from './runner';
+import type { Awareness } from './types';
+import { DEFAULT_QUEUE_PARAMS } from './types';
 
 const reader = (over: Partial<DocReader> = {}): DocReader => ({
   locate: () => [{ node: 't1', start: 0, end: 3 }],
@@ -40,7 +34,7 @@ async function run(
 
 describe('runQueue -- happy path', () => {
   it('applies edits in order and pumps awareness, returning one ok result per op', async () => {
-    const { w, calls } = recordingWriter();
+    const { w, edits } = recordingWriter();
     const { results, awareness } = await run(
       [
         { kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 },
@@ -49,18 +43,23 @@ describe('runQueue -- happy path', () => {
       w
     );
     expect(results.map((r) => r.ok)).toEqual([true, true]);
-    expect(calls.map((c) => c.fn)).toEqual(['setBlockType', 'removeNode']);
+    expect(edits.map((e) => e.fn)).toEqual(['setBlockType', 'removeNode']);
     expect(awareness.seen.length).toBeGreaterThan(0); // cursors/highlights were pumped
   });
 
   it('expands a setText op into remove + chunked insert edits', async () => {
-    const { w, calls } = recordingWriter();
+    const { w, edits } = recordingWriter();
     // typeText emits TYPE_CHUNK (3) chars per keystroke, so "Hi" is one insert.
     await run([{ kind: 'setText', id: 'b1', text: 'Hi' }], w, {
       docReader: reader({ textLength: () => 4 }),
     });
-    expect(calls.map((c) => c.fn)).toEqual(['removeText', 'insertText']);
-    expect(calls[1]!.args).toEqual(['b1', 0, 'Hi']);
+    expect(edits.map((e) => e.fn)).toEqual(['removeText', 'insertText']);
+    expect(edits[1]).toMatchObject({
+      fn: 'insertText',
+      node: 'b1',
+      at: 0,
+      text: 'Hi',
+    });
   });
 
   it('awaits pauses through the injected sleep', async () => {
@@ -92,7 +91,7 @@ describe('runQueue -- error handling', () => {
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
     const failed = results[1]!;
     expect(failed.ok).toBe(false);
-    if (!failed.ok) expect(failed.error).toBe('boom');
+    if (failed.ok === false) expect(failed.error).toBe('boom');
   });
 
   it('attributes a planning-time read failure to the stepped op', async () => {
@@ -119,59 +118,6 @@ describe('runQueue -- error handling', () => {
   });
 });
 
-describe('applyEdit routing (unit)', () => {
-  it('dispatches each fn to the matching writer method with its args', () => {
-    const { w, calls } = recordingWriter();
-    const edits: Edit[] = [
-      { fn: 'insertText', node: 'b1', at: 2, text: 'x' },
-      {
-        fn: 'formatText',
-        node: 'b1',
-        match: 'a',
-        format: 'bold',
-        on: true,
-        scope: { all: true },
-      },
-      { fn: 'setCell', table: 't', row: 1, col: 0, text: 'c' },
-    ];
-    for (const e of edits) applyEdit(w, e);
-    expect(calls).toEqual([
-      { fn: 'insertText', args: ['b1', 2, 'x'] },
-      { fn: 'formatText', args: ['b1', 'a', 'bold', true, { all: true }] },
-      { fn: 'setCell', args: ['t', 1, 0, 'c'] },
-    ]);
-  });
-});
-
-describe('describe + summarize', () => {
-  it('describes ops as concise semantic lines', () => {
-    expect(
-      describeOp({
-        kind: 'formatText',
-        id: 'b5',
-        match: 'Bluejay',
-        format: 'bold',
-        on: true,
-        scope: { all: true },
-      })
-    ).toBe('bold "Bluejay" in {b5}');
-    expect(
-      describeOp({ kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 })
-    ).toBe('{b1} → heading h2');
-  });
-  it('summarize emits only failed ops', () => {
-    const out = summarize([
-      {
-        ok: true,
-        op: { kind: 'removeBlock', id: 'b1' },
-        summary: 'removed {b1}',
-      },
-      { ok: false, op: { kind: 'removeBlock', id: 'b2' }, error: 'boom' },
-    ]);
-    expect(out).toBe('error: removeBlock: boom');
-  });
-});
-
 describe('runQueue -- error in the middle keeps neighbors', () => {
   it('op N fails, op N-1 and N+1 succeed', async () => {
     const { w } = recordingWriter({ fn: 'moveNode', error: 'cannot move' });
@@ -184,10 +130,11 @@ describe('runQueue -- error in the middle keeps neighbors', () => {
       w
     );
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
-    expect(results[1]!.ok).toBe(false);
-    if (!results[1]!.ok) {
-      expect(results[1]!.error).toBe('cannot move');
-      expect(results[1]!.op.kind).toBe('moveBlock');
+    const r1 = results[1]!;
+    expect(r1.ok).toBe(false);
+    if (r1.ok === false) {
+      expect(r1.error).toBe('cannot move');
+      expect(r1.op.kind).toBe('moveBlock');
     }
   });
 
@@ -201,11 +148,10 @@ describe('runQueue -- error in the middle keeps neighbors', () => {
         { kind: 'setChecked', id: 'b1', checked: true }, // ok
         { kind: 'removeBlock', id: 'b2' }, // throw
         { kind: 'setIndent', id: 'b3', indent: 'in' }, // throw
-        { kind: 'sortList', id: 'b4', order: 'asc' }, // ok
       ],
       w
     );
-    expect(results.map((r) => r.ok)).toEqual([true, false, false, true]);
+    expect(results.map((r) => r.ok)).toEqual([true, false, false]);
   });
 });
 
@@ -225,17 +171,18 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
           match: 'x',
           format: 'bold',
           on: true,
-          scope: {},
+          scope: { kind: 'all' },
         },
       ],
       w,
       { docReader }
     );
     expect(results).toHaveLength(1);
-    expect(results[0]!.ok).toBe(false);
-    if (!results[0]!.ok) {
-      expect(results[0]!.op.kind).toBe('formatText');
-      expect(results[0]!.error).toBe('locate failed');
+    const r0 = results[0]!;
+    expect(r0.ok).toBe(false);
+    if (r0.ok === false) {
+      expect(r0.op.kind).toBe('formatText');
+      expect(r0.error).toBe('locate failed');
     }
   });
 
@@ -256,7 +203,7 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
   });
 
   it('a planning failure mid-queue still lets later ops run', async () => {
-    const { w, calls } = recordingWriter();
+    const { w, edits } = recordingWriter();
     let calledLocate = 0;
     const docReader = reader({
       locate: () => {
@@ -267,14 +214,20 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
     });
     const { results } = await run(
       [
-        { kind: 'markText', id: 'b1', match: 'x', on: true, scope: {} }, // plan throws
+        {
+          kind: 'markText',
+          id: 'b1',
+          match: 'x',
+          on: true,
+          scope: { kind: 'all' },
+        }, // plan throws
         { kind: 'setBlockType', id: 'b2', block: 'quote' }, // ok
       ],
       w,
       { docReader }
     );
     expect(results.map((r) => r.ok)).toEqual([false, true]);
-    expect(calls.map((c) => c.fn)).toEqual(['setBlockType']);
+    expect(edits.map((e) => e.fn)).toEqual(['setBlockType']);
   });
 });
 
@@ -316,10 +269,11 @@ describe('runQueue -- awareness ordering & sleep', () => {
 
   it('edits and awareness interleave: a removeBlock pumps highlights before the remove', async () => {
     const events: string[] = [];
-    const w = new Proxy(
-      {},
-      { get: (_t, fn: string) => () => events.push(`edit:${fn}`) }
-    ) as DocWriter;
+    const w: DocWriter = {
+      apply(edit) {
+        events.push(`edit:${edit.fn}`);
+      },
+    };
     await runQueue({
       ops: [{ kind: 'removeBlock', id: 'b1' }],
       params: DEFAULT_QUEUE_PARAMS,
@@ -363,7 +317,7 @@ describe('runQueue -- ref-dependent failures', () => {
   });
 
   it('insertNode succeeds → dependent setText on the ref succeeds', async () => {
-    const { w, calls } = recordingWriter();
+    const { w, edits } = recordingWriter();
     const { results } = await run(
       [
         {
@@ -378,259 +332,8 @@ describe('runQueue -- ref-dependent failures', () => {
       { docReader: reader({ textLength: () => 0 }) }
     );
     expect(results.map((r) => r.ok)).toEqual([true, true]);
-    expect(calls.map((c) => c.fn)).toContain('insertNode');
-    expect(calls.map((c) => c.fn)).toContain('insertText');
-  });
-});
-
-describe('applyEdit -- every fn routes to its method', () => {
-  const cases: Array<[Edit, { fn: string; args: unknown[] }]> = [
-    [
-      { fn: 'removeText', node: 'b', at: 1, len: 2 },
-      { fn: 'removeText', args: ['b', 1, 2] },
-    ],
-    [
-      { fn: 'setText', node: 'b', text: 't' },
-      { fn: 'setText', args: ['b', 't'] },
-    ],
-    [
-      { fn: 'appendText', node: 'b', text: 't' },
-      { fn: 'appendText', args: ['b', 't'] },
-    ],
-    [
-      { fn: 'prependText', node: 'b', text: 't' },
-      { fn: 'prependText', args: ['b', 't'] },
-    ],
-    [
-      { fn: 'replaceText', node: 'b', find: 'a', to: 'b', scope: {} },
-      { fn: 'replaceText', args: ['b', 'a', 'b', {}] },
-    ],
-    [
-      { fn: 'clearFormat', node: 'b', match: 'x', scope: { all: true } },
-      { fn: 'clearFormat', args: ['b', 'x', { all: true }] },
-    ],
-    [
-      { fn: 'markText', node: 'b', match: 'x', on: false, scope: {} },
-      { fn: 'markText', args: ['b', 'x', false, {}] },
-    ],
-    [
-      { fn: 'linkText', node: 'b', match: 'x', url: null, scope: {} },
-      { fn: 'linkText', args: ['b', 'x', null, {}] },
-    ],
-    [
-      { fn: 'formatNode', node: 't', format: 'italic', on: true },
-      { fn: 'formatNode', args: ['t', 'italic', true] },
-    ],
-    [
-      { fn: 'clearNodeFormat', node: 't' },
-      { fn: 'clearNodeFormat', args: ['t'] },
-    ],
-    [
-      { fn: 'setBlockType', node: 'b', block: 'heading', level: 3 },
-      {
-        fn: 'setBlockType',
-        args: ['b', 'heading', { level: 3, language: undefined }],
-      },
-    ],
-    [
-      { fn: 'setListType', nodes: ['a', 'b'], list: 'number' },
-      { fn: 'setListType', args: [['a', 'b'], 'number'] },
-    ],
-    [
-      { fn: 'appendListItem', ref: 'r', node: 'b', checked: false },
-      { fn: 'appendListItem', args: ['r', 'b', false] },
-    ],
-    [
-      { fn: 'setChecked', node: 'b', checked: true },
-      { fn: 'setChecked', args: ['b', true] },
-    ],
-    [
-      { fn: 'setIndent', node: 'b', indent: 'out' },
-      { fn: 'setIndent', args: ['b', 'out'] },
-    ],
-    [
-      { fn: 'sortList', node: 'b', order: 'desc' },
-      { fn: 'sortList', args: ['b', 'desc'] },
-    ],
-    [
-      {
-        fn: 'insertNode',
-        ref: 'r',
-        spec: { block: 'divider' },
-        at: { appendToRoot: true },
-      },
-      {
-        fn: 'insertNode',
-        args: ['r', { block: 'divider' }, { appendToRoot: true }],
-      },
-    ],
-    [
-      {
-        fn: 'insertInline',
-        ref: 'r',
-        node: 'b',
-        at: 2,
-        spec: { inline: 'linebreak' },
-      },
-      { fn: 'insertInline', args: ['r', 'b', 2, { inline: 'linebreak' }] },
-    ],
-    [
-      { fn: 'moveNode', node: 'b', at: { before: 'c' } },
-      { fn: 'moveNode', args: ['b', { before: 'c' }] },
-    ],
-    [
-      { fn: 'removeNode', node: 'b' },
-      { fn: 'removeNode', args: ['b'] },
-    ],
-    [
-      { fn: 'mergeBlocks', nodes: ['a', 'b'], separator: '-' },
-      { fn: 'mergeBlocks', args: [['a', 'b'], '-'] },
-    ],
-    [
-      { fn: 'splitBlock', node: 'b', atText: 'x' },
-      { fn: 'splitBlock', args: ['b', 'x'] },
-    ],
-    [
-      {
-        fn: 'insertListItemAfter',
-        ref: 'r',
-        node: 'b',
-        text: 't',
-        list: 'number',
-      },
-      { fn: 'insertListItemAfter', args: ['r', 'b', 't', 'number'] },
-    ],
-    [
-      {
-        fn: 'insertListItemBefore',
-        ref: 'r',
-        node: 'b',
-        text: 't',
-        list: 'bullet',
-      },
-      { fn: 'insertListItemBefore', args: ['r', 'b', 't', 'bullet'] },
-    ],
-    [
-      { fn: 'removeListItem', node: 'b' },
-      { fn: 'removeListItem', args: ['b'] },
-    ],
-    [
-      { fn: 'addRow', table: 't', at: 1 },
-      { fn: 'addRow', args: ['t', 1] },
-    ],
-    [
-      { fn: 'addColumn', table: 't', at: undefined },
-      { fn: 'addColumn', args: ['t', undefined] },
-    ],
-    [
-      { fn: 'removeRow', table: 't', row: 0 },
-      { fn: 'removeRow', args: ['t', 0] },
-    ],
-    [
-      { fn: 'removeColumn', table: 't', col: 2 },
-      { fn: 'removeColumn', args: ['t', 2] },
-    ],
-  ];
-  it.each(cases)('routes %o', (edit, expected) => {
-    const { w, calls } = recordingWriter();
-    applyEdit(w, edit);
-    expect(calls).toEqual([expected]);
-  });
-});
-
-describe('describe -- summary lines', () => {
-  it('covers branchy descriptions', () => {
-    expect(
-      describeOp({
-        kind: 'formatText',
-        id: 'b',
-        match: 'x',
-        format: 'italic',
-        on: false,
-        scope: {},
-      })
-    ).toBe('unitalic "x" in {b}');
-    expect(describeOp({ kind: 'clearFormat', id: 'b', scope: {} })).toBe(
-      'cleared all formatting in {b}'
-    );
-    expect(
-      describeOp({ kind: 'clearFormat', id: 'b', match: 'y', scope: {} })
-    ).toBe('cleared formatting on "y" in {b}');
-    expect(
-      describeOp({
-        kind: 'markText',
-        id: 'b',
-        match: 'z',
-        on: false,
-        scope: {},
-      })
-    ).toBe('unhighlighted "z" in {b}');
-    expect(
-      describeOp({
-        kind: 'linkText',
-        id: 'b',
-        match: 'z',
-        url: null,
-        scope: {},
-      })
-    ).toBe('unlinked "z" in {b}');
-    expect(
-      describeOp({
-        kind: 'linkText',
-        id: 'b',
-        match: 'z',
-        url: 'http://x',
-        scope: {},
-      })
-    ).toBe('linked "z" → http://x in {b}');
-    expect(
-      describeOp({ kind: 'setBlockType', id: 'b', block: 'paragraph' })
-    ).toBe('{b} → paragraph');
-    expect(
-      describeOp({ kind: 'setListType', ids: ['a', 'b'], list: 'bullet' })
-    ).toBe('{a, b} → bullet list');
-    expect(describeOp({ kind: 'setChecked', id: 'b', checked: false })).toBe(
-      '{b} unchecked'
-    );
-    expect(
-      describeOp({
-        kind: 'insertBlock',
-        ref: 'r',
-        spec: { block: 'divider' },
-        at: { appendToRoot: true },
-      })
-    ).toBe('inserted divider (r)');
-    expect(
-      describeOp({
-        kind: 'insertInline',
-        ref: 'r',
-        id: 'b',
-        at: 3,
-        spec: { inline: 'linebreak' },
-      })
-    ).toBe('inserted linebreak in {b} @3');
-    expect(
-      describeOp({ kind: 'mergeBlocks', ids: ['a', 'b'], separator: ' ' })
-    ).toBe('merged {a, b}');
-    expect(
-      describeOp({ kind: 'setCell', table: 't', row: 2, col: 1, content: 'x' })
-    ).toBe('set cell [2, 1] of {t}');
-    expect(describeOp({ kind: 'removeRow', table: 't', row: 3 })).toBe(
-      'removed row 3 of {t}'
-    );
-  });
-
-  it('truncates long setText content with an ellipsis at 40 chars', () => {
-    const long = 'a'.repeat(50);
-    const out = describeOp({ kind: 'setText', id: 'b', text: long });
-    expect(out).toBe(`set {b} text to "${'a'.repeat(40)}…"`);
-  });
-
-  it('does not truncate text of exactly 40 chars', () => {
-    const exact = 'b'.repeat(40);
-    expect(describeOp({ kind: 'setText', id: 'b', text: exact })).toBe(
-      `set {b} text to "${exact}"`
-    );
+    expect(edits.map((e) => e.fn)).toContain('insertNode');
+    expect(edits.map((e) => e.fn)).toContain('insertText');
   });
 });
 
@@ -653,7 +356,6 @@ describe('summarize', () => {
       {
         ok: true,
         op: { kind: 'removeBlock', id: 'b1' },
-        summary: 'removed {b1}',
       },
       {
         ok: false,
@@ -668,7 +370,7 @@ describe('summarize', () => {
 describe('runQueue -- empty queue short-circuit', () => {
   it('never touches the writer, reader, or awareness', async () => {
     const apply = vi.fn();
-    const { w, calls } = recordingWriter();
+    const { w, edits } = recordingWriter();
     const results = await runQueue({
       ops: [],
       params: DEFAULT_QUEUE_PARAMS,
@@ -679,7 +381,7 @@ describe('runQueue -- empty queue short-circuit', () => {
       sleep: () => Promise.resolve(),
     });
     expect(results).toEqual([]);
-    expect(calls).toEqual([]);
+    expect(edits).toEqual([]);
     expect(apply).not.toHaveBeenCalled();
   });
 });

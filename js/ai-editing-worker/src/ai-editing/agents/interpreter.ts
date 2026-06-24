@@ -1,6 +1,6 @@
-import { type LanguageModel, type Tool, generateText, stepCountIs } from 'ai';
+import { generateText, type LanguageModel, stepCountIs, type Tool } from 'ai';
 
-export async function interpret(
+export async function interpreter(
   documentContext: string,
   request: string,
   model: LanguageModel,
@@ -9,10 +9,12 @@ export async function interpret(
 ) {
   const prompt = `User request: ${request}\n\n${documentContext}`;
 
-  return generateText({
+  const result = await generateText({
     model,
     system,
     prompt,
     ...(tools ? { tools, stopWhen: stepCountIs(12) } : {}),
   });
+
+  return { text: result.text, totalUsage: result.totalUsage };
 }

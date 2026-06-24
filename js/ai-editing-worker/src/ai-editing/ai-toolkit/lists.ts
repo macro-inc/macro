@@ -6,12 +6,7 @@ import {
   type ListNode,
   type ListType,
 } from '@lexical/list';
-import {
-  $createTextNode,
-  $isElementNode,
-  type ElementNode,
-  type LexicalNode,
-} from 'lexical';
+import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 import { $getId, $setId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import type { Session } from './session';
 
@@ -105,32 +100,4 @@ export function $outdent(block: LexicalNode): void {
     throw new Error('$outdent target is not a list item');
   }
   block.setIndent(Math.max(0, block.getIndent() - 1));
-}
-
-/**
- * Sort the items of the list enclosing `node` (a list node, or any node inside
- * one) alphabetically by their text. `order` defaults to ascending.
- */
-export function $sortList(
-  node: LexicalNode,
-  opts?: { order?: 'asc' | 'desc' }
-): void {
-  let list: LexicalNode | null = node;
-  while (list && !$isListNode(list)) {
-    list = list.getParent();
-  }
-  if (!$isListNode(list)) {
-    throw new Error('$sortList: no enclosing list');
-  }
-  const items = list.getChildren().filter($isListItemNode);
-  const sorted = [...items].sort((a, b) =>
-    a.getTextContent().localeCompare(b.getTextContent())
-  );
-  if (opts?.order === 'desc') {
-    sorted.reverse();
-  }
-  // Re-append in sorted order (append moves an already-attached child).
-  for (const item of sorted) {
-    list.append(item);
-  }
 }

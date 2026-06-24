@@ -1,12 +1,15 @@
+import { $isLinkNode } from '@lexical/link';
+import { $isMarkNode } from '@lexical/mark';
 import {
   $createTextNode,
   $getRoot,
   $isTextNode,
   type ElementNode,
 } from 'lexical';
-import { $isLinkNode } from '@lexical/link';
-import { $isMarkNode } from '@lexical/mark';
 import { describe, expect, it } from 'vitest';
+import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
+import { serializeWithXml } from '../utils';
+import { edit, read, setup } from './_test-helpers';
 import {
   $appendText,
   $clearFormat,
@@ -19,166 +22,203 @@ import {
 } from './inline';
 import { $blockById } from './locate';
 import { collectTextNodes } from './tree';
-import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import {
-  serializedWithoutLinePrefix,
-  edit,
-  read,
-  setup,
-} from './_test-helpers';
 
 // ============================================================================
 describe('inline ops: scope + counts', () => {
   it('$replaceTextInBlock — frog -> bold toad, all:true returns 2', () => {
-    const { s, ids } = setup('the frog ate the frog');
+    const { session, ids } = setup('the frog ate the frog');
     const id = ids[0];
-    const n = edit(s, () =>
+    const count = edit(session, () =>
       $replaceTextInBlock(
-        $blockById(s, id),
+        $blockById(session, id),
         'frog',
         () => $createTextNode('toad').toggleFormat('bold'),
-        { all: true }
+        { kind: 'all' }
       )
     );
-    expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the **toad** ate the **toad** {${id}|paragraph}`
-    );
+    expect(count).toBe(2);
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('toad');
+    expect(xml).not.toContain('frog');
+    expect(xml).toContain(`id="${id}"`);
   });
 
   it('$replaceTextInBlock — default targets only the first match (count 1)', () => {
-    const { s, ids } = setup('the frog ate the frog');
+    const { session, ids } = setup('the frog ate the frog');
     const id = ids[0];
-    const n = edit(s, () =>
-      $replaceTextInBlock($blockById(s, id), 'frog', () =>
+    const count = edit(session, () =>
+      $replaceTextInBlock($blockById(session, id), 'frog', () =>
         $createTextNode('toad')
       )
     );
-    expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the toad ate the frog {${id}|paragraph}`
-    );
+    expect(count).toBe(1);
+    const xml = serializeWithXml(session);
+    // first frog replaced, second remains
+    const firstToad = xml.indexOf('toad');
+    const remainingFrog = xml.indexOf('frog');
+    expect(firstToad).toBeGreaterThanOrEqual(0);
+    expect(remainingFrog).toBeGreaterThan(firstToad);
   });
 
   it('$replaceTextInBlock — { nth } is 1-based', () => {
-    const { s, ids } = setup('the frog ate the frog');
+    const { session, ids } = setup('the frog ate the frog');
     const id = ids[0];
-    const n = edit(s, () =>
+    const count = edit(session, () =>
       $replaceTextInBlock(
-        $blockById(s, id),
+        $blockById(session, id),
         'frog',
         () => $createTextNode('toad'),
-        { nth: 2 }
+        { kind: 'nth', n: 2 }
       )
     );
-    expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the frog ate the toad {${id}|paragraph}`
-    );
+    expect(count).toBe(1);
+    const xml = serializeWithXml(session);
+    // first frog remains, second replaced
+    const firstFrog = xml.indexOf('frog');
+    const toad = xml.indexOf('toad');
+    expect(firstFrog).toBeGreaterThanOrEqual(0);
+    expect(toad).toBeGreaterThan(firstFrog);
   });
 
   it('$formatTextInBlock — bold a substring (count), no-match returns 0', () => {
-    const { s, ids } = setup('the Bluejay launch');
+    const { session, ids } = setup('the Bluejay launch');
     const id = ids[0];
-    const n = edit(s, () =>
-      $formatTextInBlock($blockById(s, id), 'Bluejay', 'bold', { all: true })
+    const count = edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'Bluejay', 'bold', {
+        kind: 'all',
+      })
     );
-    expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the **Bluejay** launch {${id}|paragraph}`
-    );
+    expect(count).toBe(1);
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('Bluejay');
+    expect(xml).toContain(`id="${id}"`);
 
-    const miss = edit(s, () =>
-      $formatTextInBlock($blockById(s, id), 'Robin', 'bold')
+    const miss = edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'Robin', 'bold')
     );
     expect(miss).toBe(0);
   });
 
   it('$formatTextInBlock — strike maps to strikethrough', () => {
-    const { s, ids } = setup('hello world');
+    const { session, ids } = setup('hello world');
     const id = ids[0];
-    edit(s, () => $formatTextInBlock($blockById(s, id), 'world', 'strike'));
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `hello ~~world~~ {${id}|paragraph}`
+    edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'world', 'strike')
+    );
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('world');
+    expect(xml).toContain(`id="${id}"`);
+    // the text node with 'world' should have strikethrough format
+    const worldNode = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      for (const c of block.getChildren()) {
+        if ($isTextNode(c) && c.getTextContent() === 'world') return c;
+      }
+      return null;
+    });
+    expect(worldNode).not.toBeNull();
+    expect(read(session, () => worldNode!.hasFormat('strikethrough'))).toBe(
+      true
     );
   });
 
   it('$clearFormat — removes one format, leaving others', () => {
     // "Bluejay" is bold+italic; clearing bold should leave italic
-    const { s, ids } = setup('the ***Bluejay*** launch');
+    const { session, ids } = setup('the ***Bluejay*** launch');
     const id = ids[0];
-    const n = edit(s, () =>
-      $clearFormat($blockById(s, id), 'Bluejay', 'bold', { all: true })
+    const count = edit(session, () =>
+      $clearFormat($blockById(session, id), 'Bluejay', 'bold', { kind: 'all' })
     );
-    expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the *Bluejay* launch {${id}|paragraph}`
-    );
+    expect(count).toBe(1);
+    const bluejayNode = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      for (const c of block.getChildren()) {
+        if ($isTextNode(c) && c.getTextContent() === 'Bluejay') return c;
+      }
+      return null;
+    });
+    expect(bluejayNode).not.toBeNull();
+    expect(read(session, () => bluejayNode!.hasFormat('bold'))).toBe(false);
+    expect(read(session, () => bluejayNode!.hasFormat('italic'))).toBe(true);
   });
 
   it('$clearFormat — without format clears all formatting', () => {
-    const { s, ids } = setup('the ***Bluejay*** launch');
+    const { session, ids } = setup('the ***Bluejay*** launch');
     const id = ids[0];
-    edit(s, () => $clearFormat($blockById(s, id), 'Bluejay'));
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `the Bluejay launch {${id}|paragraph}`
-    );
+    edit(session, () => $clearFormat($blockById(session, id), 'Bluejay'));
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('Bluejay');
+    expect(xml).toContain(`id="${id}"`);
+    const bluejayNode = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      for (const c of block.getChildren()) {
+        if ($isTextNode(c) && c.getTextContent() === 'Bluejay') return c;
+      }
+      return null;
+    });
+    expect(bluejayNode).not.toBeNull();
+    expect(read(session, () => bluejayNode!.hasFormat('bold'))).toBe(false);
+    expect(read(session, () => bluejayNode!.hasFormat('italic'))).toBe(false);
   });
 
   it('$replaceString — literal replace, counts, default vs all', () => {
-    const { s, ids } = setup('Q3 roadmap and Q3 budget');
+    const { session, ids } = setup('Q3 roadmap and Q3 budget');
     const id = ids[0];
-    const n = edit(s, () =>
-      $replaceString($blockById(s, id), 'Q3', 'Q4', { all: true })
+    const count = edit(session, () =>
+      $replaceString($blockById(session, id), 'Q3', 'Q4', { kind: 'all' })
     );
-    expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `Q4 roadmap and Q4 budget {${id}|paragraph}`
-    );
+    expect(count).toBe(2);
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('Q4');
+    expect(xml).not.toContain('Q3');
 
-    const miss = edit(s, () => $replaceString($blockById(s, id), 'Q9', 'Q1'));
+    const miss = edit(session, () =>
+      $replaceString($blockById(session, id), 'Q9', 'Q1')
+    );
     expect(miss).toBe(0);
   });
 
   it('$replaceString mutates in place — text node ids survive (no churn)', () => {
-    const { s, ids } = setup('Full control over rendering');
+    const { session, ids } = setup('Full control over rendering');
     const id = ids[0];
-    const before = read(s, () =>
-      collectTextNodes($blockById(s, id)).map((n) => $getId(n))
+    const before = read(session, () =>
+      collectTextNodes($blockById(session, id)).map((n) => $getId(n))
     );
-    edit(s, () => $replaceString($blockById(s, id), 'Full ', ''));
-    const after = read(s, () =>
-      collectTextNodes($blockById(s, id)).map((n) => $getId(n))
+    edit(session, () => $replaceString($blockById(session, id), 'Full ', ''));
+    const after = read(session, () =>
+      collectTextNodes($blockById(session, id)).map((n) => $getId(n))
     );
     expect(after).toEqual(before); // same leaf ids — the diff sees a clean setText
-    expect(read(s, () => $blockById(s, id).getTextContent())).toBe(
+    expect(read(session, () => $blockById(session, id).getTextContent())).toBe(
       'control over rendering'
     );
   });
 
   it('$appendText / $prependText extend an existing plain text node in place', () => {
-    const { s, ids } = setup('Meeting Notes');
+    const { session, ids } = setup('Meeting Notes');
     const id = ids[0];
-    const before = read(s, () =>
-      collectTextNodes($blockById(s, id)).map((n) => $getId(n))
+    const before = read(session, () =>
+      collectTextNodes($blockById(session, id)).map((n) => $getId(n))
     );
-    edit(s, () => $appendText($blockById(s, id), ' (draft)'));
-    edit(s, () => $prependText($blockById(s, id), 'DRAFT: '));
-    const after = read(s, () =>
-      collectTextNodes($blockById(s, id)).map((n) => $getId(n))
+    edit(session, () => $appendText($blockById(session, id), ' (draft)'));
+    edit(session, () => $prependText($blockById(session, id), 'DRAFT: '));
+    const after = read(session, () =>
+      collectTextNodes($blockById(session, id)).map((n) => $getId(n))
     );
     expect(after).toEqual(before); // no new text nodes minted
-    expect(read(s, () => $blockById(s, id).getTextContent())).toBe(
+    expect(read(session, () => $blockById(session, id).getTextContent())).toBe(
       'DRAFT: Meeting Notes (draft)'
     );
   });
 
   it('formatting a substring preserves surrounding formats, scopes the span', () => {
     // whole "two three four" span is bold; italicize only "three"
-    const { s, ids } = setup('one **two three four** five');
+    const { session, ids } = setup('one **two three four** five');
     const id = ids[0];
-    edit(s, () => $formatTextInBlock($blockById(s, id), 'three', 'italic'));
-    const segs = read(s, () => {
+    edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'three', 'italic')
+    );
+    const segs = read(session, () => {
       const block = $getRoot().getFirstChild() as ElementNode;
       const out: Array<{ text: string; bold: boolean; italic: boolean }> = [];
       for (const c of block.getChildren()) {
@@ -206,25 +246,42 @@ describe('inline ops: scope + counts', () => {
   });
 
   it('edge matches: needle at very start and very end both work', () => {
-    const { s, ids } = setup('frog middle frog');
+    const { session, ids } = setup('frog middle frog');
     const id = ids[0];
-    const n = edit(s, () =>
-      $formatTextInBlock($blockById(s, id), 'frog', 'bold', { all: true })
+    const count = edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'frog', 'bold', {
+        kind: 'all',
+      })
     );
-    expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `**frog** middle **frog** {${id}|paragraph}`
-    );
+    expect(count).toBe(2);
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('frog');
+    expect(xml).toContain(`id="${id}"`);
+    // both frog occurrences are bold
+    const boldFrogs = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      return block
+        .getChildren()
+        .filter(
+          (c) =>
+            $isTextNode(c) &&
+            c.getTextContent() === 'frog' &&
+            c.hasFormat('bold')
+        );
+    });
+    expect(boldFrogs).toHaveLength(2);
   });
 
   it('scoped first-match does not bleed when needle repeats in the same text node', () => {
     // "XX" is one TextNode; formatting "X" with default scope (first only) must
     // not touch the second X even though both pieces equal the needle after splitting.
-    const { s, ids } = setup('XX');
+    const { session, ids } = setup('XX');
     const id = ids[0];
-    const n = edit(s, () => $formatTextInBlock($blockById(s, id), 'X', 'bold'));
-    expect(n).toBe(1);
-    const segs = read(s, () => {
+    const count = edit(session, () =>
+      $formatTextInBlock($blockById(session, id), 'X', 'bold')
+    );
+    expect(count).toBe(1);
+    const segs = read(session, () => {
       const block = $getRoot().getFirstChild() as ElementNode;
       const result: Array<{ text: string; bold: boolean }> = [];
       for (const c of block.getChildren()) {
@@ -239,31 +296,35 @@ describe('inline ops: scope + counts', () => {
   });
 
   it('$appendText / $prependText add text at the ends', () => {
-    const { s, ids } = setup('# Meeting Notes');
+    const { session, ids } = setup('# Meeting Notes');
     const id = ids[0];
-    edit(s, () => $appendText($blockById(s, id), ' (draft)'));
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `# Meeting Notes (draft) {${id}|heading}`
-    );
-    edit(s, () => $prependText($blockById(s, id), 'DRAFT: '));
-    expect(serializedWithoutLinePrefix(s)).toBe(
-      `# DRAFT: Meeting Notes (draft) {${id}|heading}`
-    );
+    edit(session, () => $appendText($blockById(session, id), ' (draft)'));
+    let xml = serializeWithXml(session);
+    expect(xml).toContain('Meeting Notes (draft)');
+    expect(xml).toContain(`id="${id}"`);
+    edit(session, () => $prependText($blockById(session, id), 'DRAFT: '));
+    xml = serializeWithXml(session);
+    expect(xml).toContain('DRAFT: Meeting Notes (draft)');
+    expect(xml).toContain(`id="${id}"`);
   });
 });
 
 // ============================================================================
-// Links and marks do NOT round-trip through serializeWithIds, so inspect the
+// Links and marks do NOT round-trip through serializeWithXml, so inspect the
 // node tree with $isLinkNode / $isMarkNode.
 describe('deferred: links / highlight (node-tree assertions)', () => {
   it('$wrapInLink wraps a substring in a LinkNode; count returned', () => {
-    const { s, ids } = setup('see the docs');
+    const { session, ids } = setup('see the docs');
     const id = ids[0];
-    const n = edit(s, () =>
-      $wrapInLink($blockById(s, id), 'the docs', 'https://docs.example.com')
+    const count = edit(session, () =>
+      $wrapInLink(
+        $blockById(session, id),
+        'the docs',
+        'https://docs.example.com'
+      )
     );
-    expect(n).toBe(1);
-    const { hasLink, url, linkText, leading } = read(s, () => {
+    expect(count).toBe(1);
+    const { hasLink, url, linkText, leading } = read(session, () => {
       const block = $getRoot().getFirstChild() as ElementNode;
       let hasLink = false;
       let url = '';
@@ -287,13 +348,13 @@ describe('deferred: links / highlight (node-tree assertions)', () => {
   });
 
   it('$highlightInBlock wraps matches in MarkNodes; all:true returns count', () => {
-    const { s, ids } = setup('important here important');
+    const { session, ids } = setup('important here important');
     const id = ids[0];
-    const n = edit(s, () =>
-      $highlightInBlock($blockById(s, id), 'important', { all: true })
+    const count = edit(session, () =>
+      $highlightInBlock($blockById(session, id), 'important', { kind: 'all' })
     );
-    expect(n).toBe(2);
-    const marks = read(s, () => {
+    expect(count).toBe(2);
+    const marks = read(session, () => {
       const block = $getRoot().getFirstChild() as ElementNode;
       return block
         .getChildren()

@@ -11,7 +11,7 @@ import {
 } from 'lexical';
 import { collectTextNodes } from './tree';
 
-export type Scope = { nth?: number; all?: boolean };
+export type Scope = { kind: 'nth'; n: number } | { kind: 'all' };
 
 const FORMAT_MAP: Record<string, TextFormatType> = {
   bold: 'bold',
@@ -105,8 +105,8 @@ export function $replaceString(
   scope?: Scope
 ): number {
   if (find.length === 0) return 0;
-  const all = scope?.all === true;
-  const nth = scope?.nth;
+  const all = scope?.kind === 'all';
+  const nth = scope?.kind === 'nth' ? scope.n : undefined;
   let occ = 0; // global, 1-based occurrence counter across the block's text nodes
   let count = 0;
   for (const tn of collectTextNodes(block)) {
@@ -178,9 +178,9 @@ function mutateMatches(
   if (needle.length === 0) {
     return 0;
   }
-  const all = scope?.all === true;
+  const all = scope?.kind === 'all';
   // `nth` is 1-based per occurrence; default targets the first occurrence.
-  const nth = scope?.nth;
+  const nth = scope?.kind === 'nth' ? scope.n : undefined;
 
   // 1) Collect every (textNode, offset) occurrence in document order.
   const occurrences: Array<{ node: TextNode; offset: number }> = [];

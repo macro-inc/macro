@@ -19,7 +19,7 @@ describe('DocumentEditor — inline formatting → ops', () => {
         match: 'frog',
         format: 'bold',
         on: true,
-        scope: { all: true },
+        scope: { kind: 'all' },
       },
     ]);
   });
@@ -48,8 +48,10 @@ describe('DocumentEditor — inline formatting → ops', () => {
   });
 
   it('passes through an explicit scope', () => {
-    expect(ed().bold('b1', 'x', { nth: 2 }).drain()[0]).toMatchObject({
-      scope: { nth: 2 },
+    expect(
+      ed().bold('b1', 'x', { kind: 'nth', n: 2 }).drain()[0]
+    ).toMatchObject({
+      scope: { kind: 'nth', n: 2 },
     });
   });
 
@@ -80,13 +82,13 @@ describe('DocumentEditor — inline formatting → ops', () => {
       kind: 'clearFormat',
       id: 'b1',
       match: 'x',
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().clearAllFormat('b1').drain()[0]).toEqual({
       kind: 'clearFormat',
       id: 'b1',
       match: undefined,
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
   });
 
@@ -116,7 +118,7 @@ describe('DocumentEditor — text / block / list → ops', () => {
       id: 'b1',
       find: 'a',
       to: 'b',
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().appendText('b1', '!').drain()[0]).toEqual({
       kind: 'appendText',
@@ -206,26 +208,21 @@ describe('DocumentEditor — text / block / list → ops', () => {
     });
   });
 
-  it('sortList defaults to asc', () => {
-    expect(ed().sortList('b1').drain()[0]).toEqual({
-      kind: 'sortList',
-      id: 'b1',
-      order: 'asc',
-    });
-  });
-
   it('insertListItemAfter defaults to a bullet item and returns a usable ref', () => {
     const e = ed();
     const ref = e.insertListItemAfter('b1', 'next');
     e.setText(ref, 'NEXT'); // would throw if ref were not registered valid
     const ops = e.drain();
-    expect(ops[0]).toEqual({
-      kind: 'insertListItemAfter',
-      ref,
-      id: 'b1',
-      text: 'next',
-      list: 'bullet',
-    });
+    expect(ops).toMatchObject([
+      {
+        kind: 'insertListItemAfter',
+        ref,
+        id: 'b1',
+        text: 'next',
+        list: 'bullet',
+      },
+      { kind: 'setText', id: ref },
+    ]);
   });
 
   it('insertListItemBefore carries an explicit list kind for nesting', () => {
@@ -254,13 +251,15 @@ describe('DocumentEditor — structure & refs', () => {
     const ref = e.insertParagraphAfter('b1', 'Intro');
     e.bold(ref, 'Intro'); // would throw if ref were not registered valid
     const ops = e.drain();
-    expect(ops[0]).toMatchObject({
-      kind: 'insertBlock',
-      ref,
-      spec: { block: 'paragraph', text: 'Intro' },
-      at: { after: 'b1' },
-    });
-    expect(ops[1]).toMatchObject({ kind: 'formatText', id: ref });
+    expect(ops).toMatchObject([
+      {
+        kind: 'insertBlock',
+        ref,
+        spec: { block: 'paragraph', text: 'Intro' },
+        at: { after: 'b1' },
+      },
+      { kind: 'formatText', id: ref },
+    ]);
   });
 
   it('append/prepend block go to root', () => {
@@ -272,7 +271,7 @@ describe('DocumentEditor — structure & refs', () => {
     expect(p.drain()[0]).toMatchObject({ at: { prependToRoot: true } });
   });
 
-  it('move / remove / removeMany / merge / split', () => {
+  it('move / remove / removeMany / merge', () => {
     expect(ed().move('b1', { before: 'b2' }).drain()[0]).toEqual({
       kind: 'moveBlock',
       id: 'b1',
@@ -288,11 +287,6 @@ describe('DocumentEditor — structure & refs', () => {
       ids: ['b1', 'b2'],
       separator: ' — ',
     });
-    expect(ed().split('b1', 'half').drain()[0]).toEqual({
-      kind: 'splitBlock',
-      id: 'b1',
-      atText: 'half',
-    });
   });
 
   it('tables: insert an EMPTY grid, then a setCell per non-empty cell (human-like fill)', () => {
@@ -302,19 +296,18 @@ describe('DocumentEditor — structure & refs', () => {
       ['c', ''],
     ]); // 2x2, one empty cell
     const ops = e.drain();
-    // empty grid first (same shape, blank cells)
-    expect(ops[0]).toMatchObject({
-      kind: 'insertBlock',
-      spec: {
-        block: 'table',
-        rows: [
-          ['', ''],
-          ['', ''],
-        ],
-      },
-    });
-    // then one setCell per NON-empty cell, in row-major order, targeting the ref
-    expect(ops.slice(1)).toEqual([
+    // empty grid first (same shape, blank cells), then one setCell per NON-empty cell
+    expect(ops).toEqual([
+      expect.objectContaining({
+        kind: 'insertBlock',
+        spec: {
+          block: 'table',
+          rows: [
+            ['', ''],
+            ['', ''],
+          ],
+        },
+      }),
       { kind: 'setCell', table: t, row: 0, col: 0, content: 'A' },
       { kind: 'setCell', table: t, row: 0, col: 1, content: 'B' },
       { kind: 'setCell', table: t, row: 1, col: 0, content: 'c' },
@@ -488,7 +481,6 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
     ['indent', (e) => e.indent('nope')],
     ['outdent', (e) => e.outdent('nope')],
     ['setIndent', (e) => e.setIndent('nope', 1)],
-    ['sortList', (e) => e.sortList('nope')],
     ['insertListItemAfter', (e) => e.insertListItemAfter('nope', 'x')],
     ['insertListItemBefore', (e) => e.insertListItemBefore('nope', 'x')],
     ['removeListItem', (e) => e.removeListItem('nope')],
@@ -496,7 +488,6 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
     ['remove', (e) => e.remove('nope')],
     ['removeMany', (e) => e.removeMany(['nope'])],
     ['merge', (e) => e.merge(['nope', 'b1'])],
-    ['split', (e) => e.split('nope', 'x')],
     ['setCell', (e) => e.setCell('nope', 0, 0, 'x')],
     ['addRow', (e) => e.addRow('nope')],
     ['addColumn', (e) => e.addColumn('nope')],
@@ -552,7 +543,6 @@ describe('DocumentEditor — match/find validation', () => {
       /match string is empty/
     );
     expect(() => ed().unlink('b1', '')).toThrow(/match string is empty/);
-    expect(() => ed().split('b1', '')).toThrow(/match string is empty/);
   });
   it('clearFormat tolerates an omitted match but rejects an empty one', () => {
     expect(() => ed().clearFormat('b1')).not.toThrow();
@@ -715,24 +705,26 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
 describe('DocumentEditor — scope defaults', () => {
   it('format/highlight/link/clearFormat/replace default to { all: true }', () => {
     expect(ed().bold('b1', 'x').drain()[0]).toMatchObject({
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().clearFormat('b1', 'x').drain()[0]).toMatchObject({
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
     expect(ed().replace('b1', 'a', 'b').drain()[0]).toMatchObject({
-      scope: { all: true },
+      scope: { kind: 'all' },
     });
   });
   it('an explicit scope overrides the default', () => {
-    expect(ed().bold('b1', 'x', { nth: 3 }).drain()[0]).toMatchObject({
-      scope: { nth: 3 },
+    expect(
+      ed().bold('b1', 'x', { kind: 'nth', n: 3 }).drain()[0]
+    ).toMatchObject({
+      scope: { kind: 'nth', n: 3 },
     });
   });
 });

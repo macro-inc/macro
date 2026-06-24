@@ -1,88 +1,165 @@
-import { describe, expect, it } from 'vitest';
+import { $isLinkNode } from '@lexical/link';
+import { $isMarkNode } from '@lexical/mark';
+import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import {
   $getRoot,
   $isElementNode,
+  $isTextNode,
   type ElementNode,
   type LexicalNode,
 } from 'lexical';
-import { $isMarkNode } from '@lexical/mark';
-import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
+import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { edit, read, setup } from '../ai-toolkit/_test-helpers';
-import { serializeWithIds, serializeWithXml } from '../utils';
-import { applyEdit } from '../queue/runner';
 import type { Session } from '../ai-toolkit/session';
-import { Doc, buildNode } from './doc';
+import { serializeWithXml } from '../utils';
+import { buildNode, Doc } from './doc';
 
-/** Serialize, stripping the `N | ` line-number prefix for stable assertions. */
-function plain(s: Session): string {
-  return serializeWithIds(s)
-    .split('\n')
-    .map((l) => l.replace(/^\d+ \| /, ''))
-    .join('\n');
+/** Serialize to XML for assertions. */
+function plain(session: Session): string {
+  return serializeWithXml(session);
+}
+
+/** Get text nodes in a block with their format. */
+function textRuns(session: Session, blockIdx = 0) {
+  return read(session, () => {
+    const block = $getRoot().getChildren()[blockIdx] as ElementNode;
+    const runs: Array<{ text: string; bold: boolean; italic: boolean }> = [];
+    const walk = (n: LexicalNode) => {
+      if ($isTextNode(n))
+        runs.push({
+          text: n.getTextContent(),
+          bold: n.hasFormat('bold'),
+          italic: n.hasFormat('italic'),
+        });
+      if ($isElementNode(n)) for (const c of n.getChildren()) walk(c);
+    };
+    if (block) for (const c of block.getChildren()) walk(c);
+    return runs;
+  });
 }
 
 describe('Doc — text content writes', () => {
   it('insertText splices in place, preserving the block id', () => {
-    const { s, ids } = setup('hello world');
-    new Doc(s).insertText(ids[0]!, 5, ' there');
-    expect(plain(s)).toBe(`hello there world {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('hello world');
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 5,
+      text: ' there',
+    });
+    expect(plain(session)).toContain('hello there world');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('removeText deletes a range', () => {
-    const { s, ids } = setup('hello world');
-    new Doc(s).removeText(ids[0]!, 5, 6); // remove " world"
-    expect(plain(s)).toBe(`hello {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('hello world');
+    new Doc(session).apply({ fn: 'removeText', node: ids[0]!, at: 5, len: 6 }); // remove " world"
+    expect(plain(session)).toContain('hello');
+    expect(plain(session)).not.toContain('world');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('setText replaces content and strips formatting', () => {
-    const { s, ids } = setup('the **bold** thing');
-    new Doc(s).setText(ids[0]!, 'plain now');
-    expect(plain(s)).toBe(`plain now {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('the **bold** thing');
+    new Doc(session).apply({ fn: 'setText', node: ids[0]!, text: 'plain now' });
+    expect(plain(session)).toContain('plain now');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('insertText at the end of a formatted run stays plain (no format inheritance)', () => {
-    const { s, ids } = setup('a **b**'); // ends in a bold run
-    const len = new Doc(s).textLength(ids[0]!);
-    new Doc(s).insertText(ids[0]!, len, ' c');
-    expect(plain(s)).toBe(`a **b** c {${ids[0]}|paragraph}`); // not `a **b c**`
+    const { session, ids } = setup('a **b**'); // ends in a bold run
+    const len = new Doc(session).textLength(ids[0]!);
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: len,
+      text: ' c',
+    });
+    // 'b' is bold, ' c' appended after is NOT bold
+    const runs = textRuns(session);
+    const boldB = runs.find((r) => r.text === 'b');
+    const plainC = runs.find((r) => r.text.includes('c'));
+    expect(boldB?.bold).toBe(true);
+    expect(plainC?.bold).toBe(false);
   });
 
   it('insertText at offset 0 before a formatted run stays plain', () => {
-    const { s, ids } = setup('**b** c'); // starts with a bold run
-    new Doc(s).insertText(ids[0]!, 0, 'a ');
-    expect(plain(s)).toBe(`a **b** c {${ids[0]}|paragraph}`); // not `**a b** c`
+    const { session, ids } = setup('**b** c'); // starts with a bold run
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 0,
+      text: 'a ',
+    });
+    // 'a ' inserted at front is NOT bold
+    const runs = textRuns(session);
+    const prefixRun = runs.find((r) => r.text.includes('a'));
+    expect(prefixRun?.bold).toBe(false);
   });
 
   it('typing char-by-char into an emptied block builds the text', () => {
-    const { s, ids } = setup('x');
-    const doc = new Doc(s);
-    doc.removeText(ids[0]!, 0, 1);
-    for (const [i, ch] of [...'Hi'].entries()) doc.insertText(ids[0]!, i, ch);
-    expect(plain(s)).toBe(`Hi {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('x');
+    const doc = new Doc(session);
+    doc.apply({ fn: 'removeText', node: ids[0]!, at: 0, len: 1 });
+    for (const [i, ch] of [...'Hi'].entries())
+      doc.apply({ fn: 'insertText', node: ids[0]!, at: i, text: ch });
+    expect(plain(session)).toContain('Hi');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
 describe('Doc — inline formatting (reuses ai-toolkit)', () => {
   it('formatText bolds every occurrence', () => {
-    const { s, ids } = setup('the Bluejay and the Bluejay');
-    new Doc(s).formatText(ids[0]!, 'Bluejay', 'bold', true, { all: true });
-    expect(plain(s)).toBe(
-      `the **Bluejay** and the **Bluejay** {${ids[0]}|paragraph}`
-    );
+    const { session, ids } = setup('the Bluejay and the Bluejay');
+    new Doc(session).apply({
+      fn: 'formatText',
+      node: ids[0]!,
+      match: 'Bluejay',
+      format: 'bold',
+      on: true,
+      scope: { kind: 'all' },
+    });
+    const runs = textRuns(session);
+    const boldRuns = runs.filter((r) => r.text === 'Bluejay');
+    expect(boldRuns).toHaveLength(2);
+    expect(boldRuns.every((r) => r.bold)).toBe(true);
   });
 
   it('formatText off clears that format on a match', () => {
-    const { s, ids } = setup('the **Bluejay** launch');
-    new Doc(s).formatText(ids[0]!, 'Bluejay', 'bold', false, { all: true });
-    expect(plain(s)).toBe(`the Bluejay launch {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('the **Bluejay** launch');
+    new Doc(session).apply({
+      fn: 'formatText',
+      node: ids[0]!,
+      match: 'Bluejay',
+      format: 'bold',
+      on: false,
+      scope: { kind: 'all' },
+    });
+    const runs = textRuns(session);
+    const bluejayRun = runs.find((r) => r.text === 'Bluejay');
+    expect(bluejayRun?.bold).toBe(false);
   });
 
   it('markText on highlights (wraps in a mark node); off is a no-op when not highlighted', () => {
-    const { s, ids } = setup('warn here');
-    expect(() => new Doc(s).markText(ids[0]!, 'warn', false, {})).not.toThrow();
-    new Doc(s).markText(ids[0]!, 'warn', true, {});
-    const hasMark = read(s, () => {
+    const { session, ids } = setup('warn here');
+    expect(() =>
+      new Doc(session).apply({
+        fn: 'markText',
+        node: ids[0]!,
+        match: 'warn',
+        on: false,
+        scope: { kind: 'all' },
+      })
+    ).not.toThrow();
+    new Doc(session).apply({
+      fn: 'markText',
+      node: ids[0]!,
+      match: 'warn',
+      on: true,
+      scope: { kind: 'all' },
+    });
+    const hasMark = read(session, () => {
       let found = false;
       const walk = (n: LexicalNode) => {
         if ($isMarkNode(n)) found = true;
@@ -96,101 +173,156 @@ describe('Doc — inline formatting (reuses ai-toolkit)', () => {
   });
 
   it('linkText wraps; unlink (null) removes the link wrapper', () => {
-    const { s, ids } = setup('see docs');
-    expect(() => new Doc(s).linkText(ids[0]!, 'docs', null, {})).not.toThrow();
-    new Doc(s).linkText(ids[0]!, 'docs', 'http://x', {});
-    expect(plain(s)).toContain('[docs](http://x)');
+    const { session, ids } = setup('see docs');
+    expect(() =>
+      new Doc(session).apply({
+        fn: 'linkText',
+        node: ids[0]!,
+        match: 'docs',
+        url: null,
+        scope: { kind: 'all' },
+      })
+    ).not.toThrow();
+    new Doc(session).apply({
+      fn: 'linkText',
+      node: ids[0]!,
+      match: 'docs',
+      url: 'http://x',
+      scope: { kind: 'all' },
+    });
+    // verify link node in tree
+    const linkUrl = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      for (const c of block.getChildren()) {
+        if ($isLinkNode(c)) return c.getURL();
+      }
+      return null;
+    });
+    expect(linkUrl).toBe('http://x');
   });
 });
 
 describe('Doc — block type & lists (id preservation)', () => {
   it('setBlockType heading keeps the durable id', () => {
-    const { s, ids } = setup('Title');
+    const { session, ids } = setup('Title');
     const before = ids[0]!;
-    new Doc(s).setBlockType(before, 'heading', { level: 2 });
-    expect(plain(s)).toBe(`## Title {${before}|heading}`);
+    new Doc(session).apply({
+      fn: 'setBlockType',
+      node: before,
+      block: 'heading',
+      level: 2,
+    });
+    expect(plain(session)).toContain('<h2');
+    expect(plain(session)).toContain(`id="${before}"`);
+    expect(plain(session)).toContain('Title');
   });
 
   it('a follow-up edit still resolves the id after a type swap', () => {
-    const { s, ids } = setup('Title');
-    const doc = new Doc(s);
-    doc.setBlockType(ids[0]!, 'heading', { level: 2 });
-    doc.appendText(ids[0]!, '!'); // same id resolves to the new heading
-    expect(plain(s)).toBe(`## Title! {${ids[0]}|heading}`);
+    const { session, ids } = setup('Title');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'setBlockType',
+      node: ids[0]!,
+      block: 'heading',
+      level: 2,
+    });
+    doc.apply({ fn: 'appendText', node: ids[0]!, text: '!' }); // same id resolves to the new heading
+    expect(plain(session)).toContain('<h2');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
+    expect(plain(session)).toContain('Title!');
   });
 
   it('setChecked operates on a list item (addressed by its own id)', () => {
-    const { s } = setup('- [ ] todo');
+    const { session } = setup('- [ ] todo');
     // top-level id is the list; the AI addresses the *item* by its id.
-    const itemId = read(s, () =>
+    const itemId = read(session, () =>
       $getId(
         (
           $getRoot().getFirstChild() as ElementNode
         ).getFirstChild() as LexicalNode
       )
     );
-    new Doc(s).setChecked(itemId!, true);
-    expect(plain(s)).toContain('[x]');
+    new Doc(session).apply({ fn: 'setChecked', node: itemId!, checked: true });
+    expect(plain(session)).toContain('checked="true"');
   });
 });
 
 describe('Doc — structure & refs', () => {
   it('insertNode mints an id resolvable by a follow-up edit via its ref', () => {
-    const { s, ids } = setup('first');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'ref-1',
-      { block: 'paragraph', text: 'second' },
-      { after: ids[0]! }
-    );
-    doc.setText('ref-1', 'SECOND');
-    const out = plain(s);
+    const { session, ids } = setup('first');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'ref-1',
+      spec: { block: 'paragraph', text: 'second' },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'setText', node: 'ref-1', text: 'SECOND' });
+    const out = plain(session);
     expect(out).toContain('first');
     expect(out).toContain('SECOND');
   });
 
   it('removeNode deletes a block', () => {
-    const { s, ids } = setup('keep\n\ndrop');
-    new Doc(s).removeNode(ids[1]!);
-    expect(plain(s)).toBe(`keep {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('keep\n\ndrop');
+    new Doc(session).apply({ fn: 'removeNode', node: ids[1]! });
+    expect(plain(session)).toContain('keep');
+    expect(plain(session)).not.toContain('drop');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('appendListItem grows an empty list, each item typed via its ref', () => {
     // Mirrors how the animator builds a list: insert empty, then append + type.
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'L',
-      { block: 'list', list: 'bullet', items: [] },
-      { after: ids[0]! }
-    );
-    doc.appendListItem('L~li-0', 'L');
-    doc.setText('L~li-0', 'first');
-    doc.appendListItem('L~li-1', 'L');
-    doc.setText('L~li-1', 'second');
-    const out = plain(s);
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'bullet', items: [] },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'appendListItem', ref: 'L~li-0', node: 'L' });
+    doc.apply({ fn: 'setText', node: 'L~li-0', text: 'first' });
+    doc.apply({ fn: 'appendListItem', ref: 'L~li-1', node: 'L' });
+    doc.apply({ fn: 'setText', node: 'L~li-1', text: 'second' });
+    const out = plain(session);
     expect(out).toContain('first');
     expect(out).toContain('second');
   });
 
   it('appendListItem rejects a non-list target', () => {
-    const { s, ids } = setup('para');
-    expect(() => new Doc(s).appendListItem('x', ids[0]!)).toThrow(/not a list/);
+    const { session, ids } = setup('para');
+    expect(() =>
+      new Doc(session).apply({ fn: 'appendListItem', ref: 'x', node: ids[0]! })
+    ).toThrow(/not a list/);
   });
 
   it('insertListItemAfter/Before add same-kind siblings into an existing list', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'L',
-      { block: 'list', list: 'bullet', items: [] },
-      { after: ids[0]! }
-    );
-    doc.appendListItem('L~li-0', 'L');
-    doc.setText('L~li-0', 'middle');
-    doc.insertListItemAfter('after', 'L~li-0', 'last', 'bullet');
-    doc.insertListItemBefore('before', 'L~li-0', 'first', 'bullet');
-    const xml = serializeWithXml(s);
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'bullet', items: [] },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'appendListItem', ref: 'L~li-0', node: 'L' });
+    doc.apply({ fn: 'setText', node: 'L~li-0', text: 'middle' });
+    doc.apply({
+      fn: 'insertListItemAfter',
+      ref: 'after',
+      node: 'L~li-0',
+      text: 'last',
+      list: 'bullet',
+    });
+    doc.apply({
+      fn: 'insertListItemBefore',
+      ref: 'before',
+      node: 'L~li-0',
+      text: 'first',
+      list: 'bullet',
+    });
+    const xml = serializeWithXml(session);
     // One list, three plain items in order, no nesting.
     expect((xml.match(/<ul/g) ?? []).length).toBe(1);
     expect(xml.indexOf('first')).toBeLessThan(xml.indexOf('middle'));
@@ -198,17 +330,24 @@ describe('Doc — structure & refs', () => {
   });
 
   it('insertListItemAfter with a differing kind nests a sublist', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'L',
-      { block: 'list', list: 'bullet', items: [] },
-      { after: ids[0]! }
-    );
-    doc.appendListItem('L~li-0', 'L');
-    doc.setText('L~li-0', 'bullet item');
-    doc.insertListItemAfter('nested', 'L~li-0', 'numbered item', 'number');
-    const xml = serializeWithXml(s);
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'bullet', items: [] },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'appendListItem', ref: 'L~li-0', node: 'L' });
+    doc.apply({ fn: 'setText', node: 'L~li-0', text: 'bullet item' });
+    doc.apply({
+      fn: 'insertListItemAfter',
+      ref: 'nested',
+      node: 'L~li-0',
+      text: 'numbered item',
+      list: 'number',
+    });
+    const xml = serializeWithXml(session);
     // The numbered item lives in an <ol> wrapped inside the bullet <ul>.
     expect(xml).toMatch(
       /<ul[\s\S]*<ol[\s\S]*numbered item[\s\S]*<\/ol>[\s\S]*<\/ul>/
@@ -216,73 +355,86 @@ describe('Doc — structure & refs', () => {
   });
 
   it('removeListItem drops a single item, keeping the rest', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'L',
-      { block: 'list', list: 'bullet', items: [] },
-      { after: ids[0]! }
-    );
-    doc.appendListItem('L~li-0', 'L');
-    doc.setText('L~li-0', 'keep');
-    doc.insertListItemAfter('drop', 'L~li-0', 'drop', 'bullet');
-    doc.removeListItem('drop');
-    const out = plain(s);
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'bullet', items: [] },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'appendListItem', ref: 'L~li-0', node: 'L' });
+    doc.apply({ fn: 'setText', node: 'L~li-0', text: 'keep' });
+    doc.apply({
+      fn: 'insertListItemAfter',
+      ref: 'drop',
+      node: 'L~li-0',
+      text: 'drop',
+      list: 'bullet',
+    });
+    doc.apply({ fn: 'removeListItem', node: 'drop' });
+    const out = plain(session);
     expect(out).toContain('keep');
     expect(out).not.toContain('drop');
   });
 
   it('removeListItem rejects a non-list-item target', () => {
-    const { s, ids } = setup('para');
-    expect(() => new Doc(s).removeListItem(ids[0]!)).toThrow(/not a list item/);
+    const { session, ids } = setup('para');
+    expect(() =>
+      new Doc(session).apply({ fn: 'removeListItem', node: ids[0]! })
+    ).toThrow(/not a list item/);
   });
 
   it('insertNode then a table cell edit', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      't',
-      {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 't',
+      spec: {
         block: 'table',
         rows: [
           ['A', 'B'],
           ['c', 'd'],
         ],
       },
-      { after: ids[0]! }
-    );
-    doc.setCell('t', 1, 0, 'C');
-    expect(plain(s)).toContain('C');
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'setCell', table: 't', row: 1, col: 0, text: 'C' });
+    expect(plain(session)).toContain('C');
   });
 });
 
 describe('Doc — readers', () => {
   it('textLength counts plain-text length', () => {
-    const { s, ids } = setup('hello');
-    expect(new Doc(s).textLength(ids[0]!)).toBe(5);
+    const { session, ids } = setup('hello');
+    expect(new Doc(session).textLength(ids[0]!)).toBe(5);
   });
 
   it('locate returns each occurrence with text-node id + offsets', () => {
-    const { s, ids } = setup('frog and frog');
-    const matches = new Doc(s).locate(ids[0]!, 'frog', { all: true });
+    const { session, ids } = setup('frog and frog');
+    const matches = new Doc(session).locate(ids[0]!, 'frog', { kind: 'all' });
     expect(matches).toHaveLength(2);
     expect(matches[0]).toMatchObject({ start: 0, end: 4 });
     expect(matches[1]).toMatchObject({ start: 9, end: 13 });
   });
 
   it('locate honors nth scope', () => {
-    const { s, ids } = setup('a a a');
-    expect(new Doc(s).locate(ids[0]!, 'a', { nth: 2 })).toHaveLength(1);
+    const { session, ids } = setup('a a a');
+    expect(
+      new Doc(session).locate(ids[0]!, 'a', { kind: 'nth', n: 2 })
+    ).toHaveLength(1);
   });
 
   it('cellNode resolves a cell content id whose text we can measure', () => {
-    const { s, ids } = setup('x');
-    const doc = new Doc(s);
-    doc.insertNode(
-      't',
-      { block: 'table', rows: [['Head'], ['body']] },
-      { after: ids[0]! }
-    );
+    const { session, ids } = setup('x');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 't',
+      spec: { block: 'table', rows: [['Head'], ['body']] },
+      at: { after: ids[0]! },
+    });
     const cell = doc.cellNode('t', 1, 0);
     expect(doc.textLength(cell)).toBe(4); // 'body'
   });
@@ -290,35 +442,38 @@ describe('Doc — readers', () => {
 
 describe('Doc — error surfacing', () => {
   it('an unknown id throws EditError (so the tool can report it)', () => {
-    const { s } = setup('hi');
-    expect(() => new Doc(s).setText('nope', 'x')).toThrow(
-      /No node with id|nope/
-    );
+    const { session } = setup('hi');
+    expect(() =>
+      new Doc(session).apply({ fn: 'setText', node: 'nope', text: 'x' })
+    ).toThrow(/No node with id|nope/);
   });
 
   it('a failed edit leaves the document untouched', () => {
-    const { s, ids } = setup('safe');
-    const doc = new Doc(s);
-    expect(() => doc.removeNode('ghost')).toThrow();
-    expect(plain(s)).toBe(`safe {${ids[0]}|paragraph}`); // unchanged
+    const { session, ids } = setup('safe');
+    const doc = new Doc(session);
+    expect(() => doc.apply({ fn: 'removeNode', node: 'ghost' })).toThrow();
+    expect(plain(session)).toContain('safe'); // unchanged
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
-describe('applyEdit routing', () => {
+describe('Doc.apply routing', () => {
   it('routes a structured Edit to the right DocWriter method', () => {
-    const { s, ids } = setup('routed');
-    applyEdit(new Doc(s), {
+    const { session, ids } = setup('routed');
+    new Doc(session).apply({
       fn: 'setBlockType',
       node: ids[0]!,
       block: 'quote',
     });
-    expect(plain(s)).toBe(`> routed {${ids[0]}|quote}`);
+    expect(plain(session)).toContain('<blockquote');
+    expect(plain(session)).toContain('routed');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
 /** Durable ids of a top-level block's element children (e.g. list items). */
-function childIds(s: Session, topLevelIndex = 0): string[] {
-  return read(s, () => {
+function childIds(session: Session, topLevelIndex = 0): string[] {
+  return read(session, () => {
     const block = $getRoot().getChildren()[topLevelIndex] as ElementNode;
     return block.getChildren().map((c) => $getId(c) ?? '?');
   });
@@ -328,8 +483,8 @@ function childIds(s: Session, topLevelIndex = 0): string[] {
 
 describe('Doc.locate — within and across text nodes', () => {
   it('multiple occurrences within ONE plain text node, within-node offsets', () => {
-    const { s, ids } = setup('a a a');
-    const matches = new Doc(s).locate(ids[0]!, 'a', { all: true });
+    const { session, ids } = setup('a a a');
+    const matches = new Doc(session).locate(ids[0]!, 'a', { kind: 'all' });
     expect(matches).toHaveLength(3);
     expect(matches.map((m) => [m.start, m.end])).toEqual([
       [0, 1],
@@ -342,8 +497,8 @@ describe('Doc.locate — within and across text nodes', () => {
 
   it('occurrences ACROSS two text runs report per-node (within-node) offsets', () => {
     // 'a **b** a' → runs: "a " (plain), "b" (bold), " a" (plain).
-    const { s, ids } = setup('a **b** a');
-    const matches = new Doc(s).locate(ids[0]!, 'a', { all: true });
+    const { session, ids } = setup('a **b** a');
+    const matches = new Doc(session).locate(ids[0]!, 'a', { kind: 'all' });
     expect(matches).toHaveLength(2);
     // first run "a ": match at 0..1 ; third run " a": match at 1..2 (within that node)
     expect(matches[0]).toMatchObject({ start: 0, end: 1 });
@@ -353,45 +508,47 @@ describe('Doc.locate — within and across text nodes', () => {
   });
 
   it('node id is the text-node id (not the block id)', () => {
-    const { s, ids } = setup('hello');
-    const matches = new Doc(s).locate(ids[0]!, 'ell');
+    const { session, ids } = setup('hello');
+    const matches = new Doc(session).locate(ids[0]!, 'ell');
     expect(matches).toHaveLength(1);
     expect(matches[0]!.node).not.toBe(ids[0]); // distinct from the block id
     expect(matches[0]).toMatchObject({ start: 1, end: 4 });
   });
 
-  it('default scope {} returns only the FIRST occurrence', () => {
-    const { s, ids } = setup('a a a');
-    expect(new Doc(s).locate(ids[0]!, 'a', {})).toHaveLength(1);
-    expect(new Doc(s).locate(ids[0]!, 'a', {})[0]).toMatchObject({
+  it('default scope (undefined) returns only the FIRST occurrence', () => {
+    const { session, ids } = setup('a a a');
+    expect(new Doc(session).locate(ids[0]!, 'a')).toHaveLength(1);
+    expect(new Doc(session).locate(ids[0]!, 'a')[0]).toMatchObject({
       start: 0,
       end: 1,
     });
   });
 
-  it('scope { nth: 2 } returns only the 2nd', () => {
-    const { s, ids } = setup('a a a');
-    const m = new Doc(s).locate(ids[0]!, 'a', { nth: 2 });
+  it("scope { kind: 'nth', n: 2 } returns only the 2nd", () => {
+    const { session, ids } = setup('a a a');
+    const m = new Doc(session).locate(ids[0]!, 'a', { kind: 'nth', n: 2 });
     expect(m).toHaveLength(1);
     expect(m[0]).toMatchObject({ start: 2, end: 3 });
   });
 
   it('scope { nth } counts across text-node boundaries', () => {
-    const { s, ids } = setup('a **b** a'); // 'a' occurs in run 1 (occ 1) and run 3 (occ 2)
-    const m = new Doc(s).locate(ids[0]!, 'a', { nth: 2 });
+    const { session, ids } = setup('a **b** a'); // 'a' occurs in run 1 (occ 1) and run 3 (occ 2)
+    const m = new Doc(session).locate(ids[0]!, 'a', { kind: 'nth', n: 2 });
     expect(m).toHaveLength(1);
     expect(m[0]).toMatchObject({ start: 1, end: 2 }); // within the third run " a"
   });
 
   it('zero matches → []', () => {
-    const { s, ids } = setup('hello');
-    expect(new Doc(s).locate(ids[0]!, 'zzz', { all: true })).toEqual([]);
+    const { session, ids } = setup('hello');
+    expect(new Doc(session).locate(ids[0]!, 'zzz', { kind: 'all' })).toEqual(
+      []
+    );
   });
 
   it('overlapping search advances past each whole match (non-overlapping)', () => {
-    const { s, ids } = setup('aaaa');
+    const { session, ids } = setup('aaaa');
     // 'aa' occurs at 0 and 2 (non-overlapping), not at 1.
-    const m = new Doc(s).locate(ids[0]!, 'aa', { all: true });
+    const m = new Doc(session).locate(ids[0]!, 'aa', { kind: 'all' });
     expect(m.map((x) => x.start)).toEqual([0, 2]);
   });
 });
@@ -400,37 +557,69 @@ describe('Doc.locate — within and across text nodes', () => {
 
 describe('Doc.insertText — multi-run formatting preservation', () => {
   it('inserting inside the second (plain) run keeps the first run bold', () => {
-    const { s, ids } = setup('**bold** plain');
-    new Doc(s).insertText(ids[0]!, 6, 'Z'); // offset 6 is inside " plain"
-    expect(plain(s)).toBe(`**bold** pZlain {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('**bold** plain');
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 6,
+      text: 'Z',
+    }); // offset 6 is inside " plain"
+    // 'bold' run stays bold, inserted 'Z' is in plain area
+    const runs = textRuns(session);
+    const boldRun = runs.find((r) => r.text === 'bold');
+    expect(boldRun?.bold).toBe(true);
+    expect(plain(session)).toContain('pZlain');
   });
 
   it('inserting inside the bold run (offset 3) keeps it bold', () => {
-    const { s, ids } = setup('a **b** c');
+    const { session, ids } = setup('a **b** c');
     // runs: "a "(0-1 plain), "b"(2 bold), " c"(3-4 plain). offset 3 = inside the bold "b".
-    new Doc(s).insertText(ids[0]!, 3, 'X');
-    expect(plain(s)).toBe(`a **bX** c {${ids[0]}|paragraph}`);
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 3,
+      text: 'X',
+    });
+    const runs = textRuns(session);
+    const boldRun = runs.find((r) => r.text === 'bX');
+    expect(boldRun?.bold).toBe(true);
   });
 
   it('inserting at a run boundary (offset 2) lands in the earlier plain run', () => {
-    const { s, ids } = setup('a **b** c');
+    const { session, ids } = setup('a **b** c');
     // offset 2 is the end of the "a " run (length 2) → text goes there, stays plain.
-    new Doc(s).insertText(ids[0]!, 2, 'X');
-    expect(plain(s)).toBe(`a X**b** c {${ids[0]}|paragraph}`);
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 2,
+      text: 'X',
+    });
+    // 'b' is still bold, 'X' is in the plain "a " run
+    const runs = textRuns(session);
+    const boldRun = runs.find((r) => r.text === 'b');
+    expect(boldRun?.bold).toBe(true);
+    expect(plain(session)).toContain('X');
   });
 
   it('inserting past the end appends to the last run', () => {
-    const { s, ids } = setup('hi');
-    new Doc(s).insertText(ids[0]!, 99, '!');
-    expect(plain(s)).toBe(`hi! {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('hi');
+    new Doc(session).apply({
+      fn: 'insertText',
+      node: ids[0]!,
+      at: 99,
+      text: '!',
+    });
+    expect(plain(session)).toContain('hi!');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('inserting into an emptied block creates a fresh text node', () => {
-    const { s, ids } = setup('x');
-    const doc = new Doc(s);
-    doc.removeText(ids[0]!, 0, 1); // now empty
-    doc.insertText(ids[0]!, 0, 'new');
-    expect(plain(s)).toBe(`new {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('x');
+    const doc = new Doc(session);
+    doc.apply({ fn: 'removeText', node: ids[0]!, at: 0, len: 1 }); // now empty
+    doc.apply({ fn: 'insertText', node: ids[0]!, at: 0, text: 'new' });
+    expect(plain(session)).toContain('new');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
@@ -438,27 +627,40 @@ describe('Doc.insertText — multi-run formatting preservation', () => {
 
 describe('Doc.removeText — slices and spans', () => {
   it('removes a range spanning two text nodes', () => {
-    const { s, ids } = setup('a **b** c'); // ' b ' spans plain/bold/plain
-    new Doc(s).removeText(ids[0]!, 1, 3); // removes offsets 1,2,3 → " b " → "ac"
-    expect(plain(s)).toBe(`ac {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('a **b** c'); // ' b ' spans plain/bold/plain
+    new Doc(session).apply({ fn: 'removeText', node: ids[0]!, at: 1, len: 3 }); // removes offsets 1,2,3 → " b " → "ac"
+    // result is 'a' and 'c' as separate text nodes (no bold 'b')
+    expect(plain(session)).toContain('>a<');
+    expect(plain(session)).toContain('>c<');
+    expect(plain(session)).not.toContain('>b<');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('removes everything', () => {
-    const { s, ids } = setup('hello');
-    new Doc(s).removeText(ids[0]!, 0, 5);
-    expect(plain(s)).toBe(` {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('hello');
+    new Doc(session).apply({ fn: 'removeText', node: ids[0]!, at: 0, len: 5 });
+    // block still exists (just empty)
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
+    expect(plain(session)).not.toContain('hello');
   });
 
   it('removes a middle slice', () => {
-    const { s, ids } = setup('abcdef');
-    new Doc(s).removeText(ids[0]!, 2, 2); // remove "cd"
-    expect(plain(s)).toBe(`abef {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('abcdef');
+    new Doc(session).apply({ fn: 'removeText', node: ids[0]!, at: 2, len: 2 }); // remove "cd"
+    expect(plain(session)).toContain('abef');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('len running past the end stops at the content edge', () => {
-    const { s, ids } = setup('abc');
-    new Doc(s).removeText(ids[0]!, 1, 100);
-    expect(plain(s)).toBe(`a {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('abc');
+    new Doc(session).apply({
+      fn: 'removeText',
+      node: ids[0]!,
+      at: 1,
+      len: 100,
+    });
+    expect(plain(session)).toContain('>a<');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
@@ -466,43 +668,64 @@ describe('Doc.removeText — slices and spans', () => {
 
 describe('Doc.insertInline — offset placement', () => {
   it('offset 0 inserts before the first run', () => {
-    const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 0, {
-      inline: 'date',
-      date: '2026-01-01',
+    const { session, ids } = setup('hello');
+    new Doc(session).apply({
+      fn: 'insertInline',
+      ref: 'r',
+      node: ids[0]!,
+      at: 0,
+      spec: { inline: 'date', date: '2026-01-01' },
     });
-    const out = plain(s);
-    expect(out.startsWith('2026-01-01 {')).toBe(true);
-    expect(out).toContain('|date-mention}hello ');
-    expect(out).toContain(`{${ids[0]}|paragraph}`);
+    const out = plain(session);
+    expect(out).toContain('2026-01-01');
+    expect(out).toContain('hello');
+    expect(out).toContain(`id="${ids[0]}"`);
+    // date comes before hello in the XML
+    expect(out.indexOf('2026-01-01')).toBeLessThan(out.indexOf('hello'));
   });
 
   it('a middle offset splits the run (linebreak shows up between the halves)', () => {
-    const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 2, { inline: 'linebreak' });
-    // linebreak becomes a real newline between "he" and "llo"
-    expect(plain(s)).toBe(`he\nllo {${ids[0]}|paragraph}`);
+    const { session, ids } = setup('hello');
+    new Doc(session).apply({
+      fn: 'insertInline',
+      ref: 'r',
+      node: ids[0]!,
+      at: 2,
+      spec: { inline: 'linebreak' },
+    });
+    // linebreak becomes a <br/> in XML
+    expect(plain(session)).toContain('<br');
+    expect(plain(session)).toContain('he');
+    expect(plain(session)).toContain('llo');
   });
 
   it('offset at the end appends after the last run', () => {
-    const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 5, {
-      inline: 'date',
-      date: '2026-01-01',
+    const { session, ids } = setup('hello');
+    new Doc(session).apply({
+      fn: 'insertInline',
+      ref: 'r',
+      node: ids[0]!,
+      at: 5,
+      spec: { inline: 'date', date: '2026-01-01' },
     });
-    const out = plain(s);
-    expect(out.startsWith('hello2026-01-01 {')).toBe(true);
-    expect(out).toContain('|date-mention}');
-    expect(out).toContain(`{${ids[0]}|paragraph}`);
+    const out = plain(session);
+    expect(out).toContain('2026-01-01');
+    expect(out).toContain('hello');
+    // hello comes before date in the XML
+    expect(out.indexOf('hello')).toBeLessThan(out.indexOf('2026-01-01'));
   });
 
   it('offset past the end also appends', () => {
-    const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 99, {
-      inline: 'date',
-      date: '2026-01-01',
+    const { session, ids } = setup('hello');
+    new Doc(session).apply({
+      fn: 'insertInline',
+      ref: 'r',
+      node: ids[0]!,
+      at: 99,
+      spec: { inline: 'date', date: '2026-01-01' },
     });
-    expect(plain(s)).toContain('hello2026-01-01');
+    expect(plain(session)).toContain('hello');
+    expect(plain(session)).toContain('2026-01-01');
   });
 });
 
@@ -510,41 +733,51 @@ describe('Doc.insertInline — offset placement', () => {
 
 describe('Doc — block-type swaps preserve the durable id', () => {
   it('paragraph → heading → quote → paragraph keeps the same id, resolvable each step', () => {
-    const { s, ids } = setup('Title');
+    const { session, ids } = setup('Title');
     const id = ids[0]!;
-    const doc = new Doc(s);
-    doc.setBlockType(id, 'heading', { level: 2 });
-    expect(plain(s)).toBe(`## Title {${id}|heading}`);
-    doc.setBlockType(id, 'quote', {});
-    expect(plain(s)).toBe(`> Title {${id}|quote}`);
-    doc.setBlockType(id, 'paragraph', {});
-    expect(plain(s)).toBe(`Title {${id}|paragraph}`);
+    const doc = new Doc(session);
+    doc.apply({ fn: 'setBlockType', node: id, block: 'heading', level: 2 });
+    expect(plain(session)).toContain('<h2');
+    expect(plain(session)).toContain(`id="${id}"`);
+    doc.apply({ fn: 'setBlockType', node: id, block: 'quote' });
+    expect(plain(session)).toContain('<blockquote');
+    expect(plain(session)).toContain(`id="${id}"`);
+    doc.apply({ fn: 'setBlockType', node: id, block: 'paragraph' });
+    expect(plain(session)).toContain('<p');
+    expect(plain(session)).toContain(`id="${id}"`);
     // a follow-up content edit still resolves the same id
-    doc.appendText(id, '!');
-    expect(plain(s)).toBe(`Title! {${id}|paragraph}`);
+    doc.apply({ fn: 'appendText', node: id, text: '!' });
+    expect(plain(session)).toContain('Title!');
+    expect(plain(session)).toContain(`id="${id}"`);
   });
 });
 
 describe('Doc.setListType — preserves item ids', () => {
   it('toggling a paragraph into a bullet list produces a list with an addressable item', () => {
-    const { s, ids } = setup('one');
-    const doc = new Doc(s);
-    doc.setListType([ids[0]!], 'bullet');
-    expect(plain(s)).toContain('- one');
+    const { session, ids } = setup('one');
+    const doc = new Doc(session);
+    doc.apply({ fn: 'setListType', nodes: [ids[0]!], list: 'bullet' });
+    expect(plain(session)).toContain('<ul');
+    expect(plain(session)).toContain('one');
     // the resulting list item has its own id, which resolves for a follow-up edit
-    const itemId = childIds(s)[0]!;
-    doc.appendText(itemId, '!');
-    expect(plain(s)).toContain('one!');
+    const itemId = childIds(session)[0]!;
+    doc.apply({ fn: 'appendText', node: itemId, text: '!' });
+    expect(plain(session)).toContain('one!');
   });
 
   it('an existing bullet list switched to numbered keeps every item id', () => {
-    const { s } = setup('- one\n- two');
-    const before = childIds(s);
-    new Doc(s).setListType([before[0]!], 'number');
-    const after = childIds(s);
+    const { session } = setup('- one\n- two');
+    const before = childIds(session);
+    new Doc(session).apply({
+      fn: 'setListType',
+      nodes: [before[0]!],
+      list: 'number',
+    });
+    const after = childIds(session);
     expect(after).toEqual(before);
-    expect(plain(s)).toContain('1. one');
-    expect(plain(s)).toContain('2. two');
+    expect(plain(session)).toContain('<ol');
+    expect(plain(session)).toContain('one');
+    expect(plain(session)).toContain('two');
   });
 });
 
@@ -552,29 +785,48 @@ describe('Doc.setListType — preserves item ids', () => {
 
 describe('Doc — ref resolution', () => {
   it('insertNode then setText/appendText/bold target the ref', () => {
-    const { s, ids } = setup('first');
-    const doc = new Doc(s);
-    doc.insertNode(
-      'ref-x',
-      { block: 'paragraph', text: 'body' },
-      { after: ids[0]! }
-    );
-    doc.appendText('ref-x', '!');
-    doc.formatText('ref-x', 'body', 'bold', true, { all: true });
-    const out = plain(s);
+    const { session, ids } = setup('first');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'ref-x',
+      spec: { block: 'paragraph', text: 'body' },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ fn: 'appendText', node: 'ref-x', text: '!' });
+    doc.apply({
+      fn: 'formatText',
+      node: 'ref-x',
+      match: 'body',
+      format: 'bold',
+      on: true,
+      scope: { kind: 'all' },
+    });
+    const out = plain(session);
     expect(out).toContain('first');
-    expect(out).toContain('**body**!');
+    expect(out).toContain('body');
+    expect(out).toContain('!');
   });
 
   it('inserting two blocks mints two distinct ids', () => {
-    const { s, ids } = setup('first');
-    const doc = new Doc(s);
-    doc.insertNode('a', { block: 'paragraph', text: 'AA' }, { after: ids[0]! });
-    doc.insertNode('b', { block: 'paragraph', text: 'BB' }, { after: ids[0]! });
+    const { session, ids } = setup('first');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'a',
+      spec: { block: 'paragraph', text: 'AA' },
+      at: { after: ids[0]! },
+    });
+    doc.apply({
+      fn: 'insertNode',
+      ref: 'b',
+      spec: { block: 'paragraph', text: 'BB' },
+      at: { after: ids[0]! },
+    });
     // resolve both refs by editing each — both should succeed and stay distinct
-    doc.appendText('a', '1');
-    doc.appendText('b', '2');
-    const out = plain(s);
+    doc.apply({ fn: 'appendText', node: 'a', text: '1' });
+    doc.apply({ fn: 'appendText', node: 'b', text: '2' });
+    const out = plain(session);
     expect(out).toContain('AA1');
     expect(out).toContain('BB2');
   });
@@ -584,62 +836,69 @@ describe('Doc — ref resolution', () => {
 
 describe('Doc — tables', () => {
   function makeTable(rows: string[][]) {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode('t', { block: 'table', rows }, { after: ids[0]! });
-    return { s, doc };
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 't',
+      spec: { block: 'table', rows },
+      at: { after: ids[0]! },
+    });
+    return { session, doc };
   }
 
   it('setCell each cell of a 2x2 table', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2'],
       ['a', 'b'],
     ]);
-    doc.setCell('t', 0, 1, 'HX');
-    doc.setCell('t', 1, 0, 'AA');
-    doc.setCell('t', 1, 1, 'BB');
-    const out = plain(s);
-    expect(out).toContain('| H1 | HX |');
-    expect(out).toContain('| AA | BB |');
+    doc.apply({ fn: 'setCell', table: 't', row: 0, col: 1, text: 'HX' });
+    doc.apply({ fn: 'setCell', table: 't', row: 1, col: 0, text: 'AA' });
+    doc.apply({ fn: 'setCell', table: 't', row: 1, col: 1, text: 'BB' });
+    const out = plain(session);
+    expect(out).toContain('H1');
+    expect(out).toContain('HX');
+    expect(out).toContain('AA');
+    expect(out).toContain('BB');
   });
 
   it('cellNode resolves and textLength matches the cell content', () => {
-    const { s, doc } = makeTable([['Head'], ['body']]);
+    const { doc } = makeTable([['Head'], ['body']]);
     expect(doc.textLength(doc.cellNode('t', 0, 0))).toBe(4); // 'Head'
     expect(doc.textLength(doc.cellNode('t', 1, 0))).toBe(4); // 'body'
   });
 
   it('addRow appends a row with the right column count', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2'],
       ['a', 'b'],
     ]);
-    doc.addRow('t');
-    const cols = rowCellCounts(s);
+    doc.apply({ fn: 'addRow', table: 't' });
+    const cols = rowCellCounts(session);
     expect(cols).toEqual([2, 2, 2]); // 3 rows, all 2 cols
   });
 
   it('addRow at an index inserts before that row', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2'],
       ['a', 'b'],
     ]);
-    doc.addRow('t', 1); // before the body row
-    doc.setCell('t', 1, 0, 'mid');
-    expect(plain(s)).toContain('| mid |');
-    expect(rowCellCounts(s)).toEqual([2, 2, 2]);
+    doc.apply({ fn: 'addRow', table: 't', at: 1 }); // before the body row
+    doc.apply({ fn: 'setCell', table: 't', row: 1, col: 0, text: 'mid' });
+    expect(plain(session)).toContain('mid');
+    expect(rowCellCounts(session)).toEqual([2, 2, 2]);
   });
 
   it('addColumn gives every row a new cell; the header-row cell is a header', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2'],
       ['a', 'b'],
     ]);
-    doc.addColumn('t');
-    expect(rowCellCounts(s)).toEqual([3, 3]);
+    doc.apply({ fn: 'addColumn', table: 't' });
+    expect(rowCellCounts(session)).toEqual([3, 3]);
     // header row's new cell is a header cell
-    const headerStates = read(s, () => {
-      const rows = tableRows(s);
+    const headerStates = read(session, () => {
+      const rows = tableRows(session);
       return rows[0]!
         .getChildren()
         .filter($isTableCellNode)
@@ -649,31 +908,41 @@ describe('Doc — tables', () => {
   });
 
   it('removeRow drops a row', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2'],
       ['a', 'b'],
       ['c', 'd'],
     ]);
-    doc.removeRow('t', 2); // drop the 'c d' row
-    expect(rowCellCounts(s)).toHaveLength(2);
-    expect(plain(s)).not.toContain('| c | d |');
+    doc.apply({ fn: 'removeRow', table: 't', row: 2 }); // drop the 'c d' row — use unique enough text
+    expect(rowCellCounts(session)).toHaveLength(2);
+    // check H1, H2, a, b are present but the dropped row content is gone
+    expect(plain(session)).toContain('>H1<');
+    expect(plain(session)).toContain('>H2<');
+    expect(plain(session)).toContain('>a<');
+    expect(plain(session)).toContain('>b<');
+    expect(plain(session)).not.toContain('>c<');
+    expect(plain(session)).not.toContain('>d<');
   });
 
   it('removeColumn drops the column from every row', () => {
-    const { s, doc } = makeTable([
+    const { session, doc } = makeTable([
       ['H1', 'H2', 'H3'],
-      ['a', 'b', 'c'],
+      ['aa', 'bb', 'cc'],
     ]);
-    doc.removeColumn('t', 1); // drop the middle column
-    expect(rowCellCounts(s)).toEqual([2, 2]);
-    const out = plain(s);
-    expect(out).toContain('| H1 | H3 |');
-    expect(out).toContain('| a | c |');
+    doc.apply({ fn: 'removeColumn', table: 't', col: 1 }); // drop the middle column
+    expect(rowCellCounts(session)).toEqual([2, 2]);
+    const out = plain(session);
+    expect(out).toContain('H1');
+    expect(out).not.toContain('H2');
+    expect(out).toContain('H3');
+    expect(out).toContain('aa');
+    expect(out).not.toContain('bb');
+    expect(out).toContain('cc');
   });
 });
 
-function tableRows(s: Session) {
-  return read(s, () => {
+function tableRows(session: Session) {
+  return read(session, () => {
     let table: LexicalNode | undefined;
     const walk = (n: LexicalNode) => {
       if (n.getType() === 'table') table = n;
@@ -683,8 +952,8 @@ function tableRows(s: Session) {
     return (table as ElementNode).getChildren().filter($isTableRowNode);
   });
 }
-function rowCellCounts(s: Session): number[] {
-  return read(s, () => {
+function rowCellCounts(session: Session): number[] {
+  return read(session, () => {
     let table: LexicalNode | undefined;
     const walk = (n: LexicalNode) => {
       if (n.getType() === 'table') table = n;
@@ -712,8 +981,8 @@ describe('buildNode — each spec builds the right node type', () => {
   it.each(
     elementBlocks
   )('%s builds an ElementNode of the right type', (_label, spec, type) => {
-    const { s } = setup('x');
-    edit(s, () => {
+    const { session } = setup('x');
+    edit(session, () => {
       const n = buildNode(spec);
       expect(n.getType()).toBe(type);
       expect($isElementNode(n)).toBe(true);
@@ -736,16 +1005,16 @@ describe('buildNode — each spec builds the right node type', () => {
   it.each(
     decoratorBlocks
   )('%s builds the right node type (non-element)', (_label, spec, type) => {
-    const { s } = setup('x');
-    edit(s, () => {
+    const { session } = setup('x');
+    edit(session, () => {
       const n = buildNode(spec);
       expect(n.getType()).toBe(type);
     });
   });
 
   it('mention spec builds the right node types', () => {
-    const { s } = setup('x');
-    edit(s, () => {
+    const { session } = setup('x');
+    edit(session, () => {
       expect(
         buildNode({
           inline: 'mention',
@@ -764,31 +1033,42 @@ describe('buildNode — each spec builds the right node type', () => {
 
 describe('buildNode — list spec serializes plausibly when placed', () => {
   it('inserting a bullet list block serializes its items', () => {
-    const { s, ids } = setup('intro');
-    new Doc(s).insertNode(
-      'l',
-      { block: 'list', list: 'bullet', items: ['one', 'two'] },
-      { after: ids[0]! }
-    );
-    const out = plain(s);
-    expect(out).toContain('- one');
-    expect(out).toContain('- two');
+    const { session, ids } = setup('intro');
+    new Doc(session).apply({
+      fn: 'insertNode',
+      ref: 'l',
+      spec: { block: 'list', list: 'bullet', items: ['one', 'two'] },
+      at: { after: ids[0]! },
+    });
+    const out = plain(session);
+    expect(out).toContain('<ul');
+    expect(out).toContain('one');
+    expect(out).toContain('two');
   });
 
   it('inserting a code block serializes its language fence and text', () => {
-    const { s, ids } = setup('intro');
-    new Doc(s).insertNode(
-      'c',
-      { block: 'code', language: 'ts', text: 'const a=1' },
-      { after: ids[0]! }
-    );
-    expect(plain(s)).toContain('const a=1');
+    const { session, ids } = setup('intro');
+    new Doc(session).apply({
+      fn: 'insertNode',
+      ref: 'c',
+      spec: { block: 'code', language: 'ts', text: 'const a=1' },
+      at: { after: ids[0]! },
+    });
+    // code block serializes as tokenized highlights in XML; check text content is present
+    expect(plain(session)).toContain('const');
+    expect(plain(session)).toContain('custom-code');
   });
 
-  it('inserting an inline equation via insertInline serializes as $tex$', () => {
-    const { s, ids } = setup('hello world');
-    new Doc(s).insertInline('e', ids[0]!, 5, { inline: 'equation', tex: 'y' });
-    expect(plain(s)).toContain('$y$');
+  it('inserting an inline equation via insertInline serializes in XML', () => {
+    const { session, ids } = setup('hello world');
+    new Doc(session).apply({
+      fn: 'insertInline',
+      ref: 'e',
+      node: ids[0]!,
+      at: 5,
+      spec: { inline: 'equation', tex: 'y' },
+    });
+    expect(plain(session)).toContain('y');
   });
 });
 
@@ -798,45 +1078,57 @@ describe('Doc.insertNode — block decorator specs', () => {
   // divider/image/video/equation build DecoratorNodes (not ElementNodes); these
   // are still valid top-level blocks and must insert (insertNode rejects only
   // genuinely inline specs).
-  const rootCount = (s: ReturnType<typeof setup>['s']) =>
-    s.editor.getEditorState().read(() => $getRoot().getChildren().length);
+  const rootCount = (session: ReturnType<typeof setup>['session']) =>
+    session.editor.getEditorState().read(() => $getRoot().getChildren().length);
 
   it('inserts a divider after a block', () => {
-    const { s, ids } = setup('x');
-    const before = rootCount(s);
+    const { session, ids } = setup('x');
+    const before = rootCount(session);
     expect(() =>
-      new Doc(s).insertNode('d', { block: 'divider' }, { after: ids[0]! })
+      new Doc(session).apply({
+        fn: 'insertNode',
+        ref: 'd',
+        spec: { block: 'divider' },
+        at: { after: ids[0]! },
+      })
     ).not.toThrow();
-    expect(rootCount(s)).toBe(before + 1);
+    expect(rootCount(session)).toBe(before + 1);
   });
   it('inserts a block image after a block', () => {
-    const { s, ids } = setup('x');
-    const before = rootCount(s);
+    const { session, ids } = setup('x');
+    const before = rootCount(session);
     expect(() =>
-      new Doc(s).insertNode(
-        'i',
-        { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
-        { after: ids[0]! }
-      )
+      new Doc(session).apply({
+        fn: 'insertNode',
+        ref: 'i',
+        spec: { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
+        at: { after: ids[0]! },
+      })
     ).not.toThrow();
-    expect(rootCount(s)).toBe(before + 1);
+    expect(rootCount(session)).toBe(before + 1);
   });
   it('inserts a block equation after a block', () => {
-    const { s, ids } = setup('x');
-    const before = rootCount(s);
+    const { session, ids } = setup('x');
+    const before = rootCount(session);
     expect(() =>
-      new Doc(s).insertNode(
-        'e',
-        { block: 'equation', tex: 'x^2' },
-        { after: ids[0]! }
-      )
+      new Doc(session).apply({
+        fn: 'insertNode',
+        ref: 'e',
+        spec: { block: 'equation', tex: 'x^2' },
+        at: { after: ids[0]! },
+      })
     ).not.toThrow();
-    expect(rootCount(s)).toBe(before + 1);
+    expect(rootCount(session)).toBe(before + 1);
   });
   it('still rejects a genuinely inline spec', () => {
-    const { s, ids } = setup('x');
+    const { session, ids } = setup('x');
     expect(() =>
-      new Doc(s).insertNode('lb', { inline: 'linebreak' }, { after: ids[0]! })
+      new Doc(session).apply({
+        fn: 'insertNode',
+        ref: 'lb',
+        spec: { inline: 'linebreak' },
+        at: { after: ids[0]! },
+      })
     ).toThrow(/block spec/);
   });
 });
@@ -845,37 +1137,51 @@ describe('Doc.insertNode — block decorator specs', () => {
 
 describe('Doc — error surfacing & atomicity', () => {
   it('a failed insert (unknown anchor) leaves the doc untouched', () => {
-    const { s, ids } = setup('safe');
-    const doc = new Doc(s);
+    const { session, ids } = setup('safe');
+    const doc = new Doc(session);
     expect(() =>
-      doc.insertNode('r', { block: 'paragraph', text: 'x' }, { after: 'ghost' })
+      doc.apply({
+        fn: 'insertNode',
+        ref: 'r',
+        spec: { block: 'paragraph', text: 'x' },
+        at: { after: 'ghost' },
+      })
     ).toThrow();
-    expect(plain(s)).toBe(`safe {${ids[0]}|paragraph}`);
+    expect(plain(session)).toContain('safe');
+    expect(plain(session)).toContain(`id="${ids[0]}"`);
   });
 
   it('cellNode on a missing cell throws EditError', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode('t', { block: 'table', rows: [['A']] }, { after: ids[0]! });
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 't',
+      spec: { block: 'table', rows: [['A']] },
+      at: { after: ids[0]! },
+    });
     expect(() => doc.cellNode('t', 9, 9)).toThrow();
   });
 
   it('a failed setCell leaves the table untouched', () => {
-    const { s, ids } = setup('intro');
-    const doc = new Doc(s);
-    doc.insertNode(
-      't',
-      {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      fn: 'insertNode',
+      ref: 't',
+      spec: {
         block: 'table',
         rows: [
           ['A', 'B'],
           ['c', 'd'],
         ],
       },
-      { after: ids[0]! }
-    );
-    const before = plain(s);
-    expect(() => doc.setCell('t', 9, 9, 'x')).toThrow();
-    expect(plain(s)).toBe(before);
+      at: { after: ids[0]! },
+    });
+    const before = plain(session);
+    expect(() =>
+      doc.apply({ fn: 'setCell', table: 't', row: 9, col: 9, text: 'x' })
+    ).toThrow();
+    expect(plain(session)).toBe(before);
   });
 });
