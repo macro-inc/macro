@@ -413,12 +413,109 @@
               --config "$TAURI_CONFIG"
           '';
           installPhaseCommand = ''
+            export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
+
             appPath=$(find target -type d -path '*/release/bundle/macos/*.app' -print -quit)
             if [ -z "$appPath" ]; then
               echo "failed to locate built macOS app bundle" >&2
               find target -path '*/bundle/*' -print >&2 || true
               exit 1
             fi
+
+            bundle_nix_dylibs() {
+              local app="$1"
+              local frameworks="$app/Contents/Frameworks"
+              mkdir -p "$frameworks"
+
+              local -a queue=()
+              while IFS= read -r -d "" mach_o; do
+                if otool -hv "$mach_o" >/dev/null 2>&1; then
+                  queue+=("$mach_o")
+                fi
+              done < <(find "$app/Contents/MacOS" "$frameworks" -type f -print0)
+
+              local processed="$TMPDIR/bundled-mach-o-files"
+              : > "$processed"
+
+              copy_dep() {
+                local dep="$1"
+                local base
+                base=$(basename "$dep")
+                local dest="$frameworks/$base"
+                if [ ! -e "$dest" ]; then
+                  echo "Bundling Nix dylib $dep -> $dest" >&2
+                  cp -L "$dep" "$dest"
+                  chmod u+w "$dest"
+                  queue+=("$dest")
+                fi
+              }
+
+              local i=0
+              while [ "$i" -lt "''${#queue[@]}" ]; do
+                local binary="''${queue[$i]}"
+                i=$((i + 1))
+
+                if grep -Fxq "$binary" "$processed"; then
+                  continue
+                fi
+                printf '%s\n' "$binary" >> "$processed"
+
+                chmod u+w "$binary" || true
+                local prefix="@loader_path"
+                case "$binary" in
+                  "$app/Contents/MacOS/"*) prefix="@executable_path/../Frameworks" ;;
+                  *) install_name_tool -id "@loader_path/$(basename "$binary")" "$binary" 2>/dev/null || true ;;
+                esac
+
+                local deps
+                deps=$(otool -L "$binary" 2>/dev/null | awk 'NR > 1 { print $1 }' | grep '^/nix/store/.*\.dylib$' || true)
+                if [ -z "$deps" ]; then
+                  continue
+                fi
+
+                while IFS= read -r dep; do
+                  [ -n "$dep" ] || continue
+                  copy_dep "$dep"
+                  install_name_tool -change "$dep" "$prefix/$(basename "$dep")" "$binary"
+                done <<< "$deps"
+              done
+
+              local remaining_refs="$TMPDIR/remaining-nix-dylib-refs"
+              : > "$remaining_refs"
+              while IFS= read -r -d "" file; do
+                otool -L "$file" 2>/dev/null \
+                  | awk -v file="$file" 'NR > 1 && $1 ~ "^/nix/store/.*\\.dylib$" { print file ": " $1 }' \
+                  >> "$remaining_refs" || true
+              done < <(find "$app/Contents/MacOS" "$app/Contents/Frameworks" -type f -print0)
+
+              if [ -s "$remaining_refs" ]; then
+                echo "App bundle still contains absolute Nix dylib references:" >&2
+                cat "$remaining_refs" >&2
+                exit 1
+              fi
+            }
+
+            sign_darwin_app() {
+              local app="$1"
+              local -a sign_args=(--force --sign "$APPLE_SIGNING_IDENTITY")
+              if [ "$APPLE_SIGNING_IDENTITY" != "-" ]; then
+                sign_args+=(--timestamp --options runtime)
+              fi
+
+              if [ -d "$app/Contents/Frameworks" ]; then
+                while IFS= read -r -d "" file; do
+                  if otool -hv "$file" >/dev/null 2>&1; then
+                    codesign "''${sign_args[@]}" "$file"
+                  fi
+                done < <(find "$app/Contents/Frameworks" -type f -print0)
+              fi
+
+              codesign "''${sign_args[@]}" --deep "$app"
+              codesign --verify --deep --strict --verbose=2 "$app"
+            }
+
+            bundle_nix_dylibs "$appPath"
+            sign_darwin_app "$appPath"
 
             mkdir -p "$out"
             dmgPath="$out/Macro-${appVersion}-${system}.dmg"

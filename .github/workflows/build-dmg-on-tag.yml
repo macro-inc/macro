@@ -197,6 +197,23 @@ jobs:
             exit 1
           fi
           codesign --verify --deep --strict --verbose=2 "$app"
+
+          dylib_refs=$(mktemp)
+          search_roots=("$app/Contents/MacOS")
+          if [ -d "$app/Contents/Frameworks" ]; then
+            search_roots+=("$app/Contents/Frameworks")
+          fi
+          while IFS= read -r -d '' file; do
+            otool -L "$file" 2>/dev/null \
+              | awk -v file="$file" 'NR > 1 && $1 ~ "^/nix/store/.*\\.dylib$" { print file ": " $1 }' \
+              >> "$dylib_refs" || true
+          done < <(find "${search_roots[@]}" -type f -print0)
+          if [ -s "$dylib_refs" ]; then
+            echo "App bundle contains absolute Nix dylib references:" >&2
+            cat "$dylib_refs" >&2
+            exit 1
+          fi
+
           (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
 
       - name: Upload DMG artifact
