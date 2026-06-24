@@ -1,7 +1,15 @@
 import type { HistorySession, VersionPin } from '@service-sync/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui';
 import { group } from 'd3-array';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  For,
+  type Setter,
+  Show,
+} from 'solid-js';
 import { CreatePin } from './CreatePin';
 import { createTimelineScales, type WindowRange } from './createTimelineScales';
 import { buildVolumeShape, VOLUME_BAND_H, type VolumeShape } from './timeline';
@@ -15,13 +23,18 @@ const THUMB_HIT_PX = 12;
 const RAIL_HEIGHT_PX = 32;
 const DOUBLE_CLICK_MS = 300;
 
-export function HistoryScrubber(props: {
+export type HistoryScrubberProps = {
   sessions: readonly HistorySession[];
   pins: readonly VersionPin[];
+  isViewingHistory: Accessor<boolean>;
+  setViewingHistory: Setter<boolean>;
   onSelect: (at: Date | null) => void;
   onCreatePin: (atMs: number, label: string) => void;
   onDeletePin: (pinId: string) => void;
-}) {
+  compact?: boolean;
+};
+
+export function HistoryScrubber(props: HistoryScrubberProps) {
   let containerRef!: HTMLDivElement;
   const size = createElementSize(() => containerRef);
   const width = () => size.width ?? 0;
@@ -114,15 +127,17 @@ export function HistoryScrubber(props: {
   // Converts a pixel offset to a real timestamp: pixel → warped coord → ms.
   const placeAt = (pointerPx: number) => {
     const ms = containerPositionToTimestamp(pointerPx);
+    props.setViewingHistory(true);
     setCursorMs(ms);
     props.onSelect(new Date(ms));
   };
 
   const thumbPx = createMemo<number | null>(() => {
+    if (!props.isViewingHistory()) return null;
     const cursor = cursorMs();
+    if (cursor === null) return null;
     const totalWidth = width();
-    const candidatePx =
-      cursor === null ? totalWidth : timestampToContainerPosition(cursor);
+    const candidatePx = timestampToContainerPosition(cursor);
     return candidatePx < -0.5 || candidatePx > totalWidth + 0.5
       ? null
       : candidatePx;
@@ -136,9 +151,13 @@ export function HistoryScrubber(props: {
       return;
     }
     setHoverPx(null);
+    const wasViewingHistory = props.isViewingHistory();
+    props.setViewingHistory(true);
     const pointerPx = localPx(e.clientX);
     const thumbPosition = thumbPx();
-    if (
+    if (!wasViewingHistory) {
+      setDrag({ mode: 'scrub', startPx: pointerPx });
+    } else if (
       thumbPosition !== null &&
       Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX
     ) {
@@ -219,10 +238,18 @@ export function HistoryScrubber(props: {
   );
 
   return (
-    <div class="flex w-full items-start gap-4">
+    <div
+      class={cn(
+        'flex w-full min-w-0 items-start gap-4',
+        props.compact && 'flex-col items-stretch gap-6'
+      )}
+    >
       <div
         ref={containerRef}
-        class="relative isolate mx-6 mb-4 min-w-0 flex-1 touch-none select-none"
+        class={cn(
+          'relative isolate mb-4 min-w-0 flex-1 touch-none select-none',
+          props.compact ? 'mx-0 w-full' : 'mx-6'
+        )}
         style={{
           cursor:
             drag()?.mode === 'scrub'
@@ -291,6 +318,7 @@ export function HistoryScrubber(props: {
                     if (e.ctrlKey || e.metaKey) {
                       props.onDeletePin(pin.id);
                     } else {
+                      props.setViewingHistory(true);
                       setCursorMs(pin.pinnedAtMs);
                       props.onSelect(new Date(pin.pinnedAtMs));
                     }
@@ -402,7 +430,12 @@ export function HistoryScrubber(props: {
 
       {/* Legend */}
       <Show when={users().length > 0}>
-        <div class="flex max-h-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain pr-1 text-xs">
+        <div
+          class={cn(
+            'flex max-h-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain pr-1 text-xs',
+            props.compact && 'w-full max-h-24'
+          )}
+        >
           <For each={users()}>
             {(user) => (
               <button
@@ -415,7 +448,14 @@ export function HistoryScrubber(props: {
                   class="size-2 shrink-0 rounded-full"
                   style={{ background: user.color }}
                 />
-                <span class="max-w-40 truncate">{user.label}</span>
+                <span
+                  class={cn(
+                    'truncate',
+                    props.compact ? 'max-w-full' : 'max-w-40'
+                  )}
+                >
+                  {user.label}
+                </span>
               </button>
             )}
           </For>

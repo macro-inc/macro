@@ -7,7 +7,10 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import type { LoroManager } from '@core/collab/manager';
-import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import {
+  editorFocusSignal,
+  getSaveState,
+} from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
@@ -36,8 +39,8 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { DocumentDiscussion } from './DocumentDiscussion';
 import { HistoryOverlay } from '../history/HistoryOverlay';
+import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
@@ -87,6 +90,8 @@ export function Notebook(props: {
   loroManager: LoroManager;
   viewingHistory: Accessor<boolean>;
   setViewingHistory: Setter<boolean>;
+  onHistoryExit: () => void;
+  selectedHistoryAt: Date | null;
   documentId: string;
 }) {
   const blockElement = blockElementSignal.get;
@@ -114,6 +119,11 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
+
+  const currentEditorState = () => {
+    const editor = md.editor;
+    return editor ? getSaveState(editor.getEditorState()) : undefined;
+  };
 
   // Set the refs on the block store.
   onMount(() => {
@@ -313,8 +323,13 @@ export function Notebook(props: {
               <HistoryOverlay
                 documentId={documentId}
                 documentName={documentName()}
+                currentState={currentEditorState}
+                selectedAt={props.selectedHistoryAt}
                 visible={props.viewingHistory()}
-                onExit={() => props.setViewingHistory(false)}
+                onExit={() => {
+                  props.setViewingHistory(false);
+                  props.onHistoryExit();
+                }}
               />
             </Show>
           </div>

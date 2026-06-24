@@ -5,49 +5,22 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { toast } from '@core/component/Toast/Toast';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
 import { useHistoryStateQuery } from '@queries/history';
-import {
-  useCreatePinMutation,
-  useDeletePinMutation,
-  usePinsQuery,
-} from '@queries/pins';
 import { storageServiceClient } from '@service-storage/client';
-import { type HistorySession, syncServiceClient } from '@service-sync/client';
 import { Button } from '@ui';
-import {
-  createMemo,
-  createResource,
-  createSignal,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import { HistoryScrubber } from './HistoryScrubber';
+import type { SerializedEditorState } from 'lexical';
+import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 const nameForkedDocument = (name: string) => `${name} (forked)`;
-
-async function fetchHistory(
-  documentId: string
-): Promise<{ sessions: HistorySession[] } | undefined> {
-  const maybe = await syncServiceClient.getHistoryMeta({ documentId });
-  if (maybe.isErr()) {
-    console.error("Couldn't get history meta for history overlay", maybe.error);
-    return undefined;
-  }
-  return { sessions: maybe.value.sessions };
-}
 
 export function HistoryOverlay(props: {
   documentId: string;
   documentName: string;
+  currentState: () => SerializedEditorState | undefined;
+  selectedAt: Date | null;
   visible: boolean;
   onExit: () => void;
 }) {
-  const [history] = createResource(() => props.documentId, fetchHistory);
   const { insertSplit } = useSplitLayout();
-
-  const pins = usePinsQuery(() => props.documentId);
-  const createPin = useCreatePinMutation(() => props.documentId);
-  const deletePin = useDeletePinMutation(() => props.documentId);
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
@@ -59,23 +32,29 @@ export function HistoryOverlay(props: {
     onCleanup(() => document.removeEventListener('keydown', onKeyDown));
   });
 
-  const [selected, setSelected] = createSignal<Date | null>(null);
+  const currentEditorState = createMemo(() => {
+    if (!props.visible) return undefined;
+    return props.currentState();
+  });
 
-  // The moment we resolve state at: the selected cursor, or the latest session end.
+  // The current document is the latest state; only fetch historical state once
+  // the user explicitly selects a timestamp from the scrubber.
   const targetAtMs = createMemo<number | undefined>(() => {
-    const scrubbed = selected();
+    const scrubbed = props.selectedAt;
     if (scrubbed) return scrubbed.getTime();
-
-    const sessions = history()?.sessions;
-    if (!sessions || sessions.length === 0) return undefined;
-
-    return sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
+    return undefined;
   });
 
   const stateAtCursor = useHistoryStateQuery(
     () => props.documentId,
     targetAtMs
   );
+
+  const previewState = createMemo(() => {
+    if (props.selectedAt)
+      return stateAtCursor.data?.state ?? currentEditorState();
+    return currentEditorState();
+  });
 
   const [forking, setForking] = createSignal(false);
   const handleFork = async (keepOpen = false) => {
@@ -117,7 +96,7 @@ export function HistoryOverlay(props: {
         </SplitToolbarLeft>
       </Show>
       {/* placeholderData keeps the last rendered state visible while the next loads. */}
-      <Show keyed when={stateAtCursor.data?.state}>
+      <Show keyed when={previewState()}>
         {(state) => {
           const config = buildConfig('markdown')
             .withMentions()
@@ -128,27 +107,12 @@ export function HistoryOverlay(props: {
             <MarkdownShell
               config={config}
               initialState={state}
+              placeholder="No history found"
               disabled
               class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
             />
           );
         }}
-      </Show>
-      {/* Controls pinned to the viewport so they're reachable on long docs. */}
-      <Show when={history()}>
-        {(h) => (
-          <div class="fixed inset-x-0 bottom-0 z-30 min-h-20 h-[15vh] max-h-60 border-edge border-t bg-active">
-            <div class="h-full overflow-y-auto px-3 pt-4 pb-3">
-              <HistoryScrubber
-                sessions={h().sessions}
-                pins={pins.data ?? []}
-                onSelect={setSelected}
-                onCreatePin={(atMs, label) => createPin.mutate({ atMs, label })}
-                onDeletePin={(pinId) => deletePin.mutate(pinId)}
-              />
-            </div>
-          </div>
-        )}
       </Show>
     </div>
   );

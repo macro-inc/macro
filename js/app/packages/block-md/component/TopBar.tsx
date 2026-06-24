@@ -7,7 +7,6 @@ import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-  ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
 import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
@@ -30,21 +29,15 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_HISTORY_COMPONENT,
-  ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  ENABLE_MARKDOWN_SIDE_PANEL,
-} from '@core/constant/featureFlags';
+import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { useCanEdit } from '@core/signal/permissions';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import IconShared from '@icon/wide-share.svg';
-import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
@@ -52,25 +45,10 @@ import SidePanelIcon from '@phosphor/square-half.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
-import {
-  type Accessor,
-  createEffect,
-  For,
-  on,
-  onCleanup,
-  type Setter,
-  Show,
-} from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup, Show } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 
-export function TopBar(
-  props: {
-    name?: Accessor<string | undefined>;
-    viewingHistory?: Accessor<boolean>;
-    setViewingHistory?: Setter<boolean>;
-  } = {}
-) {
-  const canEdit = useCanEdit();
+export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const blockName = useBlockName();
   const blockId = useBlockId();
   const scopeId = blockHotkeyScopeSignal.get;
@@ -162,16 +140,6 @@ export function TopBar(
   }
 
   const tools: BlockTool[] = [
-    {
-      label: 'History',
-      icon: ClockIcon,
-      action: () => props.setViewingHistory?.(!props.viewingHistory?.()),
-      isActive: props.viewingHistory ?? (() => false),
-      condition: () =>
-        ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-        ENABLE_HISTORY_COMPONENT &&
-        canEdit(),
-    },
     // {
     //   label: 'Copy Branch Name',
     //   icon: GitBranch,
@@ -283,43 +251,10 @@ export function TopBar(
   );
 }
 
-export function InstructionsTopBar(
-  props: {
-    viewingHistory?: Accessor<boolean>;
-    setViewingHistory?: Setter<boolean>;
-  } = {}
-) {
-  const canEdit = useCanEdit();
-
-  const tools: BlockTool[] = [
-    {
-      label: 'History',
-      icon: ClockIcon,
-      action: () => props.setViewingHistory?.(!props.viewingHistory?.()),
-      isActive: props.viewingHistory ?? (() => false),
-      condition: () =>
-        ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-        ENABLE_HISTORY_COMPONENT &&
-        canEdit(),
-    },
-  ];
-
+export function InstructionsTopBar() {
   return (
-    <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="AI Instructions" iconType="md" />
-      </SplitHeaderLeft>
-      <For each={tools}>
-        {(tool) => (
-          <Show when={!tool.condition || tool.condition()}>
-            {tool.buttonComponent ? (
-              <tool.buttonComponent />
-            ) : (
-              <ToolButton tool={tool} />
-            )}
-          </Show>
-        )}
-      </For>
-    </>
+    <SplitHeaderLeft>
+      <StaticSplitLabel label="AI Instructions" iconType="md" />
+    </SplitHeaderLeft>
   );
 }

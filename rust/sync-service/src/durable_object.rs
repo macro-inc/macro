@@ -47,6 +47,8 @@ const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 const STATE_AT_VERSION_HEADER: &str = "x-version-id";
 
+const BOGUS_BLANK_MARKDOWN_GOLDEN_SNAPSHOT_HISTORY_MS: i64 = 1780516229000;
+
 mod path {
     pub const CONNECT: &str = "connect";
     pub const EXISTS: &str = "exists";
@@ -673,6 +675,13 @@ impl DocumentSyncSession {
         let out = HistoryMetaResponse {
             sessions: sessions
                 .into_iter()
+                // Hide the known blank markdown golden snapshot session while
+                // preserving later real user sessions at different timestamps/counts.
+                .filter(|s| {
+                    !(s.start_ms == BOGUS_BLANK_MARKDOWN_GOLDEN_SNAPSHOT_HISTORY_MS
+                        && s.end_ms == BOGUS_BLANK_MARKDOWN_GOLDEN_SNAPSHOT_HISTORY_MS
+                        && s.count == 1)
+                })
                 .map(|s| SessionJson {
                     user_id: s.user_id,
                     start_ms: s.start_ms,

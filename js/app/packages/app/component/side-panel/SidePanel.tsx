@@ -228,6 +228,7 @@ function Section(
     id: string;
     title: JSX.Element;
     defaultOpen?: boolean;
+    collapsible?: boolean;
     /** Render order — lower numbers appear first. */
     order?: number;
   }>
@@ -243,25 +244,33 @@ function Section(
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
       order: props.order,
-      component: () => (
-        <Accordion.Item value={props.id}>
+      component: () =>
+        props.collapsible === false ? (
           <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
-            <Accordion.Header class="group">
-              <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs hover:underline">
-                <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
-                <span>{props.title}</span>
-              </Accordion.Trigger>
-            </Accordion.Header>
-            <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
-              <Suspense fallback={<Loading />}>
-                <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
-                  {props.children}
-                </div>
-              </Suspense>
-            </Accordion.Content>
+            <div class="px-2 py-3 text-xs">{props.title}</div>
+            <Suspense fallback={<Loading />}>
+              <div class="px-2 pb-2 text-sm">{props.children}</div>
+            </Suspense>
           </Panel>
-        </Accordion.Item>
-      ),
+        ) : (
+          <Accordion.Item value={props.id}>
+            <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
+              <Accordion.Header class="group">
+                <Accordion.Trigger class="px-2 py-3 flex w-full items-center gap-2 text-xs hover:underline">
+                  <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
+                  <span>{props.title}</span>
+                </Accordion.Trigger>
+              </Accordion.Header>
+              <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
+                <Suspense fallback={<Loading />}>
+                  <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+                    {props.children}
+                  </div>
+                </Suspense>
+              </Accordion.Content>
+            </Panel>
+          </Accordion.Item>
+        ),
     });
     onCleanup(() => ctx.unregister(props.id));
   });

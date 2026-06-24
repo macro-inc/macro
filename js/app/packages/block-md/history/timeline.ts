@@ -2,6 +2,7 @@ import { max } from 'd3-array';
 import { area, curveBasis } from 'd3-shape';
 
 export const SESSION_GAP_MS = 10 * 60 * 1000;
+const GAP_COMPRESSION_MULTIPLIER = 0.5;
 
 export type Interval = { startMs: number; endMs: number; warpStart: number };
 
@@ -38,7 +39,10 @@ export function buildCompressedTimeline(
   for (let i = 0; i < merged.length; i++) {
     if (i > 0) {
       const gap = merged[i].startMs - merged[i - 1].endMs;
-      offset += gapMs * (1 + Math.log(1 + (gap - gapMs) / gapMs));
+      offset +=
+        gapMs *
+        GAP_COMPRESSION_MULTIPLIER *
+        (1 + Math.log(1 + (gap - gapMs) / gapMs));
     }
     const span = merged[i];
     const endMs = Math.max(span.endMs, span.startMs + 1);
