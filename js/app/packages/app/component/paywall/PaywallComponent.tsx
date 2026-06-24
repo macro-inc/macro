@@ -2,9 +2,11 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';
+import { plural } from '@core/util/string';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { useUserTeamsQuery } from '@queries/team';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -47,16 +49,16 @@ const PaywallComponent = (props: PaywallProps) => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
   const userId = useUserId();
-  const userTeamsQuery = useUserTeamsQuery();
+
+  const team = useCurrentTeamQuery();
 
   const teamRole = createMemo(() => {
-    const teams = userTeamsQuery.data;
     const uid = userId();
-    if (!teams?.length || !uid) return;
+    const currentTeam = team.data;
 
-    // Assume the user can only be on one team.
-    const firstTeam = teams[0];
-    return firstTeam.owner_id === uid ? 'owner' : 'member';
+    if (!currentTeam) return;
+
+    return currentTeam.team.owner_id === uid ? 'owner' : 'member';
   });
 
   const upgradeDisabled = createMemo(() => teamRole() === 'member');
@@ -146,6 +148,15 @@ const PaywallComponent = (props: PaywallProps) => {
         <div class="flex items-baseline gap-1.5 text-xs text-ink/60">
           <span class="text-ink font-semibold text-xl leading-6">$40</span>
           <span>per seat / month</span>
+
+          <Show when={teamRole() === 'owner' && team.data}>
+            {(team) => (
+              <span class="text-ink-extra-muted text-xs">
+                • {team().members.length}{' '}
+                {plural('user', team().members.length)}
+              </span>
+            )}
+          </Show>
         </div>
         <div class="flex flex-col justify-end gap-2 sm:flex-row">
           <Button

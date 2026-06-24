@@ -5,10 +5,11 @@ import CheckIcon from '@phosphor/check.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer, Surface } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
-import { useUserTeamsQuery } from '@queries/team';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { usePermissions, useUserId } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
+import { useCurrentTeamQuery } from '@queries/team/teams';
+import { plural } from '@core/util/string';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   free: ['Access to Haiku', '5 GB storage'],
@@ -43,22 +44,18 @@ export const Billing = () => {
 
   const userId = useUserId();
 
-  const userTeamsQuery = useUserTeamsQuery();
+  const team = useCurrentTeamQuery();
 
   const canManageSubscription = createMemo(() => {
     return permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION);
   });
 
   const userTeam = createMemo(() => {
-    const teams = userTeamsQuery.data;
+    const currentTeam = team.data;
     const uid = userId();
-    if (!teams || !uid) return;
+    if (!currentTeam || !uid) return;
 
-    // Assume the user can only be on one team
-    // This is the case atm
-    const firstTeam = teams[0];
-
-    return firstTeam;
+    return currentTeam.team;
   });
 
   const teamRole = createMemo(() => {
@@ -126,12 +123,23 @@ export const Billing = () => {
                   </span>
                 </Layer>
               </div>
-              <Show when={teamRole() === 'member'}>
-                <p class="text-ink-extra-muted text-xs">
-                  Your subscription is managed by your team owner. Contact them
-                  to make changes.
-                </p>
-              </Show>
+              <Switch>
+                <Match when={teamRole() === 'member'}>
+                  <p class="text-ink-extra-muted text-xs">
+                    Your subscription is managed by your team owner. Contact
+                    them to make changes.
+                  </p>
+                </Match>
+                <Match when={teamRole() === 'owner' && team.data}>
+                  {(team) => (
+                    <p class="text-ink-extra-muted text-xs">
+                      {team().members.length}{' '}
+                      {plural('user', team().members.length)} • $40 per seat/per
+                      month
+                    </p>
+                  )}
+                </Match>
+              </Switch>
             </div>
 
             <Show
