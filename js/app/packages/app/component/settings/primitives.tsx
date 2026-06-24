@@ -29,7 +29,8 @@ export const SETTINGS_INPUT_CLASS =
  */
 export function SettingsPage(props: {
   title: string;
-  description?: string;
+  /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
+  description?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
   actions?: JSX.Element;
   children: JSX.Element;
