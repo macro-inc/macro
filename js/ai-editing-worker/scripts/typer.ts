@@ -1,3 +1,6 @@
+// This is a small helper that uses the helpers of the ai worker to type random
+// gibberish into a document
+
 import "../src/globals";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";

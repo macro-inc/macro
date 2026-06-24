@@ -1,6 +1,7 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { createAwareness } from '@core/collab/awareness';
 import { createSyncEngine } from '@core/collab/engine';
+import { logSyncService } from '@core/collab/logger';
 import type { LoroManager } from '@core/collab/manager';
 import {
   IDBSnapshotStore,
@@ -66,9 +67,7 @@ import {
   on,
   onCleanup,
   type Setter,
-  untrack,
 } from 'solid-js';
-import { logSyncService } from '@core/collab/logger';
 import { CollabStatus } from './CollabStatus';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
@@ -423,8 +422,6 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     props.pluginManager.use(lexicalStateSyncPlugin);
   }
 
-  // The manager is a plain class now (no reactive accessors), so mirror its
-  // `initialized` flag into a signal to drive the start-sync effect below.
   const [managerInitialized, setManagerInitialized] = createSignal(
     loroManager.initialized
   );
@@ -446,12 +443,20 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         }
 
         const source = docSource();
-        if (!source) return;
+        if (!source) {
+          logSyncService({
+            documentId: syncSource()?.documentId ?? 'unknown',
+            level: 'debug',
+            context: {},
+            message: 'editor init: no docSource yet, waiting (skeleton stays)',
+          });
+          return;
+        }
         if (isSourceSyncService(source)) {
           // Get the current state from the loroManager
           // At this point, the loroManager should be initialized and should
           // have the initial state from the sync service
-          const state = untrack(() => loroManager.state);
+          const state = loroManager.state;
           const empty = state
             ? isStateEmpty(state.state as unknown as SerializedEditorState)
             : null;
@@ -466,7 +471,13 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
           //TODO: some more descriptive user facing error should be displayed here
           if (!state) {
-            console.error('could not initialize editor from sync service');
+            logSyncService({
+              documentId: syncSource()!.documentId,
+              level: 'error',
+              context: {},
+              message:
+                'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
+            });
             return;
           }
 
@@ -474,15 +485,34 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           setDidFirstSync(true);
 
           // Initialize the editor with the initial state from the sync service
-          if (isStateEmpty(state.state as unknown as SerializedEditorState)) {
+          if (empty) {
+            logSyncService({
+              documentId: syncSource()!.documentId,
+              level: 'debug',
+              context: {},
+              message: 'editor init: empty',
+            });
             initializeEditorEmpty(props.editor);
           } else {
+            logSyncService({
+              documentId: syncSource()!.documentId,
+              level: 'debug',
+              context: {},
+              message: 'editor init: versioned state',
+            });
             const initError = initializeEditorWithVersionedState(
               props.editor,
               state.state as unknown as SerializedEditorState,
               () => loroManager.peerIdStr
             );
             if (initError !== null) {
+              logSyncService({
+                documentId: syncSource()!.documentId,
+                level: 'error',
+                context: { misc: { initError } },
+                message:
+                  'editor init: initializeEditorWithVersionedState failed',
+              });
               props.setEditorError(initError);
               return;
             }
@@ -491,6 +521,20 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Start the sync engine
           startSync();
           props.setEditorReady(true);
+          logSyncService({
+            documentId: syncSource()!.documentId,
+            level: 'info',
+            context: {},
+            message: 'editor ready (skeleton cleared)',
+          });
+        } else {
+          logSyncService({
+            documentId: syncSource()?.documentId ?? 'unknown',
+            level: 'debug',
+            context: {},
+            message:
+              'editor init: source is not sync-service, skipping editor init (skeleton stays)',
+          });
         }
       }
     )

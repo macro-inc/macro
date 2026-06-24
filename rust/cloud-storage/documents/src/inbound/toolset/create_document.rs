@@ -6,6 +6,7 @@ use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
+use crate::domain::ports::editing::EditingWorkerService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -56,16 +57,17 @@ pub struct CreateDocument {
 }
 
 #[async_trait]
-impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for CreateDocument
+impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for CreateDocument
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     type Output = CreateDocumentResponse;
 
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Create content");

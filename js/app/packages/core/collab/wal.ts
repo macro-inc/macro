@@ -177,11 +177,6 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 }
 
-/**
- * In-memory {@link WALStore} — no IndexedDB, no dirty hint, nothing survives the
- * process. For headless/single-shot callers (the AI editing worker) that just
- * want the {@link WALSyncer}'s batching + retry semantics without persistence.
- */
 export class InMemoryWALStore<T> implements WALStore<T> {
   private entries: WALEntry<T>[] = [];
   private seq = 0;
@@ -213,10 +208,6 @@ export class InMemoryWALStore<T> implements WALStore<T> {
     const before = this.entries.length;
     this.entries = this.entries.filter((e) => !hasExpired(e, cutoff));
     return before - this.entries.length;
-  }
-
-  markClean(): void {
-    // no dirty hint to clear — nothing persists.
   }
 
   async count(): Promise<number> {

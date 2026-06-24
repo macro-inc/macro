@@ -36,6 +36,6 @@ export * from './plugins/nodeIdPlugin';
 export * from './plugins/peerIdPlugin';
 
 export * from './transformers';
-export { toXml, fromXml } from './transformers/xml';
+export { toXml } from './transformers/xml';
 export * from './utils/markdown-state';
 export * from './utils/mentions';

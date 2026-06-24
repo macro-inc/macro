@@ -321,7 +321,7 @@ export function LexicalStateDebugger(props: {
     return { nodeList: selectableNodes, selection: selection };
   });
 
-  const [xmlInput, setXmlInput] = createSignal('');
+  const [lexicalJson, setLexicalJson] = createSignal('');
   const jsonState = createMemo(() =>
     JSON.stringify(props.state.toJSON(), null, 2)
   );
@@ -433,6 +433,7 @@ export function LexicalStateDebugger(props: {
         <div class="flex items-center justify-between px-2 py-1 border-b border-edge shrink-0">
           <span class="text-ink-extra-muted">JSON state</span>
           <button
+            type="button"
             class="border border-edge rounded-sm px-2 py-0.5 hover:bg-edge active:brightness-75"
             onClick={() => navigator.clipboard.writeText(jsonState())}
           >
@@ -447,14 +448,15 @@ export function LexicalStateDebugger(props: {
           <textarea
             class="bg-surface border border-edge rounded-sm p-1 text-xs h-16 resize-none"
             placeholder='{"root":{"children":[...]}}'
-            value={xmlInput()}
-            onInput={(e) => setXmlInput(e.currentTarget.value)}
+            value={lexicalJson()}
+            onInput={(e) => setLexicalJson(e.currentTarget.value)}
           />
           <button
+            type="button"
             class="border border-edge rounded-sm px-2 py-0.5 text-xs hover:bg-edge"
             onClick={() => {
               try {
-                const state = props.editor.parseEditorState(xmlInput());
+                const state = props.editor.parseEditorState(lexicalJson());
                 props.editor.setEditorState(state);
               } catch (e) {
                 console.error('Failed to parse editor state JSON:', e);

@@ -1,8 +1,9 @@
 pub use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentCognitionServiceUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
+    SyncServiceUrl,
 };
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -65,6 +66,8 @@ pub struct Config {
     pub cloudfront_signer_private_key: String,
     /// MCP credentials encryption key (base64-encoded, secret name or value)
     pub mcp_credentials_key_secret_name: String,
+    /// AI editing worker URL
+    pub ai_editing_worker_url: String,
 }
 
 env_var!(
@@ -112,6 +115,7 @@ impl Config {
             .unwrap_or(DEFAULT_DOCUMENT_BATCH_LIMIT);
 
         let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
+        let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
         let sync_service_url = SyncServiceUrl::new()?.to_string();
         let lexical_service_url = LexicalServiceUrl::new()?.to_string();
         let email_service_url = EmailServiceUrl::new()?.to_string();
@@ -172,6 +176,7 @@ impl Config {
             cloudfront_signer_private_key:
                 document_storage_service_cloudfront_signer_private_key_secret_name.to_string(),
             mcp_credentials_key_secret_name: mcp_credentials_key_secret_name.to_string(),
+            ai_editing_worker_url,
         })
     }
 
@@ -206,6 +211,7 @@ impl Config {
             cloudfront_signer_public_key_id: Default::default(),
             cloudfront_signer_private_key: Default::default(),
             mcp_credentials_key_secret_name: Default::default(),
+            ai_editing_worker_url: Default::default(),
         }
     }
 }

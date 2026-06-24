@@ -14,7 +14,6 @@ import type { Awareness } from './awareness';
 import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
 import { logSyncService } from './logger';
 import {
-  type LoroManager,
   LoroStateTag,
   type StateUpdate,
   type SyncEngineManager,
@@ -50,9 +49,6 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
   readonly?: () => boolean;
   onRunningChange?: (v: boolean) => void;
   snapshotStore?: LoroSnapshotStore;
-  /** Build the cross-replica side channel. Defaults to {@link noopChatter} so
-   *  the engine is runtime-agnostic; the browser opts into cross-tab gossip via
-   *  {@link createSyncEngine}. */
   makeChatter?: (documentId: string) => Chatter;
 };
 
@@ -149,6 +145,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     this._isRunning = true;
     this.onRunningChange(true);
+    this.log('info', 'engine.start: ok');
     return true;
   }
 
@@ -179,7 +176,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const syncResult = await this.loroManager.syncToLoro(state);
 
       if (syncResult.isErr()) {
-        this.log('error', 'syncStateToLoro: failed, resetting engine', { err: syncResult });
+        this.log('error', 'syncStateToLoro: failed, resetting engine', {
+          err: syncResult,
+        });
         this.reset();
       }
     });
@@ -202,13 +201,17 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     await this.syncLock.runExclusive(async () => {
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (snapshot.isErr()) {
-        this.log('error', 'engine.reset: failed to get snapshot', { err: snapshot.error });
+        this.log('error', 'engine.reset: failed to get snapshot', {
+          err: snapshot.error,
+        });
         return;
       }
 
       const resetResult = await this.loroManager.reset(snapshot.value);
       if (resetResult.isErr()) {
-        this.log('error', 'engine.reset: loro manager reset failed', { err: resetResult });
+        this.log('error', 'engine.reset: loro manager reset failed', {
+          err: resetResult,
+        });
         return;
       }
     });
@@ -272,7 +275,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const importResult = this.loroManager.importUpdate(update);
       await Promise.resolve();
       if (importResult.isErr()) {
-        this.log('error', 'engine: failed to import remote update, resetting', { err: importResult });
+        this.log('error', 'engine: failed to import remote update, resetting', {
+          err: importResult,
+        });
         this.reset();
         return;
       }
@@ -291,7 +296,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.handleRemoteUpdate(event.snapshot);
         break;
       case 'reconnect':
-        this.log('info', 'engine: reconnect, requesting updates since current version');
+        this.log(
+          'info',
+          'engine: reconnect, requesting updates since current version'
+        );
         this.requestAndHandleUpdatesSince(this.loroManager.doc.version());
         break;
     }
@@ -301,6 +309,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     since: VersionVector,
     attempt = 1
   ) {
+    this.log('debug', `engine: requestUpdatesSince (attempt ${attempt})`);
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       this.log('error', 'engine: requestUpdatesSince failed', {
@@ -315,6 +324,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       return;
     }
 
+    this.log('debug', 'engine: requestUpdatesSince ok, applying update');
     this.handleRemoteUpdate(updates.value);
   }
 }
@@ -334,11 +344,8 @@ export function createSyncEngine<
   D,
   S extends GenericRootSchema = GenericRootSchema,
 >(
-  params: Omit<SyncEngineParams<S, D>, 'onRunningChange' | 'loroManager'> & {
+  params: Omit<SyncEngineParams<S, D>, 'onRunningChange'> & {
     readonly?: Accessor<boolean>;
-    // The concrete manager (not just the lean engine seam) so we can subscribe
-    // to its state changes below.
-    loroManager: LoroManager<S>;
   }
 ): ReactiveSyncEngine<S, D> {
   const [isRunning, setIsRunning] = createSignal(false);

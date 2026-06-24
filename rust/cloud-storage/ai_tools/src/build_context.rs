@@ -14,6 +14,7 @@ use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
+use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
@@ -226,6 +227,12 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client,
         sync_client.as_ref().clone(),
+        Arc::new(ReqwestEditingWorkerClient::new(
+            document_storage_service_url.clone(),
+            env.document_storage_service_auth_key.to_string(),
+            ai_editing_worker_url,
+            Arc::new(reqwest::Client::new()),
+        )),
     );
 
     let properties_tool_context =
@@ -293,13 +300,6 @@ pub async fn build_tool_service_context_from_env(
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
-    let editing_tool_context = documents::inbound::toolset::EditDocumentToolContext {
-        dss_url: document_storage_service_url.clone(),
-        dss_auth_key: env.document_storage_service_auth_key.to_string(),
-        worker_url: ai_editing_worker_url,
-        client: Arc::new(reqwest::Client::new()),
-    };
-
     Ok(ToolServiceContext {
         search_service_client: search_client,
         email_service_client: email_ext_client,
@@ -315,7 +315,6 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
-        editing_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })

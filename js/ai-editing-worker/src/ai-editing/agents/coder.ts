@@ -63,21 +63,6 @@ export async function runTask(
           'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. Include suggestedContext when you can identify the wider line range needed. Ends your task; do not also call runCode.',
         inputSchema: z.object({
           reason: z.string().describe('what stopped you, in one line'),
-          suggestedContext: z
-            .object({
-              start_line: z
-                .number()
-                .int()
-                .describe('first line of the wider document region needed'),
-              end_line: z
-                .number()
-                .int()
-                .describe('last line of the wider document region needed'),
-            })
-            .optional()
-            .describe(
-              'line range that would likely contain the missing ids or surrounding structure'
-            ),
         }),
         execute: async () => 'acknowledged',
       }),

@@ -14,6 +14,7 @@ import {
   type PeerID,
   type Side,
   type VersionVector,
+  ImportStatus,
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
@@ -77,6 +78,9 @@ export interface SyncEngineManager<
   reset(
     snapshot: LoroRawUpdate
   ): Promise<Result<void, ResultError<LoroManagerError>[]>>;
+  /** Subscribe to state changes; `createSyncEngine` uses this to wire the
+   *  manager's updates into the engine. Returns an unsubscribe fn. */
+  onStateChange(listener: (update: StateUpdate<S>) => void): () => void;
 }
 
 /**
@@ -130,7 +134,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.options = options;
   }
 
-  // ── reads ─────────────────────────────────────────────────────────────────
   /** The inner LoroDoc. Only touch this if you know what you're doing. */
   get doc(): LoroDoc {
     return this._doc;
@@ -161,7 +164,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     return this._doc.version();
   }
 
-  // ── change notification ─────────────────────────────────────────────────
   /** Subscribe to state changes (both directions, with metadata). Returns an
    *  unsubscribe fn. */
   onStateChange(listener: (update: StateUpdate<S>) => void): () => void {
@@ -207,16 +209,20 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     await Promise.resolve();
   }
 
-  // ── operations ──────────────────────────────────────────────────────────
   importUpdate(
     update: LoroRawUpdate
   ): Result<boolean, ResultError<LoroManagerError>[]> {
-    let importStatus;
+    let importStatus: ImportStatus;
 
     try {
       importStatus = this._doc.import(update);
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `importUpdate failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `importUpdate failed: ${e}`,
+      });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -241,12 +247,17 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   importBatchUpdates(
     updates: LoroRawUpdate[]
   ): Result<boolean, ResultError<LoroManagerError>[]> {
-    let importStatus;
+    let importStatus: ImportStatus;
 
     try {
       importStatus = this._doc.importBatch(updates);
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `importBatchUpdates failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `importBatchUpdates failed: ${e}`,
+      });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -278,11 +289,11 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       return err([{ code: error.code, message: error.message }]);
     }
 
-    const mirror_ = createMirror(this._doc, this.schema);
+    const mirror = createMirror(this._doc, this.schema);
 
     try {
       await this.awaitMirrorSync();
-      const mirrorState = mirror_.getState();
+      const mirrorState = mirror.getState();
       this.emitState({
         state: mirrorState,
         metadata: {
@@ -291,7 +302,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         },
       });
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `initializeFromSnapshot: mirror sync failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `initializeFromSnapshot: mirror sync failed: ${e}`,
+      });
       this.pushError(LoroManagerError.InitializeFailed);
       return err([
         {
@@ -302,7 +318,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     }
 
     this.setInitialized(true);
-    this.subscribeMirror(mirror_);
+    this.subscribeMirror(mirror);
 
     return ok(undefined);
   }
@@ -332,7 +348,7 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
       (span) => span.peer === this._doc.peerIdStr
     );
 
-    let update;
+    let update: RawUpdate;
 
     try {
       update = this._doc.export({
@@ -343,7 +359,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         })),
       });
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getUpdateSince: export failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `getUpdateSince: export failed: ${e}`,
+      });
       this.pushError(LoroManagerError.ExportFailed);
       return err([
         {
@@ -382,7 +403,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
 
       await this.awaitMirrorSync();
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `syncToLoro failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `syncToLoro failed: ${e}`,
+      });
       return err([
         {
           code: LoroManagerError.SyncFailed,
@@ -405,11 +431,16 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     const newDoc = createLoroDoc();
     this._doc = newDoc;
 
-    let importStatus;
+    let importStatus: ImportStatus;
     try {
       importStatus = newDoc.import(snapshot);
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `reset: snapshot import failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `reset: snapshot import failed: ${e}`,
+      });
       this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
@@ -456,7 +487,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     try {
       container = this._doc.getContainerById(id);
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getContainerById failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `getContainerById failed: ${e}`,
+      });
       this.pushError(LoroManagerError.GetContainerByIdFailed);
       return err([
         { code: LoroManagerError.GetContainerByIdFailed, message: String(e) },
@@ -486,7 +522,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         ]);
       }
     } catch (e) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `getCursorPos failed: ${e}` });
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `getCursorPos failed: ${e}`,
+      });
       this.pushError(LoroManagerError.GetCursorPosFailed);
       return err([
         { code: LoroManagerError.GetCursorPosFailed, message: String(e) },
@@ -496,38 +537,39 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     return ok(pos);
   }
 
-  /** Apply a snapshot to the loro doc — initialize on first touch, otherwise
-   *  merge as an update. Errors are logged and surfaced via the return. */
-  private async applySnapshot(
-    snapshot: RawUpdate,
-    context: string
-  ): Promise<boolean> {
-    if (!this._initialized) {
-      const initResult = await this.initializeFromSnapshot(snapshot);
-      if (initResult.isErr()) {
-        logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `applySnapshot(${context}): initializeFromSnapshot failed` });
-        return false;
-      }
-      return true;
-    }
-    const importResult = this.importUpdate(snapshot);
-    if (importResult.isErr()) {
-      logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `applySnapshot(${context}): importUpdate failed` });
+  /**
+   * First snapshot received is the one ingested, all others are automatically
+   * ignored. Returns whether this snapshot became the seed.
+   */
+  async ingest(input: SnapshotIngest): Promise<boolean> {
+    if (this._initialized) return false;
+
+    const initResult = await this.initializeFromSnapshot(input.snapshot);
+    if (initResult.isErr()) {
+      logSyncService({
+        documentId: this.options.documentId,
+        level: 'error',
+        context: {},
+        message: `ingest(${input.kind}): seed failed`,
+      });
       return false;
     }
-    return true;
-  }
 
-  async ingest(input: SnapshotIngest): Promise<void> {
-    const applied = await this.applySnapshot(input.snapshot, input.kind);
-    if (!applied) return;
-
+    // WAL entries are causally anchored to the local snapshot, so they're only
+    // safe to replay on top of the local seed we just applied.
     if (input.kind === 'local' && input.walUpdates?.length) {
       const replayResult = this.importBatchUpdates(input.walUpdates);
       if (replayResult.isErr()) {
-        logSyncService({ documentId: this.options.documentId, level: 'error', context: {}, message: `ingest(${input.kind}): WAL replay failed` });
+        logSyncService({
+          documentId: this.options.documentId,
+          level: 'error',
+          context: {},
+          message: `ingest(${input.kind}): WAL replay failed`,
+        });
       }
     }
+
+    return true;
   }
 
   /** Tear down subscriptions and free the underlying doc. */
@@ -541,12 +583,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   }
 }
 
-/**
- * Solid-scoped factory for a {@link LoroManager}: constructs one and ties its
- * teardown to the owning reactive scope via `onCleanup`. Consumers that need
- * reactivity subscribe through `onStateChange` / `onInitializedChange`. Mirrors
- * `createSyncEngine`.
- */
 export function createLoroManager<S extends GenericRootSchema>(
   schema: S,
   options: LoroManagerOptions

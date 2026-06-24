@@ -7,11 +7,10 @@ export type ChatterMessage =
   | { type: 'awareness'; data: RawUpdate };
 
 /**
- * A side channel between co-located replicas of the same document — e.g. browser
- * tabs of the same doc — so a local edit fans out to its siblings without a
- * network round-trip through the sync service. Orthogonal to the live sync
- * source: environments with a single replica (the AI worker, SSR) use
- * {@link noopChatter}.
+ * Generic interface for "other people" that should also receive updates from
+ * the local peer.
+ *
+ * Usually this is just a wrapper around a broadcast channel.
  */
 export interface Chatter {
   /** Broadcast a message to the other replicas. */
@@ -22,7 +21,6 @@ export interface Chatter {
   close(): void;
 }
 
-/** No co-located replicas — nothing to gossip to, nothing to hear. */
 export function noopChatter(): Chatter {
   return { post: () => {}, subscribe: () => () => {}, close: () => {} };
 }
@@ -37,17 +35,17 @@ export class BroadcastChannelChatter implements Chatter {
     this.channel = new BroadcastChannel(`${CHANNEL_PREFIX}${documentId}`);
   }
 
-  post(message: ChatterMessage): void {
+  public post(message: ChatterMessage): void {
     this.channel.postMessage(message);
   }
 
-  subscribe(handler: (message: ChatterMessage) => void): () => void {
+  public subscribe(handler: (message: ChatterMessage) => void): () => void {
     const listener = (e: MessageEvent<ChatterMessage>) => handler(e.data);
     this.channel.addEventListener('message', listener);
     return () => this.channel.removeEventListener('message', listener);
   }
 
-  close(): void {
+  public close(): void {
     this.channel.close();
   }
 }

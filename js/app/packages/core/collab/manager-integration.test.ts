@@ -49,16 +49,24 @@ describe('LoroManager seed + converge — two-client merge', () => {
       const server = new TestServer();
       server.applyUpdate(initialSnapshotX);
 
-      const clientA = createLoroManager(TEST_SCHEMA, { documentId: 'test-doc-a' });
+      const clientA = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-a',
+      });
       await clientA.ingest({ kind: 'dss', snapshot: initialSnapshotX });
 
-      const clientB = createLoroManager(TEST_SCHEMA, { documentId: 'test-doc-b' });
+      const clientB = createLoroManager(TEST_SCHEMA, {
+        documentId: 'test-doc-b',
+      });
       await clientB.ingest({ kind: 'dss', snapshot: initialSnapshotX });
 
-      await clientA.syncToLoro({ paragraphs: [{ id: 'p1', text: 'X edit-A ' }] });
+      await clientA.syncToLoro({
+        paragraphs: [{ id: 'p1', text: 'X edit-A ' }],
+      });
       pushToServer(clientA, server);
 
-      await clientB.syncToLoro({ paragraphs: [{ id: 'p1', text: 'X edit-B ' }] });
+      await clientB.syncToLoro({
+        paragraphs: [{ id: 'p1', text: 'X edit-B ' }],
+      });
       pushToServer(clientB, server);
 
       // Both clients pull the full server state

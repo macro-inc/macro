@@ -1,7 +1,7 @@
 import { ok, okAsync } from 'neverthrow';
 import { vi } from 'vitest';
 import type { Chatter, ChatterMessage } from './chatter';
-import type { SyncEngineManager } from './manager';
+import type { StateUpdate, SyncEngineManager } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
@@ -175,6 +175,9 @@ export class MockLiveSyncSource implements LiveSyncSource {
 
 export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
   private updateCallbacks = new Set<(update: LoroRawUpdate) => void>();
+  private stateCallbacks = new Set<
+    (update: StateUpdate<GenericRootSchema>) => void
+  >();
   private _initialized: boolean;
 
   public peerId = BigInt(1);
@@ -201,7 +204,16 @@ export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
     } as any;
   }
 
+  public onStateChange(cb: (update: StateUpdate<GenericRootSchema>) => void) {
+    this.stateCallbacks.add(cb);
+    return () => this.stateCallbacks.delete(cb);
+  }
+
   public triggerLocalUpdate(update: LoroRawUpdate) {
     this.updateCallbacks.forEach((cb) => void cb(update));
+  }
+
+  public triggerStateChange(update: StateUpdate<GenericRootSchema>) {
+    this.stateCallbacks.forEach((cb) => void cb(update));
   }
 }
