@@ -211,6 +211,23 @@ export class Doc implements DocReader, DocWriter {
     return locate.$blockById(this.session, node);
   }
 
+  /** Resolve a table by id, rejecting non-table ids. `setCell`/cell resolution
+   *  otherwise walk up to the enclosing table, so a <tr>/<td> id "works" but
+   *  reindexes row/col against the table — silently clobbering the wrong cell
+   *  (e.g. the header). Require the table id so that mistake is a loud error. */
+  private requireTable(id: NodeRef): TableNode {
+    const node = locate.$byId(this.session, id);
+    if ($isTableNode(node)) return node;
+    const what = $isTableRowNode(node)
+      ? 'a <tr>'
+      : $isTableCellNode(node)
+        ? 'a <td>'
+        : `a <${node.getType()}>`;
+    throw new EditError(
+      `id "${id}" is ${what}, not a table — pass the table id with the cell's row/column (both shown in the XML).`
+    );
+  }
+
   public textLength(node: NodeRef): number {
     return this.read(
       () => locate.$byId(this.session, node).getTextContent().length
@@ -233,7 +250,7 @@ export class Doc implements DocReader, DocWriter {
   }
 
   private cell(tableRef: string, row: number, col: number) {
-    const table = resolveTable(locate.$byId(this.session, tableRef));
+    const table = this.requireTable(tableRef);
     const cell = table
       .getChildren()
       .filter($isTableRowNode)
@@ -536,9 +553,7 @@ export class Doc implements DocReader, DocWriter {
     col: number,
     text: string
   ): void {
-    this.tx(() =>
-      tables.$setCell(locate.$byId(this.session, table), row, col, text)
-    );
+    this.tx(() => tables.$setCell(this.requireTable(table), row, col, text));
   }
 
   private addRow(table: NodeRef, at?: number): void {

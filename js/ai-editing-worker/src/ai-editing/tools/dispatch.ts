@@ -24,7 +24,7 @@ type ContextRange = {
   source: 'ids' | 'full-document';
 };
 
-const ID_PATTERN = /[A-Za-z0-9_-]{6,}/g;
+const ID_PATTERN = /[A-Za-z0-9_~-]{6,}/g;
 const BLOCK_TAGS = new Set([
   'h1',
   'h2',

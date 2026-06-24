@@ -97,7 +97,9 @@ describe('runtime — end to end against real Lexical', () => {
       session,
       `editor.setCell('${alpha}', 9, 9, 'x'); editor.convertToHeading('${beta}', 3);`
     );
-    expect(summary).toBe('error: setCell: no enclosing table');
+    expect(summary).toMatch(
+      /error: setCell: id ".+" is a <paragraph>, not a table/
+    );
     expect(serializeWithXml(session)).toContain('<h3');
     expect(serializeWithXml(session)).toContain('beta');
   });

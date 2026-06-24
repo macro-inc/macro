@@ -62,11 +62,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "failed to get document permission token: {status}"
         );
 
-        let token_body: serde_json::Value = token_resp.json().await?;
-        let token = token_body["token"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("missing 'token' field in DSS response"))?
-            .to_string();
+        // real type is in dss but we can't import from there
+        #[derive(serde::Deserialize)]
+        struct TokenResponse {
+            token: String,
+        }
+        let TokenResponse { token } = token_resp.json().await?;
 
         let request_body = serde_json::json!({
             "token": token,

@@ -63,6 +63,38 @@ function serUnknown(n: UnknownNode): FxpNode {
   return el(type, (children ?? []).map(serializeNode), attrs)
 }
 
+/** Serialize a table, stamping each cell with its 0-based `row`/`column` so the
+ *  model can address `setCell` by coordinate without counting `<tr>`/`<td>`. */
+function serializeTable(n: TableNode): FxpNode {
+  // Rows/cells nest structurally inside a table, so the casts are safe; the
+  // discriminated union can't narrow them (UnknownNode.type widens to string).
+  let r = 0
+  const rows = n.children.map(child => {
+    if (child.type !== 'tablerow') return serializeNode(child)
+    const row = child as TableRowNode
+    const rowIdx = r++
+    let c = 0
+    const cells = row.children.map(child => {
+      if (child.type !== 'tablecell') return serializeNode(child)
+      const cell = child as TableCellNode
+      const colIdx = c++
+      return el('td', cell.children.map(serializeNode), nodeAttrs(cell, {
+        row: String(rowIdx),
+        column: String(colIdx),
+        ...(cell.headerState !== 0 && { headerState: String(cell.headerState) }),
+        ...(cell.colSpan !== 1     && { colSpan: String(cell.colSpan) }),
+        ...(cell.rowSpan !== 1     && { rowSpan: String(cell.rowSpan) }),
+        ...(cell.backgroundColor  && { backgroundColor: cell.backgroundColor }),
+      }))
+    })
+    return el('tr', cells, nodeAttrs(row, row.height !== undefined ? { height: String(row.height) } : {}))
+  })
+  return el('table', rows, nodeAttrs(n, {
+    ...(n.colWidths   && { colWidths: n.colWidths.join(',') }),
+    ...(n.rowStriping && { rowStriping: 'true' }),
+  }))
+}
+
 export function serializeNode(node: SerNode): FxpNode {
   if (!isKnownNode(node)) return serUnknown(node as UnknownNode)
   return match(node)
@@ -91,11 +123,7 @@ export function serializeNode(node: SerNode): FxpNode {
         ...(n.listType === 'check' && { listType: 'check' }),
         ...(n.start !== 1          && { start: String(n.start) }),
       }))
-    .with({ type: 'table' }, n =>
-      container('table', n, {
-        ...(n.colWidths   && { colWidths: n.colWidths.join(',') }),
-        ...(n.rowStriping && { rowStriping: 'true' }),
-      }))
+    .with({ type: 'table' }, n => serializeTable(n))
     .with({ type: 'tablerow' }, n =>
       container('tr', n, n.height !== undefined ? { height: String(n.height) } : {}))
     .with({ type: 'tablecell' }, n =>

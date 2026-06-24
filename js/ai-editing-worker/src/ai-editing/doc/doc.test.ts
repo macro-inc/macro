@@ -440,6 +440,50 @@ describe('Doc — structure & refs', () => {
     doc.apply({ kind: 'setCell', table: 't', row: 1, col: 0, text: 'C' });
     expect(serializeWithXml(session)).toContain('C');
   });
+
+  it('setCell stamps row/column coordinates into the XML', () => {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 't',
+      spec: {
+        block: 'table',
+        rows: [
+          ['A', 'B'],
+          ['c', 'd'],
+        ],
+      },
+      at: { after: ids[0]! },
+    });
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('row="0"');
+    expect(xml).toContain('column="0"');
+    expect(xml).toContain('column="1"');
+    expect(xml).toContain('row="1"');
+  });
+
+  it('setCell rejects a <tr> id (must be the table)', () => {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 't',
+      spec: {
+        block: 'table',
+        rows: [
+          ['A', 'B'],
+          ['c', 'd'],
+        ],
+      },
+      at: { after: ids[0]! },
+    });
+    const rowId = serializeWithXml(session).match(/<tr id="([^"]+)"/)?.[1];
+    expect(rowId).toBeTruthy();
+    expect(() =>
+      doc.apply({ kind: 'setCell', table: rowId!, row: 0, col: 0, text: 'X' })
+    ).toThrow(/not a table/);
+  });
 });
 
 describe('Doc — readers', () => {
@@ -805,7 +849,12 @@ describe('Doc — chained block-type swaps stay addressable by the original id',
     const childId = read(session, () =>
       $getId(($getRoot().getFirstChild() as ElementNode).getFirstChild()!)
     )!;
-    doc.apply({ kind: 'setBlockType', node: ids[0]!, block: 'heading', level: 2 });
+    doc.apply({
+      kind: 'setBlockType',
+      node: ids[0]!,
+      block: 'heading',
+      level: 2,
+    });
     // the child rode along on replace(…, true): its id still resolves and formats
     doc.apply({ kind: 'formatNode', node: childId, format: 'bold', on: true });
     const xml = serializeWithXml(session);
