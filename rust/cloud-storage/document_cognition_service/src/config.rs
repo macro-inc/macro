@@ -105,7 +105,9 @@ impl Config {
             notification_queue: NotificationQueue::Comptime("NOTIFICATION_QUEUE"),
             search_event_queue: SearchEventQueue::Comptime("SEARCH_EVENT_QUEUE"),
             ai_projection_queue: AiProjectionQueue::Comptime("AI_PROJECTION_QUEUE"),
-            sync_service_auth_key: SyncServiceAuthKey::Comptime("SYNC_SERVICE_AUTH_KEY"),
+            sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
+                "SYNC_SERVICE_AUTH_KEY",
+            )),
             authentication_service_secret_key: AuthenticationServiceSecretKey::Comptime(
                 "AUTHENTICATION_SERVICE_SECRET_KEY",
             ),
@@ -121,12 +123,13 @@ impl Config {
                 DocumentStorageServiceCloudfrontSignerPublicKeyId::Comptime(
                     "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
                 ),
-            document_storage_service_cloudfront_signer_private_key:
+            document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret::Local(
                 DocumentStorageServiceCloudfrontSignerPrivateKey::Comptime(
                     "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
                 ),
-            mcp_credentials_key_secret_name: McpCredentialsKeySecretName::Comptime(
-                "MCP_CREDENTIALS_KEY_SECRET_NAME",
+            ),
+            mcp_credentials_key_secret_name: LocalOrRemoteSecret::Local(
+                McpCredentialsKeySecretName::Comptime("MCP_CREDENTIALS_KEY_SECRET_NAME"),
             ),
         }
     }
