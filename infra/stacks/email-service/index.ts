@@ -12,8 +12,6 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
-  getServiceUrl,
-  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -36,56 +34,8 @@ const tags = {
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
-const AUDIENCE = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const ISSUER = config.require(`fusionauth_issuer`);
-const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
-const USE_APOLLO_CRM_ENRICHMENT = config.require(`use_apollo_crm_enrichment`);
 const APOLLO_API_KEY_SECRET_NAME = config.require(`apollo_api_key_secret_name`);
-const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
-const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
-const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
-  `redis_rate_limit_reqs_backfill`
-);
-const REDIS_RATE_LIMIT_WINDOW_SECS = config.require(
-  `redis_rate_limit_window_secs`
-);
-const PRESIGNED_URL_TTL_SECS = config.require(`presigned_url_ttl_secs`);
-const BACKFILL_QUEUE_WORKERS = config.require(`backfill_queue_workers`);
-const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
-  `backfill_queue_max_messages`
-);
-const INBOX_SYNC_QUEUE_WORKERS = config.require(`inbox_sync_queue_workers`);
-const INBOX_SYNC_QUEUE_MAX_MESSAGES = config.require(
-  `inbox_sync_queue_max_messages`
-);
-const INBOX_SYNC_RETRY_QUEUE_WORKERS = config.require(
-  `inbox_sync_retry_queue_workers`
-);
-const INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES = config.require(
-  `inbox_sync_retry_queue_max_messages`
-);
-const GMAIL_OPS_QUEUE_WORKERS = config.require(`gmail_ops_queue_workers`);
-const GMAIL_OPS_QUEUE_MAX_MESSAGES = config.require(
-  `gmail_ops_queue_max_messages`
-);
-const GMAIL_OPS_RETRY_QUEUE_WORKERS = config.require(
-  `gmail_ops_retry_queue_workers`
-);
-const GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES = config.require(
-  `gmail_ops_retry_queue_max_messages`
-);
-const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
-const gmailGcpQueue = config.require(`gmail_gcp_queue`);
-const GMAIL_GCP_QUEUE = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: gmailGcpQueue })
-  .apply((secret) => secret.secretString);
-
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
@@ -102,12 +52,6 @@ const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
       secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY,
     })
     .apply((secret) => secret.arn);
-
-const INTERNAL_AUTH_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`internal_auth_key`),
-  })
-  .apply((secret) => secret.secretString);
 
 const internalAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require(`internal_auth_key`) })
@@ -140,8 +84,7 @@ const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
   .getOutput('sfsDeleteQueueName')
   .apply((name) => name as string);
 
-const { notificationIngressQueueName, notificationIngressQueueArn } =
-  getMacroNotify();
+const { notificationIngressQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
   vpc: coparse_api_vpc,
@@ -242,7 +185,7 @@ export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queu
 
 export { sfsDeleteQueueArn, sfsDeleteQueueName };
 
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 // Retrieve name of queue used Contacts Service
 const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
@@ -251,10 +194,6 @@ const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
     name: `macro-inc/contacts-service/${stack}`,
   }
 );
-
-const contactsQueueName: pulumi.Output<string> = contactsServiceStack
-  .getOutput('contactsQueueName')
-  .apply((arn) => arn as string);
 
 // Get ARN to allow sending messages to contacts Queue
 const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
