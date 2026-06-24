@@ -12,14 +12,12 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
-  ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
-import { useUserTeamsQuery } from '@queries/team';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -44,12 +42,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { usePermissions } from '@core/context/user';
-import { PERMISSION_IDS } from '@core/constant/permissions';
-import { useSettingsState } from '@core/constant/SettingsState';
-import PaywallComponent from '../paywall/PaywallComponent';
-import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -306,35 +298,12 @@ export function Account() {
   const email = useEmail();
   const userId = useUserId();
   const logout = useLogout();
-  const permissions = usePermissions();
-  const { toggleSettings } = useSettingsState();
   const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
-
-  const userTeamsQuery = useUserTeamsQuery();
-  const ownedTeam = createMemo(() => {
-    const teams = userTeamsQuery.data;
-    const uid = userId();
-    if (!teams || !uid) return undefined;
-    return teams.find((t) => t.owner_id === uid);
-  });
-  const isNonOwnerTeamMember = createMemo(() => {
-    const teams = userTeamsQuery.data;
-    const uid = userId();
-    if (!teams || !uid) return false;
-    // Only a "non-owner member" if they own no team at all but belong to one.
-    const ownsAnyTeam = teams.some((t) => t.owner_id === uid);
-    return !ownsAnyTeam && teams.some((t) => t.owner_id !== uid);
-  });
-
-  const newPricingFlag = useFeatureFlag('enable-new-pricing', {
-    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
-  });
-  const newPricingEnabled = () => newPricingFlag().enabled;
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -370,47 +339,7 @@ export function Account() {
   };
 
   return (
-    <SettingsPage
-      title="Account"
-      actions={<TeamSubscriptionPill show={isNonOwnerTeamMember()} />}
-    >
-      <Show
-        when={
-          permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) &&
-          // Team members get the header pill instead of a card here, so
-          // skip this billing block rather than leaving it empty.
-          !(newPricingEnabled() && isNonOwnerTeamMember())
-        }
-      >
-        <SettingsSection>
-          <ShowFeatureFlag
-            key="enable-new-pricing"
-            enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
-            fallback={
-              <PaywallComponent
-                hideCloseButton
-                cb={() => {}}
-                handleGuest={() => toggleSettings()}
-              />
-            }
-          >
-            <Switch
-              fallback={
-                <PaywallComponent
-                  hideCloseButton
-                  cb={() => {}}
-                  handleGuest={() => toggleSettings()}
-                />
-              }
-            >
-              <Match when={ownedTeam()}>
-                {(team) => <PaywallTeamOwnerView team={team()} />}
-              </Match>
-            </Switch>
-          </ShowFeatureFlag>
-        </SettingsSection>
-      </Show>
-
+    <SettingsPage title="Account">
       <SettingsSection>
         <SettingsCard>
           <Show when={ENABLE_PROFILE_PICTURES}>
@@ -559,33 +488,6 @@ function Row(props: { label: string; children?: any }) {
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
-  );
-}
-
-/**
- * Team members can't manage their subscription (the owner does), so instead of
- * a full billing card we show a compact, informational pill next to the Account
- * header with the explanation in a hover tooltip. Gated to the new-pricing
- * rollout, matching where the team-member card used to appear.
- */
-function TeamSubscriptionPill(props: { show: boolean }) {
-  return (
-    <Show when={props.show}>
-      <ShowFeatureFlag
-        key="enable-new-pricing"
-        enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
-      >
-        <Tooltip
-          label="Your subscription is managed by your team owner. Contact them to make changes."
-          placement="bottom"
-        >
-          <span class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted px-2 py-0.5 text-xs font-medium text-ink-muted">
-            <UsersThreeIcon class="size-3.5 shrink-0 text-accent" />
-            Team Subscription
-          </span>
-        </Tooltip>
-      </ShowFeatureFlag>
-    </Show>
   );
 }
 

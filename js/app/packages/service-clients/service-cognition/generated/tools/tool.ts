@@ -37,6 +37,7 @@ type ToolParserMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -46,6 +47,7 @@ type ToolParserMap = {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
   };
+  LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -78,6 +80,11 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
+  SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -126,6 +133,10 @@ const toolParserMap = {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
   },
+  ListInboxes: {
+    call: schemas.ListInboxes,
+    response: schemas.ListInboxesResponse,
+  },
   ListLabels: {
     call: schemas.ListLabels,
     response: schemas.ListLabelsResponse,
@@ -138,6 +149,7 @@ const toolParserMap = {
     call: schemas.ListTeamMembers,
     response: schemas.ListTeamMembersResponse,
   },
+  LoadTools: { call: schemas.LoadTools, response: schemas.LoadToolsResponse },
   MarkNotificationsDone: {
     call: schemas.MarkNotificationsDone,
     response: schemas.MarkNotificationsResponse,
@@ -176,6 +188,14 @@ const toolParserMap = {
     response: schemas.ReadMetadataResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  RenameDocument: {
+    call: schemas.RenameDocument,
+    response: schemas.RenameDocumentResponse,
+  },
+  SearchTools: {
+    call: schemas.SearchTools,
+    response: schemas.SearchToolsResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -232,6 +252,7 @@ type ToolDataMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -241,6 +262,7 @@ type ToolDataMap = {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
   };
+  LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -273,6 +295,11 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameDocument: {
+    call: types.RenameDocument;
+    response: types.RenameDocumentResponse;
+  };
+  SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

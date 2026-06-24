@@ -18,7 +18,7 @@ pub struct ChatResponse {
     pub name: String,
     /// The messages in the chat
     pub messages: Vec<ChatMessageWithAttachments>,
-    /// The model used to generate the chat (provider api id)
+    /// The model used to generate the chat (`provider/model` id)
     pub model: Option<String>,
     /// The time the chat was created
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -30,9 +30,6 @@ pub struct ChatResponse {
     /// Current number of tokens in the chat
     // kill
     pub token_count: Option<i64>,
-    /// Available models for the chat (provider api ids)
-    // kill
-    pub available_models: Vec<String>,
     /// message_id - web citation list
     // kill
     pub web_citations: Vec<(String, Vec<GetUnfurlResponse>)>,

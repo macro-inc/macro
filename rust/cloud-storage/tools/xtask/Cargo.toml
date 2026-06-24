@@ -14,3 +14,7 @@ serde_json = { workspace = true }
 # version this hakari release is built against.
 hakari = { version = "0.17.9", features = ["cli-support"] }
 guppy = "0.17.24"
+# Define GitHub Actions workflows in Rust (`cargo run -p xtask -- workflows`).
+# xtask is excluded from hakari traversal, so these stay out of workspace-hack.
+gh-workflow = "0.8"
+indoc = "2"

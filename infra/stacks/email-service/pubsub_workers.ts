@@ -9,7 +9,11 @@ import {
   fargateLogRouterSidecarContainer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
+import {
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  type DopplerEcsEnvironment,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = 'email-service-pubsub-workers';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -26,6 +30,7 @@ type Args = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   tags: { [key: string]: string };
+  dopplerEcsEnvironment: DopplerEcsEnvironment;
 };
 
 export class EmailPubSubWorkers extends pulumi.ComponentResource {
@@ -45,6 +50,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
       platform,
       containerEnvVars,
       clusterName,
+      dopplerEcsEnvironment,
       tags,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
@@ -98,6 +104,9 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -108,6 +117,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
               environment: [...containerEnvVars],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

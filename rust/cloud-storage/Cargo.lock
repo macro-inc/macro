@@ -59,6 +59,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "prompt",
  "regex",
  "rig-core",
  "schemars 1.2.1",
@@ -2522,6 +2523,7 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "dashmap",
+ "doppler-config",
  "ensure_exists",
  "frecency",
  "futures",
@@ -2530,6 +2532,7 @@ dependencies = [
  "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -3110,6 +3113,16 @@ dependencies = [
 
 [[package]]
 name = "darling"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
+dependencies = [
+ "darling_core 0.21.3",
+ "darling_macro 0.21.3",
+]
+
+[[package]]
+name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
@@ -3123,6 +3136,20 @@ name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim 0.11.1",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
 dependencies = [
  "fnv",
  "ident_case",
@@ -3152,6 +3179,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core 0.20.11",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
+dependencies = [
+ "darling_core 0.21.3",
  "quote",
  "syn 2.0.117",
 ]
@@ -3444,6 +3482,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_setters"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7e6f6fa1f03c14ae082120b84b3c7fbd7b8588d924cf2d7c3daf9afd49df8b9"
+dependencies = [
+ "darling 0.21.3",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "device-info"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3551,6 +3601,7 @@ dependencies = [
  "document_storage_service_client",
  "documents",
  "doppleganger",
+ "doppler-config",
  "email",
  "email_service_client",
  "entity_access",
@@ -3566,6 +3617,7 @@ dependencies = [
  "log",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_db_migrator",
@@ -3850,6 +3902,7 @@ dependencies = [
  "futures",
  "hex",
  "http-body-util",
+ "jsonwebtoken 10.3.0",
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
@@ -4266,6 +4319,7 @@ dependencies = [
  "crm",
  "document_storage_service_client",
  "doppleganger",
+ "doppler-config",
  "ego-tree",
  "email",
  "email_db_client",
@@ -4283,6 +4337,7 @@ dependencies = [
  "lol_html",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -5066,6 +5121,35 @@ dependencies = [
  "rand_core 0.10.1",
  "wasip2",
  "wasip3",
+]
+
+[[package]]
+name = "gh-workflow"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "389296a8f9ebed67f6f49f3ee7fb5870d34b1f134d6033727de8caac3a6336a1"
+dependencies = [
+ "async-trait",
+ "derive_more 2.1.1",
+ "derive_setters",
+ "gh-workflow-macros",
+ "indexmap 2.14.0",
+ "merge",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "strum_macros",
+]
+
+[[package]]
+name = "gh-workflow-macros"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b8281789edecfe1c6dab6312577f5ec0f7f8b860cad70156b8fc70ebedc786d"
+dependencies = [
+ "heck 0.5.0",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -6615,6 +6699,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libyml"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
+dependencies = [
+ "anyhow",
+ "version_check",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7282,7 +7376,9 @@ dependencies = [
  "channels",
  "chat",
  "crm",
+ "database_env_vars",
  "documents",
+ "doppler-config",
  "email",
  "email_service_client",
  "entity_access",
@@ -7294,6 +7390,7 @@ dependencies = [
  "lexical_client",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
@@ -7406,6 +7503,28 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "workspace-hack",
+]
+
+[[package]]
+name = "merge"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56e520ba58faea3487f75df198b1d079644ec226ea3b0507d002c6fa4b8cf93a"
+dependencies = [
+ "merge_derive",
+ "num-traits",
+]
+
+[[package]]
+name = "merge_derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8f8ce6efff81cbc83caf4af0905c46e58cb46892f63ad3835e81b47eaf7968"
+dependencies = [
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -9342,6 +9461,7 @@ dependencies = [
  "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -10589,9 +10709,12 @@ dependencies = [
  "chrono-tz",
  "connection_gateway_client",
  "cron",
+ "database_env_vars",
+ "doppler-config",
  "futures",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -11152,6 +11275,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "serde_yml"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59e2dd588bf1597a252c3b920e0143eb99b0f76e4e082f4c92ce34fbc9e71ddd"
+dependencies = [
+ "indexmap 2.14.0",
+ "itoa",
+ "libyml",
+ "memchr",
+ "ryu",
+ "serde",
+ "version_check",
 ]
 
 [[package]]
@@ -14163,8 +14301,10 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "gh-workflow",
  "guppy",
  "hakari",
+ "indoc",
  "serde_json",
 ]
 

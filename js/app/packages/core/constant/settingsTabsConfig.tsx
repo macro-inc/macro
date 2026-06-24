@@ -1,9 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
+import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
-import SwatchesIcon from '@phosphor/swatches.svg';
+import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -43,9 +44,10 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
-      { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
-      { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
+      { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
+      { tab: 'Appearance', label: 'Appearance', icon: PaintBucketIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
+      { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
     ],
   },
   {
@@ -95,6 +97,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'Billing':
         return true;
       case 'Team':
         return teamsFlag().enabled;

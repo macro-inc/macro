@@ -67,7 +67,7 @@ export function Paywall() {
           ref={paywallContentEl}
           tabIndex={-1}
         >
-          <div class="overflow-y-auto p-6 sm:p-8">
+          <div class="overflow-y-auto">
             <PaywallComponent cb={hidePaywall} errorKey={paywallKey()} />
           </div>
         </div>

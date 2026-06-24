@@ -12,6 +12,10 @@ path = "src/bins/service.rs"
 name = "scheduled_action_openapi"
 path = "src/bins/openapi.rs"
 
+[[bin]]
+name = "scheduled_action_doppler_config"
+path = "src/doppler_config.rs"
+
 [features]
 default = []
 local_auth = ["macro_middleware/local_auth"]
@@ -20,6 +24,9 @@ local_auth = ["macro_middleware/local_auth"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
+macro_config = { path = "../macro_config" }
+database_env_vars = { path = "../macro_env_vars/database_env_vars" }
+doppler-config = { workspace = true }
 sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id"}
 cron = { version = "0.16.0" }

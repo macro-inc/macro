@@ -643,7 +643,6 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
-        config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -661,7 +660,9 @@ async fn main() -> anyhow::Result<()> {
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
+            document_permission_jwt_secret: config.document_permission_jwt_secret_key.as_ref().to_string(),
         },
+        config: Arc::new(config),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),

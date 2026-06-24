@@ -106,7 +106,7 @@ pub async fn handler(
             if !draft_attachments.is_empty() {
                 let db = ctx.db.clone();
                 let s3_client = ctx.s3_client.clone();
-                let bucket = ctx.config.attachment_bucket.clone();
+                let bucket = ctx.config.attachment_bucket.to_string();
                 let link_id = link.id;
                 tokio::spawn(async move {
                     cleanup_draft_attachments(

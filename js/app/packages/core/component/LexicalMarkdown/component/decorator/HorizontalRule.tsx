@@ -2,14 +2,10 @@ import type { HorizontalRuleDecoratorProps } from '@lexical-core';
 import Trash from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
-import {
-  $createNodeSelection,
-  $getNodeByKey,
-  $getRoot,
-  $setSelection,
-} from 'lexical';
+import { $createNodeSelection, $setSelection } from 'lexical';
 import { createSignal, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 
 export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
@@ -38,22 +34,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
   const deleteRule = () => {
     const currentEditor = editor();
     if (currentEditor === undefined) return;
-    currentEditor.update(() => {
-      let node = $getNodeByKey(props.key);
-      if (!node) return;
-      const nextSibling = node.getNextSibling();
-      const prevSibling = node.getPreviousSibling();
-      const root = $getRoot();
-
-      node.remove();
-      if (nextSibling) {
-        nextSibling.selectStart();
-      } else if (prevSibling) {
-        prevSibling.selectEnd();
-      } else {
-        root.selectEnd();
-      }
-    });
+    removeNodeAndRestoreSelection(currentEditor, props.key);
   };
 
   const debouncedSetHover = debounce((state: boolean) => {

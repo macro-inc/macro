@@ -33,6 +33,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
+import { Billing } from '@app/component/settings/Billing';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'modal';
@@ -344,6 +345,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Account')}>
                   <Suspense>
                     <Account />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Billing')}>
+                  <Suspense>
+                    <Billing />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Appearance')}>

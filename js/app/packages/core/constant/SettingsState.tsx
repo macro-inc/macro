@@ -7,6 +7,7 @@ import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
   | 'Account'
+  | 'Billing'
   | 'Subscription'
   | 'Organization'
   | 'Appearance'

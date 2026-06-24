@@ -1,4 +1,6 @@
 import { ENABLE_MENTION_TRACKING } from '@core/constant/featureFlags';
+import { queryClient } from '@queries/client';
+import { attachmentReferencesKeys } from '@queries/storage/keys';
 
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import { getPermissionToken } from './token';
@@ -29,6 +31,9 @@ export async function trackMention(
     return;
   }
 
+  queryClient.invalidateQueries({
+    queryKey: attachmentReferencesKeys.list(targetType, targetId).queryKey,
+  });
   return response.value?.id;
 }
 
@@ -50,4 +55,8 @@ export async function untrackMention(
   if (response.isErr()) {
     console.error('Failed to untrack document mention', response);
   }
+
+  queryClient.invalidateQueries({
+    queryKey: attachmentReferencesKeys.list._def,
+  });
 }

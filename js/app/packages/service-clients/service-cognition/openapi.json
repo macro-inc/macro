@@ -525,35 +525,6 @@
         }
       }
     },
-    "/chats/models": {
-      "get": {
-        "tags": ["chats"],
-        "summary": "List all chat models, each flagged with whether the requesting user has\naccess (free users get Haiku; professional users get everything).",
-        "operationId": "list_models",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelsResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/chats/{chat_id}": {
       "get": {
         "tags": ["chats"],
@@ -2150,7 +2121,7 @@
           },
           "model": {
             "type": ["string", "null"],
-            "description": "The model used to generate the chat (provider api id)."
+            "description": "The model used to generate the chat (`provider/model` id)."
           },
           "name": {
             "type": "string",
@@ -3010,7 +2981,7 @@
           },
           "model": {
             "type": "string",
-            "description": "The model to respond with (provider api id)"
+            "description": "The model to respond with (`provider/model` id)"
           },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
@@ -3067,45 +3038,6 @@
           "date": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "ModelAccess": {
-        "type": "object",
-        "description": "A chat model paired with whether the requesting user may use it.",
-        "required": ["id", "provider", "contextWindow", "available"],
-        "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "Whether the requesting user has access to this model."
-          },
-          "contextWindow": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Context window size in tokens.",
-            "minimum": 0
-          },
-          "id": {
-            "type": "string",
-            "description": "Provider api id — the string sent when this model is selected."
-          },
-          "provider": {
-            "type": "string",
-            "description": "Provider serving the model (e.g. `anthropic`, `openai`)."
-          }
-        }
-      },
-      "ModelsResponse": {
-        "type": "object",
-        "description": "Response body for the models-access endpoint: every chat model, each\nflagged with the requesting user's access.",
-        "required": ["models"],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelAccess"
-            },
-            "description": "All chat models, in display order."
           }
         }
       },
@@ -3309,7 +3241,7 @@
               },
               "model": {
                 "type": "string",
-                "description": "the chat model to respond with (provider api id)"
+                "description": "the chat model to respond with (`provider/model` id)"
               },
               "stream_id": {
                 "type": "string",

@@ -44,6 +44,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
+import { deleteCodeNode } from '../../plugins/code/deleteCodeNode';
 import { autoRegister } from '../../plugins/shared/utils';
 
 const LanguageIcons: Record<
@@ -194,11 +195,7 @@ export function CodeBoxAccessory(props: {
   };
 
   const deleteCode = () => {
-    props.editor.update(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!$isCodeNode(node)) return;
-      node.remove();
-    });
+    deleteCodeNode(props.editor, props.nodeKey);
   };
 
   const setLanguageOnNode = (language: string) => {

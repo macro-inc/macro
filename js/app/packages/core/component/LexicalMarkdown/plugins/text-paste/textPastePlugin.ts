@@ -6,6 +6,7 @@ import {
 } from '@core/block';
 import { isTauri } from '@core/util/platform';
 import { mergeRegister } from '@lexical/utils';
+import { $createPasteNode, PasteNode } from '@lexical-core';
 import { parseThemeV2Json } from '@theme/utils/themeValidation';
 import {
   $getSelection,
@@ -14,11 +15,19 @@ import {
   type LexicalEditor,
   PASTE_COMMAND,
 } from 'lexical';
+import { $insertNodesAndSplitList } from '../../utils';
 import {
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_PR_MENTION_COMMAND,
   INSERT_THEME_MENTION_COMMAND,
 } from '../mentions';
+
+/**
+ * Character threshold above which a plain-text paste collapses into a
+ * block-level PasteNode (mirroring Anthropic's "pasted" chip) instead of
+ * being inserted inline. Chosen to roughly match a few paragraphs of prose.
+ */
+export const LARGE_PASTE_CHAR_THRESHOLD = 1500;
 
 type MacroAppUrlParsed = {
   isValid: boolean;
@@ -162,6 +171,30 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             !parsedMacroAppUrl.id ||
             !parsedMacroAppUrl.block
           ) {
+            // Large plain-text pastes collapse into a block-level PasteNode
+            // (Anthropic-style "pasted" chip). Only handle genuine plain text
+            // pastes: defer to the richer paste handlers for HTML / Lexical
+            // clipboards, and only when the cursor is a collapsed selection.
+            const clipboard = event.clipboardData;
+            const isRichClipboard = Boolean(
+              clipboard?.getData('application/x-lexical-clipboard') ||
+                clipboard?.getData('text/html')
+            );
+            if (
+              !isRichClipboard &&
+              editor.hasNode(PasteNode) &&
+              pastedText.length > LARGE_PASTE_CHAR_THRESHOLD
+            ) {
+              const selection = $getSelection();
+              if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+                return false;
+              }
+              event.preventDefault();
+              $insertNodesAndSplitList([
+                $createPasteNode({ content: pastedText }),
+              ]);
+              return true;
+            }
             return false;
           }
 

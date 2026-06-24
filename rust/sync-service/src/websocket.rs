@@ -66,7 +66,6 @@ pub fn broadcast_awareness(
     Ok(())
 }
 
-
 // Max receiving websocket message is 1Mb
 const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
 
