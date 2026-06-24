@@ -34,6 +34,8 @@ pub struct ToolMessage {
     pub body_parsed: Option<String>,
     /// When the message was received/sent.
     pub date: Option<String>,
+    /// The labels on this message (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+    pub labels: Vec<String>,
 }
 
 /// A simplified contact for tool output.
@@ -65,6 +67,7 @@ impl From<ParsedMessage> for ToolMessage {
             cc: m.cc.into_iter().map(ToolContact::from).collect(),
             body_parsed: m.body_parsed,
             date: m.internal_date_ts.map(|t| t.to_rfc3339()),
+            labels: m.labels.into_iter().map(|l| l.name).collect(),
         }
     }
 }
@@ -93,7 +96,7 @@ const DEFAULT_LIMIT: i64 = 10;
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "GetThread",
-    description = "Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation or to see which labels a thread has."
+    description = "Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct GetThread {

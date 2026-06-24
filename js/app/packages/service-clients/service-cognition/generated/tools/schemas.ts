@@ -536,6 +536,7 @@ export const GetThreadResponse = z.object({
         ])
         .optional(),
       id: z.string().uuid(),
+      labels: z.array(z.string()),
       subject: z.union([z.string(), z.null()]).optional(),
       to: z.array(
         z.object({

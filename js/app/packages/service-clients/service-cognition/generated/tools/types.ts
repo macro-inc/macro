@@ -1257,7 +1257,7 @@ export interface ToolPropertyOption {
   id: string;
 }
 /**
- * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation or to see which labels a thread has.
+ * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
  */
 export interface GetThread {
   /**
@@ -1319,6 +1319,10 @@ export interface ToolMessage {
    * The message's unique identifier.
    */
   id: string;
+  /**
+   * The labels on this message (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+   */
+  labels: string[];
   /**
    * The message subject.
    */
