@@ -40,9 +40,16 @@ export function Replies(props: RepliesProps) {
   const shouldShowCollapsedIndicator = () =>
     !ctx.isReplying() && !ctx.isExpanded() && collapsedRepliesCount() > 0;
 
+  const replyAction = () => {
+    const parent = ctx.parent();
+    if (!parent) return undefined;
+    return props.getMessageActions?.(parent)?.onReply;
+  };
+
   const shouldShowReplyButton = () =>
     !!props.showReplyButton &&
     ctx.hasReplies() &&
+    !!replyAction() &&
     !ctx.isReplying() &&
     !shouldShowCollapsedIndicator();
 
@@ -134,7 +141,11 @@ export function Replies(props: RepliesProps) {
               <Show when={shouldShowReplyButton()}>
                 <Thread.ReplyButton
                   getFocusTarget={() => null}
-                  onClick={() => ctx.setIsReplying(true)}
+                  onClick={(event) => {
+                    const parent = ctx.parent();
+                    if (!parent) return;
+                    replyAction()?.({ message: parent, event });
+                  }}
                   aria-label="Reply"
                 />
               </Show>

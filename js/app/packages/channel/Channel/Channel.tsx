@@ -280,6 +280,7 @@ export function Channel(props: ChannelProps) {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     state.setIsReplying(true);
+    state.replyInputFocusRequest.request();
     return state;
   };
 
@@ -303,7 +304,10 @@ export function Channel(props: ChannelProps) {
     state.setReplyInputState(nextSnapshot);
     state.setIsReplying(true);
     requestAnimationFrame(() => {
-      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot);
+      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot, {
+        focus: false,
+      });
+      state.replyInputFocusRequest.request();
     });
   };
 
@@ -525,6 +529,9 @@ export function Channel(props: ChannelProps) {
                                 setReplyInputState={state.setReplyInputState}
                                 setReplyInputEl={state.setReplyInputEl}
                                 setReplyInputHandle={state.setReplyInputHandle}
+                                replyInputFocusRequest={
+                                  state.replyInputFocusRequest
+                                }
                                 listMeta={listMetaByMessageId()[item.id]}
                                 messageEditor={messageEditor}
                                 participants={participants.users}
