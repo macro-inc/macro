@@ -3,7 +3,7 @@ import {
   $insertList,
   $isListItemNode,
   INSERT_CHECK_LIST_COMMAND,
-  type ListItemNode,
+  ListItemNode,
 } from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -37,50 +37,6 @@ function boundsCheck(rect: DOMRect, x: number, y: number): boolean {
     return true;
   }
   return false;
-}
-
-function removeChecklistItemTabIndex(root: HTMLElement) {
-  const focusableItems = root.querySelectorAll('li[role="checkbox"][tabindex]');
-
-  for (const item of focusableItems) {
-    item.removeAttribute('tabindex');
-  }
-}
-
-function registerChecklistFocusGuard(editor: LexicalEditor) {
-  let observer: MutationObserver | null = null;
-
-  const unregisterRootListener = editor.registerRootListener(
-    (root, prevRoot) => {
-      if (observer) {
-        observer.disconnect();
-        observer = null;
-      }
-
-      if (root) {
-        removeChecklistItemTabIndex(root);
-        observer = new MutationObserver(() => {
-          removeChecklistItemTabIndex(root);
-        });
-        observer.observe(root, {
-          subtree: true,
-          childList: true,
-          attributes: true,
-          attributeFilter: ['tabindex'],
-        });
-      }
-
-      if (prevRoot) {
-        removeChecklistItemTabIndex(prevRoot);
-      }
-    }
-  );
-
-  return () => {
-    observer?.disconnect();
-    observer = null;
-    unregisterRootListener();
-  };
 }
 
 /**
@@ -166,6 +122,27 @@ function registerMouseEvents(editor: LexicalEditor) {
   });
 }
 
+function removeChecklistItemTabIndex(editor: LexicalEditor, nodeKey: string) {
+  const element = editor.getElementByKey(nodeKey);
+  if (element?.getAttribute('role') === 'checkbox') {
+    element.removeAttribute('tabindex');
+  }
+}
+
+function registerChecklistTabIndexGuard(editor: LexicalEditor) {
+  return editor.registerMutationListener(
+    ListItemNode,
+    (mutations) => {
+      for (const [nodeKey, mutation] of mutations) {
+        if (mutation !== 'destroyed') {
+          removeChecklistItemTabIndex(editor, nodeKey);
+        }
+      }
+    },
+    { skipInitialization: false }
+  );
+}
+
 /**
  * Toggle the check boxes in a selection.
  */
@@ -223,6 +200,7 @@ function registerChecklistPlugin(editor: LexicalEditor) {
       COMMAND_PRIORITY_LOW
     ),
     registerMouseEvents(editor),
+    registerChecklistTabIndexGuard(editor),
     editor.registerCommand(
       KEY_ENTER_COMMAND,
       (e) => {
@@ -236,8 +214,7 @@ function registerChecklistPlugin(editor: LexicalEditor) {
         return false;
       },
       COMMAND_PRIORITY_LOW // Set to LOW to avoid being swallowed by regular KEY_ENTER_COMMAND handler
-    ),
-    registerChecklistFocusGuard(editor)
+    )
   );
 }
 
