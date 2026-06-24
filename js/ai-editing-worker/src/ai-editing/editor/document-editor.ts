@@ -63,52 +63,97 @@ export class DocumentEditor {
     return out;
   }
 
-  public format(id: NodeId, match: string, format: Format, on = true, scope: Scope = { all: true }): this {
+  public format(
+    id: NodeId,
+    match: string,
+    format: Format,
+    on = true,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'formatText', id, match, format, on, scope });
   }
-  public bold(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'bold', true, scope); }
+  public bold(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'bold', true, scope);
+  }
 
-  public italic(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'italic', true, scope); }
+  public italic(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'italic', true, scope);
+  }
 
-  public underline(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'underline', true, scope); }
+  public underline(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'underline', true, scope);
+  }
 
-  public strike(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'strike', true, scope); }
+  public strike(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'strike', true, scope);
+  }
 
-  public inlineCode(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'code', true, scope); }
+  public inlineCode(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'code', true, scope);
+  }
 
-  public unbold(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'bold', false, scope); }
+  public unbold(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'bold', false, scope);
+  }
 
-  public unitalic(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'italic', false, scope); }
+  public unitalic(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'italic', false, scope);
+  }
 
-  public ununderline(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'underline', false, scope); }
+  public ununderline(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'underline', false, scope);
+  }
 
-  public unstrike(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'strike', false, scope); }
+  public unstrike(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'strike', false, scope);
+  }
 
-  public uninlineCode(id: NodeId, match: string, scope?: Scope): this { return this.format(id, match, 'code', false, scope); }
+  public uninlineCode(id: NodeId, match: string, scope?: Scope): this {
+    return this.format(id, match, 'code', false, scope);
+  }
 
   /** Strip all inline formatting from matched substrings (or the whole block if
    *  `match` is omitted). */
-  public clearFormat(id: NodeId, match?: string, scope: Scope = { all: true }): this {
+  public clearFormat(
+    id: NodeId,
+    match?: string,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     if (match !== undefined) this.requireMatch(match);
     return this.push({ kind: 'clearFormat', id, match, scope });
   }
-  public clearAllFormat(id: NodeId): this { return this.clearFormat(id); }
+  public clearAllFormat(id: NodeId): this {
+    return this.clearFormat(id);
+  }
 
-  public highlight(id: NodeId, match: string, scope: Scope = { all: true }): this {
+  public highlight(
+    id: NodeId,
+    match: string,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'markText', id, match, on: true, scope });
   }
-  public unhighlight(id: NodeId, match: string, scope: Scope = { all: true }): this {
+  public unhighlight(
+    id: NodeId,
+    match: string,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'markText', id, match, on: false, scope });
   }
 
-  public link(id: NodeId, match: string, url: string, scope: Scope = { all: true }): this {
+  public link(
+    id: NodeId,
+    match: string,
+    url: string,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     this.requireMatch(match);
     return this.push({ kind: 'linkText', id, match, url, scope });
@@ -123,15 +168,25 @@ export class DocumentEditor {
     this.requireId(textId);
     return this.push({ kind: 'formatNode', textId, format, on });
   }
-  public boldNode(textId: NodeId): this { return this.formatNode(textId, 'bold'); }
+  public boldNode(textId: NodeId): this {
+    return this.formatNode(textId, 'bold');
+  }
 
-  public italicNode(textId: NodeId): this { return this.formatNode(textId, 'italic'); }
+  public italicNode(textId: NodeId): this {
+    return this.formatNode(textId, 'italic');
+  }
 
-  public underlineNode(textId: NodeId): this { return this.formatNode(textId, 'underline'); }
+  public underlineNode(textId: NodeId): this {
+    return this.formatNode(textId, 'underline');
+  }
 
-  public strikeNode(textId: NodeId): this { return this.formatNode(textId, 'strike'); }
+  public strikeNode(textId: NodeId): this {
+    return this.formatNode(textId, 'strike');
+  }
 
-  public codeNode(textId: NodeId): this { return this.formatNode(textId, 'code'); }
+  public codeNode(textId: NodeId): this {
+    return this.formatNode(textId, 'code');
+  }
 
   public clearNodeFormat(textId: NodeId): this {
     this.requireId(textId);
@@ -146,7 +201,12 @@ export class DocumentEditor {
     this.requireId(id);
     return this.push({ kind: 'setEquation', id, tex });
   }
-  public replace(id: NodeId, find: string, to: string, scope: Scope = { all: true }): this {
+  public replace(
+    id: NodeId,
+    find: string,
+    to: string,
+    scope: Scope = { all: true }
+  ): this {
     this.requireId(id);
     if (find.length === 0) throw new EditError('find string is empty');
     return this.push({ kind: 'replaceText', id, find, to, scope });
@@ -166,17 +226,23 @@ export class DocumentEditor {
   }
 
   private requireLanguage(language: string): void {
-    if (typeof language !== 'string' || language.trim().length === 0) throw new EditError('code block language is required');
+    if (typeof language !== 'string' || language.trim().length === 0)
+      throw new EditError('code block language is required');
   }
 
-  public convertToParagraph(id: NodeId): this { return this.setBlockType(id, { block: 'paragraph' }); }
+  public convertToParagraph(id: NodeId): this {
+    return this.setBlockType(id, { block: 'paragraph' });
+  }
 
   public convertToHeading(id: NodeId, level: number): this {
-    if (level < 1 || level > 6) throw new EditError(`heading level must be 1-6, got ${level}`);
+    if (level < 1 || level > 6)
+      throw new EditError(`heading level must be 1-6, got ${level}`);
     return this.setBlockType(id, { block: 'heading', level });
   }
 
-  public convertToQuote(id: NodeId): this { return this.setBlockType(id, { block: 'quote' }); }
+  public convertToQuote(id: NodeId): this {
+    return this.setBlockType(id, { block: 'quote' });
+  }
 
   public convertToCodeBlock(id: NodeId, language: string): this {
     this.requireLanguage(language);
@@ -189,21 +255,34 @@ export class DocumentEditor {
 
   private toList(idOrIds: NodeId | NodeId[], list: ListKind): this {
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
-    if (ids.length === 0) throw new EditError('list requires at least one block');
+    if (ids.length === 0)
+      throw new EditError('list requires at least one block');
     for (const id of ids) this.requireId(id);
     return this.push({ kind: 'setListType', ids, list });
   }
-  public bulletList(idOrIds: NodeId | NodeId[]): this { return this.toList(idOrIds, 'bullet'); }
+  public bulletList(idOrIds: NodeId | NodeId[]): this {
+    return this.toList(idOrIds, 'bullet');
+  }
 
-  public numberedList(idOrIds: NodeId | NodeId[]): this { return this.toList(idOrIds, 'number'); }
+  public numberedList(idOrIds: NodeId | NodeId[]): this {
+    return this.toList(idOrIds, 'number');
+  }
 
-  public checklist(idOrIds: NodeId | NodeId[]): this { return this.toList(idOrIds, 'check'); }
+  public checklist(idOrIds: NodeId | NodeId[]): this {
+    return this.toList(idOrIds, 'check');
+  }
 
-  public setListType(id: NodeId, list: ListKind): this { return this.toList(id, list); }
+  public setListType(id: NodeId, list: ListKind): this {
+    return this.toList(id, list);
+  }
 
-  public check(id: NodeId): this { return this.setChecked(id, true); }
+  public check(id: NodeId): this {
+    return this.setChecked(id, true);
+  }
 
-  public uncheck(id: NodeId): this { return this.setChecked(id, false); }
+  public uncheck(id: NodeId): this {
+    return this.setChecked(id, false);
+  }
 
   public setChecked(id: NodeId, checked: boolean): this {
     this.requireId(id);
@@ -214,11 +293,14 @@ export class DocumentEditor {
     this.requireId(id);
     return this.push({ kind: 'setIndent', id, indent: by >= 0 ? 'in' : 'out' });
   }
-  public outdent(id: NodeId, by = 1): this { return this.indent(id, -Math.abs(by)); }
+  public outdent(id: NodeId, by = 1): this {
+    return this.indent(id, -Math.abs(by));
+  }
 
   public setIndent(id: NodeId, level: number): this {
     this.requireId(id);
-    if (level < 0) throw new EditError(`indent level must be >= 0, got ${level}`);
+    if (level < 0)
+      throw new EditError(`indent level must be >= 0, got ${level}`);
     return this.push({ kind: 'setIndent', id, indent: level });
   }
   public sortList(id: NodeId, order: 'asc' | 'desc' = 'asc'): this {
@@ -226,14 +308,22 @@ export class DocumentEditor {
     return this.push({ kind: 'sortList', id, order });
   }
 
-  public insertListItemAfter(id: NodeId, text: string, list: ListKind = 'bullet'): Ref {
+  public insertListItemAfter(
+    id: NodeId,
+    text: string,
+    list: ListKind = 'bullet'
+  ): Ref {
     this.requireId(id);
     const ref = this.mintRef();
     this.push({ kind: 'insertListItemAfter', ref, id, text, list });
     return ref;
   }
 
-  public insertListItemBefore(id: NodeId, text: string, list: ListKind = 'bullet'): Ref {
+  public insertListItemBefore(
+    id: NodeId,
+    text: string,
+    list: ListKind = 'bullet'
+  ): Ref {
     this.requireId(id);
     const ref = this.mintRef();
     this.push({ kind: 'insertListItemBefore', ref, id, text, list });
@@ -256,32 +346,62 @@ export class DocumentEditor {
     else if ('before' in at) this.requireId(at.before);
   }
 
-  public insertParagraphAfter(id: NodeId, text = ''): Ref { return this.insert({ block: 'paragraph', text }, { after: id }); }
+  public insertParagraphAfter(id: NodeId, text = ''): Ref {
+    return this.insert({ block: 'paragraph', text }, { after: id });
+  }
 
-  public insertParagraphBefore(id: NodeId, text = ''): Ref { return this.insert({ block: 'paragraph', text }, { before: id }); }
+  public insertParagraphBefore(id: NodeId, text = ''): Ref {
+    return this.insert({ block: 'paragraph', text }, { before: id });
+  }
 
-  public insertHeadingAfter(id: NodeId, level: 1 | 2 | 3 | 4 | 5 | 6, text = ''): Ref { return this.insert({ block: 'heading', level, text }, { after: id }); }
+  public insertHeadingAfter(
+    id: NodeId,
+    level: 1 | 2 | 3 | 4 | 5 | 6,
+    text = ''
+  ): Ref {
+    return this.insert({ block: 'heading', level, text }, { after: id });
+  }
 
-  public insertHeadingBefore(id: NodeId, level: 1 | 2 | 3 | 4 | 5 | 6, text = ''): Ref { return this.insert({ block: 'heading', level, text }, { before: id }); }
+  public insertHeadingBefore(
+    id: NodeId,
+    level: 1 | 2 | 3 | 4 | 5 | 6,
+    text = ''
+  ): Ref {
+    return this.insert({ block: 'heading', level, text }, { before: id });
+  }
 
-  public insertQuoteAfter(id: NodeId, text = ''): Ref { return this.insert({ block: 'quote', text }, { after: id }); }
+  public insertQuoteAfter(id: NodeId, text = ''): Ref {
+    return this.insert({ block: 'quote', text }, { after: id });
+  }
 
   public insertCodeBlockAfter(id: NodeId, language: string, text = ''): Ref {
     this.requireLanguage(language);
     return this.insert({ block: 'code', language, text }, { after: id });
   }
 
-  public insertBlockAfter(id: NodeId, spec: NodeSpec): Ref { return this.insert(spec, { after: id }); }
+  public insertBlockAfter(id: NodeId, spec: NodeSpec): Ref {
+    return this.insert(spec, { after: id });
+  }
 
-  public insertBlockBefore(id: NodeId, spec: NodeSpec): Ref { return this.insert(spec, { before: id }); }
+  public insertBlockBefore(id: NodeId, spec: NodeSpec): Ref {
+    return this.insert(spec, { before: id });
+  }
 
-  public appendParagraph(text = ''): Ref { return this.insert({ block: 'paragraph', text }, { appendToRoot: true }); }
+  public appendParagraph(text = ''): Ref {
+    return this.insert({ block: 'paragraph', text }, { appendToRoot: true });
+  }
 
-  public prependParagraph(text = ''): Ref { return this.insert({ block: 'paragraph', text }, { prependToRoot: true }); }
+  public prependParagraph(text = ''): Ref {
+    return this.insert({ block: 'paragraph', text }, { prependToRoot: true });
+  }
 
-  public appendBlock(spec: NodeSpec): Ref { return this.insert(spec, { appendToRoot: true }); }
+  public appendBlock(spec: NodeSpec): Ref {
+    return this.insert(spec, { appendToRoot: true });
+  }
 
-  public prependBlock(spec: NodeSpec): Ref { return this.insert(spec, { prependToRoot: true }); }
+  public prependBlock(spec: NodeSpec): Ref {
+    return this.insert(spec, { prependToRoot: true });
+  }
 
   public move(id: NodeId, at: Position): this {
     this.requireId(id);
@@ -297,7 +417,8 @@ export class DocumentEditor {
     return this;
   }
   public merge(ids: NodeId[], separator = ' '): this {
-    if (ids.length < 2) throw new EditError('merge requires at least two blocks');
+    if (ids.length < 2)
+      throw new EditError('merge requires at least two blocks');
     for (const id of ids) this.requireId(id);
     return this.push({ kind: 'mergeBlocks', ids, separator });
   }
@@ -307,21 +428,38 @@ export class DocumentEditor {
     return this.push({ kind: 'splitBlock', id, atText });
   }
 
-  public insertTableAfter(id: NodeId, rows: string[][]): Ref { return this.buildTable(rows, { after: id }); }
+  public insertTableAfter(id: NodeId, rows: string[][]): Ref {
+    return this.buildTable(rows, { after: id });
+  }
 
-  public insertTableBefore(id: NodeId, rows: string[][]): Ref { return this.buildTable(rows, { before: id }); }
+  public insertTableBefore(id: NodeId, rows: string[][]): Ref {
+    return this.buildTable(rows, { before: id });
+  }
 
-  public appendTable(rows: string[][]): Ref { return this.buildTable(rows, { appendToRoot: true }); }
+  public appendTable(rows: string[][]): Ref {
+    return this.buildTable(rows, { appendToRoot: true });
+  }
 
   private buildTable(rows: string[][], at: Position): Ref {
-    if (rows.length === 0) throw new EditError('table requires at least one row');
+    if (rows.length === 0)
+      throw new EditError('table requires at least one row');
     const empty = rows.map((row) => row.map(() => ''));
     const ref = this.insert({ block: 'table', rows: empty }, at);
-    rows.forEach((row, r) => void row.forEach((cell, c) => { if (cell) this.setCell(ref, r, c, cell); }));
+    rows.forEach(
+      (row, r) =>
+        void row.forEach((cell, c) => {
+          if (cell) this.setCell(ref, r, c, cell);
+        })
+    );
     return ref;
   }
 
-  public setCell(table: NodeId, row: number, col: number, content: string): this {
+  public setCell(
+    table: NodeId,
+    row: number,
+    col: number,
+    content: string
+  ): this {
     this.requireId(table);
     this.requireCell(row, col);
     return this.push({ kind: 'setCell', table, row, col, content });
@@ -345,27 +483,63 @@ export class DocumentEditor {
     return this.push({ kind: 'removeColumn', table, col });
   }
   private requireCell(row: number, col: number): void {
-    if (row < 0 || col < 0) throw new EditError(`cell indices must be >= 0, got (${row}, ${col})`);
+    if (row < 0 || col < 0)
+      throw new EditError(`cell indices must be >= 0, got (${row}, ${col})`);
   }
 
-  public insertDivider(afterId: NodeId): Ref { return this.insert({ block: 'divider' }, { after: afterId }); }
+  public insertDivider(afterId: NodeId): Ref {
+    return this.insert({ block: 'divider' }, { after: afterId });
+  }
 
-  public insertImage(afterId: NodeId, img: { srcType: string; url: string; alt?: string; width?: number; height?: number }): Ref {
+  public insertImage(
+    afterId: NodeId,
+    img: {
+      srcType: string;
+      url: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    }
+  ): Ref {
     return this.insert({ block: 'image', ...img }, { after: afterId });
   }
 
-  public insertVideo(afterId: NodeId, vid: { srcType: string; url: string; controls?: boolean; width?: number; height?: number }): Ref {
+  public insertVideo(
+    afterId: NodeId,
+    vid: {
+      srcType: string;
+      url: string;
+      controls?: boolean;
+      width?: number;
+      height?: number;
+    }
+  ): Ref {
     return this.insert({ block: 'video', ...vid }, { after: afterId });
   }
 
-  public insertEquation(afterId: NodeId, tex: string): Ref { return this.insert({ block: 'equation', tex }, { after: afterId }); }
+  public insertEquation(afterId: NodeId, tex: string): Ref {
+    return this.insert({ block: 'equation', tex }, { after: afterId });
+  }
 
-  public insertInlineEquation(blockId: NodeId, at: number, tex: string): Ref { return this.insertInline(blockId, at, { inline: 'equation', tex }); }
+  public insertInlineEquation(blockId: NodeId, at: number, tex: string): Ref {
+    return this.insertInline(blockId, at, { inline: 'equation', tex });
+  }
 
-  public insertLineBreak(blockId: NodeId, at: number): Ref { return this.insertInline(blockId, at, { inline: 'linebreak' }); }
+  public insertLineBreak(blockId: NodeId, at: number): Ref {
+    return this.insertInline(blockId, at, { inline: 'linebreak' });
+  }
 
-  public insertDate(blockId: NodeId, at: number, isoDate: string, displayFormat?: string): Ref {
-    return this.insertInline(blockId, at, { inline: 'date', date: isoDate, displayFormat });
+  public insertDate(
+    blockId: NodeId,
+    at: number,
+    isoDate: string,
+    displayFormat?: string
+  ): Ref {
+    return this.insertInline(blockId, at, {
+      inline: 'date',
+      date: isoDate,
+      displayFormat,
+    });
   }
   private insertInline(id: NodeId, at: number, spec: NodeSpec): Ref {
     this.requireId(id);
@@ -379,31 +553,67 @@ export class DocumentEditor {
     return this.insertInline(blockId, at, { inline: 'mention', mention });
   }
 
-  public mentionUser(blockId: NodeId, at: number, entity: { userId: string; email: string }): Ref {
+  public mentionUser(
+    blockId: NodeId,
+    at: number,
+    entity: { userId: string; email: string }
+  ): Ref {
     return this.insertMention(blockId, at, { kind: 'user', ...entity });
   }
 
-  public mentionContact(blockId: NodeId, at: number, entity: { contactId: string; name: string; emailOrDomain: string; isCompany: boolean }): Ref {
+  public mentionContact(
+    blockId: NodeId,
+    at: number,
+    entity: {
+      contactId: string;
+      name: string;
+      emailOrDomain: string;
+      isCompany: boolean;
+    }
+  ): Ref {
     return this.insertMention(blockId, at, { kind: 'contact', ...entity });
   }
 
-  public mentionGroup(blockId: NodeId, at: number, entity: { groupAlias: string }): Ref {
+  public mentionGroup(
+    blockId: NodeId,
+    at: number,
+    entity: { groupAlias: string }
+  ): Ref {
     return this.insertMention(blockId, at, { kind: 'group', ...entity });
   }
 
-  public mentionDocument(blockId: NodeId, at: number, entity: { documentId: string; documentName: string; blockName: string }): Ref {
+  public mentionDocument(
+    blockId: NodeId,
+    at: number,
+    entity: { documentId: string; documentName: string; blockName: string }
+  ): Ref {
     return this.insertMention(blockId, at, { kind: 'document', ...entity });
   }
 
-  public setImageAlt(id: NodeId, alt: string): this { this.requireId(id); return this.push({ kind: 'setImageAlt', id, alt }); }
+  public setImageAlt(id: NodeId, alt: string): this {
+    this.requireId(id);
+    return this.push({ kind: 'setImageAlt', id, alt });
+  }
 
-  public setImageUrl(id: NodeId, url: string): this { this.requireId(id); return this.push({ kind: 'setImageUrl', id, url }); }
+  public setImageUrl(id: NodeId, url: string): this {
+    this.requireId(id);
+    return this.push({ kind: 'setImageUrl', id, url });
+  }
 
-  public setVideoUrl(id: NodeId, url: string): this { this.requireId(id); return this.push({ kind: 'setVideoUrl', id, url }); }
+  public setVideoUrl(id: NodeId, url: string): this {
+    this.requireId(id);
+    return this.push({ kind: 'setVideoUrl', id, url });
+  }
 
-  public setVideoControls(id: NodeId, controls: boolean): this { this.requireId(id); return this.push({ kind: 'setVideoControls', id, controls }); }
+  public setVideoControls(id: NodeId, controls: boolean): this {
+    this.requireId(id);
+    return this.push({ kind: 'setVideoControls', id, controls });
+  }
 
-  public setDate(id: NodeId, date: string, displayFormat?: string): this { this.requireId(id); return this.push({ kind: 'setDate', id, date, displayFormat }); }
+  public setDate(id: NodeId, date: string, displayFormat?: string): this {
+    this.requireId(id);
+    return this.push({ kind: 'setDate', id, date, displayFormat });
+  }
 }
 
 export type { MentionSpec };

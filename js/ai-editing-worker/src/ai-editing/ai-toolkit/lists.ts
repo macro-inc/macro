@@ -6,7 +6,12 @@ import {
   type ListNode,
   type ListType,
 } from '@lexical/list';
-import { $createTextNode, $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import {
+  $createTextNode,
+  $isElementNode,
+  type ElementNode,
+  type LexicalNode,
+} from 'lexical';
 import { $getId, $setId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import type { Session } from './session';
 
@@ -55,7 +60,11 @@ export function $toggleList(blocks: LexicalNode[], type: ListKind): ListNode {
  * item, so this retypes the list node itself, preserving its position, nesting,
  * indentation, and the items' ids. Returns the retyped list.
  */
-export function $setListType(node: LexicalNode, type: ListKind, s?: Session): ListNode {
+export function $setListType(
+  node: LexicalNode,
+  type: ListKind,
+  s?: Session
+): ListNode {
   let list: LexicalNode | null = node;
   while (list && !$isListNode(list)) {
     list = list.getParent();

@@ -104,40 +104,61 @@ impl AsyncTool<EditDocumentToolContext> for EditDocument {
             })?
             .to_string();
 
-        // Call the editing worker.
-        let edit_resp = ctx
-            .client
-            .post(format!("{}/edit", ctx.worker_url))
-            .json(&serde_json::json!({
-                "token": token,
-                "documentId": self.document_id,
-                "prompt": self.instructions,
-                "models": {
-                    "supervisor": { "provider": "cerebras", "model": "zai-glm-4.7" },
-                    "interpret": { "provider": "cerebras", "model": "gpt-oss-120b" },
-                    "coding": { "provider": "cerebras", "model": "gpt-oss-120b" },
-                },
-                "interpret": true,
-            }))
-            .send()
-            .await
-            .map_err(|e| ToolCallError {
-                description: "could not reach editing service".into(),
-                internal_error: e.into(),
-            })?;
+        // Call the editing worker, retrying transient 5xx (e.g. the worker
+        // hot-reloading mid-request, or an upstream model provider blip).
+        let request_body = serde_json::json!({
+            "token": token,
+            "documentId": self.document_id,
+            "prompt": self.instructions,
+            "models": {
+                "supervisor": { "provider": "cerebras", "model": "zai-glm-4.7" },
+                "interpret": { "provider": "cerebras", "model": "gpt-oss-120b" },
+                "coding": { "provider": "cerebras", "model": "gpt-oss-120b" },
+            },
+            "interpret": true,
+        });
 
-        let edit_status = edit_resp.status();
-        if !edit_status.is_success() {
-            return Err(ToolCallError {
-                description: "editing service returned an error".into(),
-                internal_error: anyhow::anyhow!("worker returned {edit_status}"),
-            });
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_status = None;
+        let mut body = None;
+        for attempt in 1..=MAX_ATTEMPTS {
+            let edit_resp = ctx
+                .client
+                .post(format!("{}/edit", ctx.worker_url))
+                .json(&request_body)
+                .send()
+                .await
+                .map_err(|e| ToolCallError {
+                    description: "could not reach editing service".into(),
+                    internal_error: e.into(),
+                })?;
+
+            let status = edit_resp.status();
+            if status.is_success() {
+                body = Some(edit_resp.json::<serde_json::Value>().await.map_err(|e| {
+                    ToolCallError {
+                        description: "invalid response from editing service".into(),
+                        internal_error: e.into(),
+                    }
+                })?);
+                break;
+            }
+
+            last_status = Some(status);
+            if status.is_server_error() && attempt < MAX_ATTEMPTS {
+                tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
+                continue;
+            }
+            break;
         }
 
-        let body: serde_json::Value = edit_resp.json().await.map_err(|e| ToolCallError {
-            description: "invalid response from editing service".into(),
-            internal_error: e.into(),
-        })?;
+        let Some(body) = body else {
+            let status = last_status.expect("loop ran at least once");
+            return Err(ToolCallError {
+                description: "editing service returned an error".into(),
+                internal_error: anyhow::anyhow!("worker returned {status}"),
+            });
+        };
 
         Ok(EditDocumentResponse {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),

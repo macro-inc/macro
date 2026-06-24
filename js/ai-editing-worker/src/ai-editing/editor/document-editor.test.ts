@@ -5,13 +5,22 @@ import type { DocumentOp } from './ops';
 
 /** Build an editor over a fixed set of valid ids. */
 function ed(...ids: string[]): DocumentEditor {
-  return new DocumentEditor({ validIds: ids.length ? ids : ['b1', 'b2', 'b3', 't1'] });
+  return new DocumentEditor({
+    validIds: ids.length ? ids : ['b1', 'b2', 'b3', 't1'],
+  });
 }
 
 describe('DocumentEditor — inline formatting → ops', () => {
   it('bold collapses to a formatText op (defaults to all + on)', () => {
     expect(ed().bold('b1', 'frog').drain()).toEqual<DocumentOp[]>([
-      { kind: 'formatText', id: 'b1', match: 'frog', format: 'bold', on: true, scope: { all: true } },
+      {
+        kind: 'formatText',
+        id: 'b1',
+        match: 'frog',
+        format: 'bold',
+        on: true,
+        scope: { all: true },
+      },
     ]);
   });
 
@@ -22,74 +31,187 @@ describe('DocumentEditor — inline formatting → ops', () => {
       .strike('b1', 'c')
       .inlineCode('b1', 'd')
       .drain();
-    expect(ops.map((o) => (o as any).format)).toEqual(['italic', 'underline', 'strike', 'code']);
+    expect(ops.map((o) => (o as any).format)).toEqual([
+      'italic',
+      'underline',
+      'strike',
+      'code',
+    ]);
     expect(ops.every((o) => (o as any).on === true)).toBe(true);
   });
 
   it('un* methods set on=false', () => {
-    expect(ed().unbold('b1', 'x').drain()[0]).toMatchObject({ format: 'bold', on: false });
+    expect(ed().unbold('b1', 'x').drain()[0]).toMatchObject({
+      format: 'bold',
+      on: false,
+    });
   });
 
   it('passes through an explicit scope', () => {
-    expect(ed().bold('b1', 'x', { nth: 2 }).drain()[0]).toMatchObject({ scope: { nth: 2 } });
+    expect(ed().bold('b1', 'x', { nth: 2 }).drain()[0]).toMatchObject({
+      scope: { nth: 2 },
+    });
   });
 
   it('highlight / unhighlight → markText', () => {
-    expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({ kind: 'markText', on: true });
-    expect(ed().unhighlight('b1', 'x').drain()[0]).toMatchObject({ kind: 'markText', on: false });
+    expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({
+      kind: 'markText',
+      on: true,
+    });
+    expect(ed().unhighlight('b1', 'x').drain()[0]).toMatchObject({
+      kind: 'markText',
+      on: false,
+    });
   });
 
   it('link / unlink → linkText (unlink uses url=null)', () => {
-    expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({ kind: 'linkText', url: 'http://a' });
-    expect(ed().unlink('b1', 'x').drain()[0]).toMatchObject({ kind: 'linkText', url: null });
+    expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({
+      kind: 'linkText',
+      url: 'http://a',
+    });
+    expect(ed().unlink('b1', 'x').drain()[0]).toMatchObject({
+      kind: 'linkText',
+      url: null,
+    });
   });
 
   it('clearFormat with and without a match', () => {
-    expect(ed().clearFormat('b1', 'x').drain()[0]).toEqual({ kind: 'clearFormat', id: 'b1', match: 'x', scope: { all: true } });
-    expect(ed().clearAllFormat('b1').drain()[0]).toEqual({ kind: 'clearFormat', id: 'b1', match: undefined, scope: { all: true } });
+    expect(ed().clearFormat('b1', 'x').drain()[0]).toEqual({
+      kind: 'clearFormat',
+      id: 'b1',
+      match: 'x',
+      scope: { all: true },
+    });
+    expect(ed().clearAllFormat('b1').drain()[0]).toEqual({
+      kind: 'clearFormat',
+      id: 'b1',
+      match: undefined,
+      scope: { all: true },
+    });
   });
 
   it('formatNode / clearNodeFormat target a text-node id directly', () => {
-    expect(ed().boldNode('t1').drain()[0]).toEqual({ kind: 'formatNode', textId: 't1', format: 'bold', on: true });
-    expect(ed().clearNodeFormat('t1').drain()[0]).toEqual({ kind: 'clearNodeFormat', textId: 't1' });
+    expect(ed().boldNode('t1').drain()[0]).toEqual({
+      kind: 'formatNode',
+      textId: 't1',
+      format: 'bold',
+      on: true,
+    });
+    expect(ed().clearNodeFormat('t1').drain()[0]).toEqual({
+      kind: 'clearNodeFormat',
+      textId: 't1',
+    });
   });
 });
 
 describe('DocumentEditor — text / block / list → ops', () => {
   it('setText / replace / append / prepend', () => {
-    expect(ed().setText('b1', 'hi').drain()[0]).toEqual({ kind: 'setText', id: 'b1', text: 'hi' });
-    expect(ed().replace('b1', 'a', 'b').drain()[0]).toEqual({ kind: 'replaceText', id: 'b1', find: 'a', to: 'b', scope: { all: true } });
-    expect(ed().appendText('b1', '!').drain()[0]).toEqual({ kind: 'appendText', id: 'b1', text: '!' });
-    expect(ed().prependText('b1', '>').drain()[0]).toEqual({ kind: 'prependText', id: 'b1', text: '>' });
+    expect(ed().setText('b1', 'hi').drain()[0]).toEqual({
+      kind: 'setText',
+      id: 'b1',
+      text: 'hi',
+    });
+    expect(ed().replace('b1', 'a', 'b').drain()[0]).toEqual({
+      kind: 'replaceText',
+      id: 'b1',
+      find: 'a',
+      to: 'b',
+      scope: { all: true },
+    });
+    expect(ed().appendText('b1', '!').drain()[0]).toEqual({
+      kind: 'appendText',
+      id: 'b1',
+      text: '!',
+    });
+    expect(ed().prependText('b1', '>').drain()[0]).toEqual({
+      kind: 'prependText',
+      id: 'b1',
+      text: '>',
+    });
   });
 
   it('block type methods', () => {
-    expect(ed().convertToParagraph('b1').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'paragraph' });
-    expect(ed().convertToHeading('b1', 2).drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 });
-    expect(ed().convertToQuote('b1').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'quote' });
-    expect(ed().convertToCodeBlock('b1', 'ts').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'code', language: 'ts' });
-    expect(ed().setLanguage('b1', 'python').drain()[0]).toEqual({ kind: 'setBlockType', id: 'b1', block: 'code', language: 'python' });
+    expect(ed().convertToParagraph('b1').drain()[0]).toEqual({
+      kind: 'setBlockType',
+      id: 'b1',
+      block: 'paragraph',
+    });
+    expect(ed().convertToHeading('b1', 2).drain()[0]).toEqual({
+      kind: 'setBlockType',
+      id: 'b1',
+      block: 'heading',
+      level: 2,
+    });
+    expect(ed().convertToQuote('b1').drain()[0]).toEqual({
+      kind: 'setBlockType',
+      id: 'b1',
+      block: 'quote',
+    });
+    expect(ed().convertToCodeBlock('b1', 'ts').drain()[0]).toEqual({
+      kind: 'setBlockType',
+      id: 'b1',
+      block: 'code',
+      language: 'ts',
+    });
+    expect(ed().setLanguage('b1', 'python').drain()[0]).toEqual({
+      kind: 'setBlockType',
+      id: 'b1',
+      block: 'code',
+      language: 'python',
+    });
   });
 
   it('list toggles accept a single id or a list of ids', () => {
-    expect(ed().bulletList('b1').drain()[0]).toEqual({ kind: 'setListType', ids: ['b1'], list: 'bullet' });
-    expect(ed('b1', 'b2').numberedList(['b1', 'b2']).drain()[0]).toEqual({ kind: 'setListType', ids: ['b1', 'b2'], list: 'number' });
+    expect(ed().bulletList('b1').drain()[0]).toEqual({
+      kind: 'setListType',
+      ids: ['b1'],
+      list: 'bullet',
+    });
+    expect(ed('b1', 'b2').numberedList(['b1', 'b2']).drain()[0]).toEqual({
+      kind: 'setListType',
+      ids: ['b1', 'b2'],
+      list: 'number',
+    });
     expect(ed().checklist('b1').drain()[0]).toMatchObject({ list: 'check' });
   });
 
   it('check / uncheck → setChecked', () => {
-    expect(ed().check('b1').drain()[0]).toEqual({ kind: 'setChecked', id: 'b1', checked: true });
-    expect(ed().uncheck('b1').drain()[0]).toEqual({ kind: 'setChecked', id: 'b1', checked: false });
+    expect(ed().check('b1').drain()[0]).toEqual({
+      kind: 'setChecked',
+      id: 'b1',
+      checked: true,
+    });
+    expect(ed().uncheck('b1').drain()[0]).toEqual({
+      kind: 'setChecked',
+      id: 'b1',
+      checked: false,
+    });
   });
 
   it('indent / outdent are relative, setIndent is absolute', () => {
-    expect(ed().indent('b1').drain()[0]).toEqual({ kind: 'setIndent', id: 'b1', indent: 'in' });
-    expect(ed().outdent('b1').drain()[0]).toEqual({ kind: 'setIndent', id: 'b1', indent: 'out' });
-    expect(ed().setIndent('b1', 2).drain()[0]).toEqual({ kind: 'setIndent', id: 'b1', indent: 2 });
+    expect(ed().indent('b1').drain()[0]).toEqual({
+      kind: 'setIndent',
+      id: 'b1',
+      indent: 'in',
+    });
+    expect(ed().outdent('b1').drain()[0]).toEqual({
+      kind: 'setIndent',
+      id: 'b1',
+      indent: 'out',
+    });
+    expect(ed().setIndent('b1', 2).drain()[0]).toEqual({
+      kind: 'setIndent',
+      id: 'b1',
+      indent: 2,
+    });
   });
 
   it('sortList defaults to asc', () => {
-    expect(ed().sortList('b1').drain()[0]).toEqual({ kind: 'sortList', id: 'b1', order: 'asc' });
+    expect(ed().sortList('b1').drain()[0]).toEqual({
+      kind: 'sortList',
+      id: 'b1',
+      order: 'asc',
+    });
   });
 
   it('insertListItemAfter defaults to a bullet item and returns a usable ref', () => {
@@ -97,17 +219,32 @@ describe('DocumentEditor — text / block / list → ops', () => {
     const ref = e.insertListItemAfter('b1', 'next');
     e.setText(ref, 'NEXT'); // would throw if ref were not registered valid
     const ops = e.drain();
-    expect(ops[0]).toEqual({ kind: 'insertListItemAfter', ref, id: 'b1', text: 'next', list: 'bullet' });
+    expect(ops[0]).toEqual({
+      kind: 'insertListItemAfter',
+      ref,
+      id: 'b1',
+      text: 'next',
+      list: 'bullet',
+    });
   });
 
   it('insertListItemBefore carries an explicit list kind for nesting', () => {
     const e = ed();
     const ref = e.insertListItemBefore('b1', 'sub', 'number');
-    expect(e.drain()[0]).toEqual({ kind: 'insertListItemBefore', ref, id: 'b1', text: 'sub', list: 'number' });
+    expect(e.drain()[0]).toEqual({
+      kind: 'insertListItemBefore',
+      ref,
+      id: 'b1',
+      text: 'sub',
+      list: 'number',
+    });
   });
 
   it('removeListItem targets a single item', () => {
-    expect(ed().removeListItem('b1').drain()[0]).toEqual({ kind: 'removeListItem', id: 'b1' });
+    expect(ed().removeListItem('b1').drain()[0]).toEqual({
+      kind: 'removeListItem',
+      id: 'b1',
+    });
   });
 });
 
@@ -117,7 +254,12 @@ describe('DocumentEditor — structure & refs', () => {
     const ref = e.insertParagraphAfter('b1', 'Intro');
     e.bold(ref, 'Intro'); // would throw if ref were not registered valid
     const ops = e.drain();
-    expect(ops[0]).toMatchObject({ kind: 'insertBlock', ref, spec: { block: 'paragraph', text: 'Intro' }, at: { after: 'b1' } });
+    expect(ops[0]).toMatchObject({
+      kind: 'insertBlock',
+      ref,
+      spec: { block: 'paragraph', text: 'Intro' },
+      at: { after: 'b1' },
+    });
     expect(ops[1]).toMatchObject({ kind: 'formatText', id: ref });
   });
 
@@ -131,42 +273,89 @@ describe('DocumentEditor — structure & refs', () => {
   });
 
   it('move / remove / removeMany / merge / split', () => {
-    expect(ed().move('b1', { before: 'b2' }).drain()[0]).toEqual({ kind: 'moveBlock', id: 'b1', at: { before: 'b2' } });
-    expect(ed().remove('b1').drain()[0]).toEqual({ kind: 'removeBlock', id: 'b1' });
+    expect(ed().move('b1', { before: 'b2' }).drain()[0]).toEqual({
+      kind: 'moveBlock',
+      id: 'b1',
+      at: { before: 'b2' },
+    });
+    expect(ed().remove('b1').drain()[0]).toEqual({
+      kind: 'removeBlock',
+      id: 'b1',
+    });
     expect(ed('b1', 'b2').removeMany(['b1', 'b2']).drain()).toHaveLength(2);
-    expect(ed('b1', 'b2').merge(['b1', 'b2'], ' — ').drain()[0]).toEqual({ kind: 'mergeBlocks', ids: ['b1', 'b2'], separator: ' — ' });
-    expect(ed().split('b1', 'half').drain()[0]).toEqual({ kind: 'splitBlock', id: 'b1', atText: 'half' });
+    expect(ed('b1', 'b2').merge(['b1', 'b2'], ' — ').drain()[0]).toEqual({
+      kind: 'mergeBlocks',
+      ids: ['b1', 'b2'],
+      separator: ' — ',
+    });
+    expect(ed().split('b1', 'half').drain()[0]).toEqual({
+      kind: 'splitBlock',
+      id: 'b1',
+      atText: 'half',
+    });
   });
 
   it('tables: insert an EMPTY grid, then a setCell per non-empty cell (human-like fill)', () => {
     const e = ed();
-    const t = e.appendTable([['A', 'B'], ['c', '']]); // 2x2, one empty cell
+    const t = e.appendTable([
+      ['A', 'B'],
+      ['c', ''],
+    ]); // 2x2, one empty cell
     const ops = e.drain();
     // empty grid first (same shape, blank cells)
-    expect(ops[0]).toMatchObject({ kind: 'insertBlock', spec: { block: 'table', rows: [['', ''], ['', '']] } });
+    expect(ops[0]).toMatchObject({
+      kind: 'insertBlock',
+      spec: {
+        block: 'table',
+        rows: [
+          ['', ''],
+          ['', ''],
+        ],
+      },
+    });
     // then one setCell per NON-empty cell, in row-major order, targeting the ref
     expect(ops.slice(1)).toEqual([
       { kind: 'setCell', table: t, row: 0, col: 0, content: 'A' },
       { kind: 'setCell', table: t, row: 0, col: 1, content: 'B' },
       { kind: 'setCell', table: t, row: 1, col: 0, content: 'c' },
     ]);
-    expect(ed().addRow('b1').drain()[0]).toEqual({ kind: 'addRow', table: 'b1', at: undefined });
-    expect(ed().removeColumn('b1', 2).drain()[0]).toEqual({ kind: 'removeColumn', table: 'b1', col: 2 });
+    expect(ed().addRow('b1').drain()[0]).toEqual({
+      kind: 'addRow',
+      table: 'b1',
+      at: undefined,
+    });
+    expect(ed().removeColumn('b1', 2).drain()[0]).toEqual({
+      kind: 'removeColumn',
+      table: 'b1',
+      col: 2,
+    });
   });
 
   it('media / inline creators', () => {
     expect(ed().insertDivider('b1').length).toBeUndefined; // returns a ref string, not chainable
     const e = ed();
-    const img = e.insertImage('b1', { srcType: 'url', url: 'http://i', alt: 'a' });
+    const img = e.insertImage('b1', {
+      srcType: 'url',
+      url: 'http://i',
+      alt: 'a',
+    });
     expect(typeof img).toBe('string');
-    expect(e.drain()[0]).toMatchObject({ kind: 'insertBlock', spec: { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' } });
+    expect(e.drain()[0]).toMatchObject({
+      kind: 'insertBlock',
+      spec: { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
+    });
     expect(ed().insertDate('b1', 3, '2026-01-01').length).toBeUndefined;
   });
 
   it('insertInline creators produce insertInline ops at the offset', () => {
     const e = ed();
     e.insertLineBreak('b1', 4);
-    expect(e.drain()[0]).toMatchObject({ kind: 'insertInline', id: 'b1', at: 4, spec: { inline: 'linebreak' } });
+    expect(e.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      id: 'b1',
+      at: 4,
+      spec: { inline: 'linebreak' },
+    });
   });
 });
 
@@ -208,14 +397,42 @@ describe('DocumentEditor — eager validation (EditError)', () => {
 
 describe('DocumentEditor — mention methods push insertInline ops', () => {
   it('every mention method pushes an insertInline op with the right mention kind', () => {
-    const eu = ed(); eu.mentionUser('b1', 0, { userId: 'u', email: 'e' });
-    expect(eu.drain()[0]).toMatchObject({ kind: 'insertInline', spec: { inline: 'mention', mention: { kind: 'user', userId: 'u', email: 'e' } } });
-    const eg = ed(); eg.mentionGroup('b1', 0, { groupAlias: 'g' });
-    expect(eg.drain()[0]).toMatchObject({ kind: 'insertInline', spec: { inline: 'mention', mention: { kind: 'group', groupAlias: 'g' } } });
-    const ec = ed(); ec.mentionContact('b1', 0, { contactId: 'c', name: 'n', emailOrDomain: 'd', isCompany: false });
-    expect(ec.drain()[0]).toMatchObject({ kind: 'insertInline', spec: { inline: 'mention', mention: { kind: 'contact' } } });
-    const ed2 = ed(); ed2.mentionDocument('b1', 0, { documentId: 'd', documentName: 'n', blockName: 'b' });
-    expect(ed2.drain()[0]).toMatchObject({ kind: 'insertInline', spec: { inline: 'mention', mention: { kind: 'document' } } });
+    const eu = ed();
+    eu.mentionUser('b1', 0, { userId: 'u', email: 'e' });
+    expect(eu.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: {
+        inline: 'mention',
+        mention: { kind: 'user', userId: 'u', email: 'e' },
+      },
+    });
+    const eg = ed();
+    eg.mentionGroup('b1', 0, { groupAlias: 'g' });
+    expect(eg.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: { inline: 'mention', mention: { kind: 'group', groupAlias: 'g' } },
+    });
+    const ec = ed();
+    ec.mentionContact('b1', 0, {
+      contactId: 'c',
+      name: 'n',
+      emailOrDomain: 'd',
+      isCompany: false,
+    });
+    expect(ec.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: { inline: 'mention', mention: { kind: 'contact' } },
+    });
+    const ed2 = ed();
+    ed2.mentionDocument('b1', 0, {
+      documentId: 'd',
+      documentName: 'n',
+      blockName: 'b',
+    });
+    expect(ed2.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: { inline: 'mention', mention: { kind: 'document' } },
+    });
   });
 });
 
@@ -224,7 +441,11 @@ describe('DocumentEditor — drain semantics', () => {
     const e = ed();
     e.bold('b1', 'a').italic('b2', 'b').remove('b3');
     const first = e.drain();
-    expect(first.map((o) => o.kind)).toEqual(['formatText', 'formatText', 'removeBlock']);
+    expect(first.map((o) => o.kind)).toEqual([
+      'formatText',
+      'formatText',
+      'removeBlock',
+    ]);
     expect(e.drain()).toEqual([]); // drained
   });
 });
@@ -303,7 +524,9 @@ describe('DocumentEditor — unknown id rejected by every id-taking method', () 
 
 describe('DocumentEditor — insert position validation', () => {
   it('insertParagraphBefore validates the anchor id', () => {
-    expect(() => ed().insertParagraphBefore('nope')).toThrow(/unknown id "nope"/);
+    expect(() => ed().insertParagraphBefore('nope')).toThrow(
+      /unknown id "nope"/
+    );
   });
   it('appendToRoot / prependToRoot need no anchor', () => {
     expect(() => ed().appendParagraph('x')).not.toThrow();
@@ -320,10 +543,14 @@ describe('DocumentEditor — insert position validation', () => {
 
 describe('DocumentEditor — match/find validation', () => {
   it('empty match throws for every match-taking method', () => {
-    expect(() => ed().format('b1', '', 'bold')).toThrow(/match string is empty/);
+    expect(() => ed().format('b1', '', 'bold')).toThrow(
+      /match string is empty/
+    );
     expect(() => ed().highlight('b1', '')).toThrow(/match string is empty/);
     expect(() => ed().unhighlight('b1', '')).toThrow(/match string is empty/);
-    expect(() => ed().link('b1', '', 'http://a')).toThrow(/match string is empty/);
+    expect(() => ed().link('b1', '', 'http://a')).toThrow(
+      /match string is empty/
+    );
     expect(() => ed().unlink('b1', '')).toThrow(/match string is empty/);
     expect(() => ed().split('b1', '')).toThrow(/match string is empty/);
   });
@@ -339,7 +566,11 @@ describe('DocumentEditor — match/find validation', () => {
 describe('DocumentEditor — heading level bounds', () => {
   it('accepts 1..6 and rejects 0 and 7', () => {
     for (let lvl = 1; lvl <= 6; lvl++) {
-      expect(ed().convertToHeading('b1', lvl).drain()[0]).toMatchObject({ kind: 'setBlockType', block: 'heading', level: lvl });
+      expect(ed().convertToHeading('b1', lvl).drain()[0]).toMatchObject({
+        kind: 'setBlockType',
+        block: 'heading',
+        level: lvl,
+      });
     }
     expect(() => ed().convertToHeading('b1', 0)).toThrow(/1-6/);
     expect(() => ed().convertToHeading('b1', 7)).toThrow(/1-6/);
@@ -349,20 +580,38 @@ describe('DocumentEditor — heading level bounds', () => {
 
 describe('DocumentEditor — code block language validation', () => {
   it('requires a non-empty language for code block conversion and insertion', () => {
-    expect(() => ed().convertToCodeBlock('b1', '')).toThrow(/language is required/);
-    expect(() => ed().convertToCodeBlock('b1', undefined as unknown as string)).toThrow(/language is required/);
+    expect(() => ed().convertToCodeBlock('b1', '')).toThrow(
+      /language is required/
+    );
+    expect(() =>
+      ed().convertToCodeBlock('b1', undefined as unknown as string)
+    ).toThrow(/language is required/);
     expect(() => ed().setLanguage('b1', '')).toThrow(/language is required/);
-    expect(() => ed().setLanguage('b1', undefined as unknown as string)).toThrow(/language is required/);
-    expect(() => ed().insertCodeBlockAfter('b1', '')).toThrow(/language is required/);
-    expect(() => ed().insertCodeBlockAfter('b1', undefined as unknown as string)).toThrow(/language is required/);
+    expect(() =>
+      ed().setLanguage('b1', undefined as unknown as string)
+    ).toThrow(/language is required/);
+    expect(() => ed().insertCodeBlockAfter('b1', '')).toThrow(
+      /language is required/
+    );
+    expect(() =>
+      ed().insertCodeBlockAfter('b1', undefined as unknown as string)
+    ).toThrow(/language is required/);
   });
 });
 
 describe('DocumentEditor — indent & cell bounds', () => {
   it('setIndent rejects negatives, allows 0 and positive', () => {
     expect(() => ed().setIndent('b1', -1)).toThrow(/>= 0/);
-    expect(ed().setIndent('b1', 0).drain()[0]).toEqual({ kind: 'setIndent', id: 'b1', indent: 0 });
-    expect(ed().setIndent('b1', 3).drain()[0]).toEqual({ kind: 'setIndent', id: 'b1', indent: 3 });
+    expect(ed().setIndent('b1', 0).drain()[0]).toEqual({
+      kind: 'setIndent',
+      id: 'b1',
+      indent: 0,
+    });
+    expect(ed().setIndent('b1', 3).drain()[0]).toEqual({
+      kind: 'setIndent',
+      id: 'b1',
+      indent: 3,
+    });
   });
   it('indent maps any nonneg "by" to "in" and any negative to "out"', () => {
     expect(ed().indent('b1', 5).drain()[0]).toMatchObject({ indent: 'in' });
@@ -375,7 +624,11 @@ describe('DocumentEditor — indent & cell bounds', () => {
     expect(() => ed().setCell('b1', 0, -1, 'x')).toThrow(/>= 0/);
     expect(() => ed().removeRow('b1', -1)).toThrow(/>= 0/);
     expect(() => ed().removeColumn('b1', -1)).toThrow(/>= 0/);
-    expect(ed().setCell('b1', 0, 0, 'x').drain()[0]).toMatchObject({ kind: 'setCell', row: 0, col: 0 });
+    expect(ed().setCell('b1', 0, 0, 'x').drain()[0]).toMatchObject({
+      kind: 'setCell',
+      row: 0,
+      col: 0,
+    });
   });
 });
 
@@ -388,17 +641,25 @@ describe('DocumentEditor — list & merge cardinality', () => {
   it('merge requires two or more', () => {
     expect(() => ed().merge([])).toThrow(/at least two/);
     expect(() => ed('b1').merge(['b1'])).toThrow(/at least two/);
-    expect(ed('b1', 'b2').merge(['b1', 'b2']).drain()[0]).toMatchObject({ kind: 'mergeBlocks' });
+    expect(ed('b1', 'b2').merge(['b1', 'b2']).drain()[0]).toMatchObject({
+      kind: 'mergeBlocks',
+    });
   });
   it('merge default separator is a single space', () => {
-    expect(ed('b1', 'b2').merge(['b1', 'b2']).drain()[0]).toMatchObject({ separator: ' ' });
+    expect(ed('b1', 'b2').merge(['b1', 'b2']).drain()[0]).toMatchObject({
+      separator: ' ',
+    });
   });
 });
 
 describe('DocumentEditor — inline offset validation', () => {
   it('negative inline offset throws', () => {
-    expect(() => ed().insertLineBreak('b1', -1)).toThrow(/inline offset must be >= 0/);
-    expect(() => ed().insertInlineEquation('b1', -5, 'x')).toThrow(/inline offset must be >= 0/);
+    expect(() => ed().insertLineBreak('b1', -1)).toThrow(
+      /inline offset must be >= 0/
+    );
+    expect(() => ed().insertInlineEquation('b1', -5, 'x')).toThrow(
+      /inline offset must be >= 0/
+    );
   });
   it('offset 0 is allowed', () => {
     const e = ed();
@@ -415,7 +676,12 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
     e.appendText(ref, '!');
     e.convertToHeading(ref, 1);
     const ops = e.drain();
-    expect(ops.map((o) => o.kind)).toEqual(['insertBlock', 'formatText', 'appendText', 'setBlockType']);
+    expect(ops.map((o) => o.kind)).toEqual([
+      'insertBlock',
+      'formatText',
+      'appendText',
+      'setBlockType',
+    ]);
   });
 
   it('a table ref is a valid target for setCell/addRow/addColumn', () => {
@@ -424,7 +690,12 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
     e.setCell(t, 0, 0, 'x');
     e.addRow(t);
     e.addColumn(t);
-    expect(e.drain().map((o) => o.kind)).toEqual(['insertBlock', 'setCell', 'addRow', 'addColumn']);
+    expect(e.drain().map((o) => o.kind)).toEqual([
+      'insertBlock',
+      'setCell',
+      'addRow',
+      'addColumn',
+    ]);
   });
 
   it('an inline ref (insertLineBreak) is registered valid too', () => {
@@ -443,21 +714,37 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
 
 describe('DocumentEditor — scope defaults', () => {
   it('format/highlight/link/clearFormat/replace default to { all: true }', () => {
-    expect(ed().bold('b1', 'x').drain()[0]).toMatchObject({ scope: { all: true } });
-    expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({ scope: { all: true } });
-    expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({ scope: { all: true } });
-    expect(ed().clearFormat('b1', 'x').drain()[0]).toMatchObject({ scope: { all: true } });
-    expect(ed().replace('b1', 'a', 'b').drain()[0]).toMatchObject({ scope: { all: true } });
+    expect(ed().bold('b1', 'x').drain()[0]).toMatchObject({
+      scope: { all: true },
+    });
+    expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({
+      scope: { all: true },
+    });
+    expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({
+      scope: { all: true },
+    });
+    expect(ed().clearFormat('b1', 'x').drain()[0]).toMatchObject({
+      scope: { all: true },
+    });
+    expect(ed().replace('b1', 'a', 'b').drain()[0]).toMatchObject({
+      scope: { all: true },
+    });
   });
   it('an explicit scope overrides the default', () => {
-    expect(ed().bold('b1', 'x', { nth: 3 }).drain()[0]).toMatchObject({ scope: { nth: 3 } });
+    expect(ed().bold('b1', 'x', { nth: 3 }).drain()[0]).toMatchObject({
+      scope: { nth: 3 },
+    });
   });
 });
 
 describe('DocumentEditor — mention methods require a valid block id', () => {
   it('each mention method throws EditError for an unknown id', () => {
-    expect(() => ed().mentionUser('nope', 0, { userId: 'u', email: 'e' })).toThrow(/nope/);
-    expect(() => ed().mentionGroup('nope', 0, { groupAlias: 'g' })).toThrow(/nope/);
+    expect(() =>
+      ed().mentionUser('nope', 0, { userId: 'u', email: 'e' })
+    ).toThrow(/nope/);
+    expect(() => ed().mentionGroup('nope', 0, { groupAlias: 'g' })).toThrow(
+      /nope/
+    );
   });
 });
 

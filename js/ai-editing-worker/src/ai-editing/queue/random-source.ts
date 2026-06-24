@@ -53,12 +53,19 @@ export function mockRandomSource(opts: MockRandomOptions = {}): RandomSource {
   };
 }
 
-function drawer<T>(label: string, value: T | T[] | undefined, fallback: T): () => T {
+function drawer<T>(
+  label: string,
+  value: T | T[] | undefined,
+  fallback: T
+): () => T {
   if (value === undefined) return () => fallback;
   if (!Array.isArray(value)) return () => value;
   let i = 0;
   return () => {
-    if (i >= value.length) throw new Error(`mockRandomSource: ${label} sequence exhausted at draw ${i + 1}`);
+    if (i >= value.length)
+      throw new Error(
+        `mockRandomSource: ${label} sequence exhausted at draw ${i + 1}`
+      );
     return value[i++]!;
   };
 }

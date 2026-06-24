@@ -1,4 +1,7 @@
-import { $convertToMarkdownString, type TextFormatTransformer } from '@lexical/markdown';
+import {
+  $convertToMarkdownString,
+  type TextFormatTransformer,
+} from '@lexical/markdown';
 import { $isHeadingNode } from '@lexical/rich-text';
 import {
   $createParagraphNode,
@@ -74,7 +77,9 @@ function annotate(node: LexicalNode): void {
  * Serialize the document to markdown with `{id|type}` markers — the text the
  * model reads and locks onto.
  */
-export function serializeSnapshotWithIds(snapshot: SerializedEditorState): string {
+export function serializeSnapshotWithIds(
+  snapshot: SerializedEditorState
+): string {
   const tmp = createEditingSession();
   loadSnapshot(tmp, snapshot);
   tmp.editor.update(
@@ -91,7 +96,9 @@ export function serializeSnapshotWithIds(snapshot: SerializedEditorState): strin
     },
     { discrete: true }
   );
-  const md = tmp.editor.getEditorState().read(() => $convertToMarkdownString(AI_TRANSFORMERS));
+  const md = tmp.editor
+    .getEditorState()
+    .read(() => $convertToMarkdownString(AI_TRANSFORMERS));
   const cleaned = md.replace(
     /\{([A-Za-z0-9_\\-]+)\|([a-z]+)\}/g,
     (_m, id: string, type: string) => `{${id.replace(/\\/g, '')}|${type}}`
@@ -104,7 +111,10 @@ export const WINDOW_PADDING = 6;
 
 /** Prefix each line with a 1-indexed `N | ` gutter -- the line addressing the agents read. */
 export function numberLines(text: string): string {
-  return text.split('\n').map((line, i) => `${i + 1} | ${line}`).join('\n');
+  return text
+    .split('\n')
+    .map((line, i) => `${i + 1} | ${line}`)
+    .join('\n');
 }
 
 export function serializeWithIds(s: Session): string {
@@ -115,7 +125,12 @@ export function serializeWithIds(s: Session): string {
  * Return the line-numbered serialization sliced to the given line range
  * (1-indexed, inclusive), with `padding` extra lines on each side for context.
  */
-export function serializeWindowByLines(s: Session, lineStart: number, lineEnd: number, padding = 10): string {
+export function serializeWindowByLines(
+  s: Session,
+  lineStart: number,
+  lineEnd: number,
+  padding = 10
+): string {
   const lines = serializeWithIds(s).split('\n');
   const lo = Math.max(0, lineStart - 1 - padding);
   const hi = Math.min(lines.length - 1, lineEnd - 1 + padding);
@@ -126,7 +141,7 @@ export function serializeWindowByLines(s: Session, lineStart: number, lineEnd: n
 export function serializeHeadings(s: Session): string {
   return serializeWithIds(s)
     .split('\n')
-    .filter(l => /^\d+ \| #{1,6} /.test(l))
+    .filter((l) => /^\d+ \| #{1,6} /.test(l))
     .join('\n');
 }
 
@@ -138,7 +153,11 @@ function stripMarkers(s: string): string {
  * Fuzzy find: word-overlap score against stripped lines, returns up to 3 matching
  * regions with surrounding context lines.
  */
-export function findInDocument(s: Session, needle: string, contextLines = 5): string {
+export function findInDocument(
+  s: Session,
+  needle: string,
+  contextLines = 5
+): string {
   const allLines = serializeWithIds(s).split('\n');
   const words = stripMarkers(needle).toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '(no needle provided)';
@@ -146,10 +165,11 @@ export function findInDocument(s: Session, needle: string, contextLines = 5): st
   const hits = allLines
     .map((line, i) => {
       const clean = stripMarkers(line).toLowerCase();
-      const score = words.filter(w => clean.includes(w)).length / words.length;
+      const score =
+        words.filter((w) => clean.includes(w)).length / words.length;
       return { i, score };
     })
-    .filter(h => h.score > 0)
+    .filter((h) => h.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 
@@ -175,7 +195,11 @@ export function serializeWithXml(s: Session): string {
  * marker so the writer knows lines were omitted. A big block (long table/list)
  * is only partially covered -- list its child ids to widen the window.
  */
-export function serializeWindowByIds(s: Session, ids: string[], padding = WINDOW_PADDING): string {
+export function serializeWindowByIds(
+  s: Session,
+  ids: string[],
+  padding = WINDOW_PADDING
+): string {
   const lines = numberLines(serializeWithXml(s)).split('\n');
   const hits = ids
     .map((id) => lines.findIndex((l) => l.includes(`id="${id}"`)))
@@ -183,7 +207,13 @@ export function serializeWindowByIds(s: Session, ids: string[], padding = WINDOW
   if (hits.length === 0) return '(no matching node ids found)';
 
   const ranges = hits
-    .map((i) => [Math.max(0, i - padding), Math.min(lines.length - 1, i + padding)] as [number, number])
+    .map(
+      (i) =>
+        [Math.max(0, i - padding), Math.min(lines.length - 1, i + padding)] as [
+          number,
+          number,
+        ]
+    )
     .sort((a, b) => a[0] - b[0]);
   const merged: [number, number][] = [];
   for (const [lo, hi] of ranges) {
@@ -191,5 +221,7 @@ export function serializeWindowByIds(s: Session, ids: string[], padding = WINDOW
     if (last && lo <= last[1] + 1) last[1] = Math.max(last[1], hi);
     else merged.push([lo, hi]);
   }
-  return merged.map(([lo, hi]) => lines.slice(lo, hi + 1).join('\n')).join('\n…\n');
+  return merged
+    .map(([lo, hi]) => lines.slice(lo, hi + 1).join('\n'))
+    .join('\n…\n');
 }

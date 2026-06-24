@@ -43,7 +43,7 @@ export class PeerPool {
             this.out.add(peer);
             this.releasers.set(peer, freeSlot);
             handOut(peer);
-          }),
+          })
       );
     });
   }

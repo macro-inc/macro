@@ -6,22 +6,61 @@
  * shared `refs` map turns an inserted node's placeholder ref into its minted id,
  * so later reads/edits in the same run resolve it.
  */
-import { $createLineBreakNode, $createParagraphNode, $createTextNode, $getRoot, $isElementNode, type ElementNode, type LexicalNode, type TextNode } from 'lexical';
-import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from '@lexical/rich-text';
+import {
+  $createLineBreakNode,
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  $isElementNode,
+  type ElementNode,
+  type LexicalNode,
+  type TextNode,
+} from 'lexical';
+import {
+  $createHeadingNode,
+  $createQuoteNode,
+  type HeadingTagType,
+} from '@lexical/rich-text';
 import { $createCodeNode } from '@lexical/code';
-import { $createListItemNode, $createListNode, $isListItemNode, $isListNode, type ListType } from '@lexical/list';
-import { $createTableCellNode, $createTableRowNode, $isTableCellNode, $isTableNode, $isTableRowNode, TableCellHeaderStates, type TableNode } from '@lexical/table';
+import {
+  $createListItemNode,
+  $createListNode,
+  $isListItemNode,
+  $isListNode,
+  type ListType,
+} from '@lexical/list';
+import {
+  $createTableCellNode,
+  $createTableRowNode,
+  $isTableCellNode,
+  $isTableNode,
+  $isTableRowNode,
+  TableCellHeaderStates,
+  type TableNode,
+} from '@lexical/table';
 import { match } from 'ts-pattern';
 import { $createHorizontalRuleNode } from '../../../../lexical-core/nodes/HorizontalRuleNode';
 import { $createEquationNode } from '../../../../lexical-core/nodes/EquationNode';
-import { $createImageNode, ImageNode } from '../../../../lexical-core/nodes/ImageNode';
-import { $createVideoNode, VideoNode } from '../../../../lexical-core/nodes/VideoNode';
-import { $createDateMentionNode, $isDateMentionNode } from '../../../../lexical-core/nodes/DateMentionNode';
+import {
+  $createImageNode,
+  ImageNode,
+} from '../../../../lexical-core/nodes/ImageNode';
+import {
+  $createVideoNode,
+  VideoNode,
+} from '../../../../lexical-core/nodes/VideoNode';
+import {
+  $createDateMentionNode,
+  $isDateMentionNode,
+} from '../../../../lexical-core/nodes/DateMentionNode';
 import { $createUserMentionNode } from '../../../../lexical-core/nodes/UserMentionNode';
 import { $createContactMentionNode } from '../../../../lexical-core/nodes/ContactMentionNode';
 import { $createGroupMentionNode } from '../../../../lexical-core/nodes/GroupMentionNode';
 import { $createDocumentMentionNode } from '../../../../lexical-core/nodes/DocumentMentionNode';
-import { $getId, $updateAllNodeIds } from '../../../../lexical-core/plugins/nodeIdPlugin';
+import {
+  $getId,
+  $updateAllNodeIds,
+} from '../../../../lexical-core/plugins/nodeIdPlugin';
 import {
   $appendText,
   $clearFormat,
@@ -34,7 +73,15 @@ import {
   $unwrapFromLink,
   $wrapInLink,
 } from '../ai-toolkit/inline';
-import { $appendBlock, $mergeBlocks, $moveBlock, $prependBlock, $setText, $splitBlock, type BlockData } from '../ai-toolkit/blocks';
+import {
+  $appendBlock,
+  $mergeBlocks,
+  $moveBlock,
+  $prependBlock,
+  $setText,
+  $splitBlock,
+  type BlockData,
+} from '../ai-toolkit/blocks';
 import { $setListType, $sortList, $toggleList } from '../ai-toolkit/lists';
 import { $modifyNode } from '../ai-toolkit/modify';
 import { $setCell, $table } from '../ai-toolkit/tables';
@@ -42,10 +89,21 @@ import { $blockById, $byId, $textById } from '../ai-toolkit/locate';
 import { collectTextNodes } from '../ai-toolkit/tree';
 import type { Session } from '../ai-toolkit/session';
 import { EditError } from '../editor/errors';
-import type { Format, ListKind, NodeRef, NodeSpec, Offset, Position, Scope } from '../editor/ops';
+import type {
+  Format,
+  ListKind,
+  NodeRef,
+  NodeSpec,
+  Offset,
+  Position,
+  Scope,
+} from '../editor/ops';
 import type { DocReader, DocWriter, Match } from './interfaces';
 
-const FORMAT_BIT: Record<Format, 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code'> = {
+const FORMAT_BIT: Record<
+  Format,
+  'bold' | 'italic' | 'underline' | 'strikethrough' | 'code'
+> = {
   bold: 'bold',
   italic: 'italic',
   underline: 'underline',
@@ -85,7 +143,9 @@ export class Doc implements DocReader, DocWriter {
       this.s.editor.update(fn, { discrete: true });
     } catch (e) {
       this.s.editor.setEditorState(before);
-      this.s.editor.update(() => $updateAllNodeIds(this.s.ids), { discrete: true });
+      this.s.editor.update(() => $updateAllNodeIds(this.s.ids), {
+        discrete: true,
+      });
       throw e instanceof EditError ? e : new EditError((e as Error).message);
     }
     this.propagate();
@@ -96,7 +156,9 @@ export class Doc implements DocReader, DocWriter {
   }
 
   public textLength(node: NodeRef): number {
-    return this.read(() => $byId(this.s, this.id(node)).getTextContent().length);
+    return this.read(
+      () => $byId(this.s, this.id(node)).getTextContent().length
+    );
   }
 
   public locate(id: string, match: string, scope?: Scope): Match[] {
@@ -113,7 +175,8 @@ export class Doc implements DocReader, DocWriter {
         while (idx !== -1) {
           occ++;
           const take = all || (nth == null ? occ === 1 : occ === nth);
-          if (take && tid) out.push({ node: tid, start: idx, end: idx + match.length });
+          if (take && tid)
+            out.push({ node: tid, start: idx, end: idx + match.length });
           idx = content.indexOf(match, idx + match.length);
         }
       }
@@ -126,14 +189,19 @@ export class Doc implements DocReader, DocWriter {
       const cell = this.cell(this.id(table), row, col);
       const content = cell.getChildren().find($isElementNode) ?? cell;
       const cid = $getId(content as LexicalNode);
-      if (!cid) throw new EditError(`cell [${row}, ${col}] has no addressable content`);
+      if (!cid)
+        throw new EditError(`cell [${row}, ${col}] has no addressable content`);
       return cid;
     });
   }
 
   private cell(tableRef: string, row: number, col: number) {
     const table = resolveTable($byId(this.s, tableRef));
-    const cell = table.getChildren().filter($isTableRowNode)[row]?.getChildren().filter($isTableCellNode)[col];
+    const cell = table
+      .getChildren()
+      .filter($isTableRowNode)
+      [row]?.getChildren()
+      .filter($isTableCellNode)[col];
     if (!cell) throw new EditError(`no cell at [${row}, ${col}]`);
     return cell;
   }
@@ -158,11 +226,22 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => $prependText(this.block(node), text));
   }
 
-  public replaceText(node: NodeRef, find: string, to: string, scope: Scope): void {
+  public replaceText(
+    node: NodeRef,
+    find: string,
+    to: string,
+    scope: Scope
+  ): void {
     this.tx(() => $replaceString(this.block(node), find, to, scope));
   }
 
-  public formatText(node: NodeRef, match: string, format: Format, on: boolean, scope: Scope): void {
+  public formatText(
+    node: NodeRef,
+    match: string,
+    format: Format,
+    on: boolean,
+    scope: Scope
+  ): void {
     this.tx(() => {
       const block = this.block(node);
       if (on) $formatTextInBlock(block, match, format, scope);
@@ -170,7 +249,11 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
-  public clearFormat(node: NodeRef, match: string | undefined, scope: Scope): void {
+  public clearFormat(
+    node: NodeRef,
+    match: string | undefined,
+    scope: Scope
+  ): void {
     this.tx(() => {
       const block = this.block(node);
       if (match === undefined) $stripFormat(block);
@@ -178,14 +261,24 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
-  public markText(node: NodeRef, match: string, on: boolean, scope: Scope): void {
+  public markText(
+    node: NodeRef,
+    match: string,
+    on: boolean,
+    scope: Scope
+  ): void {
     this.tx(() => {
       if (on) $highlightInBlock(this.block(node), match, scope);
       else $unhighlightInBlock(this.block(node), match, scope);
     });
   }
 
-  public linkText(node: NodeRef, match: string, url: string | null, scope: Scope): void {
+  public linkText(
+    node: NodeRef,
+    match: string,
+    url: string | null,
+    scope: Scope
+  ): void {
     this.tx(() => {
       if (url !== null) $wrapInLink(this.block(node), match, url, scope);
       else $unwrapFromLink(this.block(node), match, scope);
@@ -208,25 +301,36 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => $modifyNode(this.s, this.id(node), { op: 'equation', tex }));
   }
 
-  public setBlockType(node: NodeRef, block: 'paragraph' | 'heading' | 'quote' | 'code', opts: { level?: number; language?: string }): void {
+  public setBlockType(
+    node: NodeRef,
+    block: 'paragraph' | 'heading' | 'quote' | 'code',
+    opts: { level?: number; language?: string }
+  ): void {
     const data: BlockData =
-      block === 'heading' ? { type: 'heading', level: opts.level ?? 1 } :
-      block === 'code'    ? { type: 'code', language: opts.language } :
-                            { type: block };
-    this.tx(() => $modifyNode(this.s, this.id(node), { op: 'blockType', block: data }));
+      block === 'heading'
+        ? { type: 'heading', level: opts.level ?? 1 }
+        : block === 'code'
+          ? { type: 'code', language: opts.language }
+          : { type: block };
+    this.tx(() =>
+      $modifyNode(this.s, this.id(node), { op: 'blockType', block: data })
+    );
   }
 
   public setListType(nodes: NodeRef[], list: ListKind): void {
     this.tx(() => {
       const resolved = nodes.map((n) => $byId(this.s, this.id(n)));
       const first = resolved[0];
-      if (first && first.getType() === 'listitem') $setListType(first, list, this.s);
+      if (first && first.getType() === 'listitem')
+        $setListType(first, list, this.s);
       else $toggleList(resolved, list);
     });
   }
 
   public setChecked(node: NodeRef, checked: boolean): void {
-    this.tx(() => $modifyNode(this.s, this.id(node), { op: 'checked', checked }));
+    this.tx(() =>
+      $modifyNode(this.s, this.id(node), { op: 'checked', checked })
+    );
   }
 
   public setIndent(node: NodeRef, indent: number | 'in' | 'out'): void {
@@ -240,7 +344,8 @@ export class Doc implements DocReader, DocWriter {
   public appendListItem(ref: string, node: NodeRef, checked?: boolean): void {
     this.tx(() => {
       const list = $byId(this.s, this.id(node));
-      if (!$isListNode(list)) throw new EditError('appendListItem target is not a list');
+      if (!$isListNode(list))
+        throw new EditError('appendListItem target is not a list');
       const li = $createListItemNode(checked);
       list.append(li);
       this.assignRef(ref, li);
@@ -250,7 +355,8 @@ export class Doc implements DocReader, DocWriter {
   public insertNode(ref: string, spec: NodeSpec, at: Position): void {
     this.tx(() => {
       // `insertNode` is for block specs; inline specs go through `insertInline`.
-      if ('inline' in spec) throw new EditError('insertNode requires a block spec');
+      if ('inline' in spec)
+        throw new EditError('insertNode requires a block spec');
       let node: LexicalNode = buildNode(spec);
       // Most blocks are ElementNodes or block decorators (divider/image/video).
       // A few block specs build a structurally-inline decorator (equation) — wrap
@@ -265,7 +371,12 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
-  public insertInline(ref: string, node: NodeRef, at: Offset, spec: NodeSpec): void {
+  public insertInline(
+    ref: string,
+    node: NodeRef,
+    at: Offset,
+    spec: NodeSpec
+  ): void {
     this.tx(() => {
       const block = this.block(node);
       const inline = buildNode(spec);
@@ -277,8 +388,10 @@ export class Doc implements DocReader, DocWriter {
   public moveNode(node: NodeRef, at: Position): void {
     this.tx(() => {
       const block = this.block(node);
-      if ('after' in at) $moveBlock(block, { afterId: this.id(at.after) }, this.s);
-      else if ('before' in at) $moveBlock(block, { beforeId: this.id(at.before) }, this.s);
+      if ('after' in at)
+        $moveBlock(block, { afterId: this.id(at.after) }, this.s);
+      else if ('before' in at)
+        $moveBlock(block, { beforeId: this.id(at.before) }, this.s);
       else {
         block.remove();
         if ('appendToRoot' in at) $appendBlock(block);
@@ -292,25 +405,41 @@ export class Doc implements DocReader, DocWriter {
   }
 
   public mergeBlocks(nodes: NodeRef[], separator: string): void {
-    this.tx(() => $mergeBlocks(nodes.map((n) => $byId(this.s, this.id(n))), separator));
+    this.tx(() =>
+      $mergeBlocks(
+        nodes.map((n) => $byId(this.s, this.id(n))),
+        separator
+      )
+    );
   }
 
   public splitBlock(node: NodeRef, atText: string): void {
     this.tx(() => $splitBlock(this.block(node), atText));
   }
 
-  public insertListItemAfter(ref: string, node: NodeRef, text: string, list: ListKind): void {
+  public insertListItemAfter(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    list: ListKind
+  ): void {
     this.tx(() => this.insertListItem(ref, node, text, list, 'after'));
   }
 
-  public insertListItemBefore(ref: string, node: NodeRef, text: string, list: ListKind): void {
+  public insertListItemBefore(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    list: ListKind
+  ): void {
     this.tx(() => this.insertListItem(ref, node, text, list, 'before'));
   }
 
   public removeListItem(node: NodeRef): void {
     this.tx(() => {
       const li = $byId(this.s, this.id(node));
-      if (!$isListItemNode(li)) throw new EditError(`{${this.id(node)}} is not a list item`);
+      if (!$isListItemNode(li))
+        throw new EditError(`{${this.id(node)}} is not a list item`);
       li.remove();
     });
   }
@@ -319,14 +448,22 @@ export class Doc implements DocReader, DocWriter {
    *  surrounding list it lands as a plain sibling; when it differs, the new item
    *  is wrapped in a sublist of that kind (a numbered list inside a bullet list,
    *  etc.) — Lexical nests via a ListItemNode that holds the child ListNode. */
-  private insertListItem(ref: string, node: NodeRef, text: string, list: ListKind, where: 'after' | 'before'): void {
+  private insertListItem(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    list: ListKind,
+    where: 'after' | 'before'
+  ): void {
     const target = $byId(this.s, this.id(node));
-    if (!$isListItemNode(target)) throw new EditError(`{${this.id(node)}} is not a list item`);
+    if (!$isListItemNode(target))
+      throw new EditError(`{${this.id(node)}} is not a list item`);
     const newLi = $createListItemNode(list === 'check' ? false : undefined);
     newLi.append($createTextNode(text));
 
     const parent = target.getParent();
-    const sameKind = $isListNode(parent) && parent.getListType() === (list as ListType);
+    const sameKind =
+      $isListNode(parent) && parent.getListType() === (list as ListType);
     if (sameKind) {
       if (where === 'after') target.insertAfter(newLi);
       else target.insertBefore(newLi);
@@ -360,12 +497,14 @@ export class Doc implements DocReader, DocWriter {
   public addColumn(table: NodeRef, at?: number): void {
     this.tx(() => {
       const t = resolveTable($byId(this.s, this.id(table)));
-      t.getChildren().filter($isTableRowNode).forEach((row, ri) => {
-        const cells = row.getChildren().filter($isTableCellNode);
-        const cell = emptyCell(ri === 0);
-        if (at == null || at >= cells.length) row.append(cell);
-        else cells[at]!.insertBefore(cell);
-      });
+      t.getChildren()
+        .filter($isTableRowNode)
+        .forEach((row, ri) => {
+          const cells = row.getChildren().filter($isTableCellNode);
+          const cell = emptyCell(ri === 0);
+          if (at == null || at >= cells.length) row.append(cell);
+          else cells[at]!.insertBefore(cell);
+        });
     });
   }
 
@@ -388,7 +527,8 @@ export class Doc implements DocReader, DocWriter {
   public setImageAlt(node: NodeRef, alt: string): void {
     this.tx(() => {
       const n = $byId(this.s, this.id(node));
-      if (!(n instanceof ImageNode)) throw new EditError(`{${node}} is not an image`);
+      if (!(n instanceof ImageNode))
+        throw new EditError(`{${node}} is not an image`);
       n.setAlt(alt);
     });
   }
@@ -396,7 +536,8 @@ export class Doc implements DocReader, DocWriter {
   public setImageUrl(node: NodeRef, url: string): void {
     this.tx(() => {
       const n = $byId(this.s, this.id(node));
-      if (!(n instanceof ImageNode)) throw new EditError(`{${node}} is not an image`);
+      if (!(n instanceof ImageNode))
+        throw new EditError(`{${node}} is not an image`);
       n.setUrl(url);
     });
   }
@@ -404,7 +545,8 @@ export class Doc implements DocReader, DocWriter {
   public setVideoUrl(node: NodeRef, url: string): void {
     this.tx(() => {
       const n = $byId(this.s, this.id(node));
-      if (!(n instanceof VideoNode)) throw new EditError(`{${node}} is not a video`);
+      if (!(n instanceof VideoNode))
+        throw new EditError(`{${node}} is not a video`);
       n.setUrl(url);
     });
   }
@@ -412,7 +554,8 @@ export class Doc implements DocReader, DocWriter {
   public setVideoControls(node: NodeRef, controls: boolean): void {
     this.tx(() => {
       const n = $byId(this.s, this.id(node));
-      if (!(n instanceof VideoNode)) throw new EditError(`{${node}} is not a video`);
+      if (!(n instanceof VideoNode))
+        throw new EditError(`{${node}} is not a video`);
       n.setControls(controls);
     });
   }
@@ -420,7 +563,8 @@ export class Doc implements DocReader, DocWriter {
   public setDate(node: NodeRef, date: string, displayFormat?: string): void {
     this.tx(() => {
       const n = $byId(this.s, this.id(node));
-      if (!$isDateMentionNode(n)) throw new EditError(`{${node}} is not a date mention`);
+      if (!$isDateMentionNode(n))
+        throw new EditError(`{${node}} is not a date mention`);
       n.setDate(date);
       n.setDisplayFormat(displayFormat ?? date);
     });
@@ -456,7 +600,9 @@ function resolveTable(node: LexicalNode): TableNode {
 }
 
 function emptyCell(header: boolean) {
-  const cell = $createTableCellNode(header ? TableCellHeaderStates.ROW : TableCellHeaderStates.NO_STATUS);
+  const cell = $createTableCellNode(
+    header ? TableCellHeaderStates.ROW : TableCellHeaderStates.NO_STATUS
+  );
   cell.append($createParagraphNode());
   return cell;
 }
@@ -491,7 +637,9 @@ function insertTextAt(block: ElementNode, at: Offset, text: string): void {
   for (const tn of texts) {
     const content = tn.getTextContent();
     if (remaining <= content.length) {
-      tn.setTextContent(content.slice(0, remaining) + text + content.slice(remaining));
+      tn.setTextContent(
+        content.slice(0, remaining) + text + content.slice(remaining)
+      );
       return;
     }
     remaining -= content.length;
@@ -518,7 +666,11 @@ function removeTextAt(block: ElementNode, at: Offset, len: number): void {
 }
 
 /** Insert an inline node at char offset `at` within a block. */
-function insertInlineAt(block: ElementNode, at: Offset, inline: LexicalNode): void {
+function insertInlineAt(
+  block: ElementNode,
+  at: Offset,
+  inline: LexicalNode
+): void {
   let remaining = at;
   for (const tn of collectTextNodes(block)) {
     const len = tn.getTextContent().length;
@@ -540,10 +692,16 @@ function insertInlineAt(block: ElementNode, at: Offset, inline: LexicalNode): vo
 export function buildNode(spec: NodeSpec): LexicalNode {
   return match(spec)
     .returnType<LexicalNode>()
-    .with({ block: 'paragraph' }, (s) => withText($createParagraphNode(), s.text))
-    .with({ block: 'heading' }, (s) => withText($createHeadingNode(`h${s.level}` as HeadingTagType), s.text))
+    .with({ block: 'paragraph' }, (s) =>
+      withText($createParagraphNode(), s.text)
+    )
+    .with({ block: 'heading' }, (s) =>
+      withText($createHeadingNode(`h${s.level}` as HeadingTagType), s.text)
+    )
     .with({ block: 'quote' }, (s) => withText($createQuoteNode(), s.text))
-    .with({ block: 'code' }, (s) => withText($createCodeNode(s.language), s.text))
+    .with({ block: 'code' }, (s) =>
+      withText($createCodeNode(s.language), s.text)
+    )
     .with({ block: 'list' }, (s) => {
       const list = $createListNode(s.list as ListType);
       for (const item of s.items) {
@@ -555,18 +713,53 @@ export function buildNode(spec: NodeSpec): LexicalNode {
     })
     .with({ block: 'table' }, (s) => $table(s.rows))
     .with({ block: 'divider' }, () => $createHorizontalRuleNode())
-    .with({ block: 'image' }, (s) => $createImageNode({ srcType: s.srcType, url: s.url, alt: s.alt, width: s.width, height: s.height }))
-    .with({ block: 'video' }, (s) => $createVideoNode({ srcType: s.srcType, url: s.url, controls: s.controls, width: s.width, height: s.height }))
-    .with({ block: 'equation' }, (s) => $createEquationNode(s.tex, s.inline ?? false))
+    .with({ block: 'image' }, (s) =>
+      $createImageNode({
+        srcType: s.srcType,
+        url: s.url,
+        alt: s.alt,
+        width: s.width,
+        height: s.height,
+      })
+    )
+    .with({ block: 'video' }, (s) =>
+      $createVideoNode({
+        srcType: s.srcType,
+        url: s.url,
+        controls: s.controls,
+        width: s.width,
+        height: s.height,
+      })
+    )
+    .with({ block: 'equation' }, (s) =>
+      $createEquationNode(s.tex, s.inline ?? false)
+    )
     .with({ inline: 'linebreak' }, () => $createLineBreakNode())
     .with({ inline: 'equation' }, (s) => $createEquationNode(s.tex, true))
-    .with({ inline: 'date' }, (s) => $createDateMentionNode({ date: s.date, displayFormat: s.displayFormat ?? s.date }))
+    .with({ inline: 'date' }, (s) =>
+      $createDateMentionNode({
+        date: s.date,
+        displayFormat: s.displayFormat ?? s.date,
+      })
+    )
     .with({ inline: 'mention' }, (s) => {
       const m = s.mention;
-      if (m.kind === 'user') return $createUserMentionNode({ userId: m.userId, email: m.email });
-      if (m.kind === 'contact') return $createContactMentionNode({ contactId: m.contactId, name: m.name, emailOrDomain: m.emailOrDomain, isCompany: m.isCompany });
-      if (m.kind === 'group') return $createGroupMentionNode({ groupAlias: m.groupAlias });
-      return $createDocumentMentionNode({ documentId: m.documentId, documentName: m.documentName, blockName: m.blockName });
+      if (m.kind === 'user')
+        return $createUserMentionNode({ userId: m.userId, email: m.email });
+      if (m.kind === 'contact')
+        return $createContactMentionNode({
+          contactId: m.contactId,
+          name: m.name,
+          emailOrDomain: m.emailOrDomain,
+          isCompany: m.isCompany,
+        });
+      if (m.kind === 'group')
+        return $createGroupMentionNode({ groupAlias: m.groupAlias });
+      return $createDocumentMentionNode({
+        documentId: m.documentId,
+        documentName: m.documentName,
+        blockName: m.blockName,
+      });
     })
     .exhaustive();
 }

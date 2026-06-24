@@ -26,7 +26,9 @@ describe('serializeWithIds — block-level ids', () => {
     loadMarkdown(s, '# Title\n\nhello world');
     const out = serializeWithIds(s);
 
-    const lines = out.split('\n').filter((l) => l.replace(/^\d+ \| /, '').trim());
+    const lines = out
+      .split('\n')
+      .filter((l) => l.replace(/^\d+ \| /, '').trim());
     expect(lines[0]).toMatch(/# Title \{[A-Za-z0-9_-]+\|heading\}$/);
     expect(lines[1]).toMatch(/hello world \{[A-Za-z0-9_-]+\|paragraph\}$/);
   });
@@ -100,7 +102,10 @@ describe('serializeWithIds — block-level ids', () => {
 describe('serializeHeadings', () => {
   it('returns only heading lines', () => {
     const s = createEditingSession();
-    loadMarkdown(s, '# Title\n\nsome paragraph\n\n## Section\n\n- list item\n\n### Sub');
+    loadMarkdown(
+      s,
+      '# Title\n\nsome paragraph\n\n## Section\n\n- list item\n\n### Sub'
+    );
     const out = serializeHeadings(s);
     const lines = out.split('\n');
     expect(lines).toHaveLength(3);

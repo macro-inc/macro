@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { $getRoot, $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import {
+  $getRoot,
+  $isElementNode,
+  type ElementNode,
+  type LexicalNode,
+} from 'lexical';
 import { $isMarkNode } from '@lexical/mark';
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
@@ -62,7 +67,9 @@ describe('Doc — inline formatting (reuses ai-toolkit)', () => {
   it('formatText bolds every occurrence', () => {
     const { s, ids } = setup('the Bluejay and the Bluejay');
     new Doc(s).formatText(ids[0]!, 'Bluejay', 'bold', true, { all: true });
-    expect(plain(s)).toBe(`the **Bluejay** and the **Bluejay** {${ids[0]}|paragraph}`);
+    expect(plain(s)).toBe(
+      `the **Bluejay** and the **Bluejay** {${ids[0]}|paragraph}`
+    );
   });
 
   it('formatText off clears that format on a match', () => {
@@ -79,7 +86,8 @@ describe('Doc — inline formatting (reuses ai-toolkit)', () => {
       let found = false;
       const walk = (n: LexicalNode) => {
         if ($isMarkNode(n)) found = true;
-        if ('getChildren' in n) for (const c of (n as any).getChildren()) walk(c);
+        if ('getChildren' in n)
+          for (const c of (n as any).getChildren()) walk(c);
       };
       for (const c of $getRoot().getChildren()) walk(c);
       return found;
@@ -114,7 +122,13 @@ describe('Doc — block type & lists (id preservation)', () => {
   it('setChecked operates on a list item (addressed by its own id)', () => {
     const { s } = setup('- [ ] todo');
     // top-level id is the list; the AI addresses the *item* by its id.
-    const itemId = read(s, () => $getId(($getRoot().getFirstChild() as ElementNode).getFirstChild() as LexicalNode));
+    const itemId = read(s, () =>
+      $getId(
+        (
+          $getRoot().getFirstChild() as ElementNode
+        ).getFirstChild() as LexicalNode
+      )
+    );
     new Doc(s).setChecked(itemId!, true);
     expect(plain(s)).toContain('[x]');
   });
@@ -124,7 +138,11 @@ describe('Doc — structure & refs', () => {
   it('insertNode mints an id resolvable by a follow-up edit via its ref', () => {
     const { s, ids } = setup('first');
     const doc = new Doc(s);
-    doc.insertNode('ref-1', { block: 'paragraph', text: 'second' }, { after: ids[0]! });
+    doc.insertNode(
+      'ref-1',
+      { block: 'paragraph', text: 'second' },
+      { after: ids[0]! }
+    );
     doc.setText('ref-1', 'SECOND');
     const out = plain(s);
     expect(out).toContain('first');
@@ -141,7 +159,11 @@ describe('Doc — structure & refs', () => {
     // Mirrors how the animator builds a list: insert empty, then append + type.
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.insertNode(
+      'L',
+      { block: 'list', list: 'bullet', items: [] },
+      { after: ids[0]! }
+    );
     doc.appendListItem('L~li-0', 'L');
     doc.setText('L~li-0', 'first');
     doc.appendListItem('L~li-1', 'L');
@@ -159,7 +181,11 @@ describe('Doc — structure & refs', () => {
   it('insertListItemAfter/Before add same-kind siblings into an existing list', () => {
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.insertNode(
+      'L',
+      { block: 'list', list: 'bullet', items: [] },
+      { after: ids[0]! }
+    );
     doc.appendListItem('L~li-0', 'L');
     doc.setText('L~li-0', 'middle');
     doc.insertListItemAfter('after', 'L~li-0', 'last', 'bullet');
@@ -174,19 +200,29 @@ describe('Doc — structure & refs', () => {
   it('insertListItemAfter with a differing kind nests a sublist', () => {
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.insertNode(
+      'L',
+      { block: 'list', list: 'bullet', items: [] },
+      { after: ids[0]! }
+    );
     doc.appendListItem('L~li-0', 'L');
     doc.setText('L~li-0', 'bullet item');
     doc.insertListItemAfter('nested', 'L~li-0', 'numbered item', 'number');
     const xml = serializeWithXml(s);
     // The numbered item lives in an <ol> wrapped inside the bullet <ul>.
-    expect(xml).toMatch(/<ul[\s\S]*<ol[\s\S]*numbered item[\s\S]*<\/ol>[\s\S]*<\/ul>/);
+    expect(xml).toMatch(
+      /<ul[\s\S]*<ol[\s\S]*numbered item[\s\S]*<\/ol>[\s\S]*<\/ul>/
+    );
   });
 
   it('removeListItem drops a single item, keeping the rest', () => {
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('L', { block: 'list', list: 'bullet', items: [] }, { after: ids[0]! });
+    doc.insertNode(
+      'L',
+      { block: 'list', list: 'bullet', items: [] },
+      { after: ids[0]! }
+    );
     doc.appendListItem('L~li-0', 'L');
     doc.setText('L~li-0', 'keep');
     doc.insertListItemAfter('drop', 'L~li-0', 'drop', 'bullet');
@@ -204,7 +240,17 @@ describe('Doc — structure & refs', () => {
   it('insertNode then a table cell edit', () => {
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('t', { block: 'table', rows: [['A', 'B'], ['c', 'd']] }, { after: ids[0]! });
+    doc.insertNode(
+      't',
+      {
+        block: 'table',
+        rows: [
+          ['A', 'B'],
+          ['c', 'd'],
+        ],
+      },
+      { after: ids[0]! }
+    );
     doc.setCell('t', 1, 0, 'C');
     expect(plain(s)).toContain('C');
   });
@@ -232,7 +278,11 @@ describe('Doc — readers', () => {
   it('cellNode resolves a cell content id whose text we can measure', () => {
     const { s, ids } = setup('x');
     const doc = new Doc(s);
-    doc.insertNode('t', { block: 'table', rows: [['Head'], ['body']] }, { after: ids[0]! });
+    doc.insertNode(
+      't',
+      { block: 'table', rows: [['Head'], ['body']] },
+      { after: ids[0]! }
+    );
     const cell = doc.cellNode('t', 1, 0);
     expect(doc.textLength(cell)).toBe(4); // 'body'
   });
@@ -241,7 +291,9 @@ describe('Doc — readers', () => {
 describe('Doc — error surfacing', () => {
   it('an unknown id throws EditError (so the tool can report it)', () => {
     const { s } = setup('hi');
-    expect(() => new Doc(s).setText('nope', 'x')).toThrow(/No node with id|nope/);
+    expect(() => new Doc(s).setText('nope', 'x')).toThrow(
+      /No node with id|nope/
+    );
   });
 
   it('a failed edit leaves the document untouched', () => {
@@ -255,7 +307,11 @@ describe('Doc — error surfacing', () => {
 describe('applyEdit routing', () => {
   it('routes a structured Edit to the right DocWriter method', () => {
     const { s, ids } = setup('routed');
-    applyEdit(new Doc(s), { fn: 'setBlockType', node: ids[0]!, block: 'quote' });
+    applyEdit(new Doc(s), {
+      fn: 'setBlockType',
+      node: ids[0]!,
+      block: 'quote',
+    });
     expect(plain(s)).toBe(`> routed {${ids[0]}|quote}`);
   });
 });
@@ -307,7 +363,10 @@ describe('Doc.locate — within and across text nodes', () => {
   it('default scope {} returns only the FIRST occurrence', () => {
     const { s, ids } = setup('a a a');
     expect(new Doc(s).locate(ids[0]!, 'a', {})).toHaveLength(1);
-    expect(new Doc(s).locate(ids[0]!, 'a', {})[0]).toMatchObject({ start: 0, end: 1 });
+    expect(new Doc(s).locate(ids[0]!, 'a', {})[0]).toMatchObject({
+      start: 0,
+      end: 1,
+    });
   });
 
   it('scope { nth: 2 } returns only the 2nd', () => {
@@ -408,7 +467,10 @@ describe('Doc.removeText — slices and spans', () => {
 describe('Doc.insertInline — offset placement', () => {
   it('offset 0 inserts before the first run', () => {
     const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 0, { inline: 'date', date: '2026-01-01' });
+    new Doc(s).insertInline('r', ids[0]!, 0, {
+      inline: 'date',
+      date: '2026-01-01',
+    });
     const out = plain(s);
     expect(out.startsWith('2026-01-01 {')).toBe(true);
     expect(out).toContain('|date-mention}hello ');
@@ -424,7 +486,10 @@ describe('Doc.insertInline — offset placement', () => {
 
   it('offset at the end appends after the last run', () => {
     const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 5, { inline: 'date', date: '2026-01-01' });
+    new Doc(s).insertInline('r', ids[0]!, 5, {
+      inline: 'date',
+      date: '2026-01-01',
+    });
     const out = plain(s);
     expect(out.startsWith('hello2026-01-01 {')).toBe(true);
     expect(out).toContain('|date-mention}');
@@ -433,7 +498,10 @@ describe('Doc.insertInline — offset placement', () => {
 
   it('offset past the end also appends', () => {
     const { s, ids } = setup('hello');
-    new Doc(s).insertInline('r', ids[0]!, 99, { inline: 'date', date: '2026-01-01' });
+    new Doc(s).insertInline('r', ids[0]!, 99, {
+      inline: 'date',
+      date: '2026-01-01',
+    });
     expect(plain(s)).toContain('hello2026-01-01');
   });
 });
@@ -486,7 +554,11 @@ describe('Doc — ref resolution', () => {
   it('insertNode then setText/appendText/bold target the ref', () => {
     const { s, ids } = setup('first');
     const doc = new Doc(s);
-    doc.insertNode('ref-x', { block: 'paragraph', text: 'body' }, { after: ids[0]! });
+    doc.insertNode(
+      'ref-x',
+      { block: 'paragraph', text: 'body' },
+      { after: ids[0]! }
+    );
     doc.appendText('ref-x', '!');
     doc.formatText('ref-x', 'body', 'bold', true, { all: true });
     const out = plain(s);
@@ -519,7 +591,10 @@ describe('Doc — tables', () => {
   }
 
   it('setCell each cell of a 2x2 table', () => {
-    const { s, doc } = makeTable([['H1', 'H2'], ['a', 'b']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2'],
+      ['a', 'b'],
+    ]);
     doc.setCell('t', 0, 1, 'HX');
     doc.setCell('t', 1, 0, 'AA');
     doc.setCell('t', 1, 1, 'BB');
@@ -535,14 +610,20 @@ describe('Doc — tables', () => {
   });
 
   it('addRow appends a row with the right column count', () => {
-    const { s, doc } = makeTable([['H1', 'H2'], ['a', 'b']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2'],
+      ['a', 'b'],
+    ]);
     doc.addRow('t');
     const cols = rowCellCounts(s);
     expect(cols).toEqual([2, 2, 2]); // 3 rows, all 2 cols
   });
 
   it('addRow at an index inserts before that row', () => {
-    const { s, doc } = makeTable([['H1', 'H2'], ['a', 'b']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2'],
+      ['a', 'b'],
+    ]);
     doc.addRow('t', 1); // before the body row
     doc.setCell('t', 1, 0, 'mid');
     expect(plain(s)).toContain('| mid |');
@@ -550,26 +631,39 @@ describe('Doc — tables', () => {
   });
 
   it('addColumn gives every row a new cell; the header-row cell is a header', () => {
-    const { s, doc } = makeTable([['H1', 'H2'], ['a', 'b']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2'],
+      ['a', 'b'],
+    ]);
     doc.addColumn('t');
     expect(rowCellCounts(s)).toEqual([3, 3]);
     // header row's new cell is a header cell
     const headerStates = read(s, () => {
       const rows = tableRows(s);
-      return rows[0]!.getChildren().filter($isTableCellNode).map((c) => c.getHeaderStyles());
+      return rows[0]!
+        .getChildren()
+        .filter($isTableCellNode)
+        .map((c) => c.getHeaderStyles());
     });
     expect(headerStates.at(-1)).not.toBe(0); // header bit set on the appended header cell
   });
 
   it('removeRow drops a row', () => {
-    const { s, doc } = makeTable([['H1', 'H2'], ['a', 'b'], ['c', 'd']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2'],
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
     doc.removeRow('t', 2); // drop the 'c d' row
     expect(rowCellCounts(s)).toHaveLength(2);
     expect(plain(s)).not.toContain('| c | d |');
   });
 
   it('removeColumn drops the column from every row', () => {
-    const { s, doc } = makeTable([['H1', 'H2', 'H3'], ['a', 'b', 'c']]);
+    const { s, doc } = makeTable([
+      ['H1', 'H2', 'H3'],
+      ['a', 'b', 'c'],
+    ]);
     doc.removeColumn('t', 1); // drop the middle column
     expect(rowCellCounts(s)).toEqual([2, 2]);
     const out = plain(s);
@@ -615,7 +709,9 @@ describe('buildNode — each spec builds the right node type', () => {
     ['list', { block: 'list', list: 'bullet', items: ['x'] }, 'list'],
     ['table', { block: 'table', rows: [['A']] }, 'table'],
   ];
-  it.each(elementBlocks)('%s builds an ElementNode of the right type', (_label, spec, type) => {
+  it.each(
+    elementBlocks
+  )('%s builds an ElementNode of the right type', (_label, spec, type) => {
     const { s } = setup('x');
     edit(s, () => {
       const n = buildNode(spec);
@@ -626,14 +722,20 @@ describe('buildNode — each spec builds the right node type', () => {
 
   const decoratorBlocks: Array<[string, any, string]> = [
     ['divider', { block: 'divider' }, 'horizontalrule'],
-    ['image', { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' }, 'image'],
+    [
+      'image',
+      { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
+      'image',
+    ],
     ['video', { block: 'video', srcType: 'url', url: 'http://v' }, 'video'],
     ['equation block', { block: 'equation', tex: 'x^2' }, 'equation'],
     ['linebreak inline', { inline: 'linebreak' }, 'linebreak'],
     ['equation inline', { inline: 'equation', tex: 'y' }, 'equation'],
     ['date inline', { inline: 'date', date: '2026-01-01' }, 'date-mention'],
   ];
-  it.each(decoratorBlocks)('%s builds the right node type (non-element)', (_label, spec, type) => {
+  it.each(
+    decoratorBlocks
+  )('%s builds the right node type (non-element)', (_label, spec, type) => {
     const { s } = setup('x');
     edit(s, () => {
       const n = buildNode(spec);
@@ -644,8 +746,18 @@ describe('buildNode — each spec builds the right node type', () => {
   it('mention spec builds the right node types', () => {
     const { s } = setup('x');
     edit(s, () => {
-      expect(buildNode({ inline: 'mention', mention: { kind: 'group', groupAlias: 'g' } }).getType()).toBe('group-mention');
-      expect(buildNode({ inline: 'mention', mention: { kind: 'user', userId: 'u1', email: 'a@b.com' } }).getType()).toBe('user-mention');
+      expect(
+        buildNode({
+          inline: 'mention',
+          mention: { kind: 'group', groupAlias: 'g' },
+        }).getType()
+      ).toBe('group-mention');
+      expect(
+        buildNode({
+          inline: 'mention',
+          mention: { kind: 'user', userId: 'u1', email: 'a@b.com' },
+        }).getType()
+      ).toBe('user-mention');
     });
   });
 });
@@ -653,7 +765,11 @@ describe('buildNode — each spec builds the right node type', () => {
 describe('buildNode — list spec serializes plausibly when placed', () => {
   it('inserting a bullet list block serializes its items', () => {
     const { s, ids } = setup('intro');
-    new Doc(s).insertNode('l', { block: 'list', list: 'bullet', items: ['one', 'two'] }, { after: ids[0]! });
+    new Doc(s).insertNode(
+      'l',
+      { block: 'list', list: 'bullet', items: ['one', 'two'] },
+      { after: ids[0]! }
+    );
     const out = plain(s);
     expect(out).toContain('- one');
     expect(out).toContain('- two');
@@ -661,7 +777,11 @@ describe('buildNode — list spec serializes plausibly when placed', () => {
 
   it('inserting a code block serializes its language fence and text', () => {
     const { s, ids } = setup('intro');
-    new Doc(s).insertNode('c', { block: 'code', language: 'ts', text: 'const a=1' }, { after: ids[0]! });
+    new Doc(s).insertNode(
+      'c',
+      { block: 'code', language: 'ts', text: 'const a=1' },
+      { after: ids[0]! }
+    );
     expect(plain(s)).toContain('const a=1');
   });
 
@@ -684,24 +804,40 @@ describe('Doc.insertNode — block decorator specs', () => {
   it('inserts a divider after a block', () => {
     const { s, ids } = setup('x');
     const before = rootCount(s);
-    expect(() => new Doc(s).insertNode('d', { block: 'divider' }, { after: ids[0]! })).not.toThrow();
+    expect(() =>
+      new Doc(s).insertNode('d', { block: 'divider' }, { after: ids[0]! })
+    ).not.toThrow();
     expect(rootCount(s)).toBe(before + 1);
   });
   it('inserts a block image after a block', () => {
     const { s, ids } = setup('x');
     const before = rootCount(s);
-    expect(() => new Doc(s).insertNode('i', { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' }, { after: ids[0]! })).not.toThrow();
+    expect(() =>
+      new Doc(s).insertNode(
+        'i',
+        { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
+        { after: ids[0]! }
+      )
+    ).not.toThrow();
     expect(rootCount(s)).toBe(before + 1);
   });
   it('inserts a block equation after a block', () => {
     const { s, ids } = setup('x');
     const before = rootCount(s);
-    expect(() => new Doc(s).insertNode('e', { block: 'equation', tex: 'x^2' }, { after: ids[0]! })).not.toThrow();
+    expect(() =>
+      new Doc(s).insertNode(
+        'e',
+        { block: 'equation', tex: 'x^2' },
+        { after: ids[0]! }
+      )
+    ).not.toThrow();
     expect(rootCount(s)).toBe(before + 1);
   });
   it('still rejects a genuinely inline spec', () => {
     const { s, ids } = setup('x');
-    expect(() => new Doc(s).insertNode('lb', { inline: 'linebreak' }, { after: ids[0]! })).toThrow(/block spec/);
+    expect(() =>
+      new Doc(s).insertNode('lb', { inline: 'linebreak' }, { after: ids[0]! })
+    ).toThrow(/block spec/);
   });
 });
 
@@ -711,7 +847,9 @@ describe('Doc — error surfacing & atomicity', () => {
   it('a failed insert (unknown anchor) leaves the doc untouched', () => {
     const { s, ids } = setup('safe');
     const doc = new Doc(s);
-    expect(() => doc.insertNode('r', { block: 'paragraph', text: 'x' }, { after: 'ghost' })).toThrow();
+    expect(() =>
+      doc.insertNode('r', { block: 'paragraph', text: 'x' }, { after: 'ghost' })
+    ).toThrow();
     expect(plain(s)).toBe(`safe {${ids[0]}|paragraph}`);
   });
 
@@ -725,7 +863,17 @@ describe('Doc — error surfacing & atomicity', () => {
   it('a failed setCell leaves the table untouched', () => {
     const { s, ids } = setup('intro');
     const doc = new Doc(s);
-    doc.insertNode('t', { block: 'table', rows: [['A', 'B'], ['c', 'd']] }, { after: ids[0]! });
+    doc.insertNode(
+      't',
+      {
+        block: 'table',
+        rows: [
+          ['A', 'B'],
+          ['c', 'd'],
+        ],
+      },
+      { after: ids[0]! }
+    );
     const before = plain(s);
     expect(() => doc.setCell('t', 9, 9, 'x')).toThrow();
     expect(plain(s)).toBe(before);

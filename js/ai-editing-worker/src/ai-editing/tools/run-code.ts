@@ -24,7 +24,7 @@ export type RunCodeToolOptions = {
 export function createRunCodeTool(opts: RunCodeToolOptions) {
   return tool({
     description:
-      'Run JS statements against `editor` (the ONLY in-scope value) to edit the document — e.g. `editor.convertToHeading(\'b3\', 2); editor.bold(\'b5\', \'word\')`. Returns `ok`, or an error naming a bad id so you can retry.',
+      "Run JS statements against `editor` (the ONLY in-scope value) to edit the document — e.g. `editor.convertToHeading('b3', 2); editor.bold('b5', 'word')`. Returns `ok`, or an error naming a bad id so you can retry.",
     inputSchema: z.object({ code: z.string() }),
     execute: async ({ code }) => {
       const result = await runEditorCode({

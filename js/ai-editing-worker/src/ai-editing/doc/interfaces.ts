@@ -36,13 +36,28 @@ export interface DocWriter {
   appendText(node: NodeRef, text: string): void;
   prependText(node: NodeRef, text: string): void;
   replaceText(node: NodeRef, find: string, to: string, scope: Scope): void;
-  formatText(node: NodeRef, match: string, format: Format, on: boolean, scope: Scope): void;
+  formatText(
+    node: NodeRef,
+    match: string,
+    format: Format,
+    on: boolean,
+    scope: Scope
+  ): void;
   clearFormat(node: NodeRef, match: string | undefined, scope: Scope): void;
   markText(node: NodeRef, match: string, on: boolean, scope: Scope): void;
-  linkText(node: NodeRef, match: string, url: string | null, scope: Scope): void;
+  linkText(
+    node: NodeRef,
+    match: string,
+    url: string | null,
+    scope: Scope
+  ): void;
   formatNode(node: NodeRef, format: Format, on: boolean): void;
   clearNodeFormat(node: NodeRef): void;
-  setBlockType(node: NodeRef, block: BlockType, opts: { level?: number; language?: string }): void;
+  setBlockType(
+    node: NodeRef,
+    block: BlockType,
+    opts: { level?: number; language?: string }
+  ): void;
   setEquation(node: NodeRef, tex: string): void;
   setListType(nodes: NodeRef[], list: ListKind): void;
   /** Append an empty list item to `node` (a list) and bind `ref` to it, so the
@@ -57,8 +72,18 @@ export interface DocWriter {
   removeNode(node: NodeRef): void;
   mergeBlocks(nodes: NodeRef[], separator: string): void;
   splitBlock(node: NodeRef, atText: string): void;
-  insertListItemAfter(ref: string, node: NodeRef, text: string, list: ListKind): void;
-  insertListItemBefore(ref: string, node: NodeRef, text: string, list: ListKind): void;
+  insertListItemAfter(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    list: ListKind
+  ): void;
+  insertListItemBefore(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    list: ListKind
+  ): void;
   removeListItem(node: NodeRef): void;
   setCell(table: NodeRef, row: number, col: number, text: string): void;
   addRow(table: NodeRef, at?: number): void;

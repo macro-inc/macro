@@ -1,33 +1,36 @@
+import { generateText, stepCountIs } from 'ai';
+import type { ResolvedModels } from '../../run-edit';
+import type { Session } from '../ai-toolkit';
+import type { AwarenessSource } from '../awareness/awareness-source';
+import { type Peer, sharedPeerPool } from '../awareness/peer-pool';
+import { Doc } from '../doc/doc';
+import type { DocumentOp } from '../editor/ops';
+import API_COMPACT from '../prompts/API_COMPACT.md';
+import INTERPRET from '../prompts/INTERPRET.md';
 import SHARED from '../prompts/SHARED.md';
 import SUPERVISOR from '../prompts/SUPERVISOR.md';
-import INTERPRET from '../prompts/INTERPRET.md';
-import API_COMPACT from '../prompts/API_COMPACT.md';
-import { generateText, stepCountIs } from 'ai';
-import { type Session } from '../ai-toolkit';
-import type { AwarenessSource } from '../awareness/awareness-source';
-import { sharedPeerPool, type Peer } from '../awareness/peer-pool';
-import { Doc } from '../doc/doc';
 import type { DocumentOpQueueParams } from '../queue/types';
-import type { RunCodeToolOptions } from '../tools/run-code';
-import type { DocumentOp } from '../editor/ops';
-import { numberLines, serializeWithIds, serializeWithXml } from '../utils';
 import { TokenTracker } from '../token-tracker';
-import { type Writer, createDispatchTool } from '../tools/dispatch';
+import { createDispatchTool, type Writer } from '../tools/dispatch';
+import type { RunCodeToolOptions } from '../tools/run-code';
 import { createSearchContactsTool } from '../tools/search-contacts';
-import { interpret } from './interpreter';
+import { numberLines, serializeWithIds, serializeWithXml } from '../utils';
 import { runTask } from './coder';
-import type { ResolvedModels } from '../../run-edit';
+import { interpret } from './interpreter';
 
 const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}\n${API_COMPACT}`;
 const INTERPRET_SYSTEM = `${SHARED}\n${INTERPRET}`;
 
-async function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export type ContactResult =
   | { kind: 'user'; userId: string; email: string; name?: string }
-  | { kind: 'contact'; contactId: string; name: string; emailOrDomain: string; isCompany: boolean };
+  | {
+      kind: 'contact';
+      contactId: string;
+      name: string;
+      emailOrDomain: string;
+      isCompany: boolean;
+    };
 
 export type SearchContacts = (query: string) => Promise<ContactResult[]>;
 
@@ -52,9 +55,16 @@ export type RunAgentOptions = {
   onOps?: (ops: DocumentOp[]) => void;
 };
 
-export async function runAgent(s: Session, request: string, models: ResolvedModels, opts: RunAgentOptions) {
+export async function runAgent(
+  s: Session,
+  request: string,
+  models: ResolvedModels,
+  opts: RunAgentOptions
+) {
   const serialize =
-    opts.docFormat === 'markdown' ? serializeWithIds : (sess: Session) => numberLines(serializeWithXml(sess));
+    opts.docFormat === 'markdown'
+      ? serializeWithIds
+      : (sess: Session) => numberLines(serializeWithXml(sess));
   const tracker = new TokenTracker();
   const doc = new Doc(s, opts.propagate);
 
@@ -81,11 +91,19 @@ export async function runAgent(s: Session, request: string, models: ResolvedMode
 
   let intent = '';
   if (opts.interpret) {
-    const interpretation = await interpret(docContext, request, models.interpret, INTERPRET_SYSTEM);
-    tracker.add(models.interpret as { modelId: string }, interpretation.totalUsage);
+    const interpretation = await interpret(
+      docContext,
+      request,
+      models.interpret,
+      INTERPRET_SYSTEM
+    );
+    tracker.add(
+      models.interpret as { modelId: string },
+      interpretation.totalUsage
+    );
     intent = interpretation.text;
     console.log(`\n[intent]\n${intent}`);
-    await delay(300);
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
   const tools = {
@@ -119,7 +137,12 @@ export async function runAgent(s: Session, request: string, models: ResolvedMode
       abortSignal: opts.signal,
     });
     tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
-    return { text: result.text || 'Applied edits.', totalUsage: tracker, steps: result.steps, intent };
+    return {
+      text: result.text || 'Applied edits.',
+      totalUsage: tracker,
+      steps: result.steps,
+      intent,
+    };
   } finally {
     // Safety net: per-writer .finally(release) is the primary path; clean up
     // anything still outstanding (e.g. on abort/throw).

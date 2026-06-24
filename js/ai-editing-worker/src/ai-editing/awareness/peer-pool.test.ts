@@ -7,7 +7,11 @@ const colors = ['red', 'green'];
 describe('PeerPool', () => {
   it('borrowing N peers yields N distinct names', async () => {
     const pool = new PeerPool({ names, colors });
-    const peers = await Promise.all([pool.borrow(), pool.borrow(), pool.borrow()]);
+    const peers = await Promise.all([
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+    ]);
     expect(new Set(peers.map((p) => p.name)).size).toBe(3);
     expect(peers.map((p) => p.name).sort()).toEqual(['A', 'B', 'C']);
     expect(pool.outstanding).toBe(3);
@@ -26,7 +30,13 @@ describe('PeerPool', () => {
 
   it('grows with still-unique names when the base list is exhausted', async () => {
     const pool = new PeerPool({ names, colors, max: 5 });
-    const peers = await Promise.all([pool.borrow(), pool.borrow(), pool.borrow(), pool.borrow(), pool.borrow()]);
+    const peers = await Promise.all([
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+    ]);
     expect(new Set(peers.map((p) => p.name)).size).toBe(5);
     expect(pool.outstanding).toBe(5);
   });
@@ -93,7 +103,11 @@ describe('PeerPool', () => {
 
   it('defaults max to 3', async () => {
     const pool = new PeerPool({ names: ['A', 'B', 'C', 'D'], colors });
-    const three = await Promise.all([pool.borrow(), pool.borrow(), pool.borrow()]);
+    const three = await Promise.all([
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+    ]);
     expect(pool.outstanding).toBe(3);
 
     const fourth = pool.borrow(); // blocks: no slot is free

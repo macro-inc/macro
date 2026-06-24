@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createEditingSession, loadSnapshot, toSnapshot } from './session';
-import { serializedWithoutLinePrefix, setup, topLevelIds } from './_test-helpers';
+import {
+  serializedWithoutLinePrefix,
+  setup,
+  topLevelIds,
+} from './_test-helpers';
 
 describe('session / IO', () => {
   it('loadMarkdown + serializeWithIds appends one {id} per top-level block', () => {
@@ -29,6 +33,8 @@ describe('session / IO', () => {
     const s2 = createEditingSession();
     loadSnapshot(s2, snap);
     expect(topLevelIds(s2)).toEqual(ids);
-    expect(serializedWithoutLinePrefix(s2)).toBe(serializedWithoutLinePrefix(s));
+    expect(serializedWithoutLinePrefix(s2)).toBe(
+      serializedWithoutLinePrefix(s)
+    );
   });
 });

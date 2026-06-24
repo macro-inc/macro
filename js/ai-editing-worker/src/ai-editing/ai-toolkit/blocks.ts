@@ -16,7 +16,11 @@ import {
   type TextNode,
 } from 'lexical';
 import { match } from 'ts-pattern';
-import { $getId, $setId, type NodeIdMappings } from '../../../../lexical-core/plugins/nodeIdPlugin';
+import {
+  $getId,
+  $setId,
+  type NodeIdMappings,
+} from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { $isCustomCodeNode } from '../../../../lexical-core/nodes/CustomCodeNode';
 import type { Session } from './session';
 import { collectTextNodes } from './tree';
@@ -29,7 +33,11 @@ export type BlockData =
 
 export type BlockType = BlockData['type'];
 
-function $transferId(node: LexicalNode, id: string, mappings: NodeIdMappings): void {
+function $transferId(
+  node: LexicalNode,
+  id: string,
+  mappings: NodeIdMappings
+): void {
   $setId(node, id);
   mappings.idToNodeKeyMap.set(id, node.getKey());
   mappings.nodeKeyToIdMap.set(node.getKey(), id);
@@ -39,7 +47,9 @@ function $transferId(node: LexicalNode, id: string, mappings: NodeIdMappings): v
 export function $blockNode(data: BlockData): ElementNode {
   return match(data)
     .returnType<ElementNode>()
-    .with({ type: 'heading' }, (d) => $createHeadingNode(`h${d.level}` as HeadingTagType))
+    .with({ type: 'heading' }, (d) =>
+      $createHeadingNode(`h${d.level}` as HeadingTagType)
+    )
     .with({ type: 'quote' }, () => $createQuoteNode())
     .with({ type: 'code' }, (d) => $createCodeNode(d.language))
     .with({ type: 'paragraph' }, () => $createParagraphNode())
@@ -282,7 +292,8 @@ function cloneEmptyBlock(block: ElementNode): ElementNode {
     return $createQuoteNode();
   }
   if (type === 'code' || type === 'custom-code') {
-    const lang = (block as ReturnType<typeof $createCodeNode>).getLanguage() ?? undefined;
+    const lang =
+      (block as ReturnType<typeof $createCodeNode>).getLanguage() ?? undefined;
     return $createCodeNode(lang);
   }
   return $createParagraphNode();

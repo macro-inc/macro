@@ -7,19 +7,53 @@
  * cursor at the offset, and sends. Each writer gets its own source (distinct
  * name + color → distinct peer → distinct cursor).
  */
-import { EphemeralStore, type Container, type LoroDoc, type LoroMap, type LoroText } from 'loro-crdt';
+import {
+  EphemeralStore,
+  type Container,
+  type LoroDoc,
+  type LoroMap,
+  type LoroText,
+} from 'loro-crdt';
 import { match } from 'ts-pattern';
 import type { Mirror } from '@loro-mirror/packages/core/src';
 import type { MarkdownLoroSchemaType } from '../../../../lexical-core/markdown-loro-schema';
 import type { Awareness } from '../queue/types';
 
 export const AI_NAMES = [
-  'Sam', 'Alex', 'Jordan', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Drew', 'Taylor', 'Avery',
-  'Reese', 'Skyler', 'Rowan', 'Emerson', 'Finley', 'Hayden', 'Parker', 'Sawyer', 'Blake', 'Cameron',
-  'Dakota', 'Elliot', 'Harper', 'Kai',
+  'Sam',
+  'Alex',
+  'Jordan',
+  'Morgan',
+  'Casey',
+  'Riley',
+  'Quinn',
+  'Drew',
+  'Taylor',
+  'Avery',
+  'Reese',
+  'Skyler',
+  'Rowan',
+  'Emerson',
+  'Finley',
+  'Hayden',
+  'Parker',
+  'Sawyer',
+  'Blake',
+  'Cameron',
+  'Dakota',
+  'Elliot',
+  'Harper',
+  'Kai',
 ].map((n) => `${n} (AI)`);
 /** Palette names must resolve to `--color-<name>` (see collaboration/color.ts). */
-export const COLORS = ['accent-210', 'accent-30', 'accent-90', 'accent-150', 'accent-270', 'accent-330'];
+export const COLORS = [
+  'accent-210',
+  'accent-30',
+  'accent-90',
+  'accent-150',
+  'accent-270',
+  'accent-330',
+];
 
 /** How long the cursor lingers after a writer finishes before it disappears. */
 const LINGER_MS = 700;
@@ -32,7 +66,11 @@ export interface AwarenessSource {
 /** Records every applied `Awareness` and never touches Loro — for tests. */
 export function mockAwarenessSource(): AwarenessSource & { seen: Awareness[] } {
   const seen: Awareness[] = [];
-  return { seen, apply: (x) => void seen.push(x), clear: () => void (seen.length = 0) };
+  return {
+    seen,
+    apply: (x) => void seen.push(x),
+    clear: () => void (seen.length = 0),
+  };
 }
 
 type EncodedCursorPoint = { nodeId: string; cursor: Uint8Array };
@@ -49,14 +87,21 @@ export type RealAwarenessOptions = {
   color: string;
 };
 
-export function realAwarenessSource(opts: RealAwarenessOptions): AwarenessSource {
+export function realAwarenessSource(
+  opts: RealAwarenessOptions
+): AwarenessSource {
   const { mirror, doc, send, name, color } = opts;
   const store = new EphemeralStore<Record<string, AwarenessPayload>>(30_000);
   const peerKey = crypto.randomUUID();
   let lingerTimer: ReturnType<typeof setTimeout> | null = null;
   let shown = false;
 
-  function setRange(nodeId: string, text: LoroText, a: number, b: number): void {
+  function setRange(
+    nodeId: string,
+    text: LoroText,
+    a: number,
+    b: number
+  ): void {
     if (lingerTimer) {
       clearTimeout(lingerTimer);
       lingerTimer = null;
@@ -84,8 +129,12 @@ export function realAwarenessSource(opts: RealAwarenessOptions): AwarenessSource
     if (!owner) return;
     const { text, nodeId: ownerNodeId } = owner;
     match(x)
-      .with({ type: 'cursor' }, ({ at = 0 }) => setRange(ownerNodeId, text, at, at))
-      .with({ type: 'highlight' }, ({ span }) => setRange(ownerNodeId, text, span?.start ?? 0, span?.end ?? text.length))
+      .with({ type: 'cursor' }, ({ at = 0 }) =>
+        setRange(ownerNodeId, text, at, at)
+      )
+      .with({ type: 'highlight' }, ({ span }) =>
+        setRange(ownerNodeId, text, span?.start ?? 0, span?.end ?? text.length)
+      )
       .exhaustive();
   }
 
@@ -147,11 +196,15 @@ export function resolveTextOwner(
 function ownText(c: LoroMap): { text: LoroText; nodeId: string } | null {
   const text = c.get('text');
   const nodeId = containerId(c);
-  return text?.kind?.() === 'Text' && nodeId ? { text: text as LoroText, nodeId } : null;
+  return text?.kind?.() === 'Text' && nodeId
+    ? { text: text as LoroText, nodeId }
+    : null;
 }
 
 /** First descendant (DFS) that directly owns a LoroText. */
-function firstDescendantText(c: LoroMap): { text: LoroText; nodeId: string } | null {
+function firstDescendantText(
+  c: LoroMap
+): { text: LoroText; nodeId: string } | null {
   const children = c.get('children');
   if (!children || typeof children.toArray !== 'function') return null;
   for (const child of children.toArray()) {

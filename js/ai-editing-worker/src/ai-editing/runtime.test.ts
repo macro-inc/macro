@@ -17,7 +17,10 @@ import { serializeWithIds } from './utils';
 import type { Session } from './ai-toolkit/session';
 
 function plain(s: Session): string {
-  return serializeWithIds(s).split('\n').map((l) => l.replace(/^\d+ \| /, '')).join('\n');
+  return serializeWithIds(s)
+    .split('\n')
+    .map((l) => l.replace(/^\d+ \| /, ''))
+    .join('\n');
 }
 
 function build(md: string): { s: Session; ids: string[] } {
@@ -29,7 +32,11 @@ function build(md: string): { s: Session; ids: string[] } {
 
 /** Top-level block ids in document order. */
 function topIds(s: Session): string[] {
-  return s.editor.getEditorState().read(() => $getRoot().getChildren().map((c) => $getId(c) ?? '?'));
+  return s.editor.getEditorState().read(() =>
+    $getRoot()
+      .getChildren()
+      .map((c) => $getId(c) ?? '?')
+  );
 }
 
 /** Run a snippet end-to-end (editor → ops → queue → real Doc), no timers/awareness delay. */
@@ -48,7 +55,10 @@ describe('runtime — end to end against real Lexical', () => {
   it('applies a multi-op snippet and returns compact success output', async () => {
     const { s } = build('Notes\n\nthe Bluejay launched');
     const [h, p] = topIds(s);
-    const summary = await runCode(s, `editor.convertToHeading('${h}', 2); editor.bold('${p}', 'Bluejay');`);
+    const summary = await runCode(
+      s,
+      `editor.convertToHeading('${h}', 2); editor.bold('${p}', 'Bluejay');`
+    );
     expect(summary).toBe('ok');
     const out = plain(s);
     expect(out).toContain('## Notes');
@@ -57,7 +67,10 @@ describe('runtime — end to end against real Lexical', () => {
 
   it('types new content char-by-char into a created block (ref resolves)', async () => {
     const { s, ids } = build('first');
-    const summary = await runCode(s, `const p = editor.insertParagraphAfter('${ids[0]}', 'hello'); editor.bold(p, 'hello');`);
+    const summary = await runCode(
+      s,
+      `const p = editor.insertParagraphAfter('${ids[0]}', 'hello'); editor.bold(p, 'hello');`
+    );
     expect(summary).toBe('ok');
     expect(plain(s)).toContain('**hello**');
   });
@@ -78,7 +91,10 @@ describe('runtime — end to end against real Lexical', () => {
     const { s } = build('alpha\n\nbeta');
     const [alpha, beta] = topIds(s);
     // first op fails (setCell on a non-table block); the heading op still applies.
-    const summary = await runCode(s, `editor.setCell('${alpha}', 9, 9, 'x'); editor.convertToHeading('${beta}', 3);`);
+    const summary = await runCode(
+      s,
+      `editor.setCell('${alpha}', 9, 9, 'x'); editor.convertToHeading('${beta}', 3);`
+    );
     expect(summary).toBe('error: setCell: no enclosing table');
     expect(plain(s)).toContain('### beta');
   });

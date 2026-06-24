@@ -44,8 +44,22 @@ export type NodeSpec =
   | { block: 'list'; list: ListKind; items: string[] }
   | { block: 'table'; rows: string[][] } // row 0 is the header
   | { block: 'divider' }
-  | { block: 'image'; srcType: string; url: string; alt?: string; width?: number; height?: number }
-  | { block: 'video'; srcType: string; url: string; controls?: boolean; width?: number; height?: number }
+  | {
+      block: 'image';
+      srcType: string;
+      url: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    }
+  | {
+      block: 'video';
+      srcType: string;
+      url: string;
+      controls?: boolean;
+      width?: number;
+      height?: number;
+    }
   | { block: 'equation'; tex: string; inline?: boolean }
   | { inline: 'linebreak' }
   | { inline: 'equation'; tex: string }
@@ -57,27 +71,57 @@ export type ListKind = 'bullet' | 'number' | 'check';
 /** Entity-mention specs. The supervisor resolves names to ids via `searchContacts`. */
 export type MentionSpec =
   | { kind: 'user'; userId: string; email: string }
-  | { kind: 'contact'; contactId: string; name: string; emailOrDomain: string; isCompany: boolean }
+  | {
+      kind: 'contact';
+      contactId: string;
+      name: string;
+      emailOrDomain: string;
+      isCompany: boolean;
+    }
   | { kind: 'group'; groupAlias: string }
-  | { kind: 'document'; documentId: string; documentName: string; blockName: string };
+  | {
+      kind: 'document';
+      documentId: string;
+      documentName: string;
+      blockName: string;
+    };
 
 /** Block-type targets for `setBlockType`. */
 export type BlockType = 'paragraph' | 'heading' | 'quote' | 'code';
 
 /** The canonical op set. Many `DocumentEditor` methods map onto each kind. */
 export type DocumentOp =
-  | { kind: 'formatText'; id: NodeId; match: string; format: Format; on: boolean; scope: Scope }
+  | {
+      kind: 'formatText';
+      id: NodeId;
+      match: string;
+      format: Format;
+      on: boolean;
+      scope: Scope;
+    }
   | { kind: 'clearFormat'; id: NodeId; match?: string; scope: Scope } // match omitted = whole block
   | { kind: 'formatNode'; textId: NodeId; format: Format; on: boolean }
   | { kind: 'clearNodeFormat'; textId: NodeId }
   | { kind: 'markText'; id: NodeId; match: string; on: boolean; scope: Scope }
-  | { kind: 'linkText'; id: NodeId; match: string; url: string | null; scope: Scope }
+  | {
+      kind: 'linkText';
+      id: NodeId;
+      match: string;
+      url: string | null;
+      scope: Scope;
+    }
   | { kind: 'setText'; id: NodeId; text: string }
   | { kind: 'setEquation'; id: NodeId; tex: string }
   | { kind: 'replaceText'; id: NodeId; find: string; to: string; scope: Scope }
   | { kind: 'appendText'; id: NodeId; text: string }
   | { kind: 'prependText'; id: NodeId; text: string }
-  | { kind: 'setBlockType'; id: NodeId; block: BlockType; level?: number; language?: string }
+  | {
+      kind: 'setBlockType';
+      id: NodeId;
+      block: BlockType;
+      level?: number;
+      language?: string;
+    }
   | { kind: 'setListType'; ids: NodeId[]; list: ListKind }
   | { kind: 'setChecked'; id: NodeId; checked: boolean }
   | { kind: 'setIndent'; id: NodeId; indent: number | 'in' | 'out' }
@@ -88,10 +132,28 @@ export type DocumentOp =
   | { kind: 'removeBlock'; id: NodeId }
   | { kind: 'mergeBlocks'; ids: NodeId[]; separator: string }
   | { kind: 'splitBlock'; id: NodeId; atText: string }
-  | { kind: 'insertListItemAfter'; ref: Ref; id: NodeId; text: string; list: ListKind }
-  | { kind: 'insertListItemBefore'; ref: Ref; id: NodeId; text: string; list: ListKind }
+  | {
+      kind: 'insertListItemAfter';
+      ref: Ref;
+      id: NodeId;
+      text: string;
+      list: ListKind;
+    }
+  | {
+      kind: 'insertListItemBefore';
+      ref: Ref;
+      id: NodeId;
+      text: string;
+      list: ListKind;
+    }
   | { kind: 'removeListItem'; id: NodeId }
-  | { kind: 'setCell'; table: NodeId; row: number; col: number; content: string }
+  | {
+      kind: 'setCell';
+      table: NodeId;
+      row: number;
+      col: number;
+      content: string;
+    }
   | { kind: 'addRow'; table: NodeId; at?: number }
   | { kind: 'addColumn'; table: NodeId; at?: number }
   | { kind: 'removeRow'; table: NodeId; row: number }

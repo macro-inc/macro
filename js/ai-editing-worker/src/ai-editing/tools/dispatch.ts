@@ -11,11 +11,33 @@ export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
 import { TokenTracker } from '../token-tracker';
 
-type BlockedReport = { reason: string; suggestedContext?: { start_line: number; end_line: number } };
-type ContextRange = { startLine: number; endLine: number; rootIds: string[]; ids: string[]; source: 'ids' | 'full-document' };
+type BlockedReport = {
+  reason: string;
+  suggestedContext?: { start_line: number; end_line: number };
+};
+type ContextRange = {
+  startLine: number;
+  endLine: number;
+  rootIds: string[];
+  ids: string[];
+  source: 'ids' | 'full-document';
+};
 
 const ID_PATTERN = /[A-Za-z0-9_-]{6,}/g;
-const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'li', 'table', 'ul', 'ol']);
+const BLOCK_TAGS = new Set([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'blockquote',
+  'li',
+  'table',
+  'ul',
+  'ol',
+]);
 const CONTAINER_TAGS = new Set(['table', 'ul', 'ol']);
 
 type XmlNodeRange = {
@@ -27,7 +49,9 @@ type XmlNodeRange = {
 };
 
 /** Pull a writer's `reportBlocked` payload out of its run, if it bailed. */
-function findBlocked(res: Awaited<ReturnType<typeof import('../agents/coder').runTask>>): BlockedReport | null {
+function findBlocked(
+  res: Awaited<ReturnType<typeof import('../agents/coder').runTask>>
+): BlockedReport | null {
   for (const step of res.steps) {
     for (const call of step.toolCalls) {
       if (call.toolName === 'reportBlocked') return call.input as BlockedReport;
@@ -47,7 +71,10 @@ function mergeRanges(ranges: Array<[number, number]>): Array<[number, number]> {
   return merged;
 }
 
-function indexXmlRanges(xml: string): { lines: string[]; byId: Map<string, XmlNodeRange> } {
+function indexXmlRanges(xml: string): {
+  lines: string[];
+  byId: Map<string, XmlNodeRange>;
+} {
   const lines = xml.split('\n');
   const byId = new Map<string, XmlNodeRange>();
   const stack: XmlNodeRange[] = [];
@@ -104,10 +131,14 @@ function containingRoot(node: XmlNodeRange): XmlNodeRange {
 
 function computeContextRange(xml: string, instruction: string): ContextRange {
   const { lines, byId } = indexXmlRanges(xml);
-  const ids = [...new Set(instruction.match(ID_PATTERN) ?? [])].filter((id) => byId.has(id));
+  const ids = [...new Set(instruction.match(ID_PATTERN) ?? [])].filter((id) =>
+    byId.has(id)
+  );
   if (ids.length > 0) {
     const roots = ids.map((id) => containingRoot(byId.get(id)!));
-    const ranges = mergeRanges(roots.map((root) => [root.startLine, root.endLine]));
+    const ranges = mergeRanges(
+      roots.map((root) => [root.startLine, root.endLine])
+    );
     return {
       startLine: ranges[0]![0],
       endLine: ranges[ranges.length - 1]![1],
@@ -116,7 +147,13 @@ function computeContextRange(xml: string, instruction: string): ContextRange {
       source: 'ids',
     };
   }
-  return { startLine: 1, endLine: lines.length, rootIds: [], ids, source: 'full-document' };
+  return {
+    startLine: 1,
+    endLine: lines.length,
+    rootIds: [],
+    ids,
+    source: 'full-document',
+  };
 }
 
 function xmlWindow(xml: string, range: ContextRange, padding = 2): string {
@@ -128,7 +165,9 @@ function xmlWindow(xml: string, range: ContextRange, padding = 2): string {
 
 function describeContextRange(range: ContextRange): string {
   const ids = range.ids.length ? ` ids: ${range.ids.join(',')}` : ' ids: none';
-  const roots = range.rootIds.length ? ` roots: ${range.rootIds.join(',')}` : '';
+  const roots = range.rootIds.length
+    ? ` roots: ${range.rootIds.join(',')}`
+    : '';
   return `lines ${range.startLine}-${range.endLine} (${range.source};${ids}${roots})`;
 }
 
@@ -152,20 +191,37 @@ export type DispatchToolOptions = {
 };
 
 export function createDispatchTool(opts: DispatchToolOptions) {
-  const { s, doc, childModel, tracker, params, typingAnimations, signal, makeWriter, runTask, runner, onOps } = opts;
+  const {
+    s,
+    doc,
+    childModel,
+    tracker,
+    params,
+    typingAnimations,
+    signal,
+    makeWriter,
+    runTask,
+    runner,
+    onOps,
+  } = opts;
   const serialize = opts.serialize ?? serializeWithXml;
   let round = 0;
   return tool({
-    description: "spawn a writer to carry out an edit instruction on the document",
+    description:
+      'spawn a writer to carry out an edit instruction on the document',
     inputSchema: z.object({
       edits: z
         .array(
           z.object({
-            editing_instruction: z.string().describe('mechanical changes you want applied to the document'),
+            editing_instruction: z
+              .string()
+              .describe('mechanical changes you want applied to the document'),
             snippets: z
               .record(z.string(), z.string())
               .optional()
-              .describe('verbatim text values injected as a `snippets` JS object the coder can use directly. all verbatim text goes here, so that the writer can paste it in'),
+              .describe(
+                'verbatim text values injected as a `snippets` JS object the coder can use directly. all verbatim text goes here, so that the writer can paste it in'
+              ),
           })
         )
         .describe('edit instructions to run as one parallel batch'),
@@ -173,10 +229,15 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     execute: async ({ edits }) => {
       round += 1;
       const xml = serializeWithXml(s);
-      const contexts = edits.map((e) => computeContextRange(xml, e.editing_instruction));
+      const contexts = edits.map((e) =>
+        computeContextRange(xml, e.editing_instruction)
+      );
       console.log(
         `\n[round ${round}] ${edits.length} edit(s):\n${edits
-          .map((e, i) => `  ${i + 1}. ${e.editing_instruction} [${describeContextRange(contexts[i]!)}]`)
+          .map(
+            (e, i) =>
+              `  ${i + 1}. ${e.editing_instruction} [${describeContextRange(contexts[i]!)}]`
+          )
           .join('\n')}`
       );
       // Writers run concurrently (distinct cursors); each applies its own ops
@@ -206,7 +267,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         tracker.add(childModel as { modelId: string }, res.totalUsage);
         const blocked = findBlocked(res);
         if (blocked) {
-          console.log(`[round ${round}] writer ${i + 1} BLOCKED: ${blocked.reason}`);
+          console.log(
+            `[round ${round}] writer ${i + 1} BLOCKED: ${blocked.reason}`
+          );
           return `${i + 1}. ⚠ BLOCKED -- ${blocked.reason}.`;
         }
         return `${i + 1}. ✓ APPLIED`;

@@ -1,5 +1,10 @@
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
-import { $isListItemNode, $isListNode, type ListItemNode, type ListNode } from '@lexical/list';
+import {
+  $isListItemNode,
+  $isListNode,
+  type ListItemNode,
+  type ListNode,
+} from '@lexical/list';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { serializeWithIds } from '../utils';
@@ -83,7 +88,9 @@ describe('deferred: lists', () => {
       return $getId(ln.getChildren()[1]);
     });
     edit(s, () => $indent($byId(s, childId!)));
-    const indent = read(s, () => ($byId(s, childId!) as ListItemNode).getIndent());
+    const indent = read(s, () =>
+      ($byId(s, childId!) as ListItemNode).getIndent()
+    );
     expect(indent).toBe(1);
   });
 
@@ -94,9 +101,13 @@ describe('deferred: lists', () => {
       return $getId(ln.getChildren()[1]);
     });
     edit(s, () => $indent($byId(s, childId!)));
-    expect(read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())).toBe(1);
+    expect(
+      read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())
+    ).toBe(1);
     edit(s, () => $outdent($byId(s, childId!)));
-    expect(read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())).toBe(0);
+    expect(
+      read(s, () => ($byId(s, childId!) as ListItemNode).getIndent())
+    ).toBe(0);
   });
 
   it('$indent / $outdent throw EditError on a non-list-item', () => {
@@ -139,9 +150,13 @@ describe('$setListType / $toggleList separation', () => {
 
   it('$toggleList refuses an existing list item (points to $setListType)', () => {
     const { s } = setup('- a\n- b');
-    const itemId = read(s, () => $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0]));
+    const itemId = read(s, () =>
+      $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0])
+    );
     edit(s, () => {
-      expect(() => $toggleList([$byId(s, itemId!)], 'number')).toThrowError(Error);
+      expect(() => $toggleList([$byId(s, itemId!)], 'number')).toThrowError(
+        Error
+      );
     });
   });
 });
@@ -150,12 +165,16 @@ describe('$setListType / $toggleList separation', () => {
 describe('$sortList', () => {
   const itemTexts = (s: Session) =>
     read(s, () =>
-      ($getRoot().getFirstChild() as ListNode).getChildren().map((i) => i.getTextContent())
+      ($getRoot().getFirstChild() as ListNode)
+        .getChildren()
+        .map((i) => i.getTextContent())
     );
 
   it('sorts the enclosing list ascending (resolving from any item)', () => {
     const { s } = setup('- banana\n- apple\n- cherry');
-    const itemId = read(s, () => $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0]));
+    const itemId = read(s, () =>
+      $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0])
+    );
     edit(s, () => $sortList($byId(s, itemId!)));
     expect(itemTexts(s)).toEqual(['apple', 'banana', 'cherry']);
   });

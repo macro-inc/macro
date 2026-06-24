@@ -31,26 +31,63 @@ export type Edit =
   | { fn: 'appendText'; node: NodeRef; text: string }
   | { fn: 'prependText'; node: NodeRef; text: string }
   | { fn: 'replaceText'; node: NodeRef; find: string; to: string; scope: Scope }
-  | { fn: 'formatText'; node: NodeRef; match: string; format: Format; on: boolean; scope: Scope }
+  | {
+      fn: 'formatText';
+      node: NodeRef;
+      match: string;
+      format: Format;
+      on: boolean;
+      scope: Scope;
+    }
   | { fn: 'clearFormat'; node: NodeRef; match?: string; scope: Scope }
   | { fn: 'markText'; node: NodeRef; match: string; on: boolean; scope: Scope }
-  | { fn: 'linkText'; node: NodeRef; match: string; url: string | null; scope: Scope }
+  | {
+      fn: 'linkText';
+      node: NodeRef;
+      match: string;
+      url: string | null;
+      scope: Scope;
+    }
   | { fn: 'formatNode'; node: NodeRef; format: Format; on: boolean }
   | { fn: 'clearNodeFormat'; node: NodeRef }
-  | { fn: 'setBlockType'; node: NodeRef; block: BlockType; level?: number; language?: string }
+  | {
+      fn: 'setBlockType';
+      node: NodeRef;
+      block: BlockType;
+      level?: number;
+      language?: string;
+    }
   | { fn: 'setListType'; nodes: NodeRef[]; list: ListKind }
   | { fn: 'appendListItem'; ref: string; node: NodeRef; checked?: boolean }
   | { fn: 'setChecked'; node: NodeRef; checked: boolean }
   | { fn: 'setIndent'; node: NodeRef; indent: number | 'in' | 'out' }
   | { fn: 'sortList'; node: NodeRef; order: 'asc' | 'desc' }
   | { fn: 'insertNode'; ref: string; spec: NodeSpec; at: Position }
-  | { fn: 'insertInline'; ref: string; node: NodeRef; at: Offset; spec: NodeSpec }
+  | {
+      fn: 'insertInline';
+      ref: string;
+      node: NodeRef;
+      at: Offset;
+      spec: NodeSpec;
+    }
   | { fn: 'moveNode'; node: NodeRef; at: Position }
   | { fn: 'removeNode'; node: NodeRef }
   | { fn: 'mergeBlocks'; nodes: NodeRef[]; separator: string }
   | { fn: 'splitBlock'; node: NodeRef; atText: string }
-  | { fn: 'insertListItemAfter'; ref: string; node: NodeRef; text: string; list: ListKind }
-  | { fn: 'insertListItemBefore'; ref: string; node: NodeRef; text: string; list: ListKind }
+  | {
+      fn: 'insertListItemAfter';
+      ref: string;
+      node: NodeRef;
+      text: string;
+      list: ListKind;
+    }
+  | {
+      fn: 'insertListItemBefore';
+      ref: string;
+      node: NodeRef;
+      text: string;
+      list: ListKind;
+    }
   | { fn: 'removeListItem'; node: NodeRef }
   | { fn: 'setCell'; table: NodeRef; row: number; col: number; text: string }
   | { fn: 'addRow'; table: NodeRef; at?: number }

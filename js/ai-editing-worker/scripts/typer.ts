@@ -1,8 +1,9 @@
 import "../src/globals";
-import { args } from "./utils";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 import { $getRoot } from "lexical";
 import type { SerializedEditorState } from "lexical";
-import { $getId } from "../../lexical-core/plugins/nodeIdPlugin";
+import { $getId, $updateAllNodeIds } from "../../lexical-core/plugins/nodeIdPlugin";
 import {
 	createEditingSession,
 	loadSnapshot,
@@ -14,39 +15,68 @@ import {
 	COLORS,
 	realAwarenessSource,
 } from "../src/ai-editing/awareness/awareness-source";
-import { runEditorCode } from "../src/ai-editing/runtime";
-import { LoroDoc } from "loro-crdt";
-import { Mirror } from "@loro-mirror/packages/core/src";
+import { DocumentEditor } from "../src/ai-editing/editor/document-editor";
+import { type CodeRunner, runEditorCode } from "../src/ai-editing/runtime";
 import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "../../lexical-core/markdown-loro-schema";
-import { WorkerSyncSource } from "../src/sync-source";
+import type { InferType } from "@loro-mirror/packages/core/src";
+import { WorkerSyncSource, createWorkerAwareness } from "../src/sync-source";
+import { LoroManager } from "../../app/packages/core/collab/manager";
+import { SyncEngine } from "../../app/packages/core/collab/engine";
+import { InMemoryWALStore, WALSyncer } from "../../app/packages/core/collab/wal";
+import type { RawUpdate } from "../../app/packages/core/collab/shared";
 
-const { wssUrl } = await args("$0 <wss-url>");
+const argv = await yargs(hideBin(process.argv)).usage("$0 <wss-url>").help().parse();
+const wssUrl = argv._[0] as string | undefined;
+if (!wssUrl) { yargs().showHelp(); process.exit(1); }
 
 const source = new WorkerSyncSource(wssUrl, "", undefined);
 const { snapshot } = await source.waitForInitialSync();
 
-const doc = new LoroDoc();
-const mirror = new Mirror<MarkdownLoroSchemaType>({ doc, schema: MARKDOWN_LORO_SCHEMA });
-doc.import(snapshot);
-doc.subscribeLocalUpdates((update) => source.pushUpdate([update]));
+const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: "" });
+let engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown> | undefined;
+manager.onStateChange((u) => queueMicrotask(() => engine?.onStateUpdate(u)));
+
+const initResult = await manager.initializeFromSnapshot(snapshot);
+if (initResult.isErr()) throw new Error(`failed to initialize: ${initResult.error[0]?.message}`);
 
 const session = createEditingSession();
-loadSnapshot(session, mirror.getState() as SerializedEditorState);
+loadSnapshot(session, manager.mirror!.getState() as unknown as SerializedEditorState);
 
+const workerAwareness = createWorkerAwareness(manager.peerIdStr);
+const wal = new WALSyncer<RawUpdate>(new InMemoryWALStore<RawUpdate>(), (updates) => source.pushUpdate(updates));
+engine = new SyncEngine({
+	loroManager: manager,
+	awareness: workerAwareness,
+	syncs: { wal, live: source },
+	bindings: { onRemoteState: () => {} },
+});
+engine.start();
+
+let chain: Promise<void> = Promise.resolve();
 const propagate = () => {
-	const buf = new Uint8Array(8);
-	crypto.getRandomValues(buf);
-	const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
-	doc.commit();
-	doc.setPeerId(newPeer);
-	source.registerPeerId(newPeer);
-	mirror.setState(toSnapshot(session) as never);
+	chain = chain.then(async () => {
+		const buf = new Uint8Array(8);
+		crypto.getRandomValues(buf);
+		const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
+		manager.doc.commit();
+		manager.doc.setPeerId(newPeer);
+		source.registerPeerId(newPeer);
+		session.editor.update(() => $updateAllNodeIds(session.ids), { discrete: true });
+		await engine!.syncStateToLoro(toSnapshot(session) as unknown as InferType<MarkdownLoroSchemaType>);
+	});
 };
+
+const awareness = realAwarenessSource({
+	mirror: manager.mirror!,
+	doc: manager.doc,
+	send: (bytes) => source.pushAwareness(bytes),
+	name: AI_NAMES[0]!,
+	color: COLORS[0]!,
+});
 
 const firstId = session.editor.getEditorState().read(() =>
 	$getId($getRoot().getFirstChildOrThrow()),
 );
-
 if (!firstId) throw new Error("document has no nodes");
 
 const paragraphs = [
@@ -54,14 +84,6 @@ const paragraphs = [
 	"It was a dark and stormy night, or at least that is what the weather forecast had suggested earlier in the week, though by the time the actual evening arrived the clouds had largely dispersed, leaving behind only a faint drizzle and the lingering sense that meteorology is, at its core, an exercise in optimistic uncertainty.",
 	"The history of human civilization can be understood, if one squints sufficiently and ignores a great many inconvenient counterexamples, as a long and winding journey from sitting in caves wondering what that rustling noise was, all the way to sitting in offices wondering what that notification sound was, which is to say the fundamental anxieties have remained remarkably consistent.",
 ];
-
-const awareness = realAwarenessSource({
-	mirror,
-	doc,
-	send: (bytes) => source.pushAwareness(bytes),
-	name: AI_NAMES[0]!,
-	color: COLORS[0]!,
-});
 
 const inserts = paragraphs
 	.map(
@@ -72,12 +94,24 @@ const inserts = paragraphs
 	)
 	.join("\n");
 
+const runner: CodeRunner = (validIds, code) => {
+	const editor = new DocumentEditor({ validIds });
+	new Function("editor", code)(editor);
+	return editor.drain();
+};
+
 await runEditorCode({
 	session,
 	doc: new Doc(session, propagate),
 	code: inserts,
 	awarenessSource: awareness,
+	runner,
 });
 
+await chain;
+await wal.flush();
 awareness.clear();
+engine.stop();
+wal.destroy();
+manager.dispose();
 source.cleanup();

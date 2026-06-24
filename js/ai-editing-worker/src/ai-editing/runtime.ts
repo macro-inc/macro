@@ -14,7 +14,10 @@ import type { Doc } from './doc/doc';
 import { EditError } from './editor/errors';
 import type { DocumentOp } from './editor/ops';
 import { applyOp, runQueue, describe, type OpResult } from './queue/runner';
-import { DEFAULT_QUEUE_PARAMS, type DocumentOpQueueParams } from './queue/types';
+import {
+  DEFAULT_QUEUE_PARAMS,
+  type DocumentOpQueueParams,
+} from './queue/types';
 import { realRandomSource } from './queue/random-source';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
@@ -32,7 +35,11 @@ export function docIds(session: Session): Set<string> {
 }
 
 /** Takes the valid id set + AI snippet, returns the ops. */
-export type CodeRunner = (validIds: Set<string>, code: string, snippets?: Record<string, string>) => DocumentOp[] | Promise<DocumentOp[]>;
+export type CodeRunner = (
+  validIds: Set<string>,
+  code: string,
+  snippets?: Record<string, string>
+) => DocumentOp[] | Promise<DocumentOp[]>;
 
 export type RunEditorCodeArgs = {
   session: Session;
@@ -74,7 +81,11 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
         applyOp(args.doc, op);
         return { ok: true as const, op, summary: describe(op) };
       } catch (e) {
-        return { ok: false as const, op, error: e instanceof Error ? e.message : String(e) };
+        return {
+          ok: false as const,
+          op,
+          error: e instanceof Error ? e.message : String(e),
+        };
       }
     });
     return summarizeErrorsOnly(results);
@@ -95,7 +106,9 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
 }
 
 function summarizeErrorsOnly(results: OpResult[]): string {
-  const failures = results.filter((r): r is Extract<OpResult, { ok: false }> => !r.ok);
+  const failures = results.filter(
+    (r): r is Extract<OpResult, { ok: false }> => !r.ok
+  );
   if (failures.length === 0) return 'ok';
   return failures.map((r) => `error: ${r.op.kind}: ${r.error}`).join('\n');
 }

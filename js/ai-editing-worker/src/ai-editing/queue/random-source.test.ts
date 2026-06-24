@@ -27,7 +27,8 @@ describe('realRandomSource', () => {
   });
   it('direction only ever returns left/right', () => {
     const r = realRandomSource();
-    for (let i = 0; i < 100; i++) expect(['left', 'right']).toContain(r.direction());
+    for (let i = 0; i < 100; i++)
+      expect(['left', 'right']).toContain(r.direction());
   });
 });
 
@@ -54,10 +55,15 @@ describe('mockRandomSource — scalar constants repeat', () => {
 describe('mockRandomSource — sequences', () => {
   it('replays an array in order', () => {
     const r = mockRandomSource({ integer: [1, 2, 3] });
-    expect([r.integer([0, 0]), r.integer([0, 0]), r.integer([0, 0])]).toEqual([1, 2, 3]);
+    expect([r.integer([0, 0]), r.integer([0, 0]), r.integer([0, 0])]).toEqual([
+      1, 2, 3,
+    ]);
   });
   it('drawers are independent: integer does not consume direction', () => {
-    const r = mockRandomSource({ integer: [1, 2], direction: ['right', 'left'] });
+    const r = mockRandomSource({
+      integer: [1, 2],
+      direction: ['right', 'left'],
+    });
     expect(r.integer([0, 0])).toBe(1);
     expect(r.direction()).toBe('right');
     expect(r.integer([0, 0])).toBe(2);
@@ -69,7 +75,9 @@ describe('mockRandomSource — sequence overflow', () => {
   it('throws with the label and draw index', () => {
     const r = mockRandomSource({ integer: [7] });
     expect(r.integer([0, 0])).toBe(7);
-    expect(() => r.integer([0, 0])).toThrow(/integer sequence exhausted at draw 2/);
+    expect(() => r.integer([0, 0])).toThrow(
+      /integer sequence exhausted at draw 2/
+    );
   });
   it('throws for direction overflow', () => {
     const r = mockRandomSource({ direction: ['left'] });

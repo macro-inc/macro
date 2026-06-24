@@ -287,14 +287,22 @@ function $unwrapWrapper(
 }
 
 /** Remove the link wrapper from a matched substring. Returns the count changed. */
-export function $unwrapFromLink(block: ElementNode, needle: string, scope?: Scope): number {
+export function $unwrapFromLink(
+  block: ElementNode,
+  needle: string,
+  scope?: Scope
+): number {
   return mutateMatches(block, needle, scope, (matchNode) =>
     $unwrapWrapper(matchNode, $isLinkNode)
   );
 }
 
 /** Remove the highlight (mark) wrapper from a matched substring. Returns the count changed. */
-export function $unhighlightInBlock(block: ElementNode, needle: string, scope?: Scope): number {
+export function $unhighlightInBlock(
+  block: ElementNode,
+  needle: string,
+  scope?: Scope
+): number {
   return mutateMatches(block, needle, scope, (matchNode) =>
     $unwrapWrapper(matchNode, $isMarkNode)
   );

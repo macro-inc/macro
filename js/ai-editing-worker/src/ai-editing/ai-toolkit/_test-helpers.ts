@@ -22,7 +22,11 @@ export function read<T>(s: Session, fn: () => T): T {
 
 /** Durable ids of the top-level blocks, in document order. */
 export function topLevelIds(s: Session): string[] {
-  return read(s, () => $getRoot().getChildren().map((c) => $getId(c) ?? '?'));
+  return read(s, () =>
+    $getRoot()
+      .getChildren()
+      .map((c) => $getId(c) ?? '?')
+  );
 }
 
 export function setup(md: string): { s: Session; ids: string[] } {

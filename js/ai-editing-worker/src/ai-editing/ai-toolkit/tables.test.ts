@@ -1,11 +1,21 @@
-import { $createTextNode, $getRoot, $isTextNode, type ElementNode } from 'lexical';
+import {
+  $createTextNode,
+  $getRoot,
+  $isTextNode,
+  type ElementNode,
+} from 'lexical';
 import { $isTableNode, type TableNode } from '@lexical/table';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { $blockNode } from './blocks';
 import { $byId } from './locate';
 import { $setCell, $table } from './tables';
-import { serializedWithoutLinePrefix, edit, read, setup } from './_test-helpers';
+import {
+  serializedWithoutLinePrefix,
+  edit,
+  read,
+  setup,
+} from './_test-helpers';
 
 describe('$table', () => {
   it('builds a real TableNode that serializes back to pipe markdown', () => {
@@ -19,7 +29,9 @@ describe('$table', () => {
         ])
       )
     );
-    expect(read(s, () => $getRoot().getChildren().some($isTableNode))).toBe(true);
+    expect(read(s, () => $getRoot().getChildren().some($isTableNode))).toBe(
+      true
+    );
     const out = serializedWithoutLinePrefix(s);
     expect(out).toContain('| Fruit | Taste |');
     expect(out).toContain('| Apple | Sweet |');
@@ -66,9 +78,9 @@ describe('$table / $setCell node flexibility', () => {
     // the paragraph we built is used as-is — the cell's text node is bold
     const isBold = read(s, () => {
       const table = $getRoot().getChildren()[1] as TableNode;
-      const row = table.getFirstChild() as ElementNode;       // TableRowNode
-      const cell = row.getFirstChild() as ElementNode;        // TableCellNode
-      const para = cell.getFirstChild() as ElementNode;       // ParagraphNode
+      const row = table.getFirstChild() as ElementNode; // TableRowNode
+      const cell = row.getFirstChild() as ElementNode; // TableCellNode
+      const para = cell.getFirstChild() as ElementNode; // ParagraphNode
       const text = para.getFirstChild();
       return $isTextNode(text) && text.hasFormat('bold');
     });

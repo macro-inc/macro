@@ -6,7 +6,10 @@ import {
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
-import { NodeReplacements, SupportedNodeTypes } from '../../../../lexical-core/node-list';
+import {
+  NodeReplacements,
+  SupportedNodeTypes,
+} from '../../../../lexical-core/node-list';
 import {
   $updateAllNodeIds,
   nodeIdPlugin,

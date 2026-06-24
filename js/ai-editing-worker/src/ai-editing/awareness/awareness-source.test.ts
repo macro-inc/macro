@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mockAwarenessSource, realAwarenessSource, resolveTextOwner } from './awareness-source';
+import {
+  mockAwarenessSource,
+  realAwarenessSource,
+  resolveTextOwner,
+} from './awareness-source';
 
 // Duck-typed fake loro containers (kind/get), matching what resolveTextOwner reads.
 function textC() {
@@ -11,7 +15,8 @@ function mapC(id: string, fields: { text?: unknown; children?: unknown[] }) {
     get: (k: string) => {
       if (k === '$') return { getShallowValue: () => ({ id }) };
       if (k === 'text') return fields.text;
-      if (k === 'children') return fields.children ? { toArray: () => fields.children } : undefined;
+      if (k === 'children')
+        return fields.children ? { toArray: () => fields.children } : undefined;
       return undefined;
     },
   };
@@ -26,7 +31,10 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
   it('a text-node container resolves to itself', () => {
     const t = textC();
     const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: t }) });
-    expect(resolveTextOwner(mirror, doc, 't1')).toEqual({ text: t, nodeId: 't1' });
+    expect(resolveTextOwner(mirror, doc, 't1')).toEqual({
+      text: t,
+      nodeId: 't1',
+    });
   });
 
   it('a block whose text lives in a child resolves to the CHILD text-node id', () => {
@@ -34,18 +42,28 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
     const block = mapC('b1', { children: [mapC('t2', { text: childText })] });
     const { mirror, doc } = fakeLoro({ c1: block });
     // block id in, but the owner is the child text node (so the caret can walk)
-    expect(resolveTextOwner(mirror, doc, 'b1')).toEqual({ text: childText, nodeId: 't2' });
+    expect(resolveTextOwner(mirror, doc, 'b1')).toEqual({
+      text: childText,
+      nodeId: 't2',
+    });
   });
 
   it('finds text nested deeper than direct children (DFS): list item → paragraph → text', () => {
     const deepText = textC();
-    const item = mapC('li1', { children: [mapC('p1', { children: [mapC('t9', { text: deepText })] })] });
+    const item = mapC('li1', {
+      children: [mapC('p1', { children: [mapC('t9', { text: deepText })] })],
+    });
     const { mirror, doc } = fakeLoro({ c1: item });
-    expect(resolveTextOwner(mirror, doc, 'li1')).toEqual({ text: deepText, nodeId: 't9' });
+    expect(resolveTextOwner(mirror, doc, 'li1')).toEqual({
+      text: deepText,
+      nodeId: 't9',
+    });
   });
 
   it('returns null for an unknown id or a block with no text anywhere', () => {
-    const { mirror, doc } = fakeLoro({ c1: mapC('b1', { children: [mapC('img', {})] }) });
+    const { mirror, doc } = fakeLoro({
+      c1: mapC('b1', { children: [mapC('img', {})] }),
+    });
     expect(resolveTextOwner(mirror, doc, 'missing')).toBeNull();
     expect(resolveTextOwner(mirror, doc, 'b1')).toBeNull();
   });

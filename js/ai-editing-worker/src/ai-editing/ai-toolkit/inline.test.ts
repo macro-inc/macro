@@ -1,4 +1,9 @@
-import { $createTextNode, $getRoot, $isTextNode, type ElementNode } from 'lexical';
+import {
+  $createTextNode,
+  $getRoot,
+  $isTextNode,
+  type ElementNode,
+} from 'lexical';
 import { $isLinkNode } from '@lexical/link';
 import { $isMarkNode } from '@lexical/mark';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +20,12 @@ import {
 import { $blockById } from './locate';
 import { collectTextNodes } from './tree';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import { serializedWithoutLinePrefix, edit, read, setup } from './_test-helpers';
+import {
+  serializedWithoutLinePrefix,
+  edit,
+  read,
+  setup,
+} from './_test-helpers';
 
 // ============================================================================
 describe('inline ops: scope + counts', () => {
@@ -31,7 +41,9 @@ describe('inline ops: scope + counts', () => {
       )
     );
     expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(`the **toad** ate the **toad** {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the **toad** ate the **toad** {${id}|paragraph}`
+    );
   });
 
   it('$replaceTextInBlock — default targets only the first match (count 1)', () => {
@@ -43,7 +55,9 @@ describe('inline ops: scope + counts', () => {
       )
     );
     expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(`the toad ate the frog {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the toad ate the frog {${id}|paragraph}`
+    );
   });
 
   it('$replaceTextInBlock — { nth } is 1-based', () => {
@@ -58,7 +72,9 @@ describe('inline ops: scope + counts', () => {
       )
     );
     expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(`the frog ate the toad {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the frog ate the toad {${id}|paragraph}`
+    );
   });
 
   it('$formatTextInBlock — bold a substring (count), no-match returns 0', () => {
@@ -68,7 +84,9 @@ describe('inline ops: scope + counts', () => {
       $formatTextInBlock($blockById(s, id), 'Bluejay', 'bold', { all: true })
     );
     expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(`the **Bluejay** launch {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the **Bluejay** launch {${id}|paragraph}`
+    );
 
     const miss = edit(s, () =>
       $formatTextInBlock($blockById(s, id), 'Robin', 'bold')
@@ -80,7 +98,9 @@ describe('inline ops: scope + counts', () => {
     const { s, ids } = setup('hello world');
     const id = ids[0];
     edit(s, () => $formatTextInBlock($blockById(s, id), 'world', 'strike'));
-    expect(serializedWithoutLinePrefix(s)).toBe(`hello ~~world~~ {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `hello ~~world~~ {${id}|paragraph}`
+    );
   });
 
   it('$clearFormat — removes one format, leaving others', () => {
@@ -91,14 +111,18 @@ describe('inline ops: scope + counts', () => {
       $clearFormat($blockById(s, id), 'Bluejay', 'bold', { all: true })
     );
     expect(n).toBe(1);
-    expect(serializedWithoutLinePrefix(s)).toBe(`the *Bluejay* launch {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the *Bluejay* launch {${id}|paragraph}`
+    );
   });
 
   it('$clearFormat — without format clears all formatting', () => {
     const { s, ids } = setup('the ***Bluejay*** launch');
     const id = ids[0];
     edit(s, () => $clearFormat($blockById(s, id), 'Bluejay'));
-    expect(serializedWithoutLinePrefix(s)).toBe(`the Bluejay launch {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `the Bluejay launch {${id}|paragraph}`
+    );
   });
 
   it('$replaceString — literal replace, counts, default vs all', () => {
@@ -108,7 +132,9 @@ describe('inline ops: scope + counts', () => {
       $replaceString($blockById(s, id), 'Q3', 'Q4', { all: true })
     );
     expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(`Q4 roadmap and Q4 budget {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `Q4 roadmap and Q4 budget {${id}|paragraph}`
+    );
 
     const miss = edit(s, () => $replaceString($blockById(s, id), 'Q9', 'Q1'));
     expect(miss).toBe(0);
@@ -125,7 +151,9 @@ describe('inline ops: scope + counts', () => {
       collectTextNodes($blockById(s, id)).map((n) => $getId(n))
     );
     expect(after).toEqual(before); // same leaf ids — the diff sees a clean setText
-    expect(read(s, () => $blockById(s, id).getTextContent())).toBe('control over rendering');
+    expect(read(s, () => $blockById(s, id).getTextContent())).toBe(
+      'control over rendering'
+    );
   });
 
   it('$appendText / $prependText extend an existing plain text node in place', () => {
@@ -140,7 +168,9 @@ describe('inline ops: scope + counts', () => {
       collectTextNodes($blockById(s, id)).map((n) => $getId(n))
     );
     expect(after).toEqual(before); // no new text nodes minted
-    expect(read(s, () => $blockById(s, id).getTextContent())).toBe('DRAFT: Meeting Notes (draft)');
+    expect(read(s, () => $blockById(s, id).getTextContent())).toBe(
+      'DRAFT: Meeting Notes (draft)'
+    );
   });
 
   it('formatting a substring preserves surrounding formats, scopes the span', () => {
@@ -182,7 +212,9 @@ describe('inline ops: scope + counts', () => {
       $formatTextInBlock($blockById(s, id), 'frog', 'bold', { all: true })
     );
     expect(n).toBe(2);
-    expect(serializedWithoutLinePrefix(s)).toBe(`**frog** middle **frog** {${id}|paragraph}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `**frog** middle **frog** {${id}|paragraph}`
+    );
   });
 
   it('scoped first-match does not bleed when needle repeats in the same text node', () => {
@@ -210,9 +242,13 @@ describe('inline ops: scope + counts', () => {
     const { s, ids } = setup('# Meeting Notes');
     const id = ids[0];
     edit(s, () => $appendText($blockById(s, id), ' (draft)'));
-    expect(serializedWithoutLinePrefix(s)).toBe(`# Meeting Notes (draft) {${id}|heading}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `# Meeting Notes (draft) {${id}|heading}`
+    );
     edit(s, () => $prependText($blockById(s, id), 'DRAFT: '));
-    expect(serializedWithoutLinePrefix(s)).toBe(`# DRAFT: Meeting Notes (draft) {${id}|heading}`);
+    expect(serializedWithoutLinePrefix(s)).toBe(
+      `# DRAFT: Meeting Notes (draft) {${id}|heading}`
+    );
   });
 });
 

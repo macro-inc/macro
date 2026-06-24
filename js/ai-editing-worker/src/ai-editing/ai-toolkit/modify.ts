@@ -91,7 +91,11 @@ export function $modifyNode(
       const item = $asListItem(node, label);
       const cur = item.getIndent();
       item.setIndent(
-        c.indent === 'in' ? cur + 1 : c.indent === 'out' ? Math.max(0, cur - 1) : c.indent
+        c.indent === 'in'
+          ? cur + 1
+          : c.indent === 'out'
+            ? Math.max(0, cur - 1)
+            : c.indent
       );
       return item;
     })

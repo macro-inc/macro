@@ -56,6 +56,8 @@ describe('lock-on + errors', () => {
 describe('read / query', () => {
   it('$getText returns a block plain text (no markdown markers)', () => {
     const { s, ids } = setup('the **bold** word');
-    expect(read(s, () => $getText($blockById(s, ids[0])))).toBe('the bold word');
+    expect(read(s, () => $getText($blockById(s, ids[0])))).toBe(
+      'the bold word'
+    );
   });
 });

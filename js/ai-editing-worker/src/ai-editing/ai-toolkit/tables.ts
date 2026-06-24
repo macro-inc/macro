@@ -51,7 +51,9 @@ export function $table(rows: CellContent[][]): TableNode {
     const row = $createTableRowNode();
     const isHeader = ri === 0;
     for (const content of rows[ri]) {
-      const cell = $createTableCellNode(isHeader ? TableCellHeaderStates.ROW : TableCellHeaderStates.NO_STATUS);
+      const cell = $createTableCellNode(
+        isHeader ? TableCellHeaderStates.ROW : TableCellHeaderStates.NO_STATUS
+      );
       cell.append($cellChild(content));
       row.append(cell);
     }
@@ -80,7 +82,11 @@ export function $setCell(
   if (!$isTableNode(table)) {
     throw new Error('$setCell: no enclosing table');
   }
-  const cell = table.getChildren().filter($isTableRowNode)[row]?.getChildren().filter($isTableCellNode)[col];
+  const cell = table
+    .getChildren()
+    .filter($isTableRowNode)
+    [row]?.getChildren()
+    .filter($isTableCellNode)[col];
   if (!cell) {
     throw new Error(`$setCell: no cell at [${row}, ${col}]`);
   }
