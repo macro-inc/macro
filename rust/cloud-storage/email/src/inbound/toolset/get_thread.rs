@@ -81,7 +81,7 @@ pub struct GetThreadResponse {
     /// Whether the thread has been read.
     pub is_read: bool,
     /// The labels applied to the thread — the distinct set of label names across
-    /// its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+    /// all of its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
     pub labels: Vec<String>,
     /// The messages in the thread (most recent first).
     pub messages: Vec<ToolMessage>,
@@ -158,12 +158,9 @@ where
 
         let summary = build_summary(&thread);
 
-        // The thread's labels are the distinct set across its messages.
-        let mut labels: Vec<String> = thread
-            .messages
-            .iter()
-            .flat_map(|m| m.labels.iter().map(|l| l.name.clone()))
-            .collect();
+        // Thread labels are the complete set across all the thread's messages
+        // (resolved by the service), not just the fetched message page.
+        let mut labels: Vec<String> = thread.labels.iter().map(|l| l.name.clone()).collect();
         labels.sort();
         labels.dedup();
 

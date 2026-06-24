@@ -1279,7 +1279,7 @@ export interface GetThreadResponse {
   isRead: boolean;
   /**
    * The labels applied to the thread — the distinct set of label names across
-   * its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+   * all of its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
    */
   labels: string[];
   /**
