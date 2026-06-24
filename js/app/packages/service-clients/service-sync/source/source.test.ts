@@ -1,15 +1,19 @@
+import type { SyncSourceEvent } from '@core/collab/source';
 import {
   WebsocketConnectionState,
   WebsocketEvent,
   type WebsocketEventListener,
 } from '@websocket';
 import { describe, expect, it, vi } from 'vitest';
-import type { SyncSourceEvent } from '@core/collab/source';
-import type { IFromPeer, FromRemote } from '../generated/schema';
+import type { FromRemote, IFromPeer } from '../generated/schema';
 import type { SyncSocket } from './socket';
 import { SyncServiceSource, TIMEOUTS } from './source';
 
-type AnyListener = WebsocketEventListener<WebsocketEvent, IFromPeer, FromRemote>;
+type AnyListener = WebsocketEventListener<
+  WebsocketEvent,
+  IFromPeer,
+  FromRemote
+>;
 
 // Minimal in-memory SyncSocket. Drives the class through deliver()/fireReconnect().
 class FakeSocket implements SyncSocket {
@@ -39,7 +43,8 @@ class FakeSocket implements SyncSocket {
     listener: WebsocketEventListener<K, IFromPeer, FromRemote>
   ) {
     if (type === WebsocketEvent.Message) this.msg.add(listener as AnyListener);
-    else if (type === WebsocketEvent.Reconnect) this.recon.add(listener as AnyListener);
+    else if (type === WebsocketEvent.Reconnect)
+      this.recon.add(listener as AnyListener);
   }
   removeEventListener<K extends WebsocketEvent>(
     _type: K,
@@ -72,15 +77,35 @@ const GUARDS = {
 
 const remote = {
   initialSync: (snapshot: Uint8Array, awareness: Uint8Array) =>
-    ({ ...GUARDS, isRemoteInitialSync: () => true, value: { snapshot, awareness } }) as unknown as FromRemote,
+    ({
+      ...GUARDS,
+      isRemoteInitialSync: () => true,
+      value: { snapshot, awareness },
+    }) as unknown as FromRemote,
   update: (update: Uint8Array) =>
-    ({ ...GUARDS, isRemoteUpdate: () => true, value: { update } }) as unknown as FromRemote,
+    ({
+      ...GUARDS,
+      isRemoteUpdate: () => true,
+      value: { update },
+    }) as unknown as FromRemote,
   awareness: (awareness: Uint8Array) =>
-    ({ ...GUARDS, isRemoteAwareness: () => true, value: { awareness } }) as unknown as FromRemote,
+    ({
+      ...GUARDS,
+      isRemoteAwareness: () => true,
+      value: { awareness },
+    }) as unknown as FromRemote,
   snapshot: (snapshot: Uint8Array) =>
-    ({ ...GUARDS, isRemoteSnapshot: () => true, value: { snapshot } }) as unknown as FromRemote,
+    ({
+      ...GUARDS,
+      isRemoteSnapshot: () => true,
+      value: { snapshot },
+    }) as unknown as FromRemote,
   ack: (id: string) =>
-    ({ ...GUARDS, isRemoteUpdateAck: () => true, value: { id } }) as unknown as FromRemote,
+    ({
+      ...GUARDS,
+      isRemoteUpdateAck: () => true,
+      value: { id },
+    }) as unknown as FromRemote,
 };
 
 const snap = new Uint8Array([1, 2, 3]);
@@ -93,7 +118,10 @@ describe('SyncServiceSource', () => {
     const src = new SyncServiceSource(ws, 'doc1');
     const pending = src.doInitialSync();
     ws.deliver(remote.initialSync(snap, aw));
-    expect((await pending)._unsafeUnwrap()).toEqual({ snapshot: snap, awareness: aw });
+    expect((await pending)._unsafeUnwrap()).toEqual({
+      snapshot: snap,
+      awareness: aw,
+    });
     expect(ws.heartbeats).toBe(1);
   });
 
@@ -199,6 +227,10 @@ describe('SyncServiceSource', () => {
     ws.deliver(remote.initialSync(snap, aw));
     await flush();
 
-    expect(events).toContainEqual({ type: 'reconnect', snapshot: snap, awareness: aw });
+    expect(events).toContainEqual({
+      type: 'reconnect',
+      snapshot: snap,
+      awareness: aw,
+    });
   });
 });

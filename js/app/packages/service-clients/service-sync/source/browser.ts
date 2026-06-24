@@ -1,11 +1,11 @@
-import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
   LiveSyncSource,
   TimeoutError,
 } from '@core/collab/source';
+import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { storageServiceClient } from '@service-storage/client';
-import { type UrlResolver } from '@websocket';
+import type { UrlResolver } from '@websocket';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { ResultAsync } from 'neverthrow';
 import { createSyncSocket, type SyncWebsocket } from './socket';

@@ -45,16 +45,16 @@ const ModelSchema: z.ZodType<Model> = z.object({
 
 const DEFAULT_MODELS = {
   supervisor: {
-    provider: DEFAULT_PROVIDER,
-    model: PROVIDERS[DEFAULT_PROVIDER].defaultModel,
+    provider: 'anthropic' satisfies Provider,
+    model: 'claude-haiku-4-5-20251001',
   },
   interpret: {
-    provider: DEFAULT_PROVIDER,
-    model: PROVIDERS[DEFAULT_PROVIDER].defaultModel,
+    provider: 'anthropic' satisfies Provider,
+    model: 'claude-sonnet-4-6',
   },
   coding: {
-    provider: DEFAULT_PROVIDER,
-    model: PROVIDERS[DEFAULT_PROVIDER].defaultModel,
+    provider: 'cerebras' satisfies Provider,
+    model: PROVIDERS.cerebras.defaultModel,
   },
 } satisfies Record<string, Model>;
 

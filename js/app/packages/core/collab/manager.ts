@@ -10,11 +10,11 @@ import {
   type Container,
   type ContainerID,
   type Cursor,
+  type ImportStatus,
   LoroDoc,
   type PeerID,
   type Side,
   type VersionVector,
-  ImportStatus,
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';

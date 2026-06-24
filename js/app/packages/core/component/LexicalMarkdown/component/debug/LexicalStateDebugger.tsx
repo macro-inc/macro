@@ -18,9 +18,9 @@ import {
   $isRangeSelection,
   type EditorState,
   ElementNode,
+  type LexicalEditor,
   type LexicalNode,
   RootNode,
-  type LexicalEditor,
   type TextFormatType,
   TextNode,
 } from 'lexical';

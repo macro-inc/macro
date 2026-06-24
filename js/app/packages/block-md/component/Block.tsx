@@ -112,7 +112,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
 
-  const getSyncSource = blockSyncSourceSignal.get;
+  const _getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
