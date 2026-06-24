@@ -43,11 +43,7 @@ impl WorkflowFile {
 
 /// Render a `gh_workflow::Workflow` to YAML. Used by most workflow modules.
 fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
-    move || {
-        build()
-            .to_string()
-            .map_err(|e| anyhow::anyhow!("{e:?}"))
-    }
+    move || build().to_string().map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
 /// Every workflow we generate. Add new workflows here.
@@ -62,10 +58,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
-        render_yaml: || {
-            serde_yml::to_string(&build_desktop_on_tag::build_desktop_on_tag())
-                .map_err(|e| anyhow::anyhow!("{e}"))
-        },
+        render_yaml: || Ok(build_desktop_on_tag::build_desktop_on_tag()),
     },
     WorkflowFile {
         slug: "code_check_cloud_storage",

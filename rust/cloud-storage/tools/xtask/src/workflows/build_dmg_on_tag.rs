@@ -1,17 +1,15 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{
-    Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
-};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
 use crate::workflows::{steps, vars};
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
     Workflow::new("Build macOS DMG")
-        .on(Event::default().workflow_call(
-            WorkflowCall::default().add_input(
+        .on(
+            Event::default().workflow_call(WorkflowCall::default().add_input(
                 "ref",
                 WorkflowCallInput {
                     description: "Git ref to check out and build".into(),
@@ -19,8 +17,8 @@ pub fn build_dmg() -> Workflow {
                     input_type: "string".into(),
                     default: None,
                 },
-            ),
-        ))
+            )),
+        )
         .add_job("build-dmg", build_dmg_job())
 }
 

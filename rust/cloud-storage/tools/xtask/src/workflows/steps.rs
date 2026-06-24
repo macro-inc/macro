@@ -154,8 +154,11 @@ pub fn mount_nix_cache_volume() -> Step<Use> {
 
 /// Configure Cachix (without entering a dev shell).
 pub fn setup_cachix() -> Step<Use> {
-    uses_local("Configure Cachix fallback", "./.github/actions/setup-cachix")
-        .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
+    uses_local(
+        "Configure Cachix fallback",
+        "./.github/actions/setup-cachix",
+    )
+    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
 }
 
 /// Derive a safe tag name from the git ref for use in artifact names.

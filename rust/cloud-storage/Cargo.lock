@@ -14304,11 +14304,8 @@ dependencies = [
  "gh-workflow",
  "guppy",
  "hakari",
- "indexmap 1.9.3",
  "indoc",
- "serde",
  "serde_json",
- "serde_yml",
 ]
 
 [[package]]

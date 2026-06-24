@@ -1,9 +1,7 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{
-    Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
-};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
 use crate::workflows::{runners, steps};
 
@@ -14,8 +12,8 @@ pub const DESKTOP_TAG_PATTERN: &str = "v[0-9]*";
 /// Build the reusable workflow.
 pub fn build_appimage() -> Workflow {
     Workflow::new("Build AppImage")
-        .on(Event::default().workflow_call(
-            WorkflowCall::default().add_input(
+        .on(
+            Event::default().workflow_call(WorkflowCall::default().add_input(
                 "ref",
                 WorkflowCallInput {
                     description: "Git ref to check out and build".into(),
@@ -23,8 +21,8 @@ pub fn build_appimage() -> Workflow {
                     input_type: "string".into(),
                     default: None,
                 },
-            ),
-        ))
+            )),
+        )
         .add_job("build-appimage", build_appimage_job())
 }
 
