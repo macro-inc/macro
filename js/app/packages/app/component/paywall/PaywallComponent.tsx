@@ -5,7 +5,6 @@ import { useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
-import { useUserTeamsQuery } from '@queries/team';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Tooltip } from '@ui';
@@ -147,7 +146,7 @@ const PaywallComponent = (props: PaywallProps) => {
       <div class="border-t border-t-edge px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-baseline gap-1.5 text-xs text-ink/60">
           <span class="text-ink font-semibold text-xl leading-6">$40</span>
-          <span>per seat / month</span>
+          <span>per seat / per month</span>
 
           <Show when={teamRole() === 'owner' && team.data}>
             {(team) => (
