@@ -3,8 +3,8 @@
  * `Doc` implements both `DocReader` (reads to plan) and `DocWriter` (atomic
  * edits), resolving every `NodeRef` through the durable id ↔ node-key map and
  * delegating the actual mutations to the existing `ai-toolkit` `$`-helpers. A
- * shared `refToId` map turns an inserted node'session placeholder ref into its minted id,
- * so later reads/edits in the same run resolve it.
+ * minted ref IS the inserted node's id — `assignRef` stamps it on directly — so
+ * later reads/edits in the same run resolve it with no extra mapping.
  */
 
 import { $createCodeNode } from '@lexical/code';
@@ -61,6 +61,7 @@ import {
 } from '../../../../lexical-core/nodes/VideoNode';
 import {
   $getId,
+  $setId,
   $updateAllNodeIds,
 } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import * as blocks from '../ai-toolkit/blocks';
@@ -73,7 +74,7 @@ import * as tables from '../ai-toolkit/tables';
 import * as tree from '../ai-toolkit/tree';
 import { EditError } from '../editor/errors';
 import type {
-  Edit,
+  DocumentOp,
   Format,
   ListKind,
   NodeRef,
@@ -96,93 +97,88 @@ const FORMAT_BIT: Record<
 };
 
 export class Doc implements DocReader, DocWriter {
-  private refToId = new Map<string, string>();
-
   constructor(
     private readonly session: Session,
     /** Push the new state out (snapshot to mirror to Loro). Noop in unit tests. */
     private readonly propagate: () => void = () => {}
   ) {}
 
-  private id(node: NodeRef): string {
-    return this.refToId.get(node) ?? node;
-  }
-
-  /** Resolve a placeholder ref to its minted id (identity if not a ref). Used by
-   *  the executor to point awareness at the real node once an insert has run. */
+  /** A ref IS the node's id (we stamp it on at insert), so resolution is identity. */
   public resolveRef(node: NodeRef): NodeRef {
-    return this.id(node);
+    return node;
   }
 
-  public apply(edit: Edit): void {
-    match(edit)
-      .with({ fn: 'insertText' }, (e) => this.insertText(e.node, e.at, e.text))
-      .with({ fn: 'removeText' }, (e) => this.removeText(e.node, e.at, e.len))
-      .with({ fn: 'setText' }, (e) => this.setText(e.node, e.text))
-      .with({ fn: 'setEquation' }, (e) => this.setEquation(e.node, e.tex))
-      .with({ fn: 'appendText' }, (e) => this.appendText(e.node, e.text))
-      .with({ fn: 'prependText' }, (e) => this.prependText(e.node, e.text))
-      .with({ fn: 'replaceText' }, (e) =>
+  public apply(op: DocumentOp): void {
+    match(op)
+      .with({ kind: 'insertText' }, (e) =>
+        this.insertText(e.node, e.at, e.text)
+      )
+      .with({ kind: 'removeText' }, (e) => this.removeText(e.node, e.at, e.len))
+      .with({ kind: 'setText' }, (e) => this.setText(e.node, e.text))
+      .with({ kind: 'setEquation' }, (e) => this.setEquation(e.node, e.tex))
+      .with({ kind: 'appendText' }, (e) => this.appendText(e.node, e.text))
+      .with({ kind: 'prependText' }, (e) => this.prependText(e.node, e.text))
+      .with({ kind: 'replaceText' }, (e) =>
         this.replaceText(e.node, e.find, e.to, e.scope)
       )
-      .with({ fn: 'formatText' }, (e) =>
+      .with({ kind: 'formatText' }, (e) =>
         this.formatText(e.node, e.match, e.format, e.on, e.scope)
       )
-      .with({ fn: 'clearFormat' }, (e) =>
+      .with({ kind: 'clearFormat' }, (e) =>
         this.clearFormat(e.node, e.match, e.scope)
       )
-      .with({ fn: 'markText' }, (e) =>
+      .with({ kind: 'markText' }, (e) =>
         this.markText(e.node, e.match, e.on, e.scope)
       )
-      .with({ fn: 'linkText' }, (e) =>
+      .with({ kind: 'linkText' }, (e) =>
         this.linkText(e.node, e.match, e.url, e.scope)
       )
-      .with({ fn: 'formatNode' }, (e) =>
+      .with({ kind: 'formatNode' }, (e) =>
         this.formatNode(e.node, e.format, e.on)
       )
-      .with({ fn: 'clearNodeFormat' }, (e) => this.clearNodeFormat(e.node))
-      .with({ fn: 'setBlockType' }, (e) =>
+      .with({ kind: 'clearNodeFormat' }, (e) => this.clearNodeFormat(e.node))
+      .with({ kind: 'setBlockType' }, (e) =>
         this.setBlockType(e.node, e.block, {
           level: e.level,
           language: e.language,
         })
       )
-      .with({ fn: 'setListType' }, (e) => this.setListType(e.nodes, e.list))
-      .with({ fn: 'appendListItem' }, (e) =>
+      .with({ kind: 'setListType' }, (e) => this.setListType(e.nodes, e.list))
+      .with({ kind: 'appendListItem' }, (e) =>
         this.appendListItem(e.ref, e.node, e.checked)
       )
-      .with({ fn: 'setChecked' }, (e) => this.setChecked(e.node, e.checked))
-      .with({ fn: 'setIndent' }, (e) => this.setIndent(e.node, e.indent))
-      .with({ fn: 'insertNode' }, (e) => this.insertNode(e.ref, e.spec, e.at))
-      .with({ fn: 'insertInline' }, (e) =>
+      .with({ kind: 'setChecked' }, (e) => this.setChecked(e.node, e.checked))
+      .with({ kind: 'setIndent' }, (e) => this.setIndent(e.node, e.indent))
+      .with({ kind: 'insertNode' }, (e) => this.insertNode(e.ref, e.spec, e.at))
+      .with({ kind: 'insertInline' }, (e) =>
         this.insertInline(e.ref, e.node, e.at, e.spec)
       )
-      .with({ fn: 'moveNode' }, (e) => this.moveNode(e.node, e.at))
-      .with({ fn: 'removeNode' }, (e) => this.removeNode(e.node))
-      .with({ fn: 'mergeBlocks' }, (e) =>
+      .with({ kind: 'moveNode' }, (e) => this.moveNode(e.node, e.at))
+      .with({ kind: 'removeNode' }, (e) => this.removeNode(e.node))
+      .with({ kind: 'mergeBlocks' }, (e) =>
         this.mergeBlocks(e.nodes, e.separator)
       )
-      .with({ fn: 'insertListItemAfter' }, (e) =>
+      .with({ kind: 'insertListItemAfter' }, (e) =>
         this.insertListItemAfter(e.ref, e.node, e.text, e.list)
       )
-      .with({ fn: 'insertListItemBefore' }, (e) =>
+      .with({ kind: 'insertListItemBefore' }, (e) =>
         this.insertListItemBefore(e.ref, e.node, e.text, e.list)
       )
-      .with({ fn: 'removeListItem' }, (e) => this.removeListItem(e.node))
-      .with({ fn: 'setCell' }, (e) =>
+      .with({ kind: 'removeListItem' }, (e) => this.removeListItem(e.node))
+      .with({ kind: 'setCell' }, (e) =>
         this.setCell(e.table, e.row, e.col, e.text)
       )
-      .with({ fn: 'addRow' }, (e) => this.addRow(e.table, e.at))
-      .with({ fn: 'addColumn' }, (e) => this.addColumn(e.table, e.at))
-      .with({ fn: 'removeRow' }, (e) => this.removeRow(e.table, e.row))
-      .with({ fn: 'removeColumn' }, (e) => this.removeColumn(e.table, e.col))
-      .with({ fn: 'setImageAlt' }, (e) => this.setImageAlt(e.node, e.alt))
-      .with({ fn: 'setImageUrl' }, (e) => this.setImageUrl(e.node, e.url))
-      .with({ fn: 'setVideoUrl' }, (e) => this.setVideoUrl(e.node, e.url))
-      .with({ fn: 'setVideoControls' }, (e) =>
+      .with({ kind: 'addRow' }, (e) => this.addRow(e.table, e.at))
+      .with({ kind: 'addColumn' }, (e) => this.addColumn(e.table, e.at))
+      .with({ kind: 'removeRow' }, (e) => this.removeRow(e.table, e.row))
+      .with({ kind: 'removeColumn' }, (e) => this.removeColumn(e.table, e.col))
+      .with({ kind: 'setImageAlt' }, (e) => this.setImageAlt(e.node, e.alt))
+      .with({ kind: 'setImageUrl' }, (e) => this.setImageUrl(e.node, e.url))
+      .with({ kind: 'setVideoUrl' }, (e) => this.setVideoUrl(e.node, e.url))
+      .with({ kind: 'setVideoControls' }, (e) =>
         this.setVideoControls(e.node, e.controls)
       )
-      .with({ fn: 'setDate' }, (e) =>
+      .with({ kind: 'setDate' }, (e) =>
         this.setDate(e.node, e.date, e.displayFormat)
       )
       .exhaustive();
@@ -212,12 +208,12 @@ export class Doc implements DocReader, DocWriter {
   }
 
   private block(node: NodeRef): ElementNode {
-    return locate.$blockById(this.session, this.id(node));
+    return locate.$blockById(this.session, node);
   }
 
   public textLength(node: NodeRef): number {
     return this.read(
-      () => locate.$byId(this.session, this.id(node)).getTextContent().length
+      () => locate.$byId(this.session, node).getTextContent().length
     );
   }
 
@@ -227,7 +223,7 @@ export class Doc implements DocReader, DocWriter {
 
   public cellNode(table: string, row: number, col: number): NodeRef {
     return this.read(() => {
-      const cell = this.cell(this.id(table), row, col);
+      const cell = this.cell(table, row, col);
       const content = cell.getChildren().find($isElementNode) ?? cell;
       const cid = $getId(content as LexicalNode);
       if (!cid)
@@ -328,19 +324,19 @@ export class Doc implements DocReader, DocWriter {
 
   private formatNode(node: NodeRef, format: Format, on: boolean): void {
     this.tx(() => {
-      const tn = locate.$textById(this.session, this.id(node));
+      const tn = locate.$textById(this.session, node);
       const bit = FORMAT_BIT[format];
       if (tn.hasFormat(bit) !== on) tn.toggleFormat(bit);
     });
   }
 
   private clearNodeFormat(node: NodeRef): void {
-    this.tx(() => locate.$textById(this.session, this.id(node)).setFormat(0));
+    this.tx(() => locate.$textById(this.session, node).setFormat(0));
   }
 
   private setEquation(node: NodeRef, tex: string): void {
     this.tx(() =>
-      modify.$modifyNode(this.session, this.id(node), { op: 'equation', tex })
+      modify.$modifyNode(this.session, node, { op: 'equation', tex })
     );
   }
 
@@ -357,7 +353,7 @@ export class Doc implements DocReader, DocWriter {
           ? { type: 'code', language: opts.language }
           : { type: block };
     this.tx(() =>
-      modify.$modifyNode(this.session, this.id(node), {
+      modify.$modifyNode(this.session, node, {
         op: 'blockType',
         block: data,
       })
@@ -366,7 +362,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setListType(nodes: NodeRef[], list: ListKind): void {
     this.tx(() => {
-      const resolved = nodes.map((n) => locate.$byId(this.session, this.id(n)));
+      const resolved = nodes.map((n) => locate.$byId(this.session, n));
       const first = resolved[0];
       if (first && first.getType() === 'listitem')
         lists.$setListType(first, list, this.session);
@@ -376,7 +372,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setChecked(node: NodeRef, checked: boolean): void {
     this.tx(() =>
-      modify.$modifyNode(this.session, this.id(node), {
+      modify.$modifyNode(this.session, node, {
         op: 'checked',
         checked,
       })
@@ -385,13 +381,13 @@ export class Doc implements DocReader, DocWriter {
 
   private setIndent(node: NodeRef, indent: number | 'in' | 'out'): void {
     this.tx(() =>
-      modify.$modifyNode(this.session, this.id(node), { op: 'indent', indent })
+      modify.$modifyNode(this.session, node, { op: 'indent', indent })
     );
   }
 
   private appendListItem(ref: string, node: NodeRef, checked?: boolean): void {
     this.tx(() => {
-      const list = locate.$byId(this.session, this.id(node));
+      const list = locate.$byId(this.session, node);
       if (!$isListNode(list))
         throw new EditError('appendListItem target is not a list');
       const li = $createListItemNode(checked);
@@ -439,13 +435,13 @@ export class Doc implements DocReader, DocWriter {
       if ('after' in at)
         blocks.$moveBlock(
           block,
-          { placement: 'after', id: this.id(at.after) },
+          { placement: 'after', id: at.after },
           this.session
         );
       else if ('before' in at)
         blocks.$moveBlock(
           block,
-          { placement: 'before', id: this.id(at.before) },
+          { placement: 'before', id: at.before },
           this.session
         );
       else {
@@ -457,13 +453,13 @@ export class Doc implements DocReader, DocWriter {
   }
 
   private removeNode(node: NodeRef): void {
-    this.tx(() => locate.$byId(this.session, this.id(node)).remove());
+    this.tx(() => locate.$byId(this.session, node).remove());
   }
 
   private mergeBlocks(nodes: NodeRef[], separator: string): void {
     this.tx(() =>
       blocks.$mergeBlocks(
-        nodes.map((n) => locate.$byId(this.session, this.id(n))),
+        nodes.map((n) => locate.$byId(this.session, n)),
         separator
       )
     );
@@ -489,9 +485,9 @@ export class Doc implements DocReader, DocWriter {
 
   private removeListItem(node: NodeRef): void {
     this.tx(() => {
-      const li = locate.$byId(this.session, this.id(node));
+      const li = locate.$byId(this.session, node);
       if (!$isListItemNode(li))
-        throw new EditError(`{${this.id(node)}} is not a list item`);
+        throw new EditError(`{${node}} is not a list item`);
       li.remove();
     });
   }
@@ -507,9 +503,9 @@ export class Doc implements DocReader, DocWriter {
     list: ListKind,
     where: 'after' | 'before'
   ): void {
-    const target = locate.$byId(this.session, this.id(node));
+    const target = locate.$byId(this.session, node);
     if (!$isListItemNode(target))
-      throw new EditError(`{${this.id(node)}} is not a list item`);
+      throw new EditError(`{${node}} is not a list item`);
     const newLi = $createListItemNode(list === 'check' ? false : undefined);
     newLi.append($createTextNode(text));
 
@@ -537,18 +533,13 @@ export class Doc implements DocReader, DocWriter {
     text: string
   ): void {
     this.tx(() =>
-      tables.$setCell(
-        locate.$byId(this.session, this.id(table)),
-        row,
-        col,
-        text
-      )
+      tables.$setCell(locate.$byId(this.session, table), row, col, text)
     );
   }
 
   private addRow(table: NodeRef, at?: number): void {
     this.tx(() => {
-      const t = resolveTable(locate.$byId(this.session, this.id(table)));
+      const t = resolveTable(locate.$byId(this.session, table));
       const rows = t.getChildren().filter($isTableRowNode);
       const cols = rows[0]?.getChildren().filter($isTableCellNode).length ?? 1;
       const row = $createTableRowNode();
@@ -560,7 +551,7 @@ export class Doc implements DocReader, DocWriter {
 
   private addColumn(table: NodeRef, at?: number): void {
     this.tx(() => {
-      const t = resolveTable(locate.$byId(this.session, this.id(table)));
+      const t = resolveTable(locate.$byId(this.session, table));
       t.getChildren()
         .filter($isTableRowNode)
         .forEach((row, ri) => {
@@ -574,14 +565,14 @@ export class Doc implements DocReader, DocWriter {
 
   private removeRow(table: NodeRef, row: number): void {
     this.tx(() => {
-      const t = resolveTable(locate.$byId(this.session, this.id(table)));
+      const t = resolveTable(locate.$byId(this.session, table));
       t.getChildren().filter($isTableRowNode)[row]?.remove();
     });
   }
 
   private removeColumn(table: NodeRef, col: number): void {
     this.tx(() => {
-      const t = resolveTable(locate.$byId(this.session, this.id(table)));
+      const t = resolveTable(locate.$byId(this.session, table));
       for (const row of t.getChildren().filter($isTableRowNode)) {
         row.getChildren().filter($isTableCellNode)[col]?.remove();
       }
@@ -590,7 +581,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setImageAlt(node: NodeRef, alt: string): void {
     this.tx(() => {
-      const n = locate.$byId(this.session, this.id(node));
+      const n = locate.$byId(this.session, node);
       if (!(n instanceof ImageNode))
         throw new EditError(`{${node}} is not an image`);
       n.setAlt(alt);
@@ -599,7 +590,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setImageUrl(node: NodeRef, url: string): void {
     this.tx(() => {
-      const n = locate.$byId(this.session, this.id(node));
+      const n = locate.$byId(this.session, node);
       if (!(n instanceof ImageNode))
         throw new EditError(`{${node}} is not an image`);
       n.setUrl(url);
@@ -608,7 +599,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setVideoUrl(node: NodeRef, url: string): void {
     this.tx(() => {
-      const n = locate.$byId(this.session, this.id(node));
+      const n = locate.$byId(this.session, node);
       if (!(n instanceof VideoNode))
         throw new EditError(`{${node}} is not a video`);
       n.setUrl(url);
@@ -617,7 +608,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setVideoControls(node: NodeRef, controls: boolean): void {
     this.tx(() => {
-      const n = locate.$byId(this.session, this.id(node));
+      const n = locate.$byId(this.session, node);
       if (!(n instanceof VideoNode))
         throw new EditError(`{${node}} is not a video`);
       n.setControls(controls);
@@ -626,7 +617,7 @@ export class Doc implements DocReader, DocWriter {
 
   private setDate(node: NodeRef, date: string, displayFormat?: string): void {
     this.tx(() => {
-      const n = locate.$byId(this.session, this.id(node));
+      const n = locate.$byId(this.session, node);
       if (!$isDateMentionNode(n))
         throw new EditError(`{${node}} is not a date mention`);
       n.setDate(date);
@@ -647,12 +638,11 @@ export class Doc implements DocReader, DocWriter {
     }
   }
 
-  /** Mint/refresh ids for the freshly inserted subtree and record ref to id. */
+  /** Stamp the ref onto the node as its real id (refs ARE ids), then id the rest
+   *  of the inserted subtree so later reads/edits resolve. */
   private assignRef(ref: string, node: LexicalNode): void {
+    $setId(node, ref);
     $updateAllNodeIds(this.session.ids);
-    const id = $getId(node);
-    if (!id) throw new EditError('failed to assign id to inserted node');
-    this.refToId.set(ref, id);
   }
 }
 

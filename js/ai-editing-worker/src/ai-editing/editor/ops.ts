@@ -1,15 +1,15 @@
 /**
- * The op vocabulary. `DocumentEditor`'s many ergonomic methods all collapse onto
- * this small set of semantic `DocumentOp`s. Each op kind has exactly one animator
- * (queue/animators) and one writer path (doc/doc.ts). These are plain data —
- * nothing here imports Lexical.
+ * The unified op vocabulary. `DocumentEditor`'s ergonomic methods collapse onto
+ * this set; animators also emit these when simulating keystrokes. Each op kind
+ * has exactly one animator (queue/animators) and one writer path (doc/doc.ts).
+ * These are plain data — nothing here imports Lexical.
  */
 
 /** A durable node id (the `{id}` / `<t id>` the model sees). */
 export type NodeId = string;
 
 /** Placeholder for a node that doesn't exist yet; minted by a creator method and
- *  resolved to a real id by `Doc` when its `insertBlock`/`insertInline` runs. */
+ *  resolved to a real id by `Doc` when its `insertNode`/`insertInline` runs. */
 export type Ref = string;
 
 /** Either an existing node's id or a ref to a not-yet-created one. */
@@ -97,153 +97,104 @@ export type MentionSpec =
 /** Block-type targets for `setBlockType`. */
 export type BlockType = 'paragraph' | 'heading' | 'quote' | 'code';
 
-/** The canonical op set. Many `DocumentEditor` methods map onto each kind. */
+/**
+ * The canonical op set. `DocumentEditor` methods produce the high-level ops;
+ * animators also emit `insertText`, `removeText`, and `appendListItem` to
+ * simulate keystrokes. `DocWriter.apply` handles every variant.
+ */
 export type DocumentOp =
+  // animation primitives (emitted by animators, not DocumentEditor)
+  | { kind: 'insertText'; node: NodeRef; at: Offset; text: string }
+  | { kind: 'removeText'; node: NodeRef; at: Offset; len: number }
+  | { kind: 'appendListItem'; ref: string; node: NodeRef; checked?: boolean }
+  // text content
+  | { kind: 'setText'; node: NodeRef; text: string }
+  | { kind: 'setEquation'; node: NodeRef; tex: string }
+  | { kind: 'appendText'; node: NodeRef; text: string }
+  | { kind: 'prependText'; node: NodeRef; text: string }
+  | {
+      kind: 'replaceText';
+      node: NodeRef;
+      find: string;
+      to: string;
+      scope: Scope;
+    }
+  // inline formatting
   | {
       kind: 'formatText';
-      id: NodeId;
+      node: NodeRef;
       match: string;
       format: Format;
       on: boolean;
       scope: Scope;
     }
-  | { kind: 'clearFormat'; id: NodeId; match?: string; scope: Scope } // match omitted = whole block
-  | { kind: 'formatNode'; textId: NodeId; format: Format; on: boolean }
-  | { kind: 'clearNodeFormat'; textId: NodeId }
-  | { kind: 'markText'; id: NodeId; match: string; on: boolean; scope: Scope }
+  | { kind: 'clearFormat'; node: NodeRef; match?: string; scope: Scope }
+  | {
+      kind: 'markText';
+      node: NodeRef;
+      match: string;
+      on: boolean;
+      scope: Scope;
+    }
   | {
       kind: 'linkText';
-      id: NodeId;
+      node: NodeRef;
       match: string;
       url: string | null;
       scope: Scope;
     }
-  | { kind: 'setText'; id: NodeId; text: string }
-  | { kind: 'setEquation'; id: NodeId; tex: string }
-  | { kind: 'replaceText'; id: NodeId; find: string; to: string; scope: Scope }
-  | { kind: 'appendText'; id: NodeId; text: string }
-  | { kind: 'prependText'; id: NodeId; text: string }
+  | { kind: 'formatNode'; node: NodeRef; format: Format; on: boolean }
+  | { kind: 'clearNodeFormat'; node: NodeRef }
+  // block type / list
   | {
       kind: 'setBlockType';
-      id: NodeId;
+      node: NodeRef;
       block: BlockType;
       level?: number;
       language?: string;
     }
-  | { kind: 'setListType'; ids: NodeId[]; list: ListKind }
-  | { kind: 'setChecked'; id: NodeId; checked: boolean }
-  | { kind: 'setIndent'; id: NodeId; indent: number | 'in' | 'out' }
-  | { kind: 'insertBlock'; ref: Ref; spec: NodeSpec; at: Position }
-  | { kind: 'insertInline'; ref: Ref; id: NodeId; at: number; spec: NodeSpec }
-  | { kind: 'moveBlock'; id: NodeId; at: Position }
-  | { kind: 'removeBlock'; id: NodeId }
-  | { kind: 'mergeBlocks'; ids: NodeId[]; separator: string }
+  | { kind: 'setListType'; nodes: NodeRef[]; list: ListKind }
+  | { kind: 'setChecked'; node: NodeRef; checked: boolean }
+  | { kind: 'setIndent'; node: NodeRef; indent: number | 'in' | 'out' }
+  // structure
+  | { kind: 'insertNode'; ref: Ref; spec: NodeSpec; at: Position }
+  | {
+      kind: 'insertInline';
+      ref: Ref;
+      node: NodeRef;
+      at: Offset;
+      spec: NodeSpec;
+    }
+  | { kind: 'moveNode'; node: NodeRef; at: Position }
+  | { kind: 'removeNode'; node: NodeRef }
+  | { kind: 'mergeBlocks'; nodes: NodeRef[]; separator: string }
+  // list items
   | {
       kind: 'insertListItemAfter';
       ref: Ref;
-      id: NodeId;
+      node: NodeRef;
       text: string;
       list: ListKind;
     }
   | {
       kind: 'insertListItemBefore';
       ref: Ref;
-      id: NodeId;
+      node: NodeRef;
       text: string;
       list: ListKind;
     }
-  | { kind: 'removeListItem'; id: NodeId }
-  | {
-      kind: 'setCell';
-      table: NodeId;
-      row: number;
-      col: number;
-      content: string;
-    }
-  | { kind: 'addRow'; table: NodeId; at?: number }
-  | { kind: 'addColumn'; table: NodeId; at?: number }
-  | { kind: 'removeRow'; table: NodeId; row: number }
-  | { kind: 'removeColumn'; table: NodeId; col: number }
-  | { kind: 'setImageAlt'; id: NodeId; alt: string }
-  | { kind: 'setImageUrl'; id: NodeId; url: string }
-  | { kind: 'setVideoUrl'; id: NodeId; url: string }
-  | { kind: 'setVideoControls'; id: NodeId; controls: boolean }
-  | { kind: 'setDate'; id: NodeId; date: string; displayFormat?: string };
+  | { kind: 'removeListItem'; node: NodeRef }
+  // tables
+  | { kind: 'setCell'; table: NodeRef; row: number; col: number; text: string }
+  | { kind: 'addRow'; table: NodeRef; at?: number }
+  | { kind: 'addColumn'; table: NodeRef; at?: number }
+  | { kind: 'removeRow'; table: NodeRef; row: number }
+  | { kind: 'removeColumn'; table: NodeRef; col: number }
+  // media / date
+  | { kind: 'setImageAlt'; node: NodeRef; alt: string }
+  | { kind: 'setImageUrl'; node: NodeRef; url: string }
+  | { kind: 'setVideoUrl'; node: NodeRef; url: string }
+  | { kind: 'setVideoControls'; node: NodeRef; controls: boolean }
+  | { kind: 'setDate'; node: NodeRef; date: string; displayFormat?: string };
 
 export type DocumentOpKind = DocumentOp['kind'];
-
-/** One atomic edit, which is 1:1 with a `DocWriter` method. */
-export type Edit =
-  | { fn: 'insertText'; node: NodeRef; at: Offset; text: string }
-  | { fn: 'removeText'; node: NodeRef; at: Offset; len: number }
-  | { fn: 'setText'; node: NodeRef; text: string }
-  | { fn: 'setEquation'; node: NodeRef; tex: string }
-  | { fn: 'appendText'; node: NodeRef; text: string }
-  | { fn: 'prependText'; node: NodeRef; text: string }
-  | { fn: 'replaceText'; node: NodeRef; find: string; to: string; scope: Scope }
-  | {
-      fn: 'formatText';
-      node: NodeRef;
-      match: string;
-      format: Format;
-      on: boolean;
-      scope: Scope;
-    }
-  | { fn: 'clearFormat'; node: NodeRef; match?: string; scope: Scope }
-  | { fn: 'markText'; node: NodeRef; match: string; on: boolean; scope: Scope }
-  | {
-      fn: 'linkText';
-      node: NodeRef;
-      match: string;
-      url: string | null;
-      scope: Scope;
-    }
-  | { fn: 'formatNode'; node: NodeRef; format: Format; on: boolean }
-  | { fn: 'clearNodeFormat'; node: NodeRef }
-  | {
-      fn: 'setBlockType';
-      node: NodeRef;
-      block: BlockType;
-      level?: number;
-      language?: string;
-    }
-  | { fn: 'setListType'; nodes: NodeRef[]; list: ListKind }
-  | { fn: 'appendListItem'; ref: string; node: NodeRef; checked?: boolean }
-  | { fn: 'setChecked'; node: NodeRef; checked: boolean }
-  | { fn: 'setIndent'; node: NodeRef; indent: number | 'in' | 'out' }
-  | { fn: 'insertNode'; ref: string; spec: NodeSpec; at: Position }
-  | {
-      fn: 'insertInline';
-      ref: string;
-      node: NodeRef;
-      at: Offset;
-      spec: NodeSpec;
-    }
-  | { fn: 'moveNode'; node: NodeRef; at: Position }
-  | { fn: 'removeNode'; node: NodeRef }
-  | { fn: 'mergeBlocks'; nodes: NodeRef[]; separator: string }
-  | {
-      fn: 'insertListItemAfter';
-      ref: string;
-      node: NodeRef;
-      text: string;
-      list: ListKind;
-    }
-  | {
-      fn: 'insertListItemBefore';
-      ref: string;
-      node: NodeRef;
-      text: string;
-      list: ListKind;
-    }
-  | { fn: 'removeListItem'; node: NodeRef }
-  | { fn: 'setCell'; table: NodeRef; row: number; col: number; text: string }
-  | { fn: 'addRow'; table: NodeRef; at?: number }
-  | { fn: 'addColumn'; table: NodeRef; at?: number }
-  | { fn: 'removeRow'; table: NodeRef; row: number }
-  | { fn: 'removeColumn'; table: NodeRef; col: number }
-  | { fn: 'setImageAlt'; node: NodeRef; alt: string }
-  | { fn: 'setImageUrl'; node: NodeRef; url: string }
-  | { fn: 'setVideoUrl'; node: NodeRef; url: string }
-  | { fn: 'setVideoControls'; node: NodeRef; controls: boolean }
-  | { fn: 'setDate'; node: NodeRef; date: string; displayFormat?: string };

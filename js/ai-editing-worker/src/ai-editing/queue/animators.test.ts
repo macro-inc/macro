@@ -60,7 +60,7 @@ describe('formatText animator — full flow', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b5',
+        node: 'b5',
         match: 'Bluejay',
         format: 'bold',
         on: true,
@@ -100,7 +100,7 @@ describe('formatText animator — full flow', () => {
       {
         kind: 'edit',
         y: {
-          fn: 'formatText',
+          kind: 'formatText',
           node: 'b5',
           match: 'Bluejay',
           format: 'bold',
@@ -115,7 +115,7 @@ describe('formatText animator — full flow', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b5',
+        node: 'b5',
         match: 'x',
         format: 'italic',
         on: true,
@@ -151,7 +151,7 @@ describe('formatText animator — full flow', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b5',
+        node: 'b5',
         match: 'frog',
         format: 'bold',
         on: true,
@@ -174,7 +174,7 @@ describe('highlight sweep count honors ranges (0–5)', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b5',
+        node: 'b5',
         match: 'x',
         format: 'bold',
         on: true,
@@ -191,7 +191,7 @@ describe('highlight sweep count honors ranges (0–5)', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b5',
+        node: 'b5',
         match: 'x',
         format: 'bold',
         on: true,
@@ -215,7 +215,7 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
     // integer draws: preSelect(30), sweepCount=3, 3 sweep pauses(75), settle(145), preDelete(190), typeText lead-in settle(150).
     // real draws: typeJitter 1.05; chunk len 2 → round(30*2*1.05)=63.
     const action = run(
-      { kind: 'setText', id: 'b1', text: 'Hi' },
+      { kind: 'setText', node: 'b1', text: 'Hi' },
       {
         randomSource: mockRandomSource({
           integer: [30, 3, 75, 75, 75, 145, 190, 150],
@@ -248,10 +248,13 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
       },
       { kind: 'pause', ms: 145 },
       { kind: 'pause', ms: 190 }, // preDelete
-      { kind: 'edit', y: { fn: 'removeText', node: 'b1', at: 0, len: 5 } },
+      { kind: 'edit', y: { kind: 'removeText', node: 'b1', at: 0, len: 5 } },
       { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 0 } },
       { kind: 'pause', ms: 150 }, // typeText lead-in
-      { kind: 'edit', y: { fn: 'insertText', node: 'b1', at: 0, text: 'Hi' } },
+      {
+        kind: 'edit',
+        y: { kind: 'insertText', node: 'b1', at: 0, text: 'Hi' },
+      },
       { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 2 } },
       { kind: 'pause', ms: 63 },
     ]);
@@ -259,11 +262,11 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
 
   it('skips the delete when the block is empty', () => {
     const action = run(
-      { kind: 'setText', id: 'b1', text: 'A' },
+      { kind: 'setText', node: 'b1', text: 'A' },
       { docReader: reader({ textLength: () => 0 }) }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'insertText', node: 'b1', at: 0, text: 'A' },
+      { kind: 'insertText', node: 'b1', at: 0, text: 'A' },
     ]);
   });
 });
@@ -271,7 +274,7 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
 describe('append / prepend animators', () => {
   it('appendText puts the cursor at the end and types from there', () => {
     const action = run(
-      { kind: 'appendText', id: 'b1', text: '!' },
+      { kind: 'appendText', node: 'b1', text: '!' },
       {
         randomSource: mockRandomSource({ real: 1.05 }),
         docReader: reader({ textLength: () => 5 }),
@@ -280,23 +283,23 @@ describe('append / prepend animators', () => {
     expect(action.steps).toEqual<DocumentOpStep[]>([
       { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 5 } },
       { kind: 'pause', ms: 0 }, // typeText lead-in (default integer 0)
-      { kind: 'edit', y: { fn: 'insertText', node: 'b1', at: 5, text: '!' } },
+      { kind: 'edit', y: { kind: 'insertText', node: 'b1', at: 5, text: '!' } },
       { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 6 } },
       { kind: 'pause', ms: 32 },
     ]);
   });
   it('prependText types from offset 0', () => {
-    const action = run({ kind: 'prependText', id: 'b1', text: 'AB' });
+    const action = run({ kind: 'prependText', node: 'b1', text: 'AB' });
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'insertText', node: 'b1', at: 0, text: 'AB' },
+      { kind: 'insertText', node: 'b1', at: 0, text: 'AB' },
     ]);
   });
 });
 
-describe('insertBlock animator', () => {
+describe('insertNode animator', () => {
   it('inserts an EMPTY typed block, then types its text into the ref', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'ref-1',
       spec: { block: 'paragraph', text: 'Hi' },
       at: { after: 'b1' },
@@ -304,7 +307,7 @@ describe('insertBlock animator', () => {
     expect(action.steps[0]).toEqual({
       kind: 'edit',
       y: {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'ref-1',
         spec: { block: 'paragraph', text: '' },
         at: { after: 'b1' },
@@ -312,18 +315,18 @@ describe('insertBlock animator', () => {
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'ref-1',
         spec: { block: 'paragraph', text: '' },
         at: { after: 'b1' },
       },
-      { fn: 'insertText', node: 'ref-1', at: 0, text: 'Hi' },
+      { kind: 'insertText', node: 'ref-1', at: 0, text: 'Hi' },
     ]);
   });
   it('atomic block (image): caret to the insertion point, pause, it appears, caret moves in', () => {
     const action = run(
       {
-        kind: 'insertBlock',
+        kind: 'insertNode',
         ref: 'ref-2',
         spec: { block: 'image', srcType: 'url', url: 'http://i' },
         at: { after: 'b1' },
@@ -339,7 +342,7 @@ describe('insertBlock animator', () => {
       {
         kind: 'edit',
         y: {
-          fn: 'insertNode',
+          kind: 'insertNode',
           ref: 'ref-2',
           spec: { block: 'image', srcType: 'url', url: 'http://i' },
           at: { after: 'b1' },
@@ -351,22 +354,22 @@ describe('insertBlock animator', () => {
 
   it('divider: drafts the dashes, then swaps them for the rule', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'ref-3',
       spec: { block: 'divider' },
       at: { after: 'b1' },
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'ref-3~draft',
         spec: { block: 'paragraph', text: '' },
         at: { after: 'b1' },
       },
-      { fn: 'insertText', node: 'ref-3~draft', at: 0, text: '---' },
-      { fn: 'removeNode', node: 'ref-3~draft' },
+      { kind: 'insertText', node: 'ref-3~draft', at: 0, text: '---' },
+      { kind: 'removeNode', node: 'ref-3~draft' },
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'ref-3',
         spec: { block: 'divider' },
         at: { after: 'b1' },
@@ -386,7 +389,7 @@ describe('insertInline animator', () => {
       {
         kind: 'insertInline',
         ref: 'r1',
-        id: 'b1',
+        node: 'b1',
         at: 3,
         spec: { inline: 'date', date: '2026-01-01' },
       },
@@ -398,7 +401,7 @@ describe('insertInline animator', () => {
       {
         kind: 'edit',
         y: {
-          fn: 'insertInline',
+          kind: 'insertInline',
           ref: 'r1',
           node: 'b1',
           at: 3,
@@ -413,7 +416,7 @@ describe('default speed', () => {
   it('is 2x (800 wpm → ~15ms/char) at DEFAULT_QUEUE_PARAMS speed', () => {
     const msPerChar = 60_000 / (800 * 5); // 15
     const steps = animate(
-      { kind: 'appendText', id: 'b1', text: 'x' },
+      { kind: 'appendText', node: 'b1', text: 'x' },
       {
         randomSource: mockRandomSource({ real: 1.05 }),
         docReader: reader({ textLength: () => 0 }),
@@ -430,23 +433,23 @@ describe('default speed', () => {
 describe('setCell animator', () => {
   it('resolves the cell node and retypes it', () => {
     const action = run(
-      { kind: 'setCell', table: 'tbl', row: 1, col: 0, content: 'Hi' },
+      { kind: 'setCell', table: 'tbl', row: 1, col: 0, text: 'Hi' },
       { docReader: reader({ cellNode: () => 'cellX', textLength: () => 3 }) }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'removeText', node: 'cellX', at: 0, len: 3 },
-      { fn: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
+      { kind: 'removeText', node: 'cellX', at: 0, len: 3 },
+      { kind: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
     ]);
   });
 
   it('filling a freshly-built (empty) cell just types — cursor walks, no delete', () => {
     // this is the table-fill path: empty grid inserted, then each cell typed.
     const action = run(
-      { kind: 'setCell', table: 'tbl', row: 0, col: 0, content: 'Hi' },
+      { kind: 'setCell', table: 'tbl', row: 0, col: 0, text: 'Hi' },
       { docReader: reader({ cellNode: () => 'cellX', textLength: () => 0 }) }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
+      { kind: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
     ]);
     // the cursor lands at the end of the typed chunk (offset 2)
     const cursors = action.steps
@@ -459,14 +462,14 @@ describe('setCell animator', () => {
 describe('structural animators — focus then a single edit', () => {
   it('setBlockType selects the line, then transforms it', () => {
     const action = run(
-      { kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 },
+      { kind: 'setBlockType', node: 'b1', block: 'heading', level: 2 },
       { docReader: reader({ textLength: () => 5 }) }
     );
     expect(highlights(action.steps).length).toBeGreaterThan(0); // selected the line
     expect(action.steps.at(-1)).toEqual({
       kind: 'edit',
       y: {
-        fn: 'setBlockType',
+        kind: 'setBlockType',
         node: 'b1',
         block: 'heading',
         level: 2,
@@ -474,40 +477,43 @@ describe('structural animators — focus then a single edit', () => {
       },
     });
   });
-  it('removeBlock selects the whole block then removes it', () => {
+  it('removeNode selects the whole block then removes it', () => {
     const action = run(
-      { kind: 'removeBlock', id: 'b1' },
+      { kind: 'removeNode', node: 'b1' },
       { docReader: reader({ textLength: () => 4 }) }
     );
     const last = action.steps.at(-1);
-    expect(last).toEqual({ kind: 'edit', y: { fn: 'removeNode', node: 'b1' } });
+    expect(last).toEqual({
+      kind: 'edit',
+      y: { kind: 'removeNode', node: 'b1' },
+    });
     expect(highlights(action.steps).length).toBeGreaterThan(0);
   });
-  it('setListType focuses the first id and edits all', () => {
+  it('setListType focuses the first node and edits all', () => {
     expect(
       onlyEdits(
-        run({ kind: 'setListType', ids: ['b1', 'b2'], list: 'bullet' }).steps
+        run({ kind: 'setListType', nodes: ['b1', 'b2'], list: 'bullet' }).steps
       )
-    ).toEqual([{ fn: 'setListType', nodes: ['b1', 'b2'], list: 'bullet' }]);
+    ).toEqual([{ kind: 'setListType', nodes: ['b1', 'b2'], list: 'bullet' }]);
   });
 });
 
 describe('enriched structural animations', () => {
-  it('moveBlock selects the whole block before moving', () => {
+  it('moveNode selects the whole block before moving', () => {
     const steps = run(
-      { kind: 'moveBlock', id: 'b1', at: { before: 'b2' } },
+      { kind: 'moveNode', node: 'b1', at: { before: 'b2' } },
       { docReader: reader({ textLength: () => 6 }) }
     ).steps;
     expect(highlights(steps).length).toBeGreaterThan(0);
     expect(steps.at(-1)).toEqual({
       kind: 'edit',
-      y: { fn: 'moveNode', node: 'b1', at: { before: 'b2' } },
+      y: { kind: 'moveNode', node: 'b1', at: { before: 'b2' } },
     });
   });
 
   it('mergeBlocks highlights each block then merges', () => {
     const steps = run(
-      { kind: 'mergeBlocks', ids: ['b1', 'b2'], separator: ' ' },
+      { kind: 'mergeBlocks', nodes: ['b1', 'b2'], separator: ' ' },
       { docReader: reader({ textLength: () => 3 }) }
     ).steps;
     // highlights touch both b1 and b2
@@ -518,19 +524,19 @@ describe('enriched structural animations', () => {
       steps.some((s) => s.kind === 'awareness' && (s.x as any).node === 'b2')
     ).toBe(true);
     expect(onlyEdits(steps)).toEqual([
-      { fn: 'mergeBlocks', nodes: ['b1', 'b2'], separator: ' ' },
+      { kind: 'mergeBlocks', nodes: ['b1', 'b2'], separator: ' ' },
     ]);
   });
 
   it('clearFormat (whole block) selects all then clears', () => {
     const steps = run(
-      { kind: 'clearFormat', id: 'b1', scope: { kind: 'all' } },
+      { kind: 'clearFormat', node: 'b1', scope: { kind: 'all' } },
       { docReader: reader({ textLength: () => 8 }) }
     ).steps;
     expect(highlights(steps).length).toBeGreaterThan(0);
     expect(onlyEdits(steps)).toEqual([
       {
-        fn: 'clearFormat',
+        kind: 'clearFormat',
         node: 'b1',
         match: undefined,
         scope: { kind: 'all' },
@@ -542,7 +548,7 @@ describe('enriched structural animations', () => {
     const steps = run({
       kind: 'insertInline',
       ref: 'r1',
-      id: 'b1',
+      node: 'b1',
       at: 3,
       spec: { inline: 'linebreak' },
     }).steps;
@@ -552,7 +558,7 @@ describe('enriched structural animations', () => {
     });
     expect(onlyEdits(steps)).toEqual([
       {
-        fn: 'insertInline',
+        kind: 'insertInline',
         ref: 'r1',
         node: 'b1',
         at: 3,
@@ -563,12 +569,12 @@ describe('enriched structural animations', () => {
 });
 
 describe('every op kind has an animation that ends in the right edit', () => {
-  // one representative op per kind → (non-empty steps, terminal edit fn).
+  // one representative op per kind → (non-empty steps, terminal edit kind).
   const cases: Array<[DocumentOp, string]> = [
     [
       {
         kind: 'formatText',
-        id: 'b1',
+        node: 'b1',
         match: 'x',
         format: 'bold',
         on: true,
@@ -577,19 +583,22 @@ describe('every op kind has an animation that ends in the right edit', () => {
       'formatText',
     ],
     [
-      { kind: 'clearFormat', id: 'b1', match: 'x', scope: { kind: 'all' } },
+      { kind: 'clearFormat', node: 'b1', match: 'x', scope: { kind: 'all' } },
       'clearFormat',
     ],
-    [{ kind: 'clearFormat', id: 'b1', scope: { kind: 'all' } }, 'clearFormat'],
     [
-      { kind: 'formatNode', textId: 't1', format: 'italic', on: true },
+      { kind: 'clearFormat', node: 'b1', scope: { kind: 'all' } },
+      'clearFormat',
+    ],
+    [
+      { kind: 'formatNode', node: 't1', format: 'italic', on: true },
       'formatNode',
     ],
-    [{ kind: 'clearNodeFormat', textId: 't1' }, 'clearNodeFormat'],
+    [{ kind: 'clearNodeFormat', node: 't1' }, 'clearNodeFormat'],
     [
       {
         kind: 'markText',
-        id: 'b1',
+        node: 'b1',
         match: 'x',
         on: true,
         scope: { kind: 'all' },
@@ -599,36 +608,36 @@ describe('every op kind has an animation that ends in the right edit', () => {
     [
       {
         kind: 'linkText',
-        id: 'b1',
+        node: 'b1',
         match: 'x',
         url: 'u',
         scope: { kind: 'all' },
       },
       'linkText',
     ],
-    [{ kind: 'setText', id: 'b1', text: 'a' }, 'insertText'],
+    [{ kind: 'setText', node: 'b1', text: 'a' }, 'insertText'],
     [
       {
         kind: 'replaceText',
-        id: 'b1',
+        node: 'b1',
         find: 'a',
         to: 'b',
         scope: { kind: 'all' },
       },
       'replaceText',
     ],
-    [{ kind: 'appendText', id: 'b1', text: 'a' }, 'insertText'],
-    [{ kind: 'prependText', id: 'b1', text: 'a' }, 'insertText'],
+    [{ kind: 'appendText', node: 'b1', text: 'a' }, 'insertText'],
+    [{ kind: 'prependText', node: 'b1', text: 'a' }, 'insertText'],
     [
-      { kind: 'setBlockType', id: 'b1', block: 'heading', level: 1 },
+      { kind: 'setBlockType', node: 'b1', block: 'heading', level: 1 },
       'setBlockType',
     ],
-    [{ kind: 'setListType', ids: ['b1'], list: 'bullet' }, 'setListType'],
-    [{ kind: 'setChecked', id: 'b1', checked: true }, 'setChecked'],
-    [{ kind: 'setIndent', id: 'b1', indent: 'in' }, 'setIndent'],
+    [{ kind: 'setListType', nodes: ['b1'], list: 'bullet' }, 'setListType'],
+    [{ kind: 'setChecked', node: 'b1', checked: true }, 'setChecked'],
+    [{ kind: 'setIndent', node: 'b1', indent: 'in' }, 'setIndent'],
     [
       {
-        kind: 'insertBlock',
+        kind: 'insertNode',
         ref: 'r1',
         spec: { block: 'divider' },
         at: { after: 'b1' },
@@ -639,26 +648,26 @@ describe('every op kind has an animation that ends in the right edit', () => {
       {
         kind: 'insertInline',
         ref: 'r1',
-        id: 'b1',
+        node: 'b1',
         at: 0,
         spec: { inline: 'linebreak' },
       },
       'insertInline',
     ],
-    [{ kind: 'moveBlock', id: 'b1', at: { before: 'b2' } }, 'moveNode'],
-    [{ kind: 'removeBlock', id: 'b1' }, 'removeNode'],
-    [{ kind: 'mergeBlocks', ids: ['b1', 'b2'], separator: ' ' }, 'mergeBlocks'],
+    [{ kind: 'moveNode', node: 'b1', at: { before: 'b2' } }, 'moveNode'],
+    [{ kind: 'removeNode', node: 'b1' }, 'removeNode'],
     [
-      { kind: 'setCell', table: 't', row: 0, col: 0, content: 'a' },
-      'insertText',
+      { kind: 'mergeBlocks', nodes: ['b1', 'b2'], separator: ' ' },
+      'mergeBlocks',
     ],
+    [{ kind: 'setCell', table: 't', row: 0, col: 0, text: 'a' }, 'insertText'],
     [{ kind: 'addRow', table: 't' }, 'addRow'],
     [{ kind: 'addColumn', table: 't' }, 'addColumn'],
     [{ kind: 'removeRow', table: 't', row: 1 }, 'removeRow'],
     [{ kind: 'removeColumn', table: 't', col: 1 }, 'removeColumn'],
   ];
 
-  it.each(cases)('%o animates and ends in an edit', (op, terminalFn) => {
+  it.each(cases)('%o animates and ends in an edit', (op, terminalKind) => {
     const docReader = reader({
       locate: () => [{ node: 't1', start: 0, end: 1 }],
       textLength: () => 3,
@@ -668,12 +677,12 @@ describe('every op kind has an animation that ends in the right edit', () => {
     expect(steps.length).toBeGreaterThan(0);
     const edits = onlyEdits(steps);
     expect(edits.length).toBeGreaterThan(0);
-    expect(edits.at(-1)!.fn).toBe(terminalFn);
+    expect(edits.at(-1)!.kind).toBe(terminalKind);
   });
 
-  it('covers every DocumentOp kind', () => {
+  it('covers every user-facing DocumentOp kind', () => {
     const kinds = new Set(cases.map(([op]) => op.kind));
-    const all = [
+    const userFacing = [
       'formatText',
       'clearFormat',
       'formatNode',
@@ -688,10 +697,10 @@ describe('every op kind has an animation that ends in the right edit', () => {
       'setListType',
       'setChecked',
       'setIndent',
-      'insertBlock',
+      'insertNode',
       'insertInline',
-      'moveBlock',
-      'removeBlock',
+      'moveNode',
+      'removeNode',
       'mergeBlocks',
       'setCell',
       'addRow',
@@ -699,7 +708,8 @@ describe('every op kind has an animation that ends in the right edit', () => {
       'removeRow',
       'removeColumn',
     ];
-    for (const k of all) expect(kinds.has(k as DocumentOp['kind'])).toBe(true);
+    for (const k of userFacing)
+      expect(kinds.has(k as DocumentOp['kind'])).toBe(true);
   });
 });
 
@@ -712,7 +722,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -740,7 +750,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -769,7 +779,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -796,7 +806,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -822,7 +832,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -846,7 +856,7 @@ describe('sweepSelect — anchoring & grow offsets', () => {
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -874,7 +884,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -892,7 +902,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -910,7 +920,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         format: 'bold',
         on: true,
@@ -930,7 +940,7 @@ describe('sweepSelect — pause ms come straight from the integer draws', () => 
 describe('typeText — per-char pause = round(msPerChar * typeJitter draw)', () => {
   it('pause = round(30 * real draw): real=0.6 → 18', () => {
     const action = run(
-      { kind: 'appendText', id: 'b', text: 'a' },
+      { kind: 'appendText', node: 'b', text: 'a' },
       {
         randomSource: mockRandomSource({ real: 0.6 }),
         docReader: reader({ textLength: () => 0 }),
@@ -940,7 +950,7 @@ describe('typeText — per-char pause = round(msPerChar * typeJitter draw)', () 
   });
   it('pause = round(30 * real draw): real=1.5 → 45', () => {
     const action = run(
-      { kind: 'appendText', id: 'b', text: 'a' },
+      { kind: 'appendText', node: 'b', text: 'a' },
       {
         randomSource: mockRandomSource({ real: 1.5 }),
         docReader: reader({ textLength: () => 0 }),
@@ -952,13 +962,16 @@ describe('typeText — per-char pause = round(msPerChar * typeJitter draw)', () 
   it('chunk offset progression: insert/cursor/pause per 3-char chunk from the start offset', () => {
     // prependText types from offset 0; "abc" is one 3-char chunk → pause round(30*3*1.05)=95
     const action = run(
-      { kind: 'prependText', id: 'b', text: 'abc' },
+      { kind: 'prependText', node: 'b', text: 'abc' },
       { randomSource: mockRandomSource({ real: 1.05 }) }
     );
     expect(action.steps).toEqual<DocumentOpStep[]>([
       { kind: 'awareness', x: { type: 'cursor', node: 'b', at: 0 } },
       { kind: 'pause', ms: 0 }, // typeText lead-in (default integer 0)
-      { kind: 'edit', y: { fn: 'insertText', node: 'b', at: 0, text: 'abc' } },
+      {
+        kind: 'edit',
+        y: { kind: 'insertText', node: 'b', at: 0, text: 'abc' },
+      },
       { kind: 'awareness', x: { type: 'cursor', node: 'b', at: 3 } },
       { kind: 'pause', ms: 95 },
     ]);
@@ -966,21 +979,21 @@ describe('typeText — per-char pause = round(msPerChar * typeJitter draw)', () 
 
   it('appendText offsets start at the existing length', () => {
     const action = run(
-      { kind: 'appendText', id: 'b', text: 'XY' },
+      { kind: 'appendText', node: 'b', text: 'XY' },
       {
         randomSource: mockRandomSource({ real: 1.05 }),
         docReader: reader({ textLength: () => 7 }),
       }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'insertText', node: 'b', at: 7, text: 'XY' },
+      { kind: 'insertText', node: 'b', at: 7, text: 'XY' },
     ]);
     expect(cursors(action.steps).map((c) => c.x.at)).toEqual([7, 9]); // initial + after the chunk
   });
 
   it('empty append/prepend string → no edits and no type pauses', () => {
     const appendAction = run(
-      { kind: 'appendText', id: 'b', text: '' },
+      { kind: 'appendText', node: 'b', text: '' },
       { docReader: reader({ textLength: () => 3 }) }
     );
     // appendText still emits the initial cursor, but no insert/pause
@@ -988,7 +1001,7 @@ describe('typeText — per-char pause = round(msPerChar * typeJitter draw)', () 
     expect(pauses(appendAction.steps)).toEqual([]);
     expect(cursors(appendAction.steps)).toHaveLength(1);
 
-    const prependAction = run({ kind: 'prependText', id: 'b', text: '' });
+    const prependAction = run({ kind: 'prependText', node: 'b', text: '' });
     expect(onlyEdits(prependAction.steps)).toEqual([]);
     expect(pauses(prependAction.steps)).toEqual([]);
   });
@@ -998,7 +1011,7 @@ describe('retype (setText) — delete branch and ordering', () => {
   it('non-empty target: selectAll → preDelete pause → removeText → cursor 0 → typeText', () => {
     // integer draws: preSelect=30, sweeps=0 (single highlight), settle=90, preDelete=120, typeText lead-in=150. real=0.6 → type pause 18.
     const action = run(
-      { kind: 'setText', id: 'b', text: 'Z' },
+      { kind: 'setText', node: 'b', text: 'Z' },
       {
         randomSource: mockRandomSource({
           integer: [30, 0, 90, 120, 150],
@@ -1016,10 +1029,10 @@ describe('retype (setText) — delete branch and ordering', () => {
       },
       { kind: 'pause', ms: 90 }, // settle
       { kind: 'pause', ms: 120 }, // preDelete
-      { kind: 'edit', y: { fn: 'removeText', node: 'b', at: 0, len: 3 } },
+      { kind: 'edit', y: { kind: 'removeText', node: 'b', at: 0, len: 3 } },
       { kind: 'awareness', x: { type: 'cursor', node: 'b', at: 0 } },
       { kind: 'pause', ms: 150 }, // typeText lead-in
-      { kind: 'edit', y: { fn: 'insertText', node: 'b', at: 0, text: 'Z' } },
+      { kind: 'edit', y: { kind: 'insertText', node: 'b', at: 0, text: 'Z' } },
       { kind: 'awareness', x: { type: 'cursor', node: 'b', at: 1 } },
       { kind: 'pause', ms: 18 }, // typeJitter real 0.6 → round(30*0.6)
     ]);
@@ -1027,7 +1040,7 @@ describe('retype (setText) — delete branch and ordering', () => {
 
   it('empty target (textLength 0): no preDelete pause, no removeText, no cursor-0 reset', () => {
     const action = run(
-      { kind: 'setText', id: 'b', text: 'Hi' },
+      { kind: 'setText', node: 'b', text: 'Hi' },
       {
         randomSource: mockRandomSource({
           integer: [30, 0, 90, 150],
@@ -1038,12 +1051,12 @@ describe('retype (setText) — delete branch and ordering', () => {
     );
     // selectAll over a 0-length node still emits cursor + one final highlight + preSelect + settle pause
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'insertText', node: 'b', at: 0, text: 'Hi' },
+      { kind: 'insertText', node: 'b', at: 0, text: 'Hi' },
     ]);
     // removeText must NOT appear (delete branch skipped for empty target)
     expect(
       action.steps.filter(
-        (s) => s.kind === 'edit' && (s as any).y.fn === 'removeText'
+        (s) => s.kind === 'edit' && (s as any).y.kind === 'removeText'
       )
     ).toHaveLength(0);
     // no preDelete pause — preSelect(30) + settle(90) + typeText lead-in(150) + 1 chunk pause round(30*2*0.6)=36
@@ -1052,7 +1065,7 @@ describe('retype (setText) — delete branch and ordering', () => {
 
   it('empty target with empty text → just selectAll, no edits at all', () => {
     const action = run(
-      { kind: 'setText', id: 'b', text: '' },
+      { kind: 'setText', node: 'b', text: '' },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
         docReader: reader({ textLength: () => 0 }),
@@ -1067,7 +1080,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     const action = run(
       {
         kind: 'formatText',
-        id: 'b',
+        node: 'b',
         match: 'nope',
         format: 'bold',
         on: true,
@@ -1079,7 +1092,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
       {
         kind: 'edit',
         y: {
-          fn: 'formatText',
+          kind: 'formatText',
           node: 'b',
           match: 'nope',
           format: 'bold',
@@ -1101,7 +1114,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     const action = run(
       {
         kind: 'markText',
-        id: 'b',
+        node: 'b',
         match: 'x',
         on: true,
         scope: { kind: 'all' },
@@ -1123,7 +1136,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     ]);
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'markText',
+        kind: 'markText',
         node: 'b',
         match: 'x',
         on: true,
@@ -1136,7 +1149,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     const action = run(
       {
         kind: 'replaceText',
-        id: 'b',
+        node: 'b',
         find: 'cat',
         to: 'dog',
         scope: { kind: 'nth', n: 1 },
@@ -1147,7 +1160,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     );
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'replaceText',
+        kind: 'replaceText',
         node: 'b',
         find: 'cat',
         to: 'dog',
@@ -1160,7 +1173,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     const action = run(
       {
         kind: 'linkText',
-        id: 'b',
+        node: 'b',
         match: 'here',
         url: 'http://x',
         scope: { kind: 'all' },
@@ -1171,7 +1184,7 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     );
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'linkText',
+        kind: 'linkText',
         node: 'b',
         match: 'here',
         url: 'http://x',
@@ -1184,19 +1197,19 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
 describe('clearFormat animator — match vs whole-block branches', () => {
   it('with a match → sweepEachThen (per-occurrence selection)', () => {
     const action = run(
-      { kind: 'clearFormat', id: 'b', match: 'x', scope: { kind: 'all' } },
+      { kind: 'clearFormat', node: 'b', match: 'x', scope: { kind: 'all' } },
       {
         docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 1 }] }),
       }
     );
     expect(highlights(action.steps).length).toBeGreaterThan(0);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'clearFormat', node: 'b', match: 'x', scope: { kind: 'all' } },
+      { kind: 'clearFormat', node: 'b', match: 'x', scope: { kind: 'all' } },
     ]);
   });
   it('without a match → selectAll over the whole block then one clear', () => {
     const action = run(
-      { kind: 'clearFormat', id: 'b', scope: { kind: 'all' } },
+      { kind: 'clearFormat', node: 'b', scope: { kind: 'all' } },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
         docReader: reader({ textLength: () => 6 }),
@@ -1207,7 +1220,7 @@ describe('clearFormat animator — match vs whole-block branches', () => {
     expect([hl[0]!.x.span.start, hl[0]!.x.span.end]).toEqual([0, 6]);
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'clearFormat',
+        kind: 'clearFormat',
         node: 'b',
         match: undefined,
         scope: { kind: 'all' },
@@ -1216,10 +1229,10 @@ describe('clearFormat animator — match vs whole-block branches', () => {
   });
 });
 
-describe('formatNode / clearNodeFormat animators — sweep over textId length', () => {
+describe('formatNode / clearNodeFormat animators — sweep over node length', () => {
   it('formatNode selects the whole text-node then formats', () => {
     const action = run(
-      { kind: 'formatNode', textId: 't1', format: 'italic', on: true },
+      { kind: 'formatNode', node: 't1', format: 'italic', on: true },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
         docReader: reader({ textLength: () => 4 }),
@@ -1228,63 +1241,63 @@ describe('formatNode / clearNodeFormat animators — sweep over textId length', 
     const hl = highlights(action.steps);
     expect([hl[0]!.x.span.start, hl[0]!.x.span.end]).toEqual([0, 4]);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'formatNode', node: 't1', format: 'italic', on: true },
+      { kind: 'formatNode', node: 't1', format: 'italic', on: true },
     ]);
   });
   it('clearNodeFormat selects the whole text-node then clears', () => {
     const action = run(
-      { kind: 'clearNodeFormat', textId: 't1' },
+      { kind: 'clearNodeFormat', node: 't1' },
       {
         randomSource: mockRandomSource({ integer: [30, 0, 90] }),
         docReader: reader({ textLength: () => 4 }),
       }
     );
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'clearNodeFormat', node: 't1' },
+      { kind: 'clearNodeFormat', node: 't1' },
     ]);
   });
 });
 
-describe('insertBlock animator — typed vs whole', () => {
+describe('insertNode animator — typed vs whole', () => {
   it('heading is a TYPED_BLOCK: inserted empty then typed', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'heading', level: 2, text: 'Hi' },
       at: { after: 'b1' },
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'r',
         spec: { block: 'heading', level: 2, text: '' },
         at: { after: 'b1' },
       },
-      { fn: 'insertText', node: 'r', at: 0, text: 'Hi' },
+      { kind: 'insertText', node: 'r', at: 0, text: 'Hi' },
     ]);
   });
   it('quote/code are TYPED_BLOCKS too', () => {
     const q = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'quote', text: 'X' },
       at: { appendToRoot: true },
     });
-    expect(onlyEdits(q.steps).map((e: any) => e.fn)).toEqual([
+    expect(onlyEdits(q.steps).map((e: any) => e.kind)).toEqual([
       'insertNode',
       'insertText',
     ]);
   });
   it('a typed block with empty text inserts empty and types nothing', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'paragraph', text: '' },
       at: { appendToRoot: true },
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'r',
         spec: { block: 'paragraph', text: '' },
         at: { appendToRoot: true },
@@ -1293,14 +1306,14 @@ describe('insertBlock animator — typed vs whole', () => {
   });
   it('a typed block with NO text key inserts empty and types nothing', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'paragraph' },
       at: { appendToRoot: true },
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'r',
         spec: { block: 'paragraph', text: '' },
         at: { appendToRoot: true },
@@ -1309,22 +1322,22 @@ describe('insertBlock animator — typed vs whole', () => {
   });
   it('list builds item by item: empty list, then append + type each item', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'list', list: 'bullet', items: ['a', 'b'] },
       at: { appendToRoot: true },
     });
     expect(onlyEdits(action.steps)).toEqual([
       {
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: 'r',
         spec: { block: 'list', list: 'bullet', items: [] },
         at: { appendToRoot: true },
       },
-      { fn: 'appendListItem', ref: 'r~li-0', node: 'r', checked: undefined },
-      { fn: 'insertText', node: 'r~li-0', at: 0, text: 'a' },
-      { fn: 'appendListItem', ref: 'r~li-1', node: 'r', checked: undefined },
-      { fn: 'insertText', node: 'r~li-1', at: 0, text: 'b' },
+      { kind: 'appendListItem', ref: 'r~li-0', node: 'r', checked: undefined },
+      { kind: 'insertText', node: 'r~li-0', at: 0, text: 'a' },
+      { kind: 'appendListItem', ref: 'r~li-1', node: 'r', checked: undefined },
+      { kind: 'insertText', node: 'r~li-1', at: 0, text: 'b' },
     ]);
     // each item's caret drops into its own fresh node before typing
     expect(cursors(action.steps).map((c) => c.x.node)).toContain('r~li-0');
@@ -1332,13 +1345,13 @@ describe('insertBlock animator — typed vs whole', () => {
   });
   it('check list seeds each appended item as unchecked', () => {
     const action = run({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       ref: 'r',
       spec: { block: 'list', list: 'check', items: ['x'] },
       at: { appendToRoot: true },
     });
     expect(onlyEdits(action.steps)).toContainEqual({
-      fn: 'appendListItem',
+      kind: 'appendListItem',
       ref: 'r~li-0',
       node: 'r',
       checked: false,
@@ -1347,9 +1360,9 @@ describe('insertBlock animator — typed vs whole', () => {
 });
 
 describe('mergeBlocks animator — between-node pauses', () => {
-  it('three ids → two betweenNodes pauses and one merge edit', () => {
+  it('three nodes → two betweenNodes pauses and one merge edit', () => {
     const action = run(
-      { kind: 'mergeBlocks', ids: ['b1', 'b2', 'b3'], separator: ' ' },
+      { kind: 'mergeBlocks', nodes: ['b1', 'b2', 'b3'], separator: ' ' },
       {
         randomSource: mockRandomSource({
           integer: [30, 0, 90, 180, 30, 0, 90, 180, 30, 0, 90],
@@ -1359,7 +1372,7 @@ describe('mergeBlocks animator — between-node pauses', () => {
     );
     expect(pauses(action.steps).filter((ms) => ms === 180)).toHaveLength(2);
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'mergeBlocks', nodes: ['b1', 'b2', 'b3'], separator: ' ' },
+      { kind: 'mergeBlocks', nodes: ['b1', 'b2', 'b3'], separator: ' ' },
     ]);
     expect(highlights(action.steps).map((h) => h.x.node)).toEqual([
       'b1',
@@ -1378,13 +1391,13 @@ describe('addRow/addColumn/removeRow/removeColumn — focus then table edit', ()
     expect(action.steps).toEqual<DocumentOpStep[]>([
       { kind: 'awareness', x: { type: 'cursor', node: 't', at: 0 } },
       { kind: 'pause', ms: 90 },
-      { kind: 'edit', y: { fn: 'addRow', table: 't', at: 2 } },
+      { kind: 'edit', y: { kind: 'addRow', table: 't', at: 2 } },
     ]);
   });
   it('removeColumn', () => {
     const action = run({ kind: 'removeColumn', table: 't', col: 1 });
     expect(onlyEdits(action.steps)).toEqual([
-      { fn: 'removeColumn', table: 't', col: 1 },
+      { kind: 'removeColumn', table: 't', col: 1 },
     ]);
   });
 });

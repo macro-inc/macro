@@ -19,7 +19,7 @@ import type {
   Scope,
 } from '../editor/ops';
 import type { RandomSource } from './random-source';
-import type { DocumentOpStep, Edit, RandomRanges } from './types';
+import type { DocumentOpStep, RandomRanges } from './types';
 
 export type AnimatorCtx = {
   randomSource: RandomSource;
@@ -40,7 +40,7 @@ const highlight = (
   kind: 'awareness',
   x: { type: 'highlight', node, span: { start, end } },
 });
-const edit = (y: Edit): DocumentOpStep => ({ kind: 'edit', y });
+const edit = (y: DocumentOp): DocumentOpStep => ({ kind: 'edit', y });
 
 /**
  * Drag-select [start, end] on a node: rest the caret on one end (direction-biased)
@@ -98,7 +98,7 @@ function typeText(
   ];
   for (let k = 0; k < text.length; k += TYPE_CHUNK) {
     const chunk = text.slice(k, k + TYPE_CHUNK);
-    steps.push(edit({ fn: 'insertText', node, at: from + k, text: chunk }));
+    steps.push(edit({ kind: 'insertText', node, at: from + k, text: chunk }));
     steps.push(cursor(node, from + k + chunk.length));
     steps.push({
       kind: 'pause',
@@ -128,7 +128,7 @@ function sweepEachThen(
   id: string,
   match: string,
   scope: Scope,
-  finalEdit: Edit,
+  finalEdit: DocumentOp,
   ctx: AnimatorCtx
 ): DocumentOpStep[] {
   const matches = ctx.docReader.locate(id, match, scope);
@@ -158,7 +158,7 @@ function retype(
       kind: 'pause',
       ms: ctx.randomSource.integer(ctx.ranges.preDeletePauseMs),
     });
-    steps.push(edit({ fn: 'removeText', node, at: 0, len }));
+    steps.push(edit({ kind: 'removeText', node, at: 0, len }));
     steps.push(cursor(node, 0));
   }
   steps.push(...typeText(node, text, 0, ctx));
@@ -187,8 +187,8 @@ function insertLead(at: Position, ctx: AnimatorCtx): DocumentOpStep[] {
  *  - divider: type `-`,`-`,`-` on a fresh line, beat, then it becomes a rule.
  *  - other atomic blocks (image/video/equation/list/table): caret to the spot,
  *    brief pause, it appears, caret moves into it. */
-function animateInsertBlock(
-  o: Extract<DocumentOp, { kind: 'insertBlock' }>,
+function animateInsertNode(
+  o: Extract<DocumentOp, { kind: 'insertNode' }>,
   ctx: AnimatorCtx
 ): DocumentOpStep[] {
   const spec = o.spec;
@@ -196,7 +196,7 @@ function animateInsertBlock(
     const text = (spec as { text?: string }).text ?? '';
     const steps: DocumentOpStep[] = [
       edit({
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: o.ref,
         spec: { ...spec, text: '' } as NodeSpec,
         at: o.at,
@@ -216,7 +216,7 @@ function animateInsertBlock(
     const steps: DocumentOpStep[] = [
       ...insertLead(o.at, ctx),
       edit({
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: o.ref,
         spec: { ...spec, items: [] } as NodeSpec,
         at: o.at,
@@ -225,7 +225,7 @@ function animateInsertBlock(
     spec.items.forEach((text, i) => {
       const itemRef = `${o.ref}~li-${i}`;
       steps.push(
-        edit({ fn: 'appendListItem', ref: itemRef, node: o.ref, checked })
+        edit({ kind: 'appendListItem', ref: itemRef, node: o.ref, checked })
       );
       steps.push(cursor(itemRef, 0));
       steps.push(...typeText(itemRef, text, 0, ctx));
@@ -237,7 +237,7 @@ function animateInsertBlock(
     const draft = `${o.ref}~draft`;
     return [
       edit({
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: draft,
         spec: { block: 'paragraph', text: '' },
         at: o.at,
@@ -245,9 +245,9 @@ function animateInsertBlock(
       cursor(draft, 0),
       ...typeText(draft, '---', 0, ctx),
       { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) },
-      edit({ fn: 'removeNode', node: draft }),
+      edit({ kind: 'removeNode', node: draft }),
       edit({
-        fn: 'insertNode',
+        kind: 'insertNode',
         ref: o.ref,
         spec: { block: 'divider' },
         at: o.at,
@@ -256,7 +256,7 @@ function animateInsertBlock(
   }
   return [
     ...insertLead(o.at, ctx),
-    edit({ fn: 'insertNode', ref: o.ref, spec, at: o.at }),
+    edit({ kind: 'insertNode', ref: o.ref, spec, at: o.at }),
     cursor(o.ref, 0),
   ];
 }
@@ -268,12 +268,12 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       // inline: sweep each occurrence, then one match-based edit
       .with({ kind: 'formatText' }, (o) =>
         sweepEachThen(
-          o.id,
+          o.node,
           o.match,
           o.scope,
           {
-            fn: 'formatText',
-            node: o.id,
+            kind: 'formatText',
+            node: o.node,
             match: o.match,
             format: o.format,
             on: o.on,
@@ -284,12 +284,12 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       )
       .with({ kind: 'markText' }, (o) =>
         sweepEachThen(
-          o.id,
+          o.node,
           o.match,
           o.scope,
           {
-            fn: 'markText',
-            node: o.id,
+            kind: 'markText',
+            node: o.node,
             match: o.match,
             on: o.on,
             scope: o.scope,
@@ -299,12 +299,12 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       )
       .with({ kind: 'linkText' }, (o) =>
         sweepEachThen(
-          o.id,
+          o.node,
           o.match,
           o.scope,
           {
-            fn: 'linkText',
-            node: o.id,
+            kind: 'linkText',
+            node: o.node,
             match: o.match,
             url: o.url,
             scope: o.scope,
@@ -314,12 +314,12 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       )
       .with({ kind: 'replaceText' }, (o) =>
         sweepEachThen(
-          o.id,
+          o.node,
           o.find,
           o.scope,
           {
-            fn: 'replaceText',
-            node: o.id,
+            kind: 'replaceText',
+            node: o.node,
             find: o.find,
             to: o.to,
             scope: o.scope,
@@ -330,121 +330,126 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       .with({ kind: 'clearFormat' }, (o) =>
         o.match === undefined
           ? [
-              ...selectAll(o.id, ctx),
+              ...selectAll(o.node, ctx),
               edit({
-                fn: 'clearFormat',
-                node: o.id,
+                kind: 'clearFormat',
+                node: o.node,
                 match: undefined,
                 scope: o.scope,
               }),
             ]
           : sweepEachThen(
-              o.id,
+              o.node,
               o.match,
               o.scope,
-              { fn: 'clearFormat', node: o.id, match: o.match, scope: o.scope },
+              {
+                kind: 'clearFormat',
+                node: o.node,
+                match: o.match,
+                scope: o.scope,
+              },
               ctx
             )
       )
       .with({ kind: 'formatNode' }, (o) => [
-        ...sweepSelect(o.textId, 0, ctx.docReader.textLength(o.textId), ctx),
-        edit({ fn: 'formatNode', node: o.textId, format: o.format, on: o.on }),
+        ...sweepSelect(o.node, 0, ctx.docReader.textLength(o.node), ctx),
+        edit({ kind: 'formatNode', node: o.node, format: o.format, on: o.on }),
       ])
       .with({ kind: 'clearNodeFormat' }, (o) => [
-        ...sweepSelect(o.textId, 0, ctx.docReader.textLength(o.textId), ctx),
-        edit({ fn: 'clearNodeFormat', node: o.textId }),
+        ...sweepSelect(o.node, 0, ctx.docReader.textLength(o.node), ctx),
+        edit({ kind: 'clearNodeFormat', node: o.node }),
       ])
       // text content: type
-      .with({ kind: 'setText' }, (o) => retype(o.id, o.text, ctx))
+      .with({ kind: 'setText' }, (o) => retype(o.node, o.text, ctx))
       .with({ kind: 'setEquation' }, (o) => [
-        ...selectAll(o.id, ctx),
-        edit({ fn: 'setEquation', node: o.id, tex: o.tex }),
+        ...selectAll(o.node, ctx),
+        edit({ kind: 'setEquation', node: o.node, tex: o.tex }),
       ])
       .with({ kind: 'appendText' }, (o) => {
-        const len = ctx.docReader.textLength(o.id);
-        return [cursor(o.id, len), ...typeText(o.id, o.text, len, ctx)];
+        const len = ctx.docReader.textLength(o.node);
+        return [cursor(o.node, len), ...typeText(o.node, o.text, len, ctx)];
       })
       .with({ kind: 'prependText' }, (o) => [
-        cursor(o.id, 0),
-        ...typeText(o.id, o.text, 0, ctx),
+        cursor(o.node, 0),
+        ...typeText(o.node, o.text, 0, ctx),
       ])
       // block type / list
       // select the line, then transform it — like a person selecting and restyling.
       .with({ kind: 'setBlockType' }, (o) => [
-        ...selectAll(o.id, ctx),
+        ...selectAll(o.node, ctx),
         edit({
-          fn: 'setBlockType',
-          node: o.id,
+          kind: 'setBlockType',
+          node: o.node,
           block: o.block,
           level: o.level,
           language: o.language,
         }),
       ])
       .with({ kind: 'setListType' }, (o) => [
-        ...focus(o.ids[0]!, ctx),
-        edit({ fn: 'setListType', nodes: o.ids, list: o.list }),
+        ...focus(o.nodes[0]!, ctx),
+        edit({ kind: 'setListType', nodes: o.nodes, list: o.list }),
       ])
       .with({ kind: 'setChecked' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setChecked', node: o.id, checked: o.checked }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setChecked', node: o.node, checked: o.checked }),
       ])
       .with({ kind: 'setIndent' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setIndent', node: o.id, indent: o.indent }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setIndent', node: o.node, indent: o.indent }),
       ])
       // structure
-      .with({ kind: 'insertBlock' }, (o) => animateInsertBlock(o, ctx))
+      .with({ kind: 'insertNode' }, (o) => animateInsertNode(o, ctx))
       // caret to the offset, brief pause, the inline node appears.
       .with({ kind: 'insertInline' }, (o) => [
-        cursor(o.id, o.at),
+        cursor(o.node, o.at),
         {
           kind: 'pause',
           ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs),
         },
         edit({
-          fn: 'insertInline',
+          kind: 'insertInline',
           ref: o.ref,
-          node: o.id,
+          node: o.node,
           at: o.at,
           spec: o.spec,
         }),
       ])
       // select the whole block first, so the user sees what is about to move.
-      .with({ kind: 'moveBlock' }, (o) => [
-        ...selectAll(o.id, ctx),
-        edit({ fn: 'moveNode', node: o.id, at: o.at }),
+      .with({ kind: 'moveNode' }, (o) => [
+        ...selectAll(o.node, ctx),
+        edit({ kind: 'moveNode', node: o.node, at: o.at }),
       ])
       // select the whole block, hesitate, then delete — destroying content is deliberate.
-      .with({ kind: 'removeBlock' }, (o) => [
-        ...selectAll(o.id, ctx),
+      .with({ kind: 'removeNode' }, (o) => [
+        ...selectAll(o.node, ctx),
         {
           kind: 'pause',
           ms: ctx.randomSource.integer(ctx.ranges.preDeletePauseMs),
         },
-        edit({ fn: 'removeNode', node: o.id }),
+        edit({ kind: 'removeNode', node: o.node }),
       ])
       // highlight each block being combined, in turn, then merge.
       .with({ kind: 'mergeBlocks' }, (o) => {
         const steps: DocumentOpStep[] = [];
-        o.ids.forEach((id, i) => {
+        o.nodes.forEach((node, i) => {
           if (i > 0)
             steps.push({
               kind: 'pause',
               ms: ctx.randomSource.integer(ctx.ranges.betweenNodesPauseMs),
             });
-          steps.push(...selectAll(id, ctx));
+          steps.push(...selectAll(node, ctx));
         });
         steps.push(
-          edit({ fn: 'mergeBlocks', nodes: o.ids, separator: o.separator })
+          edit({ kind: 'mergeBlocks', nodes: o.nodes, separator: o.separator })
         );
         return steps;
       })
       .with({ kind: 'insertListItemAfter' }, (o) => [
-        ...insertLead({ after: o.id }, ctx),
+        ...insertLead({ after: o.node }, ctx),
         edit({
-          fn: 'insertListItemAfter',
+          kind: 'insertListItemAfter',
           ref: o.ref,
-          node: o.id,
+          node: o.node,
           text: '',
           list: o.list,
         }),
@@ -452,11 +457,11 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         ...typeText(o.ref, o.text, 0, ctx),
       ])
       .with({ kind: 'insertListItemBefore' }, (o) => [
-        ...insertLead({ before: o.id }, ctx),
+        ...insertLead({ before: o.node }, ctx),
         edit({
-          fn: 'insertListItemBefore',
+          kind: 'insertListItemBefore',
           ref: o.ref,
-          node: o.id,
+          node: o.node,
           text: '',
           list: o.list,
         }),
@@ -464,59 +469,64 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         ...typeText(o.ref, o.text, 0, ctx),
       ])
       .with({ kind: 'removeListItem' }, (o) => [
-        ...selectAll(o.id, ctx),
+        ...selectAll(o.node, ctx),
         {
           kind: 'pause',
           ms: ctx.randomSource.integer(ctx.ranges.preDeletePauseMs),
         },
-        edit({ fn: 'removeListItem', node: o.id }),
+        edit({ kind: 'removeListItem', node: o.node }),
       ])
       // tables
       .with({ kind: 'setCell' }, (o) =>
-        retype(ctx.docReader.cellNode(o.table, o.row, o.col), o.content, ctx)
+        retype(ctx.docReader.cellNode(o.table, o.row, o.col), o.text, ctx)
       )
       .with({ kind: 'addRow' }, (o) => [
         ...focus(o.table, ctx),
-        edit({ fn: 'addRow', table: o.table, at: o.at }),
+        edit({ kind: 'addRow', table: o.table, at: o.at }),
       ])
       .with({ kind: 'addColumn' }, (o) => [
         ...focus(o.table, ctx),
-        edit({ fn: 'addColumn', table: o.table, at: o.at }),
+        edit({ kind: 'addColumn', table: o.table, at: o.at }),
       ])
       .with({ kind: 'removeRow' }, (o) => [
         ...focus(o.table, ctx),
-        edit({ fn: 'removeRow', table: o.table, row: o.row }),
+        edit({ kind: 'removeRow', table: o.table, row: o.row }),
       ])
       .with({ kind: 'removeColumn' }, (o) => [
         ...focus(o.table, ctx),
-        edit({ fn: 'removeColumn', table: o.table, col: o.col }),
+        edit({ kind: 'removeColumn', table: o.table, col: o.col }),
       ])
       // media / date — focus the node, apply the property change
       .with({ kind: 'setImageAlt' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setImageAlt', node: o.id, alt: o.alt }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setImageAlt', node: o.node, alt: o.alt }),
       ])
       .with({ kind: 'setImageUrl' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setImageUrl', node: o.id, url: o.url }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setImageUrl', node: o.node, url: o.url }),
       ])
       .with({ kind: 'setVideoUrl' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setVideoUrl', node: o.id, url: o.url }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setVideoUrl', node: o.node, url: o.url }),
       ])
       .with({ kind: 'setVideoControls' }, (o) => [
-        ...focus(o.id, ctx),
-        edit({ fn: 'setVideoControls', node: o.id, controls: o.controls }),
+        ...focus(o.node, ctx),
+        edit({ kind: 'setVideoControls', node: o.node, controls: o.controls }),
       ])
       .with({ kind: 'setDate' }, (o) => [
-        ...focus(o.id, ctx),
+        ...focus(o.node, ctx),
         edit({
-          fn: 'setDate',
-          node: o.id,
+          kind: 'setDate',
+          node: o.node,
           date: o.date,
           displayFormat: o.displayFormat,
         }),
       ])
+      // animation primitives — pass through as-is (animators call these directly,
+      // but they should never be dispatched through animate() in normal use)
+      .with({ kind: 'insertText' }, (o) => [edit(o)])
+      .with({ kind: 'removeText' }, (o) => [edit(o)])
+      .with({ kind: 'appendListItem' }, (o) => [edit(o)])
       .exhaustive()
   );
 }

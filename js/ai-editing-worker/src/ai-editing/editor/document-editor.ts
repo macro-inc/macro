@@ -52,7 +52,7 @@ export class DocumentEditor {
 
   private mintRef(): Ref {
     const ref = `ref-${++refSeq}`;
-    this.valid.add(ref); // later calls may target the new node
+    this.valid.add(ref);
     return ref;
   }
 
@@ -72,7 +72,14 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     this.requireMatch(match);
-    return this.push({ kind: 'formatText', id, match, format, on, scope });
+    return this.push({
+      kind: 'formatText',
+      node: id,
+      match,
+      format,
+      on,
+      scope,
+    });
   }
   public bold(id: NodeId, match: string, scope?: Scope): this {
     return this.format(id, match, 'bold', true, scope);
@@ -123,7 +130,7 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     if (match !== undefined) this.requireMatch(match);
-    return this.push({ kind: 'clearFormat', id, match, scope });
+    return this.push({ kind: 'clearFormat', node: id, match, scope });
   }
   public clearAllFormat(id: NodeId): this {
     return this.clearFormat(id);
@@ -136,7 +143,7 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     this.requireMatch(match);
-    return this.push({ kind: 'markText', id, match, on: true, scope });
+    return this.push({ kind: 'markText', node: id, match, on: true, scope });
   }
   public unhighlight(
     id: NodeId,
@@ -145,7 +152,7 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     this.requireMatch(match);
-    return this.push({ kind: 'markText', id, match, on: false, scope });
+    return this.push({ kind: 'markText', node: id, match, on: false, scope });
   }
 
   public link(
@@ -156,7 +163,7 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     this.requireMatch(match);
-    return this.push({ kind: 'linkText', id, match, url, scope });
+    return this.push({ kind: 'linkText', node: id, match, url, scope });
   }
   public unlink(
     id: NodeId,
@@ -165,45 +172,45 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     this.requireMatch(match);
-    return this.push({ kind: 'linkText', id, match, url: null, scope });
+    return this.push({ kind: 'linkText', node: id, match, url: null, scope });
   }
 
-  public formatNode(textId: NodeId, format: Format, on = true): this {
-    this.requireId(textId);
-    return this.push({ kind: 'formatNode', textId, format, on });
+  public formatNode(node: NodeId, format: Format, on = true): this {
+    this.requireId(node);
+    return this.push({ kind: 'formatNode', node, format, on });
   }
-  public boldNode(textId: NodeId): this {
-    return this.formatNode(textId, 'bold');
-  }
-
-  public italicNode(textId: NodeId): this {
-    return this.formatNode(textId, 'italic');
+  public boldNode(node: NodeId): this {
+    return this.formatNode(node, 'bold');
   }
 
-  public underlineNode(textId: NodeId): this {
-    return this.formatNode(textId, 'underline');
+  public italicNode(node: NodeId): this {
+    return this.formatNode(node, 'italic');
   }
 
-  public strikeNode(textId: NodeId): this {
-    return this.formatNode(textId, 'strike');
+  public underlineNode(node: NodeId): this {
+    return this.formatNode(node, 'underline');
   }
 
-  public codeNode(textId: NodeId): this {
-    return this.formatNode(textId, 'code');
+  public strikeNode(node: NodeId): this {
+    return this.formatNode(node, 'strike');
   }
 
-  public clearNodeFormat(textId: NodeId): this {
-    this.requireId(textId);
-    return this.push({ kind: 'clearNodeFormat', textId });
+  public codeNode(node: NodeId): this {
+    return this.formatNode(node, 'code');
+  }
+
+  public clearNodeFormat(node: NodeId): this {
+    this.requireId(node);
+    return this.push({ kind: 'clearNodeFormat', node });
   }
 
   public setText(id: NodeId, text: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setText', id, text });
+    return this.push({ kind: 'setText', node: id, text });
   }
   public setEquation(id: NodeId, tex: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setEquation', id, tex });
+    return this.push({ kind: 'setEquation', node: id, tex });
   }
   public replace(
     id: NodeId,
@@ -213,20 +220,20 @@ export class DocumentEditor {
   ): this {
     this.requireId(id);
     if (find.length === 0) throw new EditError('find string is empty');
-    return this.push({ kind: 'replaceText', id, find, to, scope });
+    return this.push({ kind: 'replaceText', node: id, find, to, scope });
   }
   public appendText(id: NodeId, text: string): this {
     this.requireId(id);
-    return this.push({ kind: 'appendText', id, text });
+    return this.push({ kind: 'appendText', node: id, text });
   }
   public prependText(id: NodeId, text: string): this {
     this.requireId(id);
-    return this.push({ kind: 'prependText', id, text });
+    return this.push({ kind: 'prependText', node: id, text });
   }
 
   private setBlockType(id: NodeId, args: SetBlockTypeArgs): this {
     this.requireId(id);
-    return this.push({ kind: 'setBlockType', id, ...args });
+    return this.push({ kind: 'setBlockType', node: id, ...args });
   }
 
   private requireLanguage(language: string): void {
@@ -262,7 +269,7 @@ export class DocumentEditor {
     if (ids.length === 0)
       throw new EditError('list requires at least one block');
     for (const id of ids) this.requireId(id);
-    return this.push({ kind: 'setListType', ids, list });
+    return this.push({ kind: 'setListType', nodes: ids, list });
   }
   public bulletList(idOrIds: NodeId | NodeId[]): this {
     return this.toList(idOrIds, 'bullet');
@@ -290,12 +297,16 @@ export class DocumentEditor {
 
   public setChecked(id: NodeId, checked: boolean): this {
     this.requireId(id);
-    return this.push({ kind: 'setChecked', id, checked });
+    return this.push({ kind: 'setChecked', node: id, checked });
   }
 
   public indent(id: NodeId, by = 1): this {
     this.requireId(id);
-    return this.push({ kind: 'setIndent', id, indent: by >= 0 ? 'in' : 'out' });
+    return this.push({
+      kind: 'setIndent',
+      node: id,
+      indent: by >= 0 ? 'in' : 'out',
+    });
   }
   public outdent(id: NodeId, by = 1): this {
     return this.indent(id, -Math.abs(by));
@@ -305,7 +316,7 @@ export class DocumentEditor {
     this.requireId(id);
     if (level < 0)
       throw new EditError(`indent level must be >= 0, got ${level}`);
-    return this.push({ kind: 'setIndent', id, indent: level });
+    return this.push({ kind: 'setIndent', node: id, indent: level });
   }
   public insertListItemAfter(
     id: NodeId,
@@ -314,7 +325,7 @@ export class DocumentEditor {
   ): Ref {
     this.requireId(id);
     const ref = this.mintRef();
-    this.push({ kind: 'insertListItemAfter', ref, id, text, list });
+    this.push({ kind: 'insertListItemAfter', ref, node: id, text, list });
     return ref;
   }
 
@@ -325,19 +336,19 @@ export class DocumentEditor {
   ): Ref {
     this.requireId(id);
     const ref = this.mintRef();
-    this.push({ kind: 'insertListItemBefore', ref, id, text, list });
+    this.push({ kind: 'insertListItemBefore', ref, node: id, text, list });
     return ref;
   }
 
   public removeListItem(id: NodeId): this {
     this.requireId(id);
-    return this.push({ kind: 'removeListItem', id });
+    return this.push({ kind: 'removeListItem', node: id });
   }
 
   private insert(spec: NodeSpec, at: Position): Ref {
     this.requireAt(at);
     const ref = this.mintRef();
-    this.push({ kind: 'insertBlock', ref, spec, at });
+    this.push({ kind: 'insertNode', ref, spec, at });
     return ref;
   }
   private requireAt(at: Position): void {
@@ -405,11 +416,11 @@ export class DocumentEditor {
   public move(id: NodeId, at: Position): this {
     this.requireId(id);
     this.requireAt(at);
-    return this.push({ kind: 'moveBlock', id, at });
+    return this.push({ kind: 'moveNode', node: id, at });
   }
   public remove(id: NodeId): this {
     this.requireId(id);
-    return this.push({ kind: 'removeBlock', id });
+    return this.push({ kind: 'removeNode', node: id });
   }
   public removeMany(ids: NodeId[]): this {
     for (const id of ids) this.remove(id);
@@ -419,7 +430,7 @@ export class DocumentEditor {
     if (ids.length < 2)
       throw new EditError('merge requires at least two blocks');
     for (const id of ids) this.requireId(id);
-    return this.push({ kind: 'mergeBlocks', ids, separator });
+    return this.push({ kind: 'mergeBlocks', nodes: ids, separator });
   }
   public insertTableAfter(id: NodeId, rows: string[][]): Ref {
     return this.buildTable(rows, { after: id });
@@ -447,15 +458,10 @@ export class DocumentEditor {
     return ref;
   }
 
-  public setCell(
-    table: NodeId,
-    row: number,
-    col: number,
-    content: string
-  ): this {
+  public setCell(table: NodeId, row: number, col: number, text: string): this {
     this.requireId(table);
     this.requireCell(row, col);
-    return this.push({ kind: 'setCell', table, row, col, content });
+    return this.push({ kind: 'setCell', table, row, col, text });
   }
   public addRow(table: NodeId, at?: number): this {
     this.requireId(table);
@@ -538,7 +544,7 @@ export class DocumentEditor {
     this.requireId(id);
     if (at < 0) throw new EditError(`inline offset must be >= 0, got ${at}`);
     const ref = this.mintRef();
-    this.push({ kind: 'insertInline', ref, id, at, spec });
+    this.push({ kind: 'insertInline', ref, node: id, at, spec });
     return ref;
   }
 
@@ -585,27 +591,27 @@ export class DocumentEditor {
 
   public setImageAlt(id: NodeId, alt: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setImageAlt', id, alt });
+    return this.push({ kind: 'setImageAlt', node: id, alt });
   }
 
   public setImageUrl(id: NodeId, url: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setImageUrl', id, url });
+    return this.push({ kind: 'setImageUrl', node: id, url });
   }
 
   public setVideoUrl(id: NodeId, url: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setVideoUrl', id, url });
+    return this.push({ kind: 'setVideoUrl', node: id, url });
   }
 
   public setVideoControls(id: NodeId, controls: boolean): this {
     this.requireId(id);
-    return this.push({ kind: 'setVideoControls', id, controls });
+    return this.push({ kind: 'setVideoControls', node: id, controls });
   }
 
   public setDate(id: NodeId, date: string, displayFormat?: string): this {
     this.requireId(id);
-    return this.push({ kind: 'setDate', id, date, displayFormat });
+    return this.push({ kind: 'setDate', node: id, date, displayFormat });
   }
 }
 

@@ -37,25 +37,25 @@ describe('runQueue -- happy path', () => {
     const { w, edits } = recordingWriter();
     const { results, awareness } = await run(
       [
-        { kind: 'setBlockType', id: 'b1', block: 'heading', level: 2 },
-        { kind: 'removeBlock', id: 'b2' },
+        { kind: 'setBlockType', node: 'b1', block: 'heading', level: 2 },
+        { kind: 'removeNode', node: 'b2' },
       ],
       w
     );
     expect(results.map((r) => r.ok)).toEqual([true, true]);
-    expect(edits.map((e) => e.fn)).toEqual(['setBlockType', 'removeNode']);
+    expect(edits.map((e) => e.kind)).toEqual(['setBlockType', 'removeNode']);
     expect(awareness.seen.length).toBeGreaterThan(0); // cursors/highlights were pumped
   });
 
   it('expands a setText op into remove + chunked insert edits', async () => {
     const { w, edits } = recordingWriter();
     // typeText emits TYPE_CHUNK (3) chars per keystroke, so "Hi" is one insert.
-    await run([{ kind: 'setText', id: 'b1', text: 'Hi' }], w, {
+    await run([{ kind: 'setText', node: 'b1', text: 'Hi' }], w, {
       docReader: reader({ textLength: () => 4 }),
     });
-    expect(edits.map((e) => e.fn)).toEqual(['removeText', 'insertText']);
+    expect(edits.map((e) => e.kind)).toEqual(['removeText', 'insertText']);
     expect(edits[1]).toMatchObject({
-      fn: 'insertText',
+      kind: 'insertText',
       node: 'b1',
       at: 0,
       text: 'Hi',
@@ -65,7 +65,7 @@ describe('runQueue -- happy path', () => {
   it('awaits pauses through the injected sleep', async () => {
     const sleep = vi.fn(() => Promise.resolve());
     await runQueue({
-      ops: [{ kind: 'setBlockType', id: 'b1', block: 'quote' }],
+      ops: [{ kind: 'setBlockType', node: 'b1', block: 'quote' }],
       params: DEFAULT_QUEUE_PARAMS,
       randomSource: mockRandomSource(),
       docReader: reader(),
@@ -79,12 +79,12 @@ describe('runQueue -- happy path', () => {
 
 describe('runQueue -- error handling', () => {
   it('records a failed op but keeps applying independent ones', async () => {
-    const { w } = recordingWriter({ fn: 'removeNode', error: 'boom' });
+    const { w } = recordingWriter({ kind: 'removeNode', error: 'boom' });
     const { results } = await run(
       [
-        { kind: 'setBlockType', id: 'b1', block: 'quote' }, // ok
-        { kind: 'removeBlock', id: 'b2' }, // throws
-        { kind: 'setChecked', id: 'b3', checked: true }, // still runs
+        { kind: 'setBlockType', node: 'b1', block: 'quote' }, // ok
+        { kind: 'removeNode', node: 'b2' }, // throws
+        { kind: 'setChecked', node: 'b3', checked: true }, // still runs
       ],
       w
     );
@@ -103,7 +103,7 @@ describe('runQueue -- error handling', () => {
     });
     // setText animator reads textLength during step → throws while planning
     const { results } = await run(
-      [{ kind: 'setText', id: 'ghost', text: 'x' }],
+      [{ kind: 'setText', node: 'ghost', text: 'x' }],
       w,
       { docReader }
     );
@@ -120,12 +120,12 @@ describe('runQueue -- error handling', () => {
 
 describe('runQueue -- error in the middle keeps neighbors', () => {
   it('op N fails, op N-1 and N+1 succeed', async () => {
-    const { w } = recordingWriter({ fn: 'moveNode', error: 'cannot move' });
+    const { w } = recordingWriter({ kind: 'moveNode', error: 'cannot move' });
     const { results } = await run(
       [
-        { kind: 'setBlockType', id: 'b1', block: 'quote' }, // ok
-        { kind: 'moveBlock', id: 'b2', at: { before: 'b3' } }, // throws
-        { kind: 'setChecked', id: 'b4', checked: false }, // ok
+        { kind: 'setBlockType', node: 'b1', block: 'quote' }, // ok
+        { kind: 'moveNode', node: 'b2', at: { before: 'b3' } }, // throws
+        { kind: 'setChecked', node: 'b4', checked: false }, // ok
       ],
       w
     );
@@ -134,20 +134,20 @@ describe('runQueue -- error in the middle keeps neighbors', () => {
     expect(r1.ok).toBe(false);
     if (r1.ok === false) {
       expect(r1.error).toBe('cannot move');
-      expect(r1.op.kind).toBe('moveBlock');
+      expect(r1.op.kind).toBe('moveNode');
     }
   });
 
   it('two failures in a row are each recorded, surrounding ops survive', async () => {
     const { w } = recordingWriter([
-      { fn: 'removeNode', error: 'gone' },
-      { fn: 'setIndent', error: 'bad indent' },
+      { kind: 'removeNode', error: 'gone' },
+      { kind: 'setIndent', error: 'bad indent' },
     ]);
     const { results } = await run(
       [
-        { kind: 'setChecked', id: 'b1', checked: true }, // ok
-        { kind: 'removeBlock', id: 'b2' }, // throw
-        { kind: 'setIndent', id: 'b3', indent: 'in' }, // throw
+        { kind: 'setChecked', node: 'b1', checked: true }, // ok
+        { kind: 'removeNode', node: 'b2' }, // throw
+        { kind: 'setIndent', node: 'b3', indent: 'in' }, // throw
       ],
       w
     );
@@ -167,7 +167,7 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
       [
         {
           kind: 'formatText',
-          id: 'g',
+          node: 'g',
           match: 'x',
           format: 'bold',
           on: true,
@@ -194,7 +194,7 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
       },
     });
     const { results } = await run(
-      [{ kind: 'setCell', table: 't', row: 9, col: 9, content: 'x' }],
+      [{ kind: 'setCell', table: 't', row: 9, col: 9, text: 'x' }],
       w,
       { docReader }
     );
@@ -216,18 +216,18 @@ describe('runQueue -- planning-time read failures attributed to the right op kin
       [
         {
           kind: 'markText',
-          id: 'b1',
+          node: 'b1',
           match: 'x',
           on: true,
           scope: { kind: 'all' },
         }, // plan throws
-        { kind: 'setBlockType', id: 'b2', block: 'quote' }, // ok
+        { kind: 'setBlockType', node: 'b2', block: 'quote' }, // ok
       ],
       w,
       { docReader }
     );
     expect(results.map((r) => r.ok)).toEqual([false, true]);
-    expect(edits.map((e) => e.fn)).toEqual(['setBlockType']);
+    expect(edits.map((e) => e.kind)).toEqual(['setBlockType']);
   });
 });
 
@@ -236,7 +236,7 @@ describe('runQueue -- awareness ordering & sleep', () => {
     const { w } = recordingWriter();
     // appendText: cursor(end) then one chunked cursor (TYPE_CHUNK 3 > "ab").
     const { awareness } = await run(
-      [{ kind: 'appendText', id: 'b', text: 'ab' }],
+      [{ kind: 'appendText', node: 'b', text: 'ab' }],
       w,
       { docReader: reader({ textLength: () => 5 }) }
     );
@@ -256,7 +256,7 @@ describe('runQueue -- awareness ordering & sleep', () => {
     // setChecked: focus = one settle pause. The mock returns its integer value
     // directly, so every pause ms is the chosen 145.
     await runQueue({
-      ops: [{ kind: 'setChecked', id: 'b1', checked: true }],
+      ops: [{ kind: 'setChecked', node: 'b1', checked: true }],
       params: DEFAULT_QUEUE_PARAMS,
       randomSource: mockRandomSource({ integer: 145 }),
       docReader: reader(),
@@ -267,15 +267,15 @@ describe('runQueue -- awareness ordering & sleep', () => {
     expect(slept).toEqual([145]);
   });
 
-  it('edits and awareness interleave: a removeBlock pumps highlights before the remove', async () => {
+  it('edits and awareness interleave: a removeNode pumps highlights before the remove', async () => {
     const events: string[] = [];
     const w: DocWriter = {
-      apply(edit) {
-        events.push(`edit:${edit.fn}`);
+      apply(op) {
+        events.push(`edit:${op.kind}`);
       },
     };
     await runQueue({
-      ops: [{ kind: 'removeBlock', id: 'b1' }],
+      ops: [{ kind: 'removeNode', node: 'b1' }],
       params: DEFAULT_QUEUE_PARAMS,
       randomSource: mockRandomSource({ integer: 0 }),
       docReader: reader({ textLength: () => 3 }),
@@ -296,19 +296,19 @@ describe('runQueue -- ref-dependent failures', () => {
     // appendText, which the animator expands into insertText edits -- the writer
     // throws on insertText (the unresolved-ref failure surfaces at apply time).
     const { w } = recordingWriter([
-      { fn: 'insertNode', error: 'cannot insert' },
-      { fn: 'insertText', error: 'unknown ref' }, // dependent op fails (ref unresolved)
+      { kind: 'insertNode', error: 'cannot insert' },
+      { kind: 'insertText', error: 'unknown ref' }, // dependent op fails (ref unresolved)
     ]);
     const { results } = await run(
       [
         {
-          kind: 'insertBlock',
+          kind: 'insertNode',
           ref: 'ref-1',
           spec: { block: 'paragraph', text: 'x' },
           at: { appendToRoot: true },
         }, // fails
-        { kind: 'appendText', id: 'ref-1', text: 'Y' }, // dependent → fails
-        { kind: 'setBlockType', id: 'b2', block: 'quote' }, // independent → ok
+        { kind: 'appendText', node: 'ref-1', text: 'Y' }, // dependent → fails
+        { kind: 'setBlockType', node: 'b2', block: 'quote' }, // independent → ok
       ],
       w,
       { docReader: reader({ textLength: () => 0 }) }
@@ -321,19 +321,19 @@ describe('runQueue -- ref-dependent failures', () => {
     const { results } = await run(
       [
         {
-          kind: 'insertBlock',
+          kind: 'insertNode',
           ref: 'ref-9',
           spec: { block: 'paragraph', text: '' },
           at: { appendToRoot: true },
         },
-        { kind: 'appendText', id: 'ref-9', text: 'Z' },
+        { kind: 'appendText', node: 'ref-9', text: 'Z' },
       ],
       w,
       { docReader: reader({ textLength: () => 0 }) }
     );
     expect(results.map((r) => r.ok)).toEqual([true, true]);
-    expect(edits.map((e) => e.fn)).toContain('insertNode');
-    expect(edits.map((e) => e.fn)).toContain('insertText');
+    expect(edits.map((e) => e.kind)).toContain('insertNode');
+    expect(edits.map((e) => e.kind)).toContain('insertText');
   });
 });
 
@@ -345,21 +345,21 @@ describe('summarize', () => {
     const results: OpResult[] = [
       {
         ok: false,
-        op: { kind: 'removeBlock', id: 'b1' },
+        op: { kind: 'removeNode', node: 'b1' },
         error: 'planning blew up',
       },
     ];
-    expect(summarize(results)).toBe('error: removeBlock: planning blew up');
+    expect(summarize(results)).toBe('error: removeNode: planning blew up');
   });
   it('omits ok lines when mixed with failures', () => {
     const results: OpResult[] = [
       {
         ok: true,
-        op: { kind: 'removeBlock', id: 'b1' },
+        op: { kind: 'removeNode', node: 'b1' },
       },
       {
         ok: false,
-        op: { kind: 'setText', id: 'b2', text: 'x' },
+        op: { kind: 'setText', node: 'b2', text: 'x' },
         error: 'nope',
       },
     ];

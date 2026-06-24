@@ -5,7 +5,7 @@ import type { AwarenessSource } from './awareness/awareness-source';
 import type { Doc } from './doc/doc';
 import type { DocumentOp } from './editor/ops';
 import { realRandomSource } from './queue/random-source';
-import { applyOp, type OpResult, runQueue } from './queue/runner';
+import { type OpResult, runQueue } from './queue/runner';
 import type { DocumentOpQueueParams } from './queue/types';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
@@ -63,7 +63,7 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
   if (args.typingAnimations === false) {
     const results: OpResult[] = ops.map((op) => {
       try {
-        applyOp(args.doc, op);
+        args.doc.apply(op);
         return { ok: true, op };
       } catch (e) {
         if (!(e instanceof Error)) throw new Error(String(e));

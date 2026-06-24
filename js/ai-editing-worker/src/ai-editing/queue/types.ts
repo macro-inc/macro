@@ -1,13 +1,9 @@
 /**
  * The data the queue produces. An op expands into a `DocumentOpAction` — a flat
  * list of `DocumentOpStep`s the executor replays in order: pump an `Awareness`
- * into the AwarenessSource, apply an `Edit` via the DocWriter, or sleep. Edits
- * (Y) are atomic and 1:1 with `DocWriter` methods; awareness (X) is one of two
- * shapes that map straight onto a cursor/selection broadcast.
+ * into the AwarenessSource, apply a `DocumentOp` via the DocWriter, or sleep.
  */
-import type { Edit, NodeRef, Offset, Span } from '../editor/ops';
-
-export type { Edit } from '../editor/ops';
+import type { DocumentOp, NodeRef, Offset, Span } from '../editor/ops';
 
 /** Awareness payload. */
 export type Awareness =
@@ -16,7 +12,7 @@ export type Awareness =
 
 export type DocumentOpStep =
   | { kind: 'awareness'; x: Awareness }
-  | { kind: 'edit'; y: Edit }
+  | { kind: 'edit'; y: DocumentOp }
   | { kind: 'pause'; ms: number };
 
 export type DocumentOpAction = { done: boolean; steps: DocumentOpStep[] };

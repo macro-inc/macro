@@ -4,7 +4,7 @@
  * so it can read to plan but never mutate, and the executor is handed `DocWriter`.
  * Mocks of these (with no Lexical) drive the pure tests.
  */
-import type { Edit, NodeId, NodeRef, Offset, Scope } from '../editor/ops';
+import type { DocumentOp, NodeId, NodeRef, Offset, Scope } from '../editor/ops';
 
 /** One located occurrence of a substring: the text node holding it and the span. */
 export type Match = { node: NodeRef; start: Offset; end: Offset };
@@ -20,5 +20,5 @@ export interface DocReader {
 }
 
 export interface DocWriter {
-  apply(edit: Edit): void;
+  apply(op: DocumentOp): void;
 }

@@ -1,22 +1,24 @@
 import type { DocWriter } from '../doc/interfaces';
-import type { Edit } from '../editor/ops';
+import type { DocumentOp } from '../editor/ops';
 import type { Awareness } from './types';
 
-/** Records every DocWriter apply call; can be told to throw on a given fn (or several). */
+/** Records every DocWriter apply call; can be told to throw on a given kind (or several). */
 export function recordingWriter(
-  throwOn?: { fn: string; error: string } | Array<{ fn: string; error: string }>
+  throwOn?:
+    | { kind: string; error: string }
+    | Array<{ kind: string; error: string }>
 ) {
   const throwers = throwOn
     ? Array.isArray(throwOn)
       ? throwOn
       : [throwOn]
     : [];
-  const edits: Edit[] = [];
+  const edits: DocumentOp[] = [];
   const w: DocWriter = {
-    apply(edit: Edit) {
-      const t = throwers.find((x) => x.fn === edit.fn);
+    apply(op: DocumentOp) {
+      const t = throwers.find((x) => x.kind === op.kind);
       if (t) throw new Error(t.error);
-      edits.push(edit);
+      edits.push(op);
     },
   };
   return { w, edits };

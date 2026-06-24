@@ -15,7 +15,7 @@ describe('DocumentEditor — inline formatting → ops', () => {
     expect(ed().bold('b1', 'frog').drain()).toEqual<DocumentOp[]>([
       {
         kind: 'formatText',
-        id: 'b1',
+        node: 'b1',
         match: 'frog',
         format: 'bold',
         on: true,
@@ -80,13 +80,13 @@ describe('DocumentEditor — inline formatting → ops', () => {
   it('clearFormat with and without a match', () => {
     expect(ed().clearFormat('b1', 'x').drain()[0]).toEqual({
       kind: 'clearFormat',
-      id: 'b1',
+      node: 'b1',
       match: 'x',
       scope: { kind: 'all' },
     });
     expect(ed().clearAllFormat('b1').drain()[0]).toEqual({
       kind: 'clearFormat',
-      id: 'b1',
+      node: 'b1',
       match: undefined,
       scope: { kind: 'all' },
     });
@@ -95,13 +95,13 @@ describe('DocumentEditor — inline formatting → ops', () => {
   it('formatNode / clearNodeFormat target a text-node id directly', () => {
     expect(ed().boldNode('t1').drain()[0]).toEqual({
       kind: 'formatNode',
-      textId: 't1',
+      node: 't1',
       format: 'bold',
       on: true,
     });
     expect(ed().clearNodeFormat('t1').drain()[0]).toEqual({
       kind: 'clearNodeFormat',
-      textId: 't1',
+      node: 't1',
     });
   });
 });
@@ -110,24 +110,24 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('setText / replace / append / prepend', () => {
     expect(ed().setText('b1', 'hi').drain()[0]).toEqual({
       kind: 'setText',
-      id: 'b1',
+      node: 'b1',
       text: 'hi',
     });
     expect(ed().replace('b1', 'a', 'b').drain()[0]).toEqual({
       kind: 'replaceText',
-      id: 'b1',
+      node: 'b1',
       find: 'a',
       to: 'b',
       scope: { kind: 'all' },
     });
     expect(ed().appendText('b1', '!').drain()[0]).toEqual({
       kind: 'appendText',
-      id: 'b1',
+      node: 'b1',
       text: '!',
     });
     expect(ed().prependText('b1', '>').drain()[0]).toEqual({
       kind: 'prependText',
-      id: 'b1',
+      node: 'b1',
       text: '>',
     });
   });
@@ -135,29 +135,29 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('block type methods', () => {
     expect(ed().convertToParagraph('b1').drain()[0]).toEqual({
       kind: 'setBlockType',
-      id: 'b1',
+      node: 'b1',
       block: 'paragraph',
     });
     expect(ed().convertToHeading('b1', 2).drain()[0]).toEqual({
       kind: 'setBlockType',
-      id: 'b1',
+      node: 'b1',
       block: 'heading',
       level: 2,
     });
     expect(ed().convertToQuote('b1').drain()[0]).toEqual({
       kind: 'setBlockType',
-      id: 'b1',
+      node: 'b1',
       block: 'quote',
     });
     expect(ed().convertToCodeBlock('b1', 'ts').drain()[0]).toEqual({
       kind: 'setBlockType',
-      id: 'b1',
+      node: 'b1',
       block: 'code',
       language: 'ts',
     });
     expect(ed().setLanguage('b1', 'python').drain()[0]).toEqual({
       kind: 'setBlockType',
-      id: 'b1',
+      node: 'b1',
       block: 'code',
       language: 'python',
     });
@@ -166,12 +166,12 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('list toggles accept a single id or a list of ids', () => {
     expect(ed().bulletList('b1').drain()[0]).toEqual({
       kind: 'setListType',
-      ids: ['b1'],
+      nodes: ['b1'],
       list: 'bullet',
     });
     expect(ed('b1', 'b2').numberedList(['b1', 'b2']).drain()[0]).toEqual({
       kind: 'setListType',
-      ids: ['b1', 'b2'],
+      nodes: ['b1', 'b2'],
       list: 'number',
     });
     expect(ed().checklist('b1').drain()[0]).toMatchObject({ list: 'check' });
@@ -180,12 +180,12 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('check / uncheck → setChecked', () => {
     expect(ed().check('b1').drain()[0]).toEqual({
       kind: 'setChecked',
-      id: 'b1',
+      node: 'b1',
       checked: true,
     });
     expect(ed().uncheck('b1').drain()[0]).toEqual({
       kind: 'setChecked',
-      id: 'b1',
+      node: 'b1',
       checked: false,
     });
   });
@@ -193,17 +193,17 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('indent / outdent are relative, setIndent is absolute', () => {
     expect(ed().indent('b1').drain()[0]).toEqual({
       kind: 'setIndent',
-      id: 'b1',
+      node: 'b1',
       indent: 'in',
     });
     expect(ed().outdent('b1').drain()[0]).toEqual({
       kind: 'setIndent',
-      id: 'b1',
+      node: 'b1',
       indent: 'out',
     });
     expect(ed().setIndent('b1', 2).drain()[0]).toEqual({
       kind: 'setIndent',
-      id: 'b1',
+      node: 'b1',
       indent: 2,
     });
   });
@@ -217,11 +217,11 @@ describe('DocumentEditor — text / block / list → ops', () => {
       {
         kind: 'insertListItemAfter',
         ref,
-        id: 'b1',
+        node: 'b1',
         text: 'next',
         list: 'bullet',
       },
-      { kind: 'setText', id: ref },
+      { kind: 'setText', node: ref },
     ]);
   });
 
@@ -231,7 +231,7 @@ describe('DocumentEditor — text / block / list → ops', () => {
     expect(e.drain()[0]).toEqual({
       kind: 'insertListItemBefore',
       ref,
-      id: 'b1',
+      node: 'b1',
       text: 'sub',
       list: 'number',
     });
@@ -240,7 +240,7 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('removeListItem targets a single item', () => {
     expect(ed().removeListItem('b1').drain()[0]).toEqual({
       kind: 'removeListItem',
-      id: 'b1',
+      node: 'b1',
     });
   });
 });
@@ -253,12 +253,12 @@ describe('DocumentEditor — structure & refs', () => {
     const ops = e.drain();
     expect(ops).toMatchObject([
       {
-        kind: 'insertBlock',
+        kind: 'insertNode',
         ref,
         spec: { block: 'paragraph', text: 'Intro' },
         at: { after: 'b1' },
       },
-      { kind: 'formatText', id: ref },
+      { kind: 'formatText', node: ref },
     ]);
   });
 
@@ -273,18 +273,18 @@ describe('DocumentEditor — structure & refs', () => {
 
   it('move / remove / removeMany / merge', () => {
     expect(ed().move('b1', { before: 'b2' }).drain()[0]).toEqual({
-      kind: 'moveBlock',
-      id: 'b1',
+      kind: 'moveNode',
+      node: 'b1',
       at: { before: 'b2' },
     });
     expect(ed().remove('b1').drain()[0]).toEqual({
-      kind: 'removeBlock',
-      id: 'b1',
+      kind: 'removeNode',
+      node: 'b1',
     });
     expect(ed('b1', 'b2').removeMany(['b1', 'b2']).drain()).toHaveLength(2);
     expect(ed('b1', 'b2').merge(['b1', 'b2'], ' — ').drain()[0]).toEqual({
       kind: 'mergeBlocks',
-      ids: ['b1', 'b2'],
+      nodes: ['b1', 'b2'],
       separator: ' — ',
     });
   });
@@ -299,7 +299,7 @@ describe('DocumentEditor — structure & refs', () => {
     // empty grid first (same shape, blank cells), then one setCell per NON-empty cell
     expect(ops).toEqual([
       expect.objectContaining({
-        kind: 'insertBlock',
+        kind: 'insertNode',
         spec: {
           block: 'table',
           rows: [
@@ -308,9 +308,9 @@ describe('DocumentEditor — structure & refs', () => {
           ],
         },
       }),
-      { kind: 'setCell', table: t, row: 0, col: 0, content: 'A' },
-      { kind: 'setCell', table: t, row: 0, col: 1, content: 'B' },
-      { kind: 'setCell', table: t, row: 1, col: 0, content: 'c' },
+      { kind: 'setCell', table: t, row: 0, col: 0, text: 'A' },
+      { kind: 'setCell', table: t, row: 0, col: 1, text: 'B' },
+      { kind: 'setCell', table: t, row: 1, col: 0, text: 'c' },
     ]);
     expect(ed().addRow('b1').drain()[0]).toEqual({
       kind: 'addRow',
@@ -334,7 +334,7 @@ describe('DocumentEditor — structure & refs', () => {
     });
     expect(typeof img).toBe('string');
     expect(e.drain()[0]).toMatchObject({
-      kind: 'insertBlock',
+      kind: 'insertNode',
       spec: { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
     });
     expect(ed().insertDate('b1', 3, '2026-01-01').length).toBeUndefined;
@@ -345,7 +345,7 @@ describe('DocumentEditor — structure & refs', () => {
     e.insertLineBreak('b1', 4);
     expect(e.drain()[0]).toMatchObject({
       kind: 'insertInline',
-      id: 'b1',
+      node: 'b1',
       at: 4,
       spec: { inline: 'linebreak' },
     });
@@ -437,7 +437,7 @@ describe('DocumentEditor — drain semantics', () => {
     expect(first.map((o) => o.kind)).toEqual([
       'formatText',
       'formatText',
-      'removeBlock',
+      'removeNode',
     ]);
     expect(e.drain()).toEqual([]); // drained
   });
@@ -594,12 +594,12 @@ describe('DocumentEditor — indent & cell bounds', () => {
     expect(() => ed().setIndent('b1', -1)).toThrow(/>= 0/);
     expect(ed().setIndent('b1', 0).drain()[0]).toEqual({
       kind: 'setIndent',
-      id: 'b1',
+      node: 'b1',
       indent: 0,
     });
     expect(ed().setIndent('b1', 3).drain()[0]).toEqual({
       kind: 'setIndent',
-      id: 'b1',
+      node: 'b1',
       indent: 3,
     });
   });
@@ -667,7 +667,7 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
     e.convertToHeading(ref, 1);
     const ops = e.drain();
     expect(ops.map((o) => o.kind)).toEqual([
-      'insertBlock',
+      'insertNode',
       'formatText',
       'appendText',
       'setBlockType',
@@ -676,12 +676,12 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
 
   it('a table ref is a valid target for setCell/addRow/addColumn', () => {
     const e = ed();
-    const t = e.appendTable([['', '']]); // empty grid → just an insertBlock, no auto setCell
+    const t = e.appendTable([['', '']]); // empty grid → just an insertNode, no auto setCell
     e.setCell(t, 0, 0, 'x');
     e.addRow(t);
     e.addColumn(t);
     expect(e.drain().map((o) => o.kind)).toEqual([
-      'insertBlock',
+      'insertNode',
       'setCell',
       'addRow',
       'addColumn',
@@ -744,11 +744,11 @@ describe('DocumentEditor — removeMany & accumulation', () => {
   it('removeMany validates every id before pushing each', () => {
     expect(() => ed('b1', 'b2').removeMany(['b1', 'nope'])).toThrow(/nope/);
   });
-  it('removeMany of all valid ids pushes one removeBlock per id in order', () => {
+  it('removeMany of all valid ids pushes one removeNode per id in order', () => {
     const ops = ed('b1', 'b2', 'b3').removeMany(['b3', 'b1']).drain();
     expect(ops).toEqual([
-      { kind: 'removeBlock', id: 'b3' },
-      { kind: 'removeBlock', id: 'b1' },
+      { kind: 'removeNode', node: 'b3' },
+      { kind: 'removeNode', node: 'b1' },
     ]);
   });
 });

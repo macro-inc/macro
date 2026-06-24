@@ -17,10 +17,6 @@ import type { Session } from './ai-toolkit/session';
 import { createEditingSession, loadMarkdown } from './ai-toolkit/session';
 import { serializeWithXml } from './utils';
 
-function plain(session: Session): string {
-  return serializeWithXml(session);
-}
-
 function build(md: string): { session: Session; ids: string[] } {
   const session = createEditingSession();
   loadMarkdown(session, md);
@@ -58,7 +54,7 @@ describe('runtime — end to end against real Lexical', () => {
       `editor.convertToHeading('${headingId}', 2); editor.bold('${paragraphId}', 'Bluejay');`
     );
     expect(summary).toBe('ok');
-    const out = plain(session);
+    const out = serializeWithXml(session);
     expect(out).toContain('<h2');
     expect(out).toContain('Notes');
     expect(out).toContain('Bluejay');
@@ -71,7 +67,7 @@ describe('runtime — end to end against real Lexical', () => {
       `const p = editor.insertParagraphAfter('${ids[0]}', 'hello'); editor.bold(p, 'hello');`
     );
     expect(summary).toBe('ok');
-    expect(plain(session)).toContain('hello');
+    expect(serializeWithXml(session)).toContain('hello');
   });
 
   it('reports an eager EditError and applies nothing', async () => {
@@ -81,7 +77,7 @@ describe('runtime — end to end against real Lexical', () => {
       `editor.bold('does-not-exist', 'x');`
     );
     expect(summary).toMatch(/error: unknown id/);
-    expect(plain(session)).toContain('untouched'); // unchanged
+    expect(serializeWithXml(session)).toContain('untouched'); // unchanged
   });
 
   it('reports compact success for an empty snippet', async () => {
@@ -98,13 +94,13 @@ describe('runtime — end to end against real Lexical', () => {
       `editor.setCell('${alpha}', 9, 9, 'x'); editor.convertToHeading('${beta}', 3);`
     );
     expect(summary).toBe('error: setCell: no enclosing table');
-    expect(plain(session)).toContain('<h3');
-    expect(plain(session)).toContain('beta');
+    expect(serializeWithXml(session)).toContain('<h3');
+    expect(serializeWithXml(session)).toContain('beta');
   });
 });
 
 describe('runtime — awareness ref resolution', () => {
-  it('points cursors at the real inserted node id, never the placeholder ref', async () => {
+  it('points cursors at the inserted node, whose ref is its durable id', async () => {
     const { session, ids } = build('first');
     const awareness = mockAwarenessSource();
     await runEditorCode({
@@ -116,8 +112,9 @@ describe('runtime — awareness ref resolution', () => {
       sleep: () => Promise.resolve(),
     });
     expect(awareness.seen.length).toBeGreaterThan(0);
-    // every awareness node was resolved through Doc.resolveRef → a real id.
-    expect(awareness.seen.every((x) => !x.node.startsWith('ref-'))).toBe(true);
+    // refs ARE ids: every awareness node id resolves to a real node in the doc.
+    const real = docIds(session);
+    expect(awareness.seen.every((x) => real.has(x.node))).toBe(true);
   });
 });
 
