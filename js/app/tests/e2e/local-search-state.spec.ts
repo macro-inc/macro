@@ -32,6 +32,44 @@ test.describe('local search bar state', () => {
 
     await expect(page).toHaveURL(/\/component\/search$/);
     await expectSearchText(page, SEEDED_DOCUMENT.document_name);
+    await expectResultVisible(page);
+  });
+
+  test('restores the query after opening a result and using the browser back button', async ({
+    page,
+  }) => {
+    await gotoApp(page, '/component/search');
+    await search(page, SEEDED_DOCUMENT.document_name);
+
+    await openFocusedResult(page);
+    await expect(page).not.toHaveURL(/\/component\/search$/);
+
+    // The browser back button drives the URL->layout reconcile path, distinct
+    // from the in-app split history. Going back must walk the split's own
+    // history so the search view is restored with its captured text and
+    // results, instead of being rebuilt into an empty (soup-feed) view.
+    await page.goBack();
+
+    await expect(page).toHaveURL(/\/component\/search$/);
+    await expectSearchText(page, SEEDED_DOCUMENT.document_name);
+    await expectResultVisible(page);
+  });
+
+  test('restores the result on browser forward after a browser back', async ({
+    page,
+  }) => {
+    await gotoApp(page, '/component/search');
+    await search(page, SEEDED_DOCUMENT.document_name);
+
+    await openFocusedResult(page);
+    const resultUrl = page.url();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/component\/search$/);
+    await expectSearchText(page, SEEDED_DOCUMENT.document_name);
+
+    await page.goForward();
+    await expect(page).toHaveURL(resultUrl);
   });
 
   test('restores the query after switching sidebar views and going back', async ({
@@ -58,6 +96,13 @@ async function search(page: Page, text: string) {
 
   // Wait for the seeded result so we know the query produced output before we
   // navigate away from the view.
+  await expectResultVisible(page);
+}
+
+// The seeded result is only rendered when the search is actually executing, so
+// asserting it after navigation guards against restoring stale bar text over an
+// empty soup feed (not just an empty bar).
+async function expectResultVisible(page: Page) {
   await expect(
     page.locator(
       `${soupListContainerSelector} ${entityIdSelector(SEEDED_DOCUMENT.document_id)}`

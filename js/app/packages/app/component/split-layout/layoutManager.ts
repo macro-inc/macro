@@ -183,6 +183,24 @@ function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
 }
 
+// Find the history index of the entry matching `predicate`, preferring the
+// closest match looking backward from the current index (the common back case),
+// then forward. Excludes the current index. Returns -1 if none match.
+function findHistoryIndex(
+  split: SplitState,
+  predicate: (content: SplitContent) => boolean
+): number {
+  const items = split.history.items;
+  const currentIdx = split.history.index;
+  for (let j = currentIdx - 1; j >= 0; j--) {
+    if (predicate(items[j])) return j;
+  }
+  for (let j = currentIdx + 1; j < items.length; j++) {
+    if (predicate(items[j])) return j;
+  }
+  return -1;
+}
+
 export type UrlCapabilities = {
   getUrlSegments: () => string[];
   getUrl: () => string;
@@ -773,28 +791,9 @@ export function createSplitLayout(
       return false;
     }
     const split = state.splits[i];
-    const items = split.history.items;
     const currentIdx = split.history.index;
-    if (items.length === 0) return false;
-
-    // Prefer the closest match looking backwards (more common case — the
-    // user just came from there). Fall back to looking forward.
-    let targetIdx = -1;
-    for (let j = currentIdx - 1; j >= 0; j--) {
-      if (predicate(items[j])) {
-        targetIdx = j;
-        break;
-      }
-    }
-    if (targetIdx === -1) {
-      for (let j = currentIdx + 1; j < items.length; j++) {
-        if (predicate(items[j])) {
-          targetIdx = j;
-          break;
-        }
-      }
-    }
-    if (targetIdx === -1 || targetIdx === currentIdx) return false;
+    const targetIdx = findHistoryIndex(split, predicate);
+    if (targetIdx === -1) return false;
 
     captureCurrentEntryState(split);
     const target = split.history.goToIndex(targetIdx);
@@ -1108,6 +1107,41 @@ export function createSplitLayout(
     return getSplit(match.id);
   }
 
+  /**
+   * Try to satisfy a URL reconcile as in-history navigation (browser/swipe back
+   * & forward). If every position whose content changed resolves to an entry
+   * already in that split's history, walk each split's history to that entry —
+   * preserving its captured per-entry state — and return true. Returns false
+   * without changing anything if any position is not in history, so the caller
+   * can rebuild from scratch instead.
+   */
+  function tryReconcileViaHistory(
+    visibleSplits: SplitState[],
+    newSplits: SplitContent[]
+  ): boolean {
+    // Resolve a target index for every changed position before navigating, so
+    // we only take this path if the whole layout can be served from history.
+    const plan: { split: SplitState; targetIdx: number }[] = [];
+    for (let i = 0; i < newSplits.length; i++) {
+      const split = visibleSplits[i];
+      if (sameContent(split.content, newSplits[i])) continue;
+      const targetIdx = findHistoryIndex(split, (item) =>
+        sameContent(item, newSplits[i])
+      );
+      if (targetIdx === -1) return false;
+      plan.push({ split, targetIdx });
+    }
+
+    for (const { split, targetIdx } of plan) {
+      const cause: NavigationCause =
+        targetIdx < split.history.index ? 'history-back' : 'history-forward';
+      captureCurrentEntryState(split);
+      const target = split.history.goToIndex(targetIdx);
+      if (target) reattach(split, target, undefined, cause);
+    }
+    return true;
+  }
+
   function reconcileSplits(newSplits: SplitContent[]) {
     // URL segments are produced by getUrlSegments(), which excludes excluded splits.
     const visibleSplits = state.splits.filter((s) => !isExcluded(s));
@@ -1116,6 +1150,16 @@ export function createSplitLayout(
     const changed = newKeys.join(',') !== currentKeys.join(',');
 
     if (!changed) return;
+
+    // Browser/swipe back & forward reach us as a URL change. When the layout
+    // shape is unchanged, prefer walking each split's own history (which keeps
+    // its captured per-entry state) over rebuilding splits from scratch.
+    if (
+      visibleSplits.length === newSplits.length &&
+      tryReconcileViaHistory(visibleSplits, newSplits)
+    ) {
+      return;
+    }
 
     // Build the result array by position, preserving excluded splits unchanged.
     const resultSplits: SplitState[] = [];
