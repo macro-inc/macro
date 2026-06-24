@@ -41,7 +41,8 @@ use crate::stream::{ChatCompletionStream, StreamPart};
 env_var! {
     struct ApiKeys {
         AnthropicApiKey,
-        OpenaiApiKey
+        OpenaiApiKey,
+        CerebrasApiKey
     }
 }
 
@@ -49,6 +50,11 @@ env_var! {
 const ANTHROPIC_PROVIDER: &str = "anthropic";
 /// Provider segment the built-in OpenAI client is registered under.
 const OPENAI_PROVIDER: &str = "openai";
+/// Provider segment Cerebras is registered under (OpenAI-compatible Chat
+/// Completions).
+const CEREBRAS_PROVIDER: &str = "cerebras";
+/// Cerebras inference endpoint (OpenAI-compatible Chat Completions API).
+const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
@@ -213,10 +219,10 @@ impl ModelRouter {
         }
     }
 
-    /// Build a router with the two built-in providers from the environment.
+    /// Build a router with the built-in providers from the environment.
     ///
-    /// Requires `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. Chain
-    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
+    /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
+    /// Chain [`with_openai_provider`](Self::with_openai_provider) to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -227,7 +233,13 @@ impl ModelRouter {
         let openai = openai::Client::builder()
             .api_key(env.openai_api_key.to_string())
             .build()?;
-        Ok(Self::new(anthropic, openai))
+        // Cerebras speaks the OpenAI Chat Completions API, so it rides the
+        // compatible-provider registry: `cerebras/<model>` ids route to it.
+        Self::new(anthropic, openai).with_openai_provider(
+            CEREBRAS_PROVIDER,
+            CEREBRAS_BASE_URL,
+            &env.cerebras_api_key,
+        )
     }
 
     /// The process-wide full router, built from the environment on first use.
@@ -262,8 +274,9 @@ impl ModelRouter {
     ///
     /// This is the whole cost of adding a provider — models served by it are
     /// then reachable as `provider/<model-id>`. The extension point for the
-    /// open provider set; unused until the first extra provider is wired.
-    #[allow(dead_code)]
+    /// open provider set (Cerebras is wired this way in [`try_from_env`]).
+    ///
+    /// [`try_from_env`]: Self::try_from_env
     pub fn with_openai_provider(
         self,
         provider: impl Into<String>,
