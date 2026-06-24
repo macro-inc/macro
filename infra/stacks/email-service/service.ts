@@ -13,7 +13,7 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
-  DopplerEcsEnvironment,
+  type DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
