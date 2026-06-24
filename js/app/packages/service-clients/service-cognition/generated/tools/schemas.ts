@@ -515,6 +515,7 @@ export const GetThread = z.object({
 
 export const GetThreadResponse = z.object({
   isRead: z.boolean(),
+  labels: z.array(z.string()),
   messages: z.array(
     z.object({
       bodyParsed: z.union([z.string(), z.null()]).optional(),

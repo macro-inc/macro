@@ -77,6 +77,9 @@ pub struct GetThreadResponse {
     pub thread_id: Uuid,
     /// Whether the thread has been read.
     pub is_read: bool,
+    /// The labels applied to the thread — the distinct set of label names across
+    /// its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+    pub labels: Vec<String>,
     /// The messages in the thread (most recent first).
     pub messages: Vec<ToolMessage>,
     /// A human-readable summary.
@@ -90,7 +93,7 @@ const DEFAULT_LIMIT: i64 = 10;
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "GetThread",
-    description = "Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation."
+    description = "Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation or to see which labels a thread has."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct GetThread {
@@ -151,12 +154,23 @@ where
             })?;
 
         let summary = build_summary(&thread);
+
+        // The thread's labels are the distinct set across its messages.
+        let mut labels: Vec<String> = thread
+            .messages
+            .iter()
+            .flat_map(|m| m.labels.iter().map(|l| l.name.clone()))
+            .collect();
+        labels.sort();
+        labels.dedup();
+
         let messages: Vec<ToolMessage> =
             thread.messages.into_iter().map(ToolMessage::from).collect();
 
         Ok(GetThreadResponse {
             thread_id: thread.row.db_id,
             is_read: thread.row.is_read,
+            labels,
             messages,
             summary,
         })
