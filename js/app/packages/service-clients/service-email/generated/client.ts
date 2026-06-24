@@ -35,7 +35,6 @@ import type {
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
-  ListLinksParams,
   ListLinksResponse,
   ParsedMessage,
   PatchSettingsRequest,
@@ -1777,27 +1776,14 @@ export type listLinksResponse =
   | listLinksResponseSuccess
   | listLinksResponseError;
 
-export const getListLinksUrl = (params?: ListLinksParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/links?${stringifiedParams}`
-    : `/email/links`;
+export const getListLinksUrl = () => {
+  return `/email/links`;
 };
 
 export const listLinks = async (
-  params?: ListLinksParams,
   options?: RequestInit
 ): Promise<listLinksResponse> => {
-  const res = await fetch(getListLinksUrl(params), {
+  const res = await fetch(getListLinksUrl(), {
     ...options,
     method: 'GET',
   });

@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LinkPhotoUrl } from './linkPhotoUrl';
-import type { LinkSignature } from './linkSignature';
 import type { Settings } from './settings';
 import type { SyncStatus } from './syncStatus';
 import type { UserProvider } from './userProvider';
@@ -25,7 +24,6 @@ per-inbox reconnect prompt independently of the sync-status badge. */
   photo_url?: LinkPhotoUrl;
   provider: UserProvider;
   settings: Settings;
-  signature?: LinkSignature;
   sync_status: SyncStatus;
   updated_at: string;
 }

@@ -3,6 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_service::util::sanitizer::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::{api, service};
@@ -56,10 +57,14 @@ pub async fn patch_settings_handler(
     link: Extension<Link>,
     Json(api_settings): Json<PatchSettingsRequest>,
 ) -> Result<Json<PatchSettingsResponse>, PatchSettingsError> {
-    let service_settings = service::settings::Settings::new(api_settings.settings, link.id);
+    // The signature is user-supplied HTML; sanitize at this trust boundary
+    // before it is persisted (and later rendered into compose bodies).
+    let mut settings = api_settings.settings;
+    settings.signature = settings.signature.map(|html| sanitize_html_fragment(&html));
 
-    let updated_settings =
-        email_db_client::settings::patch_settings(&ctx.db, service_settings).await?;
+    let patch = service::settings::SettingsPatch::new(settings, link.id);
+
+    let updated_settings = email_db_client::settings::patch_settings(&ctx.db, patch).await?;
 
     let response_settings = api::settings::Settings::from(updated_settings);
 

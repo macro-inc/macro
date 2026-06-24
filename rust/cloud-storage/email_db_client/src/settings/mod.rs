@@ -2,27 +2,29 @@ use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-/// Updates a user's settings.
+/// Applies a partial update to a user's settings. Fields left `None` in the
+/// patch keep their existing value (COALESCE); on a fresh insert, an omitted
+/// `signature_on_replies_forwards` is written as FALSE and `signature` as NULL.
 #[tracing::instrument(skip(pool), err)]
 pub async fn patch_settings(
     pool: &PgPool,
-    service_settings: service::settings::Settings,
+    patch: service::settings::SettingsPatch,
 ) -> anyhow::Result<service::settings::Settings> {
-    let db_settings = db::settings::Settings::from(service_settings);
-
     let result = sqlx::query_as!(
         db::settings::Settings,
         r#"
-        INSERT INTO email_settings (link_id, signature_on_replies_forwards)
-        VALUES ($1, $2)
+        INSERT INTO email_settings (link_id, signature_on_replies_forwards, signature)
+        VALUES ($1, COALESCE($2, FALSE), $3)
         ON CONFLICT (link_id)
         DO UPDATE SET
-            signature_on_replies_forwards = EXCLUDED.signature_on_replies_forwards,
+            signature_on_replies_forwards = COALESCE($2, email_settings.signature_on_replies_forwards),
+            signature = COALESCE($3, email_settings.signature),
             updated_at = NOW()
-        RETURNING link_id, signature_on_replies_forwards
+        RETURNING link_id, signature_on_replies_forwards, signature
         "#,
-        db_settings.link_id,
-        db_settings.signature_on_replies_forwards,
+        patch.link_id,
+        patch.signature_on_replies_forwards,
+        patch.signature,
     )
     .fetch_one(pool)
     .await?;
@@ -39,7 +41,7 @@ pub async fn fetch_settings(
     let result = sqlx::query_as!(
         db::settings::Settings,
         r#"
-        SELECT link_id, signature_on_replies_forwards
+        SELECT link_id, signature_on_replies_forwards, signature
         FROM email_settings
         WHERE link_id = $1
         "#,

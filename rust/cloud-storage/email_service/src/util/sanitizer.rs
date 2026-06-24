@@ -24,6 +24,14 @@ pub fn sanitize_email_html(raw_html: &str) -> String {
     CLEANER.clean(&content_to_clean).to_string()
 }
 
+/// Sanitizes a user-supplied HTML fragment (e.g. an email signature) with the
+/// same allowlist as full email bodies, but without the document/body
+/// reconstruction `sanitize_email_html` applies to whole messages — a fragment
+/// has no `<head>`/`<body>` to extract, so we just clean it in place.
+pub fn sanitize_html_fragment(raw_html: &str) -> String {
+    CLEANER.clean(raw_html).to_string()
+}
+
 /// Extracts all <style> tags and the <body> tag from a parsed document,
 /// wherever they might be, and reconstructs a clean HTML string.
 fn find_and_reconstruct(document: &Html) -> Option<String> {

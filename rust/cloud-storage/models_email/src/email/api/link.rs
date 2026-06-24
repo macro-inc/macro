@@ -98,7 +98,6 @@ pub struct Link {
     /// Whether the link's Google grant needs to be reconnected. Drives the
     /// per-inbox reconnect prompt independently of the sync-status badge.
     pub needs_reauth: bool,
-    pub signature: Option<String>,
     pub settings: Settings,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
@@ -108,7 +107,6 @@ pub struct Link {
 impl Link {
     pub fn new(
         source: service::link::Link,
-        signature: Option<String>,
         settings: Settings,
         sync_status: SyncStatus,
         photo_url: Option<String>,
@@ -123,7 +121,6 @@ impl Link {
             is_sync_active: source.is_sync_active,
             sync_status,
             needs_reauth: source.needs_reauth,
-            signature,
             settings,
             is_primary: source.is_primary,
             created_at: source.created_at,
