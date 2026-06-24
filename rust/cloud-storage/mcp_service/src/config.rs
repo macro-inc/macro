@@ -62,8 +62,8 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Port to listen on. Defaults to `8090` when unset.
-    #[macro_config_default(8090)]
+    /// Port to listen on. Defaults to `8080` when unset.
+    #[macro_config_default(8080)]
     pub port: usize,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
