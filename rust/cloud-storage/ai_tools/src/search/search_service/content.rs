@@ -60,7 +60,12 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             importance: Some(true),
             ..Default::default()
         };
-        if let Some(inbox) = self.inbox.as_deref() {
+        if let Some(inbox) = self
+            .inbox
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             let inboxes = search_context
                 .email_service
                 .get_inboxes_for_macro_id(MacroUserIdStr((*request_context.user_id).clone()))

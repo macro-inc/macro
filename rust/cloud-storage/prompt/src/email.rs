@@ -8,8 +8,10 @@ static INSTRUCTIONS: &str = r##"## Email inboxes
 
 - A user can have more than one email inbox: their own primary inbox, additional inboxes they
   have connected, and inboxes that teammates have delegated to them.
-- By default, every email tool operates on the user's PRIMARY inbox. Most users have a single
-  inbox, so for them you never need to think about this — just use the email tools normally.
+- By default — when you don't pass an `inbox` — reads and searches (`ListEntities`, `ContentSearch`,
+  `NameSearch`) span ALL the inboxes the user can access, and per-thread actions use whichever inbox
+  owns the thread. Pass an `inbox` only to narrow to a single mailbox. Most users have a single
+  inbox, so for them this never matters — just use the email tools normally.
 
 ## Working across multiple inboxes
 

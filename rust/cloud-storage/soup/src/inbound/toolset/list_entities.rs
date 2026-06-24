@@ -502,7 +502,12 @@ where
         // An explicit inbox selector narrows to that one link; it's resolved
         // against the accessible set so a caller can't scope to an inbox they
         // don't have (soup trusts link_ids without an independent check).
-        let link_ids: Vec<uuid::Uuid> = match self.inbox.as_deref() {
+        let link_ids: Vec<uuid::Uuid> = match self
+            .inbox
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             Some(inbox) => {
                 let caller_macro_id = request_context.user_id.to_string();
                 let link = email::inbound::toolset::resolve_inbox_selector(
