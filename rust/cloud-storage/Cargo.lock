@@ -4317,6 +4317,7 @@ dependencies = [
  "crm",
  "document_storage_service_client",
  "doppleganger",
+ "doppler-config",
  "ego-tree",
  "email",
  "email_db_client",

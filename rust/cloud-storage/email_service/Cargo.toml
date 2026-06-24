@@ -45,6 +45,10 @@ path = "src/bin/reverse_sfs_mappings/reverse_sfs_mappings.rs"
 name = "email_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "email_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []
@@ -82,6 +86,7 @@ crm = { path = "../crm" }
 unfurl = { path = "../unfurl", features = ["outbound"] }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
+doppler-config = { workspace = true }
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
