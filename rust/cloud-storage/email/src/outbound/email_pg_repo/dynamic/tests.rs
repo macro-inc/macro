@@ -621,8 +621,80 @@ fn test_build_query_non_team_has_no_dedupe_machinery() {
     assert!(!sql.contains("DISTINCT ON"));
     assert!(!sql.contains("dedupe_key"));
     assert!(!sql.contains("is_own_link"));
-    // Cursor stays inside the candidate select on the per-mailbox path.
-    assert!(sql.contains("END, t.id"));
+    // Cursor stays inside the candidate select on the per-mailbox path
+    // (contrast with the team path, which moves it past the dedupe wrapper).
+    // The default UpdatedAt sort defers the uh join, so the cursor is a plain
+    // (ts, id) comparison rather than the viewed-history CASE.
+    let cursor_pos = sql
+        .find(", t.id) < (")
+        .expect("per-mailbox cursor comparison missing");
+    let lateral_pos = sql.find("CROSS JOIN LATERAL").expect("lateral missing");
+    assert!(
+        cursor_pos < lateral_pos,
+        "cursor must sit inside the candidate select: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_defers_user_history_join_for_updated_at_sort() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_with_sort(
+        &view,
+        &expr,
+        models_pagination::SimpleSortMethod::UpdatedAt,
+    );
+
+    // Exactly one uh join, deferred to the outer query (after email_links)
+    // rather than living in the candidate stage.
+    assert_eq!(
+        sql.matches("LEFT JOIN email_user_history").count(),
+        1,
+        "expected a single, deferred uh join: {sql}"
+    );
+    let uh_pos = sql.find("LEFT JOIN email_user_history").unwrap();
+    let el_pos = sql.find("JOIN email_links el").unwrap();
+    assert!(
+        uh_pos > el_pos,
+        "uh join must be deferred past the candidate LIMIT: {sql}"
+    );
+
+    // Sort/cursor no longer reference uh; effective_ts is the plain sort field,
+    // and viewed_at is sourced from the deferred join.
+    assert!(
+        !sql.contains("WHEN 'viewed_at'"),
+        "deferred sort must drop the uh CASE: {sql}"
+    );
+    assert!(sql.contains("t.latest_outbound_message_ts AS effective_ts"));
+    assert!(sql.contains("uh.updated_at AS viewed_at"));
+}
+
+#[test]
+fn test_build_query_keeps_user_history_join_inline_for_viewed_at_sort() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_with_sort(
+        &view,
+        &expr,
+        models_pagination::SimpleSortMethod::ViewedAt,
+    );
+
+    // uh drives the sort key for viewed_at, so the join must stay in the
+    // candidate stage (before email_links) and cannot be deferred.
+    assert_eq!(
+        sql.matches("LEFT JOIN email_user_history").count(),
+        1,
+        "viewed_at sort must keep a single, inline uh join: {sql}"
+    );
+    let uh_pos = sql.find("LEFT JOIN email_user_history").unwrap();
+    let el_pos = sql.find("JOIN email_links el").unwrap();
+    assert!(
+        uh_pos < el_pos,
+        "uh join must stay in the candidate stage for viewed_at sort: {sql}"
+    );
+    assert!(sql.contains("WHEN 'viewed_at' THEN COALESCE(uh"));
+    // viewed_at is the candidate's own column on this path.
+    assert!(sql.contains("t.viewed_at,"));
 }
 
 const DEFAULT_SORT_TS: &str = "t.updated_at";

@@ -1,0 +1,302 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/code_check_cloud_storage.rs
+name: cloud storage code check
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    branches:
+    - main
+jobs:
+  path-check:
+    runs-on: namespace-profile-linux-small
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+      nextest_filter: ${{ steps.nextest-filter.outputs.nextest_filter }}
+      doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+    - name: Setup Rust
+      uses: './.github/actions/setup-rust'
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'rust/cloud-storage/**'
+            - 'rust/rust-toolchain.toml'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-sccache/**'
+            - '.github/services-config.json'
+            - '.github/scripts/build-cloud-storage-lambdas.sh'
+            - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
+            - .github/workflows/code_check_cloud_storage.yml
+    - name: compute changed files
+      if: steps.filter.outputs.should_run == 'true'
+      run: |
+        set -euo pipefail
+
+        if [ -z "${GITHUB_BASE_REF:-}" ]; then
+          compare_rev="$(git rev-parse HEAD~1)"
+        else
+          git fetch origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+          if ! compare_rev="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"; then
+            echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
+            : > /tmp/changed-files
+            exit 0
+          fi
+        fi
+
+        git diff --name-only "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+      shell: bash
+    - id: doppler-bins
+      name: compute affected Doppler config bins
+      if: steps.filter.outputs.should_run == 'true'
+      run: |
+        set -euo pipefail
+
+        doppler_config_bins="$(cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
+        {
+          echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
+          if [ -n "$doppler_config_bins" ]; then
+            printf '%s\n' "$doppler_config_bins"
+          fi
+          echo '__DOPPLER_CONFIG_BINS__'
+        } >> "$GITHUB_OUTPUT"
+      shell: bash
+    - id: nextest-filter
+      name: compute nextest package filter
+      if: steps.filter.outputs.should_run == 'true'
+      run: |
+        set -euo pipefail
+
+        # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
+        if grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+          echo "Workspace-level change detected; running all tests"
+          echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        filterset="$(cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
+
+        if [ -z "$filterset" ]; then
+          echo "No package-specific Rust changes detected; running all tests"
+        else
+          echo "nextest filter: $filterset"
+        fi
+        echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
+      shell: bash
+  check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: namespace-profile-linux-rust-ci
+    env:
+      RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
+      RUSTDOCFLAGS: '-Dwarnings'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |-
+          /sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+    - name: validate Doppler configs
+      if: needs.path-check.outputs.doppler_config_bins != ''
+      run: |
+        set -euo pipefail
+
+        if [ -z "${DOPPLER_TOKEN:-}" ]; then
+          echo "DOPPLER_TOKEN secret is required to validate Doppler configs" >&2
+          exit 1
+        fi
+
+        if [ -z "${RUSTC_WRAPPER:-}" ]; then
+          echo "RUSTC_WRAPPER is required so Doppler config binaries build through sccache" >&2
+          exit 1
+        fi
+
+        bins=()
+        cargo_args=(build --locked --all-features)
+        while IFS= read -r bin; do
+          if [ -z "$bin" ]; then
+            continue
+          fi
+
+          bins+=("$bin")
+          cargo_args+=(--bin "$bin")
+        done <<< "$DOPPLER_CONFIG_BINS"
+
+        if [ "${#bins[@]}" -eq 0 ]; then
+          echo "No Doppler config binaries to validate"
+          exit 0
+        fi
+
+        echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
+        printf '  %s\n' "${bins[@]}"
+
+        (
+          cd rust/cloud-storage
+          cargo "${cargo_args[@]}"
+          for bin in "${bins[@]}"; do
+            "./target/debug/$bin"
+          done
+        )
+      env:
+        DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
+        DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+    - name: fmt
+      run: cd rust/cloud-storage && cargo fmt --check
+    - name: clippy
+      run: cd rust/cloud-storage && cargo clippy --workspace --all-features
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+  test:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: namespace-profile-linux-rust-ci
+    env:
+      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      NEXTEST_TEST_THREADS: '32'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5 --shm-size 1g'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |-
+          /sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg16" { print $1; exit }')"
+        if [ -z "$postgres_container" ]; then
+          echo "pgvector/pgvector:pg16 service container not found" >&2
+          docker ps
+          exit 1
+        fi
+
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: prepare tests
+      run: just rust/cloud-storage/setup_test_envs && just rust/cloud-storage/initialize_dbs
+    - name: run tests
+      run: |
+        cd rust/cloud-storage
+
+        args=(--all-features --lib --bins --tests --test-threads "$NEXTEST_TEST_THREADS")
+        if [ -n "$NEXTEST_FILTER" ]; then
+          args+=(-E "$NEXTEST_FILTER")
+        fi
+        cargo nextest run "${args[@]}"
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+  status-check:
+    needs:
+    - path-check
+    - check
+    - test
+    if: always()
+    name: Cloud Storage Status Check
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "check: ${{ needs.check.result }}"
+        echo "test: ${{ needs.test.result }}"
+
+        # Fail if any job failed (skipped and success are both OK)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.check.result }}" == "failure" ]] || \
+           [[ "${{ needs.test.result }}" == "failure" ]]; then
+          echo "❌ One or more jobs failed"
+          exit 1
+        fi
+
+        echo "✅ All jobs passed or were skipped"
+concurrency:
+  group: code-check-cloud-storage-${{ github.ref }}
+  cancel-in-progress: true

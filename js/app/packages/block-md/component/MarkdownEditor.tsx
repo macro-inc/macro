@@ -1054,7 +1054,14 @@ export function MarkdownEditor(props: {
           sourceDocumentId={blockId}
         />
 
-        <ActionMenu editor={editor} menu={actionsMenuOperations} />
+        <ActionMenu
+          editor={editor}
+          menu={actionsMenuOperations}
+          actionContext={{
+            sourceDocumentId: blockId,
+            sourceBlockName: blockName,
+          }}
+        />
 
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode="common-tlds" />

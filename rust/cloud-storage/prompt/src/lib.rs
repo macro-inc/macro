@@ -8,6 +8,7 @@
 pub mod about_macro;
 pub mod channel_mention;
 pub mod citations;
+pub mod connected_toolsets;
 pub mod do_not;
 pub mod math;
 pub mod mcp_item_links;

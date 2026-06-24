@@ -7,11 +7,12 @@ use entity_access::inbound::axum_extractors::{
     OptionalMacroUserTeamExtractor, ProjectBodyAccessLevelExtractor,
 };
 use model_user::axum_extractor::MacroUserExtractor;
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
 use super::DocumentRouterState;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
+use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
 use task_dedup::NewTask;
@@ -63,7 +64,7 @@ pub async fn create_task_handler<
     let created = state
         .creator
         .create_markdown_text(
-            user_context.macro_user_id,
+            user_context.macro_user_id.clone(),
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
                 markdown: markdown.clone(),
@@ -90,8 +91,21 @@ pub async fn create_task_handler<
         },
     );
 
+    let token = encode_permission_token(
+        Some(user_context.macro_user_id.as_ref().to_string()),
+        document_id.clone(),
+        AccessLevel::Edit,
+        &state.document_permission_jwt_secret,
+    )
+    .map_err(|e| {
+        tracing::error!(error=?e, "failed to encode permission token");
+        DocumentError::Internal(e.into())
+    })?;
+
     Ok(Json(CreateTaskResponse {
         document_id,
+        document_metadata: task_metadata.metadata.clone(),
+        token,
         team_id: task_metadata.team_id,
         team_task_id: task_metadata.team_task_id,
     }))

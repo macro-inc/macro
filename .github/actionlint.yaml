@@ -2,3 +2,6 @@ self-hosted-runner:
   labels:
     - linux-extra-beefy
     - linux-latest-middy
+    - namespace-profile-linux-mid
+    - namespace-profile-linux-small
+    - namespace-profile-linux-rust-ci

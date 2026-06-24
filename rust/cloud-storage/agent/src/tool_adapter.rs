@@ -202,6 +202,31 @@ where
             })
             .collect()
     }
+
+    /// Build a single adapter for a tool loaded on demand via tool search.
+    ///
+    /// Used to register a `SearchTools`-discovered tool with the live tool
+    /// server mid-session so it becomes advertised and callable on the next
+    /// turn. Calls dispatch through the shared `toolset` by name, exactly like
+    /// [`Self::from_toolset`].
+    pub fn loaded(
+        name: String,
+        schema: schemars::Schema,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        request_context: Arc<RwLock<RequestContext>>,
+    ) -> Self {
+        let mut schema_json = serde_json::to_value(&schema)
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        normalize_request_schema(&mut schema_json);
+        DynToolSetAdapter {
+            name,
+            schema: schema_json,
+            toolset,
+            context,
+            request_context,
+        }
+    }
 }
 
 unsafe impl<C: Send + Sync> Send for DynToolSetAdapter<C> {}

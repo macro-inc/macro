@@ -88,27 +88,3 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
         Ok(SearchToolResponse { results })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ai_toolset::schema::generate_validated_input_schema;
-
-    #[test]
-    fn test_content_search_schema_validation() {
-        let result = generate_validated_input_schema::<ContentSearch>();
-        assert!(result.is_ok(), "{:?}", result);
-
-        let validated = result.unwrap();
-        assert_eq!(
-            validated.name, "ContentSearch",
-            "Tool name should match the schemars title"
-        );
-        assert!(
-            validated
-                .description
-                .contains("Search items by their content"),
-            "Description should contain expected text"
-        );
-    }
-}

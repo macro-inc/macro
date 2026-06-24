@@ -12,7 +12,6 @@ import { Button, cn } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
-  $getRoot,
   $setSelection,
   COMMAND_PRIORITY_LOW,
 } from 'lexical';
@@ -35,6 +34,7 @@ import {
   UPLOAD_MEDIA_START_COMMAND,
   UPLOAD_MEDIA_SUCCESS_COMMAND,
 } from '../../plugins';
+import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
 import { ResizeHandle } from './ResizeHandle';
 
@@ -143,22 +143,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   const deleteVideo = () => {
     const currentEditor = editor();
     if (currentEditor === undefined) return;
-    currentEditor.update(() => {
-      let node = $getNodeByKey(props.key);
-      if (!node) return;
-      const nextSibling = node.getNextSibling();
-      const prevSibling = node.getPreviousSibling();
-      const root = $getRoot();
-
-      node.remove();
-      if (nextSibling) {
-        nextSibling.selectStart();
-      } else if (prevSibling) {
-        prevSibling.selectEnd();
-      } else {
-        root.selectEnd();
-      }
-    });
+    removeNodeAndRestoreSelection(currentEditor, props.key, $isVideoNode);
   };
 
   const viewFull = () => {
