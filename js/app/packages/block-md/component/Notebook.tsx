@@ -321,9 +321,6 @@ export function Notebook(props: {
           <Show when={!props.viewingHistory()}>
             <DocumentDiscussion />
           </Show>
-          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-            <TaskDiscussion />
-          </Show>
         </ParamsProvider>
       </div>
       <div
