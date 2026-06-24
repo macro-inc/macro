@@ -275,9 +275,10 @@
               size_t dir_len = (size_t)(slash - argv[0]);
               char *dir = strndup(argv[0], dir_len);
               char *old_path = getenv("PATH");
-              size_t path_len = dir_len + 1 + (old_path ? strlen(old_path) : 0) + 1;
+              const char *nix_ldd_dir = "${pkgs.glibc.bin}/bin";
+              size_t path_len = dir_len + 1 + strlen(nix_ldd_dir) + 1 + (old_path ? strlen(old_path) : 0) + 1;
               char *path = malloc(path_len);
-              snprintf(path, path_len, "%s:%s", dir, old_path ? old_path : "");
+              snprintf(path, path_len, "%s:%s:%s", dir, nix_ldd_dir, old_path ? old_path : "");
               setenv("PATH", path, 1);
             }
 
