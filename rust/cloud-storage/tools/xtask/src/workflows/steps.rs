@@ -94,9 +94,8 @@ pub fn mount_cache_volume() -> Step<Use> {
         .continue_on_error(true)
 }
 
-/// Repoint sccache at the persisted volume. Runs AFTER `setup-cachix`, which
-/// writes `SCCACHE_DIR=$HOME/.cache/sccache` to `$GITHUB_ENV`; this overrides it
-/// for the cargo steps so compilation artifacts land on the sticky volume.
+/// Repoint sccache at the persisted volume. Runs AFTER `setup-cachix`; this keeps
+/// the compiled artifact cache directory aligned with the Namespace mounted path.
 pub fn pin_sccache_dir() -> Step<Run> {
     Step::new("Point sccache at the cache volume").run(format!(
         "echo \"SCCACHE_DIR={dir}\" >> \"$GITHUB_ENV\"\n\

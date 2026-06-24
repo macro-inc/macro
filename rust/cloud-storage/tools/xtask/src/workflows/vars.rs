@@ -26,7 +26,7 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.
-pub const SCCACHE_VOLUME_DIR: &str = "/sccache";
+pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
 
 /// Max on-disk size for the sccache cache. Larger than the setup default since
 /// the persisted volume can hold a full-workspace cache.

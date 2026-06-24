@@ -124,7 +124,7 @@ jobs:
       with:
         cache: rust
         path: |-
-          /sccache
+          /home/runner/.cache/sccache
           /nix
       continue-on-error: true
     - name: Setup Nix
@@ -136,7 +136,7 @@ jobs:
         dev-shell: 'true'
     - name: Point sccache at the cache volume
       run: |-
-        echo "SCCACHE_DIR=/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: validate Doppler configs
       if: needs.path-check.outputs.doppler_config_bins != ''
@@ -223,7 +223,7 @@ jobs:
       with:
         cache: rust
         path: |-
-          /sccache
+          /home/runner/.cache/sccache
           /nix
       continue-on-error: true
     - name: Setup Nix
@@ -235,7 +235,7 @@ jobs:
         dev-shell: 'true'
     - name: Point sccache at the cache volume
       run: |-
-        echo "SCCACHE_DIR=/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: configure postgres for concurrent tests
       run: |
