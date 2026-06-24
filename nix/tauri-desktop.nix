@@ -575,7 +575,72 @@
             install -m 0755 ${tauriLinuxdeployAppimagePlugin}/bin/linuxdeploy-plugin-appimage.AppImage target/.tauri/linuxdeploy-plugin-appimage.AppImage
             install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gtk.sh target/.tauri/linuxdeploy-plugin-gtk.sh
             install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gstreamer.sh target/.tauri/linuxdeploy-plugin-gstreamer.sh
-            patchShebangs target/.tauri/*.sh target/.tauri/linuxdeploy-plugin-appimage.AppImage
+            cat > target/.tauri/ldd <<'EOF'
+            #!${pkgs.runtimeShell}
+            set -euo pipefail
+
+            binary="''${1:?usage: ldd <elf>}"
+            if ! needed=$(patchelf --print-needed "$binary" 2>/dev/null); then
+              echo "not a dynamic executable"
+              exit 1
+            fi
+
+            origin=$(cd "$(dirname "$binary")" && pwd -P)
+            rpath=$(patchelf --print-rpath "$binary" 2>/dev/null || true)
+            search_path=""
+            append_search_path() {
+              local path_entry="$1"
+              [ -n "$path_entry" ] || return 0
+              if [ -z "$search_path" ]; then
+                search_path="$path_entry"
+              else
+                search_path="$search_path:$path_entry"
+              fi
+            }
+
+            IFS=: read -r -a rpath_entries <<< "$rpath"
+            for entry in "''${rpath_entries[@]}"; do
+              entry=$(printf '%s' "$entry" | awk -v origin="$origin" '{ gsub(/\$\{ORIGIN\}/, origin); gsub(/\$ORIGIN/, origin); print }')
+              append_search_path "$entry"
+            done
+            append_search_path "''${LD_LIBRARY_PATH:-}"
+            append_search_path "/lib"
+            append_search_path "/usr/lib"
+            append_search_path "/lib64"
+            append_search_path "/usr/lib64"
+
+            resolve_needed() {
+              local needed_name="$1"
+              if [ "''${needed_name#/}" != "$needed_name" ] && [ -e "$needed_name" ]; then
+                readlink -f "$needed_name"
+                return 0
+              fi
+
+              local entry candidate
+              IFS=: read -r -a search_entries <<< "$search_path"
+              for entry in "''${search_entries[@]}"; do
+                [ -n "$entry" ] || continue
+                candidate="$entry/$needed_name"
+                if [ -e "$candidate" ]; then
+                  readlink -f "$candidate"
+                  return 0
+                fi
+              done
+
+              return 1
+            }
+
+            while IFS= read -r needed_name; do
+              [ -n "$needed_name" ] || continue
+              if resolved=$(resolve_needed "$needed_name"); then
+                printf '\t%s => %s (0x0000000000000000)\n' "$needed_name" "$resolved"
+              else
+                printf '\t%s => not found\n' "$needed_name"
+              fi
+            done <<< "$needed"
+            EOF
+            chmod 0755 target/.tauri/ldd
+            patchShebangs target/.tauri/*.sh target/.tauri/ldd target/.tauri/linuxdeploy-plugin-appimage.AppImage
           '';
           buildPhaseCargoCommand = ''
             cargo tauri build --verbose --bundles appimage \
