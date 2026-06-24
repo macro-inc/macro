@@ -155,6 +155,7 @@ export async function runEditSession(
   };
 
   const allOps: DocumentOp[] = [];
+  const coderCodeBlocks: string[][][] = [];
   const startedAt = new Date();
   const initialDocument = args.debug ? serializeWithXml(session) : undefined;
   try {
@@ -178,6 +179,7 @@ export async function runEditSession(
         interpret: args.interpret,
         runner: args.runner,
         onOps: (ops) => allOps.push(...ops),
+        onCoderResult: (codes) => coderCodeBlocks.push(codes),
         searchContacts: args.searchContacts ?? (() => Promise.resolve([])),
         searchDocuments: args.searchDocuments ?? (() => Promise.resolve([])),
       }
@@ -209,6 +211,7 @@ export async function runEditSession(
             startedAt,
             initialDocument,
             intent,
+            coderCodeBlocks,
           },
           steps as any,
           usage

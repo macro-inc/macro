@@ -95,6 +95,13 @@ export default defineConfig({
           name: 'block-email',
         },
       },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
+          include: ['packages/service-clients/**/*.{test,spec}.{ts,tsx}'],
+          name: 'service-clients',
+        },
+      },
     ],
   },
 });

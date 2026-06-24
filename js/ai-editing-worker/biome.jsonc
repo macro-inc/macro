@@ -5,6 +5,11 @@
     "root": "../.."
   },
   "files": {
-    "includes": ["**/*.{ts,tsx,js,jsx}", "!**/*.d.ts", "!**/node_modules"]
+    "includes": [
+      "**/*.{ts,tsx,js,jsx}",
+      "!**/*.d.ts",
+      "!**/node_modules",
+      "!src/editor-sandbox-code.ts"
+    ]
   }
 }

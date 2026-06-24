@@ -7,6 +7,7 @@ import type { DocumentOp } from './ops';
 function ed(...ids: string[]): DocumentEditor {
   return new DocumentEditor({
     validIds: ids.length ? ids : ['b1', 'b2', 'b3', 't1'],
+    refs: Array.from({ length: 32 }, (_, i) => `ref-${i + 1}`),
   });
 }
 

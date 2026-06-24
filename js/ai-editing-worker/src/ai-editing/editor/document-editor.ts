@@ -23,16 +23,22 @@ type SetBlockTypeArgs =
 export type DocumentEditorOptions = {
   /** Durable ids present in the document the model was shown. */
   validIds: Iterable<NodeId>;
+  /** A pool of globally-unique ids the host pre-generated (the sandbox has no
+   *  good entropy of its own). Each insert pops one and stamps it as the new
+   *  node's durable id, so inserted ids never collide — across concurrent
+   *  writers, repeated runs, or sessions. */
+  refs: string[];
 };
-
-let refSeq = 0;
 
 export class DocumentEditor {
   private ops: DocumentOp[] = [];
   private valid: Set<string>;
+  private refs: string[];
+  private refIdx = 0;
 
   constructor(opts: DocumentEditorOptions) {
     this.valid = new Set(opts.validIds);
+    this.refs = opts.refs;
   }
 
   private push(op: DocumentOp): this {
@@ -51,7 +57,10 @@ export class DocumentEditor {
   }
 
   private mintRef(): Ref {
-    const ref = `ref-${++refSeq}`;
+    const ref = this.refs[this.refIdx++];
+    if (!ref) {
+      throw new EditError('too many inserts in one snippet (id pool exhausted)');
+    }
     this.valid.add(ref);
     return ref;
   }

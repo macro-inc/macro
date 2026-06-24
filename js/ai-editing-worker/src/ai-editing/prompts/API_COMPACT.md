@@ -33,7 +33,7 @@ The writer has the complete API reference. Use this compact list to plan native 
 
 ## Native Objects
 
-- Block objects: `insertDivider`, `insertImage`, `insertVideo`, `insertEquation`
+- Block objects: `insertDivider`, `insertImage`, `insertVideo`, `insertEquation`; or via `insertBlockAfter`/`appendBlock` with specs `document-card` (documentId, documentName, blockName, blockParams?) and `html-render` (html)
 - Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`, `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`
 - Updates: `setImageAlt`, `setImageUrl`, `setVideoUrl`, `setVideoControls`, `setDate`
 

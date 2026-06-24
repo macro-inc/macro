@@ -70,7 +70,9 @@ export function mockAwarenessSource(): AwarenessSource & { seen: Awareness[] } {
   return {
     seen,
     apply: (x) => void seen.push(x),
-    clear: () => void (seen.length = 0),
+    clear: () => {
+      seen.length = 0;
+    },
   };
 }
 
@@ -164,7 +166,10 @@ function isLoroMap(c: Container | undefined): c is LoroMap {
 /** The `$.id` of a loro container (duck-typed: loro classes can come from
  *  multiple bundle copies, so `instanceof` is unreliable). */
 function containerId(c: LoroMap): string | undefined {
-  const dollar = c.get('$');
+  // Duck-typed: loro values cross bundle copies, so `.get` is typed `unknown`.
+  const dollar = c.get('$') as
+    | { getShallowValue?: () => { id?: string } | undefined; id?: string }
+    | undefined;
   return dollar && typeof dollar.getShallowValue === 'function'
     ? dollar.getShallowValue()?.id
     : dollar?.id;
@@ -195,10 +200,10 @@ export function resolveTextOwner(
 
 /** The container's own `{ text, nodeId }` if it directly holds a LoroText. */
 function ownText(c: LoroMap): { text: LoroText; nodeId: string } | null {
-  const text = c.get('text');
+  const text = c.get('text') as { kind?: () => string } | undefined;
   const nodeId = containerId(c);
   return text?.kind?.() === 'Text' && nodeId
-    ? { text: text as LoroText, nodeId }
+    ? { text: text as unknown as LoroText, nodeId }
     : null;
 }
 
@@ -206,7 +211,9 @@ function ownText(c: LoroMap): { text: LoroText; nodeId: string } | null {
 function firstDescendantText(
   c: LoroMap
 ): { text: LoroText; nodeId: string } | null {
-  const children = c.get('children');
+  const children = c.get('children') as
+    | { toArray?: () => Array<Container | undefined> }
+    | undefined;
   if (!children || typeof children.toArray !== 'function') return null;
   for (const child of children.toArray()) {
     if (!isLoroMap(child)) continue;

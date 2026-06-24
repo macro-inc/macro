@@ -4,7 +4,7 @@ import { $createParagraphNode, $createTextNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { serializeWithXml } from '../utils';
-import { edit, setup, topLevelIds } from './_test-helpers';
+import { edit, read, setup, topLevelIds } from './_test-helpers';
 import {
   $appendBlock,
   $blockNode,
@@ -42,9 +42,9 @@ describe('$blockNode', () => {
 });
 
 describe('block ops', () => {
-  it('$setBlockType changes type but KEEPS the id (API: Notes -> ## Notes)', () => {
+  it('$setBlockType changes type, mints a FRESH id, and forwards the old id to it', () => {
     const { session, ids } = setup('Notes');
-    const id = ids[0];
+    const id = ids[0]!;
     edit(session, () =>
       $setBlockType(session, $blockById(session, id), () =>
         $blockNode({ type: 'heading', level: 2 })
@@ -52,9 +52,14 @@ describe('block ops', () => {
     );
     const xml = serializeWithXml(session);
     expect(xml).toContain('<h2');
-    expect(xml).toContain(`id="${id}"`);
     expect(xml).toContain('Notes');
-    expect(topLevelIds(session)).toEqual([id]); // id preserved
+    // The replacement carries a fresh durable id; the old id is gone from the doc
+    // (so a CRDT sync reads delete+insert, not an in-place reshape).
+    const [newId] = topLevelIds(session);
+    expect(newId).not.toBe(id);
+    expect(xml).not.toContain(`id="${id}"`);
+    // ...but the old id still resolves to the new node (forwarded in the id map).
+    expect(read(session, () => $getId($blockById(session, id)))).toBe(newId);
   });
 
   it('$setText rewrites inline content but KEEPS type and id', () => {

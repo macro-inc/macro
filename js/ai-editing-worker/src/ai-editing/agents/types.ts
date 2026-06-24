@@ -64,4 +64,6 @@ export type RunAgentOptions = {
   signal?: AbortSignal;
   /** Collect every op batch as it is generated (before it is applied). */
   onOps?: (ops: DocumentOp[]) => void;
+  /** Collect JS code blocks run by each coder, indexed by dispatch round then edit index. */
+  onCoderResult?: (codes: string[][]) => void;
 };

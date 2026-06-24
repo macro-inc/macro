@@ -98,7 +98,8 @@ const inserts = paragraphs
 	.join("\n");
 
 const runner: CodeRunner = (validIds, code) => {
-	const editor = new DocumentEditor({ validIds });
+	const refs = Array.from({ length: 128 }, (_, i) => `ref-${i + 1}`);
+	const editor = new DocumentEditor({ validIds, refs });
 	new Function("editor", code)(editor);
 	return editor.drain();
 };

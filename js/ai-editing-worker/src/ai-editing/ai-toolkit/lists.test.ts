@@ -139,12 +139,13 @@ describe('$setListType / $toggleList separation', () => {
       return target ? $getId(target) : null;
     });
 
-  it('$setListType retypes a NESTED list in place, preserving indent + id', () => {
+  it('$setListType retypes a NESTED list, preserving indent + the item id (list id is fresh)', () => {
     const session = createEditingSession();
     loadMarkdown(session, '- deeply\n  - nested\n    - list\n      - items');
     const itemId = deepItemId(session, 'items');
-    edit(session, () => $setListType($byId(session, itemId!), 'number'));
+    edit(session, () => $setListType($byId(session, itemId!), 'number', session));
     read(session, () => {
+      // the item is carried over by replace(…, true): its id still resolves
       const item = $byId(session, itemId!) as ListItemNode;
       expect(item.getType()).toBe('listitem');
       expect(item.getIndent()).toBe(3); // still deeply nested, not hoisted

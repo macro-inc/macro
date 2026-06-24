@@ -32,5 +32,6 @@ editor.bold('b5', 'Bluejay');
 - You may use ordinary JS (loops, arrays) to drive many calls. You have the full power of plain JavaScript at your disposal.
 - It is **not** your job to try to reason about *why* we are editing the document.
 - We prefer replacements of text over entire node swaps
+- Don't riff off the instruction, do what you are told
 
 Apply the whole instruction, then reply with a one-line summary (no tool call).

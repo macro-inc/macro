@@ -207,7 +207,7 @@ describe('Doc — inline formatting (reuses ai-toolkit)', () => {
 });
 
 describe('Doc — block type & lists (id preservation)', () => {
-  it('setBlockType heading keeps the durable id', () => {
+  it('setBlockType heading mints a fresh durable id (old id leaves the doc)', () => {
     const { session, ids } = setup('Title');
     const before = ids[0]!;
     new Doc(session).apply({
@@ -216,12 +216,13 @@ describe('Doc — block type & lists (id preservation)', () => {
       block: 'heading',
       level: 2,
     });
-    expect(serializeWithXml(session)).toContain('<h2');
-    expect(serializeWithXml(session)).toContain(`id="${before}"`);
-    expect(serializeWithXml(session)).toContain('Title');
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<h2');
+    expect(xml).toContain('Title');
+    expect(xml).not.toContain(`id="${before}"`); // fresh id, so Loro sees delete+insert
   });
 
-  it('a follow-up edit still resolves the id after a type swap', () => {
+  it('a follow-up edit still resolves the old id after a type swap', () => {
     const { session, ids } = setup('Title');
     const doc = new Doc(session);
     doc.apply({
@@ -230,9 +231,8 @@ describe('Doc — block type & lists (id preservation)', () => {
       block: 'heading',
       level: 2,
     });
-    doc.apply({ kind: 'appendText', node: ids[0]!, text: '!' }); // same id resolves to the new heading
+    doc.apply({ kind: 'appendText', node: ids[0]!, text: '!' }); // old id forwards to the new heading
     expect(serializeWithXml(session)).toContain('<h2');
-    expect(serializeWithXml(session)).toContain(`id="${ids[0]}"`);
     expect(serializeWithXml(session)).toContain('Title!');
   });
 
@@ -269,6 +269,31 @@ describe('Doc — structure & refs', () => {
     const out = serializeWithXml(session);
     expect(out).toContain('first');
     expect(out).toContain('SECOND');
+  });
+
+  it('inserts a block anchored to a divider (hr), landing as its sibling', () => {
+    // A divider is a decorator block, not an ElementNode. Anchoring an insert to
+    // it must still work
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 'hr',
+      spec: { block: 'divider' },
+      at: { after: ids[0]! },
+    });
+    doc.apply({
+      kind: 'insertNode',
+      ref: 'h',
+      spec: { block: 'heading', level: 2, text: 'Section' },
+      at: { after: 'hr' },
+    });
+    const out = serializeWithXml(session);
+    expect(out).toContain('<hr');
+    expect(out).toContain('<h2');
+    expect(out).toContain('Section');
+    // the heading landed as the divider's following sibling, not at the root edge
+    expect(out.indexOf('<hr')).toBeLessThan(out.indexOf('<h2'));
   });
 
   it('removeNode deletes a block', () => {
@@ -479,7 +504,6 @@ describe('Doc.apply routing', () => {
     });
     expect(serializeWithXml(session)).toContain('<blockquote');
     expect(serializeWithXml(session)).toContain('routed');
-    expect(serializeWithXml(session)).toContain(`id="${ids[0]}"`);
   });
 });
 
@@ -756,26 +780,38 @@ describe('Doc.insertInline — offset placement', () => {
   });
 });
 
-// ── id preservation ──────────────────────────────────────────────────────────
-
-describe('Doc — block-type swaps preserve the durable id', () => {
-  it('paragraph → heading → quote → paragraph keeps the same id, resolvable each step', () => {
+describe('Doc — chained block-type swaps stay addressable by the original id', () => {
+  it('paragraph → heading → quote → paragraph: each swap mints a fresh id, the original id still resolves', () => {
     const { session, ids } = setup('Title');
     const id = ids[0]!;
     const doc = new Doc(session);
     doc.apply({ kind: 'setBlockType', node: id, block: 'heading', level: 2 });
     expect(serializeWithXml(session)).toContain('<h2');
-    expect(serializeWithXml(session)).toContain(`id="${id}"`);
     doc.apply({ kind: 'setBlockType', node: id, block: 'quote' });
     expect(serializeWithXml(session)).toContain('<blockquote');
-    expect(serializeWithXml(session)).toContain(`id="${id}"`);
     doc.apply({ kind: 'setBlockType', node: id, block: 'paragraph' });
     expect(serializeWithXml(session)).toContain('<p');
-    expect(serializeWithXml(session)).toContain(`id="${id}"`);
-    // a follow-up content edit still resolves the same id
+    // the original id chained through every swap and still resolves
     doc.apply({ kind: 'appendText', node: id, text: '!' });
-    expect(serializeWithXml(session)).toContain('Title!');
-    expect(serializeWithXml(session)).toContain(`id="${id}"`);
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('Title!');
+    expect(xml).not.toContain(`id="${id}"`); // the live id is fresh, not the original
+  });
+
+  it('a child node stays addressable by its own id after the parent is swapped', () => {
+    const { session, ids } = setup('hello world');
+    const doc = new Doc(session);
+    // grab the text node's durable id before the swap
+    const childId = read(session, () =>
+      $getId(($getRoot().getFirstChild() as ElementNode).getFirstChild()!)
+    )!;
+    doc.apply({ kind: 'setBlockType', node: ids[0]!, block: 'heading', level: 2 });
+    // the child rode along on replace(…, true): its id still resolves and formats
+    doc.apply({ kind: 'formatNode', node: childId, format: 'bold', on: true });
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<h2');
+    expect(xml).toContain('bold="true"');
+    expect(xml).toContain('hello world');
   });
 });
 
@@ -805,6 +841,22 @@ describe('Doc.setListType — preserves item ids', () => {
     expect(serializeWithXml(session)).toContain('<ol');
     expect(serializeWithXml(session)).toContain('one');
     expect(serializeWithXml(session)).toContain('two');
+  });
+
+  it('retypes a list addressed by its CONTAINER id (the <ul>/<ol>), not just an item', () => {
+    // The model targets a list by the id it sees on the <ul> in the XML.
+    const { session, ids } = setup('- one\n- two');
+    const listId = ids[0]!; // top-level block IS the list container
+    new Doc(session).apply({
+      kind: 'setListType',
+      nodes: [listId],
+      list: 'number',
+    });
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<ol'); // actually retyped, not mangled or no-op'd
+    expect(xml).not.toContain('<ul');
+    expect(xml).toContain('one');
+    expect(xml).toContain('two');
   });
 });
 

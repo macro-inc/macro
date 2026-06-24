@@ -18,8 +18,7 @@ import { match } from 'ts-pattern';
 import { $isCustomCodeNode } from '../../../../lexical-core/nodes/CustomCodeNode';
 import {
   $getId,
-  $setId,
-  type NodeIdMappings,
+  $updateAllNodeIds,
 } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import type { Session } from './session';
 
@@ -30,16 +29,6 @@ export type BlockData =
   | { type: 'code'; language?: string };
 
 export type BlockType = BlockData['type'];
-
-function $transferId(
-  node: LexicalNode,
-  id: string,
-  mappings: NodeIdMappings
-): void {
-  $setId(node, id);
-  mappings.idToNodeKeyMap.set(id, node.getKey());
-  mappings.nodeKeyToIdMap.set(node.getKey(), id);
-}
 
 /** Build an (empty) block node to pass to `$setBlockType` / inserts. */
 export function $blockNode(data: BlockData): ElementNode {
@@ -55,20 +44,24 @@ export function $blockNode(data: BlockData): ElementNode {
 }
 
 /**
- * Change a block'session type, keeping its text content and durable id. The new
- * block'session children are transplanted from the old one and the old id is
- * re-applied so it survives the replacement.
+ * Change a block's type, transplanting its text content onto a new node.
+ * The replacement gets a FRESH durable id rather than inheriting the old one: a
+ * block-type change is a node *replacement*, and the downstream CRDT sync (Loro)
+ * can't reshape a container in place.
  */
 export function $setBlockType(
   session: Session,
   block: ElementNode,
   make: () => ElementNode
 ): ElementNode {
-  const oldId = $getId(block);
+  const oldKey = block.getKey();
   const replacement = make();
   block.replace(replacement, true);
-  if (oldId) {
-    $transferId(replacement, oldId, session.ids);
+  $updateAllNodeIds(session.ids, replacement);
+  const { idToNodeKeyMap } = session.ids;
+  const newKey = replacement.getKey();
+  for (const [id, key] of idToNodeKeyMap) {
+    if (key === oldKey) idToNodeKeyMap.set(id, newKey);
   }
   return replacement;
 }

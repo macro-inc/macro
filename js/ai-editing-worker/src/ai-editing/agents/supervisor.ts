@@ -87,6 +87,7 @@ export async function supervisor(
       serialize,
       runner: opts.runner,
       onOps: opts.onOps,
+      onCoderResult: opts.onCoderResult,
     }),
     searchContacts: createSearchContactsTool(opts.searchContacts),
     searchDocuments: createSearchDocumentsTool(opts.searchDocuments),
@@ -98,7 +99,7 @@ export async function supervisor(
   try {
     const result = await generateText({
       model: models.supervisor,
-      stopWhen: stepCountIs(10),
+      stopWhen: stepCountIs(12),
       system: MASTER_SYSTEM,
       prompt,
       tools,

@@ -7,17 +7,22 @@ export type TraceMeta = {
   startedAt: Date;
   initialDocument?: string;
   intent?: string;
+  /** JS code blocks run by each coder, indexed by dispatch round then edit index. */
+  coderCodeBlocks?: string[][][];
 };
 
 type Usage = UsageEntry[];
 
-function formatDispatchArgs(args: {
-  edits: Array<{
-    editing_instruction: string;
-    context?: { start_line: number; end_line: number };
-    snippets?: Record<string, string>;
-  }>;
-}): string {
+function formatDispatchArgs(
+  args: {
+    edits: Array<{
+      editing_instruction: string;
+      context?: { start_line: number; end_line: number };
+      snippets?: Record<string, string>;
+    }>;
+  },
+  codesPerEdit?: string[][]
+): string {
   return args.edits
     .map((e, i) => {
       const range = e.context
@@ -32,6 +37,15 @@ function formatDispatchArgs(args: {
             .join('\n')}\n   \`\`\``;
         }
       }
+      const codes = codesPerEdit?.[i];
+      if (codes && codes.length > 0) {
+        for (const code of codes) {
+          out += `\n\n   \`\`\`js\n${code
+            .split('\n')
+            .map((l) => `   ${l}`)
+            .join('\n')}\n   \`\`\``;
+        }
+      }
       return out;
     })
     .join('\n');
@@ -39,7 +53,8 @@ function formatDispatchArgs(args: {
 
 function formatToolCall(
   call: { toolName: string; input: unknown },
-  output: unknown
+  output: unknown,
+  codesPerEdit?: string[][]
 ): string {
   const lines: string[] = [];
 
@@ -53,7 +68,7 @@ function formatToolCall(
     };
     lines.push(`**dispatch** — ${edits.length} edit(s)`);
     lines.push('');
-    lines.push(formatDispatchArgs({ edits }));
+    lines.push(formatDispatchArgs({ edits }, codesPerEdit));
     if (output != null) {
       const res = String(output);
       const docStart = res.indexOf('<document>');
@@ -96,7 +111,12 @@ function formatToolCall(
   return lines.join('\n');
 }
 
-function formatStep(step: StepResult<ToolSet>, i: number): string {
+function formatStep(
+  step: StepResult<ToolSet>,
+  i: number,
+  dispatchRoundRef: { current: number },
+  coderCodeBlocks?: string[][][]
+): string {
   const lines: string[] = [`### Step ${i + 1}`];
 
   if (step.text) {
@@ -107,13 +127,18 @@ function formatStep(step: StepResult<ToolSet>, i: number): string {
   for (let j = 0; j < step.toolCalls.length; j++) {
     const call = step.toolCalls[j]!;
     const result = step.toolResults?.[j];
+    const codesPerEdit =
+      call.toolName === 'dispatch'
+        ? coderCodeBlocks?.[dispatchRoundRef.current++]
+        : undefined;
     lines.push('');
     lines.push(
       formatToolCall(
         call as unknown as { toolName: string; input: unknown },
         result != null
           ? (result as unknown as { output: unknown }).output
-          : undefined
+          : undefined,
+        codesPerEdit
       )
     );
   }
@@ -155,9 +180,12 @@ function formatTrace(
 
   sections.push('', '---', '', '## Supervisor');
 
+  const dispatchRoundRef = { current: 0 };
   for (let i = 0; i < steps.length; i++) {
     sections.push('');
-    sections.push(formatStep(steps[i]!, i));
+    sections.push(
+      formatStep(steps[i]!, i, dispatchRoundRef, meta.coderCodeBlocks)
+    );
   }
 
   sections.push(

@@ -15,6 +15,7 @@ Use the `<intent>` block as the resolved task. Apply it by calling `dispatch`. S
 - Use `snippets` for all exact/verbatim text, including replacement strings, table cell contents, long text, code, and special-character text. In `editing_instruction`, refer to `snippets.KEY` instead of embedding the text. It is important you include all the necessary snippets since the writers will otherwise have to painstakingly type it out by hand.
 - When creating new content from scratch (not editing existing text), generate the full text yourself and put it in `snippets`. Never ask the writer to invent or compose content — writers are mechanical appliers, not content generators.
 - Use native editor objects when appropriate: divider, table, heading, quote, code block, image, video, equation, date, mention. Do not simulate native objects with plain text, like `======` for a divider.
+- When mentioning people use our custom mention node. You will have to make a tool call to look them up first. If you find no results then just mention the name as-is.
 - Do not write literal XML/Markdown unless the user wants those characters.
 - Do not invent or preserve ids. New ids are assigned automatically and existing ids may change.
 - Do not write code yourself; describe the change mechanically.

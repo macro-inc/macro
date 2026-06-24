@@ -364,7 +364,11 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => {
       const resolved = nodes.map((n) => locate.$byId(this.session, n));
       const first = resolved[0];
-      if (first && first.getType() === 'listitem')
+      // Already a list (addressed by its <ul>/<ol> id) or an item in one →
+      // retype in place. $toggleList only WRAPS plain blocks into a new list;
+      // handed an existing list it mangles structure or no-ops, so reserve it
+      // for genuine non-list blocks (e.g. paragraphs being turned into a list).
+      if (first && ($isListNode(first) || $isListItemNode(first)))
         lists.$setListType(first, list, this.session);
       else lists.$toggleList(resolved, list);
     });
@@ -625,11 +629,24 @@ export class Doc implements DocReader, DocWriter {
     });
   }
 
+  /** Resolve an insert anchor to a sibling node. Climbs past inline nodes (so a
+   *  text id resolves to its block) but stops at the first block-level node —
+   *  including a decorator block like a divider/image/video. `$blockById` can't
+   *  be used here: it only accepts ElementNodes, so an `<hr>` anchor would skip
+   *  past to the root and `root.insertAfter` throws. */
+  private anchor(id: NodeRef): LexicalNode {
+    let node = locate.$byId(this.session, id);
+    while (node.isInline() && node.getParent()) {
+      node = node.getParent() as LexicalNode;
+    }
+    return node;
+  }
+
   private place(node: LexicalNode, at: Position): void {
     // Node-level insertion (not the ElementNode-typed $-helpers) so decorator
     // blocks — divider/image/video/equation — place correctly too.
-    if ('after' in at) this.block(at.after).insertAfter(node);
-    else if ('before' in at) this.block(at.before).insertBefore(node);
+    if ('after' in at) this.anchor(at.after).insertAfter(node);
+    else if ('before' in at) this.anchor(at.before).insertBefore(node);
     else if ('appendToRoot' in at) $getRoot().append(node);
     else {
       const first = $getRoot().getFirstChild();

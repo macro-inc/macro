@@ -6,8 +6,12 @@ import { Doc } from './doc/doc';
 import { DocumentEditor } from './editor/document-editor';
 import { type CodeRunner, docIds, runEditorCode } from './runtime';
 
+// In-process executor for unit tests: the QuickJS sandbox's wasm import doesn't
+// resolve under bun test, so tests run the snippet via `new Function`. Production
+// always goes through `runInSandbox`. The id pool mirrors what the host injects.
 const newFunctionRunner: CodeRunner = (validIds, code) => {
-  const editor = new DocumentEditor({ validIds });
+  const refs = Array.from({ length: 128 }, (_, i) => `ref-${i + 1}`);
+  const editor = new DocumentEditor({ validIds, refs });
   // eslint-disable-next-line no-new-func
   new Function('editor', code)(editor);
   return editor.drain();

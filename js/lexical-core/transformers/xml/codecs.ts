@@ -28,15 +28,6 @@ function encodeFormat(format: number): Record<string, string> {
   )
 }
 
-const ELE_DEFAULTS = {
-  version: 1 as const,
-  direction: null as string | null,
-  format: '',
-  indent: 0,
-}
-
-// ─── serialization helpers ────────────────────────────────────────────────────
-
 function el(tag: string, kids: FxpNode[], attrs: Record<string, string> = {}): FxpNode {
   return { [tag]: kids, ...(Object.keys(attrs).length && { ':@': attrs }) }
 }
@@ -49,8 +40,6 @@ function container(tag: string, node: { $?: { id: string }; children: SerNode[] 
   return el(tag, node.children.map(serializeNode), nodeAttrs(node, extra))
 }
 
-// ─── known types ──────────────────────────────────────────────────────────────
-
 const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   text: 1, linebreak: 1, paragraph: 1, heading: 1, quote: 1,
   list: 1, listitem: 1, table: 1, tablerow: 1, tablecell: 1,
@@ -61,15 +50,13 @@ function isKnownNode(node: SerNode): node is KnownNode {
   return node.type in KNOWN_TYPES
 }
 
-const SKIP_KEYS = new Set(['type', 'children', '$'])
-
 function serUnknown(n: UnknownNode): FxpNode {
   const { type, children, ...rest } = n
   const flat = flatten(rest, { safe: true }) as Record<string, unknown>
   const attrs: Record<string, string> = {}
   if (n.$?.id) attrs.id = n.$.id
   for (const [k, v] of Object.entries(flat)) {
-    if (SKIP_KEYS.has(k) || k.startsWith('$')) continue
+    if (k.startsWith('$')) continue
     if (v === null || v === undefined) { attrs[k] = 'null'; continue }
     attrs[k === 'id' ? '_id' : k] = typeof v === 'object' ? JSON.stringify(v) : String(v)
   }

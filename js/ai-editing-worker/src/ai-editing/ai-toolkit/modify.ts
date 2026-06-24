@@ -14,8 +14,9 @@ import type { Session } from './session';
  *   - blockType/text → the enclosing block-level element
  *   - listType       → the enclosing list
  *   - checked/indent → the enclosing list item
- * Durable ids are preserved. This is distinct from the fresh-id operations
- * (`$insert`, `$replaceBlock`) which create new nodes.
+ * `text`/`checked`/`indent`/`listType` preserve durable ids. `blockType` mints a
+ * FRESH id (it replaces the node — see `$setBlockType`), as do the explicit
+ * fresh-id operations (`$insert`, `$replaceBlock`).
  */
 export type NodeChange =
   | { op: 'blockType'; block: BlockData }

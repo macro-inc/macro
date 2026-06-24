@@ -86,8 +86,11 @@ export function indexXmlRanges(xml: string): {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     tagPattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = tagPattern.exec(line)) !== null) {
+    for (
+      let match = tagPattern.exec(line);
+      match !== null;
+      match = tagPattern.exec(line)
+    ) {
       const [raw, tag, attrs] = match;
       if (raw.startsWith('</')) {
         for (let j = stack.length - 1; j >= 0; j--) {
@@ -194,6 +197,8 @@ export type DispatchToolOptions = {
   runTask: typeof coder;
   serialize?: (session: Session) => string;
   onOps?: RunCodeToolOptions['onOps'];
+  /** Called after each dispatch batch with the JS code blocks run by each coder. */
+  onCoderResult?: (codes: string[][]) => void;
 };
 
 export function createDispatchTool(opts: DispatchToolOptions) {
@@ -209,6 +214,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     runTask,
     runner,
     onOps,
+    onCoderResult,
   } = opts;
   const serialize = opts.serialize ?? serializeWithXml;
   let round = 0;
@@ -280,6 +286,15 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         }
         return `${i + 1}. ✓ APPLIED`;
       });
+      if (onCoderResult) {
+        const codes = results.map((res) =>
+          res.steps
+            .flatMap((step) => step.toolCalls)
+            .filter((call) => call.toolName === 'runCode')
+            .map((call) => (call.input as { code: string }).code)
+        );
+        onCoderResult(codes);
+      }
       return `${summaries.join('\n')}\n\n<document>\n${serialize(session)}\n</document>`;
     },
   });

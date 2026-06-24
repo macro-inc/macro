@@ -1,6 +1,6 @@
 # `editor` API
 
-All edits go through the `editor` object. `id` is a node id from the XML. Methods that create a node return a handle you can pass to later calls. Pass plain text only. `scope` is optional: `{ all: true }` for every match, `{ nth: N }` for the 1-based Nth match, or omitted for the first/default behavior.
+All edits go through the `editor` object. `id` is a node id from the XML. Methods that create a node return a handle you can pass to later calls. Pass plain text only. `scope` is optional: `{ kind: 'all' }` for every match, `{ kind: 'nth', n: N }` for the 1-based Nth match, or omitted (defaults to `{ kind: 'all' }`).
 
 ## Inline Formatting By Match
 
@@ -399,6 +399,8 @@ After:
 - `{ block: 'list', list: 'bullet'|'number'|'check', items: string[] }`
 - `{ block: 'table', rows }`
 - `{ block: 'divider' }`
+- `{ block: 'document-card', documentId, documentName, blockName, blockParams? }` where `blockParams` is `Record<string, string>`
+- `{ block: 'html-render', html }`
 - `{ block: 'image', srcType, url, alt?, width?, height? }`
 - `{ block: 'video', srcType, url, controls?, width?, height? }`
 - `{ block: 'equation', tex, inline? }`

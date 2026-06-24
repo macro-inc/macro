@@ -13,18 +13,21 @@ import { $modifyNode } from './modify';
 import { createEditingSession, loadMarkdown } from './session';
 
 describe('$modifyNode', () => {
-  it("op 'blockType' changes type + level, keeping the id", () => {
+  it("op 'blockType' changes type + level, minting a fresh id the old id forwards to", () => {
     const { session, ids } = setup('Notes');
+    const old = ids[0]!;
     edit(session, () =>
-      $modifyNode(session, ids[0], {
+      $modifyNode(session, old, {
         op: 'blockType',
         block: { type: 'heading', level: 2 },
       })
     );
     const xml = serializeWithXml(session);
     expect(xml).toContain('<h2');
-    expect(xml).toContain(`id="${ids[0]}"`);
     expect(xml).toContain('Notes');
+    // fresh id replaces the old one, but the old id still resolves to the node
+    expect(xml).not.toContain(`id="${old}"`);
+    expect(read(session, () => $getId($byId(session, old)))).not.toBe(old);
   });
 
   it("op 'text' rewrites a block's content, keeping type + id", () => {
