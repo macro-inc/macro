@@ -66,7 +66,8 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
-        .email_scheduled_queue(config.email_scheduled_queue.as_ref());
+        .email_scheduled_queue(config.email_scheduled_queue.as_ref())
+        .gmail_ops_queue(config.gmail_ops_queue.as_ref());
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),

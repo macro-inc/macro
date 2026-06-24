@@ -99,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
+        .gmail_ops_queue(&config.gmail_ops_queue)
         .search_event_queue(&config.search_event_queue)
         .ai_projection_queue(&config.ai_projection_queue);
 

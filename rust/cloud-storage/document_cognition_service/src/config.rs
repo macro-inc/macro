@@ -11,6 +11,7 @@ env_vars!(
     pub struct DocumentTextExtractorQueue;
     pub struct ChatDeleteQueue;
     pub struct EmailScheduledQueue;
+    pub struct GmailOpsQueue;
     pub struct NotificationQueue;
     pub struct DocumentStorageServiceAuthKey;
     pub struct SearchEventQueue;
@@ -55,6 +56,8 @@ pub struct Config {
     pub chat_delete_queue: ChatDeleteQueue,
     /// The sqs queue to enqueue outbound email sends
     pub email_scheduled_queue: EmailScheduledQueue,
+    /// The sqs queue to enqueue Gmail label/sync operations
+    pub gmail_ops_queue: GmailOpsQueue,
     /// The sqs queue to send notifications to
     pub notification_queue: NotificationQueue,
     pub search_event_queue: SearchEventQueue,
@@ -102,6 +105,7 @@ impl Config {
             ),
             chat_delete_queue: ChatDeleteQueue::Comptime("CHAT_DELETE_QUEUE"),
             email_scheduled_queue: EmailScheduledQueue::Comptime("EMAIL_SCHEDULED_QUEUE"),
+            gmail_ops_queue: GmailOpsQueue::Comptime("GMAIL_OPS_QUEUE"),
             notification_queue: NotificationQueue::Comptime("NOTIFICATION_QUEUE"),
             search_event_queue: SearchEventQueue::Comptime("SEARCH_EVENT_QUEUE"),
             ai_projection_queue: AiProjectionQueue::Comptime("AI_PROJECTION_QUEUE"),
