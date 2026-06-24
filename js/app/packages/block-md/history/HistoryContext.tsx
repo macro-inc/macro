@@ -34,7 +34,10 @@ type HistoryContextValue = {
   setViewingHistory: Setter<boolean>;
   selectedAt: Accessor<Date | null>;
   setSelectedAt: Setter<Date | null>;
+  isScrubbedRightmost: Accessor<boolean>;
+  setIsScrubbedRightmost: Setter<boolean>;
   enterAt: (at: Date | null) => void;
+  enterRightmost: () => void;
   exit: () => void;
   sessions: Accessor<readonly HistorySession[]>;
   isLoadingSessions: Accessor<boolean>;
@@ -51,6 +54,7 @@ export function HistoryProvider(props: {
 }) {
   const [isViewingHistory, setViewingHistory] = createSignal(false);
   const [selectedAt, setSelectedAt] = createSignal<Date | null>(null);
+  const [isScrubbedRightmost, setIsScrubbedRightmost] = createSignal(true);
   const [history] = createResource(props.documentId, fetchHistoryMeta);
   const pins = usePinsQuery(props.documentId);
   const createPin = useCreatePinMutation(props.documentId);
@@ -58,12 +62,20 @@ export function HistoryProvider(props: {
 
   const enterAt = (at: Date | null) => {
     setSelectedAt(at);
-    if (at) setViewingHistory(true);
+    setIsScrubbedRightmost(at === null);
+    setViewingHistory(true);
+  };
+
+  const enterRightmost = () => {
+    setSelectedAt(null);
+    setIsScrubbedRightmost(true);
+    setViewingHistory(true);
   };
 
   const exit = () => {
     setViewingHistory(false);
     setSelectedAt(null);
+    setIsScrubbedRightmost(true);
   };
 
   const value: HistoryContextValue = {
@@ -71,7 +83,10 @@ export function HistoryProvider(props: {
     setViewingHistory,
     selectedAt,
     setSelectedAt,
+    isScrubbedRightmost,
+    setIsScrubbedRightmost,
     enterAt,
+    enterRightmost,
     exit,
     sessions: () => history()?.sessions ?? [],
     isLoadingSessions: () => history.loading,

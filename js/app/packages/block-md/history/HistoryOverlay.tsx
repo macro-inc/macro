@@ -17,6 +17,7 @@ export function HistoryOverlay(props: {
   documentName: string;
   currentState: () => SerializedEditorState | undefined;
   selectedAt: Date | null;
+  isScrubbedRightmost: boolean;
   visible: boolean;
   onExit: () => void;
 }) {
@@ -40,6 +41,7 @@ export function HistoryOverlay(props: {
   // The current document is the latest state; only fetch historical state once
   // the user explicitly selects a timestamp from the scrubber.
   const targetAtMs = createMemo<number | undefined>(() => {
+    if (props.isScrubbedRightmost) return undefined;
     const scrubbed = props.selectedAt;
     if (scrubbed) return scrubbed.getTime();
     return undefined;
@@ -51,6 +53,7 @@ export function HistoryOverlay(props: {
   );
 
   const previewState = createMemo(() => {
+    if (props.isScrubbedRightmost) return currentEditorState();
     if (props.selectedAt)
       return stateAtCursor.data?.state ?? currentEditorState();
     return currentEditorState();

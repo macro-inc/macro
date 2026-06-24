@@ -62,6 +62,7 @@ export type SplitPanelContextType = {
     headerRight?: HTMLDivElement;
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
+    overlay?: HTMLDivElement;
   };
   headerCollapser: HeaderCollapser;
 };

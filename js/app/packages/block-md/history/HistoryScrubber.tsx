@@ -28,6 +28,8 @@ export type HistoryScrubberProps = {
   pins: readonly VersionPin[];
   isViewingHistory: Accessor<boolean>;
   setViewingHistory: Setter<boolean>;
+  isScrubbedRightmost: Accessor<boolean>;
+  onSelectRightmost: () => void;
   onSelect: (at: Date | null) => void;
   onCreatePin: (atMs: number, label: string) => void;
   onDeletePin: (pinId: string) => void;
@@ -126,6 +128,11 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
 
   // Converts a pixel offset to a real timestamp: pixel → warped coord → ms.
   const placeAt = (pointerPx: number) => {
+    if (width() - pointerPx <= THUMB_HIT_PX) {
+      setCursorMs(null);
+      props.onSelectRightmost();
+      return;
+    }
     const ms = containerPositionToTimestamp(pointerPx);
     props.setViewingHistory(true);
     setCursorMs(ms);
@@ -134,6 +141,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
 
   const thumbPx = createMemo<number | null>(() => {
     if (!props.isViewingHistory()) return null;
+    if (props.isScrubbedRightmost()) return width();
     const cursor = cursorMs();
     if (cursor === null) return null;
     const totalWidth = width();

@@ -134,6 +134,8 @@ function HistorySectionContent() {
             pins={history.pins()}
             isViewingHistory={history.isViewingHistory}
             setViewingHistory={history.setViewingHistory}
+            isScrubbedRightmost={history.isScrubbedRightmost}
+            onSelectRightmost={history.enterRightmost}
             onSelect={history.enterAt}
             onCreatePin={history.createPin}
             onDeletePin={history.deletePin}

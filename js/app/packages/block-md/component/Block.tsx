@@ -28,6 +28,7 @@ import {
 } from 'solid-js';
 import type { MarkdownData } from '../definition';
 import { HistoryProvider } from '../history/HistoryContext';
+import { OldOverlay } from '../history/OldOverlay';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
@@ -171,6 +172,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       >
         <ModalsProvider>
           <HistoryProvider documentId={() => blockId}>
+            <OldOverlay />
             <SidePanel.Layout>
               <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
                 <MarkdownSidePanelSections

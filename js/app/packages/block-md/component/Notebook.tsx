@@ -321,6 +321,7 @@ export function Notebook(props: {
                 documentName={documentName()}
                 currentState={currentEditorState}
                 selectedAt={history.selectedAt()}
+                isScrubbedRightmost={history.isScrubbedRightmost()}
                 visible={history.isViewingHistory()}
                 onExit={history.exit}
               />
