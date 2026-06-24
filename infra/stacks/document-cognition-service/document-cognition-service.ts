@@ -14,15 +14,15 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
 const BASE_NAME = 'document-cognition';
 const BASE_PATH = '../../../rust/cloud-storage';
 
-export const SERVICE_DOMAIN_NAME = `document-cognition${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
+export const SERVICE_DOMAIN_NAME = `document-cognition${stack === 'prod' ? '' : `-${stack}`
+  }.${BASE_DOMAIN}`;
 
 type CreateDocumentCognitionServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
@@ -224,6 +224,13 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -243,6 +250,9 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -253,6 +263,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
               cpu: 4096,
               memory: 8192,
               environment: containerEnvVars,
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
@@ -278,11 +289,10 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${
-              platform.architecture === 'amd64'
-                ? 'X86_64'
-                : platform.architecture.toUpperCase()
-            }`,
+            cpuArchitecture: `${platform.architecture === 'amd64'
+              ? 'X86_64'
+              : platform.architecture.toUpperCase()
+              }`,
           },
         },
         desiredCount: stack === 'prod' ? 4 : 1,

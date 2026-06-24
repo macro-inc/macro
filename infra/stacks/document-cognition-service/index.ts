@@ -6,15 +6,12 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
-  getServiceUrl,
-  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { Queue } from '../../packages/resources';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import {
   DocumentCognitionService,
-  SERVICE_DOMAIN_NAME,
 } from './document-cognition-service';
 import { AiProjectionsRefreshTrigger } from './ai-projections-refresh-trigger';
 
@@ -27,13 +24,6 @@ const tags = {
 };
 
 // NOTE: NEVER EVER EVER EXPORT THIS. ITS A SECRET VALUE
-const DATABASE_URL = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_db_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
-// NOTE: NEVER EVER EVER EXPORT THIS. ITS A SECRET VALUE
 const PROXY_DATABASE_URL = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
@@ -44,39 +34,6 @@ const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
-
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
-
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
-
-const OPEN_ROUTER_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('open-router-api-key'),
-  })
-  .apply((secret) => secret.secretString);
-
-const XAI_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('xai-api-key') ?? '',
-  })
-  .apply((secret) => secret.secretString);
-
-const GCP_SERVICE_ACCOUNT = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('gcp_service_account') ?? '',
-  })
-  .apply((secret) => secret.secretString);
-
-const PERPLEXITY_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('perplexity-api-key') ?? '',
-  })
-  .apply((secret) => secret.secretString);
 
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
   'authentication_service_internal_api_key'
@@ -103,14 +60,6 @@ const connectionGatewayStack = new pulumi.StackReference(
     name: `macro-inc/connection-gateway/${stack}`,
   }
 );
-
-const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
-  .getOutput('connectionGatewayRedisUrl')
-  .apply((url) => url as string);
-
-const connectionGatewayTableName: pulumi.Output<string> = connectionGatewayStack
-  .getOutput('connectionGatewayTableName')
-  .apply((name) => name as string);
 
 const connectionGatewayTablePolicyArn: pulumi.Output<string> =
   connectionGatewayStack
@@ -150,11 +99,6 @@ const documentTextExtractorQueueArn: pulumi.Output<string> =
     .getOutput('documentTextExtractorLambdaQueueArn')
     .apply((arn) => arn as string);
 
-const documentTextExtractorQueueName: pulumi.Output<string> =
-  documentTextExtractorStack
-    .getOutput('documentTextExtractorLambdaQueueName')
-    .apply((name) => name as string);
-
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
   .apply((arn) => arn as string);
@@ -163,10 +107,10 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const { notificationIngressQueueName, notificationIngressQueueArn } =
+const { notificationIngressQueueArn } =
   getMacroNotify();
 
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 // ── AI projection queue ──────────────────────────────────────────────────────
 // This service both produces (on upsert) and consumes (via the inbound worker)
@@ -231,91 +175,9 @@ const documentCognitionService = new DocumentCognitionService(
     ],
     connectionTablePolicyArn: connectionGatewayTablePolicyArn,
     containerEnvVars: [
-      ...aiTools.envVars,
-      {
-        name: 'DATABASE_URL',
-        value: pulumi.interpolate`${DATABASE_URL}`,
-      },
       {
         name: 'ENVIRONMENT',
         value: stack,
-      },
-      {
-        name: 'RUST_LOG',
-        value: `info`,
-      },
-      {
-        name: 'OPEN_ROUTER_API_KEY',
-        value: pulumi.interpolate`${OPEN_ROUTER_API_KEY}`,
-      },
-      {
-        name: 'XAI_API_KEY',
-        value: pulumi.interpolate`${XAI_API_KEY}`,
-      },
-      {
-        name: 'DOCUMENT_TEXT_EXTRACTOR_QUEUE',
-        value: pulumi.interpolate`${documentTextExtractorQueueName}`,
-      },
-      {
-        name: 'CHAT_DELETE_QUEUE',
-        value: pulumi.interpolate`${deleteChatQueueName}`,
-      },
-      {
-        name: 'GCP_SERVICE_ACCOUNT',
-        value: pulumi.interpolate`${GCP_SERVICE_ACCOUNT}`,
-      },
-      { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
-      {
-        name: 'JWT_SECRET_KEY',
-        value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-      },
-      {
-        name: 'AUDIENCE',
-        value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-      },
-      {
-        name: 'NOTIFICATION_QUEUE',
-        value: pulumi.interpolate`${notificationIngressQueueName}`,
-      },
-      {
-        name: ServiceUrl.CONNECTION_GATEWAY_URL,
-        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-      },
-      {
-        name: 'SEARCH_EVENT_QUEUE',
-        value: pulumi.interpolate`${searchEventQueueName}`,
-      },
-      {
-        name: 'AI_PROJECTION_QUEUE',
-        value: pulumi.interpolate`${aiProjectionQueue.queue.name}`,
-      },
-      {
-        name: 'MACRO_API_TOKEN_ISSUER',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-      },
-      {
-        name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-        value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-      },
-      {
-        name: 'PERPLEXITY_API_KEY',
-        value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
-      },
-      {
-        name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
-        value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
-      },
-      {
-        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-        value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
-      },
-      {
-        name: 'REDIS_HOST',
-        value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
-      },
-      {
-        name: 'CONNECTION_GATEWAY_TABLE',
-        value: pulumi.interpolate`${connectionGatewayTableName}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {
@@ -325,10 +187,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'DD_ENV',
         value: stack,
-      },
-      {
-        name: 'DOCUMENT_COGNITION_SERVICE_URL',
-        value: `https://${SERVICE_DOMAIN_NAME}`,
       },
     ],
     isPrivate: false,
