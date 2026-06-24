@@ -7,12 +7,10 @@ use axum::Router;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_env::Environment;
-use macro_env_var::env_var;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::ConnectionGatewayUrl;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
+use scheduled_action::config::Config;
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::inbound::axum_router::{
@@ -27,31 +25,21 @@ use sqlx::postgres::PgPoolOptions;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-env_var! {
-    pub struct EnvVars {
-        Port,
-        DatabaseUrl,
-        NotificationQueue,
-    }
-}
-
 #[tokio::main]
 #[tracing::instrument(err)]
 async fn main() -> Result<()> {
     MacroEntrypoint::default().init();
 
-    let env = EnvVars::new().context("failed to read environment")?;
-    let environment = Environment::new_or_prod();
+    let config = Config::from_env()?;
+    let environment = config.environment;
 
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(10)
-        .connect(&env.database_url)
+        .connect(&config.database_url)
         .await
         .context("failed to connect to macrodb")?;
 
-    // TODO: This shoud be a config and use `macro_config` so we can
-    // have doppler tests for it.
     let tool_context = build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build tool service context")?;
@@ -60,17 +48,15 @@ async fn main() -> Result<()> {
     let notification_ingress = Arc::new(SqsNotificationIngress {
         queue: SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            env.notification_queue.to_string(),
+            config.notification_queue.to_string(),
         ),
     });
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
-    let internal_api_secret = InternalApiSecretKey::new()?;
-
     let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        internal_api_secret.as_ref().to_string(),
+        config.internal_api_secret_key.as_ref().to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     ));
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
@@ -121,7 +107,8 @@ async fn main() -> Result<()> {
         .merge(authed_routes)
         .layer(macro_cors::cors_layer());
 
-    let addr = format!("0.0.0.0:{}", &*env.port);
+    let port = config.port;
+    let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .with_context(|| format!("failed to bind {addr}"))?;

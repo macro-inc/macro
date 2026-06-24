@@ -5,6 +5,14 @@ name = "mcp_service"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "mcp_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "mcp_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
@@ -32,8 +40,11 @@ macro_auth = { path = "../macro_auth" }
 macro_db_client = { path = "../macro_db_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_config = { path = "../macro_config" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+database_env_vars = { path = "../macro_env_vars/database_env_vars" }
+doppler-config = { workspace = true }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
