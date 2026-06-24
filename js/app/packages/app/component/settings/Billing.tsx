@@ -130,7 +130,7 @@ export const Billing = () => {
                     them to make changes.
                   </p>
                 </Match>
-                <Match when={teamRole() === 'owner' && team.data}>
+                <Match when={hasPaid() && teamRole() === 'owner' && team.data}>
                   {(team) => (
                     <p class="text-ink-extra-muted text-xs">
                       {team().members.length}{' '}
