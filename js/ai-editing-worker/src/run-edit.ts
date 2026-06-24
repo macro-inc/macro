@@ -23,6 +23,7 @@ import {
   loadSnapshot,
   toSnapshot,
 } from './ai-editing/ai-toolkit';
+import { nextAiPeerId } from './ai-editing/awareness/ai-peer';
 import { realAwarenessSource } from './ai-editing/awareness/awareness-source';
 import { sharedPeerPool } from './ai-editing/awareness/peer-pool';
 import type { DocumentOp } from './ai-editing/editor/ops';
@@ -130,14 +131,13 @@ export async function runEditSession(
   // Each `propagate` syncs the *current* session state through the engine. We
   // serialize on a promise chain (the executor calls `propagate` synchronously
   // between animated ops) and snapshot inside the task so it reflects any
-  // remote reconcile that landed since — then switch to a fresh random peer id
-  // before the commit so each edit batch is attributed to a distinct author.
+  // remote reconcile that landed since — then switch to a fresh peer id from the
+  // AI-reserved block before the commit so each edit batch is attributed to a
+  // distinct author a history viewer can recognize as AI.
   let chain: Promise<void> = Promise.resolve();
   const propagate = () => {
     chain = chain.then(async () => {
-      const buf = new Uint8Array(8);
-      crypto.getRandomValues(buf);
-      const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
+      const newPeer = nextAiPeerId();
       manager.doc.commit();
       manager.doc.setPeerId(newPeer);
       source.registerPeerId(newPeer);

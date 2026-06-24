@@ -13,6 +13,7 @@ import {
 	toSnapshot,
 } from "../src/ai-editing/ai-toolkit";
 import { Doc } from "../src/ai-editing/doc/doc";
+import { nextAiPeerId } from "../src/ai-editing/awareness/ai-peer";
 import {
 	AI_NAMES,
 	COLORS,
@@ -58,9 +59,7 @@ engine.start();
 let chain: Promise<void> = Promise.resolve();
 const propagate = () => {
 	chain = chain.then(async () => {
-		const buf = new Uint8Array(8);
-		crypto.getRandomValues(buf);
-		const newPeer = new DataView(buf.buffer).getBigUint64(0, false);
+		const newPeer = nextAiPeerId();
 		manager.doc.commit();
 		manager.doc.setPeerId(newPeer);
 		source.registerPeerId(newPeer);
