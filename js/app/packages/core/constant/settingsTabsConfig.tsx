@@ -1,11 +1,11 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
+import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import CpuIcon from '@phosphor/cpu.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
-import SwatchesIcon from '@phosphor/swatches.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import SwatchesIcon from '@phosphor/swatches.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
