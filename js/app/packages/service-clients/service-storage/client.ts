@@ -37,7 +37,7 @@ import type {
   GithubPullRequestsResponse,
   GroupedSoupGroupPage,
   GroupedSoupInitialPage,
-  ParamsSortMethod,
+  GroupedSoupSort,
   PostGroupedSoupAstGroupPageRequest,
   PostGroupedSoupAstInitialRequest,
   PostGroupedSoupAstRequest,
@@ -401,7 +401,7 @@ export const storageServiceClient = {
     params: {
       group_by: PostGroupedSoupAstInitialRequest['group_by'];
       per_group_limit?: number | null;
-      sort_method?: ParamsSortMethod;
+      sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
   }) {
@@ -428,7 +428,7 @@ export const storageServiceClient = {
       group_by: PostGroupedSoupAstGroupPageRequest['group_by'];
       group_key: string;
       limit?: number | null;
-      sort_method?: ParamsSortMethod;
+      sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
   }) {

@@ -50,7 +50,11 @@ export type GroupQueryData = {
 type CreateGroupedSoupQueriesArgs = {
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  soupParams: Accessor<SoupParams>;
+  soupParams: Accessor<
+    Omit<SoupParams, 'sort_method'> & {
+      sort_method: Exclude<SoupParams['sort_method'], 'frecency'>;
+    }
+  >;
   soupBody: Accessor<SoupAstBody>;
   queryOptions: Accessor<{
     enabled?: boolean;
@@ -142,7 +146,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
                 group_by: serializeGroupByField(field),
                 group_key: group.key,
                 limit: args.soupParams().limit,
-                sort_method: args.soupParams().sort_method,
+                sort_method: args.soupParams().sort_method ?? undefined,
               },
               body: args.soupBody(),
             })
