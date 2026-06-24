@@ -11,6 +11,7 @@ const SERVICE_NAMES = [
   'static-file-service',
   'image-proxy-service',
   'connection-gateway',
+  'agent-schedule-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {
