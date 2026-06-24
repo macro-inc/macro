@@ -13,10 +13,11 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'mcp-server';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `mcp-server${
@@ -220,6 +221,12 @@ export class McpServer extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -239,6 +246,9 @@ export class McpServer extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -249,6 +259,7 @@ export class McpServer extends pulumi.ComponentResource {
               cpu: 1024,
               memory: 2048,
               environment: containerEnvVars,
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

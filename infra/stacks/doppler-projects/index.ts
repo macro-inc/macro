@@ -12,6 +12,7 @@ const SERVICE_NAMES = [
   'image-proxy-service',
   'connection-gateway',
   'agent-schedule-service',
+  'mcp-server',
 ];
 
 for (const service_name of SERVICE_NAMES) {
