@@ -142,6 +142,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
                 group_by: serializeGroupByField(field),
                 group_key: group.key,
                 limit: args.soupParams().limit,
+                sort_method: args.soupParams().sort_method,
               },
               body: args.soupBody(),
             })

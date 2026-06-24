@@ -158,6 +158,7 @@ export const useSoupAstItemsQuery = (
                 params: {
                   group_by: serializeGroupByField(groupBy),
                   per_group_limit: params.limit,
+                  sort_method: params.sort_method,
                 },
                 body,
               })
