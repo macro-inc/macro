@@ -9,7 +9,7 @@ use call::outbound::s3_recording_storage::S3RecordingStorage;
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
 };
-use config::{Config, EnvVars, Environment};
+use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
@@ -56,8 +56,7 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
-    let config = Config::from_env(EnvVars::unwrap_new())
-        .context("failed to parse config from environment")?;
+    let config = Config::from_env().context("failed to parse config from environment")?;
 
     tracing::info!("initialized config");
 
