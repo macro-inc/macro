@@ -17,9 +17,10 @@ jobs:
     runs-on: namespace-profile-linux-mid
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ github.event.ref_type == 'tag' && github.event.ref || github.ref }}
+          persist-credentials: false
 
       - name: Mount /nix cache volume
         continue-on-error: true
@@ -82,7 +83,7 @@ jobs:
           (cd artifacts && sha256sum -- *.AppImage > SHA256SUMS)
 
       - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
           path: artifacts/*

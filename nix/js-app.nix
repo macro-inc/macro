@@ -43,6 +43,28 @@
         }).androidsdk
       );
 
+      jsRustComponents = with fenix.packages.${system}; [
+        complete.rustc
+        complete.rust-src
+        complete.cargo
+        complete.clippy
+        complete.rustfmt
+        complete.rust-analyzer
+      ];
+
+      jsRustToolchain = with fenix.packages.${system}; combine jsRustComponents;
+      jsAndroidRustToolchain =
+        with fenix.packages.${system};
+        combine (
+          jsRustComponents
+          ++ [
+            targets.aarch64-linux-android.latest.rust-std
+            targets.armv7-linux-androideabi.latest.rust-std
+            targets.i686-linux-android.latest.rust-std
+            targets.x86_64-linux-android.latest.rust-std
+          ]
+        );
+
       jsBasePackages = with jsPkgs; [
         curl
         wget
@@ -60,25 +82,6 @@
         pulumiPackages.pulumi-aws-native
         playwright
         playwright-mcp
-        (
-          with fenix.packages.${system};
-          combine (
-            [
-              complete.rustc
-              complete.rust-src
-              complete.cargo
-              complete.clippy
-              complete.rustfmt
-              complete.rust-analyzer
-            ]
-            ++ pkgs.lib.optionals isLinux [
-              targets.aarch64-linux-android.latest.rust-std
-              targets.armv7-linux-androideabi.latest.rust-std
-              targets.i686-linux-android.latest.rust-std
-              targets.x86_64-linux-android.latest.rust-std
-            ]
-          )
-        )
       ];
 
       jsLinuxPackages = with jsPkgs; [
@@ -86,11 +89,20 @@
         gst_all_1.gst-plugins-base
         gst_all_1.gst-plugins-good
         gst_all_1.gst-plugins-bad
-        jdk
         xdg-utils
       ];
 
-      jsPackages = jsBasePackages ++ pkgs.lib.optionals isLinux (jsLinuxPackages ++ [ android_sdk ]);
+      jsPackages = jsBasePackages ++ [ jsRustToolchain ] ++ pkgs.lib.optionals isLinux jsLinuxPackages;
+      jsAndroidPackages =
+        jsBasePackages
+        ++ [ jsAndroidRustToolchain ]
+        ++ pkgs.lib.optionals isLinux (
+          jsLinuxPackages
+          ++ [
+            jsPkgs.jdk
+            android_sdk
+          ]
+        );
 
       jsLinuxLibraries = with jsPkgs; [
         gtk3
@@ -111,21 +123,34 @@
       ];
 
       jsLibraries = if isDarwin then jsDarwinLibraries else jsLinuxLibraries;
+      jsLinuxShellHook = ''
+        export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath jsLibraries}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export XDG_DATA_DIRS="${jsPkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${jsPkgs.gsettings-desktop-schemas.name}:${jsPkgs.gtk3}/share/gsettings-schemas/${jsPkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+      '';
     in
     {
-      devShells.js-app = jsPkgs.mkShell (
-        {
-          buildInputs = jsPackages ++ jsLibraries;
+      devShells = {
+        js-app = jsPkgs.mkShell (
+          {
+            buildInputs = jsPackages ++ jsLibraries;
+            PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
+          }
+          // pkgs.lib.optionalAttrs isLinux {
+            shellHook = jsLinuxShellHook;
+            GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
+          }
+        );
+      }
+      // pkgs.lib.optionalAttrs isLinux {
+        js-app-android = jsPkgs.mkShell {
+          buildInputs = jsAndroidPackages ++ jsLibraries;
           PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
-        }
-        // pkgs.lib.optionalAttrs isLinux {
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath jsLibraries}:$LD_LIBRARY_PATH";
-          XDG_DATA_DIRS = "${jsPkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${jsPkgs.gsettings-desktop-schemas.name}:${jsPkgs.gtk3}/share/gsettings-schemas/${jsPkgs.gtk3.name}:$XDG_DATA_DIRS";
+          shellHook = jsLinuxShellHook;
           ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
           NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
           GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
           GIO_MODULE_DIR = "${jsPkgs.glib-networking}/lib/gio/modules/";
-        }
-      );
+        };
+      };
     };
 }

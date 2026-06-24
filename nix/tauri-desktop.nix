@@ -15,6 +15,7 @@
       };
       inherit (pkgs) lib;
       isLinux = pkgs.stdenv.hostPlatform.isLinux;
+      isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
       appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
@@ -427,6 +428,13 @@
               -ov \
               -format UDZO \
               "$dmgPath"
+
+            if [ "$APPLE_SIGNING_IDENTITY" = "-" ]; then
+              codesign --force --sign - "$dmgPath"
+            else
+              codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$dmgPath"
+            fi
+            codesign --verify --strict --verbose=2 "$dmgPath"
           '';
           doInstallCargoArtifacts = false;
         }
@@ -505,9 +513,11 @@
         lib.optionalAttrs isLinux {
           tauri-frontend = frontend;
           tauri-desktop = wrappedTauriDesktop;
-          tauri-desktop-appimage = tauriDesktopAppImage;
           tauri-desktop-unwrapped = tauri.app;
           tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+        }
+        // lib.optionalAttrs isX86_64Linux {
+          tauri-desktop-appimage = tauriDesktopAppImage;
         }
         // lib.optionalAttrs isAarch64Darwin {
           tauri-frontend = frontend;
