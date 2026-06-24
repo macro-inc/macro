@@ -5,8 +5,6 @@ import {
   getAiToolsInfra,
   getMacroApiToken,
   getMacroNotify,
-  getServiceUrl,
-  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -22,46 +20,13 @@ const tags = {
 
 // ── Secrets ──────────────────────────────────────────────────────────────────
 
-const DATABASE_URL = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('macro_db_secret_key'),
-  })
-  .apply((secret) => secret.secretString);
-
 const JWT_SECRET_KEY = config.require('jwt_secret_key');
 const jwtSecretKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('fusionauth_client_id'),
-  })
-  .apply((secret) => secret.secretString);
-
-const FUSIONAUTH_ISSUER = config.require('fusionauth_issuer');
-
-const OPEN_ROUTER_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('open-router-api-key'),
-  })
-  .apply((secret) => secret.secretString);
-
-const XAI_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('xai-api-key'),
-  })
-  .apply((secret) => secret.secretString);
-
-const PERPLEXITY_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('perplexity-api-key'),
-  })
-  .apply((secret) => secret.secretString);
-
 const MACRO_API_TOKENS = getMacroApiToken();
-const { notificationIngressQueueArn, notificationIngressQueueName } =
-  getMacroNotify();
+const { notificationIngressQueueArn } = getMacroNotify();
 
 // ── AI tools infra ───────────────────────────────────────────────────────────
 
@@ -102,67 +67,9 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
   queueArns: [notificationIngressQueueArn, ...aiTools.queueArns],
   bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
-    ...aiTools.envVars,
-    // Core
-    {
-      name: 'DATABASE_URL',
-      value: pulumi.interpolate`${DATABASE_URL}`,
-    },
-    {
-      name: 'PORT',
-      value: '8080',
-    },
     {
       name: 'ENVIRONMENT',
       value: stack,
-    },
-    {
-      name: 'RUST_LOG',
-      value: 'scheduled_action=info,ai=info,ai_tools=info,tower_http=info',
-    },
-    // Auth
-    {
-      name: 'JWT_SECRET_KEY',
-      value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-    },
-    {
-      name: 'AUDIENCE',
-      value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-    },
-    {
-      name: 'ISSUER',
-      value: pulumi.interpolate`${FUSIONAUTH_ISSUER}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_ISSUER',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-    },
-    // Queues
-    {
-      name: 'NOTIFICATION_QUEUE',
-      value: pulumi.interpolate`${notificationIngressQueueName}`,
-    },
-    // Service URLs not covered by ai_tools
-    {
-      name: ServiceUrl.CONNECTION_GATEWAY_URL,
-      value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-    },
-    // AI model API keys
-    {
-      name: 'OPEN_ROUTER_API_KEY',
-      value: pulumi.interpolate`${OPEN_ROUTER_API_KEY}`,
-    },
-    {
-      name: 'XAI_API_KEY',
-      value: pulumi.interpolate`${XAI_API_KEY}`,
-    },
-    {
-      name: 'PERPLEXITY_API_KEY',
-      value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
     },
     // Datadog
     {
