@@ -381,7 +381,7 @@
             };
             bundle = {
               active = true;
-              targets = [ "dmg" ];
+              targets = [ "app" ];
             };
           }
           (
@@ -403,24 +403,30 @@
               echo "APPLE_SIGNING_IDENTITY must be set when building the signed macOS DMG; use nix build --impure." >&2
               exit 1
             fi
-            export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+            export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
             ${tauri.commonArgs.preBuild or ""}
           '';
           buildPhaseCargoCommand = ''
-            cargo tauri build --bundles dmg \
+            cargo tauri build --bundles app \
               --features tauri/custom-protocol \
               --config "$TAURI_CONFIG"
           '';
           installPhaseCommand = ''
-            dmgPath=$(find target -type f -path '*/release/bundle/dmg/*.dmg' -print -quit)
-            if [ -z "$dmgPath" ]; then
-              echo "failed to locate built DMG" >&2
+            appPath=$(find target -type d -path '*/release/bundle/macos/*.app' -print -quit)
+            if [ -z "$appPath" ]; then
+              echo "failed to locate built macOS app bundle" >&2
               find target -path '*/bundle/*' -print >&2 || true
               exit 1
             fi
 
             mkdir -p "$out"
-            cp "$dmgPath" "$out/Macro-${appVersion}-${system}.dmg"
+            dmgPath="$out/Macro-${appVersion}-${system}.dmg"
+            hdiutil create \
+              -volname "Macro" \
+              -srcfolder "$appPath" \
+              -ov \
+              -format UDZO \
+              "$dmgPath"
           '';
           doInstallCargoArtifacts = false;
         }
