@@ -29,11 +29,6 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
-import {
-  useCreatePinMutation,
-  useDeletePinMutation,
-  usePinsQuery,
-} from '@queries/pins';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
@@ -44,20 +39,17 @@ import {
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { type HistorySession, syncServiceClient } from '@service-sync/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
-  type Accessor,
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   onCleanup,
-  type Setter,
   Show,
 } from 'solid-js';
+import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
 import { mdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
@@ -65,23 +57,6 @@ import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 interface MarkdownSidePanelSectionsProps {
   canEdit: boolean;
   documentName: string;
-  isViewingHistory: Accessor<boolean>;
-  setViewingHistory: Setter<boolean>;
-  onHistorySelect: (at: Date | null) => void;
-}
-
-async function fetchHistoryMeta(
-  documentId: string
-): Promise<{ sessions: HistorySession[] } | undefined> {
-  const maybe = await syncServiceClient.getHistoryMeta({ documentId });
-  if (maybe.isErr()) {
-    console.error(
-      "Couldn't get history meta for history side panel",
-      maybe.error
-    );
-    return undefined;
-  }
-  return { sessions: maybe.value.sessions };
 }
 
 /**
@@ -132,12 +107,7 @@ export function MarkdownSidePanelSections(
         order={35}
         collapsible={false}
       >
-        <HistorySectionContent
-          documentId={blockId}
-          isViewingHistory={props.isViewingHistory}
-          setViewingHistory={props.setViewingHistory}
-          onSelect={props.onHistorySelect}
-        />
+        <HistorySectionContent />
       </SidePanel.Section>
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
@@ -149,32 +119,24 @@ export function MarkdownSidePanelSections(
   );
 }
 
-function HistorySectionContent(props: {
-  documentId: string;
-  isViewingHistory: Accessor<boolean>;
-  setViewingHistory: Setter<boolean>;
-  onSelect: (at: Date | null) => void;
-}) {
-  const [history] = createResource(() => props.documentId, fetchHistoryMeta);
-  const pins = usePinsQuery(() => props.documentId);
-  const createPin = useCreatePinMutation(() => props.documentId);
-  const deletePin = useDeletePinMutation(() => props.documentId);
+function HistorySectionContent() {
+  const history = useHistory();
 
   return (
     <Show
-      when={!history.loading && (history()?.sessions ?? [])}
+      when={!history.isLoadingSessions() && history.sessions()}
       fallback={<p class="text-xs text-ink-muted">No history found</p>}
     >
       {(sessions) => (
         <div class="min-w-0 overflow-hidden pt-2">
           <HistoryScrubber
             sessions={sessions()}
-            pins={pins.data ?? []}
-            isViewingHistory={props.isViewingHistory}
-            setViewingHistory={props.setViewingHistory}
-            onSelect={props.onSelect}
-            onCreatePin={(atMs, label) => createPin.mutate({ atMs, label })}
-            onDeletePin={(pinId) => deletePin.mutate(pinId)}
+            pins={history.pins()}
+            isViewingHistory={history.isViewingHistory}
+            setViewingHistory={history.setViewingHistory}
+            onSelect={history.enterAt}
+            onCreatePin={history.createPin}
+            onDeletePin={history.deletePin}
             compact
           />
         </div>

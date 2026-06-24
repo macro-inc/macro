@@ -29,16 +29,15 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
   onMount,
-  type Setter,
   Show,
   untrack,
 } from 'solid-js';
+import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
@@ -88,10 +87,6 @@ function useCanUseLexicalStateDebugger() {
 
 export function Notebook(props: {
   loroManager: LoroManager;
-  viewingHistory: Accessor<boolean>;
-  setViewingHistory: Setter<boolean>;
-  onHistoryExit: () => void;
-  selectedHistoryAt: Date | null;
   documentId: string;
 }) {
   const blockElement = blockElementSignal.get;
@@ -100,6 +95,7 @@ export function Notebook(props: {
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
   const md = mdStore.get;
+  const history = useHistory();
   const { navigatedFromJK } = useNavigatedFromJK();
   const documentId = props.documentId;
 
@@ -324,16 +320,13 @@ export function Notebook(props: {
                 documentId={documentId}
                 documentName={documentName()}
                 currentState={currentEditorState}
-                selectedAt={props.selectedHistoryAt}
-                visible={props.viewingHistory()}
-                onExit={() => {
-                  props.setViewingHistory(false);
-                  props.onHistoryExit();
-                }}
+                selectedAt={history.selectedAt()}
+                visible={history.isViewingHistory()}
+                onExit={history.exit}
               />
             </Show>
           </div>
-          <Show when={!props.viewingHistory()}>
+          <Show when={!history.isViewingHistory()}>
             <DocumentDiscussion />
           </Show>
         </ParamsProvider>
@@ -361,11 +354,7 @@ export function Notebook(props: {
   );
 }
 
-export function InstructionsNotebook(props: {
-  loroManager: LoroManager;
-  viewingHistory: Accessor<boolean>;
-  setViewingHistory: Setter<boolean>;
-}) {
+export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
   const scopeId = blockHotkeyScopeSignal.get;
   const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
