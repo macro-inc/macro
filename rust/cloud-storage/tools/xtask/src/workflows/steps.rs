@@ -121,3 +121,77 @@ pub fn gated_job() -> Job {
         "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
     ))
 }
+
+// ---------------------------------------------------------------------------
+// Desktop (AppImage / DMG) shared steps
+// ---------------------------------------------------------------------------
+
+/// `actions/checkout` with a dynamic ref (for tag-triggered builds). Uses the
+/// same pinned SHA as [`checkout`].
+pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
+    Step::new("Checkout Repo")
+        .uses(
+            "actions",
+            "checkout",
+            "df4cb1c069e1874edd31b4311f1884172cec0e10",
+        ) // v6
+        .add_with(("ref", ref_expr))
+        .add_with(("persist-credentials", false))
+}
+
+/// Mount only the `/nix` store cache volume (no cargo/sccache). Used by the
+/// desktop builds that delegate entirely to Nix.
+pub fn mount_nix_cache_volume() -> Step<Use> {
+    Step::new("Mount /nix cache volume")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("path", "/nix"))
+        .continue_on_error(true)
+}
+
+/// Configure Cachix (without entering a dev shell).
+pub fn setup_cachix() -> Step<Use> {
+    uses_local("Configure Cachix fallback", "./.github/actions/setup-cachix")
+        .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
+}
+
+/// Derive a safe tag name from the git ref for use in artifact names.
+pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
+    Step::new("Derive artifact metadata")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            tag="${RAW_REF#refs/tags/}"
+            if [ -z "$tag" ]; then
+              tag="${GITHUB_REF_NAME:-untagged}"
+            fi
+            safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        "#})
+        .id("metadata")
+        .shell("bash")
+        .add_env(("RAW_REF", raw_ref_expr))
+}
+
+/// Upload build artifacts via `actions/upload-artifact`, pinned.
+pub fn upload_artifact(name: &str, path: &str) -> Step<Use> {
+    Step::new(format!("Upload {name} artifact"))
+        .uses(
+            "actions",
+            "upload-artifact",
+            "ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ) // v4
+        .add_with(("name", name))
+        .add_with(("path", path))
+        .add_with(("if-no-files-found", "error"))
+        .add_with(("retention-days", 30))
+}
+
+/// Teardown Nix (always runs).
+pub fn teardown_nix() -> Step<Use> {
+    uses_local("Teardown Nix", "./.github/actions/teardown-nix")
+        .if_condition(Expression::new("always()"))
+}

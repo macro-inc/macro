@@ -9,6 +9,9 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod build_appimage_on_tag;
+mod build_desktop_on_tag;
+mod build_dmg_on_tag;
 mod check_generated;
 mod code_check_cloud_storage;
 mod runners;
@@ -27,8 +30,8 @@ use gh_workflow::Workflow;
 /// checks key on a job *name*, not the filename, so renaming files is safe.)
 struct WorkflowFile {
     slug: &'static str,
-    /// Builds the workflow definition.
-    build: fn() -> Workflow,
+    /// Produces the YAML body for this workflow.
+    render_yaml: fn() -> Result<String>,
 }
 
 impl WorkflowFile {
@@ -38,15 +41,39 @@ impl WorkflowFile {
     }
 }
 
+/// Render a `gh_workflow::Workflow` to YAML. Used by most workflow modules.
+fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
+    move || {
+        build()
+            .to_string()
+            .map_err(|e| anyhow::anyhow!("{e:?}"))
+    }
+}
+
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
+        slug: "build_appimage_on_tag",
+        render_yaml: || render_gh_workflow(build_appimage_on_tag::build_appimage)(),
+    },
+    WorkflowFile {
+        slug: "build_dmg_on_tag",
+        render_yaml: || render_gh_workflow(build_dmg_on_tag::build_dmg)(),
+    },
+    WorkflowFile {
+        slug: "build_desktop_on_tag",
+        render_yaml: || {
+            serde_yml::to_string(&build_desktop_on_tag::build_desktop_on_tag())
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        },
+    },
+    WorkflowFile {
         slug: "code_check_cloud_storage",
-        build: code_check_cloud_storage::code_check_cloud_storage,
+        render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
     },
     WorkflowFile {
         slug: "check_generated",
-        build: check_generated::check_generated_workflows,
+        render_yaml: || render_gh_workflow(check_generated::check_generated_workflows)(),
     },
 ];
 
@@ -86,9 +113,8 @@ pub fn check() -> Result<()> {
 
 /// Serialize a workflow to YAML and prepend the "do not edit" header.
 fn render(workflow: &WorkflowFile) -> Result<String> {
-    let yaml = (workflow.build)()
-        .to_string()
-        .map_err(|e| anyhow::anyhow!("serializing {}: {e:?}", workflow.file_name()))?;
+    let yaml = (workflow.render_yaml)()
+        .with_context(|| format!("serializing {}", workflow.file_name()))?;
     Ok(format!("{}{yaml}", disclaimer(workflow.slug)))
 }
 
