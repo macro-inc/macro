@@ -8,6 +8,7 @@ import {
 } from '../../packages/resources';
 import {
   config,
+  DopplerEcsEnvironment,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -597,6 +598,10 @@ const containerEnvVars = [
   },
 ];
 
+const dopplerEcsEnvironment = new DopplerEcsEnvironment(pulumi.getProject(), {
+  tags,
+});
+
 const emailService = new EmailService('email-service', {
   vpc: coparse_api_vpc,
   tags,
@@ -608,6 +613,7 @@ const emailService = new EmailService('email-service', {
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,
+  dopplerEcsEnvironment,
 });
 
 export const emailServiceUrl = pulumi.interpolate`${emailService.domain}`;
@@ -620,6 +626,7 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   role: emailServiceRole,
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,
+  dopplerEcsEnvironment,
 });
 
 const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
