@@ -37,7 +37,7 @@ import {
 } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
-import { ConnectAction, IntegrationButton, StatusLabel } from './integration-ui';
+import { ConnectAction, IntegrationButton, StatusDot } from './integration-ui';
 
 /**
  * Gmail integration as a single Connected-accounts card: a header row with the
@@ -163,18 +163,18 @@ export function EmailCard() {
           icon={<GmailIcon />}
           title="Gmail"
           description="Read, organize, and act on your email."
+          status={
+            <Show when={emailActive()}>
+              <StatusDot state="connected" label="Connected" />
+            </Show>
+          }
         >
-          <Show
-            when={emailActive()}
-            fallback={
-              <ConnectAction
-                label="Connect"
-                onClick={onConnectEmail}
-                disabled={isEmailActionPending()}
-              />
-            }
-          >
-            <StatusLabel state="connected" label="Connected" />
+          <Show when={!emailActive()}>
+            <ConnectAction
+              label="Connect"
+              onClick={onConnectEmail}
+              disabled={isEmailActionPending()}
+            />
           </Show>
         </IntegrationRow>
 

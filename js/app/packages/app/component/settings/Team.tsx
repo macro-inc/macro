@@ -749,9 +749,10 @@ function EmptyTeamState() {
   );
 }
 
-/** Shared styling for the editable Name/Slug fields in the team-details card. */
+/** Shared styling for the editable Name/Slug fields in the team-details card.
+ *  Narrows on mobile so the field + Save/Cancel cluster fits a phone width. */
 const TEAM_FIELD_CLASS =
-  'w-56 h-9 px-3 rounded-lg border bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent';
+  'w-56 mobile:w-32 h-9 px-3 rounded-lg border bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent';
 
 /** Disabled field shown to non-owners, with a tooltip explaining why it's locked. */
 function ReadOnlyField(props: { value: string; tooltip: string }) {
@@ -1100,6 +1101,7 @@ function TeamManagement(props: {
             <SettingsRow
               label="Name"
               description="What your team is called — shown in invitations and billing."
+              hideDescriptionOnMobile
             >
               <Show
                 when={isOwner()}
@@ -1146,6 +1148,7 @@ function TeamManagement(props: {
             <SettingsRow
               label="Slug"
               description="Short code in task references like ENG-42 (GitHub, branch names)."
+              hideDescriptionOnMobile
             >
               <Show
                 when={isOwner()}

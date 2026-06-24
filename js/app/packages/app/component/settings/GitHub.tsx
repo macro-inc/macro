@@ -8,7 +8,7 @@ import {
 } from '@queries/auth';
 import { Match, Show, Switch } from 'solid-js';
 import { IntegrationRow, SettingsCard } from './primitives';
-import { ConnectAction, StatusLabel } from './integration-ui';
+import { ConnectAction, type ConnectionState, StatusDot } from './integration-ui';
 
 /** GitHub integration as a Connected-accounts card. */
 export function GitHubCard() {
@@ -19,6 +19,16 @@ export function GitHubCard() {
 
   const status = () => githubLink.data?.status;
   const username = () => githubLink.data?.username;
+
+  // Drives the connection dot shown beside the "GitHub" title.
+  const connectionState = (): ConnectionState | undefined =>
+    status() === 'linked'
+      ? 'connected'
+      : status() === 'reauthentication_required'
+        ? 'attention'
+        : undefined;
+  const connectionLabel = () =>
+    connectionState() === 'attention' ? 'Reconnect required' : 'Connected';
 
   const handleGithubEnable = async () => {
     try {
@@ -54,6 +64,11 @@ export function GitHubCard() {
         icon={<GithubIcon />}
         title="GitHub"
         description="Surface pull requests and issues alongside your work."
+        status={
+          <Show when={connectionState()}>
+            {(state) => <StatusDot state={state()} label={connectionLabel()} />}
+          </Show>
+        }
       >
         <Show
           when={!githubLink.isLoading}
@@ -76,7 +91,6 @@ export function GitHubCard() {
                   </span>
                 )}
               </Show>
-              <StatusLabel state="connected" label="Connected" />
               <ConnectAction
                 label="Disconnect"
                 variant="danger"
@@ -85,7 +99,6 @@ export function GitHubCard() {
               />
             </Match>
             <Match when={status() === 'reauthentication_required'}>
-              <StatusLabel state="attention" label="Reconnect required" />
               <ConnectAction
                 label="Reconnect"
                 onClick={handleGithubReconnect}

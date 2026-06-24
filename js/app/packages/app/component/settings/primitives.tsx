@@ -124,6 +124,8 @@ export function SettingsRow(props: {
   description?: JSX.Element;
   children?: JSX.Element;
   align?: 'center' | 'start';
+  /** Hide the description on mobile, where the row is too cramped for it. */
+  hideDescriptionOnMobile?: boolean;
   class?: string;
 }) {
   return (
@@ -137,7 +139,14 @@ export function SettingsRow(props: {
       <div class="flex flex-col gap-0.5 min-w-0">
         <div class="text-sm text-ink">{props.label}</div>
         <Show when={props.description}>
-          <div class="text-xs text-ink-muted">{props.description}</div>
+          <div
+            class={cn(
+              'text-xs text-ink-muted',
+              props.hideDescriptionOnMobile && 'mobile:hidden'
+            )}
+          >
+            {props.description}
+          </div>
         </Show>
       </div>
       <Show when={props.children}>
@@ -159,6 +168,8 @@ export function IntegrationRow(props: {
   icon: JSX.Element;
   title: JSX.Element;
   description?: JSX.Element;
+  /** Optional indicator shown right after the title (e.g. a connection dot). */
+  status?: JSX.Element;
   children?: JSX.Element;
   class?: string;
 }) {
@@ -168,7 +179,10 @@ export function IntegrationRow(props: {
         {props.icon}
       </div>
       <div class="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div class="text-sm font-medium text-ink truncate">{props.title}</div>
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="text-sm font-medium text-ink truncate">{props.title}</div>
+          <Show when={props.status}>{props.status}</Show>
+        </div>
         <Show when={props.description}>
           <div class="text-sm text-ink-muted truncate">{props.description}</div>
         </Show>

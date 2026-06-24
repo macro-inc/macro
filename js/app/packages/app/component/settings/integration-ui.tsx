@@ -51,20 +51,24 @@ export function ConnectAction(props: {
   );
 }
 
-/** A small dot-and-label conveying an integration's connection state. */
-export function StatusLabel(props: { state: ConnectionState; label: string }) {
+/**
+ * A bare connection-state dot, sized to sit beside an integration's title. The
+ * state is conveyed by color (with a tooltip/aria-label for the word), so it
+ * stays legible at any width — including mobile, where a text label wouldn't fit.
+ */
+export function StatusDot(props: { state: ConnectionState; label?: string }) {
   return (
     <span
+      role="img"
+      title={props.label}
+      aria-label={props.label}
       class={cn(
-        'inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap',
-        props.state === 'connected' && 'text-success',
-        props.state === 'attention' && 'text-failure',
-        props.state === 'disconnected' && 'text-ink-muted'
+        'inline-block size-2 shrink-0 rounded-full',
+        props.state === 'connected' && 'bg-success',
+        props.state === 'attention' && 'bg-failure',
+        props.state === 'disconnected' && 'bg-ink-muted'
       )}
-    >
-      <span class="size-1.5 rounded-full bg-current" />
-      {props.label}
-    </span>
+    />
   );
 }
 
