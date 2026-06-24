@@ -39,6 +39,50 @@ function boundsCheck(rect: DOMRect, x: number, y: number): boolean {
   return false;
 }
 
+function removeChecklistItemTabIndex(root: HTMLElement) {
+  const focusableItems = root.querySelectorAll('li[role="checkbox"][tabindex]');
+
+  for (const item of focusableItems) {
+    item.removeAttribute('tabindex');
+  }
+}
+
+function registerChecklistFocusGuard(editor: LexicalEditor) {
+  let observer: MutationObserver | null = null;
+
+  const unregisterRootListener = editor.registerRootListener(
+    (root, prevRoot) => {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+
+      if (root) {
+        removeChecklistItemTabIndex(root);
+        observer = new MutationObserver(() => {
+          removeChecklistItemTabIndex(root);
+        });
+        observer.observe(root, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ['tabindex'],
+        });
+      }
+
+      if (prevRoot) {
+        removeChecklistItemTabIndex(prevRoot);
+      }
+    }
+  );
+
+  return () => {
+    observer?.disconnect();
+    observer = null;
+    unregisterRootListener();
+  };
+}
+
 /**
  * Wrap a mouseEvent-handling callback in a series of checks. 1) Element was
  * clicked, 2) Element on the correct Editor, 3) Editor is editable.
@@ -192,7 +236,8 @@ function registerChecklistPlugin(editor: LexicalEditor) {
         return false;
       },
       COMMAND_PRIORITY_LOW // Set to LOW to avoid being swallowed by regular KEY_ENTER_COMMAND handler
-    )
+    ),
+    registerChecklistFocusGuard(editor)
   );
 }
 
