@@ -5,7 +5,7 @@ import {
 } from '@core/util/scroll-intent';
 import { type Accessor, createSignal, type JSX } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import type { ScrollToIndexOpts } from 'virtua/unstable_core';
+import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 const BASE_ITEM_SIZE: number = 64;
@@ -59,6 +59,12 @@ export type ThreadListScrollState = {
   viewportSize: number;
 };
 
+export type ThreadListScrollSnapshot = {
+  scrollOffset: number;
+  virtualCache?: CacheSnapshot;
+  isNearBottom: boolean;
+};
+
 export type FullFrameThreadListScrollInsets = {
   /** Space reserved before the first message (e.g. status bar + floating header). */
   start: number;
@@ -74,6 +80,8 @@ type ThreadListProps = {
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
   onScrollStateChange?: (state: ThreadListScrollState) => void;
+  initialScrollSnapshot?: ThreadListScrollSnapshot;
+  onScrollSnapshotChange?: (snapshot: ThreadListScrollSnapshot) => void;
   shift?: Accessor<boolean>;
   prepend?: Accessor<boolean>;
   /**
@@ -255,6 +263,15 @@ export function ThreadList(props: ThreadListProps) {
   const completeInitialScroll = (handle: VirtualizerHandle) => {
     setDidInitialScroll(true);
     emitScrollState(handle, false);
+    emitScrollSnapshot(handle);
+  };
+
+  const emitScrollSnapshot = (handle: VirtualizerHandle) => {
+    props.onScrollSnapshotChange?.({
+      scrollOffset: handle.scrollOffset,
+      virtualCache: handle.cache,
+      isNearBottom: getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD,
+    });
   };
 
   const createNavigation = (
@@ -301,11 +318,10 @@ export function ThreadList(props: ThreadListProps) {
     markUserIntent: scrollIntent.markUserIntent,
   });
 
-  function scrollOnMount(handle: VirtualizerHandle) {
-    if (initialScrollStarted) return;
-    initialScrollStarted = true;
-
-    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+  function beginInitialTargetScroll(
+    handle: VirtualizerHandle,
+    target: ThreadListScrollTarget
+  ) {
     initialScrollTarget = target;
 
     console.debug('ThreadList: scrollOnMount', {
@@ -339,6 +355,26 @@ export function ThreadList(props: ThreadListProps) {
         completeInitialScroll(handle);
       }
     });
+  }
+
+  function scrollOnMount(handle: VirtualizerHandle) {
+    if (initialScrollStarted) return;
+    initialScrollStarted = true;
+
+    const snapshot = props.initialScrollSnapshot;
+    if (snapshot) {
+      if (snapshot.isNearBottom) {
+        beginInitialTargetScroll(handle, DEFAULT_INITIAL_SCROLL_TARGET);
+      } else {
+        handle.scrollTo(snapshot.scrollOffset);
+        requestAnimationFrame(() => completeInitialScroll(handle));
+      }
+
+      return;
+    }
+
+    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+    beginInitialTargetScroll(handle, target);
   }
 
   const handleScrollEnd = () => {
@@ -424,6 +460,7 @@ export function ThreadList(props: ThreadListProps) {
     }
     previousScrollOffset = handle.scrollOffset;
     emitScrollState(handle, nextIsScrollingDown);
+    emitScrollSnapshot(handle);
 
     if (!didInitialScroll()) return;
 
@@ -474,6 +511,7 @@ export function ThreadList(props: ThreadListProps) {
         />
         <div style="flex-grow: 1" />
         <Virtualizer
+          cache={props.initialScrollSnapshot?.virtualCache}
           ref={(ref) => {
             if (!ref) return;
             setVirtualHandle(ref);

@@ -2,6 +2,7 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
@@ -18,6 +19,7 @@ import {
 } from '@channel/Call';
 import {
   type ChannelHandle,
+  type ChannelMessagesStateSnapshot,
   type ChannelProps,
   Channel as NewChannel,
 } from '@channel/Channel/Channel';
@@ -59,6 +61,8 @@ import {
 } from 'solid-js';
 import { ChannelTopLeft } from './Top';
 
+const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
+
 type ChannelTargetMessageParams = {
   [URL_PARAMS.message]?: string;
   [URL_PARAMS.thread]?: string;
@@ -67,6 +71,11 @@ type ChannelTargetMessageParams = {
 };
 
 export type BlockChannelProps = ChannelTargetMessageParams;
+
+type ChannelEntryStateSnapshot = {
+  activeTab?: ChannelTabId;
+  messages?: ChannelMessagesStateSnapshot;
+};
 
 type ChannelPropsTargetMessage = Pick<
   ChannelProps,
@@ -95,11 +104,12 @@ const normalizeChannelTab = (tab: ChannelTabId) => {
 const initialChannelTab = (options: {
   wantsJoinCall: boolean;
   hasActiveCallHere: boolean;
+  persistedTab?: ChannelTabId;
 }) => {
   return normalizeChannelTab(
     options.wantsJoinCall || options.hasActiveCallHere
       ? 'call'
-      : DEFAULT_CHANNEL_TAB
+      : (options.persistedTab ?? DEFAULT_CHANNEL_TAB)
   );
 };
 
@@ -171,6 +181,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const isPreview = !!useMaybePreviewPanel();
+  const splitPanel = useSplitPanelOrThrow();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
@@ -189,9 +200,43 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const hasActiveCallHere = !!(
     callCtx?.isInCall() && callCtx.activeChannelId() === channelId
   );
+  const persistedChannelState = (
+    isPreview
+      ? undefined
+      : splitPanel.handle.currentEntryState()?.[CHANNEL_STATE_ENTRY_KEY]
+  ) as ChannelEntryStateSnapshot | undefined;
+
+  const hasInitialTargetRequest = () => {
+    const hasPropsTarget =
+      props[URL_PARAMS.message] !== undefined ||
+      props[URL_PARAMS.thread] !== undefined;
+    if (hasPropsTarget) return true;
+
+    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    if (!isSingleSplit) return false;
+
+    return (
+      searchParams[URL_PARAMS.message] !== undefined ||
+      searchParams[URL_PARAMS.thread] !== undefined
+    );
+  };
+
+  const shouldHydratePersistedChannelState =
+    !isPreview &&
+    !wantsJoinCall &&
+    !hasActiveCallHere &&
+    !isOpenCallTabRequested(props[CHANNEL_URL_PARAMS.openCallTab]) &&
+    !isOpenCallTabRequested(searchParams[CHANNEL_URL_PARAMS.openCallTab]) &&
+    !hasInitialTargetRequest();
 
   const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
-    initialChannelTab({ wantsJoinCall, hasActiveCallHere })
+    initialChannelTab({
+      wantsJoinCall,
+      hasActiveCallHere,
+      persistedTab: shouldHydratePersistedChannelState
+        ? persistedChannelState?.activeTab
+        : undefined,
+    })
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
@@ -312,6 +357,28 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     setMessagesHandle(() => handle);
   };
 
+  if (!isPreview) {
+    const disposeChannelStateCaptor =
+      splitPanel.handle.registerEntryStateCaptor(
+        CHANNEL_STATE_ENTRY_KEY,
+        (): ChannelEntryStateSnapshot => {
+          const handle = messagesHandle();
+          return {
+            activeTab: activeTab(),
+            messages: handle
+              ? handle.getMessagesStateSnapshot()
+              : persistedChannelState?.messages,
+          };
+        }
+      );
+    onCleanup(disposeChannelStateCaptor);
+  }
+
+  const initialMessagesStateSnapshot = () =>
+    shouldHydratePersistedChannelState
+      ? persistedChannelState?.messages
+      : undefined;
+
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <CallEventSync />
@@ -337,6 +404,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                 channelId={channelId}
                 onHandleReady={onChannelReady}
                 autofocus={!isPreview && !navigatedFromJK()}
+                initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
                 {...convertTargetMessage(initialTargetMessageParams())}
               />
             </Match>

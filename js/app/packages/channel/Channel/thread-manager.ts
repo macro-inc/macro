@@ -4,15 +4,29 @@ import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
 
 type ThreadStore = Record<string, ThreadState>;
-export function createThreadManager() {
+
+export type ThreadStateSnapshot = {
+  isExpanded?: boolean;
+  isReplying?: boolean;
+  replyInputState?: InputSnapshot;
+};
+
+export type ThreadManagerSnapshot = Record<string, ThreadStateSnapshot>;
+
+export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
   const [threadStore, setThreadStore] = createStore<ThreadStore>({});
 
   function initThreadState(threadId: string): ThreadState {
-    const [isExpanded, setIsExpanded] = createSignal<boolean>(false);
-    const [isReplying, setIsReplyingRaw] = createSignal<boolean>(false);
+    const snapshot = initialSnapshot?.[threadId];
+    const initialIsReplying = snapshot?.isReplying ?? false;
+    const [isExpanded, setIsExpanded] = createSignal<boolean>(
+      snapshot?.isExpanded || initialIsReplying
+    );
+    const [isReplying, setIsReplyingRaw] =
+      createSignal<boolean>(initialIsReplying);
     const [replyInputState, setReplyInputState] = createSignal<
       InputSnapshot | undefined
-    >();
+    >(snapshot?.replyInputState);
     const [replyInputEl, setReplyInputEl] = createSignal<
       HTMLElement | undefined
     >();
@@ -61,7 +75,30 @@ export function createThreadManager() {
     return initThreadState(threadId);
   }
 
+  function getSnapshot(): ThreadManagerSnapshot | undefined {
+    const snapshot: ThreadManagerSnapshot = { ...(initialSnapshot ?? {}) };
+
+    for (const [threadId, state] of Object.entries(threadStore)) {
+      const isExpanded = state.isExpanded();
+      const isReplying = state.isReplying();
+      const replyInputState = state.replyInputState();
+      if (!isExpanded && !isReplying && replyInputState === undefined) {
+        delete snapshot[threadId];
+        continue;
+      }
+
+      snapshot[threadId] = {
+        ...(isExpanded ? { isExpanded } : {}),
+        ...(isReplying ? { isReplying } : {}),
+        ...(replyInputState !== undefined ? { replyInputState } : {}),
+      };
+    }
+
+    return Object.keys(snapshot).length > 0 ? snapshot : undefined;
+  }
+
   return {
     getOrCreateThreadState,
+    getSnapshot,
   };
 }
