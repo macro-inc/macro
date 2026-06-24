@@ -10,9 +10,7 @@ import {
 } from '../../packages/shared';
 import { Queue } from '../../packages/resources';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import {
-  DocumentCognitionService,
-} from './document-cognition-service';
+import { DocumentCognitionService } from './document-cognition-service';
 import { AiProjectionsRefreshTrigger } from './ai-projections-refresh-trigger';
 
 const tags = {
@@ -107,8 +105,7 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const { notificationIngressQueueArn } =
-  getMacroNotify();
+const { notificationIngressQueueArn } = getMacroNotify();
 
 const { searchEventQueueArn } = getSearchEventQueue();
 

@@ -21,8 +21,9 @@ import {
 const BASE_NAME = 'document-cognition';
 const BASE_PATH = '../../../rust/cloud-storage';
 
-export const SERVICE_DOMAIN_NAME = `document-cognition${stack === 'prod' ? '' : `-${stack}`
-  }.${BASE_DOMAIN}`;
+export const SERVICE_DOMAIN_NAME = `document-cognition${
+  stack === 'prod' ? '' : `-${stack}`
+}.${BASE_DOMAIN}`;
 
 type CreateDocumentCognitionServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
@@ -230,7 +231,6 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -289,10 +289,11 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${platform.architecture === 'amd64'
-              ? 'X86_64'
-              : platform.architecture.toUpperCase()
-              }`,
+            cpuArchitecture: `${
+              platform.architecture === 'amd64'
+                ? 'X86_64'
+                : platform.architecture.toUpperCase()
+            }`,
           },
         },
         desiredCount: stack === 'prod' ? 4 : 1,
