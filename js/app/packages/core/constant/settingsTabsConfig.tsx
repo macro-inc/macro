@@ -1,10 +1,9 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import GithubLogoIcon from '@phosphor/github-logo.svg';
+import CpuIcon from '@phosphor/cpu.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
-import PaintBucketIcon from '@phosphor/paint-bucket.svg';
+import SwatchesIcon from '@phosphor/swatches.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -15,7 +14,6 @@ import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_EMAIL,
   ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
@@ -45,17 +43,20 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
-      { tab: 'Appearance', label: 'Appearance', icon: PaintBucketIcon },
-      { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
+      { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
       { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
+      { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
     ],
   },
   {
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
-      { tab: 'Email', label: 'Email', icon: EnvelopeIcon },
-      { tab: 'GitHub', label: 'GitHub', icon: GithubLogoIcon },
+      {
+        tab: 'Connected',
+        label: 'Connected accounts',
+        icon: CpuIcon,
+      },
       { tab: 'Agent', label: 'MCPs', icon: PlugIcon },
     ],
   },
@@ -97,9 +98,7 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Team':
         return teamsFlag().enabled;
-      case 'Email':
-        return ENABLE_EMAIL;
-      case 'GitHub':
+      case 'Connected':
         return true;
       case 'Shortcuts':
         return !isTouchDevice();

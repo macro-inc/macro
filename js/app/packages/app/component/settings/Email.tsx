@@ -7,7 +7,7 @@ import {
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
-import WideEmailIcon from '@icon/wide-email.svg';
+import GmailIcon from '@icon/mcp-gmail.svg';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
@@ -36,13 +36,16 @@ import {
   useAddInboxGate,
 } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
-import {
-  ConnectionHero,
-  IntegrationPanelShell,
-  StatusPill,
-} from './integration-ui';
+import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
+import { ConnectAction, IntegrationButton, StatusLabel } from './integration-ui';
 
-export function Email() {
+/**
+ * Gmail integration as a single Connected-accounts card: a header row with the
+ * connection state/action, and — once connected — a row per inbox plus add /
+ * disconnect controls. All the inbox + backfill logic is unchanged; only the
+ * surrounding chrome moved from a standalone panel to a shared card.
+ */
+export function EmailCard() {
   const email = useEmail();
   const userId = useUserId();
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
@@ -104,11 +107,6 @@ export function Email() {
     return { primary, others };
   });
 
-  const hasAdditionalInboxes = createMemo(() => inboxes().others.length > 0);
-  const hasConnectedInboxes = createMemo(
-    () => inboxes().primary != null || inboxes().others.length > 0
-  );
-
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
     setIsEmailActionPending(true);
@@ -159,155 +157,100 @@ export function Email() {
   };
 
   return (
-    <IntegrationPanelShell title="Email">
-      <Show
-        when={multiInboxFlag().enabled || hasAdditionalInboxes()}
-        fallback={
-          <ConnectionHero
-            icon={WideEmailIcon}
-            title="Email"
-            description="Connect your Gmail account so Macro can read, organize, and act on your email."
-            status={
-              <StatusPill
-                state={emailActive() ? 'connected' : 'disconnected'}
-                label={emailActive() ? 'Connected' : 'Not connected'}
+    <>
+      <SettingsCard>
+        <IntegrationRow
+          icon={<GmailIcon />}
+          title="Gmail"
+          description="Read, organize, and act on your email."
+        >
+          <Show
+            when={emailActive()}
+            fallback={
+              <ConnectAction
+                label="Connect"
+                onClick={onConnectEmail}
+                disabled={isEmailActionPending()}
               />
             }
           >
-            <Show
-              when={emailActive()}
-              fallback={
-                <Button
-                  variant="cta"
-                  size="md"
-                  depth={3}
-                  disabled={isEmailActionPending()}
-                  onClick={onConnectEmail}
-                >
-                  Connect Gmail
-                </Button>
-              }
-            >
-              <Button
-                variant="base"
-                size="md"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={() => setShowDisableDialog(true)}
-              >
-                Disconnect
-              </Button>
-            </Show>
-          </ConnectionHero>
-        }
-      >
-        <Show
-          when={emailActive()}
-          fallback={
-            <ConnectionHero
-              icon={WideEmailIcon}
-              title="Email"
-              description="Connect your Gmail accounts so Macro can read, organize, and act on your email."
-              status={<StatusPill state="disconnected" label="Not connected" />}
-            >
-              <Button
-                variant="cta"
-                size="md"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={onConnectEmail}
-              >
-                Connect Gmail
-              </Button>
-            </ConnectionHero>
-          }
-        >
-          <Show when={!hasConnectedInboxes()}>
-            <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
-              <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
-                <WideEmailIcon class="size-5 text-ink" />
-              </div>
-              <div class="flex flex-1 flex-col gap-1 min-w-0">
-                <div class="text-base font-semibold text-ink">
-                  Connected inboxes
-                </div>
-                <p class="text-sm text-ink-muted">
-                  Gmail accounts Macro can read and act on.
-                </p>
-              </div>
-            </div>
+            <StatusLabel state="connected" label="Connected" />
           </Show>
+        </IntegrationRow>
 
-          <div class="grid settings-row-dividers">
-            <Show when={inboxes().primary}>
-              {(primary) => (
-                <InboxRow
-                  link={primary()}
-                  isPrimary
-                  isOwn={primary().macro_id === userId()}
-                  hasCompletedBackfill={hasCompletedBackfill(primary().id)}
-                  resyncing={resyncingIds().has(primary().id)}
-                  onResync={() => handleResyncInbox(primary().id)}
-                  onReconnect={() => void startAddInbox()}
-                  onRemove={() =>
-                    setRemoveTarget({
-                      id: primary().id,
-                      email: primary().email_address,
-                      isOwn: primary().macro_id === userId(),
-                    })
-                  }
-                />
-              )}
-            </Show>
-            <Show when={!inboxes().primary && email()}>
-              <DisabledPrimaryRow
-                email={email() ?? ''}
-                onEnable={onConnectEmail}
+        <Show when={emailActive()}>
+          <Show when={inboxes().primary}>
+            {(primary) => (
+              <InboxRow
+                link={primary()}
+                isPrimary
+                isOwn={primary().macro_id === userId()}
+                hasCompletedBackfill={hasCompletedBackfill(primary().id)}
+                resyncing={resyncingIds().has(primary().id)}
+                onResync={() => handleResyncInbox(primary().id)}
+                onReconnect={() => void startAddInbox()}
+                onRemove={() =>
+                  setRemoveTarget({
+                    id: primary().id,
+                    email: primary().email_address,
+                    isOwn: primary().macro_id === userId(),
+                  })
+                }
               />
-            </Show>
-            <For each={inboxes().others}>
-              {(link) => (
-                <InboxRow
-                  link={link}
-                  isPrimary={false}
-                  isOwn={link.macro_id === userId()}
-                  hasCompletedBackfill={hasCompletedBackfill(link.id)}
-                  resyncing={resyncingIds().has(link.id)}
-                  onResync={() => handleResyncInbox(link.id)}
-                  onReconnect={() => void startAddInbox()}
-                  onRemove={() =>
-                    setRemoveTarget({
-                      id: link.id,
-                      email: link.email_address,
-                      isOwn: link.macro_id === userId(),
-                    })
-                  }
-                />
-              )}
-            </For>
-            <Show when={multiInboxFlag().enabled}>
-              <div class="px-6 py-4 flex justify-center">
-                <Show
-                  when={!emailLinksQuery.isLoading}
-                  fallback={
-                    <span class="text-sm text-ink-muted">Loading…</span>
-                  }
-                >
-                  <Button
-                    variant="active"
-                    size="sm"
-                    depth={3}
-                    onClick={() => guardAddInbox(openAddInboxDialog)}
-                  >
-                    <PlusIcon class="size-4" />
-                    Add inbox
-                  </Button>
-                </Show>
-              </div>
-            </Show>
-          </div>
+            )}
+          </Show>
+          <Show when={!inboxes().primary && email()}>
+            <DisabledPrimaryRow
+              email={email() ?? ''}
+              onEnable={onConnectEmail}
+            />
+          </Show>
+          <For each={inboxes().others}>
+            {(link) => (
+              <InboxRow
+                link={link}
+                isPrimary={false}
+                isOwn={link.macro_id === userId()}
+                hasCompletedBackfill={hasCompletedBackfill(link.id)}
+                resyncing={resyncingIds().has(link.id)}
+                onResync={() => handleResyncInbox(link.id)}
+                onReconnect={() => void startAddInbox()}
+                onRemove={() =>
+                  setRemoveTarget({
+                    id: link.id,
+                    email: link.email_address,
+                    isOwn: link.macro_id === userId(),
+                  })
+                }
+              />
+            )}
+          </For>
+          <Show when={multiInboxFlag().enabled}>
+            <SettingsRow
+              label="Add another inbox"
+              description="Connect more Gmail accounts."
+            >
+              <IntegrationButton
+                onClick={() => guardAddInbox(openAddInboxDialog)}
+              >
+                <PlusIcon class="size-4" />
+                Add inbox
+              </IntegrationButton>
+            </SettingsRow>
+          </Show>
+          <SettingsRow
+            label="Disconnect Gmail"
+            description="Clears all email data from Macro."
+          >
+            <ConnectAction
+              label="Disconnect"
+              variant="danger"
+              onClick={() => setShowDisableDialog(true)}
+              disabled={isEmailActionPending()}
+            />
+          </SettingsRow>
         </Show>
-      </Show>
+      </SettingsCard>
 
       <AddInboxDialog />
 
@@ -396,7 +339,7 @@ export function Email() {
           </Panel.Body>
         </Panel>
       </Dialog>
-    </IntegrationPanelShell>
+    </>
   );
 }
 

@@ -7,6 +7,7 @@ import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
 import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown } from '@ui';
+import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -369,127 +370,124 @@ export function Account() {
   };
 
   return (
-      <div class="h-full overflow-hidden flex justify-center p-2">
-        <div class="max-w-200 size-full">
-          <Panel depth={2} class="h-full overflow-hidden text-ink">
-          <Panel.Header class="px-6">
-            <div class="flex items-center gap-2">
-              <div class="text-sm font-semibold">Account</div>
-              <TeamSubscriptionPill show={isNonOwnerTeamMember()} />
-            </div>
-          </Panel.Header>
-
-          <Panel.Body scroll class="text-ink">
-            <Show
-              when={
-                permissions()?.includes(
-                  PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION
-                ) &&
-                // Team members get the header pill instead of a card here, so
-                // skip this billing block rather than leaving it empty.
-                !(newPricingEnabled() && isNonOwnerTeamMember())
+    <SettingsPage
+      title="Account"
+      actions={<TeamSubscriptionPill show={isNonOwnerTeamMember()} />}
+    >
+      <Show
+        when={
+          permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) &&
+          // Team members get the header pill instead of a card here, so
+          // skip this billing block rather than leaving it empty.
+          !(newPricingEnabled() && isNonOwnerTeamMember())
+        }
+      >
+        <SettingsSection>
+          <ShowFeatureFlag
+            key="enable-new-pricing"
+            enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
+            fallback={
+              <PaywallComponent
+                hideCloseButton
+                cb={() => {}}
+                handleGuest={() => toggleSettings()}
+              />
+            }
+          >
+            <Switch
+              fallback={
+                <PaywallComponent
+                  hideCloseButton
+                  cb={() => {}}
+                  handleGuest={() => toggleSettings()}
+                />
               }
             >
-              <div class="px-4 py-2 w-full border-b border-edge-muted">
-                <ShowFeatureFlag
-                  key="enable-new-pricing"
-                  enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
-                  fallback={
-                    <PaywallComponent
-                      hideCloseButton
-                      cb={() => {}}
-                      handleGuest={() => toggleSettings()}
-                    />
-                  }
-                >
-                  <Switch
-                    fallback={
-                      <PaywallComponent
-                        hideCloseButton
-                        cb={() => {}}
-                        handleGuest={() => toggleSettings()}
-                      />
-                    }
-                  >
-                    <Match when={ownedTeam()}>
-                      {(team) => <PaywallTeamOwnerView team={team()} />}
-                    </Match>
-                  </Switch>
-                </ShowFeatureFlag>
-              </div>
+              <Match when={ownedTeam()}>
+                {(team) => <PaywallTeamOwnerView team={team()} />}
+              </Match>
+            </Switch>
+          </ShowFeatureFlag>
+        </SettingsSection>
+      </Show>
+
+      <SettingsSection>
+        <SettingsCard>
+          <Show when={ENABLE_PROFILE_PICTURES}>
+            <Show when={userId()} keyed>
+              {(id) => <ProfilePictureRow userId={id} />}
             </Show>
-            <div class="grid settings-row-dividers">
-              <Show when={ENABLE_PROFILE_PICTURES}>
-                <Show when={userId()} keyed>
-                  {(id) => <ProfilePictureRow userId={id} />}
-                </Show>
-              </Show>
+          </Show>
 
-              <Row label="Email">
-                <span class="ph-no-capture text-sm text-ink-muted">
-                  {email() ?? ''}
-                </span>
-              </Row>
+          <Row label="Email">
+            <span class="ph-no-capture text-sm text-ink-muted">
+              {email() ?? ''}
+            </span>
+          </Row>
 
-              <Row label="First Name">
-                <NameInput
-                  value={firstName()}
-                  onSave={(newValue) =>
-                    saveUserName(
-                      newValue,
-                      'first_name',
-                      updatedFirstName(),
-                      setUpdatedFirstName
-                    )
-                  }
-                  placeholder="Enter First Name"
-                />
-              </Row>
+          <Row label="First Name">
+            <NameInput
+              value={firstName()}
+              onSave={(newValue) =>
+                saveUserName(
+                  newValue,
+                  'first_name',
+                  updatedFirstName(),
+                  setUpdatedFirstName
+                )
+              }
+              placeholder="Enter First Name"
+            />
+          </Row>
 
-              <Row label="Last Name">
-                <NameInput
-                  value={lastName()}
-                  onSave={(newValue) =>
-                    saveUserName(
-                      newValue,
-                      'last_name',
-                      updatedLastName(),
-                      setUpdatedLastName
-                    )
-                  }
-                  placeholder="Enter Last Name"
-                />
-              </Row>
+          <Row label="Last Name">
+            <NameInput
+              value={lastName()}
+              onSave={(newValue) =>
+                saveUserName(
+                  newValue,
+                  'last_name',
+                  updatedLastName(),
+                  setUpdatedLastName
+                )
+              }
+              placeholder="Enter Last Name"
+            />
+          </Row>
 
-              <Show when={autoUpdateUIEnabled()}>
-                <BundleVersionRow />
-                <BundleUpdateRow />
-              </Show>
+          <Show when={autoUpdateUIEnabled()}>
+            <BundleVersionRow />
+            <BundleUpdateRow />
+          </Show>
 
-              <NotificationToggle />
-            </div>
+          <NotificationToggle />
+        </SettingsCard>
+      </SettingsSection>
 
-            <Show when={isMobile()}>
-              <div class="flex items-center justify-center px-6 py-6">
-                <Button
-                  variant="base"
-                  size="md"
-                  depth={3}
-                  class="px-4"
-                  onClick={() => logout()}
-                >
-                  <SignOutIcon class="size-4" />
-                  Log out
-                </Button>
-              </div>
-            </Show>
+      <Show when={isMobile()}>
+        <SettingsSection>
+          <div class="flex items-center justify-center">
+            <Button
+              variant="base"
+              size="md"
+              depth={3}
+              class="px-4"
+              onClick={() => logout()}
+            >
+              <SignOutIcon class="size-4" />
+              Log out
+            </Button>
+          </div>
+        </SettingsSection>
+      </Show>
 
-            <Show when={isNativeMobilePlatform()}>
-              <div class="border-t border-edge pt-4">
-                <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
-                  Delete Account
-                </Button>
-                <Dialog
+      <Show when={isNativeMobilePlatform()}>
+        <SettingsSection title="Danger zone">
+          <div>
+            <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
+              Delete Account
+            </Button>
+            <Dialog
                   open={showDeleteModal()}
                   onOpenChange={setShowDeleteModal}
                   position="center"
@@ -548,18 +546,16 @@ export function Account() {
                     </Panel.Body>
                   </Panel>
                 </Dialog>
-              </div>
-            </Show>
-          </Panel.Body>
-        </Panel>
-      </div>
-    </div>
+          </div>
+        </SettingsSection>
+      </Show>
+    </SettingsPage>
   );
 }
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+    <div class="bg-surface flex items-center justify-between gap-4 min-h-15.25 px-6 py-3">
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
@@ -645,10 +641,10 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-extra-muted"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {
@@ -720,6 +716,7 @@ function NotificationSettings(props: {
   return (
     <Row label="Notifications">
       <ToggleSwitch
+        size="md"
         checked={props.settings.isEnabled()}
         onChange={handleToggle}
       />

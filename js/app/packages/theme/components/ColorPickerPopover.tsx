@@ -1,73 +1,161 @@
 import { Popover } from '@kobalte/core/popover';
 import { cn, Layer } from '@ui';
-import { batch, createEffect, createSignal, untrack } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from 'solid-js';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
-import type { ThemeReactiveColor } from '../types/themeTypes';
 import { ColorSwatch } from './ColorSwatch';
 
 // Chroma axis maxes out at 0.37, matching the Basic editor's chroma slider.
 const CHROMA_MAX = 0.37;
 
-/** One gradient-backed track + thumb + transparent range input, mirroring the
- *  slider pattern in ThemeEditorBasic. The track gradient and thumb position are
- *  reactive, so dragging any axis live-updates the preview of the others. */
-function Slider(props: {
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  value: () => number;
-  onValue: (n: number) => void;
-  gradient: () => string;
-  display: () => string;
+const RING =
+  'pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_3px_oklch(0_0_0/0.4)]';
+
+/** 2D field: chroma on X (0 → max), lightness on Y (top = light). Drag sets both. */
+function ColorField(props: {
+  l: () => number;
+  c: () => number;
+  h: () => number;
+  onL: (n: number) => void;
+  onC: (n: number) => void;
 }) {
-  const pct = () =>
-    Math.max(0, Math.min(100, ((props.value() - props.min) / (props.max - props.min)) * 100));
+  let ref!: HTMLDivElement;
+  const [dragging, setDragging] = createSignal(false);
+
+  const apply = (e: PointerEvent) => {
+    const r = ref.getBoundingClientRect();
+    const x = Math.min(Math.max(e.clientX - r.left, 0), r.width) / r.width;
+    const y = Math.min(Math.max(e.clientY - r.top, 0), r.height) / r.height;
+    batch(() => {
+      props.onC(x * CHROMA_MAX);
+      props.onL(1 - y);
+    });
+  };
+
+  onMount(() => {
+    const move = (e: PointerEvent) => dragging() && apply(e);
+    const up = () => setDragging(false);
+    document.addEventListener('pointermove', move, { passive: true });
+    document.addEventListener('pointerup', up, { passive: true });
+    onCleanup(() => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+    });
+  });
+
   return (
-    <div class="flex items-center gap-2">
-      <div class="w-3 shrink-0 font-mono text-xs text-ink-muted">{props.label}</div>
-      <div class="relative h-2.5 min-w-0 flex-1">
-        <div
-          class="absolute left-1/2 top-1/2 h-2.5 w-full -translate-x-1/2 -translate-y-1/2 rounded-sm border border-edge"
-          style={{ background: props.gradient() }}
-        />
-        <div
-          class="pointer-events-none absolute top-1/2 h-[18px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-edge bg-accent"
-          style={{ left: `${pct()}%` }}
-        />
-        <input
-          class="theme-color-picker-slider absolute -left-[9px] top-1/2 m-0 h-[18px] w-[calc(100%_+_18px)] -translate-y-1/2 cursor-pointer appearance-none bg-transparent outline-none"
-          type="range"
-          min={props.min}
-          max={props.max}
-          step={props.step}
-          value={props.value().toString()}
-          onInput={(e) => props.onValue(parseFloat(e.currentTarget.value))}
-        />
-      </div>
-      <div class="w-10 shrink-0 text-right font-mono text-xs text-ink-muted">{props.display()}</div>
+    <div
+      ref={ref}
+      class="relative h-40 flex-1 cursor-crosshair touch-none rounded-md"
+      style={{
+        background: `linear-gradient(to bottom, transparent, oklch(0 0 ${props.h()}deg)), linear-gradient(to right, oklch(1 0 ${props.h()}deg), oklch(0.65 ${CHROMA_MAX} ${props.h()}deg))`,
+      }}
+      onPointerDown={(e) => {
+        setDragging(true);
+        apply(e);
+      }}
+    >
+      <div
+        class={RING}
+        style={{
+          left: `${(props.c() / CHROMA_MAX) * 100}%`,
+          top: `${(1 - props.l()) * 100}%`,
+          'background-color': `oklch(${props.l()} ${props.c()} ${props.h()}deg)`,
+        }}
+      />
     </div>
   );
 }
 
-/** Clickable swatch that opens a popover with L / C / H sliders and a hex field,
- *  writing directly back into the reactive theme token. */
-export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeReactiveColor }) {
-  const l = () => props.colorValue.l[0]();
-  const c = () => props.colorValue.c[0]();
-  const h = () => props.colorValue.h[0]();
-  const oklch = () => `oklch(${l()} ${c()} ${h()}deg)`;
+/** Vertical hue slider (0 → 360). */
+function HueSlider(props: { h: () => number; onH: (n: number) => void }) {
+  let ref!: HTMLDivElement;
+  const [dragging, setDragging] = createSignal(false);
 
-  // Hex field keeps its own text state while typing so slider-driven updates
-  // don't fight the user's keystrokes (same guard as ThemeEditorAdvanced).
+  const apply = (e: PointerEvent) => {
+    const r = ref.getBoundingClientRect();
+    const y = Math.min(Math.max(e.clientY - r.top, 0), r.height) / r.height;
+    props.onH(y * 360);
+  };
+
+  onMount(() => {
+    const move = (e: PointerEvent) => dragging() && apply(e);
+    const up = () => setDragging(false);
+    document.addEventListener('pointermove', move, { passive: true });
+    document.addEventListener('pointerup', up, { passive: true });
+    onCleanup(() => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+    });
+  });
+
+  return (
+    <div
+      ref={ref}
+      class="relative h-40 w-3 shrink-0 cursor-pointer touch-none rounded-full"
+      style={{
+        background:
+          'linear-gradient(to bottom, oklch(0.7 0.2 0deg), oklch(0.7 0.2 60deg), oklch(0.7 0.2 120deg), oklch(0.7 0.2 180deg), oklch(0.7 0.2 240deg), oklch(0.7 0.2 300deg), oklch(0.7 0.2 360deg))',
+      }}
+      onPointerDown={(e) => {
+        setDragging(true);
+        apply(e);
+      }}
+    >
+      <div
+        class={cn(RING, 'left-1/2')}
+        style={{
+          top: `${(props.h() / 360) * 100}%`,
+          'background-color': `oklch(0.7 0.2 ${props.h()}deg)`,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * A clickable swatch that opens a color picker (2D chroma/lightness field + hue
+ * slider + hex field). Generic over how the color is read/written so it backs
+ * both the Variables tokens and the Basic editor's accent.
+ */
+export function ColorPickerPopover(props: {
+  l: () => number;
+  c: () => number;
+  h: () => number;
+  onL: (n: number) => void;
+  onC: (n: number) => void;
+  onH: (n: number) => void;
+  ariaLabel: string;
+  title?: string;
+  subtitle?: string;
+  /** Width passed to the default trigger swatch (full-width by default). */
+  triggerWidth?: string;
+  /** Custom trigger content (replaces the default swatch). */
+  trigger?: JSX.Element;
+}) {
+  const oklch = () => `oklch(${props.l()} ${props.c()} ${props.h()}deg)`;
+
+  // Hex field keeps its own text state while dragging so picker-driven updates
+  // don't fight the user's keystrokes.
   const [hexText, setHexText] = createSignal('');
   const [hexInvalid, setHexInvalid] = createSignal(false);
   const [isSetByInput, setIsSetByInput] = createSignal(false);
 
   createEffect(() => {
-    const next = convertOklchTo(l(), c(), h(), 'hex');
-    if (untrack(isSetByInput)) { setIsSetByInput(false); }
-    else { setHexText(next); }
+    const next = convertOklchTo(props.l(), props.c(), props.h(), 'hex');
+    if (untrack(isSetByInput)) {
+      setIsSetByInput(false);
+    } else {
+      setHexText(next);
+    }
   });
 
   const setHex = (value: string) => {
@@ -79,9 +167,9 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
       const next = getOklch(value);
       batch(() => {
         setIsSetByInput(true);
-        props.colorValue.l[1](next.l || 0);
-        props.colorValue.c[1](next.c || 0);
-        props.colorValue.h[1](next.h || 0);
+        props.onL(next.l || 0);
+        props.onC(next.c || 0);
+        props.onH(next.h || 0);
       });
       setHexInvalid(false);
     } catch (error) {
@@ -91,18 +179,19 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
   };
 
   return (
-    <Popover placement="bottom-start" gutter={8}>
-      <style>{`
-        .theme-color-picker-slider { -webkit-appearance: none; }
-        .theme-color-picker-slider::-webkit-slider-thumb { opacity: 0; }
-        .theme-color-picker-slider::-moz-range-thumb { opacity: 0; }
-      `}</style>
-
+    <Popover placement="bottom-end" gutter={8}>
       <Popover.Trigger
-        class="block w-full cursor-pointer appearance-none border-none bg-transparent p-0"
-        aria-label={`Edit ${props.colorValue.description} (--${props.colorKey})`}
+        class="block cursor-pointer appearance-none border-none bg-transparent p-0"
+        aria-label={props.ariaLabel}
       >
-        <ColorSwatch color={oklch()} width="100%" />
+        <Show
+          when={props.trigger}
+          fallback={
+            <ColorSwatch color={oklch()} width={props.triggerWidth ?? '100%'} />
+          }
+        >
+          {props.trigger}
+        </Show>
       </Popover.Trigger>
 
       <Popover.Portal>
@@ -110,58 +199,42 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="flex w-64 flex-col gap-3 rounded-md bg-surface p-3 shadow-lg ring-1 ring-edge"
+              class="flex w-64 flex-col gap-3 rounded-xl bg-surface p-3 shadow-lg ring-1 ring-edge-muted"
               role="dialog"
-              aria-label={`Edit color --${props.colorKey}`}
+              aria-label={props.ariaLabel}
             >
-              <div class="flex items-center gap-2">
-                <div
-                  class="h-8 w-8 shrink-0 rounded border border-edge"
-                  style={{ 'background-color': oklch() }}
-                />
-                <div class="min-w-0">
-                  <div class="truncate text-xs text-ink">{props.colorValue.description}</div>
-                  <div class="font-mono text-[0.67rem] text-ink-extra-muted">--{props.colorKey}</div>
+              <Show when={props.title}>
+                <div class="flex items-center gap-2">
+                  <div
+                    class="size-8 shrink-0 rounded border border-ink/[0.08]"
+                    style={{ 'background-color': oklch() }}
+                  />
+                  <div class="min-w-0">
+                    <div class="truncate text-xs text-ink">{props.title}</div>
+                    <Show when={props.subtitle}>
+                      <div class="font-mono text-[0.67rem] text-ink-extra-muted">
+                        {props.subtitle}
+                      </div>
+                    </Show>
+                  </div>
                 </div>
-              </div>
+              </Show>
 
-              <Slider
-                label="L"
-                min={0}
-                max={1}
-                step={0.01}
-                value={l}
-                onValue={(n) => props.colorValue.l[1](n)}
-                gradient={() => `linear-gradient(to right, oklch(0 ${c()} ${h()}deg), oklch(1 ${c()} ${h()}deg))`}
-                display={() => l().toFixed(2)}
-              />
-              <Slider
-                label="C"
-                min={0}
-                max={CHROMA_MAX}
-                step={0.005}
-                value={c}
-                onValue={(n) => props.colorValue.c[1](n)}
-                gradient={() => `linear-gradient(to right, oklch(${l()} 0 ${h()}deg), oklch(${l()} ${CHROMA_MAX} ${h()}deg))`}
-                display={() => c().toFixed(3)}
-              />
-              <Slider
-                label="H"
-                min={0}
-                max={360}
-                step={1}
-                value={h}
-                onValue={(n) => props.colorValue.h[1](n)}
-                gradient={() =>
-                  `linear-gradient(to right, oklch(${l()} ${c()} 0deg), oklch(${l()} ${c()} 60deg), oklch(${l()} ${c()} 120deg), oklch(${l()} ${c()} 180deg), oklch(${l()} ${c()} 240deg), oklch(${l()} ${c()} 300deg), oklch(${l()} ${c()} 360deg))`
-                }
-                display={() => `${Math.round(h())}°`}
-              />
+              <div class="flex gap-3">
+                <ColorField
+                  l={props.l}
+                  c={props.c}
+                  h={props.h}
+                  onL={props.onL}
+                  onC={props.onC}
+                />
+                <HueSlider h={props.h} onH={props.onH} />
+              </div>
 
               <input
                 class={cn(
-                  'rounded border border-edge-muted bg-transparent px-2 py-1 font-mono text-xs text-ink outline-none',
-                  hexInvalid() && 'text-accent'
+                  'rounded-md border border-edge-muted bg-transparent px-2 py-1 font-mono text-xs text-ink outline-none focus:border-accent',
+                  hexInvalid() && 'border-failure text-failure'
                 )}
                 value={hexText()}
                 onInput={(e) => setHex(e.currentTarget.value)}

@@ -17,6 +17,7 @@ export type SettingsTab =
   | 'Mobile App'
   | 'Agent'
   | 'Team'
+  | 'Connected'
   | 'Email'
   | 'GitHub'
   | 'Admin';

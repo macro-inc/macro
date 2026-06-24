@@ -1,4 +1,11 @@
-import { For, onMount, Show, Suspense } from 'solid-js';
+import {
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useLogout } from '@core/auth/logout';
@@ -8,8 +15,7 @@ import { Agent } from './Agent';
 import { Admin } from './Admin';
 import { Appearance } from './Appearance';
 import { Account } from './Account';
-import { Email } from './Email';
-import { GitHub } from './GitHub';
+import { ConnectedAccounts } from './ConnectedAccounts';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -17,10 +23,11 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { FloatRegion } from '../mobile/float-regions/FloatRegion';
 import { PillTabs } from '../mobile/PillTabs';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import { Button, SideNav } from '@ui';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
+import { Button, cn, Layer, SideNav } from '@ui';
+import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import {
   SplitHeaderLeft,
@@ -29,6 +36,13 @@ import {
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'modal';
+
+// Panel-width breakpoints (the panel can be a full-screen modal or a resizable
+// split, so we measure the panel itself rather than the viewport). Below
+// `COMPACT` the sidebar collapses into a horizontal tab bar; between `COMPACT`
+// and `NARROW` the gutter around the content card tightens.
+const COMPACT_WIDTH = 660;
+const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -45,7 +59,6 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const {
     closeSettings,
-    closeModal,
     moveSettingsToSplit,
     moveSettingsToModal,
     activeTabId,
@@ -61,16 +74,27 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const isCurrentTab = (tab: SettingsTab) =>
     activeTabId() === tab && isAvailable(tab);
 
+  // Responsive state, driven by the panel's own width (see breakpoints above).
+  const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
+  const compact = () => !isMobile() && panelWidth() < COMPACT_WIDTH;
+  const narrow = () => !isMobile() && panelWidth() < NARROW_WIDTH;
+
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
+  let resizeObserver: ResizeObserver | undefined;
 
-  // Attach hotkeys to the settings container
   onMount(() => {
-    if (settingsContainerRef) {
-      attachHotkeys(settingsContainerRef);
-    }
+    if (!settingsContainerRef) return;
+    attachHotkeys(settingsContainerRef);
+    resizeObserver = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setPanelWidth(width);
+    });
+    resizeObserver.observe(settingsContainerRef);
   });
+
+  onCleanup(() => resizeObserver?.disconnect());
 
   function handleEscapeKey() {
     closeSettings();
@@ -151,7 +175,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (flatTabs().some((tab) => tab.tab === value)) {
       setActiveTabId(value as SettingsTab);
     }
-  }
+  };
+
+  // Tab list for the compact segmented control / dropdown.
+  const tabItems = () =>
+    flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
   function BottomTabs() {
     return (
@@ -166,6 +194,28 @@ export function SettingsPanel(props: SettingsPanelProps) {
       </FloatRegion>
     );
   }
+
+  // "Back to app" — the modal's only close affordance. Laid out like a nav row.
+  const backToApp = () => (
+    <button
+      type="button"
+      onClick={() => closeSettings()}
+      class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-ink-extra-muted cursor-default hover:bg-ink/4 hover:text-ink-muted"
+    >
+      <CaretLeftIcon class="size-4 shrink-0" />
+      <span class="whitespace-nowrap">Back to app</span>
+    </button>
+  );
+
+  const moveToSplitButton = () => (
+    <Button
+      class="p-1 rounded-md"
+      label="Move to split"
+      onClick={() => moveSettingsToSplit()}
+    >
+      <ArrowsIn class="size-4" />
+    </Button>
+  );
 
   return (
     <div
@@ -184,6 +234,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
               </h1>
             </div>
           </HeaderIsland>
+          {/* When the sidebar collapses, tab selection moves into the split's
+              top bar as a dropdown of the current tab. (Rendered directly
+              rather than via CollapsibleHeaderItem so the wide segmented
+              control never flashes before measuring.) */}
+          <Show when={compact()}>
+            <div class="mx-2 shrink-0">
+              <TabsInsetDropdown
+                list={tabItems()}
+                value={activeTabId()}
+                onChange={handleTabChange}
+              />
+            </div>
+          </Show>
         </SplitHeaderLeft>
         {/* Pop the split back out into the modal (desktop only). */}
         <Show when={!isMobile()}>
@@ -199,34 +262,23 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </Show>
       </Show>
 
-      {/* The modal has no split header to portal into, so it renders its own. */}
-      <Show when={variant() === 'modal'}>
-        <div class="flex items-center justify-between h-11 shrink-0 px-2 border-b border-edge-muted">
-          <h1 class="font-semibold text-ink select-none text-sm pl-1">
-            Settings
-          </h1>
-          <div class="flex items-center gap-0.5">
-            <Button
-              class="p-1 rounded-lg"
-              label="Open in split"
-              onClick={() => moveSettingsToSplit()}
-            >
-              <ColumnsPlusRight class="size-4" />
-            </Button>
-            <Button
-              class="p-1 rounded-lg"
-              label="Close settings"
-              onClick={() => closeModal()}
-            >
-              <CloseIcon class="size-4" />
-            </Button>
-          </div>
-        </div>
-      </Show>
-
       <div class="flex grow min-h-1 overflow-hidden">
-        <Show when={!isMobile()}>
-          <SideNav class="w-[clamp(168px,22%,220px)]">
+        {/* Inline sidebar — hidden once the panel gets too narrow. */}
+        <Show when={!isMobile() && !compact()}>
+          <SideNav
+            class={cn(
+              'w-[clamp(208px,20%,248px)] gap-3',
+              narrow() ? 'pr-1' : 'pr-2'
+            )}
+          >
+            {/* The full-screen modal has no surrounding chrome, so the sidebar
+                carries the "back" and "move to split" affordances itself. */}
+            <Show when={variant() === 'modal'}>
+              <div class="flex items-center justify-between gap-1">
+                {backToApp()}
+                {moveToSplitButton()}
+              </div>
+            </Show>
             <For each={groups()}>
               {(group) => (
                 <SideNav.Group label={group.label}>
@@ -236,6 +288,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                         icon={item.icon}
                         active={activeTabId() === item.tab}
                         onSelect={() => handleTabChange(item.tab)}
+                        class="text-xs py-1.5"
                       >
                         {item.label}
                       </SideNav.Item>
@@ -248,7 +301,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <button
                 type="button"
                 onClick={() => logout()}
-                class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm text-ink-extra-muted cursor-default hover:bg-ink/3 hover:text-ink"
+                class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-ink-extra-muted cursor-default hover:bg-ink/3 hover:text-ink"
               >
                 <SignOutIcon class="size-4 shrink-0" />
                 <span class="whitespace-nowrap">Log out</span>
@@ -257,42 +310,70 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </SideNav>
         </Show>
 
-        <div class="relative grow min-h-1 min-w-0 overflow-auto mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
-          <Show when={isCurrentTab('Account')}>
-            <Suspense>
-              <Account />
-            </Suspense>
-          </Show>
-          <Show when={isCurrentTab('Appearance')}>
-            <Appearance />
-          </Show>
-          <Show when={isCurrentTab('Shortcuts')}>
-            <Shortcuts />
-          </Show>
-          <Show when={isCurrentTab('Team')}>
-            <Suspense>
-              <Team />
-            </Suspense>
-          </Show>
-          <Show when={isCurrentTab('Email')}>
-            <Suspense>
-              <Email />
-            </Suspense>
-          </Show>
-          <Show when={isCurrentTab('GitHub')}>
-            <Suspense>
-              <GitHub />
-            </Suspense>
-          </Show>
-          <Show when={isCurrentTab('Mobile App')}>
-            <MobileApp />
-          </Show>
-          <Show when={isCurrentTab('Agent')}>
-            <Agent />
-          </Show>
-          <Show when={isCurrentTab('Admin')}>
-            <Admin />
-          </Show>
+        {/* Content sits in its own subtly-raised, rounded card. The gutter
+            around it tightens as the panel narrows, and goes uniform once the
+            sidebar collapses. Full-bleed on mobile. */}
+        <div
+          class="flex-1 min-w-0 overflow-hidden mobile:p-0"
+          classList={{
+            'py-2 pr-2 pl-0': !compact() && !narrow(),
+            'py-1 pr-1 pl-0': !compact() && narrow(),
+            'p-1': compact(),
+          }}
+        >
+          <Layer depth={1}>
+            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface mobile:rounded-none mobile:border-0 mobile:bg-transparent">
+              {/* Compact modal chrome: no split header to host the tabs, so
+                  the sidebar collapses into a top bar here — back / tab
+                  dropdown / move-to-split. (Split mode puts the tabs in its
+                  header.) */}
+              <Show when={variant() === 'modal' && compact()}>
+                <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
+                  {backToApp()}
+                  <TabsInsetDropdown
+                    list={tabItems()}
+                    value={activeTabId()}
+                    onChange={handleTabChange}
+                  />
+                  <div class="flex-1" />
+                  {moveToSplitButton()}
+                </div>
+              </Show>
+
+              <div class="relative min-h-0 flex-1 overflow-hidden mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                <Show when={isCurrentTab('Account')}>
+                  <Suspense>
+                    <Account />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Appearance')}>
+                  <Appearance />
+                </Show>
+                <Show when={isCurrentTab('Shortcuts')}>
+                  <Shortcuts />
+                </Show>
+                <Show when={isCurrentTab('Team')}>
+                  <Suspense>
+                    <Team />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Connected')}>
+                  <Suspense>
+                    <ConnectedAccounts />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Mobile App')}>
+                  <MobileApp />
+                </Show>
+                <Show when={isCurrentTab('Agent')}>
+                  <Agent />
+                </Show>
+                <Show when={isCurrentTab('Admin')}>
+                  <Admin />
+                </Show>
+              </div>
+            </div>
+          </Layer>
         </div>
       </div>
 

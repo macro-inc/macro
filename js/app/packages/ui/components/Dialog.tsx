@@ -9,6 +9,8 @@ export type DialogProps = {
   onOpenChange?: (open: boolean) => void /* Forwarded to Kobalte */;
   contentRef?: Ref<HTMLDivElement> /* content element ref  */;
   position?: 'top' | 'center' /* Vertical position    */;
+  /** Edge-to-edge takeover: fills the viewport with no gutter or centering. */
+  fullscreen?: boolean /* Fill the viewport    */;
   children: JSX.Element /* Content children     */;
   class?: string /* classes for content  */;
   open: boolean /* if dialog is open    */;
@@ -21,16 +23,24 @@ export function Dialog(props: DialogProps) {
         <KobalteDialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div
           class={cn(
-            'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex justify-center px-2',
-            props.position === 'center'
-              ? 'items-center'
-              : 'items-start pt-[10vh]'
+            'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex',
+            props.fullscreen
+              ? 'inset-0'
+              : cn(
+                  'justify-center px-2',
+                  props.position === 'center'
+                    ? 'items-center'
+                    : 'items-start pt-[10vh]'
+                )
           )}
         >
           <KobalteDialog.Content
             ref={props.contentRef}
             class={cn(
-              'w-200 max-w-[calc(100vw-16px)] overflow-hidden portal-scope isolate',
+              'overflow-hidden portal-scope isolate',
+              props.fullscreen
+                ? 'size-full'
+                : 'w-200 max-w-[calc(100vw-16px)]',
               props.class
             )}
             onCloseAutoFocus={props.onCloseAutoFocus}

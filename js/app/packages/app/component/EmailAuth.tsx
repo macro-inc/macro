@@ -119,7 +119,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       navigateToSuccess();
       return;
     }
-    setActiveTabId('Email');
+    setActiveTabId('Connected');
     navigate('/component/mail/component/settings', { replace: true });
   };
 

@@ -10,8 +10,26 @@ export type ToggleSwitchProps = {
   label?: JSX.Element;
   disabled?: boolean;
   checked?: boolean;
+  /** Visual size. `sm` (default) is the compact toolbar size; `md` is larger,
+   *  used in settings rows. */
+  size?: 'sm' | 'md';
   class?: string;
 };
+
+const SWITCH_SIZES = {
+  sm: {
+    control: 'h-4 w-6',
+    thumb: 'top-0.5 left-0.5 h-3',
+    stretched: 'w-4 data-checked:translate-x-1',
+    normal: 'w-3 data-checked:translate-x-2',
+  },
+  md: {
+    control: 'h-5 w-9',
+    thumb: 'top-0.5 left-0.5 h-4',
+    stretched: 'w-5 data-checked:translate-x-3',
+    normal: 'w-4 data-checked:translate-x-4',
+  },
+} as const;
 
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   const [local, others] = splitProps(props, [
@@ -22,7 +40,9 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'checked',
     'class',
     'label',
+    'size',
   ]);
+  const sizing = () => SWITCH_SIZES[local.size ?? 'sm'];
   const [isStretched, setIsStretched] = createSignal(false);
   let stretchTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -51,13 +71,17 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
-      <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent">
+      <KobalteSwitch.Control
+        class={cn(
+          'relative rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent',
+          sizing().control
+        )}
+      >
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-100 ease-in-out',
-            isStretched()
-              ? 'w-4 data-checked:translate-x-1'
-              : 'w-3 data-checked:translate-x-2'
+            'absolute rounded-full bg-surface transition-all duration-100 ease-in-out',
+            sizing().thumb,
+            isStretched() ? sizing().stretched : sizing().normal
           )}
         />
       </KobalteSwitch.Control>
