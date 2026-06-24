@@ -1,27 +1,52 @@
-use rig_core::completion::CompletionModel;
+use std::borrow::Cow;
 
-pub trait Model {
-    /// The provider-specific completion model this resolves to.
-    type Completion: CompletionModel;
-    /// Build the completion model used to drive an agent.
-    fn completion(&self) -> Self::Completion;
-    /// Best-effort reasoning / extended-thinking config, or `None` if the
-    /// model doesn't support it.
-    fn thinking_params(&self) -> Option<serde_json::Value>;
+use crate::AgentError;
+#[derive(Debug)]
+pub struct Model<'a> {
+    pub provider: Cow<'a, str>,
+    pub name: Cow<'a, str>,
 }
 
-/// Routes a validated, provider-specific model id to a runtime model.
-///
-/// Routing is infallible: validation lives in the id type. Each router's
-/// [`ModelId`](ModelRouter::ModelId) is a newtype whose only constructor checks
-/// the id against the provider's namespace (e.g.
-/// [`AnthropicModelId`](crate::model::anthropic::AnthropicModelId)), so by the
-/// time `route_model` receives one it is guaranteed to belong to this provider.
-pub trait ModelRouter {
-    /// The validated id type this router accepts.
-    type ModelId;
-    /// The runtime model this router produces.
-    type RoutedModel: Model;
-    /// Bind an already-validated id to this router's provider client.
-    fn route_model(&self, model: Self::ModelId) -> Self::RoutedModel;
+impl<'a> Model<'a> {
+    pub fn provider(&self) -> &str {
+        &self.provider
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Model<'a> {
+    type Error = crate::error::AgentError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        value
+            .trim()
+            .split_once("/")
+            .ok_or_else(|| AgentError::MalformedModel(value.to_string()))
+            .map(|(provider, name)| Self {
+                provider: Cow::Borrowed(provider),
+                name: Cow::Borrowed(name),
+            })
+    }
+}
+
+impl<'a> std::fmt::Display for Model<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.provider, self.name)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_from_string() {
+        let good = super::Model::try_from("anthropic/claude-big-burger").expect("good model");
+        assert_eq!(good.name(), "claude-big-burger");
+        assert_eq!(good.provider(), "anthropic");
+
+        let bad = "claude-big-burger";
+        assert!(super::Model::try_from(bad).is_err());
+    }
 }

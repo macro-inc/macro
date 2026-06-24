@@ -55,7 +55,7 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { formatRelativeTimestamp } from '@entity';
 import { useHasPaidAccess } from '@core/auth/license';
-import { usePaywallState } from '@core/constant/PaywallState';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
@@ -729,7 +729,7 @@ function EmptyTeamState() {
                   <Button
                     variant="active"
                     class="rounded-xs"
-                    onClick={() => showPaywall()}
+                    onClick={() => showPaywall(PaywallKey.TEAMS)}
                   >
                     Upgrade
                   </Button>

@@ -8,11 +8,10 @@ import {
 } from '../../packages/resources';
 import {
   config,
+  DopplerEcsEnvironment,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
-  getServiceUrl,
-  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -35,56 +34,8 @@ const tags = {
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
-const AUDIENCE = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const ISSUER = config.require(`fusionauth_issuer`);
-const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
-const USE_APOLLO_CRM_ENRICHMENT = config.require(`use_apollo_crm_enrichment`);
 const APOLLO_API_KEY_SECRET_NAME = config.require(`apollo_api_key_secret_name`);
-const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
-const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
-const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
-  `redis_rate_limit_reqs_backfill`
-);
-const REDIS_RATE_LIMIT_WINDOW_SECS = config.require(
-  `redis_rate_limit_window_secs`
-);
-const PRESIGNED_URL_TTL_SECS = config.require(`presigned_url_ttl_secs`);
-const BACKFILL_QUEUE_WORKERS = config.require(`backfill_queue_workers`);
-const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
-  `backfill_queue_max_messages`
-);
-const INBOX_SYNC_QUEUE_WORKERS = config.require(`inbox_sync_queue_workers`);
-const INBOX_SYNC_QUEUE_MAX_MESSAGES = config.require(
-  `inbox_sync_queue_max_messages`
-);
-const INBOX_SYNC_RETRY_QUEUE_WORKERS = config.require(
-  `inbox_sync_retry_queue_workers`
-);
-const INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES = config.require(
-  `inbox_sync_retry_queue_max_messages`
-);
-const GMAIL_OPS_QUEUE_WORKERS = config.require(`gmail_ops_queue_workers`);
-const GMAIL_OPS_QUEUE_MAX_MESSAGES = config.require(
-  `gmail_ops_queue_max_messages`
-);
-const GMAIL_OPS_RETRY_QUEUE_WORKERS = config.require(
-  `gmail_ops_retry_queue_workers`
-);
-const GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES = config.require(
-  `gmail_ops_retry_queue_max_messages`
-);
-const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
-const gmailGcpQueue = config.require(`gmail_gcp_queue`);
-const GMAIL_GCP_QUEUE = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: gmailGcpQueue })
-  .apply((secret) => secret.secretString);
-
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
@@ -101,12 +52,6 @@ const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
       secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY,
     })
     .apply((secret) => secret.arn);
-
-const INTERNAL_AUTH_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`internal_auth_key`),
-  })
-  .apply((secret) => secret.secretString);
 
 const internalAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require(`internal_auth_key`) })
@@ -139,8 +84,7 @@ const sfsDeleteQueueName: pulumi.Output<string> = sfsDeleteLambdaStack
   .getOutput('sfsDeleteQueueName')
   .apply((name) => name as string);
 
-const { notificationIngressQueueName, notificationIngressQueueArn } =
-  getMacroNotify();
+const { notificationIngressQueueArn } = getMacroNotify();
 
 const emailServiceRedis = new Redis('email-service-redis', {
   vpc: coparse_api_vpc,
@@ -241,7 +185,7 @@ export const sfsUploaderQueueName = pulumi.interpolate`${sfs_uploader_queue.queu
 
 export { sfsDeleteQueueArn, sfsDeleteQueueName };
 
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 // Retrieve name of queue used Contacts Service
 const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
@@ -250,10 +194,6 @@ const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
     name: `macro-inc/contacts-service/${stack}`,
   }
 );
-
-const contactsQueueName: pulumi.Output<string> = contactsServiceStack
-  .getOutput('contactsQueueName')
-  .apply((arn) => arn as string);
 
 // Get ARN to allow sending messages to contacts Queue
 const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
@@ -383,208 +323,8 @@ emailAttachmentBucket.attachCloudfrontPolicy({
 
 const containerEnvVars = [
   {
-    name: 'RUST_LOG',
-    value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},entity_access=${stack === 'prod' ? 'debug' : 'debug'},pubsub_workers=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,crm=${stack === 'prod' ? 'info' : 'debug'},teams=${stack === 'prod' ? 'info' : 'debug'}`,
-  },
-  {
     name: 'ENVIRONMENT',
     value: stack,
-  },
-  {
-    name: 'MACRO_DB_URL',
-    value: pulumi.interpolate`${MACRO_DB_URL}`,
-  },
-  {
-    name: 'REDIS_URI',
-    value: pulumi.interpolate`redis://${emailServiceRedis.endpoint}`,
-  },
-  {
-    name: 'LINK_MANAGER_QUEUE',
-    value: linkManagerQueueName,
-  },
-  {
-    name: 'EMAIL_SCHEDULED_QUEUE',
-    value: scheduledQueueName,
-  },
-  {
-    name: 'GMAIL_INBOX_SYNC_QUEUE',
-    value: inboxSyncQueueName,
-  },
-  {
-    name: 'GMAIL_INBOX_SYNC_RETRY_QUEUE',
-    value: inboxSyncRetryQueueName,
-  },
-  {
-    name: 'GMAIL_OPS_QUEUE',
-    value: gmailOpsQueueName,
-  },
-  {
-    name: 'GMAIL_OPS_RETRY_QUEUE',
-    value: gmailOpsRetryQueueName,
-  },
-  {
-    name: 'BACKFILL_QUEUE',
-    value: backfillQueueName,
-  },
-  {
-    name: 'SFS_UPLOADER_QUEUE',
-    value: sfsUploaderQueueName,
-  },
-  {
-    name: 'SFS_DELETE_QUEUE',
-    value: sfsDeleteQueueName,
-  },
-  {
-    name: 'GMAIL_GCP_QUEUE',
-    value: pulumi.interpolate`${GMAIL_GCP_QUEUE}`,
-  },
-  {
-    name: 'NOTIFICATION_QUEUE',
-    value: pulumi.interpolate`${notificationIngressQueueName}`,
-  },
-  {
-    name: 'JWT_SECRET_KEY',
-    value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-  },
-  {
-    name: 'AUDIENCE',
-    value: pulumi.interpolate`${AUDIENCE}`,
-  },
-  {
-    name: 'ISSUER',
-    value: pulumi.interpolate`${ISSUER}`,
-  },
-  {
-    name: 'INTERNAL_API_SECRET_KEY',
-    value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
-  },
-  {
-    name: ServiceUrl.AUTHENTICATION_SERVICE_URL,
-    value: getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL),
-  },
-  {
-    name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-    value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
-  },
-  {
-    name: ServiceUrl.STATIC_FILE_SERVICE_URL,
-    value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
-  },
-  {
-    name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
-    value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
-  },
-  {
-    name: ServiceUrl.CONNECTION_GATEWAY_URL,
-    value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-  },
-  {
-    name: 'NOTIFICATIONS_ENABLED',
-    value: pulumi.interpolate`${NOTIFICATIONS_ENABLED}`,
-  },
-  {
-    name: 'USE_APOLLO_CRM_ENRICHMENT',
-    value: pulumi.interpolate`${USE_APOLLO_CRM_ENRICHMENT}`,
-  },
-  {
-    name: 'APOLLO_API_KEY',
-    value: pulumi.interpolate`${APOLLO_API_KEY_SECRET_NAME}`,
-  },
-  {
-    name: 'SEARCH_EVENT_QUEUE',
-    value: pulumi.interpolate`${searchEventQueueName}`,
-  },
-  {
-    name: 'SENT_UNDO_DELAY_SECS',
-    value: pulumi.interpolate`${SENT_UNDO_DELAY_SECS}`,
-  },
-  {
-    name: 'REDIS_RATE_LIMIT_REQS',
-    value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS}`,
-  },
-  {
-    name: 'REDIS_RATE_LIMIT_REQS_BACKFILL',
-    value: pulumi.interpolate`${REDIS_RATE_LIMIT_REQS_BACKFILL}`,
-  },
-  {
-    name: 'REDIS_RATE_LIMIT_WINDOW_SECS',
-    value: pulumi.interpolate`${REDIS_RATE_LIMIT_WINDOW_SECS}`,
-  },
-  {
-    name: 'BACKFILL_QUEUE_WORKERS',
-    value: pulumi.interpolate`${BACKFILL_QUEUE_WORKERS}`,
-  },
-  {
-    name: 'BACKFILL_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${BACKFILL_QUEUE_MAX_MESSAGES}`,
-  },
-  {
-    name: 'INBOX_SYNC_QUEUE_WORKERS',
-    value: pulumi.interpolate`${INBOX_SYNC_QUEUE_WORKERS}`,
-  },
-  {
-    name: 'INBOX_SYNC_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${INBOX_SYNC_QUEUE_MAX_MESSAGES}`,
-  },
-  {
-    name: 'INBOX_SYNC_RETRY_QUEUE_WORKERS',
-    value: pulumi.interpolate`${INBOX_SYNC_RETRY_QUEUE_WORKERS}`,
-  },
-  {
-    name: 'INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${INBOX_SYNC_RETRY_QUEUE_MAX_MESSAGES}`,
-  },
-  {
-    name: 'GMAIL_OPS_QUEUE_WORKERS',
-    value: pulumi.interpolate`${GMAIL_OPS_QUEUE_WORKERS}`,
-  },
-  {
-    name: 'GMAIL_OPS_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${GMAIL_OPS_QUEUE_MAX_MESSAGES}`,
-  },
-  {
-    name: 'GMAIL_OPS_RETRY_QUEUE_WORKERS',
-    value: pulumi.interpolate`${GMAIL_OPS_RETRY_QUEUE_WORKERS}`,
-  },
-  {
-    name: 'GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES',
-    value: pulumi.interpolate`${GMAIL_OPS_RETRY_QUEUE_MAX_MESSAGES}`,
-  },
-  {
-    name: 'SFS_UPLOADER_WORKERS',
-    value: pulumi.interpolate`${SFS_UPLOADER_WORKERS}`,
-  },
-  {
-    name: 'MACRO_API_TOKEN_ISSUER',
-    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-  },
-  {
-    name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-    value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-  },
-  {
-    name: 'EMAIL_SERVICE_PRESIGNED_URL_TTL_SECS',
-    value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
-  },
-  {
-    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
-    value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
-  },
-  {
-    name: 'CONTACTS_QUEUE',
-    value: pulumi.interpolate`${contactsQueueName}`,
-  },
-  {
-    name: 'ATTACHMENT_BUCKET',
-    value: emailAttachmentBucket.bucket.id,
-  },
-  {
-    name: 'EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
-    value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
-  },
-  {
-    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-    value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
   },
   // OpenTelemetry / Datadog tracing configuration
   {
@@ -597,6 +337,10 @@ const containerEnvVars = [
   },
 ];
 
+const dopplerEcsEnvironment = new DopplerEcsEnvironment(pulumi.getProject(), {
+  tags,
+});
+
 const emailService = new EmailService('email-service', {
   vpc: coparse_api_vpc,
   tags,
@@ -608,6 +352,7 @@ const emailService = new EmailService('email-service', {
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,
+  dopplerEcsEnvironment,
 });
 
 export const emailServiceUrl = pulumi.interpolate`${emailService.domain}`;
@@ -620,6 +365,7 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   role: emailServiceRole,
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,
+  dopplerEcsEnvironment,
 });
 
 const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);

@@ -13,6 +13,8 @@ const SERVICE_NAMES = [
   'connection-gateway',
   'agent-schedule-service',
   'mcp-server',
+  'email-service',
+  'document-cognition',
 ];
 
 for (const service_name of SERVICE_NAMES) {

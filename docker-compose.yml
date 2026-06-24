@@ -232,6 +232,8 @@ services:
     command: ["/app/out/notification_service"]
     ports:
       - "8089:8080"
+    environment:
+      LAST_ONLINE_REDIS_URI: ${LAST_ONLINE_REDIS_URI:-${REDIS_URI:-redis://redis:6379}}
     depends_on:
       - redis
       - document_cognition_service

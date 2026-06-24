@@ -1,16 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import {
-  PLAN_FEATURES,
-  PLANS,
-  type PlanTier,
-} from '@app/component/paywall/plans';
-import SubscriptionTier from '@app/component/paywall/SubscriptionTier';
 import { useHasPaidAccess } from '@core/auth';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
-import IconX from '@phosphor/x.svg';
+import { useUserId } from '@core/context/user';
+import { plural } from '@core/util/string';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import CheckIcon from '@phosphor/check.svg';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
-import { Button, cn } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Button, Tooltip } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 
 export interface PaywallProps {
   cb: () => Promise<void> | void;
@@ -21,23 +19,48 @@ export interface PaywallProps {
   hideCloseButton?: boolean;
 }
 
+const PAYWALL_PREMIUM_FEATURES = [
+  'All agents',
+  'All models',
+  'No watermark',
+  'MCP access',
+  'AI projections',
+  'Multiple email inboxes',
+  'Calls',
+  'Teams',
+  '1 TB storage',
+];
+
+const PremiumFeatures = () => (
+  <ul class="grid grid-cols-1 gap-x-4 gap-y-3 text-sm text-ink-muted sm:grid-cols-3">
+    <For each={PAYWALL_PREMIUM_FEATURES}>
+      {(label) => (
+        <li class="flex items-center gap-2">
+          <CheckIcon class="size-3 text-success" />
+          <span class="text-ink-muted text-xs">{label}</span>
+        </li>
+      )}
+    </For>
+  </ul>
+);
+
 const PaywallComponent = (props: PaywallProps) => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
+  const userId = useUserId();
 
-  const currentTier = createMemo<PlanTier>(() =>
-    hasPaid() ? 'premium' : 'free'
-  );
+  const team = useCurrentTeamQuery();
 
-  // `userSelectedTier` is only set when the user explicitly clicks a plan card. Until
-  // then the UI reflects `currentTier`. This avoids mirroring derived state into a signal
-  // via `createEffect` and sidesteps the briefly-wrong-card window before permissions resolve.
-  const [userSelectedTier, setUserSelectedTier] = createSignal<PlanTier | null>(
-    null
-  );
-  const selectedTier = createMemo<PlanTier>(
-    () => userSelectedTier() ?? currentTier()
-  );
+  const teamRole = createMemo(() => {
+    const uid = userId();
+    const currentTeam = team.data;
+
+    if (!currentTeam) return;
+
+    return currentTeam.team.owner_id === uid ? 'owner' : 'member';
+  });
+
+  const upgradeDisabled = createMemo(() => teamRole() === 'member');
 
   const handleCheckout = async () => {
     try {
@@ -68,122 +91,111 @@ const PaywallComponent = (props: PaywallProps) => {
   };
 
   const handleContinue = () => {
-    const tier = selectedTier();
-    // Paid users go to the Stripe portal regardless of selection — that's where
-    // they cancel (downgrade to free) or manage billing on premium.
+    if (upgradeDisabled()) return;
+
     if (hasPaid()) {
       manageSubscription();
-      return;
-    }
-    if (tier === 'free') {
-      props.handleGuest?.();
       return;
     }
     handleCheckout();
   };
 
-  const ctaLabel = () => {
-    if (hasPaid()) {
-      return selectedTier() === 'free' ? 'Downgrade' : 'Manage Subscription';
-    }
-    if (selectedTier() === 'free') return 'Continue with Free';
-    return 'Get Premium';
-  };
+  const ctaLabel = () => (hasPaid() ? 'Manage Subscription' : 'Upgrade now');
+  const paywallMetadata = () =>
+    props.errorKey ? PaywallMessages[props.errorKey] : undefined;
 
   return (
-    <div class="relative space-y-2 w-full">
-      <Show when={!props.hideCloseButton}>
-        <button
-          onClick={props.cb}
-          class="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-ink-extra-muted hover:text-ink transition-colors z-10"
-        >
-          <IconX class="size-5 sm:size-6" />
-        </button>
-      </Show>
-      <Show when={!hasPaid()}>
-        <div class="relative w-full text-center">
-          <div class="space-y-6 sm:space-y-8">
-            <div class="text-center">
-              <h2 class="mb-2 font-semibold text-ink text-xl sm:text-2xl">
-                Choose your plan
-              </h2>
-              <Show when={props.errorKey}>
-                <p class="mb-4 text-failure-ink text-sm sm:text-base">
-                  {PaywallMessages[props.errorKey as PaywallKey]}
-                </p>
-              </Show>
-            </div>
+    <section class="relative flex w-full flex-col gap-6">
+      <div class="grid grid-cols-1 gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] p-6 sm:px-8 sm:pt-8 sm:pb-4">
+        <section class="flex flex-col gap-4">
+          <div class="flex flex-col gap-2">
+            <h2 class="text-2xl text-ink font-semibold">
+              Unlock Premium features
+            </h2>
+            <p class="text-sm text-ink-extra-muted">
+              {paywallMetadata()?.description ??
+                'Upgrade your workspace with more AI power, team collaboration, and room to grow.'}
+            </p>
+            <Show when={paywallMetadata()?.learnMoreUrl}>
+              {(learnMoreUrl) => (
+                <a
+                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-ink-extra-muted hover:text-accent"
+                  href={learnMoreUrl()}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Learn more about{' '}
+                  {paywallMetadata()!.learnMoreSubject ?? 'Premium'}
+                  <ArrowSquareOutIcon class="size-4" />
+                </a>
+              )}
+            </Show>
           </div>
-        </div>
-      </Show>
+        </section>
 
-      <div class="w-full @container">
-        <div class="gap-2 grid grid-cols-1 @[400px]:grid-cols-2">
-          <For each={PLANS}>
-            {(plan) => (
-              <button
-                onClick={() => setUserSelectedTier(plan.tier)}
-                class={cn(
-                  selectedTier() === plan.tier
-                    ? 'border-accent bg-active'
-                    : 'border-edge hover:border-edge',
-                  'p-4 sm:p-5 border flex flex-col transition-all relative text-left rounded-sm'
-                )}
-              >
-                <div class="flex flex-col gap-3 w-full">
-                  <div class="flex justify-between items-start">
-                    <div class="flex items-center gap-2">
-                      <div class="font-semibold text-ink text-base sm:text-lg">
-                        {plan.name}
-                      </div>
-                      <Show when={currentTier() === plan.tier}>
-                        <span class="text-xs text-ink/60 px-1.5 py-0.5 border border-edge-muted rounded">
-                          Current
-                        </span>
-                      </Show>
-                    </div>
-                    <SubscriptionTier
-                      class="w-7 shrink-0"
-                      tier={plan.tier === 'premium' ? 'premium' : undefined}
-                    />
-                  </div>
-                  <div class="flex items-baseline gap-0.5">
-                    <span class="text-3xl font-bold text-ink">
-                      ${plan.price}
-                    </span>
-                    <span class="text-base text-ink/40">/mo</span>
-                  </div>
-                  <div class="text-sm text-ink/60 flex flex-col gap-1">
-                    <For each={PLAN_FEATURES}>
-                      {(feature) => (
-                        <span>
-                          {feature.label}: {feature.values[plan.tier]}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </button>
+        <section class="h-full flex flex-col gap-3">
+          <div class="flex flex-1 flex-col gap-4 rounded-lg bg-active p-4">
+            <div class="flex flex-col">
+              <h3 class="text-sm text-ink">Premium features</h3>
+            </div>
+            <PremiumFeatures />
+          </div>
+        </section>
+      </div>
+
+      <div class="border-t border-t-edge px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-baseline gap-1.5 text-xs text-ink/60">
+          <span class="text-ink font-semibold text-xl leading-6">$40</span>
+          <span>per seat / per month</span>
+
+          <Show when={teamRole() === 'owner' && team.data}>
+            {(team) => (
+              <span class="text-ink-extra-muted text-xs">
+                • {team().members.length}{' '}
+                {plural('user', team().members.length)}
+              </span>
             )}
-          </For>
+          </Show>
+        </div>
+        <div class="flex flex-col justify-end gap-2 sm:flex-row">
+          <Button
+            variant="ghost"
+            depth={3}
+            class="rounded-full sm:w-auto px-3 py-1.5"
+            onClick={props.cb}
+          >
+            Dismiss
+          </Button>
+          <Show
+            when={upgradeDisabled()}
+            fallback={
+              <Button
+                variant={hasPaid() ? 'base' : 'cta'}
+                class="rounded-full sm:w-auto px-3 py-1.5"
+                onClick={handleContinue}
+              >
+                {ctaLabel()}
+              </Button>
+            }
+          >
+            <Tooltip
+              label="Your subscription is managed by your team owner. Contact them to make changes."
+              placement="top"
+            >
+              <span>
+                <Button
+                  variant={hasPaid() ? 'base' : 'cta'}
+                  class="rounded-full sm:w-auto px-3 py-1.5"
+                  disabled
+                >
+                  {ctaLabel()}
+                </Button>
+              </span>
+            </Tooltip>
+          </Show>
         </div>
       </div>
-
-      <div class="w-full">
-        <Button
-          onClick={handleContinue}
-          variant="base"
-          size="lg"
-          depth={3}
-          class="w-full"
-          disabled={
-            !hasPaid() && selectedTier() === 'free' && !props.handleGuest
-          }
-        >
-          {ctaLabel()}
-        </Button>
-      </div>
-    </div>
+    </section>
   );
 };
 
