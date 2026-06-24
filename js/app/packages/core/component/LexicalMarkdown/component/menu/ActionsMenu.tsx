@@ -24,7 +24,7 @@ import {
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
 import { ACTIONS } from '../../plugins/actions/actions';
-import type { Action } from '../../plugins/actions/types';
+import type { Action, ActionContext } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
@@ -40,6 +40,7 @@ function ActionsMenuItem(props: {
   index: number;
   selected: boolean;
   editor: LexicalEditor;
+  actionContext?: ActionContext;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
 }) {
@@ -70,7 +71,7 @@ function ActionsMenuItem(props: {
         if (action) {
           if (dependencies !== undefined) {
             if (props.editor.hasNodes(dependencies)) {
-              action(props.editor);
+              action(props.editor, props.actionContext);
             } else {
               console.error(
                 'Dispatched Action with missing dependencies:',
@@ -78,7 +79,7 @@ function ActionsMenuItem(props: {
               );
             }
           } else {
-            action(props.editor);
+            action(props.editor, props.actionContext);
           }
         }
         props.setOpen(false);
@@ -114,6 +115,7 @@ export function ActionMenu(props: {
   additionalActions?: Action[];
   /** IDs of default actions to exclude from the menu. */
   ignoreActionIds?: string[];
+  actionContext?: ActionContext;
 }) {
   const { isOpen, setIsOpen } = props.menu;
 
@@ -209,7 +211,7 @@ export function ActionMenu(props: {
     const selectedItem = items[selectedIndex()];
     props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
     if (selectedItem) {
-      selectedItem.action(props.editor);
+      selectedItem.action(props.editor, props.actionContext);
     }
     setIsOpen(false);
   };
@@ -277,6 +279,7 @@ export function ActionMenu(props: {
                 index={index()}
                 selected={index() === selectedIndex()}
                 editor={props.editor}
+                actionContext={props.actionContext}
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setIsOpen}
               />

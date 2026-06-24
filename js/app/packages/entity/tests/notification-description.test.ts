@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
   getActionVerb,
+  getGithubSenderLogin,
   getTypeNoun,
+  getUniqueGithubLogins,
   getUniqueSenderIds,
 } from '../src/extractors-notification/notification-description-helpers';
 import type { Notification } from '../src/types/notification';
+
+const githubNotification = (login: string | null | undefined): Notification =>
+  ({
+    notification_metadata: {
+      tag: 'github_pr_comment',
+      content: { senderGithubLogin: login },
+    },
+  }) as unknown as Notification;
 
 describe('notification-description helpers', () => {
   describe('getUniqueSenderIds', () => {
@@ -69,6 +79,51 @@ describe('notification-description helpers', () => {
 
       const result = getUniqueSenderIds(notifications);
       expect(result).toEqual(['user3', 'user1', 'user2']);
+    });
+  });
+
+  describe('getGithubSenderLogin', () => {
+    it('extracts the GitHub login from PR notification metadata', () => {
+      expect(getGithubSenderLogin(githubNotification('octocat'))).toBe(
+        'octocat'
+      );
+    });
+
+    it('returns undefined when the login is null', () => {
+      expect(getGithubSenderLogin(githubNotification(null))).toBeUndefined();
+    });
+
+    it('returns undefined for non-GitHub notifications', () => {
+      const notification = {
+        notification_metadata: { tag: 'channel_mention', content: {} },
+      } as unknown as Notification;
+      expect(getGithubSenderLogin(notification)).toBeUndefined();
+    });
+  });
+
+  describe('getUniqueGithubLogins', () => {
+    it('extracts unique GitHub logins preserving order', () => {
+      const notifications = [
+        githubNotification('peter'),
+        githubNotification('gabriel'),
+        githubNotification('peter'),
+      ];
+      expect(getUniqueGithubLogins(notifications)).toEqual([
+        'peter',
+        'gabriel',
+      ]);
+    });
+
+    it('skips notifications without a login', () => {
+      const notifications = [
+        githubNotification('peter'),
+        githubNotification(null),
+        githubNotification('gabriel'),
+      ];
+      expect(getUniqueGithubLogins(notifications)).toEqual([
+        'peter',
+        'gabriel',
+      ]);
     });
   });
 

@@ -29,6 +29,7 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import {
@@ -36,17 +37,13 @@ import {
   useSetDocumentTeamShareMutation,
 } from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import {
-  blockNameToItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   onCleanup,
@@ -439,24 +436,12 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReferencesSectionConditional(props: { documentId: string }) {
-  const [references] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.documentId,
-    async (id) => {
-      const response = await storageServiceClient.attachmentReferences({
-        entity_type: 'document',
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return [];
-      }
-
-      return response.value.references;
-    }
+    () => 'document'
   );
 
-  const count = createMemo(() => references()?.length ?? 0);
+  const count = createMemo(() => references.data?.length ?? 0);
 
   return (
     <Show when={count() > 0}>

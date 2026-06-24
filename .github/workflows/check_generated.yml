@@ -1,0 +1,25 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/check_generated.rs
+name: check generated workflows
+'on':
+  pull_request:
+    branches:
+    - main
+    paths:
+    - rust/cloud-storage/tools/xtask/**
+    - '.github/workflows/**'
+jobs:
+  check-workflows:
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Setup Rust
+      uses: './.github/actions/setup-rust'
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: verify workflows are up to date
+      run: cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- workflows --check

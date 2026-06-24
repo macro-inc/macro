@@ -50,6 +50,8 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
+    // TODO: This shoud be a config and use `macro_config` so we can
+    // have doppler tests for it.
     let tool_context = build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build tool service context")?;

@@ -1,0 +1,10 @@
+# Cargo aliases for the cloud-storage workspace.
+#
+# `cargo x <subcommand>` runs the xtask repo-automation tool from anywhere inside
+# rust/cloud-storage:
+#   cargo x workflows [--check]      # regenerate / verify .github/workflows
+#   cargo x deps [--check]           # regenerate / verify workspace-hack + dep closures
+#   cargo x nextest-filter <file>    # nextest rdeps filter for changed files
+#   cargo x doppler-bins <file>      # Doppler config-validation bins affected by changed files
+[alias]
+x = "run -p xtask --"

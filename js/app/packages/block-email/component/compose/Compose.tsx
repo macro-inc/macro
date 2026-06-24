@@ -231,6 +231,7 @@ export function EmailCompose(props: EmailComposeProps) {
       if (draftID) {
         await deleteDraftMutation.mutateAsync({
           draftId: draftID,
+          threadId: currentThreadID(),
           linkId: headerLinkId(),
         });
       }
@@ -602,6 +603,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (draftId) {
       await deleteDraftMutation.mutateAsync({
         draftId,
+        threadId: currentThreadID(),
         linkId: headerLinkId(),
       });
     }

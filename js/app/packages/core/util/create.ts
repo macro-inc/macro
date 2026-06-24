@@ -6,11 +6,14 @@ import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
+import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
+
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
 import { isPaymentError } from './handlePaymentError';
@@ -45,7 +48,13 @@ export async function createMarkdownFile(
 
   if (result.isErr()) return;
 
-  const { documentId } = result.value;
+  const { documentId, documentMetadata, token } = result.value;
+
+  seedDocumentLoadBundle(documentId, {
+    documentMetadata,
+    userAccessLevel: AccessLevel.owner,
+    token,
+  });
 
   setPreviewOnCreate({
     itemId: documentId,
@@ -101,7 +110,13 @@ export async function createTask(
 
   if (result.isErr()) return;
 
-  const { documentId } = result.value;
+  const { documentId, documentMetadata, token } = result.value;
+
+  seedDocumentLoadBundle(documentId, {
+    documentMetadata,
+    userAccessLevel: AccessLevel.owner,
+    token,
+  });
 
   setPreviewOnCreate({
     itemId: documentId,
