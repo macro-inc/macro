@@ -461,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
     let mcp_redirect_uri = format!(
         "{}/mcp/servers/auth/callback",
-        DocumentCognitionServiceUrl::new()?.to_string(),
+        DocumentCognitionServiceUrl::new()?,
     );
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
