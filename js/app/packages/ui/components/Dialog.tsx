@@ -38,9 +38,7 @@ export function Dialog(props: DialogProps) {
             ref={props.contentRef}
             class={cn(
               'overflow-hidden portal-scope isolate',
-              props.fullscreen
-                ? 'size-full'
-                : 'w-200 max-w-[calc(100vw-16px)]',
+              props.fullscreen ? 'size-full' : 'w-200 max-w-[calc(100vw-16px)]',
               props.class
             )}
             onCloseAutoFocus={props.onCloseAutoFocus}
