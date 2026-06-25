@@ -1,10 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
-  GithubPullRequestChecksContent,
-  GithubPullRequestDetailsContent,
+  GithubPullRequestDetailsRows,
   SidePanel,
 } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -17,10 +17,12 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
+import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
 import ClockIcon from '@phosphor/clock.svg';
@@ -471,6 +473,7 @@ function GithubSectionConditional(props: {
     props.documentId,
     props.isTask
   );
+  const { openWithSplit } = useSplitLayout();
 
   const pullRequests = createMemo((): GithubPullRequestWithDetails[] => {
     if (!props.isTask || query.isLoading || query.isError) return [];
@@ -488,24 +491,44 @@ function GithubSectionConditional(props: {
         <div class="flex flex-col gap-4">
           <For each={pullRequests()}>
             {(pr, index) => {
-              const enrichment = () => pr;
               const title = () => pr.name?.trim() || pr.displayName;
+              const openPullRequest = () => {
+                if (USE_MACRO_PR_SUMMARY_BLOCK && pr.foreignEntityId) {
+                  openWithSplit(
+                    {
+                      type: 'pr',
+                      id: pr.foreignEntityId,
+                    },
+                    { referredFrom: null }
+                  );
+                  return;
+                }
+                openExternalUrl(pr.url);
+              };
 
               return (
                 <div
                   class={cn(
-                    'flex flex-col gap-3',
+                    'flex flex-col',
                     index() > 0 && 'border-t border-edge-muted pt-4'
                   )}
                 >
-                  <div class="min-w-0 text-xs font-medium text-ink">
-                    <span class="truncate">{title()}</span>
-                  </div>
-                  <GithubPullRequestDetailsContent enrichment={enrichment} />
-                  <div class="flex flex-col gap-1">
-                    <div class="text-xs font-medium text-ink-muted">Checks</div>
-                    <GithubPullRequestChecksContent enrichment={enrichment} />
-                  </div>
+                  <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)]">
+                    <span class="text-ink-muted truncate self-start pt-[0.3125rem]">
+                      PR
+                    </span>
+                    <div class="min-w-0 max-w-full overflow-hidden self-start py-0.5">
+                      <button
+                        type="button"
+                        class="block min-w-0 max-w-full text-left whitespace-normal wrap-break-word leading-snug underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+                        title={title()}
+                        onClick={openPullRequest}
+                      >
+                        {title()}
+                      </button>
+                    </div>
+                    <GithubPullRequestDetailsRows enrichment={pr} />
+                  </SidePanel.Grid>
                 </div>
               );
             }}

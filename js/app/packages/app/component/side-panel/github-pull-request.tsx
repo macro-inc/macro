@@ -139,60 +139,81 @@ export function GithubPullRequestDetailsContent(props: {
     <Show when={props.enrichment()} fallback={<SidePanel.Loading />}>
       {(enrichment) => (
         <SidePanel.Grid>
-          <Show when={enrichment().authorLogin}>
-            {(authorLogin) => (
-              <SidePanel.Row label="Author">
-                <SidePanel.Pill>
-                  <img
-                    src={githubAvatarUrl(authorLogin())}
-                    alt={authorLogin()}
-                    class="size-3.5 rounded-full shrink-0"
-                    loading="lazy"
-                  />
-                  <span class="truncate">{authorLogin()}</span>
-                </SidePanel.Pill>
-              </SidePanel.Row>
-            )}
-          </Show>
-          <SidePanel.Row label="Repository">
-            <span class="truncate">
-              {enrichment().owner}/{enrichment().repo}
-            </span>
-          </SidePanel.Row>
-          <Show when={enrichment().status}>
-            {(status) => (
-              <SidePanel.Row label="Status">
-                <GithubPullRequestStatusChip
-                  status={status()}
-                  class="text-xs px-1.5 py-0.5 gap-1"
-                />
-              </SidePanel.Row>
-            )}
-          </Show>
-          <Show
-            when={
-              enrichment().additions != null || enrichment().deletions != null
-            }
-          >
-            <SidePanel.Row label="Changes">
-              <span class="text-success">+{enrichment().additions ?? 0}</span>
-              <span class="text-ink-extra-muted">/</span>
-              <span class="text-failure">−{enrichment().deletions ?? 0}</span>
-            </SidePanel.Row>
-          </Show>
-          <SidePanel.Row label="GitHub">
-            <a
-              href={enrichment().url}
-              target="_blank"
-              rel="noreferrer"
-              class="min-w-0 truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
-            >
-              {enrichment().displayName}
-            </a>
-          </SidePanel.Row>
+          <GithubPullRequestDetailsRows enrichment={enrichment()} />
         </SidePanel.Grid>
       )}
     </Show>
+  );
+}
+
+export function GithubPullRequestDetailsRows(props: {
+  enrichment: GithubPullRequestWithPanelDetails;
+}) {
+  return (
+    <>
+      <SidePanel.Row label="Author">
+        <SidePanel.Pill>
+          <Show
+            when={props.enrichment.authorLogin}
+            fallback={
+              <>
+                <span class="skeleton-shimmer size-3.5 rounded-full bg-ink/10" />
+                <span class="skeleton-shimmer h-3 w-16 rounded-full bg-ink/10" />
+              </>
+            }
+          >
+            {(authorLogin) => (
+              <>
+                <img
+                  src={githubAvatarUrl(authorLogin())}
+                  alt={authorLogin()}
+                  class="size-3.5 rounded-full shrink-0"
+                  loading="lazy"
+                />
+                <span class="truncate">{authorLogin()}</span>
+              </>
+            )}
+          </Show>
+        </SidePanel.Pill>
+      </SidePanel.Row>
+      <SidePanel.Row label="Repository">
+        <span class="truncate">
+          {props.enrichment.owner}/{props.enrichment.repo}
+        </span>
+      </SidePanel.Row>
+      <Show when={props.enrichment.status}>
+        {(status) => (
+          <SidePanel.Row label="Status">
+            <GithubPullRequestStatusChip
+              status={status()}
+              class="text-xs px-1.5 py-0.5 gap-1"
+            />
+          </SidePanel.Row>
+        )}
+      </Show>
+      <Show
+        when={
+          props.enrichment.additions != null ||
+          props.enrichment.deletions != null
+        }
+      >
+        <SidePanel.Row label="Changes">
+          <span class="text-success">+{props.enrichment.additions ?? 0}</span>
+          <span class="text-ink-extra-muted">/</span>
+          <span class="text-failure">−{props.enrichment.deletions ?? 0}</span>
+        </SidePanel.Row>
+      </Show>
+      <SidePanel.Row label="GitHub">
+        <a
+          href={props.enrichment.url}
+          target="_blank"
+          rel="noreferrer"
+          class="min-w-0 truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+        >
+          {props.enrichment.displayName}
+        </a>
+      </SidePanel.Row>
+    </>
   );
 }
 
