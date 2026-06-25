@@ -17,6 +17,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
     .with({ type: 'project' }, (e) => e.name)
     .with({ type: 'channel' }, (e) => e.name)
     .with({ type: 'channel_message' }, (e) => e.channelName)
+    .with({ type: 'channel_thread' }, (e) => e.channelName)
     .with({ type: 'email' }, (e) => e.name || '(No Subject)')
     .with({ type: 'chat' }, (e) => e.name)
     .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))

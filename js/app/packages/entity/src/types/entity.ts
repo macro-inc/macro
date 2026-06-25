@@ -3,8 +3,12 @@ import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
+  SoupCountedReaction,
   SoupLabel,
+  SoupMessageAttachment,
+  SoupMessageSender,
   SoupProperty,
+  SoupThreadReply,
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 
@@ -77,6 +81,29 @@ export type ChannelMessageEntity = EntityBase & {
   threadId?: string;
   senderId: string;
   content: string;
+};
+
+export type ChannelThreadEntity = EntityBase & {
+  type: 'channel_thread';
+  channelId: string;
+  channelName: string;
+  channelType?: ChannelEntity['channelType'];
+  messageId: string;
+  threadId: string;
+  senderId: string;
+  sender: SoupMessageSender;
+  content: string;
+  attachments: SoupMessageAttachment[];
+  reactions: SoupCountedReaction[];
+  editedAt?: DateValue | null;
+  deletedAt?: DateValue | null;
+  thread: {
+    replyCount: number;
+    latestReplyAt?: DateValue | null;
+    preview: SoupThreadReply[];
+  };
+  replyCount?: number;
+  latestReplyAt?: DateValue | null;
 };
 
 export type ChatEntity = EntityBase & {
@@ -228,6 +255,7 @@ export type CrmContactEntity = EntityBase & {
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
+  | ChannelThreadEntity
   | ChatEntity
   | DocumentEntity
   | TaskEntity
@@ -243,6 +271,7 @@ export type EntityData =
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'channel',
   'channel_message',
+  'channel_thread',
   'chat',
   'document',
   'email',
@@ -308,6 +337,12 @@ export const isChannelMessageEntity = (
   entity: EntityData
 ): entity is ChannelMessageEntity => {
   return entity.type === 'channel_message';
+};
+
+export const isChannelThreadEntity = (
+  entity: EntityData
+): entity is ChannelThreadEntity => {
+  return entity.type === 'channel_thread';
 };
 
 const _isChatEntity = (entity: EntityData): entity is ChatEntity => {
