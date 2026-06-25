@@ -18,6 +18,7 @@ struct FakeContext {
     message_count: i64,
     document_mentions: Vec<ChannelDocumentMention>,
     bot_profile: Option<BotSenderProfile>,
+    bot_profile_lookup_count: Arc<Mutex<usize>>,
     thread_context: ThreadNotificationContext,
 }
 
@@ -30,6 +31,7 @@ impl Default for FakeContext {
                 name: "Test Bot".to_string(),
                 avatar_url: Some("https://example.com/bot.png".to_string()),
             }),
+            bot_profile_lookup_count: Arc::new(Mutex::new(0)),
             thread_context: ThreadNotificationContext::default(),
         }
     }
@@ -74,6 +76,7 @@ impl ChannelSideEffectContext for FakeContext {
     }
 
     async fn get_bot_sender_profile(&self, _bot_id: BotId) -> Option<BotSenderProfile> {
+        *self.bot_profile_lookup_count.lock().unwrap() += 1;
         self.bot_profile.clone()
     }
 }
@@ -145,6 +148,78 @@ fn user(email: &str) -> MacroUserIdStr<'static> {
 
 fn users(emails: &[&str]) -> Vec<MacroUserIdStr<'static>> {
     emails.iter().map(|email| user(email)).collect()
+}
+
+#[tokio::test]
+async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
+    let lookup_count = Arc::new(Mutex::new(0));
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            bot_profile: None,
+            bot_profile_lookup_count: lookup_count.clone(),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeSearch::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::Bot(bot_id::MACRO_AI_BOT_ID),
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("Macro AI should have a built-in profile");
+
+    assert_eq!(profile.name, bot_id::MACRO_AI_NAME);
+    assert_eq!(profile.avatar_url, None);
+    assert_eq!(*lookup_count.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn non_macro_bot_profile_uses_context_lookup() {
+    let lookup_count = Arc::new(Mutex::new(0));
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            bot_profile_lookup_count: lookup_count.clone(),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        FakeNotifications::default(),
+        FakeSearch::default(),
+        FakeContacts::default(),
+    );
+    let now = Utc::now();
+    let message = MutatedMessage {
+        id: Uuid::new_v4(),
+        channel_id: Uuid::new_v4(),
+        thread_id: None,
+        sender_id: Sender::Bot(BotId::from_uuid(Uuid::new_v4())),
+        content: "hello".to_string(),
+        created_at: now,
+        updated_at: now,
+        edited_at: None,
+        deleted_at: None,
+    };
+
+    let profile = service
+        .bot_profile_for_message(&message)
+        .await
+        .expect("non-Macro bot profile should come from context");
+
+    assert_eq!(profile.name, "Test Bot");
+    assert_eq!(*lookup_count.lock().unwrap(), 1);
 }
 
 #[tokio::test]
