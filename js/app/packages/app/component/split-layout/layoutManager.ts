@@ -1148,6 +1148,12 @@ export function createSplitLayout(
       plan.push({ split, targetIdx });
     }
 
+    // A simultaneous multi-split reorder (e.g. [A, B] -> [B, A]) can't be
+    // applied one split at a time without tripping reattach's duplicate guard
+    // after the index has already moved. Only walk history when a single split
+    // moved; fall back to a clean rebuild otherwise.
+    if (plan.length > 1) return false;
+
     for (const { split, targetIdx } of plan) {
       const cause: NavigationCause =
         targetIdx < split.history.index ? 'history-back' : 'history-forward';
