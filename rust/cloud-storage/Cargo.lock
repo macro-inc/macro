@@ -3740,6 +3740,7 @@ dependencies = [
  "macro_env_var",
  "macro_middleware",
  "macro_project_utils",
+ "macro_queues",
  "macro_service_urls",
  "macro_sha_count_client",
  "macro_tower_layers",
