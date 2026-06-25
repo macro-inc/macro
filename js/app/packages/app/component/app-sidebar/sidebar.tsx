@@ -303,11 +303,6 @@ type SidebarHotkeyDeps = {
 
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
-const isComponentEntry =
-  (id: string) =>
-  (entry: SplitContent): boolean =>
-    entry.type === 'component' && entry.id === id;
-
 const isMarkdownDocumentsParams = (
   params: SidebarItem['params'] | undefined
 ): boolean => {
@@ -319,12 +314,9 @@ const isMarkdownDocumentsParams = (
 };
 
 /**
- * Navigate to a sidebar view, preserving prior state when possible.
- *
- * If the active split's history already contains an entry for this view, jump
- * back to it so search text, filters, preview state, etc. are restored from
- * that entry. Otherwise push a fresh entry. Holding shift bypasses the lookup
- * and forces a new entry / new split.
+ * Navigate to a sidebar view by pushing a fresh entry into the active split.
+ * Holding shift opens it in a new split. Use in-app back/forward to return to
+ * prior entries.
  */
 function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
@@ -351,14 +343,6 @@ function navigateToSidebarView(args: {
       controller.toggleMarkdownFilter();
       return activeSplit;
     }
-  }
-
-  if (
-    !params &&
-    !shiftKey &&
-    activeSplit?.goToEntry(isComponentEntry(viewId))
-  ) {
-    return activeSplit;
   }
 
   return openWithSplit(

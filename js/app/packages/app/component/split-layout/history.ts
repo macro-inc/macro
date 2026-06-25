@@ -15,13 +15,6 @@ export type History<T extends object> = {
    * (e.g. captured per-entry state) before navigating away.
    */
   replaceCurrent: (next: T) => void;
-  /**
-   * Jump the current index to `n` (clamped to the valid range). Returns the
-   * item at that position, or null if the history is empty. Use this to
-   * navigate to a known prior entry in one step rather than walking via
-   * `back()`/`forward()`.
-   */
-  goToIndex: (n: number) => T | null;
   remove: (predicate: (item: T) => boolean) => T | null;
 };
 
@@ -83,13 +76,6 @@ export function createHistory<T extends object>(): History<T> {
     return items[index()];
   };
 
-  const goToIndex = (n: number) => {
-    if (items.length === 0) return null;
-    const clamped = Math.max(0, Math.min(items.length - 1, n));
-    setIndex(clamped);
-    return items[clamped];
-  };
-
   const remove = (predicate: (item: T) => boolean) => {
     const prevItems = items;
     const prevIndex = index();
@@ -133,7 +119,6 @@ export function createHistory<T extends object>(): History<T> {
     push,
     merge,
     replaceCurrent,
-    goToIndex,
     forward,
     canGoBack,
     canGoForward,
