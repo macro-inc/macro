@@ -30,6 +30,17 @@ pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
 
+/// Base-compose services that bind fixed host ports but aren't in our inventory
+/// (reached via the proxy / container network, not the host). For named
+/// instances we drop their host-port bindings so concurrent stacks don't collide
+/// on 8787/6969/8096/8100.
+const AUX_HOST_PORT_SERVICES: &[&str] = &[
+    "sync_service",
+    "websocket_service",
+    "lexical_service",
+    "static_file_cdn",
+];
+
 /// The host directory bind-mounted into FusionAuth at
 /// `/usr/local/fusionauth/kickstart`. The kickstart writer fills it.
 pub fn kickstart_dir(instance: &Instance) -> PathBuf {
@@ -211,6 +222,9 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
                 format!("{}:9600", instance.port(Port::OpenSearchPa)),
             ])),
         );
+        // The auxiliary services' host-port bindings are dropped in `apply_tags`
+        // (an empty `ports:` can't be expressed in the typed model — it needs the
+        // `!override []` merge tag).
     }
 }
 
@@ -251,9 +265,23 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
             }
         }
         if !instance.is_default() {
+            // Remapped infra ports REPLACE the inherited `ports:`.
             for infra in ["postgres", "redis", "search"] {
                 if let Some(s) = services.get_mut(infra).and_then(Value::as_mapping_mut) {
                     override_in_place(s, "ports");
+                }
+            }
+            // Drop the aux services' fixed host ports (reached via the proxy /
+            // container network) so concurrent named stacks don't collide. An
+            // empty `ports:` can't be built in the typed model, so inject the
+            // `!override []` directly: `{ports: !override []}` merges over the
+            // base service, replacing its host-port list with nothing.
+            for name in AUX_HOST_PORT_SERVICES {
+                let entry = services
+                    .entry(Value::from(*name))
+                    .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()));
+                if let Some(m) = entry.as_mapping_mut() {
+                    m.insert("ports".into(), override_tag(Value::Sequence(vec![])));
                 }
             }
         }
@@ -306,16 +334,18 @@ fn reset_null() -> Value {
     }))
 }
 
+/// Wrap a value in the `!override` merge tag (replace-not-merge).
+fn override_tag(value: Value) -> Value {
+    Value::Tagged(Box::new(TaggedValue {
+        tag: Tag::new("!override"),
+        value,
+    }))
+}
+
 /// Wrap an existing field value in the `!override` tag (replace-not-merge).
 fn override_in_place(service: &mut serde_yaml::Mapping, field: &str) {
     if let Some(existing) = service.remove(field) {
-        service.insert(
-            field.into(),
-            Value::Tagged(Box::new(TaggedValue {
-                tag: Tag::new("!override"),
-                value: existing,
-            })),
-        );
+        service.insert(field.into(), override_tag(existing));
     }
 }
 
