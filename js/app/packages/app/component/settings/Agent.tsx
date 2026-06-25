@@ -24,12 +24,10 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import {
   IntegrationRow,
-  SETTINGS_INPUT_CLASS,
   SettingsCard,
   SettingsPage,
   SettingsSection,
 } from './primitives';
-import { cn } from '@ui';
 
 /** Best-effort hostname for an MCP server URL — friendlier than the raw URL. */
 function hostFromUrl(url: string): string {
@@ -152,7 +150,7 @@ function AddServerForm(props: {
               <span class="text-xs text-ink-muted">Name</span>
               <input
                 type="text"
-                class={cn(SETTINGS_INPUT_CLASS, 'w-full')}
+                class="settings-input w-full"
                 placeholder="My MCP Server"
                 value={name()}
                 onInput={(e) => setName(e.currentTarget.value)}
@@ -169,7 +167,7 @@ function AddServerForm(props: {
               <span class="text-xs text-ink-muted">URL</span>
               <input
                 type="url"
-                class={cn(SETTINGS_INPUT_CLASS, 'w-full')}
+                class="settings-input w-full"
                 placeholder="https://example.com/mcp"
                 value={url()}
                 onInput={(e) => setUrl(e.currentTarget.value)}

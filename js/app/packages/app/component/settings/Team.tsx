@@ -751,22 +751,16 @@ function EmptyTeamState() {
 
 /** Shared styling for the editable Name/Slug fields in the team-details card.
  *  Narrows on mobile so the field + Save/Cancel cluster fits a phone width. */
-const TEAM_FIELD_CLASS =
-  'w-56 mobile:w-32 h-9 px-3 rounded-lg border bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent';
+/** Width for the editable Name/Slug fields; pairs with the shared `settings-input`
+ *  utility. Narrows on mobile so the field + Save/Cancel cluster fits a phone. */
+const TEAM_FIELD_CLASS = 'settings-input w-56 mobile:w-32';
 
-/** Disabled field shown to non-owners, with a tooltip explaining why it's locked. */
+/** Disabled field shown to non-owners, with a tooltip explaining why it's locked.
+ *  The muted look comes from `settings-input`'s `:disabled` styling. */
 function ReadOnlyField(props: { value: string; tooltip: string }) {
   return (
     <Tooltip label={props.tooltip} placement="top">
-      <input
-        type="text"
-        value={props.value}
-        disabled
-        class={cn(
-          TEAM_FIELD_CLASS,
-          'border-edge-muted text-ink-muted pointer-events-none opacity-70'
-        )}
-      />
+      <input type="text" value={props.value} disabled class={TEAM_FIELD_CLASS} />
     </Tooltip>
   );
 }
@@ -1128,7 +1122,7 @@ function TeamManagement(props: {
                       }
                     }}
                     placeholder="Enter team name"
-                    class={cn(TEAM_FIELD_CLASS, 'border-edge-muted')}
+                    class={TEAM_FIELD_CLASS}
                   />
                   <Show when={hasTeamNameChanged()}>
                     <SaveCancelButtons
@@ -1177,10 +1171,7 @@ function TeamManagement(props: {
                       }}
                       placeholder="Enter team slug"
                       class={TEAM_FIELD_CLASS}
-                      classList={{
-                        'border-failure': !!teamSlugError(),
-                        'border-edge-muted': !teamSlugError(),
-                      }}
+                      aria-invalid={!!teamSlugError()}
                     />
                     <Show when={teamSlugError()}>
                       <p class="text-xs text-failure-ink text-right">

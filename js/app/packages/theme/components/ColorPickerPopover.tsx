@@ -1,4 +1,5 @@
 import { Popover } from '@kobalte/core/popover';
+import { Slider } from '@kobalte/core/slider';
 import { cn, Layer } from '@ui';
 import {
   batch,
@@ -75,49 +76,41 @@ function ColorField(props: {
   );
 }
 
-/** Vertical hue slider (0 → 360). */
+// Vertical hue gradient, 0° at the top → 360° at the bottom. Pairs with the
+// slider's `inverted` flag so the thumb (value 0 at top) tracks the gradient.
+const HUE_GRADIENT =
+  'linear-gradient(to bottom, oklch(0.7 0.2 0deg), oklch(0.7 0.2 60deg), oklch(0.7 0.2 120deg), oklch(0.7 0.2 180deg), oklch(0.7 0.2 240deg), oklch(0.7 0.2 300deg), oklch(0.7 0.2 360deg))';
+
+/** Vertical hue slider (0 → 360), backed by Kobalte's generic Slider so pointer
+ *  dragging and keyboard control come for free; we only style the rail/thumb.
+ *  `inverted` keeps 0° at the top (matching the prior hand-rolled slider). */
 function HueSlider(props: { h: () => number; onH: (n: number) => void }) {
-  let ref!: HTMLDivElement;
-  const [dragging, setDragging] = createSignal(false);
-
-  const apply = (e: PointerEvent) => {
-    const r = ref.getBoundingClientRect();
-    const y = Math.min(Math.max(e.clientY - r.top, 0), r.height) / r.height;
-    props.onH(y * 360);
-  };
-
-  onMount(() => {
-    const move = (e: PointerEvent) => dragging() && apply(e);
-    const up = () => setDragging(false);
-    document.addEventListener('pointermove', move, { passive: true });
-    document.addEventListener('pointerup', up, { passive: true });
-    onCleanup(() => {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
-    });
-  });
-
   return (
-    <div
-      ref={ref}
-      class="relative h-40 w-3 shrink-0 cursor-pointer touch-none rounded-full"
-      style={{
-        background:
-          'linear-gradient(to bottom, oklch(0.7 0.2 0deg), oklch(0.7 0.2 60deg), oklch(0.7 0.2 120deg), oklch(0.7 0.2 180deg), oklch(0.7 0.2 240deg), oklch(0.7 0.2 300deg), oklch(0.7 0.2 360deg))',
-      }}
-      onPointerDown={(e) => {
-        setDragging(true);
-        apply(e);
-      }}
+    <Slider
+      class="relative flex h-40 w-3 shrink-0 touch-none select-none"
+      orientation="vertical"
+      inverted
+      minValue={0}
+      maxValue={360}
+      step={1}
+      value={[props.h()]}
+      onChange={(v) => props.onH(v[0] ?? 0)}
+      aria-label="Hue"
     >
-      <div
-        class={cn(RING, 'left-1/2')}
-        style={{
-          top: `${(props.h() / 360) * 100}%`,
-          'background-color': `oklch(0.7 0.2 ${props.h()}deg)`,
-        }}
-      />
-    </div>
+      <Slider.Track
+        class="relative h-full w-full rounded-full"
+        style={{ background: HUE_GRADIENT }}
+      >
+        {/* Kobalte positions the thumb on the main (vertical) axis via `bottom` +
+            its own transform; we only center it horizontally and paint it. */}
+        <Slider.Thumb
+          class="absolute left-1/2 -ml-[7px] size-3.5 rounded-full border-2 border-white shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
+          style={{ 'background-color': `oklch(0.7 0.2 ${props.h()}deg)` }}
+        >
+          <Slider.Input />
+        </Slider.Thumb>
+      </Slider.Track>
+    </Slider>
   );
 }
 

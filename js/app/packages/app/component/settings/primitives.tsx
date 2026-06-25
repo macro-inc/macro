@@ -17,12 +17,6 @@ import { cn, Layer } from '@ui';
  *   </SettingsPage>
  */
 
-/** Shared input styling so text fields look the same across every settings tab. */
-export const SETTINGS_INPUT_CLASS =
-  'h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-sm text-ink ' +
-  'outline-none transition-colors placeholder:text-ink-extra-muted ' +
-  'hover:border-edge focus:border-accent';
-
 /**
  * Scrolling page shell: a centered, max-width column with a large title and an
  * optional one-line description, followed by the page's sections.
