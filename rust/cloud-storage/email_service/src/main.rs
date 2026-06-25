@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let search_event_queue = macro_queues::SearchEventQueue::new();
-    let backfill_queue = macro_queues::BackfillQueue::new();
+    let backfill_queue = macro_queues::EmailBackfillQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();

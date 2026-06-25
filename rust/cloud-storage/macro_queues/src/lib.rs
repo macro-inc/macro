@@ -577,17 +577,8 @@ queue! {
             dev: "email-service-gmail-webhook-retry-queue-dev",
             prod: "email-service-gmail-webhook-retry-queue-prod",
         },
-        /// Queue for the email backfill process (email_service `BACKFILL_QUEUE`).
-        pub BackfillQueue {
-            local: "email-service-backfill-queue",
-            dev: "email-service-backfill-queue-dev",
-            prod: "email-service-backfill-queue-prod",
-        },
-        /// Queue for the email backfill process
-        /// (authentication_service `EMAIL_BACKFILL_QUEUE`).
-        ///
-        /// Note: this is the same backing queue as `BackfillQueue`, exposed
-        /// under a second env var name. See `queue-migration.md`.
+        /// Queue for the email backfill process (authentication_service
+        /// `EMAIL_BACKFILL_QUEUE` and email_service `BACKFILL_QUEUE`).
         pub EmailBackfillQueue {
             local: "email-service-backfill-queue",
             dev: "email-service-backfill-queue-dev",

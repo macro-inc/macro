@@ -192,10 +192,6 @@ fn exported_queues_match_local_values() {
         "email-service-gmail-inbox-retry-queue",
     );
     assert_eq!(
-        queues.backfill_queue.as_ref(),
-        "email-service-backfill-queue",
-    );
-    assert_eq!(
         queues.email_backfill_queue.as_ref(),
         "email-service-backfill-queue",
     );
@@ -273,10 +269,6 @@ fn exported_queues_match_dev_values() {
     assert_eq!(
         queues.gmail_inbox_sync_retry_queue.as_ref(),
         "email-service-gmail-webhook-retry-queue-dev",
-    );
-    assert_eq!(
-        queues.backfill_queue.as_ref(),
-        "email-service-backfill-queue-dev",
     );
     assert_eq!(
         queues.email_backfill_queue.as_ref(),
@@ -365,10 +357,6 @@ fn exported_queues_match_prod_values() {
     assert_eq!(
         queues.gmail_inbox_sync_retry_queue.as_ref(),
         "email-service-gmail-webhook-retry-queue-prod",
-    );
-    assert_eq!(
-        queues.backfill_queue.as_ref(),
-        "email-service-backfill-queue-prod",
     );
     assert_eq!(
         queues.email_backfill_queue.as_ref(),
@@ -462,10 +450,6 @@ fn exported_queue_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         GmailInboxSyncRetryQueue::local().override_env_var_name(),
         "OVERRIDE_GMAIL_INBOX_SYNC_RETRY_QUEUE",
-    );
-    assert_eq!(
-        BackfillQueue::local().override_env_var_name(),
-        "OVERRIDE_BACKFILL_QUEUE",
     );
     assert_eq!(
         EmailBackfillQueue::local().override_env_var_name(),

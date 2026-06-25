@@ -29,7 +29,6 @@ x-local-e2e-env: &local-e2e-env
   # Queue names now live in the `macro_queues` crate; these OVERRIDE_* vars point
   # the local-e2e services at the localstack queues (OVERRIDE_ wins over the
   # per-environment constant regardless of ENVIRONMENT).
-  OVERRIDE_BACKFILL_QUEUE: email-service-backfill-queue
   OVERRIDE_CHAT_DELETE_QUEUE: delete-chat-handler-queue
   OVERRIDE_CONTACTS_QUEUE: contacts-queue
   OVERRIDE_CONVERT_QUEUE: convert-service-queue
