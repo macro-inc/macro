@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let contacts_ingress = contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.contacts_queue.clone(),
+            macro_queues::ContactsQueue::new()?.to_string(),
         ),
     };
 
