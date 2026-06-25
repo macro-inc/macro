@@ -23,18 +23,19 @@ pub fn build_appimage() -> Workflow {
                 },
             )),
         )
-        .add_job("build-appimage", build_appimage_job())
+        .add_job("build-appimage", build_appimage_job("${{ inputs.ref }}"))
 }
 
-fn build_appimage_job() -> Job {
+/// Build the AppImage job, checking out and naming artifacts from `ref_expr`.
+pub fn build_appimage_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build AppImage")
         .runs_on(runners::Runner::LinuxRustCi.to_string())
-        .add_step(steps::checkout_ref("${{ inputs.ref }}"))
+        .add_step(steps::checkout_ref(ref_expr))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_cachix())
-        .add_step(steps::derive_artifact_metadata("${{ inputs.ref }}"))
+        .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
         .add_step(steps::upload_artifact(

@@ -19,19 +19,20 @@ pub fn build_dmg() -> Workflow {
                 },
             )),
         )
-        .add_job("build-dmg", build_dmg_job())
+        .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
 }
 
-fn build_dmg_job() -> Job {
+/// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
+pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
         .runs_on("macos-15")
-        .add_step(steps::checkout_ref("${{ inputs.ref }}"))
+        .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
         .add_step(install_nix_macos())
         .add_step(steps::setup_cachix())
         .add_step(configure_signing_identity())
-        .add_step(steps::derive_artifact_metadata("${{ inputs.ref }}"))
+        .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_dmg())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
