@@ -25,9 +25,6 @@ let nextOffset = 0;
  *  AI_PEER_COUNT, two live editors can never collide. */
 export const nextAiPeerId = (): bigint => {
   const id = AI_PEER_BASE + BigInt(nextOffset);
-  nextOffset += 1;
-  if (nextOffset > AI_PEER_COUNT) {
-    throw new Error('AI peer id overflow');
-  }
+  nextOffset = (nextOffset + 1) % AI_PEER_COUNT;
   return id;
 };

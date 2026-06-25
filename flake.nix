@@ -881,7 +881,6 @@
             {
               buildInputs = shellTools ++ libraries;
               PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
               # Keep local cargo-lambda builds on the same aws-lc-sys path as
