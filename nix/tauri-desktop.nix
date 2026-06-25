@@ -194,11 +194,11 @@
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
-          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<'EOF'
+          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<EOF
           [Desktop Entry]
           Type=Application
           Name=Macro
-          Exec=app %U
+          Exec=$out/bin/app %U
           Icon=macro
           Categories=Office;Utility;
           MimeType=x-scheme-handler/macro;
