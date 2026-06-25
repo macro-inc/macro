@@ -4,7 +4,12 @@ import type { Session } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';
 import type { Doc } from './doc';
 import type { DocumentOp } from './editor';
-import { realRandomSource, type OpResult, runQueue, type DocumentOpQueueParams } from './queue';
+import {
+  type DocumentOpQueueParams,
+  type OpResult,
+  realRandomSource,
+  runQueue,
+} from './queue';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
 export function docIds(session: Session): Set<string> {

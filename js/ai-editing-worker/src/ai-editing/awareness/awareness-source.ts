@@ -58,7 +58,7 @@ export const AI_NAMES = [
   'Amara',
   'Juno',
   'Silas',
-  'Noemi'
+  'Noemi',
 ].map((n) => `${n} (AI)`);
 /** Palette names must resolve to `--color-<name>` (see collaboration/color.ts). */
 export const COLORS = [

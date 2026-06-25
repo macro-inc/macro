@@ -19,7 +19,11 @@ import {
   loadSnapshot,
   toSnapshot,
 } from './ai-editing/ai-toolkit';
-import { nextAiPeerId, realAwarenessSource, sharedPeerPool } from './ai-editing/awareness';
+import {
+  nextAiPeerId,
+  realAwarenessSource,
+  sharedPeerPool,
+} from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';

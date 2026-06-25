@@ -145,7 +145,6 @@ describe('formatText animator — full flow', () => {
       x: { type: 'highlight', node: 't1', span: { start: 4, end: 6 } },
     });
   });
-
 });
 
 describe('setText animator — select-all, delete, type (full flow)', () => {

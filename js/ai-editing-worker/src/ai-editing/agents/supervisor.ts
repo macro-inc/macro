@@ -8,7 +8,7 @@ import INTERPRET from '../prompts/INTERPRET.md';
 import SHARED from '../prompts/SHARED.md';
 import SUPERVISOR from '../prompts/SUPERVISOR.md';
 import { TokenTracker } from '../token-tracker';
-import { createDispatchTool, type Writer, createImBlockedTool } from '../tools';
+import { createDispatchTool, createImBlockedTool, type Writer } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
