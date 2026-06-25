@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
     let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     ));
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(

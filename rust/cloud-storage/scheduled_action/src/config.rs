@@ -14,7 +14,7 @@ use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-pub use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
     /// SQS URL for the notification ingress queue.
@@ -61,8 +61,8 @@ pub struct Config {
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
     pub document_storage_service_cloudfront_signer_private_key_secret_name:
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
-    /// Shared secret for authenticating internal service-to-service calls.
-    pub internal_api_secret_key: InternalApiSecretKey,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
