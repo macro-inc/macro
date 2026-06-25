@@ -613,6 +613,15 @@ where
         message_id: Uuid,
         req: PatchMessageRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let PatchMessageRequest {
+            content,
+            mentions: replacement_mentions,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+            notification_policy,
+        } = req;
+
         let actor_storage_id = actor.to_storage_string();
         let owner = self
             .repo
@@ -626,10 +635,8 @@ where
             ));
         }
 
-        let notification_policy = req.notification_policy;
-        let replacement_mentions = req.mentions.clone();
-        let attachments_to_delete = req.attachment_ids_to_delete.clone().unwrap_or_default();
-        let attachments_to_add = req.attachments_to_add.clone().unwrap_or_default();
+        let attachments_to_delete = attachment_ids_to_delete.clone().unwrap_or_default();
+        let attachments_to_add = attachments_to_add.clone().unwrap_or_default();
         let attachments_changed =
             !attachments_to_delete.is_empty() || !attachments_to_add.is_empty();
 
@@ -640,15 +647,15 @@ where
                 message_id,
                 attachments_to_delete,
                 attachments_to_add,
-                req.nonce.clone(),
+                nonce.clone(),
             )
             .await?;
         }
 
-        if let Some(content) = req.content.clone() {
+        if let Some(content) = content.as_ref() {
             let message = self
                 .repo
-                .patch_message(channel_id, message_id, content)
+                .patch_message(channel_id, message_id, content.clone())
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
@@ -735,7 +742,7 @@ where
                 actor: actor.clone(),
                 message: message.clone(),
                 recipients: participants,
-                nonce: req.nonce.clone(),
+                nonce,
                 posted_notification,
             });
 
@@ -751,7 +758,7 @@ where
         }
 
         if attachments_changed
-            && req.content.is_none()
+            && content.is_none()
             && actor.as_user().is_some()
             && let Err(err) = self
                 .repo
