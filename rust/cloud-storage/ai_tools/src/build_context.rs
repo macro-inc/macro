@@ -133,7 +133,10 @@ pub async fn build_tool_service_context_from_env(
     }
     let notification_queue = if enable_notification_queue {
         let notification_queue = macro_queues::NotificationQueue::new()?;
-        ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, notification_queue.to_string()))
+        ToolNotificationQueue::Sqs(SqsQueue::new(
+            aws_sqs_client,
+            notification_queue.to_string(),
+        ))
     } else {
         ToolNotificationQueue::NoOp
     };

@@ -96,8 +96,8 @@ async fn main() -> Result<(), Error> {
     tracing::info!("initiating lambda");
 
     let dynamo_table_name = DynamodbTable::new().context("DYNAMODB_TABLE must be set")?;
-    let upload_extract_queue = macro_queues::UploadExtractorQueue::new()
-        .context("UPLOAD_EXTRACTOR_QUEUE must be set")?;
+    let upload_extract_queue =
+        macro_queues::UploadExtractorQueue::new().context("UPLOAD_EXTRACTOR_QUEUE must be set")?;
 
     tracing::trace!("initialized env vars");
 
