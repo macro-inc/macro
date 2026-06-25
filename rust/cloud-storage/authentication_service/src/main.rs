@@ -181,9 +181,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get multiplexed redis connection")?;
 
+    let notification_queue = macro_queues::NotificationQueue::new()?;
+    let search_event_queue = macro_queues::SearchEventQueue::new()?;
+    let link_manager_queue = macro_queues::LinkManagerQueue::new()?;
+    let email_backfill_queue = macro_queues::EmailBackfillQueue::new()?;
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
-        config.notification_queue.to_string().clone(),
+        notification_queue.to_string(),
     );
     let notification_ingress_service = SqsNotificationIngress {
         queue: ingress_queue,
@@ -193,9 +197,9 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .search_event_queue(&config.search_event_queue)
-    .email_link_manager_queue(&config.link_manager_queue)
-    .email_backfill_queue(&config.email_backfill_queue);
+    .search_event_queue(&search_event_queue)
+    .email_link_manager_queue(&link_manager_queue)
+    .email_backfill_queue(&email_backfill_queue);
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
