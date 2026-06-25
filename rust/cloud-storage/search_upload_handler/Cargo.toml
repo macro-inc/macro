@@ -13,6 +13,7 @@ aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 s3_key = { path = "../s3_key" }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",

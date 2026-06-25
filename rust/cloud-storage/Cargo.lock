@@ -10977,6 +10977,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
+ "macro_queues",
  "macro_service_urls",
  "s3_key",
  "sqs_client",

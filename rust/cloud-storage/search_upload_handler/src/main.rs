@@ -11,7 +11,6 @@ use std::sync::Arc;
 mod handler;
 
 env_vars! {
-    struct SearchEventQueue;
     struct DocumentStorageServiceAuthKey;
 }
 
@@ -21,8 +20,8 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initiating lambda");
 
-    let search_event_queue =
-        SearchEventQueue::new().context("SEARCH_EVENT_QUEUE must be provided")?;
+    let search_event_queue = macro_queues::SearchEventQueue::new()
+        .context("SEARCH_EVENT_QUEUE must be provided")?;
 
     let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let dss_auth_key = DocumentStorageServiceAuthKey::new()
