@@ -1,7 +1,7 @@
+import { toXml } from '@macro-inc/lexical-core';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { toXmlText } from '../lib/convsersions';
 import {
   ConversionError,
   createSyncError,
@@ -52,7 +52,7 @@ export class XmlEndpoint extends OpenAPIRoute {
 
       if (rawDocument.success) {
         try {
-          const xml = toXmlText(rawDocument.data);
+          const xml = toXml(rawDocument.data);
           return c.json({ data: xml });
         } catch {
           throw new ConversionError('Failed to parse document snapshot');

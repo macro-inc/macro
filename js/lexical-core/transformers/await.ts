@@ -1,10 +1,6 @@
 import type { TextMatchTransformer } from '@lexical/markdown';
 import type { TextNode } from 'lexical';
-import {
-  $createAwaitNode,
-  $isAwaitNode,
-  AwaitNode,
-} from '../nodes/AwaitNode';
+import { $createAwaitNode, $isAwaitNode, AwaitNode } from '../nodes/AwaitNode';
 
 /**
  * Internal transformer for persisted await placeholders.
