@@ -20,7 +20,19 @@ function readShortSha(): string {
   }
 }
 
+function readBundleBuild(): string {
+  const value = process.env.BUNDLE_BUILD_NUMBER;
+  if (value == null || value === '') return Date.now().toString();
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      `BUNDLE_BUILD_NUMBER must be an unsigned integer, got ${JSON.stringify(value)}`
+    );
+  }
+  return value;
+}
+
 const shortSha = readShortSha();
+const bundleBuild = readBundleBuild();
 const appVersion = `${version}+${shortSha}`;
 
 function readGitBranch(): string {
@@ -67,6 +79,27 @@ function gitBranchHmrPlugin(): Plugin {
   };
 }
 
+function buildMetadataPlugin(): Plugin {
+  return {
+    name: 'macro-build-metadata',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'js-build-info.json',
+        source: `${JSON.stringify(
+          {
+            bundleBuild,
+            appVersion,
+          },
+          null,
+          2
+        )}\n`,
+      });
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
@@ -92,6 +125,7 @@ export const createAppViteConfig = (): UserConfigFn => {
           root: '../../',
         }),
         gitBranchHmrPlugin(),
+        buildMetadataPlugin(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
@@ -230,6 +264,7 @@ function getAssetsPath(mode: string, command: string): string {
 function defineEnv(mode: string, command: string) {
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
+    'import.meta.env.__JS_BUNDLE_BUILD__': JSON.stringify(bundleBuild),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),

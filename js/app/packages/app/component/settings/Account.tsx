@@ -668,8 +668,17 @@ type BundleDebugInfo = {
   nativeBuild: number;
 };
 
+const runtimeJsBuildInfo = {
+  bundleBuild: import.meta.env.__JS_BUNDLE_BUILD__,
+};
+
+function runtimeBundleMatches(info: BundleDebugInfo): boolean {
+  return String(info.bundleBuild) === runtimeJsBuildInfo.bundleBuild;
+}
+
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
+  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
@@ -679,13 +688,71 @@ function BundleVersionRow() {
   return (
     <Show when={bundleDebugInfo()}>
       {(info) => (
-        <Row label="Version">
-          <span class="text-sm text-ink-muted">
-            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'})
-            {' '}
-            - {info().nativeBuild}
-          </span>
-        </Row>
+        <>
+          <Row label="Version">
+            <button
+              type="button"
+              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => setShowBuildInfo(true)}
+            >
+              {info().bundleBuild}{' '}
+              ({info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
+              {info().nativeBuild}
+            </button>
+          </Row>
+          <Dialog
+            open={showBuildInfo()}
+            onOpenChange={setShowBuildInfo}
+            position="center"
+            class="w-120"
+          >
+            <Panel active depth={2} class="rounded-xl">
+              <Panel.Header class="px-6">
+                <Dialog.Title class="text-ink text-sm font-semibold">
+                  Version Info
+                </Dialog.Title>
+              </Panel.Header>
+              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
+                <div class="grid gap-2 text-sm">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Served</span>
+                    <span class="text-ink">
+                      {info().bundleBuild}{' '}
+                      ({info().source === 'embedded' ? 'app' : 'ota'})
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">iOS bundle</span>
+                    <span class="text-ink">{info().nativeBuild}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Runtime</span>
+                    <span
+                      class="text-right"
+                      classList={{
+                        'text-ink': runtimeBundleMatches(info()),
+                        'text-failure': !runtimeBundleMatches(info()),
+                      }}
+                    >
+                      {runtimeJsBuildInfo.bundleBuild}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Matches</span>
+                    <span
+                      classList={{
+                        'text-ink': runtimeBundleMatches(info()),
+                        'text-failure': !runtimeBundleMatches(info()),
+                      }}
+                    >
+                      {runtimeBundleMatches(info()) ? 'true' : 'false'}
+                    </span>
+                  </div>
+                </div>
+              </Panel.Body>
+            </Panel>
+          </Dialog>
+        </>
       )}
     </Show>
   );

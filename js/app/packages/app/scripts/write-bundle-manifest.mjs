@@ -15,6 +15,24 @@ function parseBuildNumber(name, fallback) {
   return Number(value);
 }
 
+function readGeneratedBundleBuild() {
+  try {
+    const buildInfo = JSON.parse(
+      readFileSync(join(packageDir, 'dist', 'js-build-info.json'), 'utf8')
+    );
+    const value = buildInfo.bundleBuild;
+    if (typeof value === 'string' && /^\d+$/.test(value)) {
+      return Number(value);
+    }
+    if (Number.isSafeInteger(value) && value >= 0) {
+      return value;
+    }
+  } catch {
+    // Fall back below for direct invocations that did not run Vite first.
+  }
+  return Date.now();
+}
+
 function gitSha() {
   try {
     return execSync('git rev-parse --short HEAD', {
@@ -29,7 +47,7 @@ function gitSha() {
 
 const manifest = {
   schemaVersion: 2,
-  bundleBuild: parseBuildNumber('BUNDLE_BUILD_NUMBER', Date.now()),
+  bundleBuild: parseBuildNumber('BUNDLE_BUILD_NUMBER', readGeneratedBundleBuild()),
   minNativeBuild: parseBuildNumber('MIN_NATIVE_BUILD', 0),
   gitSha: gitSha(),
   appVersion: packageJson.version,
