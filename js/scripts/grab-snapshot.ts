@@ -37,9 +37,6 @@ if (meta.ok) {
   console.warn(`metadata fetch failed (${meta.status}); continuing without peer map`);
 }
 
-const outFile = `${import.meta.dir}/${srcDocId}.snapshot.bin`;
-await Bun.write(outFile, snapshot);
-
 const set = await fetch(`${TARGET_URL}/document/${targetDocId}/set_memory_state`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },

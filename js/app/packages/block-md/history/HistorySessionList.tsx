@@ -9,6 +9,7 @@ type HistorySessionListProps = {
   sessions: readonly HistorySession[];
   selectedAt: Accessor<Date | null>;
   onSelect: (at: Date | null) => void;
+  maxHeightPx?: number | null;
 };
 
 type HistorySessionRow = {
@@ -90,8 +91,15 @@ export function HistorySessionList(props: HistorySessionListProps) {
 
   return (
     <Show when={rows().length > 0}>
-      <div class="mt-3 min-w-0 border-edge-muted border-t pt-3">
-        <div class="max-h-43 space-y-1 overflow-y-auto pr-1">
+      <div class="mt-2 min-w-0">
+        <div
+          class="min-h-0 space-y-1 overflow-y-auto pr-1"
+          style={{
+            'max-height': props.maxHeightPx
+              ? `${props.maxHeightPx}px`
+              : undefined,
+          }}
+        >
           <For each={rows()}>
             {(row) => {
               const isSelected = () => selectedMs() === row.endMs;

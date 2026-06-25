@@ -1,5 +1,5 @@
 import { max } from 'd3-array';
-import { area, curveBasis } from 'd3-shape';
+import { area, curveCatmullRom } from 'd3-shape';
 
 export const SESSION_GAP_MS = 10 * 60 * 1000;
 const GAP_COMPRESSION_MULTIPLIER = 0.5;
@@ -59,6 +59,7 @@ export type VolumeShape = { area: string; line: string };
 export const VOLUME_BAND_H = 32;
 
 const VOLUME_BUCKETS = 80;
+const VOLUME_CURVE_ALPHA = 0.75;
 
 // Histogram of edit intensity across the timeline. Each session contributes
 // edits/minute to the buckets it spans (in pixel space), normalized to the
@@ -97,7 +98,7 @@ export function buildVolumeShape(
     .x((_, i) => (i / (VOLUME_BUCKETS - 1)) * width)
     .y0(bandH)
     .y1((value) => bandH - (value / peak) * (bandH - 2))
-    .curve(curveBasis);
+    .curve(curveCatmullRom.alpha(VOLUME_CURVE_ALPHA));
 
   return {
     area: areaGenerator(buckets) ?? '',

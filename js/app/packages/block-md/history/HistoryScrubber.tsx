@@ -259,7 +259,8 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
       <div
         ref={containerRef}
         class={cn(
-          'relative isolate mb-4 min-w-0 flex-1 touch-none select-none',
+          'relative isolate min-w-0 flex-1 touch-none select-none',
+          props.compact ? 'mb-2' : 'mb-4',
           props.compact ? 'mx-0 w-full' : 'mx-6'
         )}
         style={{
@@ -441,11 +442,13 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
       </div>
 
       {/* Legend */}
-      <Show when={users().length > 0}>
+      <Show when={props.isViewingHistory() && users().length > 0}>
         <div
           class={cn(
-            'flex max-h-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain pr-1 text-xs',
-            props.compact && 'w-full max-h-24'
+            'flex shrink-0 flex-col gap-0.5 pr-1 text-xs',
+            props.compact
+              ? 'w-full'
+              : 'max-h-32 overflow-y-auto overscroll-contain'
           )}
         >
           <For each={users()}>

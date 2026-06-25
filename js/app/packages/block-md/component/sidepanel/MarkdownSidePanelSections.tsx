@@ -24,6 +24,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -39,6 +40,7 @@ import {
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
+import { createElementBounds } from '@solid-primitives/bounds';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
@@ -102,12 +104,7 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <SidePanel.Section
-        id="history"
-        title="History"
-        order={35}
-        collapsible={false}
-      >
+      <SidePanel.Section id="history" title="History" defaultOpen order={35}>
         <HistorySectionContent />
       </SidePanel.Section>
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
@@ -122,6 +119,14 @@ export function MarkdownSidePanelSections(
 
 function HistorySectionContent() {
   const history = useHistory();
+  const [showSessions, setShowSessions] = createSignal(false);
+  const [activityElement, setActivityElement] = createSignal<HTMLDivElement>();
+  const activityBounds = createElementBounds(activityElement);
+  const isShowingSessions = () => history.isViewingHistory() || showSessions();
+  const activityMaxHeightPx = () =>
+    activityBounds.top === null
+      ? null
+      : Math.max(120, window.innerHeight - activityBounds.top - 12);
 
   return (
     <Show
@@ -129,7 +134,7 @@ function HistorySectionContent() {
       fallback={<p class="text-xs text-ink-muted">No history found</p>}
     >
       {(sessions) => (
-        <div class="min-w-0 overflow-hidden pt-2">
+        <div class="min-w-0 overflow-hidden">
           <HistoryScrubber
             sessions={sessions()}
             pins={history.pins()}
@@ -143,11 +148,39 @@ function HistorySectionContent() {
             onDeletePin={history.deletePin}
             compact
           />
-          <HistorySessionList
-            sessions={sessions()}
-            selectedAt={history.selectedAt}
-            onSelect={history.enterAt}
-          />
+          <Show when={sessions().length > 0}>
+            <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
+              <button
+                type="button"
+                aria-expanded={isShowingSessions()}
+                class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                onClick={() => {
+                  history.enterRightmost();
+                  setShowSessions(true);
+                }}
+              >
+                <CaretRightIcon
+                  class={cn(
+                    'size-3 shrink-0 transition-transform duration-90',
+                    isShowingSessions() && 'rotate-90'
+                  )}
+                />
+                <span>
+                  {isShowingSessions() ? 'Activity' : 'Show activity'}
+                </span>
+              </button>
+              <Show when={isShowingSessions()}>
+                <div ref={setActivityElement} class="min-h-0">
+                  <HistorySessionList
+                    sessions={sessions()}
+                    selectedAt={history.selectedAt}
+                    onSelect={history.enterAt}
+                    maxHeightPx={activityMaxHeightPx()}
+                  />
+                </div>
+              </Show>
+            </div>
+          </Show>
         </div>
       )}
     </Show>
