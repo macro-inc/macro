@@ -43,11 +43,23 @@ fn base_prompt_includes_channel_message_mention_format() {
 fn tool_use_prompt_appends_tool_section_to_base() {
     let rendered = TOOL_USE_PROMPT.to_string();
     assert!(rendered.starts_with(&BASE_PROMPT.to_string()));
+    assert!(rendered.contains("# Tool Use"));
+    assert!(rendered.contains("read the appropriate resource using the read tool."));
+    assert!(
+        rendered.contains("Only fall back to searching by name if you cannot resolve an address.")
+    );
+}
+
+#[test]
+fn tool_use_prompt_appends_email_section_after_tool_use() {
+    let rendered = TOOL_USE_PROMPT.to_string();
+    assert!(rendered.contains("# Email Inboxes"));
     assert!(
         rendered
             .trim_end()
-            .ends_with("Only fall back to searching by name if you cannot resolve an address.")
+            .ends_with("or omit both for the primary inbox.")
     );
-    assert!(rendered.contains("# Tool Use"));
-    assert!(rendered.contains("read the appropriate resource using the read tool."));
+    let tool_use_idx = rendered.find("# Tool Use").expect("tool use section");
+    let email_idx = rendered.find("# Email Inboxes").expect("email section");
+    assert!(tool_use_idx < email_idx, "email section must come last");
 }

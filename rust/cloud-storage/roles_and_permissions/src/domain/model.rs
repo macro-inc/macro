@@ -132,12 +132,8 @@ pub enum PermissionId {
     WriteAiFeatures,
     /// Read access to the docx editor
     ReadDocxEditor,
-    /// Use haiku
-    WriteHaiku,
-    /// Use sonnet
-    WriteSonnet,
-    /// Use opus
-    WriteOpus,
+    /// Use the professional (paid) AI models
+    WriteProAi,
 }
 
 impl FromStr for PermissionId {
@@ -155,9 +151,7 @@ impl FromStr for PermissionId {
             "write:email_tool" => Ok(Self::WriteEmailTool),
             "write:ai_features" => Ok(Self::WriteAiFeatures),
             "read:docx_editor" => Ok(Self::ReadDocxEditor),
-            "write:haiku" => Ok(Self::WriteHaiku),
-            "write:sonnet" => Ok(Self::WriteSonnet),
-            "write:opus" => Ok(Self::WriteOpus),
+            "write:proai" => Ok(Self::WriteProAi),
             _ => Err(anyhow::anyhow!("invalid permission id {s}")),
         }
     }
@@ -178,9 +172,7 @@ impl Display for PermissionId {
             PermissionId::WriteEmailTool => write!(f, "write:email_tool"),
             PermissionId::WriteAiFeatures => write!(f, "write:ai_features"),
             PermissionId::ReadDocxEditor => write!(f, "read:docx_editor"),
-            PermissionId::WriteHaiku => write!(f, "write:haiku"),
-            PermissionId::WriteSonnet => write!(f, "write:sonnet"),
-            PermissionId::WriteOpus => write!(f, "write:opus"),
+            PermissionId::WriteProAi => write!(f, "write:proai"),
         }
     }
 }

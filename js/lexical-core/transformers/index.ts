@@ -26,6 +26,7 @@ import {
   I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
+import { E_PASTE_NODE, I_PASTE_NODE } from './paste';
 import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
 import {
@@ -51,6 +52,7 @@ export { isConversionOnlyTransformer };
  */
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
+  I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -90,6 +92,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   HTML_BLOCKQUOTE,
   E_USER_MENTION,
   E_GROUP_MENTION,
+  E_PASTE_NODE, // export raw pasted text to external markdown
   I_DOCUMENT_MENTION, // for chat attachments
   E_DOCUMENT_MENTION,
   I_DOCUMENT_CARD, // for internal representation
@@ -114,6 +117,8 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
  */
 export const ALL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
+  I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
+  E_PASTE_NODE,
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,

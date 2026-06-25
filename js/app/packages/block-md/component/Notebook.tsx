@@ -25,6 +25,7 @@ import {
 import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
+import { makePersisted } from '@solid-primitives/storage';
 import {
   createEffect,
   createMemo,
@@ -44,6 +45,16 @@ import {
   registerLexicalStateDebuggerCommand,
   registerMarkdownCommands,
 } from './useMarkdownCommands';
+
+/**
+ * Whether the Lexical state debugger panel is open, persisted across reloads so
+ * the debug panel stays where the user left it. Shared by every notebook so the
+ * toggle is consistent regardless of which editor surfaced it.
+ */
+const [showLexicalStateDebugger, setShowLexicalStateDebugger] = makePersisted(
+  createSignal(false),
+  { name: 'lexical-state-debugger-open' }
+);
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -95,8 +106,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
@@ -322,8 +331,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
 export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
   const scopeId = blockHotkeyScopeSignal.get;
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;

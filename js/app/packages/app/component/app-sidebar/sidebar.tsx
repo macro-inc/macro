@@ -1051,7 +1051,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }}
             primaryAction={{
               label: 'Upgrade',
-              onClick: () => openSettingsTab('Account'),
+              onClick: () => openSettingsTab('Billing'),
             }}
             secondaryAction={{
               label: 'Later',

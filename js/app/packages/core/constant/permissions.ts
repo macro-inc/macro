@@ -17,9 +17,7 @@ export const PERMISSION_IDS = {
   WRITE_EMAIL_TOOL: 'write:email_tool',
   WRITE_AI_FEATURES: 'write:ai_features',
   READ_DOCX_EDITOR: 'read:docx_editor',
-  WRITE_HAIKU: 'write:haiku',
-  WRITE_SONNET: 'write:sonnet',
-  WRITE_OPUS: 'write:opus',
+  WRITE_PROAI: 'write:proai',
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];

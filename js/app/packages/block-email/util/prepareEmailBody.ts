@@ -509,7 +509,9 @@ export function prepareEmailBody(
 
 /**
  * Returns true if the draft has meaningful user content worth saving.
- * Auto-filled reply/forward subjects alone don't count.
+ * Auto-filled reply/forward subjects alone don't count. Pass recipientCount
+ * only when recipients are user-entered (compose) and should keep the draft
+ * alive — reply recipients are auto-derived, so the reply path omits it.
  */
 export function hasDraftContent(
   bodyText: string,

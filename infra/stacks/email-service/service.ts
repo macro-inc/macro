@@ -13,6 +13,7 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  type DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
@@ -38,6 +39,7 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
+  dopplerEcsEnvironment: DopplerEcsEnvironment;
 };
 
 export class EmailService extends pulumi.ComponentResource {
@@ -65,6 +67,7 @@ export class EmailService extends pulumi.ComponentResource {
       isPrivate,
       containerEnvVars,
       clusterName,
+      dopplerEcsEnvironment,
       tags,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
@@ -135,6 +138,9 @@ export class EmailService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -145,6 +151,7 @@ export class EmailService extends pulumi.ComponentResource {
               cpu: stack === 'prod' ? 1024 : 256,
               memory: stack === 'prod' ? 4096 : 717,
               environment: [...containerEnvVars],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

@@ -2,6 +2,7 @@ import type { InputHandle, InputSnapshot } from '@channel/Input';
 import { batch, createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
+import { createFocusRequest } from '../Thread/focus-request';
 
 type ThreadStore = Record<string, ThreadState>;
 export function createThreadManager() {
@@ -19,6 +20,7 @@ export function createThreadManager() {
     const [replyInputHandle, setReplyInputHandle] = createSignal<
       InputHandle | undefined
     >();
+    const replyInputFocusRequest = createFocusRequest();
 
     /** If you set replying from false -> true this means it must be expanded **/
     const setIsReplying: Setter<boolean> = (val) => {
@@ -46,6 +48,7 @@ export function createThreadManager() {
       setReplyInputEl,
       replyInputHandle,
       setReplyInputHandle,
+      replyInputFocusRequest,
     };
 
     setThreadStore(threadId, state);

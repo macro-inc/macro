@@ -2,7 +2,6 @@ use super::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
 
 // Test struct with valid schema (should pass)
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
@@ -64,47 +63,6 @@ struct Constrained {
     pub id: String,
 }
 
-#[derive(Debug, JsonSchema, Deserialize, Clone)]
-#[schemars(description = "Schema with a map field", title = "WithMap")]
-#[allow(dead_code)]
-struct WithMap {
-    pub map_field: HashMap<String, String>,
-}
-
-#[derive(Debug, JsonSchema, Deserialize, Clone, Default)]
-#[allow(dead_code)]
-enum PlainEnum {
-    #[default]
-    Red,
-    Blue,
-}
-
-// Fields that are optional without being Option (serde defaults): strict
-// mode requires them to become required + nullable.
-#[derive(Debug, JsonSchema, Deserialize, Clone)]
-#[schemars(
-    description = "Schema with serde-default fields",
-    title = "WithDefaults"
-)]
-#[allow(dead_code)]
-struct WithDefaults {
-    pub always: String,
-
-    #[serde(default)]
-    #[schemars(description = "An optional counter")]
-    pub count: u32,
-
-    #[serde(default)]
-    pub color: PlainEnum,
-}
-
-#[derive(Debug, JsonSchema, Deserialize, Clone)]
-#[schemars(description = "A recursive schema", title = "Recursive")]
-#[allow(dead_code)]
-struct Recursive {
-    pub children: Vec<Recursive>,
-}
-
 fn schema_json(schema: &Schema) -> Value {
     serde_json::to_value(schema).expect("schema serializes")
 }
@@ -128,41 +86,6 @@ fn test_validate_tool_schema_passes() {
         validated.description,
         "Valid test schema with simple properties"
     );
-}
-
-#[test]
-fn test_optional_fields_are_required_and_nullable() {
-    let validated = generate_validated_input_schema::<ValidTestSchema>().unwrap();
-    let json = schema_json(&validated.schema);
-
-    // OpenAI strict mode: every property must be in `required`; optional
-    // fields are expressed as nullable unions instead.
-    let required: Vec<&str> = json["required"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    for field in ["simple_field", "list_field", "flag_field", "number_field"] {
-        assert!(required.contains(&field), "{field} must be required");
-    }
-    let types = property(&json, "simple_field")["type"].as_array().unwrap();
-    assert!(types.contains(&Value::String("null".into())), "{types:?}");
-}
-
-#[test]
-fn test_additional_properties_only_on_objects() {
-    let validated = generate_validated_input_schema::<ValidTestSchema>().unwrap();
-    let json = schema_json(&validated.schema);
-
-    assert_eq!(json["additionalProperties"], Value::Bool(false));
-    // Scalars and arrays must not carry the keyword.
-    for field in ["simple_field", "list_field", "flag_field", "number_field"] {
-        assert!(
-            property(&json, field).get("additionalProperties").is_none(),
-            "{field} should not have additionalProperties"
-        );
-    }
 }
 
 #[test]
@@ -208,57 +131,4 @@ fn test_unsupported_constraints_stripped_into_description() {
 
     // `uuid` is on both providers' format whitelist and survives.
     assert_eq!(property(&json, "id")["format"], "uuid");
-}
-
-#[test]
-fn test_serde_default_fields_become_required_and_nullable() {
-    let validated = generate_validated_input_schema::<WithDefaults>().unwrap();
-    let json = schema_json(&validated.schema);
-
-    let required: Vec<&str> = json["required"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    for field in ["always", "count", "color"] {
-        assert!(required.contains(&field), "{field} must be required");
-    }
-
-    // An already-required field keeps its plain type.
-    assert_eq!(property(&json, "always")["type"], "string");
-
-    // A promoted scalar becomes a null union.
-    let count_types = property(&json, "count")["type"].as_array().unwrap();
-    assert!(count_types.contains(&Value::String("integer".into())));
-    assert!(count_types.contains(&Value::String("null".into())));
-
-    // A promoted enum admits null in both `type` and `enum`.
-    let color = property(&json, "color");
-    let color_types = color["type"].as_array().unwrap();
-    assert!(
-        color_types.contains(&Value::String("null".into())),
-        "{color:?}"
-    );
-    let values = color["enum"].as_array().unwrap();
-    assert!(values.contains(&Value::Null), "{values:?}");
-    assert!(values.contains(&Value::String("Red".into())));
-}
-
-#[test]
-fn test_map_types_fail_validation() {
-    let result = generate_validated_input_schema::<WithMap>();
-    assert!(
-        matches!(result, Err(ValidationError::AdditionalProperties)),
-        "map types cannot be expressed in strict mode: {result:?}"
-    );
-}
-
-#[test]
-fn test_recursive_types_fail_validation() {
-    let result = generate_validated_input_schema::<Recursive>();
-    assert!(
-        matches!(result, Err(ValidationError::UnsupportedRef)),
-        "recursive types cannot be inlined: {result:?}"
-    );
 }

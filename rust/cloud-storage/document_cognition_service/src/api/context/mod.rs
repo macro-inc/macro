@@ -18,12 +18,11 @@ use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::websocket::ConnectionGatewayClient;
 use search_service_client::SearchServiceClient;
-use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use static_file::inbound::attachment::StaticFileAttachmentService;
 use static_file::outbound::CdnStaticFileRepo;
@@ -85,7 +84,7 @@ pub struct ApiContext {
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
-    pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub connection_repo: Arc<dyn ConnectionRepo>,
     pub connection_gateway_client: Arc<ConnectionGatewayClient>,

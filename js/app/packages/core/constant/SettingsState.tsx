@@ -7,6 +7,7 @@ import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
   | 'Account'
+  | 'Billing'
   | 'Subscription'
   | 'Organization'
   | 'Appearance'
@@ -17,6 +18,7 @@ export type SettingsTab =
   | 'Mobile App'
   | 'Agent'
   | 'Team'
+  | 'Connected'
   | 'Email'
   | 'GitHub'
   | 'Admin';

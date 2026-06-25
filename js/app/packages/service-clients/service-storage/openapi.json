@@ -4676,11 +4676,19 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a markdown document.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
-                      "description": "The document ID of the created markdown document."
+                      "description": "The document ID of the created markdown document"
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -4820,11 +4828,15 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document"
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -4835,6 +4847,10 @@
                       "type": ["integer", "null"],
                       "format": "int32",
                       "description": "The task number assigned within the team."
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -11818,11 +11834,19 @@
       "CreateMarkdownDocumentResponse": {
         "type": "object",
         "description": "Response for creating a markdown document.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
-            "description": "The document ID of the created markdown document."
+            "description": "The document ID of the created markdown document"
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document"
+          },
+          "token": {
+            "type": "string",
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },
@@ -11925,11 +11949,15 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document"
           },
           "teamId": {
             "type": ["string", "null"],
@@ -11940,6 +11968,10 @@
             "type": ["integer", "null"],
             "format": "int32",
             "description": "The task number assigned within the team."
+          },
+          "token": {
+            "type": "string",
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },

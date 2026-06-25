@@ -82,7 +82,7 @@ function ThemeDebug() {
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <For each={[1, 2, 3] as const}>
               {(depth) => (
-                <Panel depth={depth} active class="min-h-32">
+                <Panel depth={depth} class="min-h-32">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Active Depth {depth}
@@ -344,7 +344,7 @@ function ThemeDebug() {
             A complete panel with header, body, and footer.
           </p>
 
-          <Panel depth={2} active>
+          <Panel depth={2}>
             <Panel.Header class="px-4">
               <span class="text-sm font-semibold text-ink">Card Title</span>
             </Panel.Header>

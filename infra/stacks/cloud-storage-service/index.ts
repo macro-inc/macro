@@ -51,9 +51,6 @@ const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
 const internalApiSecret = aws.secretsmanager.getSecretVersionOutput({
   secretId: INTERNAL_API_SECRET_KEY,
 });
-const internalApiKeyArn: pulumi.Output<string> = internalApiSecret.apply(
-  (secret) => secret.arn
-);
 const internalApiSecretValue: pulumi.Output<string> = internalApiSecret.apply(
   (secret) => secret.secretString
 );
@@ -267,7 +264,6 @@ const cloudStorageService = new CloudStorageService(
       jwtSecretKeyArn,
       documentStoragePermissionsKeyArn,
       cloudfrontPrivateKeySecretArn,
-      internalApiKeyArn,
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       githubWebhookSecretKeyArn,

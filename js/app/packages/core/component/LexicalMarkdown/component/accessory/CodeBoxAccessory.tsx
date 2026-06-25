@@ -44,6 +44,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
+import { deleteCodeNode } from '../../plugins/code/deleteCodeNode';
 import { autoRegister } from '../../plugins/shared/utils';
 
 const LanguageIcons: Record<
@@ -73,7 +74,9 @@ function StaticLabel(props: { language: SupportedLanguage }) {
   return (
     <div class="text-xs font-sans font-medium flex items-center gap-1 p-2 text-ink-extra-muted/50">
       <Dynamic component={LanguageIcons[props.language]} class="size-4" />
-      <span>{LanguageDefinitions[props.language].label}</span>
+      <span class="select-none">
+        {LanguageDefinitions[props.language].label}
+      </span>
     </div>
   );
 }
@@ -194,11 +197,7 @@ export function CodeBoxAccessory(props: {
   };
 
   const deleteCode = () => {
-    props.editor.update(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!$isCodeNode(node)) return;
-      node.remove();
-    });
+    deleteCodeNode(props.editor, props.nodeKey);
   };
 
   const setLanguageOnNode = (language: string) => {

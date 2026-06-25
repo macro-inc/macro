@@ -64,10 +64,6 @@ pub async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let internal_secret_key = secretsmanager_client
-        .get_maybe_secret_value(config.environment, config.internal_api_secret_key.clone())
-        .await?;
-
     let unsubscribe_hmac_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, config.url_signing_hmac.clone())
         .await?;
@@ -151,12 +147,12 @@ pub async fn main() -> anyhow::Result<()> {
         apns_voip_platform_arn: config.sns_apns_voip_platform_arn().to_string(),
     };
     let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-        internal_secret_key.as_ref().to_string(),
+        config.internal_api_key.as_ref().to_string(),
         connection_gateway_url.clone(),
     ));
     let notification_events_realtime_adapter =
         WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-            internal_secret_key.as_ref().to_string(),
+            config.internal_api_key.as_ref().to_string(),
             connection_gateway_url.clone(),
         ));
     let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
@@ -188,7 +184,7 @@ pub async fn main() -> anyhow::Result<()> {
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
     let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
-        internal_secret_key.as_ref().to_string(),
+        config.internal_api_key.as_ref().to_string(),
         connection_gateway_url,
     ));
 
@@ -316,11 +312,11 @@ pub async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(
         ApiContext {
+            internal_api_key: config.internal_api_key.clone(),
             db,
             sns_client: Arc::new(sns_client),
             config: Arc::new(config),
             jwt_args,
-            internal_secret_key,
         },
         ingress_state,
     )

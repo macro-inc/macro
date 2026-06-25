@@ -3727,7 +3727,86 @@ export const createMarkdownHandlerResponse = zod
   .object({
     documentId: zod
       .string()
-      .describe('The document ID of the created markdown document.'),
+      .describe('The document ID of the created markdown document'),
+    documentMetadata: zod.object({
+      branchedFromId: zod
+        .string()
+        .nullish()
+        .describe('The id of the document this document branched from'),
+      branchedFromVersionId: zod
+        .number()
+        .nullish()
+        .describe(
+          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+        ),
+      createdAt: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
+      documentBom: zod
+        .array(
+          zod.object({
+            id: zod.string().describe('The uuid of the bom part'),
+            path: zod
+              .string()
+              .describe('The file path of the bom part content'),
+            sha: zod
+              .string()
+              .describe(
+                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
+              ),
+          })
+        )
+        .nullish()
+        .describe(
+          'If the document is a DOCX document, the document_bom will be present'
+        ),
+      documentFamilyId: zod
+        .number()
+        .nullish()
+        .describe('The id of the document family this document belongs to'),
+      documentId: zod.string().describe('The document id'),
+      documentName: zod.string().describe('The name of the document'),
+      documentVersionId: zod
+        .number()
+        .describe(
+          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+        ),
+      fileType: zod
+        .string()
+        .nullish()
+        .describe('The file type of the document'),
+      modificationData: zod
+        .unknown()
+        .optional()
+        .describe(
+          'The modification data for the document instance.\nThis is only used for PDF documents.'
+        ),
+      owner: zod.string().describe('The owner of the document'),
+      sha: zod
+        .string()
+        .nullish()
+        .describe(
+          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+        ),
+      subType: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['task', 'snippet'])
+            .describe(
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+            ),
+        ])
+        .optional(),
+      updatedAt: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('The time the document instance \/ document BOM was updated'),
+    }),
+    token: zod
+      .string()
+      .describe('A pre-generated permission token that you can use for SS'),
   })
   .describe('Response for creating a markdown document.');
 
@@ -3929,6 +4008,82 @@ export const createTaskHandlerBody = zod
 export const createTaskHandlerResponse = zod
   .object({
     documentId: zod.string().describe('The document ID of the created task.'),
+    documentMetadata: zod.object({
+      branchedFromId: zod
+        .string()
+        .nullish()
+        .describe('The id of the document this document branched from'),
+      branchedFromVersionId: zod
+        .number()
+        .nullish()
+        .describe(
+          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
+        ),
+      createdAt: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
+      documentBom: zod
+        .array(
+          zod.object({
+            id: zod.string().describe('The uuid of the bom part'),
+            path: zod
+              .string()
+              .describe('The file path of the bom part content'),
+            sha: zod
+              .string()
+              .describe(
+                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
+              ),
+          })
+        )
+        .nullish()
+        .describe(
+          'If the document is a DOCX document, the document_bom will be present'
+        ),
+      documentFamilyId: zod
+        .number()
+        .nullish()
+        .describe('The id of the document family this document belongs to'),
+      documentId: zod.string().describe('The document id'),
+      documentName: zod.string().describe('The name of the document'),
+      documentVersionId: zod
+        .number()
+        .describe(
+          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
+        ),
+      fileType: zod
+        .string()
+        .nullish()
+        .describe('The file type of the document'),
+      modificationData: zod
+        .unknown()
+        .optional()
+        .describe(
+          'The modification data for the document instance.\nThis is only used for PDF documents.'
+        ),
+      owner: zod.string().describe('The owner of the document'),
+      sha: zod
+        .string()
+        .nullish()
+        .describe(
+          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
+        ),
+      subType: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['task', 'snippet'])
+            .describe(
+              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+            ),
+        ])
+        .optional(),
+      updatedAt: zod.iso
+        .datetime({})
+        .nullish()
+        .describe('The time the document instance \/ document BOM was updated'),
+    }),
     teamId: zod
       .uuid()
       .nullish()
@@ -3937,6 +4092,9 @@ export const createTaskHandlerResponse = zod
       .number()
       .nullish()
       .describe('The task number assigned within the team.'),
+    token: zod
+      .string()
+      .describe('A pre-generated permission token that you can use for SS'),
   })
   .describe('Response for creating a task.');
 
