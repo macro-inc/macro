@@ -179,7 +179,7 @@ pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
         .add_env(("RAW_REF", raw_ref_expr))
 }
 
-/// Upload build artifacts via `actions/upload-artifact`, pinned.
+/// Upload build artifacts within the workflow run for a later publish job.
 pub fn upload_artifact(name: &str, path: &str) -> Step<Use> {
     Step::new(format!("Upload {name} artifact"))
         .uses(
@@ -191,6 +191,34 @@ pub fn upload_artifact(name: &str, path: &str) -> Step<Use> {
         .add_with(("path", path))
         .add_with(("if-no-files-found", "error"))
         .add_with(("retention-days", 30))
+}
+
+/// Download all build artifacts into one directory for release publishing.
+pub fn download_artifacts(path: &str) -> Step<Use> {
+    Step::new("Download Build Artifacts")
+        .uses(
+            "actions",
+            "download-artifact",
+            "634f93cb2916e3fdff6788551b99b062d0335ce0",
+        ) // v5
+        .add_with(("path", path))
+        .add_with(("merge-multiple", true))
+}
+
+/// Attach build artifacts to the GitHub release for the resolved release tag.
+pub fn upload_release_artifacts(path: &str) -> Step<Use> {
+    Step::new("Upload Release Artifacts")
+        .uses(
+            "softprops",
+            "action-gh-release",
+            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
+        ) // v2
+        .if_condition(Expression::new(
+            "startsWith(steps.metadata.outputs.tag, 'v')",
+        ))
+        .add_with(("tag_name", "${{ steps.metadata.outputs.tag }}"))
+        .add_with(("files", path))
+        .add_with(("fail_on_unmatched_files", true))
 }
 
 /// Teardown Nix (always runs).

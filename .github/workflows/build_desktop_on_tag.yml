@@ -5,16 +5,11 @@ name: Build Desktop on Tag
   push:
     tags:
     - v[0-9]*
-  create: {}
   workflow_dispatch:
     inputs:
       ref:
         description: Release tag to build (v* or refs/tags/v*). Defaults to the selected protected ref or release tag.
-        required: false
         type: string
-concurrency:
-  group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
-  cancel-in-progress: true
 jobs:
   resolve-ref:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')
@@ -78,14 +73,334 @@ jobs:
   build-appimage:
     needs:
     - resolve-ref
-    uses: './.github/workflows/build_appimage_on_tag.yml'
-    with:
-      ref: ${{ needs.resolve-ref.outputs.ref }}
-    secrets: inherit
+    name: Build AppImage
+    runs-on: namespace-profile-linux-rust-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ needs.resolve-ref.outputs.ref }}
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Configure Cachix fallback
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Build AppImage with Nix
+      run: |
+        set -euo pipefail
+        cachix_pid=
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+          cachix_pid=$!
+          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+        fi
+        restart_nix_daemon() {
+          echo "::warning::Restarting nix-daemon before retrying AppImage build."
+          sudo systemctl restart nix-daemon.service 2>/dev/null || true
+          sudo pkill -x nix-daemon 2>/dev/null || true
+          sudo rm -f /nix/var/nix/daemon-socket/socket
+          sudo mkdir -p /nix/var/nix/daemon-socket
+          sudo sh -c 'nohup /nix/var/nix/profiles/default/bin/nix-daemon >/tmp/nix-daemon-retry.log 2>&1 &'
+          for _ in $(seq 1 30); do
+            if sudo test -S /nix/var/nix/daemon-socket/socket; then
+              return 0
+            fi
+            sleep 1
+          done
+          echo "nix-daemon failed to restart; log follows:" >&2
+          sudo cat /tmp/nix-daemon-retry.log >&2 || true
+          return 1
+        }
+
+        build_appimage() {
+          local attempt="$1"
+          local -a fallback_args=()
+          if [ "$attempt" -eq 3 ]; then
+            fallback_args=(--fallback)
+          fi
+
+          # Force a hermetic Nix sandbox for linuxdeploy. Namespace's restored
+          # Nix daemon can otherwise run unsandboxed under /nix/var/nix/builds,
+          # where linuxdeploy sees host libraries/tools and can fail with only
+          # `failed to run linuxdeploy` in Tauri's default output.
+          nix build \
+            "${fallback_args[@]}" \
+            --option sandbox true \
+            --option sandbox-build-dir /build \
+            --option download-attempts 10 \
+            --print-build-logs \
+            ".#tauri-desktop-appimage"
+        }
+
+        for attempt in 1 2 3; do
+          if build_appimage "$attempt"; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            exit 1
+          fi
+          echo "::warning::AppImage nix build failed on attempt $attempt; retrying."
+          restart_nix_daemon
+          sleep $((attempt * 10))
+        done
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push AppImage result closure to Cachix."
+        fi
+      shell: bash
+    - name: Collect AppImage artifact
+      run: |
+        set -euo pipefail
+        mkdir -p artifacts
+        shopt -s nullglob
+        appimages=(result/*.AppImage)
+        if [ "${#appimages[@]}" -eq 0 ]; then
+          echo "No AppImage files found in nix build result" >&2
+          find -L result -maxdepth 2 -type f -print >&2 || true
+          exit 1
+        fi
+        cp -v "${appimages[@]}" artifacts/
+        chmod 0755 artifacts/*.AppImage
+        (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
+      shell: bash
+    - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   build-dmg:
     needs:
     - resolve-ref
-    uses: './.github/workflows/build_dmg_on_tag.yml'
-    with:
-      ref: ${{ needs.resolve-ref.outputs.ref }}
-    secrets: inherit
+    name: Build macOS DMG
+    runs-on: macos-15
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ needs.resolve-ref.outputs.ref }}
+        persist-credentials: 'false'
+    - name: Assert arm64 runner
+      run: |
+        set -euo pipefail
+        if [ "$(uname -m)" != "arm64" ]; then
+          echo "macOS DMG builds must run on an arm64/aarch64 runner, got $(uname -m)" >&2
+          exit 1
+        fi
+      shell: bash
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        if ! command -v nix >/dev/null 2>&1; then
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install macos --no-confirm \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "sandbox = false" \
+            --extra-conf "trusted-users = root runner"
+        fi
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        nix --version
+      shell: bash
+    - name: Configure Cachix fallback
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Configure signing identity
+      run: |
+        set -euo pipefail
+        if [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_BASE64}" ] || [ -z "${MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD}" ]; then
+          echo "Developer ID certificate secrets are not configured; using ad-hoc signing for build validation."
+          echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+          exit 0
+        fi
+
+        certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+        printf '%s' "$MACOS_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path" 2>/dev/null \
+          || printf '%s' "$MACOS_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 -D > "$certificate_path"
+
+        # Nix's macOS daemon builds as _nixbld users, not the runner user.
+        # Put the Developer ID identity in the system keychain so codesign can
+        # find it from inside the Nix build without embedding certificate
+        # secrets into the derivation.
+        sudo security import "$certificate_path" \
+          -k /Library/Keychains/System.keychain \
+          -P "$MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD" \
+          -A \
+          -T /usr/bin/codesign \
+          -T /usr/bin/security
+        sudo security set-key-partition-list \
+          -S apple-tool:,apple:,codesign: \
+          -s \
+          -k "" \
+          /Library/Keychains/System.keychain || true
+
+        identity=$(security find-identity -v -p codesigning /Library/Keychains/System.keychain \
+          | awk -F '"' '/Developer ID Application/ { print $2; exit }')
+        if [ -z "$identity" ]; then
+          echo "No Developer ID Application identity found in System.keychain" >&2
+          security find-identity -v -p codesigning /Library/Keychains/System.keychain >&2 || true
+          exit 1
+        fi
+        echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+        echo "Using signing identity: $identity"
+      shell: bash
+      env:
+        MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+        MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Build DMG with Nix
+      run: |
+        set -euo pipefail
+        cachix_pid=
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+          cachix_pid=$!
+          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+        fi
+        nix build --impure --option sandbox false --print-build-logs ".#packages.aarch64-darwin.tauri-desktop-dmg"
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push DMG result closure to Cachix."
+        fi
+      shell: bash
+    - name: Collect DMG artifact
+      run: |
+        set -euo pipefail
+        mkdir -p artifacts
+        shopt -s nullglob
+        dmgs=(result/*.dmg)
+        if [ "${#dmgs[@]}" -eq 0 ]; then
+          echo "No DMG files found in nix build result" >&2
+          find -L result -maxdepth 2 -type f -print >&2 || true
+          exit 1
+        fi
+        cp -v "${dmgs[@]}" artifacts/
+      shell: bash
+    - name: Validate signed DMG
+      run: |
+        set -euo pipefail
+        dmg=$(find artifacts -maxdepth 1 -type f -name '*.dmg' -print -quit)
+        if [ -z "$dmg" ]; then
+          echo "No DMG found to validate" >&2
+          exit 1
+        fi
+        codesign --verify --strict --verbose=2 "$dmg"
+
+        mount_dir=$(mktemp -d)
+        hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg"
+        trap 'hdiutil detach "$mount_dir" >/dev/null 2>&1 || true; rmdir "$mount_dir" >/dev/null 2>&1 || true' EXIT
+        app=$(find "$mount_dir" -maxdepth 2 -type d -name '*.app' -print -quit)
+        if [ -z "$app" ] && [ -d "$mount_dir/Contents" ]; then
+          app="$mount_dir"
+        fi
+        if [ -z "$app" ]; then
+          echo "No app bundle found in DMG" >&2
+          find "$mount_dir" -maxdepth 2 -print >&2 || true
+          exit 1
+        fi
+        codesign --verify --deep --strict --verbose=2 "$app"
+
+        dylib_refs=$(mktemp)
+        search_roots=("$app/Contents/MacOS")
+        if [ -d "$app/Contents/Frameworks" ]; then
+          search_roots+=("$app/Contents/Frameworks")
+        fi
+        while IFS= read -r -d '' file; do
+          otool -L "$file" 2>/dev/null \
+            | awk -v file="$file" 'NR > 1 && $1 ~ "^/nix/store/.*\\.dylib$" { print file ": " $1 }' \
+            >> "$dylib_refs" || true
+        done < <(find "${search_roots[@]}" -type f -print0)
+        if [ -s "$dylib_refs" ]; then
+          echo "App bundle contains absolute Nix dylib references:" >&2
+          cat "$dylib_refs" >&2
+          exit 1
+        fi
+
+        (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
+      shell: bash
+    - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
+  publish-release:
+    needs:
+    - resolve-ref
+    - build-appimage
+    - build-dmg
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: release-artifacts
+        merge-multiple: 'true'
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+      with:
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: release-artifacts/*
+        fail_on_unmatched_files: 'true'
+concurrency:
+  group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
+  cancel-in-progress: true

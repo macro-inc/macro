@@ -106,6 +106,11 @@ export async function fetchWithAuth<
           code: 'UNAUTHORIZED',
           message: 'Unauthorized access',
         };
+      case 403:
+        return {
+          code: 'FORBIDDEN',
+          message: 'Forbidden',
+        };
       case 409:
         return {
           code: 'CONFLICT',

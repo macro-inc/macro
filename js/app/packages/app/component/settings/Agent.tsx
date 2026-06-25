@@ -1,8 +1,7 @@
 import { createEffect, createSignal, For, Show, Suspense } from 'solid-js';
-import { TabsInset } from '@core/component/TabsInset';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import { Button, Layer, Panel, ToggleSwitch } from '@ui';
+import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
@@ -11,7 +10,6 @@ import type {
   ServerResponse,
   StartAuthResponse,
 } from '@service-cognition/generated/schemas';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   useMcpServersQuery,
   useAddMcpServerMutation,
@@ -20,17 +18,25 @@ import {
   useStartMcpAuthMutation,
 } from '@queries/mcp-servers';
 import {
-  agentSettingsSubTab,
-  setAgentSettingsSubTab,
-  type AgentSettingsSubTab,
-} from '@core/constant/SettingsState';
-import {
   QUICK_CONNECT_SERVERS,
   QUICK_CONNECT_ICON_MAP,
   type SvgIcon,
 } from '@core/component/AI/constant/mcpServers';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsSection,
+} from './primitives';
 
-type McpTab = AgentSettingsSubTab;
+/** Best-effort hostname for an MCP server URL — friendlier than the raw URL. */
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 function AddServerForm(props: {
   open: boolean;
@@ -97,105 +103,110 @@ function AddServerForm(props: {
   };
 
   return (
-    <ScopedPortal scope="local" show={props.open}>
-      <Layer depth={3}>
-        <div class="absolute inset-0 z-10 flex items-center justify-center bg-overlay">
-          <div class="w-100 max-w-[calc(100%-2rem)]">
-            <Panel depth={3} class="shadow-md">
-              <Panel.Header class="px-6">
-                <span class="text-ink text-sm font-semibold">Add MCP Server</span>
-              </Panel.Header>
-              <Panel.Body class="p-6 flex flex-col gap-5">
-                <div class="flex flex-col gap-2">
-                  <span class="text-xs text-ink-muted">Quick Connect</span>
-                  <div class="grid grid-cols-2 gap-2">
-                    <For each={QUICK_CONNECT_SERVERS}>
-                      {(server) => {
-                        const added = () => props.existingUrls.has(server.url);
-                        return (
-                          <button
-                            class="flex items-center justify-between px-3 py-2 rounded-sm border border-edge-muted text-sm transition-colors"
-                            classList={{
-                              'bg-panel text-ink hover:bg-hover cursor-pointer': !added(),
-                              'bg-panel text-ink-muted cursor-default': added(),
-                            }}
-                            disabled={added() || addMutation.isPending}
-                            onClick={() => handleQuickConnect(server)}
-                          >
-                            <span class="flex items-center gap-2 text-accent">
-                              <server.icon class="size-4" />
-                              <span class="text-ink">{server.server_name}</span>
-                            </span>
-                            <Show when={added()}>
-                              <span class="text-xs text-ink-muted">Added</span>
-                            </Show>
-                          </button>
-                        );
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && props.onOpenChange(false)}
+      position="center"
+      class="w-100"
+    >
+      <Panel active depth={2} class="rounded-xl">
+        <Panel.Header class="px-6">
+          <span class="text-ink text-sm font-semibold">Add MCP Server</span>
+        </Panel.Header>
+        <Panel.Body class="p-6 flex flex-col gap-5">
+          <div class="flex flex-col gap-2">
+            <span class="text-xs text-ink-muted">Quick Connect</span>
+            <div class="grid grid-cols-2 gap-2">
+              <For each={QUICK_CONNECT_SERVERS}>
+                {(server) => {
+                  const added = () => props.existingUrls.has(server.url);
+                  return (
+                    <button
+                      class="flex items-center justify-between px-3 py-2 rounded-lg border border-edge-muted text-sm transition-colors"
+                      classList={{
+                        'text-ink hover:bg-ink/4 cursor-pointer': !added(),
+                        'text-ink-muted cursor-default': added(),
                       }}
-                    </For>
-                  </div>
-                </div>
-
-                <div class="flex flex-col gap-4">
-                  <span class="text-xs text-ink-muted">Custom Server</span>
-                  <label class="flex flex-col gap-1.5">
-                    <span class="text-xs text-ink-muted">Name</span>
-                    <input
-                      type="text"
-                      class="h-8 px-2.5 rounded-lg border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-accent"
-                      placeholder="My MCP Server"
-                      value={name()}
-                      onInput={(e) => setName(e.currentTarget.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSubmit();
-                        if (e.key === 'Escape') { reset(); props.onOpenChange(false); }
-                      }}
-                    />
-                  </label>
-                  <label class="flex flex-col gap-1.5">
-                    <span class="text-xs text-ink-muted">URL</span>
-                    <input
-                      type="url"
-                      class="h-8 px-2.5 rounded-lg border border-edge-muted bg-input text-sm text-ink outline-none placeholder:text-ink-muted focus:border-accent"
-                      placeholder="https://example.com/mcp"
-                      value={url()}
-                      onInput={(e) => setUrl(e.currentTarget.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSubmit();
-                        if (e.key === 'Escape') { reset(); props.onOpenChange(false); }
-                      }}
-                    />
-                  </label>
-                </div>
-
-                <div class="flex justify-end gap-2 pt-1">
-                  <Button
-                    variant="base"
-                    size="sm"
-                    depth={3}
-                    onClick={() => {
-                      reset();
-                      props.onOpenChange(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="active"
-                    size="sm"
-                    depth={3}
-                    disabled={!name().trim() || !url().trim() || addMutation.isPending}
-                    onClick={handleSubmit}
-                  >
-                    {addMutation.isPending ? 'Adding...' : 'Add'}
-                  </Button>
-                </div>
-              </Panel.Body>
-            </Panel>
+                      disabled={added() || addMutation.isPending}
+                      onClick={() => handleQuickConnect(server)}
+                    >
+                      <span class="flex items-center gap-2 text-accent">
+                        <server.icon class="size-4" />
+                        <span class="text-ink">{server.server_name}</span>
+                      </span>
+                      <Show when={added()}>
+                        <span class="text-xs text-ink-muted">Added</span>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
           </div>
-        </div>
-      </Layer>
-    </ScopedPortal>
+
+          <div class="flex flex-col gap-4">
+            <span class="text-xs text-ink-muted">Custom Server</span>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs text-ink-muted">Name</span>
+              <input
+                type="text"
+                class="settings-input w-full"
+                placeholder="My MCP Server"
+                value={name()}
+                onInput={(e) => setName(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSubmit();
+                  if (e.key === 'Escape') {
+                    reset();
+                    props.onOpenChange(false);
+                  }
+                }}
+              />
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs text-ink-muted">URL</span>
+              <input
+                type="url"
+                class="settings-input w-full"
+                placeholder="https://example.com/mcp"
+                value={url()}
+                onInput={(e) => setUrl(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSubmit();
+                  if (e.key === 'Escape') {
+                    reset();
+                    props.onOpenChange(false);
+                  }
+                }}
+              />
+            </label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              onClick={() => {
+                reset();
+                props.onOpenChange(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              disabled={!name().trim() || !url().trim() || addMutation.isPending}
+              onClick={handleSubmit}
+            >
+              {addMutation.isPending ? 'Adding...' : 'Add'}
+            </Button>
+          </div>
+        </Panel.Body>
+      </Panel>
+    </Dialog>
   );
 }
 
@@ -293,130 +304,129 @@ function ServerRow(props: { server: ServerResponse }) {
     QUICK_CONNECT_ICON_MAP.get(props.server.url) ?? (PlugIcon as SvgIcon);
 
   return (
-    <div class="bg-panel flex items-center gap-4 @max-[480px]:gap-2 px-6 @max-[480px]:px-3 py-3">
-      {(() => {
+    <IntegrationRow
+      icon={(() => {
         const C = Icon();
-        return <C class="size-5 shrink-0 text-accent" />;
+        return <C class="size-5 text-accent" />;
       })()}
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-1.5">
-          <span class="min-w-0 truncate text-sm font-medium text-ink">
-            {props.server.server_name}
-          </span>
+      title={
+        <span class="flex items-center gap-1.5">
+          <span class="min-w-0 truncate">{props.server.server_name}</span>
           <Show when={props.server.authenticated}>
             <CheckIcon class="size-3 shrink-0 text-success" />
           </Show>
           <Show when={connectionFailed()}>
             <XIcon class="size-3 shrink-0 text-failure" />
           </Show>
-        </div>
-        <div class="text-xs text-ink-muted truncate">{props.server.url}</div>
-      </div>
-
-      <div class="flex items-center gap-2 shrink-0">
-        <Show when={!props.server.authenticated}>
-          <Show when={connectionFailed()}>
-            <span class="text-xs text-failure whitespace-nowrap">
-              Last connection attempt failed
-            </span>
-          </Show>
-          <Button
-            variant="active"
-            size="sm"
-            depth={3}
-            disabled={authMutation.isPending}
-            onClick={handleAuth}
-          >
-            {authMutation.isPending
-              ? 'Connecting...'
-              : connectionFailed()
-                ? 'Try Again'
-                : 'Connect'}
-          </Button>
+        </span>
+      }
+      description={hostFromUrl(props.server.url)}
+    >
+      <Show when={!props.server.authenticated}>
+        <Show when={connectionFailed()}>
+          <span class="text-xs text-failure whitespace-nowrap">
+            Last attempt failed
+          </span>
         </Show>
-
-        <Show when={props.server.authenticated}>
-          <ToggleSwitch
-            checked={props.server.enabled}
-            disabled={updateMutation.isPending}
-            onChange={handleToggleEnabled}
-            label={props.server.enabled ? 'Enabled' : 'Disabled'}
-            labelClass="@max-[480px]:hidden inline-block w-14 text-left text-xs text-ink-muted whitespace-nowrap"
-          />
-        </Show>
-
-        <Show
-          when={!confirmDelete()}
-          fallback={
-            <div class="flex items-center gap-1">
-              <Button
-                variant="danger"
-                size="sm"
-                depth={3}
-                disabled={deleteMutation.isPending}
-                onClick={handleDelete}
-              >
-                {deleteMutation.isPending ? 'Removing...' : 'Confirm'}
-              </Button>
-              <Button
-                variant="base"
-                size="sm"
-                depth={3}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          }
+        <Button
+          variant="active"
+          size="sm"
+          depth={3}
+          disabled={authMutation.isPending}
+          onClick={handleAuth}
         >
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            tooltip="Remove"
-            class="@max-[480px]:border-transparent"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <span class="@max-[480px]:hidden">Remove</span>
-            <XIcon class="hidden size-4 @max-[480px]:block" />
-          </Button>
-        </Show>
-      </div>
-    </div>
+          {authMutation.isPending
+            ? 'Connecting...'
+            : connectionFailed()
+              ? 'Try Again'
+              : 'Connect'}
+        </Button>
+      </Show>
+
+      <Show when={props.server.authenticated}>
+        <ToggleSwitch
+          size="md"
+          checked={props.server.enabled}
+          disabled={updateMutation.isPending}
+          onChange={handleToggleEnabled}
+          label={props.server.enabled ? 'Enabled' : 'Disabled'}
+          labelClass="inline-block w-14 text-left text-xs text-ink-muted whitespace-nowrap"
+        />
+      </Show>
+
+      <Show
+        when={!confirmDelete()}
+        fallback={
+          <div class="flex items-center gap-1">
+            <Button
+              variant="danger"
+              size="sm"
+              depth={3}
+              disabled={deleteMutation.isPending}
+              onClick={handleDelete}
+            >
+              {deleteMutation.isPending ? 'Removing...' : 'Confirm'}
+            </Button>
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        }
+      >
+        <Button
+          variant="base"
+          size="sm"
+          depth={3}
+          tooltip="Remove"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <XIcon class="size-4" />
+        </Button>
+      </Show>
+    </IntegrationRow>
   );
 }
 
 function Connectors() {
   const serversQuery = useMcpServersQuery();
   const [showAddDialog, setShowAddDialog] = createSignal(false);
-  const hasServers = () => (serversQuery.data?.length ?? 0) > 0;
 
   return (
-    <div class="@container">
-    <div class="px-6 @max-[480px]:px-2 py-4 flex flex-col gap-4">
-      <Show when={!hasServers()}>
-        <div class="text-sm">
-          Connect the Macro agent to external MCP servers
-        </div>
-      </Show>
-
-      <Show when={serversQuery.isLoading}>
-        <div class="text-sm text-ink-muted py-8 text-center">Loading...</div>
-      </Show>
-
+    <SettingsSection
+      title="Connectors"
+      description="Connect Macro's agent to external MCP servers."
+      actions={
+        <Button
+          variant="base"
+          size="sm"
+          depth={3}
+          onClick={() => setShowAddDialog(true)}
+        >
+          <PlusIcon class="size-4" />
+          Add server
+        </Button>
+      }
+    >
       <Show when={serversQuery.isError}>
-        <div class="text-sm text-red-500 py-8 text-center">
-          Failed to load servers.
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            onClick={() => serversQuery.refetch()}
-            class="ml-2"
-          >
-            Retry
-          </Button>
-        </div>
+        <SettingsCard>
+          <div class="px-6 py-8 text-center text-sm text-ink-muted">
+            Failed to load servers.
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              onClick={() => serversQuery.refetch()}
+              class="ml-2"
+            >
+              Retry
+            </Button>
+          </div>
+        </SettingsCard>
       </Show>
 
       <Show when={serversQuery.data}>
@@ -424,81 +434,51 @@ function Connectors() {
           <Show
             when={servers().length > 0}
             fallback={
-              <div class="text-sm text-ink-muted py-8 text-center">
-                No MCP servers configured yet.
-              </div>
+              <SettingsCard>
+                <div class="px-6 py-8 text-center text-sm text-ink-muted">
+                  No MCP servers connected yet.
+                </div>
+              </SettingsCard>
             }
           >
-            <div class="flex flex-col rounded-sm overflow-hidden border border-edge-muted settings-row-dividers @max-[480px]:[&>*:not(:last-child)]:after:inset-x-3">
+            <SettingsCard>
               <For each={servers()}>
                 {(server) => <ServerRow server={server} />}
               </For>
-            </div>
+            </SettingsCard>
           </Show>
         )}
       </Show>
-
-      <div class="flex justify-center">
-        <Button
-          variant="active"
-          size="sm"
-          depth={3}
-          onClick={() => setShowAddDialog(true)}
-        >
-          <PlusIcon class="size-4" />
-          Add Server
-        </Button>
-      </div>
 
       <AddServerForm
         open={showAddDialog()}
         onOpenChange={setShowAddDialog}
         existingUrls={new Set(serversQuery.data?.map((s) => s.url) ?? [])}
       />
-    </div>
-    </div>
-  );
-}
-
-function McpServer() {
-  return (
-    <div class="px-6">
-      <div class="text-sm py-4"> Connect agents to Macro's MCP Server </div>
-      <McpSetupCards class="max-w-none" />
-    </div>
+    </SettingsSection>
   );
 }
 
 export function Agent() {
-  const tabList = [
-    { value: 'connectors', label: 'Connectors' },
-    { value: 'mcp_server', label: 'MCP Server' },
-  ];
-
   return (
-    <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-200 size-full">
-        <Panel depth={2} class="relative portal-scope">
-          <Panel.Header>
-            <TabsInset
-              list={tabList}
-              value={agentSettingsSubTab()}
-              defaultValue="connectors"
-              onChange={(v) => setAgentSettingsSubTab(v as McpTab)}
-            />
-          </Panel.Header>
-          <Panel.Body scroll>
-            <Show when={agentSettingsSubTab() === 'connectors'}>
-              <Suspense fallback={<div class="text-sm text-ink-muted py-8 text-center">Loading...</div>}>
-                <Connectors />
-              </Suspense>
-            </Show>
-            <Show when={agentSettingsSubTab() === 'mcp_server'}>
-              <McpServer />
-            </Show>
-          </Panel.Body>
-        </Panel>
-      </div>
-    </div>
+    <SettingsPage
+      title="MCPs"
+      description="Connect Macro's agent to external tools, or connect other agents to Macro."
+    >
+      <Suspense
+        fallback={
+          <div class="text-sm text-ink-muted py-8 text-center">Loading...</div>
+        }
+      >
+        <Connectors />
+      </Suspense>
+
+      <SettingsSection
+        title="Macro MCP server"
+        description="Connect other agents and tools to your Macro workspace."
+      >
+        <McpSetupCards class="max-w-none" />
+      </SettingsSection>
+    </SettingsPage>
   );
 }

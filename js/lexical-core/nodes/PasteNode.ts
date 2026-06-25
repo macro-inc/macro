@@ -1,3 +1,5 @@
+import { $convertFromMarkdownString } from '@lexical/markdown';
+import { $unwrapNode } from '@lexical/utils';
 import {
   $applyNodeReplacement,
   $createParagraphNode,
@@ -12,6 +14,7 @@ import {
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
+import { ALL_TRANSFORMERS } from '../transformers';
 import { DecoratorBlockNode } from './DecoratorBlockNode';
 
 const VERSION = 1;
@@ -165,14 +168,18 @@ export function $isPasteNode(
 }
 
 /**
- * Convert a PasteNode (block) into plain in-document text, inserting the
- * content exactly the way a normal plain-text paste does — i.e. as text with
- * line breaks inside a single paragraph (via `insertRawText`) rather than the
- * block-level PasteNode the large-paste handler would otherwise create.
+ * Convert a PasteNode (block) into in-document content, parsing the held text
+ * as markdown exactly the way pasting that same text directly would — just
+ * without re-wrapping the result in a PasteNode. The content is parsed into a
+ * temporary paragraph wrapper which is then unwrapped so the resulting nodes
+ * sit at the paste node's former level.
  */
 export function $convertPasteToText(pasteNode: PasteNode): void {
   const content = pasteNode.getContent();
-  const paragraph = $createParagraphNode();
-  pasteNode.replace(paragraph);
-  paragraph.select().insertRawText(content);
+  const wrapper = $createParagraphNode();
+  pasteNode.replace(wrapper);
+  $convertFromMarkdownString(content, ALL_TRANSFORMERS, wrapper, false);
+  const lastChild = wrapper.getLastChild();
+  $unwrapNode(wrapper);
+  lastChild?.selectEnd();
 }

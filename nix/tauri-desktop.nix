@@ -185,20 +185,35 @@
                 pkgs.atk
                 pkgs.librsvg
                 pkgs.libayatana-appindicator
+                pkgs.dbus
+                pkgs.gst_all_1.gstreamer
+                pkgs.gst_all_1.gst-plugins-base
+                pkgs.gst_all_1.gst-plugins-good
+                pkgs.gst_all_1.gst-plugins-bad
+                pkgs.gst_all_1.gst-libav
                 pkgs.openssl
               ]
             } \
-            --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
+            --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
+            --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${
+              lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
+                pkgs.gst_all_1.gstreamer
+                pkgs.gst_all_1.gst-plugins-base
+                pkgs.gst_all_1.gst-plugins-good
+                pkgs.gst_all_1.gst-plugins-bad
+                pkgs.gst_all_1.gst-libav
+              ]
+            }"
 
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
-          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<'EOF'
+          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<EOF
           [Desktop Entry]
           Type=Application
           Name=Macro
-          Exec=app %U
+          Exec=$out/bin/app %U
           Icon=macro
           Categories=Office;Utility;
           MimeType=x-scheme-handler/macro;
@@ -352,6 +367,12 @@
         pkgs.atk
         pkgs.librsvg
         pkgs.libayatana-appindicator
+        pkgs.dbus
+        pkgs.gst_all_1.gstreamer
+        pkgs.gst_all_1.gst-plugins-base
+        pkgs.gst_all_1.gst-plugins-good
+        pkgs.gst_all_1.gst-plugins-bad
+        pkgs.gst_all_1.gst-libav
         pkgs.openssl
       ];
       tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;

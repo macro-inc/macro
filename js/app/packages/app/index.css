@@ -419,6 +419,30 @@ a {
   }
 }
 
+/* Shared text-field styling so inputs look the same across every settings tab.
+   Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
+@utility settings-input {
+  @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-sm text-ink outline-none transition-colors;
+  &::placeholder {
+    @apply text-ink-extra-muted;
+  }
+  &:hover {
+    @apply border-edge;
+  }
+  &:focus {
+    @apply border-accent;
+  }
+  /* State styling owned by the utility so call sites toggle an attribute instead
+     of fighting the border/text classes. `aria-invalid` after `:focus` so the
+     error border wins even while focused; `:disabled` reads as a muted field. */
+  &[aria-invalid="true"] {
+    @apply border-failure;
+  }
+  &:disabled {
+    @apply text-ink-muted opacity-70;
+  }
+}
+
 /* Subtle, inset divider between settings rows (Account/Appearance/Email/Agent).
    Apply to a list container whose direct children are full-width rows with px-6
    padding; draws the line under every row except the last. */
