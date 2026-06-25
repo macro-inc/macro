@@ -165,7 +165,8 @@ async fn main() -> anyhow::Result<()> {
     let stripe_client = stripe::Client::new(stripe_client_secret);
     tracing::trace!("initialized stripe client");
 
-    let ses_client = ses_client::Ses::new(
+    // `from_env` routes to local SMTP (Mailpit) when SMTP_HOST is set, else SES.
+    let ses_client = ses_client::Ses::from_env(
         aws_sdk_sesv2::Client::new(&macro_aws_config::get_macro_aws_config().await),
         &config.environment.to_string(),
     );
