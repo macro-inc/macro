@@ -13,16 +13,21 @@ path = "src/main.rs"
 name = "image_proxy_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "image_proxy_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
+doppler-config = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
+macro_config = { path = "../macro_config" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
-macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "tracking",

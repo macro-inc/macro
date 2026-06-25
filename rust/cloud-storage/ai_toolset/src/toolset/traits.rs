@@ -1,6 +1,6 @@
 //! The core ToolSet trait implemented by the ToolSet and AsyncToolset
 use crate::toolset::types::{RequestSchema, ToolInfo};
-use crate::{AsyncToolCollection, RequestContext, ToolResult, ToolSetError};
+use crate::{AsyncToolCollection, RequestContext, SearchableTool, ToolResult, ToolSetError};
 use std::pin::Pin;
 
 /// An object with a set of tools
@@ -16,8 +16,24 @@ pub trait ToolSet<Context>: Send + Sync {
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     >;
 
-    /// Returns the input schemas for all tools in the toolset, or `None` if the toolset is empty.
+    /// Returns the input schemas for the tools sent to the provider on every
+    /// request. Tools loaded on demand via tool search are excluded — they are
+    /// surfaced through [`Self::searchable_catalog`] instead.
     fn request_schemas(&self) -> Option<Vec<RequestSchema>>;
+
+    /// The catalog of on-demand (searchable) tools — those not sent on every
+    /// request but discoverable via the `SearchTools` tool. Defaults to empty.
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        Vec::new()
+    }
+
+    /// Names of the toolsets (e.g. connected MCP servers) whose tools are
+    /// available via tool search but not advertised on every request. Used to
+    /// tell the model which integrations it can reach via `SearchTools` /
+    /// `LoadTools`. Defaults to empty (no searchable toolsets).
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        Vec::new()
+    }
 
     /// Dynamic routers use this to demangle tool names for frontend consumption
     fn routing_description<'a>(&'a self, _tool_name: &'a str) -> Option<ToolInfo> {

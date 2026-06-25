@@ -279,6 +279,12 @@ export const MarkdownShell: Component<
                   builderConfig.actions.ignoreActionIds) ||
                 undefined
               }
+              actionContext={{
+                sourceDocumentId: builderConfig.mentions?.sourceDocumentId,
+                sourceBlockName: builderConfig.mentions?.block,
+                disableMentionTracking:
+                  builderConfig.mentions?.disableMentionTracking,
+              }}
               portalScope={props.portalScope}
             />
           )}
@@ -312,7 +318,9 @@ export const MarkdownShell: Component<
         {/* Floating Link Menu */}
         <Show when={builderConfig.links?.floatingMenu}>
           <FloatingMenuGroup>
-            <FloatingLinkMenu />
+            <FloatingLinkMenu
+              autoLinkMatchMode={builderConfig.links?.autoLinkMatchMode}
+            />
           </FloatingMenuGroup>
         </Show>
       </div>

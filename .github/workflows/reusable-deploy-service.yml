@@ -1,3 +1,14 @@
+# Single-service deploy on the shared namespace + nix + crane pipeline — the
+# same warm sticky-disk nix builds, crane/cargo-zigbuild lambdas, nsc artifact
+# handoff, and Namespace Docker builder used by deploy-all-services, scoped to
+# one service. This replaced a pipeline that built binaries on Cachix-only
+# linux-extra-beefy runners, built lambdas per-handler, and handed off via the
+# GitHub artifacts API.
+#
+# deploy-all-services warms a shared dep closure once and fans a build matrix
+# out across it; with a single service there is no fan-out to amortise, so the
+# per-service build realises its own closure directly (the /nix sticky disk +
+# Cachix still substitute everything unchanged from prior runs).
 name: Reusable Deploy Service
 on:
   workflow_call:
@@ -37,55 +48,77 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
-      AWS_ACCESS_KEY_ID:
-        required: false
-      SCCACHE_BUCKET:
-        required: false
 
 jobs:
-  build-service-binaries:
-    name: Build ${{ inputs.service-name }} binaries
-    runs-on: linux-extra-beefy
+  # Resolve which artifact kinds this service produces so the heavy nix build
+  # jobs only spin up a Namespace runner + /nix volume when there's something to
+  # build (mirrors deploy-all-services' matrix filtering, for one service).
+  setup:
+    name: Check ${{ inputs.service-name }} artifacts
+    runs-on: ubuntu-latest
     outputs:
-      has_binaries: ${{ steps.check-binaries.outputs.has_binaries }}
+      has_binaries: ${{ steps.check.outputs.has_binaries }}
+      has_lambdas: ${{ steps.check.outputs.has_lambdas }}
     steps:
       # Pinned actions/checkout v6: https://github.com/actions/checkout/commit/de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.ref_name }}
-          clean: false
-
-      - name: Configure Cachix
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-
-      - name: Check prebuilt binaries config
-        id: check-binaries
+          sparse-checkout: .github/
+      - name: Check artifact config
+        id: check
         env:
           SERVICE: ${{ inputs.service-name }}
         run: |
-          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
+          set -euo pipefail
+          cfg=.github/services-config.json
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' "$cfg")
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' "$cfg")
           echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+          echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
+
+  build-service-binaries:
+    name: Build ${{ inputs.service-name }} binaries
+    needs: setup
+    if: ${{ needs.setup.outputs.has_binaries == 'true' }}
+    runs-on: namespace-profile-linux-mid
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          clean: false
+
+      # Namespace cache volume backing /nix. Purely an optimization: if the
+      # profile has no cache volumes (or the mount fails), setup-nix performs
+      # a cold install and Cachix substitutes the warm layers — slower, never
+      # wrong. Hence continue-on-error.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          path: /nix
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build prebuilt binaries
-        if: ${{ steps.check-binaries.outputs.has_binaries == 'true' }}
         shell: bash
         env:
           SERVICE: ${{ inputs.service-name }}
         run: |
           set -euo pipefail
           mkdir -p prebuilt
-          if command -v cachix >/dev/null 2>&1; then
-            cachix watch-store "$CACHIX_CACHE_NAME" &
+          cachix_pid=
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
             cachix_pid=$!
-            trap 'kill "$cachix_pid" || true' EXIT
-          else
-            echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
+            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
           fi
-
-          nix build ".#deploy-service-binaries-${SERVICE}"
+          nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
           cp -r result/bin/* prebuilt/
           mkdir -p prebuilt/nix-store
           while IFS= read -r store_path; do
@@ -93,86 +126,157 @@ jobs:
           done < <(nix-store -qR result)
           touch prebuilt/.keep
           tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+          # Receipt: the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
 
-      - name: Upload prebuilt binaries
-        if: ${{ steps.check-binaries.outputs.has_binaries == 'true' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: cloud-storage-service-binaries-${{ inputs.service-name }}-${{ github.sha }}
-          path: prebuilt-binaries.tar.gz
-          retention-days: 7
+      # Handoff to the deploy job via Namespace artifact storage: strongly
+      # consistent object storage (no snapshot-visibility races), rides
+      # Namespace's network rather than the GitHub artifacts API. Attempt-scoped
+      # path so re-runs never collide with stale uploads.
+      - name: Upload handoff artifact
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/prebuilt-binaries.tar.gz
+        run: nsc artifact upload prebuilt-binaries.tar.gz "$DEST" --expires_in=24h
+
+      - name: Teardown Nix (free cache volume for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
 
   build-lambda-artifacts:
     name: Build ${{ inputs.service-name }} Lambda artifacts
-    runs-on: linux-extra-beefy
-    outputs:
-      has_lambdas: ${{ steps.check-lambdas.outputs.has_lambdas }}
+    needs: setup
+    if: ${{ needs.setup.outputs.has_lambdas == 'true' }}
+    # Each handler is a crane + cargo-zigbuild nix package; the build script runs
+    # `nix build .#deploy-lambda-<name>` for the service's handlers. Unchanged
+    # handlers are pure cache hits (substituted from the /nix disk or Cachix).
+    runs-on: namespace-profile-linux-mid
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.ref_name }}
           clean: false
 
-      - name: Configure Cachix
+      # See note on the binary build's volume mount.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          path: /nix
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-
-      - name: Check Lambda config
-        id: check-lambdas
-        env:
-          SERVICE: ${{ inputs.service-name }}
-        run: |
-          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
       - name: Build Lambda artifacts
-        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
         env:
           SERVICE: ${{ inputs.service-name }}
         run: .github/scripts/build-cloud-storage-lambdas-nix.sh
 
-      - name: Upload Lambda artifacts
-        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: cloud-storage-lambdas-${{ inputs.service-name }}-${{ github.sha }}
-          path: lambda-artifacts.tar.gz
-          retention-days: 7
+      - name: Log handoff receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The build script writes lambda-artifacts.tar.gz to the workspace
+          # root; the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
+
+      # Handoff via Namespace artifact storage (see build-service-binaries).
+      - name: Upload handoff artifact
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/lambda-artifacts.tar.gz
+        run: nsc artifact upload lambda-artifacts.tar.gz "$DEST" --expires_in=24h
+
+      - name: Teardown Nix (free cache volume for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
 
   deploy:
-    needs: [build-service-binaries, build-lambda-artifacts]
-    runs-on:
-      [
-        runs-on,
-        runner=8cpu-linux-x64,
-        hdd=40,
-        spot=false,
-        ssh=false,
-        'run-id=${{github.run_id}}-${{ inputs.service-name }}',
-      ]
+    name: Deploy ${{ inputs.service-name }}
+    needs: [setup, build-service-binaries, build-lambda-artifacts]
+    # A build job is skipped when the service has no binaries/lambdas (and a
+    # service may legitimately have neither). Proceed as long as nothing
+    # actually failed or was cancelled — skipped needs are expected here.
+    if: ${{ !failure() && !cancelled() }}
+    # Deploys via Pulumi + Docker; AWS auth is via explicit static keys
+    # (configure-aws-credentials).
+    runs-on: namespace-profile-linux-small
+    # Pin PULUMI_HOME to a fixed path (outside the workspace, which the deploy
+    # action's checkout cleans) so the plugins subdir can be backed by a sticky
+    # disk. Propagates into the composite action's pulumi step via the job env.
+    env:
+      PULUMI_HOME: /pulumi
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.ref_name }}
-      
+
       - name: Get project name
         id: project-name
         uses: ./.github/actions/get-project-name
         with:
           service-name: ${{ inputs.service-name }}
-      
-      - uses: ./.github/actions/deploy-cloud-storage-pulumi
+
+      # Pull the handoff tars from Namespace artifact storage into runner.temp
+      # (outside the workspace, which the composite action's checkout cleans).
+      # The composite's tar-path branch handles receipts + the extract guard.
+      - name: Download handoff artifacts
+        if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
+        shell: bash
+        env:
+          HAS_BINARIES: ${{ needs.setup.outputs.has_binaries }}
+          HAS_LAMBDAS: ${{ needs.setup.outputs.has_lambdas }}
+          BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}
+        run: |
+          set -euo pipefail
+          if ! command -v nsc >/dev/null 2>&1; then
+            echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/handoff"
+          if [[ "$HAS_BINARIES" == "true" ]]; then
+            nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
+          fi
+          if [[ "$HAS_LAMBDAS" == "true" ]]; then
+            nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
+          fi
+
+      # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a Namespace
+      # cache volume. Plugins are version-pinned by infra/ and identical across
+      # services. Optimization-only: a cold volume just re-downloads (~45s).
+      - name: Cache Pulumi plugins
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          path: /pulumi/plugins
+
+      # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
+      # make them writable so pulumi can write credentials + plugins as the
+      # runner. No-op when the runner already runs as root. mkdir -p first: the
+      # plugin cache mount is continue-on-error, so on a mount failure /pulumi
+      # may not exist yet — create it so the cold-cache fallback works instead
+      # of the chown hard-failing the deploy.
+      - name: Ensure Pulumi home is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /pulumi
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
+
+      - name: Deploy ${{ inputs.service-name }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
           environment: ${{ inputs.environment }}
           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
-          prebuilt-binaries-artifact: ${{ needs.build-service-binaries.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', inputs.service-name, github.sha) || '' }}
-          lambda-artifacts: ${{ needs.build-lambda-artifacts.outputs.has_lambdas == 'true' && format('cloud-storage-lambdas-{0}-{1}', inputs.service-name, github.sha) || '' }}
-          dd-app-key: ${{ secrets.DD_APP_KEY }}
-          dd-api-key: ${{ secrets.DD_API_KEY }}
+          use-namespace-builder: 'true'
           use-docker: ${{ inputs.use-docker }}
           use-lfs: ${{ inputs.use-lfs }}
+          prebuilt-binaries-tar: ${{ needs.setup.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
+          lambda-artifacts-tar: ${{ needs.setup.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}

@@ -39,7 +39,7 @@ impl From<EmailRecipient> for ContactInfo {
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendEmail",
-    description = "Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
+    description = "Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendEmail {

@@ -201,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
 
@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         LexicalServiceUrl::new()?.to_string(),
     ));
 
@@ -276,11 +276,18 @@ async fn main() -> anyhow::Result<()> {
     let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
         queue: ingress_queue,
     });
-    let properties_service = Arc::new(PropertiesServiceImpl::new(
-        PropertiesPgRepo::new(db.clone()),
-        Some(permission_checker),
-        Some(notification_service),
-    ));
+    let properties_service = Arc::new(
+        PropertiesServiceImpl::new(
+            PropertiesPgRepo::new(db.clone()),
+            Some(permission_checker),
+            Some(notification_service),
+        )
+        .with_search_indexer(Arc::new(
+            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
+                sqs_client.clone(),
+            ),
+        )),
+    );
 
     // Create the channel list service used by soup.
     let channel_service_for_soup = ChannelListServiceImpl::new(
@@ -636,7 +643,6 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
-        config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -654,7 +660,9 @@ async fn main() -> anyhow::Result<()> {
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
+            document_permission_jwt_secret: config.document_permission_jwt_secret_key.as_ref().to_string(),
         },
+        config: Arc::new(config),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),

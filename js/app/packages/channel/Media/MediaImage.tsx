@@ -16,25 +16,32 @@ const ATTACHMENT_TILE_SIZE = 92;
 function ImagePlaceholder(props: {
   dims?: { width: number; height: number };
   square?: boolean;
+  /** Fill the parent's fixed box, so the placeholder matches the loaded image. */
+  fill?: boolean;
 }) {
   return (
     <div
-      class="flex items-center justify-center rounded-2xl border border-edge bg-surface"
+      class={cn(
+        'flex items-center justify-center rounded-2xl border border-edge bg-surface',
+        props.fill && 'size-full'
+      )}
       style={
-        props.square
-          ? {
-              width: `${ATTACHMENT_TILE_SIZE}px`,
-              height: `${ATTACHMENT_TILE_SIZE}px`,
-            }
-          : props.dims
+        props.fill
+          ? undefined
+          : props.square
             ? {
-                width: `${props.dims.width}px`,
-                height: `${props.dims.height}px`,
+                width: `${ATTACHMENT_TILE_SIZE}px`,
+                height: `${ATTACHMENT_TILE_SIZE}px`,
               }
-            : {
-                width: '60px',
-                height: '60px',
-              }
+            : props.dims
+              ? {
+                  width: `${props.dims.width}px`,
+                  height: `${props.dims.height}px`,
+                }
+              : {
+                  width: '60px',
+                  height: '60px',
+                }
       }
     >
       <Spinner class="size-4 animate-spin" />
@@ -53,8 +60,15 @@ function Root(props: ParentProps<{ class?: string }>) {
 function Fallback(props: {
   dims?: { width: number; height: number };
   square?: boolean;
+  fill?: boolean;
 }) {
-  return <ImagePlaceholder dims={props.dims} square={props.square} />;
+  return (
+    <ImagePlaceholder
+      dims={props.dims}
+      square={props.square}
+      fill={props.fill}
+    />
+  );
 }
 
 function Image(props: {

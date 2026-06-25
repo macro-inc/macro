@@ -37,6 +37,7 @@ export type ArrayFieldFilters = {
   channelId?: string[];
   channelType?: string[];
   channelSenderId?: string[];
+  channelThreadId?: string[];
   chatId?: string[];
   chatOwnerId?: string[];
   chatProjectId?: string[];

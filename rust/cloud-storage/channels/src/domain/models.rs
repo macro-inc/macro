@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
-use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
-use macro_user_id::user_id::MacroUserIdStr;
+use item_filters::ast::{
+    LiteralTree,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+};
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -214,7 +217,7 @@ pub enum MessagePageDirection {
 }
 
 /// A top-level message with thread info, reactions, and attachments.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelMessage {
     /// Message id.
     pub id: Uuid,
@@ -281,7 +284,7 @@ impl SortOn<CreatedAt> for ChannelMessage {
 }
 
 /// Thread metadata + preview replies for a top-level message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ThreadInfo {
     /// Total number of replies in the thread.
     pub reply_count: i64,
@@ -1151,6 +1154,14 @@ impl UserName {
     }
 }
 
+/// Lookup from Macro user id to display name.
+pub(crate) type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
+
+/// Produce the human-readable fallback for a Macro user id.
+pub(crate) fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
+    user_id.email_part().local_part().to_string()
+}
+
 /// Channel list request.
 #[cfg(feature = "list")]
 #[derive(Debug)]
@@ -1182,6 +1193,57 @@ pub struct GetChannelsParams {
     macro_id: MacroUserIdStr<'static>,
     limit: Option<u32>,
     query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+/// Channel thread reply rows request.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsRequest {
+    /// Requesting user id.
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Optional result limit.
+    pub limit: Option<u32>,
+    /// Cursor, sort, and channel-thread-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsRequest {
+    /// Convert into repository params.
+    pub fn into_params(self) -> GetThreadReplyRowsParams {
+        GetThreadReplyRowsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+/// Channel thread reply rows repository parameters.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsParams {
+    /// Requesting user id.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    /// Optional result limit.
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    /// Cursor, sort, and channel-thread-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>> {
+        &self.query
+    }
 }
 
 #[cfg(feature = "list")]
@@ -1366,5 +1428,12 @@ mod tests {
 
         assert_eq!(sender.to_storage_string(), storage);
         assert_eq!(serde_json::to_value(&sender).unwrap(), storage);
+    }
+
+    #[test]
+    fn fallback_user_name_uses_email_local_part() {
+        let user_id = MacroUserIdStr::parse_from_str("macro|shepherd.hatton@gmail.com").unwrap();
+
+        assert_eq!(fallback_user_name(&user_id), "shepherd.hatton");
     }
 }

@@ -6,6 +6,7 @@ import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import {
   hotkeyScopeTree,
@@ -51,13 +52,12 @@ import {
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'DMs' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'tasks', label: 'Tasks' },
+  { id: 'commands', label: 'Command' },
   { id: 'chats', label: 'Agents' },
-  { id: 'projects', label: 'Folders' },
-  { id: 'commands', label: 'Commands' },
+  { id: 'documents', label: 'Files' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'channels', label: 'Channels' },
+  { id: 'dms', label: 'People' },
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
@@ -242,9 +242,15 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      // TODO(dev-rb/github): Route GitHub PRs to /pr.
       if (isGithubPrEntity(item.data)) {
-        openExternalUrl(item.data.metadata.url);
+        if (USE_MACRO_PR_SUMMARY_BLOCK) {
+          openWithSplit(
+            { type: 'pr', id: item.data.id },
+            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+          );
+        } else {
+          openExternalUrl(item.data.metadata.url);
+        }
         CommandState.close();
         CommandState.setQuery('');
         return;
@@ -308,6 +314,9 @@ export function CommandMenuInner(props: {
         {
           type: 'component',
           id: 'search',
+          // Opening search into an existing split otherwise drops these params
+          // and the field mounts empty. Entry state still wins on back/forward.
+          preserveParams: true,
           params: {
             initialQuery: item.query,
             initialFilters: filters,

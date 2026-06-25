@@ -36,6 +36,7 @@ pub async fn delete_user_entity_access_bulk(
         EntityType::User
         | EntityType::Team
         | EntityType::Channel
+        | EntityType::ChannelMessage
         | EntityType::StaticFile
         | EntityType::CrmCompany
         | EntityType::CrmContact

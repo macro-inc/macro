@@ -112,6 +112,65 @@
         }
       }
     },
+    "/ai-projections": {
+      "post": {
+        "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
+        "summary": "Gets or creates an ai projection and the requesting user's cold instance.",
+        "operationId": "upsert_ai_projection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/attachments/{attachment_id}/chats": {
       "get": {
         "tags": ["get_chats_for_attachment"],
@@ -455,35 +514,6 @@
           },
           "500": {
             "description": "Internal server error",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/chats/models": {
-      "get": {
-        "tags": ["chats"],
-        "summary": "List all chat models, each flagged with whether the requesting user has\naccess (free users get Haiku; professional users get everything).",
-        "operationId": "list_models",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelsResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1550,7 +1580,8 @@
           "dynamic_completions_api",
           "chat_rename",
           "call_summary",
-          "channel_bot"
+          "channel_bot",
+          "ai_projection"
         ]
       },
       "AssistantMessagePart": {
@@ -2090,7 +2121,7 @@
           },
           "model": {
             "type": ["string", "null"],
-            "description": "The model used to generate the chat (provider api id)."
+            "description": "The model used to generate the chat (`provider/model` id)."
           },
           "name": {
             "type": "string",
@@ -2348,6 +2379,7 @@
           "user",
           "chat",
           "channel",
+          "channel_message",
           "document",
           "project",
           "email_thread",
@@ -2380,6 +2412,11 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "Expiry": {
+        "type": "string",
+        "description": "How long a projection remains active without being requested.",
+        "enum": ["day", "week", "month"]
       },
       "FeatureUsage": {
         "type": "object",
@@ -2944,7 +2981,7 @@
           },
           "model": {
             "type": "string",
-            "description": "The model to respond with (provider api id)"
+            "description": "The model to respond with (`provider/model` id)"
           },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
@@ -3001,45 +3038,6 @@
           "date": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "ModelAccess": {
-        "type": "object",
-        "description": "A chat model paired with whether the requesting user may use it.",
-        "required": ["id", "provider", "contextWindow", "available"],
-        "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "Whether the requesting user has access to this model."
-          },
-          "contextWindow": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Context window size in tokens.",
-            "minimum": 0
-          },
-          "id": {
-            "type": "string",
-            "description": "Provider api id — the string sent when this model is selected."
-          },
-          "provider": {
-            "type": "string",
-            "description": "Provider serving the model (e.g. `anthropic`, `openai`)."
-          }
-        }
-      },
-      "ModelsResponse": {
-        "type": "object",
-        "description": "Response body for the models-access endpoint: every chat model, each\nflagged with the requesting user's access.",
-        "required": ["models"],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelAccess"
-            },
-            "description": "All chat models, in display order."
           }
         }
       },
@@ -3154,6 +3152,45 @@
           }
         }
       },
+      "ProjectionStateResponse": {
+        "type": "object",
+        "description": "The current state of a user's projection instance.",
+        "required": ["id", "status"],
+        "properties": {
+          "data": {
+            "type": ["string", "null"],
+            "description": "The cached result, if any."
+          },
+          "generated_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the result was generated."
+          },
+          "id": {
+            "type": "string",
+            "description": "The projection id."
+          },
+          "stale_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the result becomes stale."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectionStatus",
+            "description": "The materialization status."
+          }
+        }
+      },
+      "ProjectionStatus": {
+        "type": "string",
+        "description": "The materialization status of a user's projection instance.",
+        "enum": ["loading", "cold", "ready", "refreshing", "error"]
+      },
+      "RefreshCadence": {
+        "type": "string",
+        "description": "How frequently an active projection is regenerated.",
+        "enum": ["high", "medium", "low"]
+      },
       "RejectToolCallRequest": {
         "type": "object",
         "description": "Request body for rejecting a pending tool call.",
@@ -3204,7 +3241,7 @@
               },
               "model": {
                 "type": "string",
-                "description": "the chat model to respond with (provider api id)"
+                "description": "the chat model to respond with (`provider/model` id)"
               },
               "stream_id": {
                 "type": "string",
@@ -3472,6 +3509,11 @@
           "result": {}
         }
       },
+      "TargetType": {
+        "type": "string",
+        "description": "The kind of entity a projection is materialized for.",
+        "enum": ["user", "team"]
+      },
       "ToolSet": {
         "oneOf": [
           {
@@ -3605,6 +3647,39 @@
           "toolCallId": {
             "type": "string",
             "description": "The tool call ID whose response should be updated."
+          }
+        }
+      },
+      "UpsertProjectionRequest": {
+        "type": "object",
+        "description": "Request body for getting or creating an ai projection. The concrete target\nid is resolved from the authenticated user, so only the target type is sent.",
+        "required": [
+          "id",
+          "prompt",
+          "target_type",
+          "refresh_cadence",
+          "expiry"
+        ],
+        "properties": {
+          "expiry": {
+            "$ref": "#/components/schemas/Expiry",
+            "description": "How long the projection remains active without being requested."
+          },
+          "id": {
+            "type": "string",
+            "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt used to materialize the projection."
+          },
+          "refresh_cadence": {
+            "$ref": "#/components/schemas/RefreshCadence",
+            "description": "How frequently the projection should be regenerated."
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/TargetType",
+            "description": "Whether the projection is materialized for the requesting user or their team."
           }
         }
       },

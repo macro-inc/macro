@@ -1,3 +1,4 @@
+import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -218,14 +219,14 @@ export function ChannelCompose() {
         <div class="h-full items-center flex" p-1></div>
       </SplitToolbarLeft>
       <div class="relative flex flex-col size-full panel">
-        <div class="pt-2 size-full grow overflow-y-auto @min-[40rem]:px-4">
+        <div class="pt-2 mobile:pt-[calc(var(--mobile-content-inset-top)+.5rem)] size-full grow overflow-y-auto @min-[40rem]:px-4">
           <div class="macro-message-width macro-message-padding mx-auto pb-1 h-full">
             <input
               type="text"
               value={channelName()}
               disabled={selectedRecipients().length < 2}
               placeholder={previewName()}
-              class="text-xl font-medium mb-6 mt-12 bg-transparent border-none outline-none w-full resize-none appearance-none focus:ring-0"
+              class="text-xl font-medium mb-6 mt-12 mobile:mt-0 bg-transparent border-none outline-none w-full resize-none appearance-none focus:ring-0"
               style="box-shadow: none;"
               onInput={(e) => {
                 if (selectedRecipients().length >= 2) {
@@ -252,83 +253,89 @@ export function ChannelCompose() {
             </div>
           </div>
         </div>
-        <Show when={error()}>
-          <div class="shrink-0 w-full @min-[40rem]:px-4">
-            <div class="mx-auto w-full macro-message-width macro-message-padding">
-              <div class="text-sm font-mono text-failure-ink">{error()}</div>
+        {/* Full-frame mobile: error + composer float in the bottom accessory
+            region above the dock; desktop renders them inline as before. */}
+        <FloatRegionOrInline region="accessory">
+          <Show when={error()}>
+            <div class="shrink-0 w-full @min-[40rem]:px-4 mobile:px-(--mobile-chrome-gutter)">
+              <div class="mx-auto w-full macro-message-width macro-message-padding">
+                <div class="text-sm font-mono text-failure-ink">{error()}</div>
+              </div>
             </div>
-          </div>
-        </Show>
-        <div class="px-2">
-          <ChannelInputContainer>
-            <Input.Root
-              input={inputState.view()}
-              commands={inputState.commands}
-            >
-              <Surface
-                depth={2}
-                class="rounded-xl ring-1 ring-edge"
-                style={{ border: '0' }}
+          </Show>
+          {/* ChannelInputContainer owns the mobile chrome gutter, so drop the
+              desktop px-2 there. */}
+          <div class="px-2 mobile:px-0">
+            <ChannelInputContainer>
+              <Input.Root
+                input={inputState.view()}
+                commands={inputState.commands}
               >
-                <Input.DropZone
-                  onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
-                  onDragEnd={() => inputState.setIsDraggedOver(false)}
+                <Surface
+                  depth={2}
+                  class="rounded-xl mobile:rounded-3xl ring-1 ring-edge"
+                  style={{ border: '0' }}
                 >
-                  <Input.Layout>
-                    <Input.DropOverlay />
-                    <Input.FormatRibbon>
-                      <FormatButtons
-                        selectionState={() => markdownEditor.selection}
-                        onInlineFormat={(format) =>
-                          applyInlineFormat(markdownEditor.lexical, format)
-                        }
-                        onNodeFormat={(format) =>
-                          applyNodeFormat(markdownEditor.lexical, format)
-                        }
-                      />
-                    </Input.FormatRibbon>
-                    <Input.EditorShell
-                      ref={setScrollContainer}
-                      onClick={(event) => {
-                        if (!isMobile()) {
-                          event.stopPropagation();
-                          markdownEditor.controls.focus();
-                        }
-                      }}
-                    >
-                      <Input.Editor>
-                        <MarkdownShell
-                          config={markdownEditor}
-                          placeholder={placeholder()}
-                          autofocus={false}
-                          class="text-sm"
+                  <Input.DropZone
+                    onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
+                    onDragEnd={() => inputState.setIsDraggedOver(false)}
+                  >
+                    <Input.Layout>
+                      <Input.DropOverlay />
+                      <Input.FormatRibbon>
+                        <FormatButtons
+                          selectionState={() => markdownEditor.selection}
+                          onInlineFormat={(format) =>
+                            applyInlineFormat(markdownEditor.lexical, format)
+                          }
+                          onNodeFormat={(format) =>
+                            applyNodeFormat(markdownEditor.lexical, format)
+                          }
                         />
-                      </Input.Editor>
-                    </Input.EditorShell>
-                    <Input.Attachments kind="media" />
-                    <Input.Attachments kind="document" />
-                    <Input.Footer>
-                      <Input.Actions>
-                        <Input.Actions.Left>
-                          <Show
-                            when={!isPlatform('ios')}
-                            fallback={<Input.AttachNativeMediaAction />}
-                          >
-                            <Input.AttachFilesAction />
-                          </Show>
-                          <Input.ToggleFormatAction />
-                        </Input.Actions.Left>
-                        <Input.Actions.Right>
-                          <Input.SendAction />
-                        </Input.Actions.Right>
-                      </Input.Actions>
-                    </Input.Footer>
-                  </Input.Layout>
-                </Input.DropZone>
-              </Surface>
-            </Input.Root>
-          </ChannelInputContainer>
-        </div>
+                      </Input.FormatRibbon>
+                      <Input.EditorShell
+                        ref={setScrollContainer}
+                        onClick={(event) => {
+                          if (!isMobile()) {
+                            event.stopPropagation();
+                            markdownEditor.controls.focus();
+                          }
+                        }}
+                      >
+                        <Input.Editor>
+                          <MarkdownShell
+                            config={markdownEditor}
+                            placeholder={placeholder()}
+                            autofocus={false}
+                            class="text-sm"
+                          />
+                        </Input.Editor>
+                      </Input.EditorShell>
+                      <Input.Attachments kind="media" />
+                      <Input.Attachments kind="document" />
+                      <Input.Footer>
+                        <Input.Actions>
+                          <Input.Actions.Left>
+                            <Show
+                              when={!isPlatform('ios')}
+                              fallback={<Input.AttachNativeMediaAction />}
+                            >
+                              <Input.AttachFilesAction />
+                            </Show>
+                            <Input.ToggleFormatAction />
+                          </Input.Actions.Left>
+                          <Input.Actions.Right>
+                            <Input.SendAction />
+                          </Input.Actions.Right>
+                        </Input.Actions>
+                      </Input.Footer>
+                    </Input.Layout>
+                  </Input.DropZone>
+                </Surface>
+              </Input.Root>
+            </ChannelInputContainer>
+          </div>
+        </FloatRegionOrInline>
       </div>
     </>
   );

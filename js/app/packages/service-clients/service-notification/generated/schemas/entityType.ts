@@ -15,6 +15,7 @@ export const EntityType = {
   user: 'user',
   chat: 'chat',
   channel: 'channel',
+  channel_message: 'channel_message',
   document: 'document',
   project: 'project',
   email_thread: 'email_thread',

@@ -9,6 +9,10 @@ import {
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
+import {
+  getSoupInputStoredModel,
+  storeSoupInputModel,
+} from '@core/component/AI/util/storage';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
@@ -18,7 +22,7 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { onMount } from 'solid-js';
+import { createEffect, onMount } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -37,6 +41,14 @@ function SoupChatInputInner() {
     },
     block: 'chat',
     showOpenTabs: true,
+  });
+
+  // Persist the model the user picks in the new-chat composer so it survives
+  // reload/navigation, matching how the existing-chat draft model is restored.
+  // ChatInput may reconcile to an available model if the user isn't entitled to
+  // the stored one, and that corrected value flows through here too.
+  createEffect(() => {
+    storeSoupInputModel(input.model());
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
@@ -138,8 +150,12 @@ function SoupChatInputInner() {
 }
 
 export function SoupChatInput() {
+  // Seed the selector from the persisted soup draft model so the user's last
+  // choice in the new-chat composer is restored. ChatInputProvider falls back
+  // to DEFAULT_MODEL when this is undefined.
+  const initialModel = getSoupInputStoredModel();
   return (
-    <ChatInputProvider>
+    <ChatInputProvider model={initialModel}>
       <SoupChatInputInner />
     </ChatInputProvider>
   );

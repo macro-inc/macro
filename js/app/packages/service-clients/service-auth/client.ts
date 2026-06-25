@@ -638,10 +638,18 @@ export const authServiceClient = {
 
   async getTeam() {
     return (
-      await fetchWithAuth<TeamWithMembers>(`${authHost}/team`, {
-        method: 'GET',
-      })
-    ).map((result) => result);
+      (
+        await fetchWithAuth<TeamWithMembers>(`${authHost}/team`, {
+          method: 'GET',
+        })
+      )
+        // A user with no team gets a 204 No Content, which `safeFetch`
+        // surfaces as an empty object. Normalize that to `null` so callers
+        // don't dereference a non-existent `team`/`members`.
+        .map((result): TeamWithMembers | null =>
+          'team' in result ? result : null
+        )
+    );
   },
 
   async getTeamInvites() {

@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Project id associated with the thread.
+ */
 export type SoupEmailThreadPreviewProjectId = string | null;

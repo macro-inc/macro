@@ -12,20 +12,25 @@ path = "src/main.rs"
 name = "unfurl_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "unfurl_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [features]
 mock = []
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
+doppler-config = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
+macro_config = { path = "../macro_config" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
-macro_env_var = { path = "../macro_env_var" }
 reqwest = { workspace = true, features = ["stream"] }
 scraper = { workspace = true }
 serde = { workspace = true }

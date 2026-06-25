@@ -13,6 +13,11 @@ path = "src/main.rs"
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "document_storage_service_doppler_config"
+path = "src/doppler_config.rs"
+
+
 [features]
 connection_gateway = []
 default = ["connection_gateway", "location_check"]
@@ -151,6 +156,7 @@ uuid = { workspace = true }
 zip = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_config = { path = "../macro_config" }
+doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"

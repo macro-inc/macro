@@ -1,8 +1,8 @@
 use crate::domain::models::{Error, McpServer, McpServerRecord};
 use crate::domain::ports::McpConnector;
 use ai_toolset::{
-    AsyncToolCollection, RequestContext, RequestSchema, ToolCallError, ToolInfo, ToolResult,
-    ToolSet, ToolSetError,
+    AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
+    ToolResult, ToolSet, ToolSetError,
 };
 use rmcp::RoleClient;
 use rmcp::model::{CallToolRequestParams, CallToolResult, Tool};
@@ -119,6 +119,39 @@ impl McpToolSet {
         self.tools.is_empty()
     }
 
+    /// The full catalog of MCP tools (mangled name + description + input schema)
+    /// for on-demand loading via tool search.
+    fn catalog(&self) -> Vec<SearchableTool> {
+        self.tools
+            .iter()
+            .map(|(mangled, entry)| SearchableTool {
+                name: mangled.as_str().to_string(),
+                description: entry
+                    .tool
+                    .description
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_string(),
+                schema: Schema::from((*entry.tool.input_schema).clone()),
+            })
+            .collect()
+    }
+
+    /// Distinct names of the connected MCP servers that contributed tools,
+    /// sorted for a stable prompt. Derived from the mangled tool keys so it
+    /// reflects the servers actually serving searchable tools this request.
+    fn toolset_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .tools
+            .keys()
+            .filter_map(|mangled| MangledName::parse(mangled.as_str()))
+            .map(|(server, _tool)| server.to_string())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
     #[tracing::instrument(skip(self, arguments), err)]
     async fn call_tool(
         &self,
@@ -206,6 +239,10 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for McpToolSet {
         }
     }
 
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.toolset_names()
+    }
+
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
         let (server_name, original_name) = MangledName::parse(tool_name)?;
         let key = MangledName(tool_name.to_owned());
@@ -262,15 +299,19 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
-        let mut schemas = self.static_tools.request_schemas().unwrap_or_default();
-        schemas.extend(
-            <McpToolSet as ToolSet<T>>::request_schemas(&self.mcp_tools).unwrap_or_default(),
-        );
-        if schemas.is_empty() {
-            None
-        } else {
-            Some(schemas)
-        }
+        // Only the static (first-party) tools are sent on every request. MCP
+        // tools are loaded on demand via the `SearchTools` tool — they are
+        // surfaced through `searchable_catalog`, not here — so a large/growing
+        // MCP catalog never bloats the request.
+        self.static_tools.request_schemas()
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.mcp_tools.catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.mcp_tools.toolset_names()
     }
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {

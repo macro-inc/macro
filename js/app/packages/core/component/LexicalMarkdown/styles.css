@@ -512,24 +512,24 @@ mark {
 }
 
 .md-mark.comment {
-  background: oklch(from var(--color-comment-bg) l c h / 0.1);
+  background: oklch(from var(--color-comment) l c h / 0.1);
   border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.3);
   padding-bottom: 2px;
 }
 
 .md-mark-overlap.comment {
-  background: oklch(from var(--color-comment-bg) l c h / 0.2);
+  background: oklch(from var(--color-comment) l c h / 0.2);
   border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.4);
 }
 
 .md-mark.selected.comment {
-  background: oklch(from var(--color-comment-bg) l c h / 0.3);
+  background: oklch(from var(--color-comment) l c h / 0.3);
   border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.5);
   color: var(--color-comment-ink);
 }
 
 .md-mark-overlap.selected.comment {
-  background: oklch(from var(--color-comment-bg) l c h / 0.4);
+  background: oklch(from var(--color-comment) l c h / 0.4);
   border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.6);
 }
 

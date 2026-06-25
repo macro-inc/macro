@@ -152,8 +152,6 @@ impl SearchCursorOption {
 /// The search cursor contains all the individual `SearchCursorOption` for each search method.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct SearchCursor {
-    /// The document name cursor
-    pub document_name_cursor: SearchCursorOption,
     /// The chat name cursor
     pub chat_name_cursor: SearchCursorOption,
     /// The content cursor
@@ -184,8 +182,7 @@ impl SearchCursor {
 
     /// Returns if the cursor is fully exhausted
     pub fn is_exhausted(&self) -> bool {
-        self.document_name_cursor.is_done()
-            && self.chat_name_cursor.is_done()
+        self.chat_name_cursor.is_done()
             && self.content_cursor.is_done()
             && self.project_name_cursor.is_done()
             && self.crm_company_cursor.is_done()
@@ -228,7 +225,6 @@ mod test {
     #[test]
     fn is_exhausted_requires_crm_done() {
         let mut cursor = SearchCursor {
-            document_name_cursor: SearchCursorOption::Done,
             chat_name_cursor: SearchCursorOption::Done,
             content_cursor: SearchCursorOption::Done,
             project_name_cursor: SearchCursorOption::Done,

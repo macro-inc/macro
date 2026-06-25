@@ -1,5 +1,6 @@
 //! Entity type shared across database, service, and API layers.
 
+use document_sub_type::DocumentSubType;
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 use utoipa::ToSchema;
@@ -54,6 +55,16 @@ impl FromStr for EntityType {
             "thread" => Ok(Self::Thread),
             "user" => Ok(Self::User),
             other => Err(NoConversion(other.to_owned())),
+        }
+    }
+}
+
+impl From<DocumentSubType> for EntityType {
+    fn from(sub_type: DocumentSubType) -> Self {
+        match sub_type {
+            DocumentSubType::Task => EntityType::Task,
+            // No dedicated property entity type for snippets; they key under Document.
+            DocumentSubType::Snippet => EntityType::Document,
         }
     }
 }

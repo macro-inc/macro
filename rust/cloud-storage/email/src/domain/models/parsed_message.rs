@@ -46,4 +46,7 @@ pub struct ParsedThread {
     pub row: super::thread::ThreadRow,
     /// Parsed messages in the thread.
     pub messages: Vec<ParsedMessage>,
+    /// The distinct labels across all of the thread's messages. Unlike the
+    /// per-message labels, this is not limited to the fetched message page.
+    pub labels: Vec<ParsedLabel>,
 }

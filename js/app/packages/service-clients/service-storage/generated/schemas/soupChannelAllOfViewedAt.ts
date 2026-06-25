@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Timestamp when the requesting user last viewed this channel.
+ */
 export type SoupChannelAllOfViewedAt = string | null;

@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::ChannelType;
+use crate::domain::models::{ChannelType, NameLookup, fallback_user_name};
 
 /// Batch-resolve display names for a list of channel ids from the perspective
 /// of `viewer_user_id`. The viewer is only used to pick the right "other
@@ -76,7 +76,7 @@ pub async fn batch_resolve_channel_names<'a>(
 async fn load_participants_and_names(
     pool: &PgPool,
     channel_ids: &[Uuid],
-) -> Result<(HashMap<Uuid, Vec<String>>, HashMap<String, String>), sqlx::Error> {
+) -> Result<(HashMap<Uuid, Vec<MacroUserIdStr<'static>>>, NameLookup), sqlx::Error> {
     let participant_rows = sqlx::query!(
         r#"
         SELECT channel_id, user_id
@@ -88,17 +88,27 @@ async fn load_participants_and_names(
     .fetch_all(pool)
     .await?;
 
-    let mut participants_by_channel: HashMap<Uuid, Vec<String>> = HashMap::new();
-    let mut all_user_ids: HashSet<String> = HashSet::new();
+    let mut participants_by_channel: HashMap<Uuid, Vec<MacroUserIdStr<'static>>> = HashMap::new();
+    let mut all_user_ids: HashSet<MacroUserIdStr<'static>> = HashSet::new();
     for row in participant_rows {
-        all_user_ids.insert(row.user_id.clone());
+        let Ok(user_id) = MacroUserIdStr::try_from(row.user_id) else {
+            continue;
+        };
+        all_user_ids.insert(user_id.clone());
         participants_by_channel
             .entry(row.channel_id)
             .or_default()
-            .push(row.user_id);
+            .push(user_id);
     }
 
-    let user_id_strings: Vec<String> = all_user_ids.into_iter().collect();
+    let user_id_strings: Vec<String> = all_user_ids
+        .iter()
+        .map(|user_id| user_id.as_ref().to_string())
+        .collect();
+    let user_ids_by_string: HashMap<_, _> = all_user_ids
+        .into_iter()
+        .map(|user_id| (user_id.as_ref().to_string(), user_id))
+        .collect();
     let name_rows = sqlx::query!(
         r#"
         SELECT u.id as user_profile_id, mui.first_name, mui.last_name
@@ -111,12 +121,15 @@ async fn load_participants_and_names(
     .fetch_all(pool)
     .await?;
 
-    let mut name_lookup = HashMap::new();
+    let mut name_lookup = NameLookup::new();
     for row in name_rows {
         let Some(name) = display_name(row.first_name.as_deref(), row.last_name.as_deref()) else {
             continue;
         };
-        name_lookup.insert(row.user_profile_id, name);
+        let Some(user_id) = user_ids_by_string.get(&row.user_profile_id) else {
+            continue;
+        };
+        name_lookup.insert(user_id.clone(), name);
     }
 
     Ok((participants_by_channel, name_lookup))
@@ -127,8 +140,8 @@ fn resolve_channel_name(
     stored_name: Option<&str>,
     channel_id: Uuid,
     viewer_user_id: &str,
-    participants: &[String],
-    name_lookup: &HashMap<String, String>,
+    participants: &[MacroUserIdStr<'static>],
+    name_lookup: &NameLookup,
 ) -> String {
     if let Some(name) = stored_name.filter(|name| !name.trim().is_empty()) {
         return name.to_string();
@@ -139,8 +152,8 @@ fn resolve_channel_name(
         ChannelType::Private => {
             let mut names: Vec<_> = participants
                 .iter()
-                .filter(|id| id.as_str() != viewer_user_id)
-                .map(|id| display_name_for_user(id, name_lookup))
+                .filter(|id| id.as_ref() != viewer_user_id)
+                .map(|id| id_to_display_name(id, name_lookup))
                 .collect();
             names.sort();
             if names.is_empty() {
@@ -151,17 +164,17 @@ fn resolve_channel_name(
         }
         ChannelType::DirectMessage => participants
             .iter()
-            .find(|id| id.as_str() != viewer_user_id)
-            .map(|id| display_name_for_user(id, name_lookup))
+            .find(|id| id.as_ref() != viewer_user_id)
+            .map(|id| id_to_display_name(id, name_lookup))
             .unwrap_or_else(|| "Direct message".to_string()),
     }
 }
 
-fn display_name_for_user(user_id: &str, name_lookup: &HashMap<String, String>) -> String {
-    name_lookup
-        .get(user_id)
-        .cloned()
-        .unwrap_or_else(|| user_id.to_string())
+fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLookup) -> String {
+    match name_lookup.get(user_id) {
+        Some(name) if !name.trim().is_empty() => name.clone(),
+        _ => fallback_user_name(user_id),
+    }
 }
 
 fn display_name(first: Option<&str>, last: Option<&str>) -> Option<String> {
@@ -171,5 +184,23 @@ fn display_name(first: Option<&str>, last: Option<&str>) -> Option<String> {
         (None, Some(last)) => Some(last.to_string()),
         (Some(first), None) => Some(first.to_string()),
         (Some(first), Some(last)) => Some(format!("{first} {last}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_to_display_name_falls_back_to_email_local_part() {
+        let name_lookup = NameLookup::new();
+
+        let user_id =
+            MacroUserIdStr::try_from("macro|shepherd.hatton@gmail.com".to_string()).unwrap();
+
+        assert_eq!(
+            id_to_display_name(&user_id, &name_lookup),
+            "shepherd.hatton"
+        );
     }
 }

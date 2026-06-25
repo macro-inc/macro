@@ -13,10 +13,11 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'agent-schedule-service';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `agent-schedule${
@@ -214,6 +215,12 @@ export class AgentScheduleService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     this.service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
       {
@@ -232,6 +239,9 @@ export class AgentScheduleService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -248,6 +258,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
                   value: this.domain,
                 },
               ],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

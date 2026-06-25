@@ -12,8 +12,7 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::{InternalApiSecretKey, ValidInternalKey};
-use secretsmanager_client::LocalOrRemoteSecret;
+use macro_middleware::auth::internal_access::ValidInternalKey;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -25,24 +24,32 @@ static MAX_REQUEST_SIZE: usize = 4096;
 pub async fn setup_and_serve(
     config: Config,
     jwt_validation_args: JwtValidationArgs,
-    internal_api_secret: LocalOrRemoteSecret<InternalApiSecretKey>,
 ) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let metadata_client = DynamodbClient::new(&aws_config, config.dynamodb_table.clone());
+    let metadata_client = DynamodbClient::new(
+        &aws_config,
+        config
+            .static_file_service_dynamodb_table_name
+            .as_ref()
+            .to_owned(),
+    );
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     let inner_client = macro_aws_config::s3_client().await;
-    let storage_client = S3Client::new(inner_client, config.storage_bucket_name.clone());
+    let storage_client = S3Client::new(
+        inner_client,
+        config.static_storage_bucket.as_ref().to_owned(),
+    );
 
     let state = AppState {
         metadata_client,
         storage_client: Arc::new(storage_client),
         sqs_client,
+        internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        internal_api_secret,
     };
 
     let state_clone = state.clone();

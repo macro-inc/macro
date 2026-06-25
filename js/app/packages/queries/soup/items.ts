@@ -152,12 +152,21 @@ export const useSoupAstItemsQuery = (
       queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
+          let sort_method = params.sort_method ?? undefined;
+
+          // TODO(dev-rb/soup): This is temporary fix since we don't support
+          // 'frecency' for group by. Replace with proper types
+          if (sort_method === 'frecency') {
+            sort_method = 'updated_at';
+          }
+
           const response = await throwOnErr(
             async () =>
               await storageServiceClient.getGroupedSoupAstItems({
                 params: {
                   group_by: serializeGroupByField(groupBy),
                   per_group_limit: params.limit,
+                  sort_method,
                 },
                 body,
               })

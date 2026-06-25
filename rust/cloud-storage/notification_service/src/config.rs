@@ -2,7 +2,7 @@ use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_env::Environment;
 use macro_env_var::{env_var, env_vars, maybe_env_var};
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use std::sync::LazyLock;
 
 // We load this through `macro_config` at startup as part of [`Config`]. This lazy is retained for
@@ -58,8 +58,8 @@ pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub(crate) database_url: DatabaseUrl,
 
-    /// Internal API secret key name/value.
-    pub(crate) internal_api_secret_key: InternalApiSecretKey,
+    /// Internal API key.
+    pub(crate) internal_api_key: InternalApiKey,
 
     /// Secret name/value for digest unsubscribe URL signing.
     pub(crate) url_signing_hmac: UrlSigningHmac,

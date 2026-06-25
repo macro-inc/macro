@@ -11,10 +11,8 @@ use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
-use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;
 use utoipa::OpenApi;
@@ -72,13 +70,9 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
-
     let notifier = Some(
         ConnectionGatewayNotifier::new(
-            internal_api_secret.as_ref().to_string(),
+            config.internal_api_key.to_string(),
             ConnectionGatewayUrl::new()?.to_string(),
         )
         .unwrap(),

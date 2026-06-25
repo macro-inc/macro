@@ -3,7 +3,6 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@icon/macro-logo.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCommandIcon } from '@icon/wide-command';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
@@ -77,10 +76,6 @@ interface MockAppChromeProps {
   onFilterChange?: (filter: SandboxSidebarFilter) => void;
   /** When set, highlights that sidebar icon in accent color until activated. */
   highlightId?: SandboxSidebarFilter;
-  /** Called when the command menu button at the bottom of the sidebar is clicked. If omitted, the button is inert. */
-  onCommandClick?: () => void;
-  /** When true, glows the command menu button until it's clicked for the first time. */
-  highlightCommand?: boolean;
   /** Called when the create (+) button at the top of the sidebar is clicked. If omitted, the button is inert. */
   onCreateClick?: () => void;
   /** When true, glows the create button until it's clicked for the first time. */
@@ -117,10 +112,6 @@ export function MockAppChrome(props: MockAppChromeProps) {
     }
     props.onFilterChange?.(filter);
   };
-
-  const [commandActivated, setCommandActivated] = createSignal(false);
-  const isCommandHighlighted = () =>
-    !!props.highlightCommand && !commandActivated();
 
   const [createActivated, setCreateActivated] = createSignal(false);
   const isCreateHighlighted = () =>
@@ -274,23 +265,6 @@ export function MockAppChrome(props: MockAppChromeProps) {
           </For>
 
           <div class="mt-auto flex flex-col items-center gap-1">
-            <button
-              type="button"
-              class={cn(
-                'size-6 text-ink rounded-xs p-1 transition-colors cursor-default',
-                isCommandHighlighted()
-                  ? 'opacity-100 hover:bg-ink/10 sidebar-glow'
-                  : 'opacity-50 hover:opacity-80 hover:bg-ink/10'
-              )}
-              onClick={(e) => {
-                e.preventDefault();
-                setCommandActivated(true);
-                props.onCommandClick?.();
-              }}
-              title="Command Menu"
-            >
-              <AnimatedCommandIcon />
-            </button>
             <button
               type="button"
               class="size-6 text-ink rounded-xs p-1 transition-colors cursor-default opacity-50 hover:opacity-80 hover:bg-ink/10"

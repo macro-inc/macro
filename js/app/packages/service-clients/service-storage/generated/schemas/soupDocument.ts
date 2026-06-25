@@ -15,6 +15,9 @@ import type { SoupDocumentSubTypeProperty } from './soupDocumentSubTypeProperty'
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
 import type { SoupProperty } from './soupProperty';
 
+/**
+ * A document as displayed in Soup.
+ */
 export interface SoupDocument {
   /** The id of the document this document branched from */
   branchedFromId?: SoupDocumentBranchedFromId;

@@ -25,6 +25,7 @@ export function useContactEmailsQuery(
       const base = {
         df: { l: { id: NIL_UUID } },
         chanf: { l: { ChannelId: NIL_UUID } },
+        cthf: { l: { ThreadId: NIL_UUID } },
         cf: { l: { cid: NIL_UUID } },
         pf: { l: { pid: NIL_UUID } },
         callf: { l: { CallId: NIL_UUID } },

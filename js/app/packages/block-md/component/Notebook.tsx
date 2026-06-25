@@ -6,14 +6,13 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import { useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
-  ENABLE_RAIL_CHAT_TASK_COMMENTS,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -26,26 +25,36 @@ import {
 import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
+import { makePersisted } from '@solid-primitives/storage';
 import {
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
   onMount,
-  Show,
   untrack,
 } from 'solid-js';
+import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { TaskDiscussion } from './TaskDiscussion';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import {
   registerLexicalStateDebuggerCommand,
   registerMarkdownCommands,
 } from './useMarkdownCommands';
+
+/**
+ * Whether the Lexical state debugger panel is open, persisted across reloads so
+ * the debug panel stays where the user left it. Shared by every notebook so the
+ * toggle is consistent regardless of which editor surfaced it.
+ */
+const [showLexicalStateDebugger, setShowLexicalStateDebugger] = makePersisted(
+  createSignal(false),
+  { name: 'lexical-state-debugger-open' }
+);
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -87,7 +96,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const setWideEnoughForComments = commentWidthSignal.set;
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
-  const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
   const { navigatedFromJK } = useNavigatedFromJK();
 
@@ -98,8 +106,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
@@ -236,7 +242,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 min-w-0';
+    const shared = 'grow max-w-3xl pt-12 mobile:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;
@@ -296,9 +302,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
               setShowLexicalStateDebugger(false)
             }
           />
-          <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
-            <TaskDiscussion />
-          </Show>
+          <DocumentDiscussion />
         </ParamsProvider>
       </div>
       <div
@@ -327,8 +331,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
 export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
   const scopeId = blockHotkeyScopeSignal.get;
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;

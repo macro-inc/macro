@@ -80,7 +80,10 @@ export type InputHandle = {
   focus: () => void;
   send: () => Promise<boolean>;
   attachFiles: (files: File[]) => Promise<void>;
-  restoreSnapshot: (snapshot: InputSnapshot) => void;
+  restoreSnapshot: (
+    snapshot: InputSnapshot,
+    options?: { focus?: boolean }
+  ) => void;
   /**
    * Inserts a mention for a dragged soup entity into the editor. Only provided
    * by inputs that support entity drag-and-drop (e.g. channel inputs).

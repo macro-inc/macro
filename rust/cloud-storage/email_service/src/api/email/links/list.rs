@@ -1,9 +1,8 @@
 use crate::api::context::ApiContext;
-use axum::extract::{Query, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email_service::util::gmail::auth::fetch_gmail_access_token_from_link;
 use futures::future::join_all;
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -17,17 +16,12 @@ use thiserror::Error;
 pub enum ListLinksError {
     #[error("Database error")]
     DatabaseError(anyhow::Error),
-
-    #[error("Failed to fetch Gmail access token")]
-    AuthError(anyhow::Error),
 }
 
 impl IntoResponse for ListLinksError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            ListLinksError::DatabaseError(_) | ListLinksError::AuthError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            ListLinksError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (status_code, self.to_string()).into_response()
@@ -41,21 +35,11 @@ pub struct ListLinksResponse {
     pub links: Vec<api::link::Link>,
 }
 
-#[derive(serde::Deserialize, Debug, ToSchema)]
-pub struct QueryParams {
-    /// if we should include the user's gmail signature in the response. hits gmail api
-    #[serde(default)]
-    pub include_signature: bool,
-}
-
 /// List all links belonging to the user.
 #[utoipa::path(
     get,
     tag = "Links",
     path = "/email/links",
-    params(
-        ("include_signature" = Option<bool>, Query, description = "If the user's gmail signature should be included in the response. Defaults to false."),
-    ),
     operation_id = "list_links",
     responses(
             (status = 200, body=ListLinksResponse),
@@ -68,7 +52,6 @@ pub struct QueryParams {
 pub async fn list_links_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    Query(query_params): Query<QueryParams>,
 ) -> Result<Response, ListLinksError> {
     let links =
         email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
@@ -104,26 +87,8 @@ pub async fn list_links_handler(
             .map_err(ListLinksError::DatabaseError)?
             .and_then(|contact| contact.photo_url);
 
-            let signature = if query_params.include_signature {
-                let access_token = fetch_gmail_access_token_from_link(
-                    &link,
-                    &ctx.redis_client,
-                    &ctx.auth_service_client,
-                )
-                .await
-                .map_err(ListLinksError::AuthError)?;
-
-                ctx.gmail_client
-                    .get_email_signature(&access_token, link.email_address.0.as_ref())
-                    .await
-                    .unwrap_or(None)
-            } else {
-                None
-            };
-
             Ok(api::link::Link::new(
                 link,
-                signature,
                 api::settings::Settings::from(settings),
                 sync_status,
                 photo_url,

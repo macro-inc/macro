@@ -54,6 +54,12 @@
     "composite": true,
     "incremental": true,
     "paths": {
+      "loro-crdt": [
+        "../node_modules/loro-crdt"
+      ],
+      "loro-crdt/*": [
+        "../node_modules/loro-crdt/*"
+      ],
       "@filesystem": [
         "./packages/filesystem/src"
       ],
@@ -152,6 +158,9 @@
       ],
       "@block-email/*": [
         "./packages/block-email/*"
+      ],
+      "@block-pr/*": [
+        "./packages/block-pr/*"
       ],
       "@block-md/*": [
         "./packages/block-md/*"

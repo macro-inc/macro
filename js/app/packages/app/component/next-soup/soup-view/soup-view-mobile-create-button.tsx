@@ -98,12 +98,12 @@ export function SoupViewMobileCreateButton(props: {
   const isVisible = () => (props.visible?.() ?? true) && !!createAction();
 
   return (
-    <Layer depth={4}>
+    <Layer depth={3}>
       <button
         type="button"
         class={cn(
           'absolute bottom-4 right-4 z-10 h-11 pl-3.5 pr-4.5 rounded-full',
-          'bg-surface text-accent flex items-center justify-center gap-2 shadow-md ring ring-edge',
+          'island flex items-center justify-center gap-2',
           MOBILE_FLOATING_BUTTON_TRANSITION,
           isVisible()
             ? MOBILE_FLOATING_BUTTON_VISIBLE

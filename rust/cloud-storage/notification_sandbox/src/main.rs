@@ -299,6 +299,7 @@ async fn run_notification_cycle<I: NotificationIngress>(
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Channel
             .with_entity_string(uuid::Uuid::now_v7().to_string()),
+        secondary_notification_entity: None,
         notification: ChannelMessageSendMetadata {
             sender: Some(MacroUserIdStr::try_from_email("fake-user@example.com").unwrap()),
             sender_display_name: None,

@@ -1,6 +1,6 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AWAIT_NODE } from './await';
-import { I_MACRO_QUOTE } from './classedBlock';
+import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
@@ -15,15 +15,18 @@ import {
   E_DOCUMENT_CARD,
   E_DOCUMENT_MENTION,
   E_GROUP_MENTION,
+  E_PR_MENTION,
   E_USER_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_DOCUMENT_CARD,
   I_DOCUMENT_MENTION,
   I_GROUP_MENTION,
+  I_PR_MENTION,
   I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
+import { E_PASTE_NODE, I_PASTE_NODE } from './paste';
 import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
 import {
@@ -49,6 +52,7 @@ export { isConversionOnlyTransformer };
  */
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
+  I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -61,10 +65,12 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_GROUP_MENTION,
   I_DOCUMENT_MENTION,
   I_DOCUMENT_CARD,
+  I_PR_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,
@@ -83,12 +89,16 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   E_USER_MENTION,
   E_GROUP_MENTION,
+  E_PASTE_NODE, // export raw pasted text to external markdown
   I_DOCUMENT_MENTION, // for chat attachments
   E_DOCUMENT_MENTION,
   I_DOCUMENT_CARD, // for internal representation
   E_DOCUMENT_CARD,
+  I_PR_MENTION,
+  E_PR_MENTION,
   E_CONTACT_MENTION,
   E_DATE_MENTION,
   // order matters
@@ -107,6 +117,8 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
  */
 export const ALL_TRANSFORMERS: Transformer[] = [
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
+  I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
+  E_PASTE_NODE,
   PRESERVE_LINES,
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
@@ -118,6 +130,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   E_SNAPSHOT_NODE,
   I_USER_MENTION,
   E_USER_MENTION,
@@ -127,6 +140,8 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_DOCUMENT_MENTION,
   I_DOCUMENT_CARD,
   E_DOCUMENT_CARD,
+  I_PR_MENTION,
+  E_PR_MENTION,
   I_CONTACT_MENTION,
   E_CONTACT_MENTION,
   I_DATE_MENTION,

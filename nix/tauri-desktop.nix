@@ -1,0 +1,691 @@
+{ inputs, ... }:
+{
+  perSystem =
+    { system, ... }:
+    let
+      inherit (inputs)
+        nixpkgs
+        fenix
+        crane
+        crane-tauri
+        ;
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+      };
+      inherit (pkgs) lib;
+      isLinux = pkgs.stdenv.hostPlatform.isLinux;
+      isX86_64Linux = system == "x86_64-linux";
+      isAarch64Darwin = system == "aarch64-darwin";
+
+      appVersion = (builtins.fromJSON (builtins.readFile ../js/app/packages/app/package.json)).version;
+      gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
+
+      rustToolchain = fenix.packages.${system}.fromToolchainFile {
+        file = ../rust/rust-toolchain.toml;
+        sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
+      };
+      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+      jsRoot = ../js;
+      jsSrc = lib.cleanSourceWith {
+        src = jsRoot;
+        filter =
+          path: type:
+          let
+            rel = lib.removePrefix ((toString jsRoot) + "/") (toString path);
+          in
+          !(lib.hasPrefix "node_modules/" rel)
+          && !(lib.hasPrefix "app/node_modules/" rel)
+          && !(lib.hasPrefix "app/packages/app/dist/" rel)
+          && !(lib.hasPrefix "app/tauri/target/" rel)
+          && !(lib.hasPrefix "lexical-core/node_modules/" rel)
+          && !(lib.hasPrefix "lexical-service/node_modules/" rel)
+          && !(lib.hasPrefix "loro-mirror/node_modules/" rel)
+          && !(lib.hasInfix "/node_modules/" rel)
+          && !(lib.hasInfix "/target/" rel)
+          && !(lib.hasInfix "/dist/" rel)
+          && rel != "node_modules"
+          && rel != "app/node_modules"
+          && rel != "app/packages/app/dist"
+          && rel != "app/tauri/target";
+      };
+
+      bunDeps = pkgs.stdenvNoCC.mkDerivation {
+        pname = "macro-js-bun-deps";
+        version = appVersion;
+        src = jsSrc;
+
+        nativeBuildInputs = with pkgs; [
+          bun
+          git
+        ];
+
+        dontConfigure = true;
+        dontBuild = true;
+        dontFixup = true;
+
+        installPhase = ''
+          runHook preInstall
+
+          export HOME="$TMPDIR"
+          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
+          bun install --frozen-lockfile --no-progress
+
+          mkdir -p "$out"
+          cp -a node_modules "$out/node_modules"
+
+          runHook postInstall
+        '';
+
+        outputHashAlgo = "sha256";
+        outputHashMode = "recursive";
+        outputHash =
+          if isAarch64Darwin then
+            "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
+          else
+            "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+      };
+
+      frontend = pkgs.stdenvNoCC.mkDerivation {
+        pname = "macro-tauri-frontend";
+        version = appVersion;
+        src = jsSrc;
+
+        nativeBuildInputs = with pkgs; [
+          bun
+          git
+        ];
+
+        dontConfigure = true;
+
+        buildPhase = ''
+          runHook preBuild
+
+          export HOME="$TMPDIR"
+          cp -a ${bunDeps}/node_modules ./node_modules
+          chmod -R u+w ./node_modules
+
+          printf production > app/tauri/src-tauri/.macro-tauri-env
+          (
+            cd app/packages/app
+            MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+            printf '${appVersion}+${gitRev}\n' > dist/semver.txt
+            BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+          )
+
+          runHook postBuild
+        '';
+
+        installPhase = ''
+          runHook preInstall
+          cp -r app/packages/app/dist "$out"
+          runHook postInstall
+        '';
+      };
+
+      tauriCargoVendorDir = craneLib.vendorCargoDeps {
+        src = ../js/app/tauri;
+        cargoLock = ../js/app/tauri/Cargo.lock;
+        outputHashes = {
+          "git+https://github.com/macro-inc/tauri-plugins?rev=26537c8a46bb8424f9cf4021d08aa76aa7cd66ef#26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" =
+            "sha256-v0Pn8kiRXaczNrFNjXct7yZUQ50qP68l8ivQDumu7Hw=";
+          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fwebsocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
+            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
+          "git+https://github.com/seanaye/plugins-workspace?branch=seanaye/feat/websocket-cookies#c23e1d7b24391a79b5bcfc3df535452c17f1f01c" =
+            "sha256-cxxQLB9q/Ajh0YkyyZ0AuLt9Syeq+g7LcSqNr05SDXo=";
+          "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
+            "sha256-5HamTWAZPtUSWOfP3TgtiqFJvunlPXy9/C0TLHQpXlU=";
+          "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01" =
+            "sha256-OdEp5mw0l5Euj0ry7gzNVxdB0jlGUq0N7XINXUhtE+c=";
+        };
+      };
+
+      tauri = crane-tauri.lib.buildTauriApp { inherit pkgs craneLib; } {
+        pname = "macro-tauri-desktop";
+        version = appVersion;
+        binaryName = "app";
+        src = ../js/app/tauri;
+        cargoRoot = ../js/app/tauri;
+        cargoLock = ../js/app/tauri/Cargo.lock;
+        inherit frontend;
+
+        craneArgs.cargoVendorDir = tauriCargoVendorDir;
+        craneArgs.postConfigure = ''
+          writable_vendor="$TMPDIR/cargo-vendor"
+          mkdir -p "$writable_vendor"
+          cp -aL ${tauriCargoVendorDir}/. "$writable_vendor/"
+          chmod -R u+w "$writable_vendor"
+          substituteInPlace .cargo-home/config.toml \
+            --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
+        '';
+        craneArgs.preBuild = ''
+          mkdir -p ../packages/app
+          cp ${../js/app/packages/app/package.json} ../packages/app/package.json
+          rm -rf ../packages/app/dist
+          cp -r ${frontend} ../packages/app/dist
+        '';
+      };
+
+      wrappedTauriDesktop = pkgs.symlinkJoin {
+        name = "macro-tauri-desktop-${appVersion}";
+        paths = [ tauri.app ];
+        nativeBuildInputs = [ pkgs.makeWrapper ];
+        postBuild = ''
+          wrapProgram "$out/bin/app" \
+            --prefix LD_LIBRARY_PATH : ${
+              lib.makeLibraryPath [
+                pkgs.webkitgtk_4_1
+                pkgs.libsoup_3
+                pkgs.gtk3
+                pkgs.glib
+                pkgs.cairo
+                pkgs.pango
+                pkgs.gdk-pixbuf
+                pkgs.atk
+                pkgs.librsvg
+                pkgs.libayatana-appindicator
+                pkgs.openssl
+              ]
+            } \
+            --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
+
+          install -Dm0644 ${../js/app/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
+          install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
+          install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
+          install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
+          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Macro
+          Exec=app %U
+          Icon=macro
+          Categories=Office;Utility;
+          MimeType=x-scheme-handler/macro;
+          EOF
+        '';
+        meta.mainProgram = "app";
+      };
+
+      tauriBundlerSource = pkgs.cargo-tauri.src;
+      tauriAppRun = pkgs.fetchurl {
+        url = "https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64";
+        hash = "sha256-8wFApDoKWeRtshve/fdJuenyxpRukq+rus+YuK5z+08=";
+      };
+      tauriLinuxdeployWrapper = pkgs.stdenv.mkDerivation {
+        pname = "tauri-linuxdeploy-wrapper";
+        version = "1";
+        dontUnpack = true;
+        buildPhase = ''
+          cat > linuxdeploy-wrapper.c <<'EOF'
+          #include <dirent.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <unistd.h>
+
+          static int has_suffix(const char *value, const char *suffix) {
+            size_t value_len = strlen(value);
+            size_t suffix_len = strlen(suffix);
+            return value_len >= suffix_len && strcmp(value + value_len - suffix_len, suffix) == 0;
+          }
+
+          static void remove_if_exists(const char *path) {
+            if (access(path, F_OK) == 0) {
+              unlink(path);
+            }
+          }
+
+          static void sanitize_appdir(const char *appdir) {
+            if (appdir == NULL) return;
+            DIR *dir = opendir(appdir);
+            if (dir == NULL) return;
+
+            size_t appdir_len = strlen(appdir);
+            char *dir_icon = malloc(appdir_len + strlen("/.DirIcon") + 1);
+            sprintf(dir_icon, "%s/.DirIcon", appdir);
+            remove_if_exists(dir_icon);
+            free(dir_icon);
+
+            struct dirent *entry;
+            while ((entry = readdir(dir)) != NULL) {
+              if (has_suffix(entry->d_name, ".desktop")) {
+                char *path = malloc(appdir_len + 1 + strlen(entry->d_name) + 1);
+                sprintf(path, "%s/%s", appdir, entry->d_name);
+                remove_if_exists(path);
+                free(path);
+              }
+            }
+            closedir(dir);
+          }
+
+          int main(int argc, char **argv) {
+            const char *appdir = NULL;
+            for (int i = 1; i < argc; i++) {
+              if (strcmp(argv[i], "--appdir") == 0 && i + 1 < argc) {
+                appdir = argv[i + 1];
+              } else if (strncmp(argv[i], "--appdir=", 9) == 0) {
+                appdir = argv[i] + 9;
+              }
+            }
+            sanitize_appdir(appdir);
+
+            char *slash = strrchr(argv[0], '/');
+            if (slash != NULL) {
+              size_t dir_len = (size_t)(slash - argv[0]);
+              char *dir = strndup(argv[0], dir_len);
+              char *old_path = getenv("PATH");
+              const char *nix_ldd_dir = "${pkgs.glibc.bin}/bin";
+              size_t path_len = dir_len + 1 + strlen(nix_ldd_dir) + 1 + (old_path ? strlen(old_path) : 0) + 1;
+              char *path = malloc(path_len);
+              snprintf(path, path_len, "%s:%s:%s", dir, nix_ldd_dir, old_path ? old_path : "");
+              setenv("PATH", path, 1);
+            }
+
+            char **args = calloc((size_t)argc + 1, sizeof(char *));
+            args[0] = "${pkgs.linuxdeploy}/bin/linuxdeploy";
+            int out = 1;
+            for (int i = 1; i < argc; i++) {
+              if (strcmp(argv[i], "--appimage-extract-and-run") == 0) {
+                continue;
+              }
+              if (strcmp(argv[i], "--plugin") == 0 && i + 1 < argc && strcmp(argv[i + 1], "gtk") == 0) {
+                i++;
+                continue;
+              }
+              if (strcmp(argv[i], "--plugin=gtk") == 0) {
+                continue;
+              }
+              args[out++] = argv[i];
+            }
+            args[out] = NULL;
+            execv(args[0], args);
+            perror("execv linuxdeploy");
+            return 127;
+          }
+          EOF
+          $CC linuxdeploy-wrapper.c -o linuxdeploy-x86_64.AppImage
+        '';
+        installPhase = ''
+          install -Dm0755 linuxdeploy-x86_64.AppImage "$out/bin/linuxdeploy-x86_64.AppImage"
+        '';
+      };
+      tauriAppImageRuntime = pkgs.fetchurl {
+        # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
+        url = "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64";
+        hash = "sha256-L8qLRDySUQ8Ug6iD9gBhrQm0a5eLJjHIB82HOkfsJg0=";
+      };
+      tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
+        # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
+        url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage";
+        hash = "sha256-mS1QKiSOFKsYVEjd9vbn0lVYy4TUYjw1TDrzUMJfzLM=";
+      };
+      tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
+        pname = "linuxdeploy-plugin-appimage";
+        version = "1-alpha-20250213-1";
+        src = tauriLinuxdeployAppimagePluginSource;
+      };
+      tauriLinuxdeployAppimagePlugin = pkgs.stdenvNoCC.mkDerivation {
+        pname = "linuxdeploy-plugin-appimage-patched";
+        version = "1-alpha-20250213-1";
+        dontUnpack = true;
+        installPhase = ''
+          mkdir -p "$out/lib/linuxdeploy-plugin-appimage" "$out/bin"
+          cp -a ${tauriLinuxdeployAppimagePluginExtracted}/. "$out/lib/linuxdeploy-plugin-appimage/"
+          chmod -R u+w "$out/lib/linuxdeploy-plugin-appimage"
+          patchShebangs "$out/lib/linuxdeploy-plugin-appimage"
+          printf '%s\n' \
+            '#!${pkgs.runtimeShell}' \
+            'exec "'$out'/lib/linuxdeploy-plugin-appimage/AppRun" "$@"' \
+            > "$out/bin/linuxdeploy-plugin-appimage.AppImage"
+          chmod 0755 "$out/bin/linuxdeploy-plugin-appimage.AppImage"
+        '';
+      };
+      tauriRuntimeLibraries = [
+        pkgs.webkitgtk_4_1
+        pkgs.libsoup_3
+        pkgs.gtk3
+        pkgs.glib
+        pkgs.cairo
+        pkgs.pango
+        pkgs.gdk-pixbuf
+        pkgs.atk
+        pkgs.librsvg
+        pkgs.libayatana-appindicator
+        pkgs.openssl
+      ];
+      tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
+      tauriRuntimeClosure = pkgs.closureInfo {
+        rootPaths = tauriRuntimeLibraries ++ tauri.commonArgs.buildInputs;
+      };
+      tauriAppImageConfig = builtins.toJSON {
+        build = {
+          frontendDist = "${frontend}";
+          beforeBuildCommand = "";
+        };
+        bundle = {
+          active = true;
+          targets = [ "appimage" ];
+          useLocalToolsDir = true;
+          linux.appimage.files = {
+            "/usr/bin/xdg-mime" = "${pkgs.xdg-utils}/bin/xdg-mime";
+            "/usr/bin/xdg-open" = "${pkgs.xdg-utils}/bin/xdg-open";
+          };
+        };
+      };
+      tauriDesktopDmgSigningIdentity = builtins.getEnv "APPLE_SIGNING_IDENTITY";
+      tauriDesktopDmgConfig = builtins.toJSON (
+        lib.recursiveUpdate
+          {
+            build = {
+              frontendDist = "${frontend}";
+              beforeBuildCommand = "";
+            };
+            bundle = {
+              active = true;
+              targets = [ "app" ];
+            };
+          }
+          (
+            lib.optionalAttrs (tauriDesktopDmgSigningIdentity != "") {
+              bundle.macOS.signingIdentity = tauriDesktopDmgSigningIdentity;
+            }
+          )
+      );
+      tauriDesktopDmg = craneLib.mkCargoDerivation (
+        tauri.commonArgs
+        // {
+          cargoArtifacts = tauri.cargoArtifacts;
+          pname = "macro-tauri-desktop-dmg";
+          TAURI_CONFIG = tauriDesktopDmgConfig;
+          APPLE_SIGNING_IDENTITY = tauriDesktopDmgSigningIdentity;
+          nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
+          preBuild = ''
+            if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+              echo "APPLE_SIGNING_IDENTITY must be set when building the signed macOS DMG; use nix build --impure." >&2
+              exit 1
+            fi
+            export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
+            ${tauri.commonArgs.preBuild or ""}
+          '';
+          buildPhaseCargoCommand = ''
+            cargo tauri build --bundles app \
+              --features tauri/custom-protocol \
+              --config "$TAURI_CONFIG"
+          '';
+          installPhaseCommand = ''
+            export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
+
+            appPath=$(find target -type d -path '*/release/bundle/macos/*.app' -print -quit)
+            if [ -z "$appPath" ]; then
+              echo "failed to locate built macOS app bundle" >&2
+              find target -path '*/bundle/*' -print >&2 || true
+              exit 1
+            fi
+
+            bundle_nix_dylibs() {
+              local app="$1"
+              local frameworks="$app/Contents/Frameworks"
+              mkdir -p "$frameworks"
+
+              local -a queue=()
+              while IFS= read -r -d "" mach_o; do
+                if otool -hv "$mach_o" >/dev/null 2>&1; then
+                  queue+=("$mach_o")
+                fi
+              done < <(find "$app/Contents/MacOS" "$frameworks" -type f -print0)
+
+              local processed="$TMPDIR/bundled-mach-o-files"
+              : > "$processed"
+
+              copy_dep() {
+                local dep="$1"
+                local base
+                base=$(basename "$dep")
+                local dest="$frameworks/$base"
+                if [ ! -e "$dest" ]; then
+                  echo "Bundling Nix dylib $dep -> $dest" >&2
+                  cp -L "$dep" "$dest"
+                  chmod u+w "$dest"
+                  queue+=("$dest")
+                fi
+              }
+
+              local i=0
+              while [ "$i" -lt "''${#queue[@]}" ]; do
+                local binary="''${queue[$i]}"
+                i=$((i + 1))
+
+                if grep -Fxq "$binary" "$processed"; then
+                  continue
+                fi
+                printf '%s\n' "$binary" >> "$processed"
+
+                chmod u+w "$binary" || true
+                local prefix="@loader_path"
+                case "$binary" in
+                  "$app/Contents/MacOS/"*) prefix="@executable_path/../Frameworks" ;;
+                  *) install_name_tool -id "@loader_path/$(basename "$binary")" "$binary" 2>/dev/null || true ;;
+                esac
+
+                local deps
+                deps=$(otool -L "$binary" 2>/dev/null | awk 'NR > 1 { print $1 }' | grep '^/nix/store/.*\.dylib$' || true)
+                if [ -z "$deps" ]; then
+                  continue
+                fi
+
+                while IFS= read -r dep; do
+                  [ -n "$dep" ] || continue
+                  copy_dep "$dep"
+                  install_name_tool -change "$dep" "$prefix/$(basename "$dep")" "$binary"
+                done <<< "$deps"
+              done
+
+              local remaining_refs="$TMPDIR/remaining-nix-dylib-refs"
+              : > "$remaining_refs"
+              while IFS= read -r -d "" file; do
+                otool -L "$file" 2>/dev/null \
+                  | awk -v file="$file" 'NR > 1 && $1 ~ "^/nix/store/.*\\.dylib$" { print file ": " $1 }' \
+                  >> "$remaining_refs" || true
+              done < <(find "$app/Contents/MacOS" "$app/Contents/Frameworks" -type f -print0)
+
+              if [ -s "$remaining_refs" ]; then
+                echo "App bundle still contains absolute Nix dylib references:" >&2
+                cat "$remaining_refs" >&2
+                exit 1
+              fi
+            }
+
+            sign_darwin_app() {
+              local app="$1"
+              local -a sign_args=(--force --sign "$APPLE_SIGNING_IDENTITY")
+              if [ "$APPLE_SIGNING_IDENTITY" != "-" ]; then
+                sign_args+=(--timestamp --options runtime)
+              fi
+
+              if [ -d "$app/Contents/Frameworks" ]; then
+                while IFS= read -r -d "" file; do
+                  if otool -hv "$file" >/dev/null 2>&1; then
+                    codesign "''${sign_args[@]}" "$file"
+                  fi
+                done < <(find "$app/Contents/Frameworks" -type f -print0)
+              fi
+
+              codesign "''${sign_args[@]}" --deep "$app"
+              codesign --verify --deep --strict --verbose=2 "$app"
+            }
+
+            bundle_nix_dylibs "$appPath"
+            sign_darwin_app "$appPath"
+
+            mkdir -p "$out"
+            dmgPath="$out/Macro-${appVersion}-${system}.dmg"
+            hdiutil create \
+              -volname "Macro" \
+              -srcfolder "$appPath" \
+              -ov \
+              -format UDZO \
+              "$dmgPath"
+
+            if [ "$APPLE_SIGNING_IDENTITY" = "-" ]; then
+              codesign --force --sign - "$dmgPath"
+            else
+              codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$dmgPath"
+            fi
+            codesign --verify --strict --verbose=2 "$dmgPath"
+          '';
+          doInstallCargoArtifacts = false;
+        }
+      );
+
+      tauriDesktopAppImage = craneLib.mkCargoDerivation (
+        tauri.commonArgs
+        // {
+          cargoArtifacts = tauri.cargoArtifacts;
+          pname = "macro-tauri-desktop-appimage";
+          TAURI_CONFIG = tauriAppImageConfig;
+          nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [
+            pkgs.cargo-tauri
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.diffutils
+            pkgs.file
+            pkgs.findutils
+            pkgs.gawk
+            pkgs.gnugrep
+            pkgs.gnused
+            pkgs.patchelf
+            pkgs.which
+          ];
+          LD_LIBRARY_PATH = tauriRuntimeLibraryPath;
+          LDAI_RUNTIME_FILE = tauriAppImageRuntime;
+          preBuild = ''
+            ${tauri.commonArgs.preBuild or ""}
+
+            runtime_library_path="$(while IFS= read -r store_path; do
+              if [ -d "$store_path/lib" ]; then
+                printf '%s:' "$store_path/lib"
+              fi
+            done < ${tauriRuntimeClosure}/store-paths)"
+            export LD_LIBRARY_PATH="$runtime_library_path$LD_LIBRARY_PATH"
+
+            mkdir -p target/.tauri
+            install -m 0755 ${tauriAppRun} target/.tauri/AppRun-x86_64
+            install -m 0755 ${tauriLinuxdeployWrapper}/bin/linuxdeploy-x86_64.AppImage target/.tauri/linuxdeploy-x86_64.AppImage
+            install -m 0755 ${tauriLinuxdeployAppimagePlugin}/bin/linuxdeploy-plugin-appimage.AppImage target/.tauri/linuxdeploy-plugin-appimage.AppImage
+            install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gtk.sh target/.tauri/linuxdeploy-plugin-gtk.sh
+            install -m 0755 ${tauriBundlerSource}/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy-plugin-gstreamer.sh target/.tauri/linuxdeploy-plugin-gstreamer.sh
+            cat > target/.tauri/ldd <<'EOF'
+            #!${pkgs.runtimeShell}
+            set -euo pipefail
+
+            binary="''${1:?usage: ldd <elf>}"
+            if ! needed=$(patchelf --print-needed "$binary" 2>/dev/null); then
+              echo "not a dynamic executable"
+              exit 1
+            fi
+
+            origin=$(cd "$(dirname "$binary")" && pwd -P)
+            rpath=$(patchelf --print-rpath "$binary" 2>/dev/null || true)
+            search_path=""
+            append_search_path() {
+              local path_entry="$1"
+              [ -n "$path_entry" ] || return 0
+              if [ -z "$search_path" ]; then
+                search_path="$path_entry"
+              else
+                search_path="$search_path:$path_entry"
+              fi
+            }
+
+            IFS=: read -r -a rpath_entries <<< "$rpath"
+            for entry in "''${rpath_entries[@]}"; do
+              entry=$(printf '%s' "$entry" | awk -v origin="$origin" '{ gsub(/\$\{ORIGIN\}/, origin); gsub(/\$ORIGIN/, origin); print }')
+              append_search_path "$entry"
+            done
+            append_search_path "''${LD_LIBRARY_PATH:-}"
+            append_search_path "/lib"
+            append_search_path "/usr/lib"
+            append_search_path "/lib64"
+            append_search_path "/usr/lib64"
+
+            resolve_needed() {
+              local needed_name="$1"
+              if [ "''${needed_name#/}" != "$needed_name" ] && [ -e "$needed_name" ]; then
+                readlink -f "$needed_name"
+                return 0
+              fi
+
+              local entry candidate
+              IFS=: read -r -a search_entries <<< "$search_path"
+              for entry in "''${search_entries[@]}"; do
+                [ -n "$entry" ] || continue
+                candidate="$entry/$needed_name"
+                if [ -e "$candidate" ]; then
+                  readlink -f "$candidate"
+                  return 0
+                fi
+              done
+
+              return 1
+            }
+
+            while IFS= read -r needed_name; do
+              [ -n "$needed_name" ] || continue
+              if resolved=$(resolve_needed "$needed_name"); then
+                printf '\t%s => %s (0x0000000000000000)\n' "$needed_name" "$resolved"
+              else
+                printf '\t%s => not found\n' "$needed_name"
+              fi
+            done <<< "$needed"
+            EOF
+            chmod 0755 target/.tauri/ldd
+            patchShebangs target/.tauri/*.sh target/.tauri/ldd target/.tauri/linuxdeploy-plugin-appimage.AppImage
+          '';
+          buildPhaseCargoCommand = ''
+            cargo tauri build --verbose --bundles appimage \
+              --features tauri/custom-protocol \
+              --config "$TAURI_CONFIG"
+          '';
+          installPhaseCommand = ''
+            appimagePath=$(find target -type f -path '*/release/bundle/appimage/*.AppImage' -print -quit)
+            if [ -z "$appimagePath" ]; then
+              echo "failed to locate built AppImage" >&2
+              find target -path '*/bundle/*' -print >&2 || true
+              exit 1
+            fi
+
+            mkdir -p "$out"
+            cp "$appimagePath" "$out/Macro-${appVersion}-${system}.AppImage"
+            chmod 0755 "$out/Macro-${appVersion}-${system}.AppImage"
+          '';
+          doInstallCargoArtifacts = false;
+        }
+      );
+    in
+    {
+      apps = lib.optionalAttrs isLinux {
+        tauri-desktop = {
+          type = "app";
+          program = "${wrappedTauriDesktop}/bin/app";
+          meta.description = "Run the Macro Tauri desktop app";
+        };
+      };
+
+      packages =
+        lib.optionalAttrs isLinux {
+          tauri-frontend = frontend;
+          tauri-desktop = wrappedTauriDesktop;
+          tauri-desktop-unwrapped = tauri.app;
+          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+        }
+        // lib.optionalAttrs isX86_64Linux {
+          tauri-desktop-appimage = tauriDesktopAppImage;
+        }
+        // lib.optionalAttrs isAarch64Darwin {
+          tauri-frontend = frontend;
+          tauri-desktop-dmg = tauriDesktopDmg;
+          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+        };
+    };
+}

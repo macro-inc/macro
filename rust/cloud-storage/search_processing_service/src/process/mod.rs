@@ -90,6 +90,9 @@ pub async fn process_message(
             )
             .await?;
         }
+        SearchQueueMessage::UpdateDocumentProperties(message) => {
+            document::process_property_update(&ctx.opensearch_client, &ctx.db, &message).await?;
+        }
         SearchQueueMessage::ChatMessage(message) => {
             chat::insert_chat_message(&ctx.opensearch_client, &ctx.db, &message).await?;
         }

@@ -21,9 +21,35 @@ import {
 } from '@queries/soup/search';
 import type {
   EntityFilters,
+  PropertyFilter,
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
 import { type Accessor, createMemo, on, type Setter } from 'solid-js';
+
+// Map the tasks-view property filters (status/priority/assignee/custom) into the
+// search request shape, mirroring the soup path so search and soup agree. Values
+// are grouped by property id: multiple values on one property are OR'd (a task
+// matches any of them), and different properties are AND'd. Select options go to
+// option_ids, entity refs to entity_ids.
+function includePropertiesToFilters(
+  properties: QueryState['include']['properties']
+): PropertyFilter[] {
+  if (!properties?.length) return [];
+  const byPropId = new Map<string, PropertyFilter>();
+  for (const p of properties) {
+    let filter = byPropId.get(p.propertyId);
+    if (!filter) {
+      filter = { property_definition_id: p.propertyId };
+      byPropId.set(p.propertyId, filter);
+    }
+    if (p.type === 'select') {
+      filter.option_ids = [...(filter.option_ids ?? []), p.value];
+    } else {
+      filter.entity_ids = [...(filter.entity_ids ?? []), p.value];
+    }
+  }
+  return [...byPropId.values()];
+}
 
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
@@ -76,6 +102,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     };
   }
 
+  // Channel thread filters
+  if (include.channelThreadId?.length) {
+    filters.channel_thread_filters = {
+      thread_ids: include.channelThreadId,
+    };
+  }
+
   // Chat filters
   if (
     include.chatId?.length ||
@@ -124,6 +157,12 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
       ids: include.foreignEntityRecordId,
       foreign_entity_sources: include.foreignEntitySource,
     };
+  }
+
+  // Property filters (status, priority, assignees, custom)
+  const propertyFilters = includePropertiesToFilters(include.properties);
+  if (propertyFilters.length) {
+    filters.property_filters = propertyFilters;
   }
 
   return filters;

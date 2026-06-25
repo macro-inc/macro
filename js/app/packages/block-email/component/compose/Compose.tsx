@@ -231,6 +231,7 @@ export function EmailCompose(props: EmailComposeProps) {
       if (draftID) {
         await deleteDraftMutation.mutateAsync({
           draftId: draftID,
+          threadId: currentThreadID(),
           linkId: headerLinkId(),
         });
       }
@@ -602,6 +603,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (draftId) {
       await deleteDraftMutation.mutateAsync({
         draftId,
+        threadId: currentThreadID(),
         linkId: headerLinkId(),
       });
     }
@@ -762,9 +764,6 @@ export function EmailCompose(props: EmailComposeProps) {
         </SplitHeaderLeft>
       </Show>
       <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
-        <Show when={hasLinkError()}>
-          <EmailPermissionsBanner />
-        </Show>
         <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:scrollbar-hidden mobile:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => (
@@ -775,6 +774,7 @@ export function EmailCompose(props: EmailComposeProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
+              notice={hasLinkError() ? <EmailPermissionsBanner /> : undefined}
               class="size-full p-4 bg-surface max-h-full mobile:max-h-none overflow-hidden flex flex-col min-h-0 mobile:min-h-full"
             />
           </WrapUnlessMobile>

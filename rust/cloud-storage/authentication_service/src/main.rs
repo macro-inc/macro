@@ -19,7 +19,6 @@ use github::{
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
 use native_app_service::{
@@ -69,16 +68,14 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let internal_api_key = secretsmanager_client
-        .get_maybe_secret_value(env, InternalApiSecretKey::new()?)
-        .await?;
+    // Parse our configuration from the environment.
+    let config = Config::from_env().context("expected to be able to generate config")?;
+
+    let internal_api_key = config.internal_api_key.clone();
 
     let stripe_webhook_secret = secretsmanager_client
         .get_maybe_secret_value(env, StripeWebhookSecretKey::new()?)
         .await?;
-
-    // Parse our configuration from the environment.
-    let config = Config::from_env().context("expected to be able to generate config")?;
 
     tracing::trace!("initialized config");
 

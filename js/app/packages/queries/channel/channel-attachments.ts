@@ -19,9 +19,15 @@ type ChannelAttachmentsQueryKey = ReturnType<
   typeof channelKeys.attachments
 >['queryKey'];
 
+// Media grid is virtualized and pages in on scroll, so the page size only needs
+// to fill the first viewport.
+const MEDIA_PAGE_SIZE = 50;
+const DOCUMENT_PAGE_SIZE = 50;
+
 export function channelAttachmentsQueryOptions(
   channelId: string,
-  attachmentType?: ChannelAttachmentType
+  attachmentType?: ChannelAttachmentType,
+  limit = 100
 ) {
   return {
     queryKey: channelKeys.attachments(channelId, attachmentType).queryKey,
@@ -36,7 +42,7 @@ export function channelAttachmentsQueryOptions(
         async () =>
           await storageServiceClient.getChannelAttachments({
             channel_id: channelId,
-            limit: 100,
+            limit,
             cursor: pageParam,
             attachment_type: attachmentType,
             signal,
@@ -52,21 +58,22 @@ export function channelAttachmentsQueryOptions(
 
 function useChannelAttachmentsQuery(
   channelId: Accessor<string>,
-  attachmentType?: Accessor<ChannelAttachmentType | undefined>
+  attachmentType?: Accessor<ChannelAttachmentType | undefined>,
+  limit?: number
 ) {
   return useInfiniteQuery(() =>
-    channelAttachmentsQueryOptions(channelId(), attachmentType?.())
+    channelAttachmentsQueryOptions(channelId(), attachmentType?.(), limit)
   );
 }
 
 export function useChannelMediaAttachmentsQuery(channelId: Accessor<string>) {
-  return useChannelAttachmentsQuery(channelId, () => 'static');
+  return useChannelAttachmentsQuery(channelId, () => 'static', MEDIA_PAGE_SIZE);
 }
 
 export function useChannelDocumentAttachmentsQuery(
   channelId: Accessor<string>
 ) {
-  return useChannelAttachmentsQuery(channelId, () => 'dss');
+  return useChannelAttachmentsQuery(channelId, () => 'dss', DOCUMENT_PAGE_SIZE);
 }
 
 function _useChannelAttachmentsWithIndex(channelId: Accessor<string>) {

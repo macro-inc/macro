@@ -125,7 +125,13 @@ const createBlock = async (spec: {
     });
   } else {
     openWithSplit(
-      { type: blockName, id },
+      {
+        type: blockName,
+        id,
+        ...(createMdParams
+          ? { params: createMdParams, preserveParams: true }
+          : {}),
+      },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
@@ -282,6 +288,36 @@ export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
+    label: 'Email',
+    icon: WideEmail,
+    animatedIcon: AnimatedEmailIcon,
+    description: 'Create email',
+    keywords: ['new', 'make', 'add', 'compose'],
+    blockName: 'email',
+    hotkeyToken: TOKENS.create.email,
+    altHotkeyToken: TOKENS.create.emailNewSplit,
+    hotkey: 'e',
+    keyDownHandler: () => {
+      runCreateAction('email', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Agent',
+    icon: WideStar,
+    animatedIcon: AnimatedStarIcon,
+    description: 'Create AI chat',
+    keywords: ['new', 'make', 'add', 'agent'],
+    blockName: 'chat',
+    hotkeyToken: TOKENS.create.chat,
+    altHotkeyToken: TOKENS.create.chatNewSplit,
+    hotkey: 'a',
+    keyDownHandler: () => {
+      runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Doc',
     icon: WideFileMd,
     animatedIcon: AnimatedFileMdIcon,
@@ -327,21 +363,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Email',
-    icon: WideEmail,
-    animatedIcon: AnimatedEmailIcon,
-    description: 'Create email',
-    keywords: ['new', 'make', 'add', 'compose'],
-    blockName: 'email',
-    hotkeyToken: TOKENS.create.email,
-    altHotkeyToken: TOKENS.create.emailNewSplit,
-    hotkey: 'e',
-    keyDownHandler: () => {
-      runCreateAction('email', { shouldInsert: pressedKeys().has('shift') });
-      return true;
-    },
-  },
-  {
     label: 'Message',
     icon: WideChat,
     animatedIcon: AnimatedChatIcon,
@@ -353,21 +374,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'm',
     keyDownHandler: () => {
       runCreateAction('channel', { shouldInsert: pressedKeys().has('shift') });
-      return true;
-    },
-  },
-  {
-    label: 'Agent',
-    icon: WideStar,
-    animatedIcon: AnimatedStarIcon,
-    description: 'Create AI chat',
-    keywords: ['new', 'make', 'add', 'agent'],
-    blockName: 'chat',
-    hotkeyToken: TOKENS.create.chat,
-    altHotkeyToken: TOKENS.create.chatNewSplit,
-    hotkey: 'a',
-    keyDownHandler: () => {
-      runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },

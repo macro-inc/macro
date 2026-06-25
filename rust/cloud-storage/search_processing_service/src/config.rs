@@ -1,8 +1,8 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use macro_service_urls::LexicalServiceUrl;
-use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
     pub struct DatabaseUrl;
@@ -15,6 +15,8 @@ env_vars! {
 }
 
 maybe_env_vars! {
+    #[derive(Clone)]
+    pub struct DatabaseUrlReadonly;
     pub struct BackfillCallsPageSize;
     pub struct BackfillChatsPageSize;
     pub struct BackfillChannelsPageSize;
@@ -72,16 +74,15 @@ fn parse_u64(name: &str, raw_value: Option<&str>, default: u64) -> anyhow::Resul
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
     /// The connection URL for the Postgres database this application should use.
-    /// For deployed applications, this is a secret stored in AWS Secrets Manager.
-    pub database_url: LocalOrRemoteSecret<DatabaseUrl>,
+    pub database_url: DatabaseUrl,
 
-    /// Optional connection URL (or SM secret id when `environment != Local`)
+    /// Optional connection URL
     /// for the macrodb read-replica. When present, backfill reads run against
     /// the replica so they do not contend with writes on the primary; queue
     /// workers always read from the primary because replica lag would cause
     /// them to miss rows they are meant to index. When absent, backfills fall
     /// back to the primary.
-    pub database_url_readonly: Option<String>,
+    pub database_url_readonly: DatabaseUrlReadonly,
 
     /// The port to listen for HTTP requests on.
     #[macro_config_default(8080)]
@@ -105,7 +106,7 @@ pub struct Config {
     /// The username for the Opensearch instance
     pub opensearch_username: OpensearchUsername,
     /// The password for the Opensearch instance
-    pub opensearch_password: LocalOrRemoteSecret<OpensearchPassword>,
+    pub opensearch_password: OpensearchPassword,
 
     /// The bucket where documents are stored
     pub document_storage_bucket: DocumentStorageBucket,
@@ -137,6 +138,9 @@ pub struct Config {
     /// TTL applied to the `expires_at` attribute on each job record. Acts as
     /// the GC mechanism — DynamoDB removes items shortly after this elapses.
     pub backfill_job_ttl_seconds: BackfillJobTtlSeconds,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {

@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Thread display name or subject.
+ */
 export type SoupEmailThreadPreviewName = string | null;

@@ -298,9 +298,24 @@ where
             })
             .collect();
 
+        // Thread labels are the distinct set across ALL the thread's messages,
+        // independent of the fetched message page (unlike per-message labels).
+        let labels = self
+            .email_repo
+            .labels_by_thread_ids(&[thread_row.db_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|l| ParsedLabel {
+                provider_id: l.provider_label_id,
+                name: l.name,
+            })
+            .collect();
+
         Ok(Some(ParsedThread {
             row: thread_row,
             messages,
+            labels,
         }))
     }
 }

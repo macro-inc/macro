@@ -4,7 +4,6 @@ interface ImportMetaEnv {
   readonly __GIT_BRANCH__: string;
 
   readonly VITE_SEGMENT_WRITE_KEY: string;
-  readonly VITE_DD_WEB_APP_ID: string;
   readonly VITE_DD_WEB_APP_TOKEN: string;
   readonly VITE_DD_HASH: string;
   readonly VITE_POSTHOG_API_KEY: string;

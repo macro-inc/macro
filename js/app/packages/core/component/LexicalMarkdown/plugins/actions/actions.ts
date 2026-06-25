@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import { trackMention } from '@core/signal/mention';
 import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
@@ -42,7 +43,23 @@ import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
-import { type Action, ActionCategory } from './types';
+import { type Action, ActionCategory, type ActionContext } from './types';
+
+async function trackSlashTaskMention(
+  context: ActionContext | undefined,
+  documentId: string
+) {
+  if (
+    !context?.sourceDocumentId ||
+    context.disableMentionTracking ||
+    context.sourceBlockName === 'channel' ||
+    context.sourceBlockName === 'chat'
+  ) {
+    return undefined;
+  }
+
+  return await trackMention(context.sourceDocumentId, 'document', documentId);
+}
 
 export const ACTIONS: Action[] = [
   {
@@ -157,19 +174,17 @@ export const ACTIONS: Action[] = [
     keywords: ['task', 'todo', 'create'],
     category: ActionCategory.ELEMENT,
     icon: CheckSquare,
-    action: (editor: LexicalEditor) => {
+    action: (editor: LexicalEditor, context?: ActionContext) => {
       const splitManager = globalSplitManager();
       if (!splitManager) return;
       const awaitId = nanoid(21);
       let placeholderInserted = false;
-      console.log('[task-action] opening compose, awaitId=', awaitId);
       splitManager.createPopoverSplit({
         content: {
           type: 'component',
           id: 'task-compose',
           params: {
             onCreateStart: ({ title }: { title: string }) => {
-              console.log('[task-action] onCreateStart fired, title=', title);
               const handled = editor.dispatchCommand(
                 INSERT_AWAIT_NODE_COMMAND,
                 {
@@ -177,26 +192,16 @@ export const ACTIONS: Action[] = [
                   text: `Creating ${title}`,
                 }
               );
-              console.log(
-                '[task-action] INSERT_AWAIT_NODE_COMMAND handled=',
-                handled
-              );
-              placeholderInserted = true;
+              placeholderInserted = handled;
             },
             onCreateFailure: () => {
-              console.log(
-                '[task-action] onCreateFailure, placeholderInserted=',
-                placeholderInserted
-              );
               if (!placeholderInserted) return;
               editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
               placeholderInserted = false;
             },
-            onSuccess: (result: ComposeTaskSuccess) => {
-              console.log(
-                '[task-action] onSuccess, placeholderInserted=',
-                placeholderInserted,
-                'documentId=',
+            onSuccess: async (result: ComposeTaskSuccess) => {
+              const mentionUuid = await trackSlashTaskMention(
+                context,
                 result.documentId
               );
               if (placeholderInserted) {
@@ -208,6 +213,7 @@ export const ACTIONS: Action[] = [
                       documentName: result.title,
                       blockName: 'task',
                       createdAt: Date.now(),
+                      mentionUuid,
                     }),
                 });
                 placeholderInserted = false;
@@ -217,6 +223,7 @@ export const ACTIONS: Action[] = [
                 documentId: result.documentId,
                 documentName: result.title,
                 blockName: 'task',
+                mentionUuid,
               });
             },
           },

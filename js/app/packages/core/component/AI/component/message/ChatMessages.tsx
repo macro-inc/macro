@@ -3,6 +3,7 @@ import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PulsingStar } from '@entity/components/PulsingStar';
@@ -22,6 +23,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
 import { AssistantMessage } from './AssistantMessage';
+import { createMobileKeyboardScrollPin } from './create-mobile-keyboard-scroll-pin';
 import { EmptyChatState } from './EmptyChatState';
 import { UserMessage } from './UserMessage';
 
@@ -132,6 +134,14 @@ export function ChatMessages(props: ChatMessagesProps) {
     setParentHeight(size);
   });
 
+  // Full-frame mobile: keep pinned to the bottom across virtual-keyboard
+  // show/hide when the user was already at the bottom.
+  createMobileKeyboardScrollPin({
+    scrollEl: selectScroll,
+    wrapperEl: () => messagesRef?.parentElement,
+    scrollToBottom,
+  });
+
   onMount(() => {
     scrollToBottom('instant');
   });
@@ -239,7 +249,16 @@ export function ChatMessages(props: ChatMessagesProps) {
                 <div
                   class="shrink-0 flex flex-col gap-y-4"
                   style={{
-                    'min-height': `${parentHeight()}px`,
+                    // Sized so scrollToBottom rests the just-sent message at
+                    // the top of the viewport. Full-frame mobile keeps the
+                    // chrome insets inside the scroller (see Chat.tsx), so
+                    // subtract them — the trailing bottom inset otherwise
+                    // pushes the message above the viewport, and the message
+                    // should rest below the floating top chrome, not under
+                    // it. (0.5rem matches the scroll content's top gap.)
+                    'min-height': isMobile()
+                      ? `calc(${parentHeight()}px - var(--mobile-content-inset-top, 0px) - var(--mobile-content-inset-bottom, 0px) - 0.5rem)`
+                      : `${parentHeight()}px`,
                   }}
                 >
                   <Show when={lastPair()}>

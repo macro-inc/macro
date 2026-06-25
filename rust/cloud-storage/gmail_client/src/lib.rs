@@ -6,7 +6,6 @@ pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
 pub(crate) mod profile;
-mod settings;
 pub(crate) mod threads;
 pub(crate) mod watch;
 
@@ -77,15 +76,18 @@ impl GmailClient {
         }
     }
 
-    /// Lists the num_threads most recent threads for the user
+    /// Lists the num_threads most recent threads for the user, optionally
+    /// filtered to threads carrying all of the given Gmail label ids
+    /// (an empty slice applies no filter).
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn list_threads(
         &self,
         access_token: &str,
         num_threads: u32,
         next_page_token: Option<&str>,
+        label_ids: &[&str],
     ) -> anyhow::Result<ServiceThreadList> {
-        threads::list_threads(self, access_token, num_threads, next_page_token).await
+        threads::list_threads(self, access_token, num_threads, next_page_token, label_ids).await
     }
 
     // Returns a list containing the message ids belonging to the thread.
@@ -308,16 +310,6 @@ impl GmailClient {
         sync_token: Option<&str>,
     ) -> anyhow::Result<(Vec<PersonResource>, String)> {
         contacts::list_other_contacts(self, access_token, sync_token).await
-    }
-
-    /// Gets the email signature for a specific email address
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_email_signature(
-        &self,
-        access_token: &str,
-        email_address: &str,
-    ) -> Result<Option<String>, GmailError> {
-        settings::get_email_signature(self, access_token, email_address).await
     }
 
     /// Blocks a sender by creating a filter that sends their emails to SPAM.

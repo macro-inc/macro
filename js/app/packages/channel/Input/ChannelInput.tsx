@@ -49,6 +49,7 @@ import type {
   InputData,
   InputHandle,
   InputPersistenceKey,
+  InputSnapshot,
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
@@ -176,24 +177,43 @@ export function ChannelInput(props: ChannelInputProps) {
   const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
 
   let isEditorConnected = false;
-  let pendingRestoreSnapshot:
-    | Parameters<InputHandle['restoreSnapshot']>[0]
+  let pendingRestore:
+    | {
+        snapshot: InputSnapshot;
+        options?: { focus?: boolean };
+      }
     | undefined;
+  let pendingFocus = false;
 
   const applySnapshot = (
-    snapshot: Parameters<InputHandle['restoreSnapshot']>[0]
+    snapshot: InputSnapshot,
+    options?: { focus?: boolean }
   ) => {
     markdownEditor.controls.setMarkdown(snapshot.value);
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
-    markdownEditor.controls.focus();
+    if (options?.focus !== false) markdownEditor.controls.focus();
   };
 
   const flushPendingRestore = () => {
-    const snapshot = pendingRestoreSnapshot;
-    pendingRestoreSnapshot = undefined;
-    if (!snapshot) return;
-    queueMicrotask(() => applySnapshot(snapshot));
+    const restore = pendingRestore;
+    pendingRestore = undefined;
+    if (!restore) return;
+    queueMicrotask(() => applySnapshot(restore.snapshot, restore.options));
+  };
+
+  const focusEditor = () => {
+    if (!isEditorConnected) {
+      pendingFocus = true;
+      return;
+    }
+    markdownEditor.controls.focus();
+  };
+
+  const flushPendingFocus = () => {
+    if (!pendingFocus) return;
+    pendingFocus = false;
+    queueMicrotask(() => markdownEditor.controls.focus());
   };
 
   // Macro AI is mentionable in every channel. It is surfaced through the same
@@ -315,18 +335,18 @@ export function ChannelInput(props: ChannelInputProps) {
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
-    focus: () => markdownEditor.controls.focus(),
+    focus: focusEditor,
     send: () => inputState.commands.send(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,
     previewEntityMentionInsertion,
     clearEntityMentionInsertionPreview,
-    restoreSnapshot: (snapshot) => {
+    restoreSnapshot: (snapshot, options) => {
       if (!isEditorConnected) {
-        pendingRestoreSnapshot = snapshot;
+        pendingRestore = { snapshot, options };
         return;
       }
-      applySnapshot(snapshot);
+      applySnapshot(snapshot, options);
     },
   });
 
@@ -359,6 +379,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
+          class="mobile:rounded-full"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -387,7 +408,7 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class={cn('rounded-xl', isCollapsed() && 'hidden')}
+        class={cn('rounded-xl mobile:rounded-3xl', isCollapsed() && 'hidden')}
         depth={2}
         solid
       >
@@ -428,6 +449,7 @@ export function ChannelInput(props: ChannelInputProps) {
                   onConnect={() => {
                     isEditorConnected = true;
                     flushPendingRestore();
+                    flushPendingFocus();
                   }}
                 />
                 <DragInsertIndicator

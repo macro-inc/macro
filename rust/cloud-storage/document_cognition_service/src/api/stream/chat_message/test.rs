@@ -1,5 +1,16 @@
 use super::*;
 
+#[test]
+fn send_chat_message_request_accepts_arbitrary_model_string() {
+    let request: HttpSendChatMessageRequest = serde_json::from_value(serde_json::json!({
+        "content": "hello",
+        "model": "custom-provider/custom-model",
+    }))
+    .unwrap();
+
+    assert_eq!(request.model, "custom-provider/custom-model");
+}
+
 fn text(s: &str) -> AssistantMessagePart {
     AssistantMessagePart::Text { text: s.into() }
 }

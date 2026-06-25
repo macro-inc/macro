@@ -76,11 +76,26 @@ named system label here, then call UpdateThreadLabels with that id):\n\
 - Apply or remove a custom user label → look up the label by its display name and add/remove it\n\
 \n\
 Match label names case-insensitively when searching the response. You can also use this to \
-understand how the user's mail is organized before filtering or searching by label."
+understand how the user's mail is organized before filtering or searching by label.\n\
+\n\
+Labels are per-inbox: each inbox has its own label `id`s, so a label id from one inbox will \
+not work on a thread in another. When acting on a specific thread, pass its `thread_id` and \
+this returns the labels of the inbox that owns that thread (the matching ids to pass to \
+UpdateThreadLabels). Otherwise, in a multi-inbox setup, pass `inbox` (an inbox email address \
+from ListInboxes) to list a specific inbox's labels; omit both to use the primary inbox."
 )]
-#[allow(unused)]
-// empty structs can't be deserialized;
-pub struct ListLabels {}
+pub struct ListLabels {
+    /// List the labels of the inbox that owns this thread. Use this when you
+    /// intend to add or remove a label on a specific thread so the label ids
+    /// match that thread's inbox. Takes precedence over `inbox`.
+    #[serde(default)]
+    pub thread_id: Option<Uuid>,
+
+    /// Restrict to a specific inbox by its email address (from ListInboxes).
+    /// Omit to use the primary inbox. Ignored when `thread_id` is set.
+    #[serde(default)]
+    pub inbox: Option<String>,
+}
 
 #[async_trait]
 impl<T, G, E> AsyncTool<EmailToolContext<T, G, E>> for ListLabels
@@ -99,9 +114,36 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!("List labels");
 
-        let link = service_context
-            .resolve_link(MacroUserIdStr((*request_context.user_id).clone()))
-            .await?;
+        let link = match self.thread_id {
+            Some(thread_id) => service_context
+                .service
+                .get_owned_link_for_thread(
+                    MacroUserIdStr((*request_context.user_id).clone()),
+                    thread_id,
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Failed to resolve inbox for thread: {e}"),
+                    internal_error: e.into(),
+                })?
+                .ok_or_else(|| ToolCallError {
+                    description: "No accessible inbox owns this thread.".to_string(),
+                    internal_error: anyhow::anyhow!("no owned link for thread"),
+                })?,
+            None => {
+                let inboxes = service_context
+                    .service
+                    .get_inboxes_for_macro_id(MacroUserIdStr((*request_context.user_id).clone()))
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: format!("Failed to resolve inboxes: {e}"),
+                        internal_error: e.into(),
+                    })?;
+                let caller_macro_id = request_context.user_id.to_string();
+                super::resolve_inbox_selector(&inboxes, &caller_macro_id, self.inbox.as_deref())?
+                    .clone()
+            }
+        };
 
         let labels = service_context
             .service

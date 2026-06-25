@@ -9,14 +9,15 @@ use crate::domain::{
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
         AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
-        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem,
+        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem, ChannelMessage,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
         ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
         CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
-        LatestMessage, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
-        ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow, UserName,
+        GetThreadReplyRowsParams, LatestMessage, MessageAttachment, MessagePageDirection,
+        MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, Sender, SimpleMention,
+        ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName,
+        fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -25,7 +26,10 @@ use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
 use filter_ast::Expr;
 #[cfg(feature = "list")]
-use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
+use item_filters::ast::{
+    LiteralTree,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, Query};
 #[cfg(feature = "list")]
@@ -47,6 +51,15 @@ impl PgChannelsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+#[cfg(feature = "list")]
+fn bot_profile_for_sender(
+    profiles: &HashMap<BotId, BotSenderProfile>,
+    sender_id: &str,
+) -> Option<BotSenderProfile> {
+    let bot_id = BotId::parse_storage_str(sender_id).ok()?;
+    profiles.get(&bot_id).cloned()
 }
 
 /// Intermediate row for the top-level messages query.
@@ -524,16 +537,17 @@ async fn resolve_channel_display_name(
         ChannelType::Private | ChannelType::DirectMessage => {
             let participant_ids = load_active_participant_ids(pool, info.id).await?;
             let name_lookup = load_user_display_names(pool, &participant_ids).await?;
+
             if matches!(info.channel_type, ChannelType::DirectMessage)
                 && participant_ids
                     .iter()
-                    .any(|participant_id| participant_id == viewer_user_id.as_ref())
+                    .any(|participant_id| participant_id.as_ref() == viewer_user_id.as_ref())
             {
                 if let Some(other_participant_id) = participant_ids
                     .iter()
-                    .find(|participant_id| participant_id.as_str() != viewer_user_id.as_ref())
+                    .find(|participant_id| participant_id.as_ref() != viewer_user_id.as_ref())
                 {
-                    return Ok(user_display_name(other_participant_id, &name_lookup));
+                    return Ok(id_to_display_name(other_participant_id, &name_lookup));
                 }
 
                 tracing::warn!(channel_id=%info.id, "direct message channel has no other participant");
@@ -542,7 +556,7 @@ async fn resolve_channel_display_name(
 
             Ok(participant_ids
                 .iter()
-                .map(|participant_id| user_display_name(participant_id, &name_lookup))
+                .map(|participant_id| id_to_display_name(participant_id, &name_lookup))
                 .collect::<Vec<_>>()
                 .join(", "))
         }
@@ -552,7 +566,7 @@ async fn resolve_channel_display_name(
 async fn load_active_participant_ids(
     pool: &PgPool,
     channel_id: Uuid,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
@@ -565,16 +579,27 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(|row| row.user_id).collect())
+    rows.into_iter()
+        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
+        .collect()
 }
 
 async fn load_user_display_names(
     pool: &PgPool,
-    user_ids: &[String],
-) -> anyhow::Result<HashMap<String, String>> {
+    user_ids: &[MacroUserIdStr<'static>],
+) -> anyhow::Result<NameLookup> {
     if user_ids.is_empty() {
-        return Ok(HashMap::new());
+        return Ok(NameLookup::new());
     }
+
+    let user_id_strings: Vec<String> = user_ids
+        .iter()
+        .map(|user_id| user_id.as_ref().to_string())
+        .collect();
+    let user_ids_by_string: HashMap<_, _> = user_ids
+        .iter()
+        .map(|user_id| (user_id.as_ref().to_string(), user_id.clone()))
+        .collect();
 
     let rows = sqlx::query_as!(
         UserDisplayNameRow,
@@ -584,16 +609,20 @@ async fn load_user_display_names(
         JOIN "User" u ON mui.macro_user_id = u.macro_user_id
         WHERE u.id = ANY($1)
         "#,
-        user_ids,
+        &user_id_strings,
     )
     .fetch_all(pool)
     .await?;
 
-    let mut lookup = HashMap::with_capacity(rows.len());
+    let mut lookup = NameLookup::with_capacity(rows.len());
     for row in rows {
-        if let Some(name) = display_name(row.first_name.as_deref(), row.last_name.as_deref()) {
-            lookup.insert(row.user_profile_id, name);
-        }
+        let Some(name) = display_name(row.first_name.as_deref(), row.last_name.as_deref()) else {
+            continue;
+        };
+        let Some(user_id) = user_ids_by_string.get(&row.user_profile_id) else {
+            continue;
+        };
+        lookup.insert(user_id.clone(), name);
     }
 
     Ok(lookup)
@@ -612,20 +641,11 @@ fn display_name(first_name: Option<&str>, last_name: Option<&str>) -> Option<Str
     }
 }
 
-fn user_display_name(user_id: &str, name_lookup: &HashMap<String, String>) -> String {
-    name_lookup
-        .get(user_id)
-        .filter(|name| !name.trim().is_empty())
-        .cloned()
-        .unwrap_or_else(|| fallback_user_name(user_id))
-}
-
-fn fallback_user_name(user_id: &str) -> String {
-    let email = user_id.split_once('|').map_or(user_id, |(_, email)| email);
-    email
-        .split_once('@')
-        .map_or(email, |(local, _)| local)
-        .to_string()
+fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLookup) -> String {
+    match name_lookup.get(user_id) {
+        Some(name) if !name.trim().is_empty() => name.clone(),
+        _ => fallback_user_name(user_id),
+    }
 }
 
 #[cfg(feature = "list")]
@@ -774,6 +794,176 @@ fn build_channel_list_query(
     let mut builder = QueryBuilder::new(CHANNEL_LIST_PREFIX);
     builder.push(build_channel_list_filter(filter_ast.as_deref()));
     builder.push(CHANNEL_LIST_SELECT);
+    builder
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_sort_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    sort_method_str: String,
+) {
+    builder.push("(CASE ");
+    builder.push_bind(sort_method_str);
+    builder.push(
+        " WHEN 'created_at' THEN m.created_at ELSE GREATEST(m.updated_at, COALESCE(thread_stats.latest_reply_updated_at, m.updated_at)) END)",
+    );
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_filter_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    expr: &Expr<ChannelThreadLiteral>,
+    user_id: &MacroUserIdStr<'_>,
+) {
+    match expr {
+        Expr::And(a, b) => {
+            builder.push("(");
+            push_channel_thread_filter_expr(builder, a, user_id);
+            builder.push(" AND ");
+            push_channel_thread_filter_expr(builder, b, user_id);
+            builder.push(")");
+        }
+        Expr::Or(a, b) => {
+            builder.push("(");
+            push_channel_thread_filter_expr(builder, a, user_id);
+            builder.push(" OR ");
+            push_channel_thread_filter_expr(builder, b, user_id);
+            builder.push(")");
+        }
+        Expr::Not(a) => {
+            builder.push("(NOT ");
+            push_channel_thread_filter_expr(builder, a, user_id);
+            builder.push(")");
+        }
+        Expr::Literal(ChannelThreadLiteral::ThreadId(id)) => {
+            builder.push("m.id = ");
+            builder.push_bind(*id);
+        }
+        Expr::Literal(ChannelThreadLiteral::ChannelId(channel_id)) => {
+            builder.push("c.id = ");
+            builder.push_bind(*channel_id);
+        }
+        Expr::Literal(ChannelThreadLiteral::RootSender(sender)) => {
+            builder.push("m.sender_id = ");
+            builder.push_bind(sender.as_ref().to_string());
+        }
+        Expr::Literal(ChannelThreadLiteral::NotificationDone(done)) => {
+            push_channel_thread_notification_filter_expr(
+                builder,
+                user_id,
+                if *done {
+                    "un.done = true"
+                } else {
+                    "un.done = false"
+                },
+            );
+        }
+        Expr::Literal(ChannelThreadLiteral::NotificationSeen(seen)) => {
+            push_channel_thread_notification_filter_expr(
+                builder,
+                user_id,
+                if *seen {
+                    "un.seen_at IS NOT NULL"
+                } else {
+                    "un.seen_at IS NULL"
+                },
+            );
+        }
+    }
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_notification_filter_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    user_id: &MacroUserIdStr<'_>,
+    predicate_sql: &str,
+) {
+    builder.push(
+        r#"EXISTS (
+            SELECT 1
+            FROM notification n
+            JOIN user_notification un ON un.notification_id = n.id
+            WHERE un.user_id = "#,
+    );
+    builder.push_bind(user_id.as_ref().to_string());
+    builder.push(
+        r#"
+              AND un.deleted_at IS NULL
+              AND n.event_item_type = 'channel'
+              AND n.event_item_id = c.id::text
+              AND n.secondary_event_item_type = 'channel_message'
+              AND n.secondary_event_item_id = m.id::text
+              AND "#,
+    );
+    builder.push(predicate_sql);
+    builder.push(")");
+}
+
+#[cfg(feature = "list")]
+fn build_channel_thread_rows_query(
+    params: &GetThreadReplyRowsParams,
+) -> QueryBuilder<'static, Postgres> {
+    // Dynamic QueryBuilder is required because the channel-thread filter is an AST with
+    // arbitrary AND/OR/NOT shape. All runtime values are still passed as bind parameters.
+    let cursor = params.query();
+    let sort_method_str = cursor.sort_method().to_string();
+    let query_limit = params.limit().map(i64::from);
+    let (cursor_id, cursor_timestamp) = cursor.vals();
+    let cursor_id_str = cursor_id.map(|id| id.to_string());
+    let cursor_timestamp = cursor_timestamp.cloned();
+
+    let mut builder = QueryBuilder::new(
+        r#"
+        WITH user_channels AS (
+            SELECT DISTINCT c.*
+            FROM comms_channels c
+            INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+            WHERE cp.user_id = "#,
+    );
+    builder.push_bind(params.user().as_ref().to_string());
+    builder.push(
+        r#" AND cp.left_at IS NULL
+        )
+        SELECT
+            m.id AS id,
+            m.channel_id AS channel_id,
+            m.sender_id AS sender_id,
+            m.content AS content,
+            m.created_at AS created_at,
+            m.updated_at AS updated_at,
+            m.edited_at::timestamptz AS edited_at,
+            m.deleted_at::timestamptz AS deleted_at
+        FROM comms_messages m
+        INNER JOIN user_channels c ON c.id = m.channel_id
+        LEFT JOIN LATERAL (
+            SELECT MAX(reply.updated_at) AS latest_reply_updated_at
+            FROM comms_messages reply
+            WHERE reply.thread_id = m.id
+              AND reply.deleted_at IS NULL
+        ) thread_stats ON TRUE
+        WHERE m.thread_id IS NULL
+          AND m.deleted_at IS NULL
+        "#,
+    );
+
+    if let Some(expr) = cursor.filter().as_deref() {
+        builder.push(" AND ");
+        push_channel_thread_filter_expr(&mut builder, expr, params.user());
+    }
+
+    builder.push(" AND (");
+    builder.push_bind(cursor_timestamp);
+    builder.push("::timestamptz IS NULL OR (");
+    push_channel_thread_sort_expr(&mut builder, sort_method_str.clone());
+    builder.push(", m.id::text) < (");
+    builder.push_bind(cursor_timestamp);
+    builder.push(", ");
+    builder.push_bind(cursor_id_str);
+    builder.push(")) ORDER BY ");
+    push_channel_thread_sort_expr(&mut builder, sort_method_str);
+    builder.push(" DESC, m.id::text DESC LIMIT ");
+    builder.push_bind(query_limit);
+
     builder
 }
 
@@ -1052,6 +1242,117 @@ impl ChannelListRepo for PgChannelsRepo {
         })
         .fetch_all(&self.pool)
         .await?)
+    }
+
+    async fn get_thread_messages(
+        &self,
+        params: GetThreadReplyRowsParams,
+    ) -> Result<Vec<ChannelMessage>, rootcause::Report> {
+        let parents: Vec<TopLevelMessageRow> = build_channel_thread_rows_query(&params)
+            .build()
+            .try_map(|row: PgRow| {
+                Ok(TopLevelMessageRow {
+                    id: row.try_get("id")?,
+                    channel_id: row.try_get("channel_id")?,
+                    sender_id: row.try_get("sender_id")?,
+                    content: row.try_get("content")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                    edited_at: row.try_get("edited_at")?,
+                    deleted_at: row.try_get("deleted_at")?,
+                })
+            })
+            .fetch_all(&self.pool)
+            .await?;
+
+        let parent_ids: Vec<Uuid> = parents.iter().map(|parent| parent.id).collect();
+        if parent_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let thread_data = self
+            .get_thread_data(&parent_ids, 3)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        let mut all_ids = parent_ids.clone();
+        let mut sender_ids: Vec<&str> = parents
+            .iter()
+            .map(|parent| parent.sender_id.as_str())
+            .collect();
+        for data in thread_data.values() {
+            for reply in &data.preview_replies {
+                all_ids.push(reply.id);
+                sender_ids.push(reply.sender_id.as_str());
+            }
+        }
+
+        let bot_ids: Vec<BotId> = sender_ids
+            .into_iter()
+            .filter_map(|sender_id| BotId::parse_storage_str(sender_id).ok())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let (reactions, attachments, bot_profiles) = tokio::join!(
+            self.get_reactions_batch(&all_ids),
+            self.get_attachments_batch(&all_ids),
+            self.get_bot_profiles(&bot_ids),
+        );
+
+        let reactions = reactions.map_err(|error| rootcause::report!(error))?;
+        let attachments = attachments.map_err(|error| rootcause::report!(error))?;
+        let bot_profiles = bot_profiles.map_err(|error| rootcause::report!(error))?;
+
+        Ok(parents
+            .into_iter()
+            .map(|parent| {
+                let data = thread_data.get(&parent.id);
+                let preview = data
+                    .map(|data| {
+                        data.preview_replies
+                            .iter()
+                            .map(|reply| ThreadReply {
+                                id: reply.id,
+                                sender_id: reply.sender_id.clone(),
+                                bot_profile: bot_profile_for_sender(
+                                    &bot_profiles,
+                                    &reply.sender_id,
+                                ),
+                                content: reply.content.clone(),
+                                created_at: reply.created_at,
+                                updated_at: reply.updated_at,
+                                edited_at: reply.edited_at,
+                                reactions: reactions.get(&reply.id).cloned().unwrap_or_default(),
+                                attachments: attachments
+                                    .get(&reply.id)
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                ChannelMessage {
+                    id: parent.id,
+                    channel_id: parent.channel_id,
+                    sender_id: parent.sender_id.clone(),
+                    bot_profile: bot_profile_for_sender(&bot_profiles, &parent.sender_id),
+                    content: parent.content,
+                    created_at: parent.created_at,
+                    updated_at: parent.updated_at,
+                    edited_at: parent.edited_at,
+                    deleted_at: parent.deleted_at,
+                    thread: ThreadInfo {
+                        reply_count: data.map_or(0, |data| data.reply_count),
+                        latest_reply_at: data.and_then(|data| data.latest_reply_at),
+                        preview,
+                    },
+                    reactions: reactions.get(&parent.id).cloned().unwrap_or_default(),
+                    attachments: attachments.get(&parent.id).cloned().unwrap_or_default(),
+                }
+            })
+            .collect())
     }
 }
 

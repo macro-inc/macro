@@ -10,8 +10,12 @@ import type { SoupLabel } from './soupLabel';
 import type { SoupProperty } from './soupProperty';
 
 export type SoupEnrichedEmailThreadPreviewAllOf = {
+  /** Attachments on the thread. */
   attachments: SoupAttachment[];
+  /** Labels attached to the thread. */
   labels: SoupLabel[];
+  /** Contacts participating in the thread. */
   participants: SoupContact[];
+  /** Properties attached to the thread. */
   properties: SoupProperty[];
 };

@@ -187,7 +187,7 @@ runs:
         bun install
 
     # configure aws credentials
-    - uses: aws-actions/configure-aws-credentials@v4
+    - uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
       with:
         aws-access-key-id: ${{ inputs.aws-access-key }}
         aws-secret-access-key: ${{ inputs.aws-secret-key }}
@@ -200,7 +200,7 @@ runs:
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 569036502058.dkr.ecr.us-east-1.amazonaws.com
 
     # deploy
-    - uses: pulumi/actions@v5
+    - uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
       with:
         command: up
         stack-name: macro-inc/${{ inputs.environment }}

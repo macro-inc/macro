@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Attachment filename.
+ */
 export type SoupAttachmentFilename = string | null;

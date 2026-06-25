@@ -2,7 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import { useChatInputContext } from '@core/component/AI/context';
-import type { Model, ToolSet } from '@core/component/AI/types';
+import { Model, type ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -14,8 +14,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import { useModelsQuery } from '@queries/chat';
-import { queryReadyGate } from '@queries/gate';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
@@ -51,26 +49,19 @@ export function ChatInput(props: ChatInputComponentProps) {
   const generating = input.isGenerating;
   const { showPaywall } = usePaywallState();
 
-  // Which models this user may use (free → Haiku; professional → all).
-  // Gate on the query so reading `.data` doesn't trip Suspense while loading;
-  // an empty list until ready is fine (the effect below no-ops on `[]`).
-  const modelsQuery = useModelsQuery();
-  const modelOptions = createMemo(() => {
-    if (!queryReadyGate(modelsQuery)) return [];
-    return modelsQuery.data.models.map((m) => ({
-      id: m.id as Model,
-      available: m.available,
-    }));
-  });
+  // Every model is offered in the picker; the backend enforces plan
+  // entitlements on send (a free user picking a pro model is rejected there).
+  const modelOptions = createMemo(() =>
+    Object.values(Model).map((id) => ({ id, available: true }))
+  );
 
-  // If the selected model isn't available to this user, fall back to the
-  // first available one so we never send a model that would 403.
+  // If the selected model isn't a known id (e.g. a stale persisted value),
+  // fall back to the first one so we never send something unroutable.
   createEffect(() => {
     const options = modelOptions();
-    if (options.length === 0) return;
-    if (options.some((o) => o.id === model() && o.available)) return;
-    const firstAvailable = options.find((o) => o.available);
-    if (firstAvailable) input.setModel(firstAvailable.id);
+    if (options.some((o) => o.id === model())) return;
+    const [first] = options;
+    if (first) input.setModel(first.id);
   });
 
   let containerRef!: HTMLDivElement;
@@ -124,9 +115,12 @@ export function ChatInput(props: ChatInputComponentProps) {
   });
 
   const isEmptyInput = () => markdownText().trim().length === 0;
+  const hasAttachedFiles = () => attachments.attached().length > 0;
   const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
-    !isEmptyInput() && !generating() && !hasUploadingAttachments();
+    (!isEmptyInput() || hasAttachedFiles()) &&
+    !generating() &&
+    !hasUploadingAttachments();
 
   const LINE_HEIGHT_THRESHOLD = 40;
   let mdRef: undefined | HTMLDivElement;

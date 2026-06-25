@@ -50,7 +50,7 @@ pub async fn put_presigned_url(
     let id: String = Uuid::new_v4().to_string();
     let static_file_key = s3_key::StaticFileKey::new(&id);
     let s3_key = static_file_key.to_key();
-    let permalink = format!("{}/{}", ctx.config.service_url, s3_key);
+    let permalink = format!("{}/{}", ctx.config.static_file_service_url, s3_key);
 
     let owner_id = if !user.user_id.is_empty() {
         user.user_id.clone()

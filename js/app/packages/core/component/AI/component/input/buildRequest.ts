@@ -1,3 +1,4 @@
+import { displayResultsInstructions } from '@app/component/dynamic-ui/toolSchema';
 import { analytics } from '@app/lib/analytics';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
@@ -30,13 +31,19 @@ export function useSendChatMessage() {
     attachments,
     toolset,
   }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
+    // Append the dynamic-UI (displayResults) JSON schema so the model knows the
+    // shape of the tool's `any` `view` argument.
+    const base = additionalInstructions();
+    const dashboard = displayResultsInstructions();
+    const merged = base ? `${base}\n\n${dashboard}` : dashboard;
+
     const response = await cognitionApiServiceClient.sendStreamChatMessage({
       content,
       model: model ?? DEFAULT_MODEL,
       chat_id: chatId,
       attachments: attachments.length > 0 ? attachments : undefined,
       toolset,
-      additional_instructions: additionalInstructions(),
+      additional_instructions: merged,
     });
 
     if (isPaymentError(response)) {

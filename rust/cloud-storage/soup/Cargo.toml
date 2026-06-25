@@ -9,6 +9,8 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:schemars",
+  "email/ai_tools",
+  "email/inbound",
   "email/outbound",
   "frecency/outbound",
   "frecency/postgres",

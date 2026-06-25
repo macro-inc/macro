@@ -5,6 +5,7 @@ import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { EntityDragEvent } from '@entity';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
@@ -28,6 +29,7 @@ import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
+import { HeaderIsland } from './HeaderIsland';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -62,7 +64,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg"
+      class="p-1 rounded-lg mobile:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -85,10 +87,7 @@ function SplitForwardButton() {
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn(
-        'p-1 rounded-lg',
-        isMobile() && !context.handle.canGoForward() && 'hidden'
-      )}
+      class={cn('p-1 rounded-lg')}
     >
       <CaretRight class="h-4" />
     </Button>
@@ -262,7 +261,13 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class={cn(
         'isolate relative w-full h-full overflow-clip text-ink',
+        // On mobile the header overlays the panel body as a transparent strip
+        // of floating islands
+        'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
         isMobile() && isListViewID(panel.handle.content().id) && 'hidden',
+        isMobile() &&
+          !isNativeMobilePlatform() &&
+          'mobile:top-[calc(var(--safe-top)+6px)]',
         isEntityDraggingOver() && 'bg-active/50'
       )}
       data-split-header
@@ -286,19 +291,32 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </Portal>
         )}
       </Show>
-      <div class="absolute inset-0 flex justify-start items-center">
-        <div class="relative flex items-center pl-2 mobile:pl-0 h-full">
-          <div class="mobile:hidden">
-            <SplitCloseButton />
-          </div>
-          <Show when={!(isMobile() && isListViewID(panel.handle.content().id))}>
-            <SplitBackButton />
-            <SplitForwardButton />
-          </Show>
-        </div>
+      <div class="absolute inset-0 flex justify-start items-center mobile:px-(--mobile-chrome-gutter) mobile:gap-2">
+        <Show
+          when={isMobile()}
+          fallback={
+            <div class="relative flex items-center pl-2 h-full">
+              <SplitCloseButton />
+              <SplitBackButton />
+              <SplitForwardButton />
+            </div>
+          }
+        >
+          {/* Back/forward island. */}
+          <HeaderIsland
+            class={cn(
+              'relative gap-0 px-1',
+              !panel.handle.canGoBack() && 'hidden'
+            )}
+          >
+            <Show when={!isListViewID(panel.handle.content().id)}>
+              <SplitBackButton />
+            </Show>
+          </HeaderIsland>
+        </Show>
 
         <div
-          class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5"
+          class="relative min-w-0 h-full shrink pl-2 flex items-center gap-0.5 mobile:pl-0 mobile:gap-2"
           ref={(ref) => {
             panel.layoutRefs.headerLeft = ref;
           }}
@@ -314,7 +332,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </div>
         </Show>*/}
 
-        <div class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2">
+        <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 mobile:px-0 mobile:gap-2">
           <div
             class="contents"
             ref={(ref) => {

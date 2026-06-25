@@ -77,56 +77,57 @@ export function GitHub() {
           icon={GithubIcon}
           title="GitHub"
           description="Connect your GitHub account so Macro can surface pull requests and issues alongside your work."
-          status={
-            <div class="flex flex-col items-center gap-2">
+        >
+          <div class="flex flex-col items-center gap-2">
+            <div class="flex items-center gap-3">
               <StatusPill state={pill().state} label={pill().label} />
-              <Show when={status() === 'linked' && githubLink.data?.username}>
-                {(username) => (
-                  <span class="ph-no-capture text-sm text-ink">
-                    @{username()}
-                  </span>
-                )}
+              <Show when={status() === 'reauthentication_required'}>
+                <Button
+                  variant="cta"
+                  size="sm"
+                  depth={3}
+                  onClick={handleGithubReconnect}
+                  disabled={reauthenticateGithub.isPending}
+                >
+                  Reconnect
+                </Button>
+              </Show>
+              <Show when={status() === 'linked'}>
+                <Button
+                  variant="base"
+                  size="sm"
+                  depth={3}
+                  onClick={handleGithubDisable}
+                  disabled={deleteGithubLink.isPending}
+                >
+                  Disconnect
+                </Button>
+              </Show>
+              <Show
+                when={
+                  status() !== 'linked' &&
+                  status() !== 'reauthentication_required'
+                }
+              >
+                <Button
+                  variant="cta"
+                  size="sm"
+                  depth={3}
+                  onClick={handleGithubEnable}
+                  disabled={initGithubLink.isPending}
+                >
+                  Connect GitHub
+                </Button>
               </Show>
             </div>
-          }
-        >
-          <Show when={status() === 'reauthentication_required'}>
-            <Button
-              variant="cta"
-              size="md"
-              depth={3}
-              onClick={handleGithubReconnect}
-              disabled={reauthenticateGithub.isPending}
-            >
-              Reconnect
-            </Button>
-          </Show>
-          <Show when={status() === 'linked'}>
-            <Button
-              variant="base"
-              size="md"
-              depth={3}
-              onClick={handleGithubDisable}
-              disabled={deleteGithubLink.isPending}
-            >
-              Disconnect
-            </Button>
-          </Show>
-          <Show
-            when={
-              status() !== 'linked' && status() !== 'reauthentication_required'
-            }
-          >
-            <Button
-              variant="cta"
-              size="md"
-              depth={3}
-              onClick={handleGithubEnable}
-              disabled={initGithubLink.isPending}
-            >
-              Connect GitHub
-            </Button>
-          </Show>
+            <Show when={status() === 'linked' && githubLink.data?.username}>
+              {(username) => (
+                <span class="ph-no-capture text-sm text-ink">
+                  @{username()}
+                </span>
+              )}
+            </Show>
+          </div>
         </ConnectionHero>
       </Show>
     </IntegrationPanelShell>

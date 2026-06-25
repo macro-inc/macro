@@ -273,6 +273,7 @@ function _removeSandboxEntity(id: string) {
 
 export type SandboxEntityType =
   | 'md'
+  | 'snippet'
   | 'email'
   | 'task'
   | 'channel'
@@ -283,6 +284,7 @@ export type SandboxEntityType =
 
 const SAMPLE_NAMES: Record<SandboxEntityType, string> = {
   md: 'My Sample Document',
+  snippet: 'My Sample Snippet',
   email: 'My Sample Email Draft',
   task: 'My Sample Task',
   channel: 'My Sample Message',
@@ -307,6 +309,13 @@ export function createSandboxEntity(type: SandboxEntityType): EntityData {
   switch (type) {
     case 'md':
       return { ...base, type: 'document', fileType: 'md' };
+    case 'snippet':
+      return {
+        ...base,
+        type: 'document',
+        fileType: 'md',
+        subType: { type: 'snippet' },
+      };
     case 'canvas':
       return { ...base, type: 'document', fileType: 'canvas' };
     case 'code':
@@ -351,6 +360,7 @@ export function resetSandbox() {
 type EntityBucketType =
   | 'note'
   | 'task'
+  | 'snippet'
   | 'email'
   | 'channel'
   | 'chat'
@@ -361,7 +371,9 @@ type EntityBucketType =
 function entityToBucket(entity: EntityData): EntityBucketType {
   switch (entity.type) {
     case 'document':
-      return entity.subType?.type === 'task' ? 'task' : 'note';
+      if (entity.subType?.type === 'task') return 'task';
+      if (entity.subType?.type === 'snippet') return 'snippet';
+      return 'note';
     case 'email':
       return 'email';
     case 'channel':

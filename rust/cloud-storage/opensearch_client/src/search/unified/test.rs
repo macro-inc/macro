@@ -6,6 +6,45 @@ use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
 
 #[test]
+fn expand_document_name_highlight_yields_name_hit_without_goto() {
+    use std::collections::HashMap;
+    use uuid::Uuid;
+
+    let entity_id = "00000000-0000-0000-0000-000000000001"
+        .parse::<Uuid>()
+        .unwrap();
+    // A parent document whose name matched: a top-level `document_name`
+    // highlight, no inner_hits (the content branch did not match).
+    let hit = Hit {
+        score: Some(2.0),
+        source: UnifiedSearchIndex::Document(DocumentIndex {
+            entity_id,
+            document_name: "Q3 Report".to_string(),
+            owner_id: "alice".to_string(),
+            file_type: "md".to_string(),
+            updated_at_seconds: Some(1_779_000_000),
+        }),
+        highlight: Some(HashMap::from([(
+            "document_name".to_string(),
+            vec!["Q3 <macro_em>Rep</macro_em>ort".to_string()],
+        )])),
+        inner_hits: None,
+    };
+
+    let results = expand_hit_into_search_hits(hit);
+    assert_eq!(results.len(), 1, "name-only match yields a single hit");
+    assert_eq!(results[0].entity_id, entity_id);
+    assert!(
+        results[0].goto.is_none(),
+        "a name match carries no chunk goto so grouping treats it as a name result"
+    );
+    assert_eq!(
+        results[0].highlight.name.as_deref(),
+        Some("Q3 <macro_em>Rep</macro_em>ort")
+    );
+}
+
+#[test]
 fn test_deserialization() -> anyhow::Result<()> {
     let json = serde_json::json!({
       "took": 20,
@@ -482,6 +521,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -799,6 +839,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
       "highlight": {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },

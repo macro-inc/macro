@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, created_at, updated_at\n            FROM ai_projection\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "prompt",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "prompt_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "target_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "refresh_cadence",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "expiry",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "44e7fd51a0308617c9641b7d42de6a2ddd91a43806bde7e2910e4ae7d536a041"
+}

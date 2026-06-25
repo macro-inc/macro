@@ -30,11 +30,11 @@ import type {
   GetThreadResponse,
   InitResponse,
   InitUserParams,
+  ListBackfillJobsResponse,
   ListBlockedResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
-  ListLinksParams,
   ListLinksResponse,
   ParsedMessage,
   PatchSettingsRequest,
@@ -192,6 +192,62 @@ export const getAttachmentDocumentId = async (
     status: res.status,
     headers: res.headers,
   } as getAttachmentDocumentIdResponse;
+};
+
+/**
+ * @summary List all backfill jobs for the authenticated user, across every link they
+own. Scoped by the user's fusionauth id from the request context rather than
+a single resolved link.
+ */
+export type listBackfillGmailResponse200 = {
+  data: ListBackfillJobsResponse;
+  status: 200;
+};
+
+export type listBackfillGmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listBackfillGmailResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listBackfillGmailResponseSuccess = listBackfillGmailResponse200 & {
+  headers: Headers;
+};
+export type listBackfillGmailResponseError = (
+  | listBackfillGmailResponse401
+  | listBackfillGmailResponse500
+) & {
+  headers: Headers;
+};
+
+export type listBackfillGmailResponse =
+  | listBackfillGmailResponseSuccess
+  | listBackfillGmailResponseError;
+
+export const getListBackfillGmailUrl = () => {
+  return `/email/backfill/gmail`;
+};
+
+export const listBackfillGmail = async (
+  options?: RequestInit
+): Promise<listBackfillGmailResponse> => {
+  const res = await fetch(getListBackfillGmailUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBackfillGmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBackfillGmailResponse;
 };
 
 /**
@@ -1720,27 +1776,14 @@ export type listLinksResponse =
   | listLinksResponseSuccess
   | listLinksResponseError;
 
-export const getListLinksUrl = (params?: ListLinksParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/links?${stringifiedParams}`
-    : `/email/links`;
+export const getListLinksUrl = () => {
+  return `/email/links`;
 };
 
 export const listLinks = async (
-  params?: ListLinksParams,
   options?: RequestInit
 ): Promise<listLinksResponse> => {
-  const res = await fetch(getListLinksUrl(params), {
+  const res = await fetch(getListLinksUrl(), {
     ...options,
     method: 'GET',
   });

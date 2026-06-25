@@ -1,6 +1,6 @@
 import type { Attachment, Model } from '@core/component/AI/types';
 import { makePersisted } from '@solid-primitives/storage';
-import { untrack } from 'solid-js';
+import { createSignal, untrack } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { DEFAULT_MODEL } from '../constant';
 import { parseModel } from './parse';
@@ -78,4 +78,23 @@ export function getChatInputStoredState(id: string): Partial<StoredStuff> {
     ...storedStuff,
     model,
   };
+}
+
+// The new-chat soup composer has no chat id to key off of, so its draft model
+// gets its own persisted slot (kept out of the LRU-bounded chat-state store so
+// it's never purged). Like the per-chat draft model, this lets a model the user
+// picked but hasn't sent yet survive reload/navigation.
+const [soupModel, setSoupModel] = makePersisted(
+  createSignal<Model | undefined>(undefined),
+  {
+    name: 'soup-chat-input-model',
+  }
+);
+
+export function getSoupInputStoredModel(): Model | undefined {
+  return parseModel(untrack(soupModel));
+}
+
+export function storeSoupInputModel(model: Model) {
+  setSoupModel(model);
 }

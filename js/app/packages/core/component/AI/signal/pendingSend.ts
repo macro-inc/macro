@@ -19,6 +19,12 @@ export function getPendingSend(): PendingSend | null {
   return null;
 }
 
+// Read the pending send without clearing it. Used to seed UI state (e.g. the
+// model selector) before the pending send is consumed for the actual send.
+export function peekPendingSend(): PendingSend | null {
+  return pendingSend();
+}
+
 export function setPendingSendData(send: PendingSend): void {
   setPendingSend(send);
 }

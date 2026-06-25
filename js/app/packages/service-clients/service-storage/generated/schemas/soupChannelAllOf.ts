@@ -8,6 +8,8 @@ import type { SoupChannelAllOfInteractedAt } from './soupChannelAllOfInteractedA
 import type { SoupChannelAllOfViewedAt } from './soupChannelAllOfViewedAt';
 
 export type SoupChannelAllOf = {
+  /** Timestamp when the requesting user last interacted with this channel. */
   interacted_at?: SoupChannelAllOfInteractedAt;
+  /** Timestamp when the requesting user last viewed this channel. */
   viewed_at?: SoupChannelAllOfViewedAt;
 };

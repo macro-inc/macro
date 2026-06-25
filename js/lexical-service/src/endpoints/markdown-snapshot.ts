@@ -47,7 +47,7 @@ export class MarkdownSnapshotEndpoint extends OpenAPIRoute {
         );
       }
 
-      return c.body(snapshot, 200, {
+      return c.body(new Uint8Array(snapshot), 200, {
         'Content-Type': 'application/octet-stream',
       });
     } catch (error) {

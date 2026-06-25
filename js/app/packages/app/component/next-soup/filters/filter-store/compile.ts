@@ -22,6 +22,7 @@ type QueryTarget =
   | 'df'
   | 'ef'
   | 'chanf'
+  | 'cthf'
   | 'cf'
   | 'pf'
   | 'callf'
@@ -103,6 +104,7 @@ const FIELD_CONFIG: Record<
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
+  channelThreadId: { target: 'cthf', field: 'ThreadId' },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
@@ -177,6 +179,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   df: [],
   ef: [],
   chanf: [],
+  cthf: [],
   cf: [],
   pf: [],
   callf: [],
@@ -381,6 +384,11 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
+  // Channel-thread soup items are not displayable in the frontend. Always
+  // exclude them at the AST layer so hidden rows do not consume page limits or
+  // grouped counts.
+  result.cthf ??= AST.literal('ThreadId', NIL_UUID);
+
   if (state.emailView) {
     result.emailView = state.emailView;
   }
@@ -392,6 +400,7 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   df: 'documentId',
   ef: 'threadId',
   chanf: 'channelId',
+  cthf: 'channelThreadId',
   cf: 'chatId',
   pf: 'folderId',
   callf: 'callId',

@@ -11,6 +11,7 @@ import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -340,9 +341,21 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  // TODO(dev-rb/github): Route GitHub PRs to /pr.
   if (isGithubPrEntity(entity)) {
-    openExternalUrl(entity.metadata.url);
+    if (USE_MACRO_PR_SUMMARY_BLOCK) {
+      splitManager.openWithSplit(
+        { type: 'pr', id: entity.id },
+        {
+          referredFrom: options.referredFrom,
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          handle: splitHandle,
+          mergeHistory,
+        }
+      );
+    } else {
+      openExternalUrl(entity.metadata.url);
+    }
     return;
   }
   if (entity.type === 'foreign') return;

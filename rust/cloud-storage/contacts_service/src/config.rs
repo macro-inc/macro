@@ -2,6 +2,7 @@ use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
     pub struct BaseUrl;
@@ -32,6 +33,8 @@ pub struct Config {
     pub contacts_queue_max_messages: ContactsQueueMaxMessages,
     /// The notification queue wait time seconds
     pub contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds,
+    /// The internal api key value.
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
@@ -51,6 +54,7 @@ impl Config {
             contacts_queue: ContactsQueue::new_testing(""),
             contacts_queue_max_messages: ContactsQueueMaxMessages::new_unset(),
             contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds::new_unset(),
+            internal_api_key: InternalApiKey::Comptime(""),
         }
     }
 }

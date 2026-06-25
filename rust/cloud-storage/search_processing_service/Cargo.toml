@@ -8,12 +8,16 @@ version = "0.1.0"
 [features]
 default = ["processing", "service"]
 processing = []
-service = ["macro_db_client"]
+service = ["macro_db_client", "models_properties", "properties_db_client"]
 
 [[bin]]
 name = "search_processing_service"
 path = "src/main.rs"
 required-features = ["processing", "service"]
+
+[[bin]]
+name = "search_processing_service_doppler_config"
+path = "src/doppler_config.rs"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -42,16 +46,19 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 document_sub_type = { path = "../document_sub_type" }
+doppler-config = { workspace = true }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email" }
 model_file_type = { path = "../model_file_type" }
 models_opensearch = { path = "../models_opensearch" }
+models_properties = { path = "../models_properties", optional = true }
 models_search = { path = "../models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
 ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true }
+properties_db_client = { path = "../properties_db_client", optional = true }
 rust-embed = "8.6.0"
 s3_client = { path = "../s3_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }

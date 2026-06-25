@@ -327,8 +327,13 @@ export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_RAIL_CHAT_TASK_COMMENTS = resolveFeatureFlag(
-  'RAIL_CHAT_TASK_COMMENTS',
+export const ENABLE_PR_DISCUSSION_INPUT = resolveFeatureFlag(
+  'ENABLE_PR_DISCUSSION_INPUT',
+  false
+);
+
+export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
+  'USE_MACRO_PR_SUMMARY_BLOCK',
   true
 );
 

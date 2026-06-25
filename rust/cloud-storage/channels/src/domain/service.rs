@@ -10,7 +10,7 @@ use crate::domain::{
         PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
         PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
         RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo,
-        ThreadReply, TopLevelMessageRow, WithChannelId,
+        ThreadReply, ThreadReplyRow, TopLevelMessageRow, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -173,6 +173,42 @@ where
             .collect();
 
         Ok(messages)
+    }
+
+    /// Hydrate thread reply rows with reactions, attachments, and bot profiles.
+    async fn hydrate_thread_replies(
+        &self,
+        reply_rows: Vec<ThreadReplyRow>,
+    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
+        if reply_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let reply_ids: Vec<Uuid> = reply_rows.iter().map(|row| row.id).collect();
+        let (reactions, attachments, bot_profiles) = tokio::join!(
+            self.repo.get_reactions_batch(&reply_ids),
+            self.repo.get_attachments_batch(&reply_ids),
+            self.get_bot_profiles_for_senders(reply_rows.iter().map(|row| row.sender_id.as_str())),
+        );
+
+        let reactions = reactions.map_err(anyhow::Error::from)?;
+        let attachments = attachments.map_err(anyhow::Error::from)?;
+        let bot_profiles = bot_profiles?;
+
+        Ok(reply_rows
+            .into_iter()
+            .map(|row| ThreadReply {
+                id: row.id,
+                bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
+                sender_id: row.sender_id,
+                content: row.content,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                edited_at: row.edited_at,
+                reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
+                attachments: attachments.get(&row.id).cloned().unwrap_or_default(),
+            })
+            .collect())
     }
 
     /// Batch-fetch public bot profiles for any bot senders among `sender_ids`.
@@ -1464,11 +1500,11 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_thread_replies(
+    async fn get_thread_reply_rows(
         &self,
         channel_id: Uuid,
         message_id: Uuid,
-    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
+    ) -> Result<Vec<ThreadReplyRow>, ChannelMessagesErr> {
         let parent = self
             .repo
             .resolve_top_level_parent(channel_id, message_id)
@@ -1476,43 +1512,21 @@ where
             .map_err(anyhow::Error::from)?
             .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
 
-        let reply_rows = self
-            .repo
+        self.repo
             .get_thread_replies(parent.id)
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMessagesErr::Repo)
+    }
 
-        if reply_rows.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let reply_ids: Vec<Uuid> = reply_rows.iter().map(|row| row.id).collect();
-        let (reactions, attachments, bot_profiles) = tokio::join!(
-            self.repo.get_reactions_batch(&reply_ids),
-            self.repo.get_attachments_batch(&reply_ids),
-            self.get_bot_profiles_for_senders(reply_rows.iter().map(|row| row.sender_id.as_str())),
-        );
-
-        let reactions = reactions.map_err(anyhow::Error::from)?;
-        let attachments = attachments.map_err(anyhow::Error::from)?;
-        let bot_profiles = bot_profiles?;
-
-        let replies = reply_rows
-            .into_iter()
-            .map(|row| ThreadReply {
-                id: row.id,
-                bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
-                sender_id: row.sender_id,
-                content: row.content,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                edited_at: row.edited_at,
-                reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
-                attachments: attachments.get(&row.id).cloned().unwrap_or_default(),
-            })
-            .collect();
-
-        Ok(replies)
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_replies(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
+        let reply_rows = self.get_thread_reply_rows(channel_id, message_id).await?;
+        self.hydrate_thread_replies(reply_rows).await
     }
 
     #[tracing::instrument(err, skip(self))]

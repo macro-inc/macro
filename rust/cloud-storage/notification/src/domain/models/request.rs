@@ -73,6 +73,8 @@ impl NotificationEntityRef {
 pub struct SendNotificationRequestBuilder<'a, T> {
     /// The entity associated with this notification (e.g., Channel, Team, Document).
     pub notification_entity: Entity<'a>,
+    /// The secondary entity associated with this notification (e.g., Channel, Team, Document).
+    pub secondary_notification_entity: Option<Entity<'a>>,
     /// The notification payload (implements `Notification` trait).
     pub notification: T,
     /// The user who triggered this notification (optional).
@@ -89,6 +91,7 @@ where
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
         let SendNotificationRequestBuilder {
             notification_entity,
+            secondary_notification_entity,
             notification,
             sender_id,
             recipient_ids,
@@ -97,6 +100,7 @@ where
             uuid_to_write: Uuid::now_v7(),
             req: SendNotificationRequestBuilder {
                 notification_entity,
+                secondary_notification_entity,
                 notification: TaggedContent::new(notification),
                 sender_id,
                 recipient_ids,

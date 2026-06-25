@@ -4,7 +4,10 @@ use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::project::SoupProject;
-use crate::{chat::SoupChat, comms::SoupChannel};
+use crate::{
+    chat::SoupChat,
+    comms::{SoupChannel, SoupChannelThread},
+};
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
@@ -12,17 +15,28 @@ use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// A single item in the Soup feed.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
+    /// Document item.
     Document(SoupDocument),
+    /// Chat item.
     Chat(SoupChat),
+    /// Project item.
     Project(SoupProject),
+    /// Email thread item.
     EmailThread(SoupEnrichedEmailThreadPreview),
+    /// Channel item.
     Channel(SoupChannel),
+    /// Channel thread item.
+    ChannelThread(SoupChannelThread),
+    /// Call record item.
     Call(SoupCallRecord),
+    /// CRM company item.
     CrmCompany(SoupCrmCompany),
+    /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
 }
 
@@ -45,6 +59,9 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
+            SoupItem::ChannelThread(thread) => {
+                EntityType::ChannelMessage.with_entity_string(thread.id.to_string())
+            }
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
@@ -57,6 +74,7 @@ impl SoupItem {
         }
     }
 
+    /// Returns the timestamp used as this item's update time.
     pub fn updated_at(&self) -> DateTime<Utc> {
         match self {
             SoupItem::Document(soup_document) => soup_document.updated_at,
@@ -64,6 +82,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
+            SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
@@ -124,6 +143,8 @@ impl SoupItem {
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
+            (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => thread.created_at,
+            (SoupItem::ChannelThread(thread), _) => thread.effective_updated_at(),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
@@ -152,6 +173,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
+            SoupItem::ChannelThread(thread) => thread.id,
             SoupItem::Call(record) => record.call_id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
@@ -196,6 +218,7 @@ impl SoupItem {
                 PropertiesEntityType::Chat,
             )),
             SoupItem::Channel(_) => None,
+            SoupItem::ChannelThread(_) => None,
             SoupItem::Call(_) => None,
             // CRM companies are not in entity_properties.
             SoupItem::CrmCompany(_) => None,

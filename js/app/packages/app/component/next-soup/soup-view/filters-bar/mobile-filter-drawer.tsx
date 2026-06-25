@@ -3,6 +3,7 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@app/component/mobile/MobileDrawer';
+import { pressPulse } from '@app/component/mobile/pressPulse';
 import {
   type FilterContext,
   NO_ASSIGNEE,
@@ -264,7 +265,9 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          class="rounded-xs [&_svg]:size-6 relative h-full"
+          depth={3}
+          class="island pointer-events-auto relative size-10 shrink-0 rounded-full bg-surface [&_svg]:size-5"
+          ref={pressPulse}
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>

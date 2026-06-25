@@ -33,9 +33,11 @@ import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
   CallRecordPreview,
+  ForeignEntity,
   GithubPullRequestsResponse,
   GroupedSoupGroupPage,
   GroupedSoupInitialPage,
+  GroupedSoupSort,
   PostGroupedSoupAstGroupPageRequest,
   PostGroupedSoupAstInitialRequest,
   PostGroupedSoupAstRequest,
@@ -399,14 +401,16 @@ export const storageServiceClient = {
     params: {
       group_by: PostGroupedSoupAstInitialRequest['group_by'];
       per_group_limit?: number | null;
+      sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
   }) {
-    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const { limit: _limit, ...filters } = args.body;
     const body = {
       ...filters,
       mode: 'initial',
       group_by: args.params.group_by,
+      sort_method: args.params.sort_method,
       ...(args.params.per_group_limit != null && {
         per_group_limit: args.params.per_group_limit,
       }),
@@ -424,6 +428,7 @@ export const storageServiceClient = {
       group_by: PostGroupedSoupAstGroupPageRequest['group_by'];
       group_key: string;
       limit?: number | null;
+      sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
   }) {
@@ -431,11 +436,12 @@ export const storageServiceClient = {
     if (args.params.cursor) params.set('cursor', args.params.cursor);
     const searchParams = params.toString() ? `?${params.toString()}` : '';
 
-    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const { limit: _limit, ...filters } = args.body;
     const body = {
       ...filters,
       mode: 'group_page',
       group_by: args.params.group_by,
+      sort_method: args.params.sort_method,
       group_key: args.params.group_key,
       ...(args.params.limit != null && { limit: args.params.limit }),
     } satisfies PostGroupedSoupAstRequest;
@@ -1052,7 +1058,11 @@ export const storageServiceClient = {
     }
 
     const response = result.value;
-    return ok({ documentId: response.documentId });
+    return ok({
+      documentId: response.documentId,
+      documentMetadata: response.documentMetadata,
+      token: response.token,
+    });
   },
 
   /**
@@ -1322,6 +1332,16 @@ export const storageServiceClient = {
       `/documents/${documentId}/github_prs`,
       { method: 'GET' }
     );
+  },
+
+  async getForeignEntity({
+    id,
+  }: {
+    id: string;
+  }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
+    return await dssFetch<ForeignEntity>(`/foreign_entity/${id}`, {
+      method: 'GET',
+    });
   },
 
   async exportDocument({ documentId }) {
