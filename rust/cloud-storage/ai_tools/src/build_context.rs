@@ -132,7 +132,7 @@ pub async fn build_tool_service_context_from_env(
         sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue.as_ref());
     }
     let notification_queue = if enable_notification_queue {
-        let notification_queue = macro_queues::NotificationQueue::new();
+        let notification_queue = macro_queues::NotificationIngressQueue::new();
         ToolNotificationQueue::Sqs(SqsQueue::new(
             aws_sqs_client,
             notification_queue.to_string(),

@@ -100,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let search_event_queue = macro_queues::SearchEventQueue::new();
     let ai_projection_queue = macro_queues::AiProjectionQueue::new();
-    let notification_queue = macro_queues::NotificationQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&document_text_extractor_queue)
         .chat_delete_queue(&chat_delete_queue)
