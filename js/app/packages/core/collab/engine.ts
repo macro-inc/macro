@@ -167,6 +167,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
     this._isRunning = false;
     this.onRunningChange(false);
+    this.log('info', 'engine.stop: ok');
   }
 
   public async syncStateToLoro(state: InferType<S>) {
@@ -199,6 +200,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     }
 
     await this.syncLock.runExclusive(async () => {
+      this.log('info', 'engine.reset: starting');
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
@@ -242,6 +244,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
+    this.log('debug', 'engine: local update, appending to WAL');
     void this.syncs.wal.append(update);
     this.chatter?.post({ type: 'update', data: update });
   }
@@ -262,6 +265,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       // now safe to drop WAL entries it captures. we prune only
       // after the save succeeds so that we can always recover fully.
       await this.syncs.wal.pruneDelivered();
+      this.log('debug', 'engine: snapshot persisted ok');
     } catch (err) {
       this.log('error', 'engine: failed to persist snapshot', {
         errName: err instanceof Error ? err.name : undefined,
@@ -272,6 +276,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   private async handleRemoteUpdate(update: RawUpdate) {
     await this.syncLock.runExclusive(async () => {
+      this.log('debug', 'engine: handling remote update');
       const importResult = this.loroManager.importUpdate(update);
       await Promise.resolve();
       if (importResult.isErr()) {
@@ -281,18 +286,21 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.reset();
         return;
       }
+      this.log('debug', 'engine: remote update imported ok');
     });
   }
 
   private handleSourceEvent(event: SyncSourceEvent) {
     switch (event.type) {
       case 'update':
+        this.log('debug', 'engine: source event: update');
         this.handleRemoteUpdate(event.update);
         break;
       case 'awareness':
         this.awareness.importRemoteAwareness(event.awareness);
         break;
       case 'incremental_snapshot':
+        this.log('debug', 'engine: source event: incremental_snapshot');
         this.handleRemoteUpdate(event.snapshot);
         break;
       case 'reconnect':

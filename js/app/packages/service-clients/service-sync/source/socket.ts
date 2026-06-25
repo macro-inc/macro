@@ -15,9 +15,7 @@ import { FromPeer, FromRemote, type IFromPeer } from '../generated/schema';
 export type SyncWebsocket = Websocket<IFromPeer, FromRemote>;
 
 /**
- * The slice of {@link SyncWebsocket} that `SyncServiceSource` needs. The real
- * `Websocket<FromPeer, FromRemote>` satisfies this structurally, so production
- * passes one directly; tests pass a tiny in-memory fake.
+ * Simple websocket interface that we use for our syncing abstractions.
  */
 export interface SyncSocket {
   connectionState: WebsocketConnectionState;

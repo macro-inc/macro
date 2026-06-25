@@ -57,12 +57,6 @@ export type LoroManagerOptions = {
   documentId: string;
 };
 
-/**
- * The slice of {@link LoroManager} that {@link SyncEngine} depends on. This lean
- * interface is the DI seam: it lets the engine be unit-tested against a mock
- * (which can't satisfy the concrete class's `private` fields), while the real
- * `LoroManager` and any future stub both fit it structurally.
- */
 export interface SyncEngineManager<
   S extends GenericRootSchema = GenericRootSchema,
 > {
@@ -104,12 +98,6 @@ export interface SyncEngineManager<
  * │    │              ├─────────▶│              │     │
  * │    └──────────────┘          └──────────────┘     │
  * └───────────────────────────────────────────────────┘
- *
- * This is a pure, Solid-free class: reads are plain getters and changes are
- * announced through the `onStateChange` / `onInitializedChange` subscriptions
- * (the same callback shape `SyncEngine` uses for `onRunningChange`). The browser
- * wraps it with {@link createLoroManager} to bridge those into signals; headless
- * callers (the AI worker) construct and subscribe to it directly.
  */
 export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   implements SyncEngineManager<S>
@@ -120,7 +108,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   private _initialized = false;
   private _doc: LoroDoc = createLoroDoc();
   private _mirror?: Mirror<S>;
-  private _errors: LoroManagerError[] = [];
   private _state?: StateUpdate<S>;
 
   private mirrorUnsub?: () => void;
@@ -142,13 +129,27 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get mirror(): Mirror<S> | undefined {
     return this._mirror;
   }
-  /** The latest mirrored state + the metadata of the update that produced it. */
+  /** The current mirrored state of the loro doc
+   *
+   * ┌─────────────┐
+   * │ Local State │                    ┌─────────────┐
+   * │   Update    │                    │Remote Import│
+   * └─────────────┘                    └─────────────┘
+   *       │                                  │
+   *       │                                  │
+   *       ▼                                  ▼
+   * ┌──────────┐      ┌ ─ ─ ─ ─ ┐      ┌──────────┐      ┌ ─ ─ ─ ─ ─ ┐
+   * │  Mirror  │─────▶   Diff          │ LoroDoc  │─────▶ exportJSON
+   * └──────────┘      └ ─ ─ ─ ─ ┘      └──────────┘      └ ─ ─ ─ ─ ─ ┘
+   *                         │                                   │
+   *                         │                                   │
+   *                         ▼                                   ▼
+   *                   ┌───────────┐                       ┌───────────┐
+   *                   │  LoroDoc  │                       │   State   │
+   *                   └───────────┘                       └───────────┘
+   * */
   get state(): StateUpdate<S> | undefined {
     return this._state;
-  }
-  /** Errors accumulated over this manager's life. */
-  get errors(): LoroManagerError[] {
-    return this._errors;
   }
   /** Whether the manager has been initialized from a snapshot. */
   get initialized(): boolean {
@@ -188,10 +189,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     for (const listener of this.stateListeners) listener(update);
   }
 
-  private pushError(error: LoroManagerError) {
-    this._errors = [...this._errors, error];
-  }
-
   /** Subscribe to the given mirror, dropping any prior subscription. The mirror
    *  fires for every state change (both directions, with metadata). */
   private subscribeMirror(mirror: Mirror<S>) {
@@ -223,7 +220,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `importUpdate failed: ${e}`,
       });
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -235,7 +231,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     const didChange = Object.keys(importStatus.success).length > 0;
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         { code: LoroManagerError.ImportFailed, message: 'Import failed' },
       ]);
@@ -258,7 +253,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `importBatchUpdates failed: ${e}`,
       });
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -270,7 +264,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     const didChange = Object.keys(importStatus.success).length > 0;
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         { code: LoroManagerError.ImportFailed, message: 'Import failed' },
       ]);
@@ -308,7 +301,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `initializeFromSnapshot: mirror sync failed: ${e}`,
       });
-      this.pushError(LoroManagerError.InitializeFailed);
       return err([
         {
           code: LoroManagerError.InitializeFailed,
@@ -365,7 +357,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `getUpdateSince: export failed: ${e}`,
       });
-      this.pushError(LoroManagerError.ExportFailed);
       return err([
         {
           code: LoroManagerError.ExportFailed,
@@ -441,7 +432,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `reset: snapshot import failed: ${e}`,
       });
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -451,7 +441,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     }
 
     if (Object.keys(importStatus.pending ?? {}).length > 0) {
-      this.pushError(LoroManagerError.ImportFailed);
       return err([
         {
           code: LoroManagerError.ImportFailed,
@@ -493,7 +482,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `getContainerById failed: ${e}`,
       });
-      this.pushError(LoroManagerError.GetContainerByIdFailed);
       return err([
         { code: LoroManagerError.GetContainerByIdFailed, message: String(e) },
       ]);
@@ -528,7 +516,6 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
         context: {},
         message: `getCursorPos failed: ${e}`,
       });
-      this.pushError(LoroManagerError.GetCursorPosFailed);
       return err([
         { code: LoroManagerError.GetCursorPosFailed, message: String(e) },
       ]);
