@@ -1,9 +1,8 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use macro_service_urls::StaticFileServiceUrl;
-use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
     pub struct StaticFileServiceDynamodbTableName;
@@ -29,8 +28,8 @@ pub struct Config {
     pub static_file_service_url: String,
     /// s3 upload notification queue
     pub static_file_service_s3_event_queue_url: StaticFileServiceS3EventQueueUrl,
-    /// Internal API secret key
-    pub internal_api_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    /// Internal API key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
