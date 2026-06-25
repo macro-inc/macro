@@ -50,9 +50,7 @@ import {
   type InboxItem as InboxItemData,
   type InboxRelatedDocument,
 } from './InboxItem';
-import { InboxItemActionLocationLayout } from './layouts/InboxItemActionLocationLayout';
 import { InboxItemActionLocationThirdRowLayout } from './layouts/InboxItemActionLocationThirdRowLayout';
-import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
 import {
   notificationAction,
   notificationContent,
@@ -88,11 +86,6 @@ type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type InboxMode = 'signal' | 'noise' | 'all';
-type InboxLayoutMode =
-  | 'inline'
-  | 'action-location'
-  | 'action-location-third-row';
-
 type DevNotificationFilter = {
   id: string;
   label: string;
@@ -766,7 +759,7 @@ function NotificationInboxGroupItemsPanel(props: {
                 item={item}
                 selected={props.selectedItem?.id === item.id}
               >
-                <InboxItemActionLocationLayout
+                <InboxItemActionLocationThirdRowLayout
                   nested
                   onClick={() => props.onSelect(item)}
                 />
@@ -784,11 +777,9 @@ function NotificationInboxList(props: {
   hiddenFilterIds: string[];
   readFilter: ReadFilter;
   inboxMode: InboxMode;
-  layoutMode: InboxLayoutMode;
   selectedItem: InboxItemData | undefined;
   onReadFilterChange: (filter: ReadFilter) => void;
   onInboxModeChange: (mode: InboxMode) => void;
-  onLayoutModeChange: (mode: InboxLayoutMode) => void;
   onLoadMore: () => void;
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
@@ -1041,53 +1032,6 @@ function NotificationInboxList(props: {
                 </Button>
                 <Show when={showDevFilters()}>
                   <div class="flex flex-col gap-2 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
-                    <div class="flex items-center gap-2">
-                      <span class="shrink-0 px-1 text-xs font-medium text-ink-extra-muted">
-                        Layout
-                      </span>
-                      <Dropdown placement="bottom-start" gutter={4}>
-                        <Dropdown.Trigger
-                          class="h-7 bg-surface text-ink-muted capitalize"
-                          depth={2}
-                          size="sm"
-                          variant="base"
-                        >
-                          {props.layoutMode === 'inline'
-                            ? 'Inline'
-                            : props.layoutMode === 'action-location-third-row'
-                              ? 'Action third row'
-                              : 'Action'}
-                        </Dropdown.Trigger>
-                        <Dropdown.Content>
-                          <Dropdown.Group>
-                            <For
-                              each={
-                                [
-                                  'inline',
-                                  'action-location',
-                                  'action-location-third-row',
-                                ] as const
-                              }
-                            >
-                              {(mode) => (
-                                <Dropdown.Item
-                                  class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
-                                  onSelect={() =>
-                                    props.onLayoutModeChange(mode)
-                                  }
-                                >
-                                  {mode === 'inline'
-                                    ? 'Inline'
-                                    : mode === 'action-location-third-row'
-                                      ? 'Action/location third row'
-                                      : 'Action/location'}
-                                </Dropdown.Item>
-                              )}
-                            </For>
-                          </Dropdown.Group>
-                        </Dropdown.Content>
-                      </Dropdown>
-                    </div>
                     <div class="flex flex-wrap gap-1">
                       <For each={devNotificationFilters}>
                         {(filter) => {
@@ -1225,10 +1169,7 @@ function NotificationInboxList(props: {
               return (
                 <div
                   class={cn(
-                    row.depth > 0 &&
-                      (props.layoutMode === 'action-location'
-                        ? 'ml-8 pl-2'
-                        : 'ml-2 border-l border-edge-muted pl-4')
+                    row.depth > 0 && 'ml-2 border-l border-edge-muted pl-4'
                   )}
                 >
                   <InboxItem.Root
@@ -1237,42 +1178,14 @@ function NotificationInboxList(props: {
                     item={row.item}
                     selected={props.selectedItem?.id === row.item.id}
                   >
-                    <Show
-                      when={props.layoutMode !== 'inline'}
-                      fallback={
-                        <InboxItemInlineTypeLayout
-                          nested={row.depth > 0}
-                          onClick={onItemClick}
-                          onSelectRelatedDocument={onSelectRelatedDocument}
-                          onToggleExpanded={() =>
-                            setExpanded(row.item, !isExpanded(row.item))
-                          }
-                        />
+                    <InboxItemActionLocationThirdRowLayout
+                      nested={row.depth > 0}
+                      onClick={onItemClick}
+                      onSelectRelatedDocument={onSelectRelatedDocument}
+                      onToggleExpanded={() =>
+                        setExpanded(row.item, !isExpanded(row.item))
                       }
-                    >
-                      <Show
-                        when={props.layoutMode === 'action-location-third-row'}
-                        fallback={
-                          <InboxItemActionLocationLayout
-                            nested={row.depth > 0}
-                            onClick={onItemClick}
-                            onSelectRelatedDocument={onSelectRelatedDocument}
-                            onToggleExpanded={() =>
-                              setExpanded(row.item, !isExpanded(row.item))
-                            }
-                          />
-                        }
-                      >
-                        <InboxItemActionLocationThirdRowLayout
-                          nested={row.depth > 0}
-                          onClick={onItemClick}
-                          onSelectRelatedDocument={onSelectRelatedDocument}
-                          onToggleExpanded={() =>
-                            setExpanded(row.item, !isExpanded(row.item))
-                          }
-                        />
-                      </Show>
-                    </Show>
+                    />
                   </InboxItem.Root>
                 </div>
               );
@@ -1291,7 +1204,6 @@ export function NotificationInbox2() {
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
   const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
   const [inboxMode, setInboxMode] = createSignal<InboxMode>('signal');
-  const [layoutMode, setLayoutMode] = createSignal<InboxLayoutMode>('inline');
   const hiddenTags = createMemo(() => {
     const ids = new Set(hiddenFilterIds());
     return new Set(
@@ -1492,10 +1404,8 @@ export function NotificationInbox2() {
               groups={groups()}
               hiddenFilterIds={hiddenFilterIds()}
               inboxMode={inboxMode()}
-              layoutMode={layoutMode()}
               readFilter={readFilter()}
               onInboxModeChange={setInboxMode}
-              onLayoutModeChange={setLayoutMode}
               onLoadMore={() => {
                 if (!soupQuery.hasNextPage || soupQuery.isFetchingNextPage) {
                   return;
