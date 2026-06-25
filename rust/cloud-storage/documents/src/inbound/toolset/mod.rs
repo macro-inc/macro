@@ -93,7 +93,7 @@ impl<
         entity_access_service: ESvc,
         lexical_client: LexicalClient,
         sync_service_client: SyncServiceClient,
-        editing: Arc<EDSvc>,
+        editing: EDSvc,
     ) -> Self {
         let service = Arc::new(service);
         let lexical_client = Arc::new(lexical_client);
@@ -113,7 +113,7 @@ impl<
             lexical_client,
             sync_service_client,
             creator,
-            editing,
+            editing: Arc::new(editing),
             user_token: None,
         }
     }

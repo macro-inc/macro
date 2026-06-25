@@ -280,11 +280,9 @@ async fn main() -> anyhow::Result<()> {
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
-        std::sync::Arc::new(
-            documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
-                config.ai_editing_worker_url.clone(),
-                std::sync::Arc::new(reqwest::Client::new()),
-            ),
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
+            config.ai_editing_worker_url.clone(),
+            std::sync::Arc::new(reqwest::Client::new()),
         ),
     );
 
