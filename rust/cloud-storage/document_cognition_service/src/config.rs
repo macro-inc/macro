@@ -83,15 +83,6 @@ impl Config {
             document_storage_service_auth_key: DocumentStorageServiceAuthKey::Comptime(
                 "DOCUMENT_STORAGE_SERVICE_AUTH_KEY",
             ),
-            document_text_extractor_queue: DocumentTextExtractorQueue::Comptime(
-                "DOCUMENT_TEXT_EXTRACTOR_QUEUE",
-            ),
-            chat_delete_queue: ChatDeleteQueue::Comptime("CHAT_DELETE_QUEUE"),
-            email_scheduled_queue: EmailScheduledQueue::Comptime("EMAIL_SCHEDULED_QUEUE"),
-            gmail_ops_queue: GmailOpsQueue::Comptime("GMAIL_OPS_QUEUE"),
-            notification_queue: NotificationQueue::Comptime("NOTIFICATION_QUEUE"),
-            search_event_queue: SearchEventQueue::Comptime("SEARCH_EVENT_QUEUE"),
-            ai_projection_queue: AiProjectionQueue::Comptime("AI_PROJECTION_QUEUE"),
             sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
                 "SYNC_SERVICE_AUTH_KEY",
             )),
