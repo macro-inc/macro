@@ -5,10 +5,9 @@ import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { cn, Dropdown, InlineCheckbox } from '@ui';
-import { Show } from 'solid-js';
-import { match } from 'ts-pattern';
-import { useCallContext } from '../CallContext';
+import { cn, Dropdown, InlineCheckbox, SingleSelectCheck } from '@ui';
+import { For, Show } from 'solid-js';
+import { NOISE_SUPPRESSION_OPTIONS, useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 import { useToggleShareWithTeam } from '../use-toggle-share-with-team';
 import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
@@ -19,12 +18,6 @@ export function CallControlsPanelSmallRow() {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
   const handleToggleShareWithTeam = useToggleShareWithTeam();
-  const noiseSuppressionModeLabel = () =>
-    match(callCtx.noiseSuppressionMode())
-      .with('krisp', () => 'Krisp')
-      .with('browser', () => 'Browser')
-      .with('off', () => 'Off')
-      .exhaustive();
 
   const anyMediaActive = () =>
     !callCtx.isAudioMuted() ||
@@ -91,16 +84,22 @@ export function CallControlsPanelSmallRow() {
 
             <MenuDivider />
 
-            <MenuLabel>Audio processing</MenuLabel>
-            <Dropdown.Item
-              closeOnSelect={false}
-              onSelect={() => void callCtx.toggleNoiseSuppression()}
-            >
-              <span class="flex-1 truncate">Noise suppression</span>
-              <span class="text-xs text-ink-muted">
-                {noiseSuppressionModeLabel()}
-              </span>
-            </Dropdown.Item>
+            <MenuLabel>Noise suppression</MenuLabel>
+            <For each={NOISE_SUPPRESSION_OPTIONS}>
+              {(option) => (
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  onSelect={() =>
+                    void callCtx.setNoiseSuppressionMode(option.mode)
+                  }
+                >
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <SingleSelectCheck
+                    active={callCtx.noiseSuppressionMode() === option.mode}
+                  />
+                </Dropdown.Item>
+              )}
+            </For>
 
             <MenuDivider />
 

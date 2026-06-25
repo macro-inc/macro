@@ -102,8 +102,11 @@ function normalizeNoiseSuppressionMode(
   value: unknown
 ): MicNoiseSuppressionMode {
   if (value === false || value === 'false' || value === 'off') return 'off';
+  if (value === 'krisp') return 'krisp';
   if (value === 'browser') return 'browser';
-  return 'krisp';
+  // Legacy boolean `true` ("NS on", which predated the engine choice) and any
+  // unrecognized value fall back to the current default engine, 'browser'.
+  return 'browser';
 }
 
 function effectiveCaptureModeForPreferredMode(
@@ -117,6 +120,29 @@ function isNoiseSuppressionEnabled(mode: MicNoiseSuppressionMode): boolean {
   return mode !== 'off';
 }
 
+// User-facing noise-suppression options, ordered least → most aggressive.
+// Exported so the call-control menus render the same set the context applies.
+export const NOISE_SUPPRESSION_OPTIONS: {
+  mode: MicNoiseSuppressionMode;
+  label: string;
+}[] = [
+  { mode: 'off', label: 'Off' },
+  { mode: 'browser', label: 'Browser' },
+  { mode: 'krisp', label: 'Krisp' },
+];
+
+// AGC normalizes capture loudness so a normal-distance talker isn't published
+// quiet/distant — the main fidelity gap vs Google Meet, which keeps AGC on.
+// Enable it for 'off' and 'browser', but keep it OFF under Krisp: Krisp is a
+// fixed-strength DNN denoiser (its suppression level is hardcoded to max in
+// @livekit/krisp-noise-filter and is not exposed by its API), so a downstream
+// gain stage re-amplifies the residual noise floor it leaves during quiet
+// passages — exactly the "background noise gets louder" artifact we want to
+// avoid stacking on top of Krisp.
+function autoGainControlForMode(mode: MicNoiseSuppressionMode): boolean {
+  return mode !== 'krisp';
+}
+
 function microphoneCaptureOptions(
   mode: MicNoiseSuppressionMode,
   deviceId?: string | null
@@ -124,11 +150,8 @@ function microphoneCaptureOptions(
   const useBrowserProcessing = mode === 'browser';
 
   return {
-    // AGC can raise residual background artifacts during quiet speech/silence.
-    // Keep it disabled for every mode; Krisp/browser NS should not be stacked
-    // with a gain stage that makes suppressed noise audible again.
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: false }
+      ? { autoGainControl: autoGainControlForMode(mode) }
       : {}),
     echoCancellation: true,
     ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
@@ -148,7 +171,7 @@ function nativeAudioProcessingConstraints(
 
   return {
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: false }
+      ? { autoGainControl: autoGainControlForMode(mode) }
       : {}),
     ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
       ? { noiseSuppression: useBrowserProcessing }
@@ -284,10 +307,13 @@ const [persistedBackgroundEffect, setPersistedBackgroundEffect] = makePersisted(
 
 // Persisted across reloads — users with hardware noise cancellation (e.g.
 // AirPods Pro, Bose) need to disable app/browser-side NS to avoid cascading
-// filters that attenuate voice. Defaults to Krisp to match existing behavior.
-// The custom deserializer migrates the previous boolean format.
+// filters that attenuate voice. Defaults to 'browser' (WebRTC NS + AGC, like
+// Google Meet): Krisp runs at a non-configurable max suppression level that
+// over-attenuates/muffles some voices, so it is now opt-in. The custom
+// deserializer preserves an explicit 'krisp'/'off'/'browser' choice and
+// migrates the previous boolean format ("on" → browser).
 const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
-  makePersisted(createSignal<MicNoiseSuppressionMode>('krisp'), {
+  makePersisted(createSignal<MicNoiseSuppressionMode>('browser'), {
     name: 'call.noiseSuppression',
     deserialize(data) {
       try {
@@ -362,6 +388,8 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle mic noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
+  /** Set the mic noise suppression mode explicitly (off | browser | krisp) */
+  setNoiseSuppressionMode: (mode: MicNoiseSuppressionMode) => Promise<void>;
   /** Begin an optimistic join to a channel */
   beginOptimisticJoin: (channelId: string) => void;
   /** Rollback an optimistic join to a channel */
@@ -467,6 +495,25 @@ function createCallState() {
       | NativeAudioProcessingConstraints
       | undefined;
 
+    // Detect out-of-band processing (e.g. macOS Control Center "Voice
+    // Isolation" or hardware NS) that ignores our getUserMedia constraints: if
+    // we asked for a processor to be OFF but the track reports it ON, a second
+    // NS/AGC stage is cascading on top of ours, which muffles voice and pumps
+    // steady noise. This can't be disabled in-app; surface it for support.
+    const osOverrides: string[] = [];
+    if (constraints?.autoGainControl === false && settings?.autoGainControl)
+      osOverrides.push('autoGainControl');
+    if (constraints?.noiseSuppression === false && settings?.noiseSuppression)
+      osOverrides.push('noiseSuppression');
+    if (constraints?.voiceIsolation === false && settings?.voiceIsolation)
+      osOverrides.push('voiceIsolation');
+    if (osOverrides.length > 0) {
+      console.warn(
+        '[call] mic processing overridden by OS/hardware (e.g. macOS Voice Isolation)',
+        { event, osOverrides }
+      );
+    }
+
     console.debug('[call] mic audio processing', {
       event,
       preferredMode: persistedNoiseSuppressionMode(),
@@ -548,6 +595,10 @@ function createCallState() {
       // `quality` is model size/CPU cost, not suppression strength. The default
       // medium model avoids the CPU pressure/dropouts that made voices sound
       // muddy on busy machines while still enabling Krisp when supported.
+      // NOTE: Krisp's suppression *level* is hardcoded to max (100) in the SDK
+      // and is not exposed by @livekit/krisp-noise-filter's options, so its
+      // aggressiveness cannot be dialed back here. Users who find Krisp over-
+      // suppresses / muffles their voice should switch to the 'browser' mode.
       const krisp = KrispNoiseFilter({ quality: 'medium' });
       setKrispFilter(krisp);
       await micTrack.setProcessor(krisp);
@@ -1086,30 +1137,34 @@ function createCallState() {
     setStore('isSharedWithTeam', value);
   }
 
-  async function toggleNoiseSuppression() {
-    const newMode: MicNoiseSuppressionMode = isNoiseSuppressionEnabled(
-      store.noiseSuppressionMode
-    )
-      ? 'off'
-      : 'krisp';
-
-    setStore('noiseSuppressionMode', newMode);
-    setPersistedNoiseSuppressionMode(newMode);
+  async function setNoiseSuppressionMode(mode: MicNoiseSuppressionMode) {
+    setStore('noiseSuppressionMode', mode);
+    setPersistedNoiseSuppressionMode(mode);
 
     const r = room();
     if (!r) return;
 
     try {
-      if (newMode === 'off') {
+      if (mode === 'off') {
         await detachKrispFromMicTrack(r);
+        // 'off' still re-applies native constraints (AGC back on, NS/VI off).
         await applyNativeAudioProcessingToMicTrack(r, 'off');
-        logMicAudioProcessing('noise-suppression-toggled-off', r);
+        logMicAudioProcessing('noise-suppression-set-off', r);
       } else {
+        // ensureNoiseSuppressionOnMicTrack reads the freshly-persisted mode and
+        // (de)attaches Krisp + applies the right native AGC/NS constraints for
+        // 'browser' vs 'krisp'.
         await ensureNoiseSuppressionOnMicTrack(r);
       }
     } catch (e) {
-      console.error('failed to toggle noise suppression', e);
+      console.error('failed to set noise suppression mode', e);
     }
+  }
+
+  async function toggleNoiseSuppression() {
+    await setNoiseSuppressionMode(
+      isNoiseSuppressionEnabled(store.noiseSuppressionMode) ? 'off' : 'browser'
+    );
   }
 
   // --- optimistic join ---
@@ -1219,6 +1274,7 @@ function createCallState() {
     isNoiseSuppressed: () =>
       isNoiseSuppressionEnabled(store.noiseSuppressionMode),
     toggleNoiseSuppression,
+    setNoiseSuppressionMode,
     beginOptimisticJoin,
     rollbackOptimisticJoin,
     joinError: currentJoinError,

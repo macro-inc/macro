@@ -8,7 +8,11 @@ import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import { Button, Dropdown, SingleSelectCheck } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import { BACKGROUND_IMAGES, useCallContext } from '../CallContext';
+import {
+  BACKGROUND_IMAGES,
+  NOISE_SUPPRESSION_OPTIONS,
+  useCallContext,
+} from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 
 export type CallControlsDefaultAndPanelRowProps = {
@@ -235,16 +239,22 @@ export function CallControlsDefaultAndPanelRow(
               />
             </Dropdown.Group>
             <Dropdown.Group>
-              <Dropdown.GroupLabel>Audio processing</Dropdown.GroupLabel>
-              <Dropdown.Item
-                closeOnSelect={false}
-                onSelect={() => void callCtx.toggleNoiseSuppression()}
-              >
-                <span class="flex-1 truncate">Noise suppression</span>
-                <SingleSelectCheck
-                  active={callCtx.noiseSuppressionMode() !== 'off'}
-                />
-              </Dropdown.Item>
+              <Dropdown.GroupLabel>Noise suppression</Dropdown.GroupLabel>
+              <For each={NOISE_SUPPRESSION_OPTIONS}>
+                {(option) => (
+                  <Dropdown.Item
+                    closeOnSelect={false}
+                    onSelect={() =>
+                      void callCtx.setNoiseSuppressionMode(option.mode)
+                    }
+                  >
+                    <span class="flex-1 truncate">{option.label}</span>
+                    <SingleSelectCheck
+                      active={callCtx.noiseSuppressionMode() === option.mode}
+                    />
+                  </Dropdown.Item>
+                )}
+              </For>
             </Dropdown.Group>
             <Show when={isBackgroundBlurSupported()}>
               <BackgroundEffectSelector />
