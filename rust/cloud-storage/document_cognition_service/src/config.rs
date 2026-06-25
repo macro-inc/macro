@@ -9,14 +9,7 @@ use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 env_vars!(
     pub struct DatabaseUrl;
     pub struct DocumentStorageBucket;
-    pub struct DocumentTextExtractorQueue;
-    pub struct ChatDeleteQueue;
-    pub struct EmailScheduledQueue;
-    pub struct GmailOpsQueue;
-    pub struct NotificationQueue;
     pub struct DocumentStorageServiceAuthKey;
-    pub struct SearchEventQueue;
-    pub struct AiProjectionQueue;
     pub struct SyncServiceAuthKey;
     pub struct AuthenticationServiceUrl;
     pub struct AuthenticationServiceSecretKey;
@@ -51,19 +44,6 @@ pub struct Config {
     pub document_storage_bucket: DocumentStorageBucket,
     /// document storage service auth key
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
-    /// The sqs queue to send document text extract jobs to
-    pub document_text_extractor_queue: DocumentTextExtractorQueue,
-    /// The sqs queue to send chat delete jobs
-    pub chat_delete_queue: ChatDeleteQueue,
-    /// The sqs queue to enqueue outbound email sends
-    pub email_scheduled_queue: EmailScheduledQueue,
-    /// The sqs queue to enqueue Gmail label/sync operations
-    pub gmail_ops_queue: GmailOpsQueue,
-    /// The sqs queue to send notifications to
-    pub notification_queue: NotificationQueue,
-    pub search_event_queue: SearchEventQueue,
-    /// The sqs queue used to enqueue and poll ai projection materialization jobs
-    pub ai_projection_queue: AiProjectionQueue,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
     /// authentication service secret key (for soup service)
     pub authentication_service_secret_key: AuthenticationServiceSecretKey,
