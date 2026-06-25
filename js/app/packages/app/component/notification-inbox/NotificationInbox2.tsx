@@ -1279,6 +1279,15 @@ export function NotificationInbox2() {
   const [selectedGroupItem, setSelectedGroupItem] = createSignal<
     InboxItemData | undefined
   >();
+  const getItemTimestamp = (item: InboxItemData) => {
+    const timestamp = Date.parse(item.timestamp ?? '');
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  };
+  const mostRecentUnreadSubItem = (item: InboxItemData) =>
+    item.subItems
+      ?.filter((subItem) => subItem.unread)
+      .toSorted((a, b) => getItemTimestamp(b) - getItemTimestamp(a))
+      .at(0);
   const selectedEntity = () => {
     const item = selectedItem();
     if (!item) return undefined;
@@ -1293,7 +1302,7 @@ export function NotificationInbox2() {
   const handleListSelect = (item: InboxItemData) => {
     if (item.subItems?.length) {
       setSelectedGroupItem(item);
-      setSelectedItem(undefined);
+      setSelectedItem(mostRecentUnreadSubItem(item) ?? item.subItems[0]);
       return;
     }
 
@@ -1343,24 +1352,6 @@ export function NotificationInbox2() {
             />
           </div>
         </Resize.Panel>
-        <Show when={selectedGroupItem()}>
-          {(groupItem) => (
-            <Resize.Panel
-              id="notification-inbox-group-items"
-              index={1}
-              minSize={240}
-              target={{ kind: 'px', px: 320 }}
-            >
-              <div class="size-full min-h-0 min-w-0 border-r border-edge-muted">
-                <NotificationInboxGroupItemsPanel
-                  groupItem={groupItem()}
-                  selectedItem={selectedItem()}
-                  onSelect={setSelectedItem}
-                />
-              </div>
-            </Resize.Panel>
-          )}
-        </Show>
         <Resize.Panel
           id="notification-inbox-preview"
           index={2}
