@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
@@ -47,7 +48,6 @@ env_vars! {
     pub struct MetaAccessToken;
     #[derive(Clone)]
     pub struct DocumentStorageServiceAuthKey;
-    pub struct InternalApiSecretKey;
 }
 
 maybe_env_vars! {
@@ -108,8 +108,9 @@ pub struct Config {
     pub meta_pixel_id: MetaPixelId,
     pub meta_access_token: MetaAccessToken,
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
-    pub internal_api_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
-    // pub vars: EnvVars,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
+
     /// The port to listen for HTTP requests on.
     #[macro_config_default(8080)]
     pub port: usize,

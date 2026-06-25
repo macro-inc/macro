@@ -201,7 +201,7 @@ async fn main() -> anyhow::Result<()> {
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
 
@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         LexicalServiceUrl::new()?.to_string(),
     ));
 
