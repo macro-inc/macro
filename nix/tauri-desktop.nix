@@ -51,40 +51,9 @@
           && rel != "app/tauri/target";
       };
 
-      bunDeps = pkgs.stdenvNoCC.mkDerivation {
-        pname = "macro-js-bun-deps";
-        version = appVersion;
-        src = jsSrc;
-
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
-        ];
-
-        dontConfigure = true;
-        dontBuild = true;
-        dontFixup = true;
-
-        installPhase = ''
-          runHook preInstall
-
-          export HOME="$TMPDIR"
-          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
-          bun install --frozen-lockfile --no-progress
-
-          mkdir -p "$out"
-          cp -a node_modules "$out/node_modules"
-
-          runHook postInstall
-        '';
-
-        outputHashAlgo = "sha256";
-        outputHashMode = "recursive";
-        outputHash =
-          if isAarch64Darwin then
-            "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
-          else
-            "sha256-T7LUQ6yNLxTnq6TK9nFzYKSqvrZ9MYRwCK/cYzPzuv8=";
+      bun2nix = inputs.bun2nix.packages.${system}.default;
+      bunDeps = bun2nix.fetchBunDeps {
+        bunNix = ../js/bun.nix;
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
@@ -92,9 +61,11 @@
         version = appVersion;
         src = jsSrc;
 
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
+        nativeBuildInputs = [
+          pkgs.bun
+          pkgs.git
+          pkgs.nodejs
+          pkgs.yq-go
         ];
 
         dontConfigure = true;
@@ -102,9 +73,71 @@
         buildPhase = ''
           runHook preBuild
 
-          export HOME="$TMPDIR"
-          cp -a ${bunDeps}/node_modules ./node_modules
-          chmod -R u+w ./node_modules
+          export HOME="$TMPDIR/home"
+          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
+          mkdir -p "$HOME" "$BUN_INSTALL_CACHE_DIR"
+          cp -r ${bunDeps}/share/bun-cache/. "$BUN_INSTALL_CACHE_DIR"
+          chmod -R u+w "$BUN_INSTALL_CACHE_DIR"
+          ln -sfn @GH@macro-inc-pdf.js-f9b2ce6@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-pdf.js-v2.16.52-web@@@1"
+          ln -sfn @GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
+          mkdir -p "$BUN_INSTALL_CACHE_DIR/pdfjs-dist" "$BUN_INSTALL_CACHE_DIR/@inkibra/tauri-plugins"
+          ln -sfn ../@GH@macro-inc-pdf.js-f9b2ce6@@@1 "$BUN_INSTALL_CACHE_DIR/pdfjs-dist/macro-inc-pdf.js-v2.16.52-web@@@1"
+          ln -sfn ../../@GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@inkibra/tauri-plugins/macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
+          node ${./pin-bun-workspace-deps.mjs} .
+          node <<'EOF'
+          const fs = require("fs");
+          function updatePackageJson(path, update) {
+            const packageJson = JSON.parse(fs.readFileSync(path, "utf8"));
+            update(packageJson);
+            fs.writeFileSync(path, JSON.stringify(packageJson, null, 2) + "\n");
+          }
+          updatePackageJson("app/package.json", packageJson => {
+            delete packageJson.dependencies["@inkibra/tauri-plugins"];
+          });
+          updatePackageJson("app/packages/block-pdf/package.json", packageJson => {
+            delete packageJson.dependencies["pdfjs-dist"];
+          });
+          EOF
+          yq -o=json 'del(.patchedDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
+          yq -o=json 'del(.patchedDependencies)' bun.lock > bun.lock.tmp && mv bun.lock.tmp bun.lock
+          node ${./local-bun-registry.mjs} ${bunDeps}/share/bun-packages > "$TMPDIR/npm-registry-port" &
+          registry_pid=$!
+          trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
+          while [ ! -s "$TMPDIR/npm-registry-port" ]; do
+            kill -0 "$registry_pid" 2>/dev/null
+            sleep 0.1
+          done
+          registry_port=$(cat "$TMPDIR/npm-registry-port")
+          bun install --linker=hoisted --ignore-scripts --no-progress --registry "http://127.0.0.1:$registry_port"
+          rm -rf node_modules/@inkibra
+          mkdir -p node_modules/@inkibra node_modules/@tauri-apps
+          rm -rf node_modules/pdfjs-dist
+          cp -aL ${bunDeps}/share/bun-packages/github:macro-inc-pdf.js-f9b2ce6 node_modules/pdfjs-dist
+          chmod -R u+w node_modules/pdfjs-dist
+          cp -a ${bunDeps}/share/bun-packages/github:macro-inc-tauri-plugins-26537c8 node_modules/@inkibra/tauri-plugins
+          chmod -R u+w node_modules/@inkibra/tauri-plugins
+          for package in node_modules/@inkibra/tauri-plugins/packages/*; do
+            if [ -L "$package" ]; then
+              target=$(readlink -f "$package")
+              rm "$package"
+              mkdir -p "$package"
+              cp -aL "$target"/. "$package"/
+            fi
+          done
+          rm -rf node_modules/@tauri-apps/api
+          ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@tauri-apps/api
+          mkdir -p node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps
+          ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps/api
+          node <<'EOF'
+          const fs = require("fs");
+          const path = "app/packages/app/vite.base.ts";
+          let viteConfig = fs.readFileSync(path, "utf8");
+          viteConfig = viteConfig.replace(
+            "      resolve: {\n        dedupe:",
+            "      resolve: {\n        alias: [\n          { find: /^@tauri-apps\\/api/, replacement: resolve(__dirname, '../../../node_modules/@tauri-apps/api') },\n        ],\n        dedupe:",
+          );
+          fs.writeFileSync(path, viteConfig);
+          EOF
 
           printf production > app/tauri/src-tauri/.macro-tauri-env
           (
