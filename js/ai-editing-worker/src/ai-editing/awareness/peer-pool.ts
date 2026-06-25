@@ -19,7 +19,7 @@ export class PeerPool {
   }
 
   /** Acquire a unique identity, waiting if `max` are already out (semaphore). */
-  borrow(): Promise<Peer> {
+  public borrow(): Promise<Peer> {
     return new Promise<Peer>((handOut) => {
       // The queued task holds a concurrency slot until its promise resolves; we
       // keep it pending and resolve it from release(), so the slot is occupied
@@ -36,7 +36,7 @@ export class PeerPool {
     });
   }
 
-  release(p: Peer): void {
+  public release(p: Peer): void {
     if (!this.out.delete(p)) return; // unknown / double-release -> no-op
     this.free.push(p);
     const freeSlot = this.releasers.get(p);
@@ -46,7 +46,7 @@ export class PeerPool {
     }
   }
 
-  get outstanding(): number {
+  public get outstanding(): number {
     return this.out.size;
   }
 

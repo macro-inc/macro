@@ -59,7 +59,6 @@ export async function supervisor(
     );
     intent = interpretation.text;
     console.log(`\n[intent]\n${intent}`);
-    await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
   const tools = {

@@ -33,6 +33,7 @@ function run(
 
 const onlyEdits = (steps: DocumentOpStep[]) =>
   steps.filter((s) => s.kind === 'edit').map((s) => (s as any).y);
+
 const highlights = (steps: DocumentOpStep[]) =>
   steps.filter(
     (s) => s.kind === 'awareness' && (s.x as any).type === 'highlight'
@@ -44,6 +45,7 @@ const highlights = (steps: DocumentOpStep[]) =>
       span: { start: number; end: number };
     };
   }>;
+
 const cursors = (steps: DocumentOpStep[]) =>
   steps.filter(
     (s) => s.kind === 'awareness' && (s.x as any).type === 'cursor'
@@ -51,6 +53,7 @@ const cursors = (steps: DocumentOpStep[]) =>
     kind: 'awareness';
     x: { type: 'cursor'; node: string; at: number };
   }>;
+
 const pauses = (steps: DocumentOpStep[]) =>
   steps.filter((s) => s.kind === 'pause').map((s) => (s as any).ms as number);
 
@@ -262,7 +265,7 @@ describe('insertNode animator', () => {
     ]);
   });
 
-  it('divider: drafts the dashes, then swaps them for the rule', () => {
+  it('divider: inserts the rule directly (no draft swap)', () => {
     const action = run({
       kind: 'insertNode',
       ref: 'ref-3',
@@ -272,24 +275,11 @@ describe('insertNode animator', () => {
     expect(onlyEdits(action.steps)).toEqual([
       {
         kind: 'insertNode',
-        ref: 'ref-3~draft',
-        spec: { block: 'paragraph', text: '' },
-        at: { after: 'b1' },
-      },
-      { kind: 'insertText', node: 'ref-3~draft', at: 0, text: '---' },
-      { kind: 'removeNode', node: 'ref-3~draft' },
-      {
-        kind: 'insertNode',
         ref: 'ref-3',
         spec: { block: 'divider' },
         at: { after: 'b1' },
       },
     ]);
-    // the three dashes type as one chunk: caret starts at 0, jumps to 3
-    const cursors = action.steps
-      .filter((s) => s.kind === 'awareness' && (s as any).x.type === 'cursor')
-      .map((s) => (s as any).x.at);
-    expect(cursors).toEqual([0, 3]);
   });
 });
 

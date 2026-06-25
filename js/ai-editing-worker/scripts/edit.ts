@@ -6,13 +6,9 @@ const {
 	port,
 	"worker-url": workerUrlOpt,
 	"user-token": userToken,
-	provider,
-	"supervisor-provider": supervisorProvider,
-	"interpret-provider": interpretProvider,
-	"coding-provider": codingProvider,
-	"supervisor-model": supervisorModel,
-	"interpret-model": interpretModel,
-	"coding-model": codingModel,
+	"supervisor-model": supervisorModelFlag,
+	"interpret-model": interpretModelFlag,
+	"coding-model": codingModelFlag,
 	debug,
 	_,
 } = await yargs(hideBin(process.argv))
@@ -21,13 +17,9 @@ const {
 	.option("user-token", { type: "string", demandOption: true, describe: "user JWT or full browser cookie string" })
 	.option("port", { type: "number", default: 8933, describe: "worker port" })
 	.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
-	.option("provider", { type: "string", describe: "override provider for all roles: anthropic, cerebras, openai (defaults are per-role)" })
-	.option("supervisor-provider", { type: "string", describe: "provider for the supervisor agent (overrides --provider)" })
-	.option("interpret-provider", { type: "string", describe: "provider for the interpret pass (overrides --provider)" })
-	.option("coding-provider", { type: "string", describe: "provider for the coding agents (overrides --provider)" })
-	.option("supervisor-model", { type: "string", describe: "model ID for the supervisor agent" })
-	.option("interpret-model", { type: "string", describe: "model ID for the interpret pass" })
-	.option("coding-model", { type: "string", describe: "model ID for the coding (writer) agents" })
+	.option("supervisor-model", { type: "string", demandOption: true, describe: "provider:model for the supervisor" })
+	.option("interpret-model", { type: "string", demandOption: true, describe: "provider:model for the interpret pass" })
+	.option("coding-model", { type: "string", demandOption: true, describe: "provider:model for the coding agents" })
 	.option("debug", { type: "boolean", default: false, describe: "include the supervisor step trace in the response" })
 	.parse();
 
@@ -38,33 +30,9 @@ if (!documentId || !prompt) {
 	process.exit(1);
 }
 
-// Per-role defaults mirror what the document service hardcodes when it calls
-// the worker (rust/.../editing_worker_client.rs).
-const DEFAULT_MODELS = {
-	supervisor: { provider: "anthropic", model: "claude-haiku-4-5-20251001" },
-	interpret: { provider: "anthropic", model: "claude-sonnet-4-6" },
-	coding: { provider: "cerebras", model: "gpt-oss-120b" },
-} as const;
-
-// Fallback model when a role's provider is overridden but its model is not.
-const PROVIDER_FALLBACK_MODEL: Record<string, string> = {
-	anthropic: "claude-sonnet-4-6",
-	cerebras: "gpt-oss-120b",
-	openai: "gpt-4o",
-};
-
-const makeModel = (
-	role: keyof typeof DEFAULT_MODELS,
-	providerOverride: string | undefined,
-	modelOverride: string | undefined,
-) => {
-	const provider = providerOverride ?? DEFAULT_MODELS[role].provider;
-	const model =
-		modelOverride ??
-		(provider === DEFAULT_MODELS[role].provider
-			? DEFAULT_MODELS[role].model
-			: (PROVIDER_FALLBACK_MODEL[provider] ?? DEFAULT_MODELS[role].model));
-	return { provider, model };
+const parseModel = (flag: string) => {
+	const [provider, model] = flag.split(":");
+	return { provider: provider!, model: model! };
 };
 
 const workerUrl = workerUrlOpt ?? `http://localhost:${port}`;
@@ -86,9 +54,9 @@ const res = await fetch(`${workerUrl}/edit`, {
 		documentId,
 		prompt,
 		models: {
-			supervisor: makeModel("supervisor", (supervisorProvider ?? provider) as string | undefined, supervisorModel as string | undefined),
-			interpret: makeModel("interpret", (interpretProvider ?? provider) as string | undefined, interpretModel as string | undefined),
-			coding: makeModel("coding", (codingProvider ?? provider) as string | undefined, codingModel as string | undefined),
+			supervisor: parseModel(supervisorModelFlag),
+			interpret: parseModel(interpretModelFlag),
+			coding: parseModel(codingModelFlag),
 		},
 		debug,
 	}),

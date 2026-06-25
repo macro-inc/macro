@@ -184,8 +184,7 @@ function insertLead(at: Position, ctx: AnimatorCtx): DocumentOpStep[] {
 
 /** Insert a block, animated by what it is:
  *  - typed text block (paragraph/heading/quote/code): insert empty, then type it.
- *  - divider: type `-`,`-`,`-` on a fresh line, beat, then it becomes a rule.
- *  - other atomic blocks (image/video/equation/list/table): caret to the spot,
+ *  - atomic blocks (divider/image/video/equation/list/table): caret to the spot,
  *    brief pause, it appears, caret moves into it. */
 function animateInsertNode(
   o: Extract<DocumentOp, { kind: 'insertNode' }>,
@@ -231,28 +230,6 @@ function animateInsertNode(
       steps.push(...typeText(itemRef, text, 0, ctx));
     });
     return steps;
-  }
-  if ('block' in spec && spec.block === 'divider') {
-    // Draft the dashes in a throwaway paragraph, then swap it for the rule.
-    const draft = `${o.ref}~draft`;
-    return [
-      edit({
-        kind: 'insertNode',
-        ref: draft,
-        spec: { block: 'paragraph', text: '' },
-        at: o.at,
-      }),
-      cursor(draft, 0),
-      ...typeText(draft, '---', 0, ctx),
-      { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) },
-      edit({ kind: 'removeNode', node: draft }),
-      edit({
-        kind: 'insertNode',
-        ref: o.ref,
-        spec: { block: 'divider' },
-        at: o.at,
-      }),
-    ];
   }
   return [
     ...insertLead(o.at, ctx),
