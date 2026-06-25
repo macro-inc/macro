@@ -6,7 +6,6 @@ pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
 pub(crate) mod profile;
-mod settings;
 pub(crate) mod threads;
 pub(crate) mod watch;
 
@@ -311,16 +310,6 @@ impl GmailClient {
         sync_token: Option<&str>,
     ) -> anyhow::Result<(Vec<PersonResource>, String)> {
         contacts::list_other_contacts(self, access_token, sync_token).await
-    }
-
-    /// Gets the email signature for a specific email address
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_email_signature(
-        &self,
-        access_token: &str,
-        email_address: &str,
-    ) -> Result<Option<String>, GmailError> {
-        settings::get_email_signature(self, access_token, email_address).await
     }
 
     /// Blocks a sender by creating a filter that sends their emails to SPAM.

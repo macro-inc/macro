@@ -304,7 +304,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
           mediaType,
         ]);
       },
-      { discrete: true }
+      { discrete: true, tag: 'historic' }
     );
   };
 

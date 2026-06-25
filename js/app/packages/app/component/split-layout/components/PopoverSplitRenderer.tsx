@@ -88,6 +88,7 @@ function PopoverSplitModal(props: {
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
+    captureEntryState: () => {},
     currentEntryState: () => undefined,
   };
 
@@ -136,7 +137,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Panel depth={2} active class="rounded-xl *:max-h-[75vh]">
+      <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
         <SplitPanelContext.Provider value={stubPanelContext}>
           <SoupContextProvider>
             <Show when={props.popover.mount}>

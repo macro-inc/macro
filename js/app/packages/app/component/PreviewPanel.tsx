@@ -1,12 +1,14 @@
 import { getChannelParams } from '@block-channel/utils/link';
 import type { BlockAliasContext, BlockName } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
 import {
   type EntityData,
   isChannelMessageEntity,
+  isGithubPrEntity,
   isSnippetEntity,
   isTaskEntity,
 } from '@entity';
@@ -89,8 +91,14 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       blockType = 'channel';
       blockId = props.selectedEntity.channelId;
     } else if (props.selectedEntity.type === 'foreign') {
-      // TODO(dev-rb/github): Preview GitHub PRs with /pr.
-      blockType = 'unknown';
+      // GitHub PRs preview in the dedicated /pr block (keyed by foreign entity
+      // id); other foreign sources fall back to the generic unknown block.
+      // Mirrors the open path in openEntityInSplitFromUnifiedList, which is
+      // also gated on USE_MACRO_PR_SUMMARY_BLOCK.
+      blockType =
+        USE_MACRO_PR_SUMMARY_BLOCK && isGithubPrEntity(props.selectedEntity)
+          ? 'pr'
+          : 'unknown';
       blockId = props.selectedEntity.id;
     } else if (props.selectedEntity.type === 'crm_company') {
       blockType = 'company';

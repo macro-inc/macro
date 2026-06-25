@@ -58,7 +58,7 @@ fn path_check() -> Job {
 /// fmt + clippy (and Doppler-config validation).
 fn check() -> Job {
     steps::gated_job()
-        .runs_on(runners::Runner::LinuxRustCi.to_string())
+        .runs_on(runners::Runner::LinuxRustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
             "RUSTFLAGS",
             "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
@@ -78,7 +78,7 @@ fn check() -> Job {
 /// cargo nextest against postgres + redis service containers.
 fn test() -> Job {
     steps::gated_job()
-        .runs_on(runners::Runner::LinuxRustCi.to_string())
+        .runs_on(runners::Runner::LinuxRustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
             "NEXTEST_FILTER",
             "${{ needs.path-check.outputs.nextest_filter }}",

@@ -14,6 +14,7 @@ lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 models_email = { path = "../models_email" }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client" }

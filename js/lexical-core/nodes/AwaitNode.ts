@@ -1,6 +1,7 @@
 import {
   $applyNodeReplacement,
   DecoratorNode,
+  type DOMConversionMap,
   type EditorConfig,
   type EditorThemeClasses,
   type LexicalEditor,
@@ -129,6 +130,10 @@ export class AwaitNode extends DecoratorNode<
   // Await nodes are ephemeral — never serialize to the clipboard / outgoing HTML.
   exportDOM() {
     return { element: null };
+  }
+
+  static importDOM(): DOMConversionMap | null {
+    return null;
   }
 
   getAwaitId(): string {

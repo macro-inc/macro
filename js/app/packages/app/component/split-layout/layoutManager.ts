@@ -423,6 +423,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    */
   registerEntryStateCaptor: (key: string, getter: () => unknown) => () => void;
   /**
+   * Immediately capture registered entry-state slices into the split's current
+   * history entry. This is usually done implicitly on navigation, but here we offer
+   * an explicit handle to trigger it manually, e.g. for mobile to manage it's split.
+   */
+  captureEntryState: () => void;
+  /**
    * Read the `state` blob attached to this split's *current* history entry.
    * Returns `undefined` if no state has been captured.
    */
@@ -560,7 +566,7 @@ export function createSplitLayout(
     if (idx < 0 || idx >= items.length) return;
     const currentItem = items[idx];
 
-    const state: EntryState = {};
+    const state: EntryState = { ...(currentItem.state ?? {}) };
     for (const [key, getter] of captors) {
       try {
         state[key] = getter();
@@ -1013,6 +1019,11 @@ export function createSplitLayout(
           if (map.get(key) === getter) map.delete(key);
           if (map.size === 0) entryStateCaptors.delete(currentSplit.id);
         };
+      },
+      captureEntryState: () => {
+        const live = s();
+        if (!live) return;
+        captureCurrentEntryState(live);
       },
       currentEntryState: () => {
         const live = s();

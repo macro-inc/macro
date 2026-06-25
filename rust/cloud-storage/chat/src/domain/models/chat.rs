@@ -57,7 +57,7 @@ pub struct ChatResponse {
     pub name: String,
     /// The messages in the chat.
     pub messages: Vec<ChatMessageWithAttachments>,
-    /// The model used to generate the chat (provider api id).
+    /// The model used to generate the chat (`provider/model` id).
     pub model: Option<String>,
     /// The time the chat was created.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,

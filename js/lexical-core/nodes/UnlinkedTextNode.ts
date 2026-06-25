@@ -7,6 +7,7 @@ import {
   $applyNodeReplacement,
   $getSelection,
   $isRangeSelection,
+  type DOMConversionMap,
   type EditorConfig,
   type LexicalEditor,
   type LexicalNode,
@@ -40,6 +41,10 @@ export class UnlinkedTextNode extends TextNode {
 
   exportDOM(editor: LexicalEditor) {
     return super.exportDOM(editor);
+  }
+
+  static importDOM(): DOMConversionMap | null {
+    return null;
   }
 
   exportJSON(): SerializedUnlinkedTextNode {

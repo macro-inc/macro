@@ -95,7 +95,7 @@ pub async fn handler(
             .into_response()
     })?;
 
-    let bucket = &ctx.config.attachment_bucket;
+    let bucket = &ctx.config.attachment_bucket.to_string();
 
     // Create an object key that combines link_id and attachment_id
     let object_key =
@@ -275,7 +275,7 @@ async fn get_presigned_url(state: &ApiContext, key: &str) -> anyhow::Result<Stri
     let public_key_id = state
         .config
         .email_service_cloudfront_signer_public_key_id
-        .clone();
+        .to_string();
     let private_key = state
         .config
         .email_service_cloudfront_signer_private_key
@@ -283,7 +283,7 @@ async fn get_presigned_url(state: &ApiContext, key: &str) -> anyhow::Result<Stri
     let url = state
         .config
         .email_service_cloudfront_distribution_url
-        .clone();
+        .to_string();
 
     let current_unix_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

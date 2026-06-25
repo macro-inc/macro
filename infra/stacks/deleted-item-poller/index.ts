@@ -27,19 +27,11 @@ const deleteDocumentQueueArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('deleteDocumentQueueArn')
   .apply((arn) => arn as string);
 
-const deleteDocumentQueueName: pulumi.Output<string> = cloudStorageServiceStack
-  .getOutput('deleteDocumentQueueName')
-  .apply((name) => name as string);
-
 const deleteChatQueueArn: pulumi.Output<string> = cloudStorageServiceStack
   .getOutput('deleteChatQueueArn')
   .apply((arn) => arn as string);
 
-const deleteChatQueueName: pulumi.Output<string> = cloudStorageServiceStack
-  .getOutput('deleteChatQueueName')
-  .apply((name) => name as string);
-
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 const vpc = get_coparse_api_vpc();
 
@@ -48,9 +40,6 @@ const deletedItemPoller = new DeleteItemPoller('deleted-item-poller', {
   vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
-    DOCUMENT_DELETE_QUEUE: pulumi.interpolate`${deleteDocumentQueueName}`,
-    CHAT_DELETE_QUEUE: pulumi.interpolate`${deleteChatQueueName}`,
-    SEARCH_EVENT_QUEUE: pulumi.interpolate`${searchEventQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'deleted_item_poller=info',
   },

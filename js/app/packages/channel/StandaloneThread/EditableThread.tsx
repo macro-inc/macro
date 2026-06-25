@@ -50,7 +50,12 @@ function EditableThreadInner() {
           attachments: current?.attachments ?? [],
         };
         setReplyInputState(nextSnapshot);
-        replyInputHandle()?.restoreSnapshot(nextSnapshot);
+        requestAnimationFrame(() => {
+          replyInputHandle()?.restoreSnapshot(nextSnapshot, { focus: false });
+          ctx.replyInputFocusRequest.request();
+        });
+      } else {
+        ctx.replyInputFocusRequest.request();
       }
 
       ctx.setIsReplying(true);
@@ -77,6 +82,7 @@ function EditableThreadInner() {
           setReplyInputState={setReplyInputState}
           setIsReplying={ctx.setIsReplying}
           setReplyInputHandle={setReplyInputHandle}
+          focusRequest={ctx.replyInputFocusRequest}
         />
       </Show>
     </>

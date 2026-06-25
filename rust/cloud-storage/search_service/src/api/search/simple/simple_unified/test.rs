@@ -31,21 +31,31 @@ fn ts(secs: i64) -> chrono::DateTime<Utc> {
 // ==================== Tests for compute_next_cursor ====================
 
 #[test]
-fn test_compute_next_cursor_search_is_done_returns_done() {
-    // When search returned Done, always return Done regardless of other params
+fn test_compute_next_cursor_search_done_but_truncated_in_merge_continues() {
+    // The sub-search reported Done, but the cross-source merge dropped some of
+    // this source's entities (included < original). Those must resurface next
+    // page, so the cursor continues from the last included hit rather than ending
+    // — returning Done here would silently lose the bumped entities.
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(1000);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::ProjectName);
+
     let result = compute_next_cursor(
         &SearchCursorOption::Done,
         5,  // included_count
-        10, // original_count (more than included)
-        Some(&make_tagged_hit(
-            Uuid::new_v4(),
-            Some(ts(1000)),
-            SearchSource::ProjectName,
-        )),
+        10, // original_count (more than included — truncated in merge)
+        Some(&last_hit),
         &SearchCursorOption::NotDone(None),
     );
 
-    assert!(result.is_done());
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, got_ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(got_ts, timestamp);
+        }
+        _ => panic!("Expected NotDone with cursor, got {:?}", result),
+    }
 }
 
 #[test]
@@ -196,6 +206,55 @@ fn test_compute_next_cursor_hit_without_timestamp_returns_none_cursor() {
         SearchCursorOption::NotDone(None) => {}
         _ => panic!("Expected NotDone(None), got {:?}", result),
     }
+}
+
+// ==================== Tests for take_first_n_entities ====================
+
+#[test]
+fn take_first_n_entities_budgets_distinct_entities_keeping_all_hits() {
+    let e1 = Uuid::new_v4();
+    let e2 = Uuid::new_v4();
+    let e3 = Uuid::new_v4();
+    // e1 contributes 3 hits (e.g. three matching content chunks), e2 and e3 one
+    // each. The budget is 2 entities.
+    let combined = vec![
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e2, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e3, Some(ts(1000)), SearchSource::Content),
+    ];
+
+    let result = take_first_n_entities(combined, 2);
+
+    // All three of e1's hits plus e2's single hit; e3 dropped entirely.
+    assert_eq!(result.len(), 4);
+    assert_eq!(
+        result.iter().filter(|t| t.hit.entity_id == e1).count(),
+        3,
+        "every hit of an included entity is kept together"
+    );
+    assert!(
+        result
+            .iter()
+            .all(|t| t.hit.entity_id == e1 || t.hit.entity_id == e2),
+        "the third entity must not appear once the budget is full"
+    );
+}
+
+#[test]
+fn take_first_n_entities_keeps_all_when_under_budget() {
+    let e1 = Uuid::new_v4();
+    let e2 = Uuid::new_v4();
+    let combined = vec![
+        make_tagged_hit(e1, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e2, Some(ts(1000)), SearchSource::ChatName),
+    ];
+
+    let result = take_first_n_entities(combined, 10);
+
+    assert_eq!(result.len(), 3, "nothing is dropped when under the budget");
 }
 
 // ==================== Tests for find_last_of_source ====================

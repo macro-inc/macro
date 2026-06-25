@@ -171,14 +171,18 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("initialized s3 client");
 
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
+    let contacts_queue = macro_queues::ContactsQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.search_event_queue)
-        .document_delete_queue(&config.document_delete_queue);
+        .search_event_queue(&search_event_queue)
+        .document_delete_queue(&document_delete_queue);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.contacts_queue.to_string(),
+            contacts_queue.to_string(),
         ),
     });
 
@@ -201,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
 
@@ -211,7 +215,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         LexicalServiceUrl::new()?.to_string(),
     ));
 
@@ -259,7 +263,7 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.to_string(),
+        notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
@@ -536,7 +540,7 @@ async fn main() -> anyhow::Result<()> {
     // Create the SQS worker for delete document processing before config is moved
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.document_delete_queue.to_string(),
+        document_delete_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );

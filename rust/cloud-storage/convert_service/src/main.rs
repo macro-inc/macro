@@ -3,9 +3,7 @@ use crate::api::context::ApiContext;
 use anyhow::Context;
 use config::{Config, Environment};
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use process::runner::run_worker;
-use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -68,14 +66,6 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&aws_config),
-    );
-
-    let internal_auth_key = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
-
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(5)
@@ -90,15 +80,16 @@ async fn main() -> anyhow::Result<()> {
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
+    let convert_queue = macro_queues::ConvertQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))
-        .convert_queue(&config.convert_queue);
+        .convert_queue(&convert_queue);
     tracing::trace!("initialized sqs client");
 
     if !cfg!(feature = "disable_worker") {
         let sqs_client = aws_sdk_sqs::Client::new(&queue_aws_config);
         let sqs_worker = sqs_worker::SQSWorker::new(
             sqs_client,
-            config.convert_queue.to_string(),
+            convert_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
@@ -111,8 +102,8 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(ApiContext {
         db,
         s3_client,
+        internal_api_key: config.internal_api_key.clone(),
         sqs_client: Arc::new(sqs_client),
-        internal_auth_key,
         config: Arc::new(config),
     })
     .await?;

@@ -25,10 +25,11 @@ async fn main() -> Result<(), Error> {
         .await
         .context("could not connect to db")?;
 
+    let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .sfs_delete_queue(&config.email_sfs_delete_queue);
+    .sfs_delete_queue(&sfs_delete_queue);
 
     let ctx = context::Context {
         db,

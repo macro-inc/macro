@@ -28,8 +28,6 @@ use foreign_entity::{
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_env_var::env_var;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::{
     AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
     SyncServiceUrl,
@@ -47,28 +45,7 @@ use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
 
-env_var!(
-    pub struct McpEnvVars {
-        DatabaseUrl,
-        EmailScheduledQueue,
-        DocumentStorageServiceAuthKey,
-        SyncServiceAuthKey,
-        DocumentStorageBucket,
-        DocxDocumentUploadBucket,
-        DocumentStorageServiceCloudfrontDistributionUrl,
-        DocumentStorageServiceCloudfrontSignerPublicKeyId,
-        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
-        McpPublicUrl,
-        FusionauthBaseUrl,
-        FusionauthClientId,
-        FusionauthTenantId,
-        FusionauthApiKeySecretKey,
-        FusionauthClientSecretKey,
-        GoogleClientId,
-        GoogleClientSecretKey,
-        RedisUrl,
-    }
-);
+use crate::config::Config;
 
 #[derive(Clone)]
 pub struct McpContext {
@@ -79,23 +56,24 @@ pub struct McpContext {
     pub db: PgPool,
 }
 
-pub async fn build_context() -> anyhow::Result<McpContext> {
-    let env_vars = McpEnvVars::new().context("failed to load environment variables")?;
-
+pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
     let db = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(10)
-        .connect(&env_vars.database_url)
+        .connect(&config.database_url)
         .await
         .context("failed to connect to macrodb")?;
 
     tracing::info!("initialized db connection");
 
-    let macro_env = macro_env::Environment::new_or_prod();
+    let macro_env = config.environment;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
-        .email_scheduled_queue(env_vars.email_scheduled_queue.as_ref());
+        .email_scheduled_queue(email_scheduled_queue.as_ref())
+        .gmail_ops_queue(gmail_ops_queue.as_ref());
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -105,34 +83,26 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
         .await
         .context("failed to initialize JWT validation args")?;
 
-    let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
-        InternalApiSecretKey::new().context("failed to create internal auth key")?,
-    );
-
     let sync_service_auth_key = LocalOrRemoteSecret::new_from_secret_manager(
-        env_vars.sync_service_auth_key.as_ref().to_owned(),
+        config.sync_service_auth_key.as_ref().to_owned(),
         &secretsmanager_client,
     )
     .await
     .context("failed to load sync service auth key")?;
 
     let tool_context = build_tool_context(
-        &env_vars,
+        config,
         &db,
         &secretsmanager_client,
         sqs_client,
-        internal_auth_key.as_ref().to_string(),
-        env_vars
-            .document_storage_service_auth_key
-            .as_ref()
-            .to_owned(),
+        config.document_storage_service_auth_key.as_ref().to_owned(),
         sync_service_auth_key.as_ref().to_owned(),
     )
     .await?;
 
-    let auth_proxy = build_auth_proxy(&env_vars, &secretsmanager_client).await?;
+    let auth_proxy = build_auth_proxy(config, &secretsmanager_client).await?;
 
-    let mcp_public_host = http::Uri::try_from(env_vars.mcp_public_url.as_ref())
+    let mcp_public_host = http::Uri::try_from(config.mcp_public_url.as_ref())
         .context("MCP_PUBLIC_URL is not a valid URI")?
         .host()
         .context("MCP_PUBLIC_URL has no host")?
@@ -148,11 +118,10 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
 }
 
 async fn build_tool_context(
-    env_vars: &McpEnvVars,
+    config: &Config,
     db: &PgPool,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
     sqs_client: sqs_client::SQS,
-    internal_auth_key: String,
     document_storage_service_auth_key: String,
     sync_service_auth_key: String,
 ) -> anyhow::Result<ToolServiceContext> {
@@ -166,12 +135,12 @@ async fn build_tool_context(
         SearchServiceClient::new(document_storage_service_auth_key, dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        internal_auth_key.clone(),
+        config.internal_api_key.to_string(),
         lexical_service_url,
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
-        internal_auth_key.clone(),
+        config.internal_api_key.to_string(),
         email_service_url,
     ));
 
@@ -209,12 +178,12 @@ async fn build_tool_context(
     let s3_client = macro_aws_config::s3_client().await;
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
-        env_vars.document_storage_bucket.as_ref(),
-        env_vars.docx_document_upload_bucket.as_ref(),
+        config.document_storage_bucket.as_ref(),
+        config.docx_document_upload_bucket.as_ref(),
     );
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_private_key = LocalOrRemoteSecret::new_from_secret_manager(
-        env_vars
+        config
             .document_storage_service_cloudfront_signer_private_key_secret_name
             .as_ref()
             .to_owned(),
@@ -223,11 +192,11 @@ async fn build_tool_context(
     .await
     .context("failed to load CloudFront signer private key")?;
     let cloudfront_config = CloudFrontConfig {
-        distribution_url: env_vars
+        distribution_url: config
             .document_storage_service_cloudfront_distribution_url
             .as_ref()
             .to_owned(),
-        signer_public_key_id: env_vars
+        signer_public_key_id: config
             .document_storage_service_cloudfront_signer_public_key_id
             .as_ref()
             .to_owned(),
@@ -353,48 +322,48 @@ async fn build_tool_context(
 }
 
 async fn build_auth_proxy(
-    env_vars: &McpEnvVars,
+    config: &Config,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
 ) -> anyhow::Result<McpAuthProxyServiceImpl<RedisInflightAuth>> {
-    let mcp_public_url: String = env_vars.mcp_public_url.as_ref().to_owned();
+    let mcp_public_url: String = config.mcp_public_url.as_ref().to_owned();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
 
     let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
-        env_vars.fusionauth_api_key_secret_key.as_ref().to_owned(),
+        config.fusionauth_api_key_secret_key.as_ref().to_owned(),
         secretsmanager_client,
     )
     .await
     .context("failed to load FusionAuth API key")?;
 
     let fusionauth_client_secret = LocalOrRemoteSecret::new_from_secret_manager(
-        env_vars.fusionauth_client_secret_key.as_ref().to_owned(),
+        config.fusionauth_client_secret_key.as_ref().to_owned(),
         secretsmanager_client,
     )
     .await
     .context("failed to load FusionAuth client secret")?;
 
     let google_client_secret = LocalOrRemoteSecret::new_from_secret_manager(
-        env_vars.google_client_secret_key.as_ref().to_owned(),
+        config.google_client_secret_key.as_ref().to_owned(),
         secretsmanager_client,
     )
     .await
     .context("failed to load Google client secret")?;
 
     let fusionauth_client = fusionauth::FusionAuthClient::new(
-        env_vars.fusionauth_tenant_id.as_ref().to_owned(),
+        config.fusionauth_tenant_id.as_ref().to_owned(),
         fusionauth_api_key.as_ref().to_owned(),
-        env_vars.fusionauth_client_id.as_ref().to_owned(),
+        config.fusionauth_client_id.as_ref().to_owned(),
         fusionauth_client_secret.as_ref().to_owned(),
-        env_vars.fusionauth_base_url.as_ref().to_owned(),
+        config.fusionauth_base_url.as_ref().to_owned(),
         mcp_oauth_redirect_uri,
-        env_vars.google_client_id.as_ref().to_owned(),
+        config.google_client_id.as_ref().to_owned(),
         google_client_secret.as_ref().to_owned(),
     );
 
     let auth_provider = FusionAuthOAuthProvider::new(fusionauth_client)
         .await
         .context("failed to initialize MCP auth provider")?;
-    let redis_client = redis::Client::open(env_vars.redis_url.as_ref().to_owned())
+    let redis_client = redis::Client::open(config.redis_url.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
 
     Ok(McpAuthProxyServiceImpl::new(

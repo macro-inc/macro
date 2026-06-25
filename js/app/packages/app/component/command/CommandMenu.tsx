@@ -52,13 +52,12 @@ import {
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'DMs' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'tasks', label: 'Tasks' },
+  { id: 'commands', label: 'Command' },
   { id: 'chats', label: 'Agents' },
-  { id: 'projects', label: 'Folders' },
-  { id: 'commands', label: 'Commands' },
+  { id: 'documents', label: 'Files' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'channels', label: 'Channels' },
+  { id: 'dms', label: 'People' },
 ];
 
 const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
@@ -541,7 +540,6 @@ export function CommandMenuInner(props: {
       class={cn('max-h-[75vh] rounded-xl', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
-      active
     >
       <Panel.Header class="gap-2 px-2 bg-surface">
         <Show

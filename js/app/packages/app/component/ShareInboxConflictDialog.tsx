@@ -25,7 +25,7 @@ export function ShareInboxConflictDialog(props: {
       position="center"
       class="w-120 max-w-[calc(100vw-2rem)]"
     >
-      <Panel active depth={2} class="rounded-xl">
+      <Panel depth={2} class="rounded-xl">
         <Panel.Header class="px-6">
           <Dialog.Title class="text-ink text-sm font-semibold">
             Share this inbox?

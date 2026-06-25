@@ -77,6 +77,7 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "tracking",

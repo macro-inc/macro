@@ -964,7 +964,7 @@ export function PopupPreview(
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Surface active depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
+      <Surface depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
         <DocumentPreviewContent
           delete={props.delete}
           collapseInfo={props.collapseInfo}

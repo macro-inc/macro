@@ -6,17 +6,7 @@ use uuid::Uuid;
 pub struct Settings {
     pub link_id: Uuid,
     pub signature_on_replies_forwards: bool,
-}
-
-impl Settings {
-    pub fn new(api_settings: crate::email::api::settings::Settings, link_id: Uuid) -> Self {
-        Settings {
-            link_id,
-            signature_on_replies_forwards: api_settings
-                .signature_on_replies_forwards
-                .unwrap_or(false),
-        }
-    }
+    pub signature: Option<String>,
 }
 
 impl From<crate::email::db::settings::Settings> for Settings {
@@ -24,6 +14,25 @@ impl From<crate::email::db::settings::Settings> for Settings {
         Settings {
             link_id: db_settings.link_id,
             signature_on_replies_forwards: db_settings.signature_on_replies_forwards,
+            signature: db_settings.signature,
+        }
+    }
+}
+
+/// A partial update to a link's settings. `None` fields are left unchanged.
+#[derive(Debug, Clone)]
+pub struct SettingsPatch {
+    pub link_id: Uuid,
+    pub signature_on_replies_forwards: Option<bool>,
+    pub signature: Option<String>,
+}
+
+impl SettingsPatch {
+    pub fn new(api_settings: crate::email::api::settings::Settings, link_id: Uuid) -> Self {
+        SettingsPatch {
+            link_id,
+            signature_on_replies_forwards: api_settings.signature_on_replies_forwards,
+            signature: api_settings.signature,
         }
     }
 }

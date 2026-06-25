@@ -1,32 +1,29 @@
 import AppStoreQr from '@design/app-store.svg';
-import { Panel } from '@ui';
+import { SettingsCard, SettingsPage } from './primitives';
 
 export function MobileApp() {
   return (
-    <div
-      class="h-full overflow-hidden flex justify-center p-2"
+    <SettingsPage
+      title="Mobile app"
+      description="Scan the code to get Macro on your phone."
     >
-      <div class="max-w-200 size-full">
-        <Panel depth={2} class="h-full overflow-hidden text-ink">
-          <Panel.Header class="px-6">
-            <div class="text-sm font-semibold">Mobile App</div>
-          </Panel.Header>
-          <Panel.Body class="flex flex-col items-center justify-center gap-6 py-8">
-              <AppStoreQr style="display: block; max-width: 300px;" />
-              <p class="text-sm text-ink text-center">
-                Download on the<br/>
-                <a
-                  href="https://apps.apple.com/us/app/macro-app/id6743133649"
-                  rel="noopener noreferrer"
-                  class="underline"
-                  target="_blank"
-                >
-                  App Store
-                </a>
-              </p>
-          </Panel.Body>
-        </Panel>
-      </div>
-    </div>
+      <SettingsCard>
+        <div class="flex flex-col items-center justify-center gap-6 py-12">
+          <AppStoreQr style="display: block; max-width: 280px;" />
+          <p class="text-sm text-ink text-center">
+            Download on the
+            <br />
+            <a
+              href="https://apps.apple.com/us/app/macro-app/id6743133649"
+              rel="noopener noreferrer"
+              class="text-accent hover:underline"
+              target="_blank"
+            >
+              App Store
+            </a>
+          </p>
+        </div>
+      </SettingsCard>
+    </SettingsPage>
   );
 }

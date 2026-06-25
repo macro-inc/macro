@@ -13,15 +13,22 @@ macro_rules! secret {
 
 secret!(CACHIX_AUTH_TOKEN);
 secret!(DOPPLER_TOKEN);
+secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
+secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
 /// smaller.
 pub const NEXTEST_TEST_THREADS: u32 = 32;
 
+/// Explicit Namespace cache tag for the heavy compile jobs (check + test). A
+/// fixed tag (instead of the default per-branch scoping) makes the cache volume
+/// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
+pub const CI_CACHE_TAG: &str = "sccache-ci";
+
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.
-pub const SCCACHE_VOLUME_DIR: &str = "/sccache";
+pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
 
 /// Max on-disk size for the sccache cache. Larger than the setup default since
 /// the persisted volume can hold a full-workspace cache.

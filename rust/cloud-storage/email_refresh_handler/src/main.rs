@@ -27,10 +27,11 @@ async fn main() -> Result<(), Error> {
         .await
         .context("could not connect to db")?;
 
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .email_link_manager_queue(&config.link_manager_queue);
+    .email_link_manager_queue(&link_manager_queue);
 
     let ctx = context::Context {
         db,
