@@ -52,7 +52,10 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
 
         let status = edit_resp.status();
         if !status.is_success() {
-            anyhow::bail!("editing worker returned {}", status);
+            // The worker returns `{ "error": "..." }` with the real cause; surface
+            // it instead of just the status so failures are debuggable.
+            let body = edit_resp.text().await.unwrap_or_default();
+            anyhow::bail!("editing worker returned {}: {}", status, body);
         }
 
         let body = edit_resp.json::<serde_json::Value>().await?;

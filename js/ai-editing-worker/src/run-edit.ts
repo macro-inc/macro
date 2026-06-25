@@ -26,7 +26,7 @@ import type { DocumentOp } from './ai-editing/editor/ops';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
-import { createWorkerAwareness, WorkerSyncSource } from './sync-source';
+import { createWorkerAwareness, createWorkerSyncSource } from './sources';
 import { buildTraceLog } from './trace-log';
 
 export type Model = {
@@ -73,8 +73,18 @@ export type RunEditResult = {
 export async function runEditSession(
   args: RunEditArgs
 ): Promise<RunEditResult> {
-  const source = new WorkerSyncSource(args.wsUrl, args.documentId, args.signal);
-  const initial = await source.waitForInitialSync();
+  const source = createWorkerSyncSource(
+    args.wsUrl,
+    args.documentId,
+    args.signal
+  );
+  const initialResult = await source.doInitialSync();
+  if (initialResult.isErr()) {
+    source.cleanup();
+    const e = initialResult.error;
+    throw new Error(`initial sync failed: ${e.type} (${e.duration}ms)`);
+  }
+  const initial = initialResult.value;
 
   // The manager owns the one true (merged) doc + mirror. Defer state changes to
   // the engine on a microtask: loro fires the mirror subscriber synchronously

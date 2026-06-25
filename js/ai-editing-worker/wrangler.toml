@@ -8,6 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 "@observability/logger" = "./src/logger-shim.ts"
 "@core" = "../app/packages/core"
 "@loro-mirror" = "../loro-mirror"
+"@websocket" = "../app/packages/websocket/index.ts"
 
 [[rules]]
 type = "Text"

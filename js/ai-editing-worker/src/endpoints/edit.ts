@@ -86,6 +86,9 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     return c.json({ ok: true, usage, ops, trace, clarification });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));
+    if (!signal.aborted) {
+      console.error('edit session failed:', err.message, err.stack);
+    }
     const status = (signal.aborted ? 499 : 502) as 502;
     return c.json({ error: err.message }, status);
   }

@@ -31,6 +31,12 @@
 			],
 			"@core/*": [
 				"../app/packages/core/*"
+			],
+			"@websocket": [
+				"../app/packages/websocket"
+			],
+			"@websocket/*": [
+				"../app/packages/websocket/*"
 			]
 		}
 	},

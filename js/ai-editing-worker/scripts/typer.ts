@@ -23,7 +23,7 @@ import { DocumentEditor } from "../src/ai-editing/editor/document-editor";
 import { type CodeRunner, runEditorCode } from "../src/ai-editing/runtime";
 import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from "../../lexical-core/markdown-loro-schema";
 import type { InferType } from "@loro-mirror/packages/core/src";
-import { WorkerSyncSource, createWorkerAwareness } from "../src/sync-source";
+import { createWorkerSyncSource, createWorkerAwareness } from "../src/sources";
 import { LoroManager } from "../../app/packages/core/collab/manager";
 import { SyncEngine } from "../../app/packages/core/collab/engine";
 import { InMemoryWALStore, WALSyncer } from "../../app/packages/core/collab/wal";
@@ -33,8 +33,10 @@ const argv = await yargs(hideBin(process.argv)).usage("$0 <wss-url>").help().par
 const wssUrl = argv._[0] as string | undefined;
 if (!wssUrl) { yargs().showHelp(); process.exit(1); }
 
-const source = new WorkerSyncSource(wssUrl, "", undefined);
-const { snapshot } = await source.waitForInitialSync();
+const source = createWorkerSyncSource(wssUrl, "", undefined);
+const initial = await source.doInitialSync();
+if (initial.isErr()) throw new Error(`initial sync failed: ${initial.error.type}`);
+const { snapshot } = initial.value;
 
 const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: "" });
 let engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown> | undefined;
