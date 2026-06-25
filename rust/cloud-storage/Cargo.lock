@@ -8819,6 +8819,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
+ "macro_queues",
  "serde_json",
  "sqlx",
  "sqs_client",

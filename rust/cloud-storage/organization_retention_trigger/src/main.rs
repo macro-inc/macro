@@ -14,7 +14,6 @@ use sqlx::postgres::PgPoolOptions;
 
 env_vars! {
     struct DatabaseUrl;
-    struct OrganizationRetentionQueue;
 }
 
 #[tracing::instrument(skip(db, sqs_client, event))]
@@ -52,8 +51,8 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized db client");
 
-    let organization_retention_queue =
-        OrganizationRetentionQueue::new().context("ORGANIZATION_RETENTION_QUEUE must be set")?;
+    let organization_retention_queue = macro_queues::OrganizationRetentionQueue::new()
+        .context("ORGANIZATION_RETENTION_QUEUE must be set")?;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
