@@ -1,6 +1,7 @@
 import { registerCodeHighlighting } from '@lexical/code';
 import { $convertFromMarkdownString } from '@lexical/markdown';
 import {
+  $createParagraphNode,
   $getRoot,
   createEditor,
   type LexicalEditor,
@@ -65,8 +66,20 @@ export function loadSnapshot(
   session: Session,
   raw: SerializedEditorState
 ): void {
-  const state = session.editor.parseEditorState(raw);
-  session.editor.setEditorState(state);
+  // Lexical forbids an empty root (setEditorState throws). A document can be
+  // genuinely empty, so seed a single empty paragraph instead of crashing.
+  if (raw.root.children.length === 0) {
+    session.editor.update(
+      () => {
+        const root = $getRoot();
+        root.clear();
+        root.append($createParagraphNode());
+      },
+      { discrete: true }
+    );
+  } else {
+    session.editor.setEditorState(session.editor.parseEditorState(raw));
+  }
   session.editor.update(
     () => {
       $updateAllNodeIds(session.ids);
