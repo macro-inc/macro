@@ -43,7 +43,7 @@ export function BlameTooltip(props: {
   let showTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Only commits to a new nodeId after FETCH_DELAY_MS of hover stillness.
-  const scheduled = createScheduled(fn => debounce(fn, FETCH_DELAY_MS));
+  const scheduled = createScheduled((fn) => debounce(fn, FETCH_DELAY_MS));
   const queriedNodeId = createMemo<string | null>((prev) => {
     const active = props.state.hovering ? props.state.nodeId : null;
     return scheduled() ? active : prev;

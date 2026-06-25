@@ -72,6 +72,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import {
+  BlameTooltip,
+  blameTooltipPlugin,
+  createBlameTooltipStore,
+} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
@@ -84,11 +89,6 @@ import {
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import {
-  createBlameTooltipStore,
-  BlameTooltip,
-  blameTooltipPlugin,
-} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import {
   GO_TO_LOCATION_COMMAND,

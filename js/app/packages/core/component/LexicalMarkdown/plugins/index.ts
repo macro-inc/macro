@@ -1,5 +1,6 @@
 export * from './actions';
 export * from './await';
+export * from './blame-tooltip';
 export * from './checklist';
 export * from './code';
 export * from './comments';
@@ -15,7 +16,6 @@ export * from './file-paste';
 export * from './find-and-replace';
 export * from './generate';
 export * from './horizontal-rules';
-export * from './blame-tooltip';
 export * from './insert-text';
 export * from './ios-cursor-scroll';
 export * from './katex';
