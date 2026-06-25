@@ -23,31 +23,6 @@ const FORMAT_MAP: Record<string, TextFormatType> = {
 
 export type InlineFormat = 'bold' | 'italic' | 'underline' | 'strike' | 'code';
 
-/**
- * Replace each matched occurrence of `needle` with constructed node(s).
- * Returns the count changed.
- */
-export function $replaceTextInBlock(
-  block: ElementNode,
-  needle: string,
-  make: () => LexicalNode | LexicalNode[],
-  scope?: Scope
-): number {
-  return mutateMatches(block, needle, scope, (matchNode) => {
-    const built = make();
-    const nodes = Array.isArray(built) ? built : [built];
-    let anchor: LexicalNode = matchNode;
-    nodes.forEach((node, i) => {
-      if (i === 0) {
-        anchor.replace(node);
-      } else {
-        anchor.insertAfter(node);
-      }
-      anchor = node;
-    });
-  });
-}
-
 /** Format a substring (split the text node and set the format bit). */
 export function $formatTextInBlock(
   block: ElementNode,

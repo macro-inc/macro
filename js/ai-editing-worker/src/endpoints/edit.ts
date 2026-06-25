@@ -13,63 +13,31 @@ import { fetchDocToken } from '../service-clients';
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
 const PROVIDERS = {
-  anthropic: {
-    key: 'ANTHROPIC_API_KEY' as const,
-    defaultModel: 'claude-sonnet-4-6',
-    create: createAnthropic,
-  },
-  cerebras: {
-    key: 'CEREBRAS_API_KEY' as const,
-    defaultModel: 'gpt-oss-120b',
-    create: createCerebras,
-  },
-  openai: {
-    key: 'OPENAI_API_KEY' as const,
-    defaultModel: 'gpt-4o',
-    create: createOpenAI,
-  },
+  anthropic: { key: 'ANTHROPIC_API_KEY', create: createAnthropic },
+  cerebras: { key: 'CEREBRAS_API_KEY', create: createCerebras },
+  openai: { key: 'OPENAI_API_KEY', create: createOpenAI },
 } satisfies Record<
   Provider,
   {
     key: keyof Bindings;
-    defaultModel: string;
     create: (opts: { apiKey: string }) => (modelId: string) => LanguageModel;
   }
 >;
-
-const DEFAULT_PROVIDER = 'anthropic' satisfies Provider;
 
 const ModelSchema: z.ZodType<Model> = z.object({
   provider: z.enum(['anthropic', 'cerebras', 'openai']),
   model: z.string(),
 });
 
-const DEFAULT_MODELS = {
-  supervisor: {
-    provider: 'anthropic' satisfies Provider,
-    model: 'claude-haiku-4-5-20251001',
-  },
-  interpret: {
-    provider: 'anthropic' satisfies Provider,
-    model: 'claude-sonnet-4-6',
-  },
-  coding: {
-    provider: 'cerebras' satisfies Provider,
-    model: PROVIDERS.cerebras.defaultModel,
-  },
-} satisfies Record<string, Model>;
-
 const EditBody = z.object({
   userToken: z.string(),
   documentId: z.string(),
   prompt: z.string(),
-  models: z
-    .object({
-      supervisor: ModelSchema.optional(),
-      interpret: ModelSchema.optional(),
-      coding: ModelSchema.optional(),
-    })
-    .optional(),
+  models: z.object({
+    supervisor: ModelSchema,
+    interpret: ModelSchema,
+    coding: ModelSchema,
+  }),
   typingAnimations: z.boolean().optional(),
   interpret: z.boolean().default(true),
   debug: z.boolean().default(false),
@@ -83,7 +51,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     userToken,
     documentId,
     prompt,
-    models: modelsSpec,
+    models,
     typingAnimations,
     interpret,
     debug,
@@ -105,13 +73,9 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       documentId,
       prompt,
       models: {
-        supervisor: resolveModel(
-          modelsSpec?.supervisor ?? DEFAULT_MODELS.supervisor
-        ),
-        interpret: resolveModel(
-          modelsSpec?.interpret ?? DEFAULT_MODELS.interpret
-        ),
-        coding: resolveModel(modelsSpec?.coding ?? DEFAULT_MODELS.coding),
+        supervisor: resolveModel(models.supervisor),
+        interpret: resolveModel(models.interpret),
+        coding: resolveModel(models.coding),
       },
       typingAnimations,
       interpret,

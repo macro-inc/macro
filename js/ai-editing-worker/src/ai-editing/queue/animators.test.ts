@@ -661,7 +661,6 @@ describe('every op kind has an animation that ends in the right edit', () => {
     expect(edits.length).toBeGreaterThan(0);
     expect(edits.at(-1)!.kind).toBe(terminalKind);
   });
-
 });
 
 // ── sweepSelect via formatText (the simplest animator that uses it on one match) ──
@@ -1095,7 +1094,6 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
       },
     ]);
   });
-
 });
 
 describe('clearFormat animator — match vs whole-block branches', () => {

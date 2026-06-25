@@ -899,7 +899,6 @@
             {
               buildInputs = jsPackages ++ jsLibraries;
               PKG_CONFIG_PATH = "${jsPkgs.openssl.dev}/lib/pkgconfig";
-              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath jsLibraries}:$LD_LIBRARY_PATH";

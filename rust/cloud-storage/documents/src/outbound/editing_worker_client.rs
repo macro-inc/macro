@@ -16,6 +16,11 @@ impl ReqwestEditingWorkerClient {
     pub fn new(worker_url: String, client: Arc<Client>) -> Self {
         Self { worker_url, client }
     }
+
+    /// Construct a client backed by a fresh default reqwest client.
+    pub fn from_url(worker_url: String) -> Self {
+        Self::new(worker_url, Arc::new(Client::new()))
+    }
 }
 
 impl EditingWorkerService for ReqwestEditingWorkerClient {
@@ -38,37 +43,19 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "interpret": true,
         });
 
-        const MAX_ATTEMPTS: u32 = 3;
-        let mut last_status = None;
-        let mut body = None;
-        for attempt in 1..=MAX_ATTEMPTS {
-            let edit_resp = self
-                .client
-                .post(format!("{}/edit", self.worker_url))
-                .json(&request_body)
-                .send()
-                .await?;
+        let edit_resp = self
+            .client
+            .post(format!("{}/edit", self.worker_url))
+            .json(&request_body)
+            .send()
+            .await?;
 
-            let status = edit_resp.status();
-            if status.is_success() {
-                body = Some(edit_resp.json::<serde_json::Value>().await?);
-                break;
-            }
-
-            last_status = Some(status);
-            if status.is_server_error() && attempt < MAX_ATTEMPTS {
-                tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
-                continue;
-            }
-            break;
+        let status = edit_resp.status();
+        if !status.is_success() {
+            anyhow::bail!("editing worker returned {}", status);
         }
 
-        let body = body.ok_or_else(|| {
-            anyhow::anyhow!(
-                "editing worker returned {}",
-                last_status.expect("loop ran at least once")
-            )
-        })?;
+        let body = edit_resp.json::<serde_json::Value>().await?;
 
         Ok(EditResult {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),

@@ -16,20 +16,3 @@ export async function args<T extends Record<string, unknown>>(
 	}
 	return { ...(argv as unknown as T), wssUrl };
 }
-
-export type ParsedWssUrl = {
-	documentId: string;
-	token: string;
-};
-
-/** Extract documentId and token from a sync wss URL. */
-export function parseWssUrl(wssUrl: string): ParsedWssUrl {
-	const url = new URL(wssUrl);
-	const documentId = url.pathname.split("/").at(-2);
-	const token = url.searchParams.get("token");
-	if (!documentId || !token) {
-		console.error("Could not parse documentId or token from WSS URL");
-		process.exit(1);
-	}
-	return { documentId, token };
-}

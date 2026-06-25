@@ -111,7 +111,6 @@ describe('runQueue -- error handling', () => {
     expect(results[0].ok).toBe(false);
     if (!results[0].ok) expect(results[0].op.kind).toBe('setText');
   });
-
 });
 
 describe('runQueue -- error in the middle keeps neighbors', () => {

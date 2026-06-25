@@ -36,11 +36,6 @@ export function $blockById(session: Session, id: string): ElementNode {
   return node;
 }
 
-/** Resolve several ids at once (each must resolve, in order). */
-export function $allById(session: Session, ids: string[]): LexicalNode[] {
-  return ids.map((id) => $byId(session, id));
-}
-
 /**
  * Resolve a text node by its XML id (the `id` attr on `<t>` elements). Use
  * this in XML mode when you want to act on a specific text span without
@@ -50,11 +45,6 @@ export function $textById(session: Session, id: string): TextNode {
   const node = $byId(session, id);
   if (!$isTextNode(node)) throw new Error(`Node "${id}" is not a TextNode`);
   return node;
-}
-
-/** Plain text of a node (block, list item, or inline). */
-export function $getText(node: LexicalNode): string {
-  return node.getTextContent();
 }
 
 export type TextMatch = { node: string; start: number; end: number };

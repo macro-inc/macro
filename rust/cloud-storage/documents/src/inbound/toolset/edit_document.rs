@@ -29,17 +29,11 @@ pub struct EditDocument {
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct EditDocumentResponse {
-    /// Number of individual edit operations applied to the document.
-    pub edits_applied: usize,
-    pub usage: Option<EditUsage>,
+    /// A short outcome for the model -- whether the edit was applied or
+    /// interrupted -- never the underlying list of edit operations.
+    pub summary: String,
     /// If present, invoke this tool again with this information appended to `instructions`.
     pub clarification: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct EditUsage {
-    pub input_tokens: u32,
-    pub output_tokens: u32,
 }
 
 #[async_trait]
@@ -70,12 +64,14 @@ where
                 internal_error: e,
             })?;
 
+        let summary = if result.clarification.is_some() {
+            "Paused for clarification; no edits applied.".to_string()
+        } else {
+            format!("Applied {} edit(s) to the document.", result.edits_applied)
+        };
+
         Ok(EditDocumentResponse {
-            edits_applied: result.edits_applied,
-            usage: result.usage.map(|u| EditUsage {
-                input_tokens: u.input_tokens,
-                output_tokens: u.output_tokens,
-            }),
+            summary,
             clarification: result.clarification,
         })
     }

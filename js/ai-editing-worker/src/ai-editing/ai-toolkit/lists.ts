@@ -85,27 +85,3 @@ export function $setListType(
   }
   return retyped;
 }
-
-/** Check/uncheck a list item. */
-export function $setChecked(item: LexicalNode, checked: boolean): void {
-  if (!$isListItemNode(item)) {
-    throw new Error('$setChecked target is not a list item');
-  }
-  item.setChecked(checked);
-}
-
-/** Nest a list item one level deeper. */
-export function $indent(block: LexicalNode): void {
-  if (!$isListItemNode(block)) {
-    throw new Error('$indent target is not a list item');
-  }
-  block.setIndent(block.getIndent() + 1);
-}
-
-/** Un-nest a list item one level. */
-export function $outdent(block: LexicalNode): void {
-  if (!$isListItemNode(block)) {
-    throw new Error('$outdent target is not a list item');
-  }
-  block.setIndent(Math.max(0, block.getIndent() - 1));
-}

@@ -1,9 +1,4 @@
-import {
-  generateText,
-  hasToolCall,
-  type LanguageModel,
-  stepCountIs,
-} from 'ai';
+import { generateText, hasToolCall, type LanguageModel, stepCountIs } from 'ai';
 import type { Session } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
@@ -42,7 +37,7 @@ export async function coder(
         onOps: deps.onOps,
       }),
       reportBlocked: createImBlockedTool(
-        'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. This ends your task.',
+        'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need.',
         false
       ),
     },

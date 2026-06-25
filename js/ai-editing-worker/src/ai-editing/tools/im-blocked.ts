@@ -2,15 +2,19 @@ import { tool } from 'ai';
 import { z } from 'zod';
 
 /**
- * @param whenToUse - injected into the tool description; tell the model when to call it
- * @param callMeAgain - whether the caller can re-invoke with more info to resolve the block
+ * A tool the agent calls to bail out when it cannot proceed. Pass only the
+ * trigger condition in `whenToUse`; this factory owns the shared framing.
+ *
+ * @param whenToUse - the situation that should trigger the call
+ * @param callMeAgain - if the block is resolvable by re-invoking with more info,
+ *   the message is framed as a directive to the caller; otherwise it is a one-line reason
  */
 export function createImBlockedTool(whenToUse: string, callMeAgain: boolean) {
-  const retryHint = callMeAgain
-    ? ' The caller will invoke you again with the missing information.'
-    : '';
+  const guidance = callMeAgain
+    ? ' Your message must be a directive telling the caller to invoke you again with the missing information.'
+    : ' State what stopped you in one line.';
   return tool({
-    description: `${whenToUse}${retryHint}`,
+    description: `${whenToUse}${guidance} This ends your turn.`,
     inputSchema: z.object({
       message: z
         .string()

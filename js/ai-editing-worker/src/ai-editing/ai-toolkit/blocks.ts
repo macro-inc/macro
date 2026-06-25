@@ -28,8 +28,6 @@ export type BlockData =
   | { type: 'quote' }
   | { type: 'code'; language?: string };
 
-export type BlockType = BlockData['type'];
-
 /** Build an (empty) block node to pass to `$setBlockType` / inserts. */
 export function $blockNode(data: BlockData): ElementNode {
   return match(data)
@@ -87,53 +85,6 @@ export function $setText(block: ElementNode, text: string): void {
     block.clear();
     block.append($createTextNode(text));
   }
-}
-
-/**
- * Replace a block entirely with pre-built node(session). The first node takes the
- * original block'session position; subsequent nodes follow it. Returns the new nodes.
- */
-export function $replaceBlock(
-  block: ElementNode,
-  ...nodes: ElementNode[]
-): ElementNode[] {
-  if (nodes.length === 0) {
-    block.remove();
-    return [];
-  }
-  let anchor: LexicalNode = block;
-  const [first, ...rest] = nodes;
-  block.replace(first);
-  anchor = first;
-  for (const node of rest) {
-    anchor.insertAfter(node);
-    anchor = node;
-  }
-  return nodes;
-}
-
-/** Insert pre-built block node(session) after `block`. */
-export function $insertAfter(
-  block: ElementNode,
-  ...nodes: ElementNode[]
-): ElementNode[] {
-  let anchor: LexicalNode = block;
-  for (const node of nodes) {
-    anchor.insertAfter(node);
-    anchor = node;
-  }
-  return nodes;
-}
-
-/** Insert pre-built block node(session) before `block`. */
-export function $insertBefore(
-  block: ElementNode,
-  ...nodes: ElementNode[]
-): ElementNode[] {
-  for (const node of nodes) {
-    block.insertBefore(node);
-  }
-  return nodes;
 }
 
 /** Append pre-built block node(session) at the end of the document. */

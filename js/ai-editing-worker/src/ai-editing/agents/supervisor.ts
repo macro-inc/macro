@@ -66,7 +66,7 @@ export async function supervisor(
 
   const tools = {
     reportBlocked: createImBlockedTool(
-      'Call this when you cannot proceed without more information or when the task is impossible. Your message must be a directive telling the caller to invoke you again with what is missing.',
+      'Call this when you cannot proceed without more information or when the task is impossible.',
       true
     ),
     dispatch: createDispatchTool({
@@ -100,16 +100,11 @@ export async function supervisor(
     });
     tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
 
-    let clarification: string | undefined;
-    for (const step of result.steps) {
-      for (const call of step.toolCalls) {
-        if (call.toolName === 'reportBlocked') {
-          clarification = (call.input as { message: string }).message;
-          break;
-        }
-      }
-      if (clarification) break;
-    }
+    const blocked = result.steps
+      .flatMap((s) => s.toolCalls)
+      .find((c) => c.toolName === 'reportBlocked');
+    const clarification = (blocked?.input as { message: string } | undefined)
+      ?.message;
 
     return {
       text: result.text || 'Applied edits.',

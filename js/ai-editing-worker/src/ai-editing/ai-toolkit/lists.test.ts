@@ -9,21 +9,18 @@ import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { serializeWithXml } from '../utils';
 import { edit, read, setup, topLevelIds } from './_test-helpers';
-import {
-  $indent,
-  $outdent,
-  $setChecked,
-  $setListType,
-  $toggleList,
-} from './lists';
-import { $allById, $blockById, $byId } from './locate';
+import { $setListType, $toggleList } from './lists';
+import { $byId } from './locate';
 import { createEditingSession, loadMarkdown, type Session } from './session';
 
 describe('deferred: lists', () => {
   it('$toggleList creates one list block (fresh id); items get fresh ids', () => {
     const { session, ids } = setup('todo a\n\ntodo b');
     const list = edit(session, () =>
-      $toggleList($allById(session, ids), 'check')
+      $toggleList(
+        ids.map((id) => $byId(session, id)),
+        'check'
+      )
     );
     // single top-level block now
     const top = topLevelIds(session);
@@ -59,66 +56,6 @@ describe('deferred: lists', () => {
     expect(xml).toContain('todo a');
     expect(xml).toContain('todo b');
   });
-
-  it('$setChecked checks a list item', () => {
-    const { session, ids } = setup('todo a\n\ntodo b');
-    edit(session, () => $toggleList($allById(session, ids), 'check'));
-    const firstItemId = read(session, () => {
-      const ln = $getRoot().getFirstChild() as ListNode;
-      return $getId(ln.getFirstChild());
-    });
-    edit(session, () => $setChecked($byId(session, firstItemId!), true));
-    const checked = read(session, () => {
-      const ln = $getRoot().getFirstChild() as ListNode;
-      return (ln.getChildren() as ListItemNode[]).map((it) => it.getChecked());
-    });
-    expect(checked).toEqual([true, false]);
-  });
-
-  it('$setChecked throws EditError on a non-list-item', () => {
-    const { session, ids } = setup('plain paragraph');
-    edit(session, () => {
-      expect(() => $setChecked($blockById(session, ids[0]), true)).toThrowError(
-        Error
-      );
-    });
-  });
-
-  it('$indent nests a list item one level deeper (assert via getIndent)', () => {
-    const { session } = setup('- parent\n- child');
-    const childId = read(session, () => {
-      const ln = $getRoot().getFirstChild() as ListNode;
-      return $getId(ln.getChildren()[1]);
-    });
-    edit(session, () => $indent($byId(session, childId!)));
-    const indent = read(session, () =>
-      ($byId(session, childId!) as ListItemNode).getIndent()
-    );
-    expect(indent).toBe(1);
-  });
-
-  it('$outdent un-nests a list item one level', () => {
-    const { session } = setup('- parent\n- child');
-    const childId = read(session, () => {
-      const ln = $getRoot().getFirstChild() as ListNode;
-      return $getId(ln.getChildren()[1]);
-    });
-    edit(session, () => $indent($byId(session, childId!)));
-    edit(session, () => $outdent($byId(session, childId!)));
-    expect(
-      read(session, () =>
-        ($byId(session, childId!) as ListItemNode).getIndent()
-      )
-    ).toBe(0);
-  });
-
-  it('$indent / $outdent throw EditError on a non-list-item', () => {
-    const { session, ids } = setup('plain paragraph');
-    edit(session, () => {
-      expect(() => $indent($blockById(session, ids[0]))).toThrowError(Error);
-      expect(() => $outdent($blockById(session, ids[0]))).toThrowError(Error);
-    });
-  });
 });
 
 describe('$setListType / $toggleList separation', () => {
@@ -138,7 +75,9 @@ describe('$setListType / $toggleList separation', () => {
     const session = createEditingSession();
     loadMarkdown(session, '- deeply\n  - nested\n    - list\n      - items');
     const itemId = deepItemId(session, 'items');
-    edit(session, () => $setListType($byId(session, itemId!), 'number', session));
+    edit(session, () =>
+      $setListType($byId(session, itemId!), 'number', session)
+    );
     read(session, () => {
       // the item is carried over by replace(…, true): its id still resolves
       const item = $byId(session, itemId!) as ListItemNode;
@@ -149,5 +88,4 @@ describe('$setListType / $toggleList separation', () => {
       expect($getRoot().getChildren()).toHaveLength(1);
     });
   });
-
 });

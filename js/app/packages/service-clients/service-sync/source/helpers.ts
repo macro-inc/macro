@@ -51,11 +51,6 @@ export function createSyncServiceSocket(
   return createSyncSocket(getUrl);
 }
 
-/**
- * Browser entry point: builds a token-refreshing sync websocket, wraps it in a
- * {@link SyncServiceSource}, and overlays a reactive Solid `status` signal so
- * connection-status UI updates as the socket state changes.
- */
 export const createSyncServiceSource = (
   documentId: string,
   token: string

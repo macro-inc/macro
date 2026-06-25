@@ -627,7 +627,6 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
     const r = e.insertLineBreak('b1', 0);
     expect(() => e.bold(r, 'x')).not.toThrow();
   });
-
 });
 
 describe('DocumentEditor — scope defaults', () => {

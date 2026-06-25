@@ -118,4 +118,3 @@ describe('runtime — awareness ref resolution', () => {
     expect(awareness.seen.every((x) => real.has(x.node))).toBe(true);
   });
 });
-

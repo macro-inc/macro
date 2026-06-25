@@ -256,11 +256,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
+    let test_editing_client =
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            "http://nofileshere".into(),
+        );
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
         test_lexical_client,
         sync_service_client.as_ref().clone(),
+        test_editing_client,
     );
 
     let search_service_client = Arc::new(search_service_client);

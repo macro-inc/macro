@@ -113,8 +113,8 @@ export function realAwarenessSource(
       lingerTimer = null;
     }
     const len = text.length;
-    const anchor = text.getCursor(clamp(a, len));
-    const focus = text.getCursor(clamp(b, len));
+    const anchor = text.getCursor(Math.max(0, Math.min(a, len)));
+    const focus = text.getCursor(Math.max(0, Math.min(b, len)));
     if (!anchor || !focus) return;
     store.set(peerKey, {
       user: { userId: name, color, peerId: peerKey },
@@ -156,10 +156,6 @@ export function realAwarenessSource(
   }
 
   return { apply, clear };
-}
-
-function clamp(n: number, max: number): number {
-  return Math.max(0, Math.min(n, max));
 }
 
 function isLoroMap(c: Container | undefined): c is LoroMap {

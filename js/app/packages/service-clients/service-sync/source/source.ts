@@ -79,14 +79,10 @@ export interface SyncServiceSourceOptions {
 }
 
 /**
- * Transport-agnostic sync-service source: owns the wire protocol (the
- * `FromRemote` → event mapping, send-and-await-response correlation, and the
- * `LiveSyncSource` methods) on top of an injected {@link SyncSocket}. All
- * environment concerns — reconnect/backoff/heartbeat — live in the socket; all
- * Solid reactivity lives in the `createSyncServiceSource` wrapper.
+ * Transport-agnostic sync-service source.
  */
 export class SyncServiceSource implements LiveSyncSource {
-  readonly documentId: string;
+  public readonly documentId: string;
 
   private readonly ws: SyncSocket;
   private readonly newId: () => string;
@@ -98,7 +94,7 @@ export class SyncServiceSource implements LiveSyncSource {
   private initialSyncReceived = false;
   private readonly initialSyncPromise: ResultAsync<InitialSync, TimeoutError>;
 
-  constructor(
+  public constructor(
     ws: SyncSocket,
     documentId: string,
     options: SyncServiceSourceOptions = {}
@@ -136,19 +132,24 @@ export class SyncServiceSource implements LiveSyncSource {
     this.ws.addEventListener(WebsocketEvent.Message, this.onMessage);
     this.ws.addEventListener(WebsocketEvent.Reconnect, this.onReconnect);
 
-    // When the browser regains connectivity or the tab becomes visible again,
-    // kick the connection immediately instead of waiting out the current
-    // backoff timer. No-ops in non-DOM environments (e.g. the worker).
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', this.onOnline);
-      document.addEventListener('visibilitychange', this.onVisibilityChange);
-    }
+    this.registerEnvironmentListeners();
   }
 
-  doInitialSync = (): ResultAsync<InitialSync, TimeoutError> =>
+  /**
+   * When the browser regains connectivity or the tab becomes visible again,
+   * kick the connection immediately instead of waiting out the current backoff
+   * timer. No-ops in non-DOM environments (e.g. the worker).
+   */
+  private registerEnvironmentListeners(): void {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('online', this.onOnline);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+  }
+
+  public doInitialSync = (): ResultAsync<InitialSync, TimeoutError> =>
     this.initialSyncPromise;
 
-  listen: LiveSyncSource['listen'] = (listener) => {
+  public listen: LiveSyncSource['listen'] = (listener) => {
     this.listeners.add(listener);
     // Flush anything that arrived before the first listener attached.
     if (this.buffered.length > 0) {
@@ -158,10 +159,10 @@ export class SyncServiceSource implements LiveSyncSource {
     return () => this.listeners.delete(listener);
   };
 
-  status: LiveSyncSource['status'] = () =>
+  public status: LiveSyncSource['status'] = () =>
     mapToSyncStatus(this.ws.connectionState);
 
-  pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
+  public pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
     if (!this.initialSyncReceived) return false;
     if (updates.length === 0) return true;
 
@@ -180,23 +181,18 @@ export class SyncServiceSource implements LiveSyncSource {
     return acked;
   };
 
-  pushAwareness = (awareness: RawUpdate): void => {
+  public pushAwareness = (awareness: RawUpdate): void => {
     // Awareness is ephemeral (cursor positions with a short server-side TTL),
-    // so never let it sit in the send buffer: replaying a backlog of stale
-    // cursor moves after a reconnect would flood the room for no benefit.
-    // Drop it unless the socket is open right now — the next local cursor
-    // move re-publishes fresh state anyway. (Read connectionState rather than
-    // the underlying socket's readyState: the latter throws while the socket is
-    // momentarily absent during connect/reconnect.)
+    // so never let it sit in the send buffer
     if (this.ws.connectionState !== WebsocketConnectionState.Open) return;
     this.ws.send(FromPeer.fromPeerAwareness({ awareness }));
   };
 
-  registerPeerId = (peerId: bigint): void => {
+  public registerPeerId = (peerId: bigint): void => {
     this.ws.send(FromPeer.fromPeerRegisterId({ peerid: peerId }));
   };
 
-  requestSnapshot = (): ResultAsync<RawUpdate, TimeoutError> => {
+  public requestSnapshot = (): ResultAsync<RawUpdate, TimeoutError> => {
     this.ws.send(FromPeer.fromPeerRequestSnapshot({}));
     return ResultAsync.fromPromise(
       this.awaitMessage(
@@ -207,7 +203,7 @@ export class SyncServiceSource implements LiveSyncSource {
     ).map((message) => (message.value as RemoteSnapshot).snapshot);
   };
 
-  requestUpdatesSince = (
+  public requestUpdatesSince = (
     vv: VersionVector
   ): ResultAsync<RawUpdate, TimeoutError> => {
     const encodedVv = vv.encode();
@@ -223,7 +219,7 @@ export class SyncServiceSource implements LiveSyncSource {
     ).map((message) => (message.value as RemoteUpdateSince).update);
   };
 
-  reconnect = (): void => {
+  public reconnect = (): void => {
     // Only force a new connection when the socket is actually down. Tearing
     // down an OPEN socket caused reconnect storms, and tearing down a
     // CONNECTING one aborts an attempt that may be about to succeed. Liveness
@@ -231,7 +227,7 @@ export class SyncServiceSource implements LiveSyncSource {
     this.ws.reconnectIfDisconnected();
   };
 
-  cleanup = (): void => {
+  public cleanup = (): void => {
     logSyncService({
       documentId: this.documentId,
       level: 'debug',

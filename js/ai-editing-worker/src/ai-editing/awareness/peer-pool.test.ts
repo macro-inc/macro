@@ -74,6 +74,7 @@ describe('PeerPool', () => {
     const a = await pool.borrow();
     const b = await pool.borrow();
     expect(pool.outstanding).toBe(2);
+    expect(b.name).not.toBe(a.name);
 
     // A third borrow must wait — the pool is full.
     let third: { name: string } | undefined;
@@ -91,7 +92,6 @@ describe('PeerPool', () => {
     expect(third).toBe(c);
     expect(c.name).toBe(a.name);
     expect(pool.outstanding).toBe(2);
-    void b;
   });
 
   it('blocks borrows past max until a slot frees, reusing the freed name', async () => {

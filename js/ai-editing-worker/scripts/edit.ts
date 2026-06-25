@@ -21,7 +21,7 @@ const {
 			.option("user-token", { type: "string", demandOption: true, describe: "user JWT or full browser cookie string" })
 			.option("port", { type: "number", default: 8933, describe: "worker port" })
 			.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
-			.option("provider", { type: "string", default: "anthropic", describe: "default provider for all roles: anthropic, cerebras, openai" })
+			.option("provider", { type: "string", describe: "override provider for all roles: anthropic, cerebras, openai (defaults are per-role)" })
 			.option("supervisor-provider", { type: "string", describe: "provider for the supervisor agent (overrides --provider)" })
 			.option("interpret-provider", { type: "string", describe: "provider for the interpret pass (overrides --provider)" })
 			.option("coding-provider", { type: "string", describe: "provider for the coding agents (overrides --provider)" })
@@ -38,16 +38,34 @@ if (!documentId || !prompt) {
 	process.exit(1);
 }
 
-const DEFAULT_MODELS: Record<string, string> = {
+// Per-role defaults mirror what the document service hardcodes when it calls
+// the worker (rust/.../editing_worker_client.rs).
+const DEFAULT_MODELS = {
+	supervisor: { provider: "anthropic", model: "claude-haiku-4-5-20251001" },
+	interpret: { provider: "anthropic", model: "claude-sonnet-4-6" },
+	coding: { provider: "cerebras", model: "gpt-oss-120b" },
+} as const;
+
+// Fallback model when a role's provider is overridden but its model is not.
+const PROVIDER_FALLBACK_MODEL: Record<string, string> = {
 	anthropic: "claude-sonnet-4-6",
 	cerebras: "gpt-oss-120b",
 	openai: "gpt-4o",
 };
 
-const makeModel = (modelId: string | undefined, roleProvider: string) => ({
-	provider: roleProvider,
-	model: modelId ?? DEFAULT_MODELS[roleProvider] ?? "claude-sonnet-4-6",
-});
+const makeModel = (
+	role: keyof typeof DEFAULT_MODELS,
+	providerOverride: string | undefined,
+	modelOverride: string | undefined,
+) => {
+	const provider = providerOverride ?? DEFAULT_MODELS[role].provider;
+	const model =
+		modelOverride ??
+		(provider === DEFAULT_MODELS[role].provider
+			? DEFAULT_MODELS[role].model
+			: (PROVIDER_FALLBACK_MODEL[provider] ?? DEFAULT_MODELS[role].model));
+	return { provider, model };
+};
 
 const workerUrl = workerUrlOpt ?? `http://localhost:${port}`;
 
@@ -68,9 +86,9 @@ const res = await fetch(`${workerUrl}/edit`, {
 		documentId,
 		prompt,
 		models: {
-			supervisor: makeModel(supervisorModel as string | undefined, (supervisorProvider ?? provider) as string),
-			interpret: makeModel(interpretModel as string | undefined, (interpretProvider ?? provider) as string),
-			coding: makeModel(codingModel as string | undefined, (codingProvider ?? provider) as string),
+			supervisor: makeModel("supervisor", (supervisorProvider ?? provider) as string | undefined, supervisorModel as string | undefined),
+			interpret: makeModel("interpret", (interpretProvider ?? provider) as string | undefined, interpretModel as string | undefined),
+			coding: makeModel("coding", (codingProvider ?? provider) as string | undefined, codingModel as string | undefined),
 		},
 		debug,
 	}),

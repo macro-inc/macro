@@ -1,11 +1,6 @@
 import { $isLinkNode } from '@lexical/link';
 import { $isMarkNode } from '@lexical/mark';
-import {
-  $createTextNode,
-  $getRoot,
-  $isTextNode,
-  type ElementNode,
-} from 'lexical';
+import { $getRoot, $isTextNode, type ElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { serializeWithXml } from '../utils';
@@ -17,69 +12,12 @@ import {
   $highlightInBlock,
   $prependText,
   $replaceString,
-  $replaceTextInBlock,
   $wrapInLink,
 } from './inline';
 import { $blockById } from './locate';
 import { collectTextNodes } from './tree';
 
-// ============================================================================
 describe('inline ops: scope + counts', () => {
-  it('$replaceTextInBlock — frog -> bold toad, all:true returns 2', () => {
-    const { session, ids } = setup('the frog ate the frog');
-    const id = ids[0];
-    const count = edit(session, () =>
-      $replaceTextInBlock(
-        $blockById(session, id),
-        'frog',
-        () => $createTextNode('toad').toggleFormat('bold'),
-        { kind: 'all' }
-      )
-    );
-    expect(count).toBe(2);
-    const xml = serializeWithXml(session);
-    expect(xml).toContain('toad');
-    expect(xml).not.toContain('frog');
-    expect(xml).toContain(`id="${id}"`);
-  });
-
-  it('$replaceTextInBlock — default targets only the first match (count 1)', () => {
-    const { session, ids } = setup('the frog ate the frog');
-    const id = ids[0];
-    const count = edit(session, () =>
-      $replaceTextInBlock($blockById(session, id), 'frog', () =>
-        $createTextNode('toad')
-      )
-    );
-    expect(count).toBe(1);
-    const xml = serializeWithXml(session);
-    // first frog replaced, second remains
-    const firstToad = xml.indexOf('toad');
-    const remainingFrog = xml.indexOf('frog');
-    expect(firstToad).toBeGreaterThanOrEqual(0);
-    expect(remainingFrog).toBeGreaterThan(firstToad);
-  });
-
-  it('$replaceTextInBlock — { nth } is 1-based', () => {
-    const { session, ids } = setup('the frog ate the frog');
-    const id = ids[0];
-    const count = edit(session, () =>
-      $replaceTextInBlock(
-        $blockById(session, id),
-        'frog',
-        () => $createTextNode('toad'),
-        { kind: 'nth', n: 2 }
-      )
-    );
-    expect(count).toBe(1);
-    const xml = serializeWithXml(session);
-    // first frog remains, second replaced
-    const firstFrog = xml.indexOf('frog');
-    const toad = xml.indexOf('toad');
-    expect(firstFrog).toBeGreaterThanOrEqual(0);
-    expect(toad).toBeGreaterThan(firstFrog);
-  });
-
   it('$formatTextInBlock — bold a substring (count), no-match returns 0', () => {
     const { session, ids } = setup('the Bluejay launch');
     const id = ids[0];
@@ -89,10 +27,16 @@ describe('inline ops: scope + counts', () => {
       })
     );
     expect(count).toBe(1);
-    const xml = serializeWithXml(session);
-    expect(xml).toContain('Bluejay');
-    expect(xml).toContain(`id="${id}"`);
-
+    const bluejayNode = read(session, () => {
+      const block = $getRoot().getFirstChild() as ElementNode;
+      for (const c of block.getChildren()) {
+        if ($isTextNode(c) && c.getTextContent() === 'Bluejay') return c;
+      }
+      return null;
+    });
+    expect(bluejayNode).not.toBeNull();
+    expect(read(session, () => bluejayNode!.hasFormat('bold'))).toBe(true);
+    expect(serializeWithXml(session)).toContain(`id="${id}"`);
   });
 
   it('$formatTextInBlock — strike maps to strikethrough', () => {
@@ -290,10 +234,8 @@ describe('inline ops: scope + counts', () => {
     expect(segs.filter((x) => x.bold).map((x) => x.text)).toEqual(['X']);
     expect(segs.filter((x) => !x.bold).map((x) => x.text)).toEqual(['X']);
   });
-
 });
 
-// ============================================================================
 // Links and marks do NOT round-trip through serializeWithXml, so inspect the
 // node tree with $isLinkNode / $isMarkNode.
 describe('deferred: links / highlight (node-tree assertions)', () => {

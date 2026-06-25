@@ -59,7 +59,9 @@ export class DocumentEditor {
   private mintRef(): Ref {
     const ref = this.refs[this.refIdx++];
     if (!ref) {
-      throw new EditError('too many inserts in one snippet (id pool exhausted)');
+      throw new EditError(
+        'too many inserts in one snippet (id pool exhausted)'
+      );
     }
     this.valid.add(ref);
     return ref;

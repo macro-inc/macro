@@ -43,7 +43,6 @@ describe('mergeRanges', () => {
       [5, 7],
     ]);
   });
-
 });
 
 describe('indexXmlRanges', () => {

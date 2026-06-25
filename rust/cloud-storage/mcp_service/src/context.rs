@@ -11,7 +11,10 @@ use channels::{
 use documents::{
     domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
-    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
+    outbound::{
+        editing_worker_client::ReqwestEditingWorkerClient,
+        pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter,
+    },
 };
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
@@ -28,7 +31,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::{
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -156,6 +160,7 @@ async fn build_tool_context(
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
+    let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
 
     let search_service_client =
         SearchServiceClient::new(document_storage_service_auth_key, dss_url);
@@ -258,6 +263,7 @@ async fn build_tool_context(
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
+        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
