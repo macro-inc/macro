@@ -997,3 +997,22 @@ fn paginate_has_more_when_parent_count_exceeds_page_size() {
         _ => panic!("expected NotDone cursor, got {cursor:?}"),
     }
 }
+
+#[test]
+fn paginate_page_size_zero_terminates() {
+    // page_size 0 passes request validation, and the query fetches size(1) so a
+    // hit can return. The page is empty (take(0)) with no anchor, so the cursor
+    // must be Done — a NotDone here would loop the caller on empty pages.
+    let d1 = "00000000-0000-0000-0000-000000000001"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let hits = vec![doc_hit_with_chunks(d1, 1_779_000_100, 5)];
+
+    let (results, cursor) = paginate_unified_hits(hits, 0);
+
+    assert!(results.is_empty(), "page_size 0 yields no results");
+    assert!(
+        cursor.is_done(),
+        "no anchor to resume from must terminate, not loop, got {cursor:?}"
+    );
+}

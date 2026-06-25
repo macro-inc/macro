@@ -671,13 +671,17 @@ fn paginate_unified_hits(
         .flat_map(expand_hit_into_search_hits)
         .collect();
 
-    let cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor::UpdatedAt {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at.unwrap_or_else(Utc::now),
-        }))
-    } else {
-        SearchCursorOption::Done
+    // Continue only with a real anchor to resume from. A page_size of 0 yields
+    // an empty page (nothing to anchor on), so emitting NotDone there would loop
+    // the caller on identical empty pages. Return a terminal cursor instead.
+    let cursor = match results.last() {
+        Some(last) if has_more && page_size > 0 => {
+            SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+                entity_id: last.entity_id,
+                updated_at: last.updated_at.unwrap_or_else(Utc::now),
+            }))
+        }
+        _ => SearchCursorOption::Done,
     };
 
     (results, cursor)
