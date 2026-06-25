@@ -760,7 +760,13 @@ function NotificationInboxGroupItemsPanel(props: {
                 selected={props.selectedItem?.id === item.id}
               >
                 <InboxItemActionLocationThirdRowLayout
+                  item={item}
                   nested
+                  selected={props.selectedItem?.id === item.id}
+                  unread={Boolean(
+                    item.unread ||
+                      item.subItems?.some((subItem) => subItem.unread)
+                  )}
                   onClick={() => props.onSelect(item)}
                 />
               </InboxItem.Root>
@@ -1179,7 +1185,15 @@ function NotificationInboxList(props: {
                     selected={props.selectedItem?.id === row.item.id}
                   >
                     <InboxItemActionLocationThirdRowLayout
+                      expanded={isExpanded(row.item)}
+                      highlighted={focusedRow()?.item.id === row.item.id}
+                      item={row.item}
                       nested={row.depth > 0}
+                      selected={props.selectedItem?.id === row.item.id}
+                      unread={Boolean(
+                        row.item.unread ||
+                          row.item.subItems?.some((subItem) => subItem.unread)
+                      )}
                       onClick={onItemClick}
                       onSelectRelatedDocument={onSelectRelatedDocument}
                       onToggleExpanded={() =>
