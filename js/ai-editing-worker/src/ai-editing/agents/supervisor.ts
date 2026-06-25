@@ -58,7 +58,6 @@ export async function supervisor(
       interpretation.totalUsage
     );
     intent = interpretation.text;
-    console.log(`\n[intent]\n${intent}`);
   }
 
   const tools = {

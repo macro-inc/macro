@@ -38,7 +38,6 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
         runner: opts.runner,
         onOps: opts.onOps,
       });
-      if (result.startsWith('error:')) console.log(`[runCode error] ${result}`);
       return result;
     },
   });

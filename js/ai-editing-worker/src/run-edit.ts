@@ -130,11 +130,10 @@ export async function runEditSession(
   engine.start();
 
   // Each `propagate` syncs the *current* session state through the engine. We
-  // serialize on a promise chain (the executor calls `propagate` synchronously
-  // between animated ops) and snapshot inside the task so it reflects any
-  // remote reconcile that landed since — then switch to a fresh peer id from the
-  // AI-reserved block before the commit so each edit batch is attributed to a
-  // distinct author a history viewer can recognize as AI.
+  // serialize on a promise chain. By the time we are done we have a queue of
+  // stuff that we have to finish waiting to complete.
+  //
+  // The agents don't care WHEN their changes are applied.
   let chain: Promise<void> = Promise.resolve();
   const propagate = () => {
     chain = chain.then(async () => {
@@ -156,6 +155,7 @@ export async function runEditSession(
   };
 
   const allOps: DocumentOp[] = [];
+  // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
   const startedAt = new Date();
   const initialDocument = args.debug ? serializeWithXml(session) : undefined;
@@ -184,20 +184,10 @@ export async function runEditSession(
       }
     );
 
-    // A final propagate catches any Prism tokenization that settled after the
-    // last edit's propagate (its code-highlight nodes are otherwise unsynced).
     propagate();
     // Drain the last queued propagate + ensure every commit reached the server
     // before we disconnect.
     await chain;
-    // Debug: log block types in the committed Loro doc to verify block-type changes landed.
-    const loroBlocks = (manager.doc.toJSON() as any)?.root?.children;
-    if (Array.isArray(loroBlocks)) {
-      console.log(
-        '[loro-debug] committed block types:',
-        loroBlocks.map((b: any) => `${b?.type}/${b?.$?.id}`)
-      );
-    }
     await wal.flush();
 
     const usage = totalUsage.toEntries();

@@ -171,14 +171,6 @@ function xmlWindow(xml: string, range: ContextRange, padding = 2): string {
   return numbered.slice(lo, hi + 1).join('\n');
 }
 
-function describeContextRange(range: ContextRange): string {
-  const ids = range.ids.length ? ` ids: ${range.ids.join(',')}` : ' ids: none';
-  const roots = range.rootIds.length
-    ? ` roots: ${range.rootIds.join(',')}`
-    : '';
-  return `lines ${range.startLine}-${range.endLine} (${range.source};${ids}${roots})`;
-}
-
 /** A borrowed writer identity (its own cursor). `release` clears the cursor and
  *  returns the peer to the pool; call it when the writer ends. */
 export type Writer = { awarenessSource: AwarenessSource; release: () => void };
@@ -216,7 +208,6 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     onCoderResult,
   } = opts;
   const serialize = opts.serialize ?? serializeWithXml;
-  let round = 0;
   return tool({
     description:
       'spawn a writer to carry out an edit instruction on the document',
@@ -238,18 +229,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         .describe('edit instructions to run as one parallel batch'),
     }),
     execute: async ({ edits }) => {
-      round += 1;
       const xml = serializeWithXml(session);
       const contexts = edits.map((e) =>
         computeContextRange(xml, e.editing_instruction)
-      );
-      console.log(
-        `\n[round ${round}] ${edits.length} edit(session):\n${edits
-          .map(
-            (e, i) =>
-              `  ${i + 1}. ${e.editing_instruction} [${describeContextRange(contexts[i]!)}]`
-          )
-          .join('\n')}`
       );
       // Writers run concurrently (distinct cursors); each applies its own ops
       // serially via editor.update, so the shared session never tears.
@@ -269,10 +251,6 @@ export function createDispatchTool(opts: DispatchToolOptions) {
               runner,
               onOps,
             });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[dispatch] coder ${i + 1} threw: ${msg}`);
-            throw err;
           } finally {
             writer.release();
           }
@@ -282,9 +260,6 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         tracker.add(childModel as { modelId: string }, res.totalUsage);
         const blocked = findBlocked(res);
         if (blocked) {
-          console.log(
-            `[round ${round}] writer ${i + 1} BLOCKED: ${blocked.message}`
-          );
           return `${i + 1}. ⚠ BLOCKED -- ${blocked.message}.`;
         }
         return `${i + 1}. ✓ APPLIED`;
