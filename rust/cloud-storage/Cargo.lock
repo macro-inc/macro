@@ -13217,6 +13217,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
+ "macro_queues",
  "models_bulk_upload",
  "s3_key",
  "serde",
