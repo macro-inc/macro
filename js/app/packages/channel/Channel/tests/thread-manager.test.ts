@@ -5,16 +5,10 @@ import { createThreadManager } from '../thread-manager';
 describe('createThreadManager', () => {
   it('hydrates thread state from a snapshot', () => {
     createRoot((dispose) => {
-      const replyInputState = {
-        value: 'draft reply',
-        mentions: [],
-        attachments: [],
-      };
       const manager = createThreadManager({
         expanded: { isExpanded: true },
         replying: {
           isReplying: true,
-          replyInputState,
         },
       });
 
@@ -25,7 +19,6 @@ describe('createThreadManager', () => {
       expect(expanded.isReplying()).toBe(false);
       expect(replying.isExpanded()).toBe(true);
       expect(replying.isReplying()).toBe(true);
-      expect(replying.replyInputState()).toEqual(replyInputState);
 
       dispose();
     });
@@ -56,9 +49,6 @@ describe('createThreadManager', () => {
         },
         expanded: {
           isExpanded: true,
-        },
-        draft: {
-          replyInputState,
         },
       });
 

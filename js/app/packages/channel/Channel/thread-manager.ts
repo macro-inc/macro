@@ -8,7 +8,6 @@ type ThreadStore = Record<string, ThreadState>;
 export type ThreadStateSnapshot = {
   isExpanded?: boolean;
   isReplying?: boolean;
-  replyInputState?: InputSnapshot;
 };
 
 export type ThreadManagerSnapshot = Record<string, ThreadStateSnapshot>;
@@ -26,7 +25,7 @@ export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
       createSignal<boolean>(initialIsReplying);
     const [replyInputState, setReplyInputState] = createSignal<
       InputSnapshot | undefined
-    >(snapshot?.replyInputState);
+    >();
     const [replyInputEl, setReplyInputEl] = createSignal<
       HTMLElement | undefined
     >();
@@ -75,14 +74,14 @@ export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
     return initThreadState(threadId);
   }
 
+  // Passed up via messagesHandle to get called by split history captor on navigation, so that we can restore thread state on history navigation
   function getSnapshot(): ThreadManagerSnapshot | undefined {
     const snapshot: ThreadManagerSnapshot = { ...(initialSnapshot ?? {}) };
 
     for (const [threadId, state] of Object.entries(threadStore)) {
       const isExpanded = state.isExpanded();
       const isReplying = state.isReplying();
-      const replyInputState = state.replyInputState();
-      if (!isExpanded && !isReplying && replyInputState === undefined) {
+      if (!isExpanded && !isReplying) {
         delete snapshot[threadId];
         continue;
       }
@@ -90,7 +89,6 @@ export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
       snapshot[threadId] = {
         ...(isExpanded ? { isExpanded } : {}),
         ...(isReplying ? { isReplying } : {}),
-        ...(replyInputState !== undefined ? { replyInputState } : {}),
       };
     }
 
