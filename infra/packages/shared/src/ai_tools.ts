@@ -90,11 +90,6 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretOutput({ name: MCP_CREDENTIALS_KEY_SECRET_NAME })
     .apply((s) => s.arn);
 
-  const INTERNAL_AUTH_KEY_SECRET_NAME = `document-storage-service-auth-key-${stack}`;
-  const internalAuthKey: pulumi.Output<string> = aws.secretsmanager
-    .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_SECRET_NAME })
-    .apply((s) => s.secretString);
-
   const SLACK_MCP_CLIENT_ID = aws.secretsmanager
     .getSecretVersionOutput({ secretId: 'slack-mcp-client-id' })
     .apply((secret) => secret.secretString);
@@ -120,14 +115,6 @@ export function getAiToolsInfra(): AiToolsInfra {
     .apply((secret) => secret.secretString);
 
   const envVars: AiToolsInfra['envVars'] = [
-    {
-      name: 'INTERNAL_API_SECRET_KEY',
-      value: pulumi.interpolate`${internalAuthKey}`,
-    },
-    {
-      name: 'DOCUMENT_STORAGE_SERVICE_AUTH_KEY',
-      value: pulumi.interpolate`${internalAuthKey}`,
-    },
     {
       name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
       value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),

@@ -38,7 +38,6 @@ type CreateConvertServiceArgs = {
   isPrivate?: boolean;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
-  secretKeyArns: (pulumi.Output<string> | string)[];
   jobUpdateHandlerLambdaArn: pulumi.Output<string> | string;
 };
 
@@ -68,7 +67,6 @@ export class ConvertService extends pulumi.ComponentResource {
       ecsClusterArn,
       containerEnvVars,
       cloudStorageClusterName,
-      secretKeyArns,
       jobUpdateHandlerLambdaArn,
     }: CreateConvertServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -77,28 +75,6 @@ export class ConvertService extends pulumi.ComponentResource {
     this.domain = `https://${SERVICE_DOMAIN_NAME}`;
     this.tags = tags;
     this.cloudStorageClusterName = cloudStorageClusterName;
-
-    const secretsManagerPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-secrets-manager-policy`,
-      {
-        name: `${BASE_NAME}-secrets-manager-policy-${stack}`,
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: [
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ],
-              Resource: [...secretKeyArns],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
 
     const queuePolicy = new aws.iam.Policy(
       `${BASE_NAME}-sqs-policy`,
@@ -156,11 +132,7 @@ export class ConvertService extends pulumi.ComponentResource {
           ],
         },
         tags: this.tags,
-        managedPolicyArns: [
-          secretsManagerPolicy.arn,
-          queuePolicy.arn,
-          lambdaInvokePolicy.arn,
-        ],
+        managedPolicyArns: [queuePolicy.arn, lambdaInvokePolicy.arn],
       },
       { parent: this }
     );
