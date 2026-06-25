@@ -474,6 +474,16 @@ export const DisplayResults = z.object({ view: z.any() });
 
 export const DisplayResultsResponse = z.object({ message: z.string() });
 
+export const EditDocument = z.object({
+  document_id: z.string(),
+  instructions: z.string(),
+});
+
+export const EditDocumentResponse = z.object({
+  clarification: z.union([z.string(), z.null()]).optional(),
+  summary: z.string(),
+});
+
 export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
