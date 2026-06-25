@@ -1,8 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
+import {
+  defaultModelForPlan,
+  FREE_MODELS,
+  PAID_MODELS,
+} from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import { Model, type ToolSet } from '@core/component/AI/types';
+import type { Model, ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -48,20 +54,26 @@ export function ChatInput(props: ChatInputComponentProps) {
   const model = input.model;
   const generating = input.isGenerating;
   const { showPaywall } = usePaywallState();
+  const hasPaidAccess = useHasPaidAccess();
 
-  // Every model is offered in the picker; the backend enforces plan
-  // entitlements on send (a free user picking a pro model is rejected there).
+  // Free and paid users see different selector lists. Free users get only the
+  // free models (Haiku); premium models aren't shown at all. The 403 -> paywall
+  // path is the backstop for anything that slips through to the backend.
   const modelOptions = createMemo(() =>
-    Object.values(Model).map((id) => ({ id, available: true }))
+    (hasPaidAccess() ? PAID_MODELS : FREE_MODELS).map((id) => ({
+      id,
+      available: true,
+    }))
   );
 
-  // If the selected model isn't a known id (e.g. a stale persisted value),
-  // fall back to the first one so we never send something unroutable.
+  // Keep the selected model valid for the current plan: if it isn't a known id
+  // (e.g. a stale persisted value) or isn't available to this user (e.g. a free
+  // user defaulted to Opus), fall back to the plan default so we never send
+  // something unroutable or something the backend rejects.
   createEffect(() => {
     const options = modelOptions();
-    if (options.some((o) => o.id === model())) return;
-    const [first] = options;
-    if (first) input.setModel(first.id);
+    if (options.some((o) => o.id === model() && o.available)) return;
+    input.setModel(defaultModelForPlan(hasPaidAccess()));
   });
 
   let containerRef!: HTMLDivElement;
