@@ -10864,6 +10864,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_queues",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",

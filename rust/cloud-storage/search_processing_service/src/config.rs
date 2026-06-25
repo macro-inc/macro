@@ -6,7 +6,6 @@ use macro_service_urls::LexicalServiceUrl;
 
 env_vars! {
     pub struct DatabaseUrl;
-    pub struct SearchEventQueue;
     pub struct OpensearchUrl;
     pub struct OpensearchUsername;
     pub struct OpensearchPassword;
@@ -88,8 +87,6 @@ pub struct Config {
     #[macro_config_default(8080)]
     pub port: usize,
 
-    /// The search text extractor queue
-    pub search_event_queue: SearchEventQueue,
     /// The queue max messages per poll
     #[macro_config_default(10)]
     pub queue_max_messages: i32,

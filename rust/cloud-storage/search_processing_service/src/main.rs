@@ -69,8 +69,9 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
+    let search_event_queue = macro_queues::SearchEventQueue::new()?;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.search_event_queue);
+        .search_event_queue(&search_event_queue);
 
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
@@ -145,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.search_event_queue.to_string(),
+            search_event_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
