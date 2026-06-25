@@ -80,15 +80,16 @@ async fn main() -> anyhow::Result<()> {
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
+    let convert_queue = macro_queues::ConvertQueue::new()?;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))
-        .convert_queue(&config.convert_queue);
+        .convert_queue(&convert_queue);
     tracing::trace!("initialized sqs client");
 
     if !cfg!(feature = "disable_worker") {
         let sqs_client = aws_sdk_sqs::Client::new(&queue_aws_config);
         let sqs_worker = sqs_worker::SQSWorker::new(
             sqs_client,
-            config.convert_queue.to_string(),
+            convert_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );

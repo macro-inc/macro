@@ -36,6 +36,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
+macro_queues = { path = "../macro_queues" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
