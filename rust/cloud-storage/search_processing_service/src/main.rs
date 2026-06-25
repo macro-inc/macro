@@ -12,10 +12,8 @@ use anyhow::Context;
 use config::{Config, Environment};
 use lexical_client::LexicalClient;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
-use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -107,8 +105,6 @@ async fn main() -> anyhow::Result<()> {
         return Err(e);
     }
 
-    let internal_auth_key = LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?);
-
     // Backfills run against the read-replica when available so they don't
     // contend with writes on the primary. Queue workers always read from the
     // primary because replica lag would cause them to miss rows they are
@@ -143,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         let lexical_client = LexicalClient::new(
-            internal_auth_key.as_ref().to_string(),
+            config.internal_api_key.to_string(),
             config.lexical_service_url.clone(),
         );
 
@@ -179,9 +175,9 @@ async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(ApiContext {
         db,
+        internal_api_key: config.internal_api_key.clone(),
         sqs_client,
         opensearch_client: Arc::new(opensearch_client),
-        internal_auth_key,
         config: Arc::new(config),
         backfill_service,
         backfill_jobs,

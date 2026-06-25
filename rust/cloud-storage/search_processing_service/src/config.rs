@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use macro_service_urls::LexicalServiceUrl;
 
 env_vars! {
@@ -137,6 +138,9 @@ pub struct Config {
     /// TTL applied to the `expires_at` attribute on each job record. Acts as
     /// the GC mechanism — DynamoDB removes items shortly after this elapses.
     pub backfill_job_ttl_seconds: BackfillJobTtlSeconds,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
