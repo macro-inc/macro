@@ -17,6 +17,19 @@ env_vars! {
     pub struct DdEnv;
 }
 
+/// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
+///
+/// [`EnvFilter::from_default_env`] only reads the process environment, so a `RUST_LOG` set through
+/// `APP_SECRETS_JSON` (the way the rest of our config is injected, see `macro_env_var`) is ignored
+/// and our tracing filter ends up wrong. This reads `RUST_LOG` the same way `macro_env_var` does —
+/// `APP_SECRETS_JSON` first, then the process environment as a fallback.
+fn rust_log_env_filter() -> EnvFilter {
+    match macro_env_var::maybe_read_env("RUST_LOG") {
+        Some(directives) => EnvFilter::builder().parse_lossy(directives),
+        None => EnvFilter::from_default_env(),
+    }
+}
+
 /// unit struct which defines the behaviour for instantiation
 #[derive(Debug)]
 pub struct MacroEntrypoint {
@@ -72,7 +85,7 @@ impl MacroEntrypoint {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
                 tracing_subscriber::fmt()
                     .with_ansi(true)
-                    .with_env_filter(EnvFilter::from_default_env())
+                    .with_env_filter(rust_log_env_filter())
                     .with_file(true)
                     .with_line_number(true)
                     .pretty()
@@ -120,7 +133,7 @@ impl MacroEntrypoint {
                     .event_format(datadog_fmt::DatadogFormat { inner: json_format });
 
                 Registry::default()
-                    .with(EnvFilter::from_default_env())
+                    .with(rust_log_env_filter())
                     .with(fmt_layer)
                     .with(otel_layer)
                     .init();
