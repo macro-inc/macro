@@ -5,7 +5,7 @@
 mod datadog_fmt;
 
 use macro_env::Environment;
-use macro_env_var::env_vars;
+use macro_env_var::{env_vars, maybe_env_var};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
@@ -17,6 +17,10 @@ env_vars! {
     pub struct DdEnv;
 }
 
+maybe_env_var! {
+    pub struct RustLog;
+}
+
 /// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
 ///
 /// [`EnvFilter::from_default_env`] only reads the process environment, so a `RUST_LOG` set through
@@ -24,8 +28,8 @@ env_vars! {
 /// and our tracing filter ends up wrong. This reads `RUST_LOG` the same way `macro_env_var` does —
 /// `APP_SECRETS_JSON` first, then the process environment as a fallback.
 fn rust_log_env_filter() -> EnvFilter {
-    match macro_env_var::maybe_read_env("RUST_LOG") {
-        Some(directives) => EnvFilter::builder().parse_lossy(directives),
+    match RustLog::new() {
+        Some(value) => EnvFilter::builder().parse_lossy(value),
         None => EnvFilter::from_default_env(),
     }
 }
