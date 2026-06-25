@@ -77,9 +77,6 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         .await
         .context("failed to initialize JWT validation args")?;
 
-    let internal_auth_key =
-        secretsmanager_client::LocalOrRemoteSecret::Local(config.internal_api_secret_key.clone());
-
     let sync_service_auth_key = LocalOrRemoteSecret::new_from_secret_manager(
         config.sync_service_auth_key.as_ref().to_owned(),
         &secretsmanager_client,
@@ -92,7 +89,6 @@ pub async fn build_context(config: &Config) -> anyhow::Result<McpContext> {
         &db,
         &secretsmanager_client,
         sqs_client,
-        internal_auth_key.as_ref().to_string(),
         config.document_storage_service_auth_key.as_ref().to_owned(),
         sync_service_auth_key.as_ref().to_owned(),
     )
@@ -120,7 +116,6 @@ async fn build_tool_context(
     db: &PgPool,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
     sqs_client: sqs_client::SQS,
-    internal_auth_key: String,
     document_storage_service_auth_key: String,
     sync_service_auth_key: String,
 ) -> anyhow::Result<ToolServiceContext> {
@@ -133,12 +128,12 @@ async fn build_tool_context(
         SearchServiceClient::new(document_storage_service_auth_key, dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        internal_auth_key.clone(),
+        config.internal_api_key.to_string(),
         lexical_service_url,
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
-        internal_auth_key.clone(),
+        config.internal_api_key.to_string(),
         email_service_url,
     ));
 

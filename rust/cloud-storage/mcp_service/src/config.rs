@@ -9,7 +9,7 @@ use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-pub use macro_middleware::auth::internal_access::InternalApiSecretKey;
+pub use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
     /// SQS URL for the email scheduled queue, consumed by the AI tools.
@@ -89,8 +89,8 @@ pub struct Config {
     pub google_client_secret_key: GoogleClientSecretKey,
     pub redis_url: RedisUrl,
     pub app_base_url: AppBaseUrl,
-    /// Shared secret for authenticating internal service-to-service calls.
-    pub internal_api_secret_key: InternalApiSecretKey,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
