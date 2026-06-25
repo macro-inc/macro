@@ -8,6 +8,8 @@ name: Build macOS DMG
         description: Git ref to check out and build
         required: true
         type: string
+permissions:
+  contents: write
 jobs:
   build-dmg:
     name: Build macOS DMG
@@ -170,12 +172,12 @@ jobs:
           exit 1
         fi
 
-        (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
+        (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
-    - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@v2
       with:
-        name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
-        path: artifacts/*
-        if-no-files-found: error
-        retention-days: '30'
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: artifacts/*
+        fail_on_unmatched_files: 'true'

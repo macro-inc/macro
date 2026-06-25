@@ -11,6 +11,8 @@ name: Build Desktop on Tag
       ref:
         description: Release tag to build (v* or refs/tags/v*). Defaults to the selected protected ref or release tag.
         type: string
+permissions:
+  contents: write
 jobs:
   resolve-ref:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')
@@ -182,15 +184,15 @@ jobs:
         fi
         cp -v "${appimages[@]}" artifacts/
         chmod 0755 artifacts/*.AppImage
-        (cd artifacts && sha256sum -- *.AppImage > SHA256SUMS)
+        (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
       shell: bash
-    - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@v2
       with:
-        name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
-        path: artifacts/*
-        if-no-files-found: error
-        retention-days: '30'
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: artifacts/*
+        fail_on_unmatched_files: 'true'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -357,15 +359,15 @@ jobs:
           exit 1
         fi
 
-        (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
+        (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
-    - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@v2
       with:
-        name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
-        path: artifacts/*
-        if-no-files-found: error
-        retention-days: '30'
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: artifacts/*
+        fail_on_unmatched_files: 'true'
 concurrency:
   group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
   cancel-in-progress: true

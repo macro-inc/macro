@@ -36,4 +36,4 @@ if [ -s "$dylib_refs" ]; then
   exit 1
 fi
 
-(cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
+(cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
