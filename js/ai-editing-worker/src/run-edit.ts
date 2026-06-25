@@ -13,7 +13,7 @@ import {
   type MarkdownLoroSchemaType,
 } from '../../lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '../../lexical-core/plugins/nodeIdPlugin';
-import { supervisor } from './ai-editing/agents/supervisor';
+import { supervisor } from './ai-editing/agents';
 import {
   createEditingSession,
   loadSnapshot,

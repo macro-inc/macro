@@ -1,6 +1,6 @@
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
-import type { coder } from '../agents/coder';
+import type { coder } from '../agents';
 import type { Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
 import type { Doc } from '../doc/doc';
