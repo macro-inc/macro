@@ -14,8 +14,7 @@ use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use secretsmanager_client::LocalOrRemoteSecret;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -44,7 +43,7 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
-    pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
     pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,

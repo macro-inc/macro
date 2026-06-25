@@ -5,7 +5,6 @@ use email_service::config::Config;
 use email_service::pubsub::CrmMetadataResolver;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::{
     AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
 };
@@ -210,20 +209,18 @@ async fn main() -> anyhow::Result<()> {
         config.redis_rate_limit_window_secs,
     );
 
-    let internal_auth_key = InternalApiSecretKey::new()?;
-
     let sfs_client = StaticFileServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         StaticFileServiceUrl::new()?.to_string(),
     );
 
     let dss_client = DocumentStorageServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         DocumentStorageServiceUrl::new()?.to_string(),
     );
 
     let connection_gateway_client = connection_gateway_client::client::ConnectionGatewayClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
 

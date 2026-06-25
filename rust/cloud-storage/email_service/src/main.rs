@@ -15,9 +15,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
-use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -100,15 +98,13 @@ async fn main() -> anyhow::Result<()> {
         config.redis_rate_limit_window_secs,
     );
 
-    let internal_auth_key = InternalApiSecretKey::new()?;
-
     let sfs_client = StaticFileServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         StaticFileServiceUrl::new()?.to_string(),
     );
 
     let dss_client = DocumentStorageServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         DocumentStorageServiceUrl::new()?.to_string(),
     );
 
@@ -156,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
     ));
     api::setup_and_serve(ApiContext {
         db,
+        internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         auth_service_client,
         redis_client,
@@ -166,7 +163,6 @@ async fn main() -> anyhow::Result<()> {
         dss_client: Arc::new(dss_client),
         system_properties_service,
         jwt_args,
-        internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
         email_service,
         entity_access_service,
         email_thread_state,

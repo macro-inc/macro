@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -191,6 +192,9 @@ pub struct Config {
     // How long presigned urls should be valid for attachments
     #[macro_config_default(3600)]
     pub email_service_presigned_url_ttl_secs: u64,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
