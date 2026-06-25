@@ -13,6 +13,7 @@ import type {
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
+  ChannelThreadEntity,
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
@@ -54,12 +55,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Channel thread soup items are currently only exposed to AI tooling; the app
-// entity list does not have enough channel metadata to render them directly.
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'channelThread' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 
 type SoupEntity =
   | DocumentEntity
@@ -67,6 +63,7 @@ type SoupEntity =
   | ProjectEntity
   | EmailEntity
   | ChannelEntity
+  | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
   | ForeignEntity;
@@ -515,7 +512,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => item.tag !== 'channelThread';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -620,6 +617,36 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         participantIds: item.data.participants.map((p) => p.userId),
         summary: item.data.summary ?? undefined,
       } satisfies CallEntity;
+    })
+    .with({ tag: 'channelThread' }, (item) => {
+      const out: ChannelThreadEntity = {
+        type: 'channel_thread',
+        id: item.data.id,
+        name: blockNameToDefaultFile('channel'),
+        channelId: item.data.channel_id,
+        channelName: blockNameToDefaultFile('channel'),
+        messageId: item.data.id,
+        threadId: item.data.id,
+        senderId: item.data.sender_id,
+        sender: item.data.sender,
+        content: item.data.content,
+        attachments: item.data.attachments,
+        reactions: item.data.reactions,
+        ownerId: item.data.sender_id,
+        createdAt: item.data.created_at,
+        updatedAt: item.data.thread.latest_reply_at ?? item.data.updated_at,
+        sortTs: item.data.thread.latest_reply_at ?? item.data.updated_at,
+        editedAt: item.data.edited_at,
+        deletedAt: item.data.deleted_at,
+        thread: {
+          replyCount: item.data.thread.reply_count,
+          latestReplyAt: item.data.thread.latest_reply_at,
+          preview: item.data.thread.preview,
+        },
+        replyCount: item.data.thread.reply_count,
+        latestReplyAt: item.data.thread.latest_reply_at,
+      };
+      return out;
     })
     .with({ tag: 'channel' }, (item) => {
       const latestMessage =

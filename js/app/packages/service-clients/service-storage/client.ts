@@ -205,6 +205,7 @@ export type ItemType =
   | 'channel'
   | 'email'
   | 'channel_message'
+  | 'channel_thread'
   | 'call'
   | 'automation'
   | 'foreign'
