@@ -925,8 +925,14 @@ export function createSplitLayout(
       id: currentSplit.id,
       content,
       activate: () => activateSplit(currentSplit.id),
-      canGoBack: () => currentSplit.history.canGoBack(),
-      canGoForward: () => currentSplit.history.canGoForward(),
+      // Re-resolve the split by id rather than reading the captured
+      // `currentSplit`. reconcileSplits can replace the SplitState (fresh
+      // history, same id) while this handle instance persists, so the captured
+      // reference goes stale and the button would report the old history.
+      canGoBack: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoBack(),
+      canGoForward: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
