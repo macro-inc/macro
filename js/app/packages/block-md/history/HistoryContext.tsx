@@ -1,34 +1,18 @@
+import { useHistoryMetaQuery } from '@queries/history';
 import {
   useCreatePinMutation,
   useDeletePinMutation,
   usePinsQuery,
 } from '@queries/pins';
-import {
-  type HistorySession,
-  syncServiceClient,
-  type VersionPin,
-} from '@service-sync/client';
+import type { HistorySession, VersionPin } from '@service-sync/client';
 import {
   type Accessor,
   createContext,
-  createResource,
   createSignal,
   type JSX,
-  onCleanup,
   type Setter,
   useContext,
 } from 'solid-js';
-
-async function fetchHistoryMeta(
-  documentId: string
-): Promise<{ sessions: HistorySession[] } | undefined> {
-  const maybe = await syncServiceClient.getHistoryMeta({ documentId });
-  if (maybe.isErr()) {
-    console.error("Couldn't get history meta", maybe.error);
-    return undefined;
-  }
-  return { sessions: maybe.value.sessions };
-}
 
 type HistoryContextValue = {
   /** Whether history mode is active. */
@@ -70,18 +54,10 @@ export function HistoryProvider(props: {
   const [isViewingHistory, setViewingHistory] = createSignal(false);
   const [selectedAt, setSelectedAt] = createSignal<Date | null>(null);
   const [isScrubbedRightmost, setIsScrubbedRightmost] = createSignal(true);
-  const [history, { refetch: refetchHistory }] = createResource(
-    props.documentId,
-    fetchHistoryMeta
-  );
+  const history = useHistoryMetaQuery(props.documentId);
   const pins = usePinsQuery(props.documentId);
   const createPin = useCreatePinMutation(props.documentId);
   const deletePin = useDeletePinMutation(props.documentId);
-
-  const refreshInterval = window.setInterval(() => {
-    refetchHistory();
-  }, 30_000);
-  onCleanup(() => window.clearInterval(refreshInterval));
 
   const enterAt = (at: Date | null) => {
     setSelectedAt(at);
@@ -111,8 +87,8 @@ export function HistoryProvider(props: {
     enterAt,
     enterRightmost,
     exit,
-    sessions: () => history()?.sessions ?? [],
-    isLoadingSessions: () => history.loading,
+    sessions: () => history.data?.sessions ?? [],
+    isLoadingSessions: () => history.isLoading,
     pins: () => pins.data ?? [],
     createPin: (atMs, label) => createPin.mutate({ atMs, label }),
     deletePin: (pinId) => deletePin.mutate(pinId),

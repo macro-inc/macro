@@ -1,4 +1,8 @@
-import { type HistoryVersionId, syncServiceClient } from '@service-sync/client';
+import {
+  type HistorySession,
+  type HistoryVersionId,
+  syncServiceClient,
+} from '@service-sync/client';
 import { keepPreviousData, useQuery } from '@tanstack/solid-query';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
@@ -9,12 +13,36 @@ export type HistoryStateResult = {
   versionId: HistoryVersionId | null;
 };
 
+export type HistoryMetaResult = {
+  sessions: HistorySession[];
+};
+
+const historyKeys = {
+  meta: (documentId: string) => ['history-meta', documentId] as const,
+  state: (documentId: string, atUnixTimeMs: number | undefined) =>
+    ['history-state', documentId, atUnixTimeMs] as const,
+};
+
+export function useHistoryMetaQuery(documentId: Accessor<string>) {
+  return useQuery<HistoryMetaResult>(() => ({
+    queryKey: historyKeys.meta(documentId()),
+    queryFn: async () => {
+      const maybe = await syncServiceClient.getHistoryMeta({
+        documentId: documentId(),
+      });
+      if (maybe.isErr()) throw new Error(maybe.error);
+      return maybe.value;
+    },
+    refetchInterval: 30_000,
+  }));
+}
+
 export function useHistoryStateQuery(
   documentId: Accessor<string>,
   atUnixTimeMs: Accessor<number | undefined>
 ) {
   return useQuery<HistoryStateResult | null>(() => ({
-    queryKey: ['history-state', documentId(), atUnixTimeMs()],
+    queryKey: historyKeys.state(documentId(), atUnixTimeMs()),
     queryFn: async () => {
       const unixTimeMs = atUnixTimeMs();
       if (unixTimeMs === undefined) return null;
