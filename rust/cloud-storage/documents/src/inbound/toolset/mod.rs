@@ -132,8 +132,8 @@ impl<
 }
 
 /// Create a document toolset
-pub fn document_toolset<DSvc, ESvc, EDSvc>(
-) -> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
+pub fn document_toolset<DSvc, ESvc, EDSvc>()
+-> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,

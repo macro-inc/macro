@@ -260,10 +260,7 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client,
         sync_client.as_ref().clone(),
-        ReqwestEditingWorkerClient::new(
-            ai_editing_worker_url,
-            Arc::new(reqwest::Client::new()),
-        ),
+        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
     );
 
     let properties_tool_context =

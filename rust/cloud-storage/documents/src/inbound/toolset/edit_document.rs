@@ -1,9 +1,7 @@
 //! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
 
 use crate::domain::ports::{
-    DocumentService,
-    create::DocumentCreationService,
-    editing::EditingWorkerService,
+    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -53,7 +51,10 @@ where
     ) -> ToolResult<Self::Output> {
         let user_token = ctx.user_token.as_deref().ok_or_else(|| {
             let e = anyhow::anyhow!("user_token not available on DocumentToolContext");
-            ToolCallError { description: "editing worker requires a user token".to_string(), internal_error: e }
+            ToolCallError {
+                description: "editing worker requires a user token".to_string(),
+                internal_error: e,
+            }
         })?;
         let result = ctx
             .editing

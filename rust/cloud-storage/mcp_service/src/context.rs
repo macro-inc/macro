@@ -12,8 +12,8 @@ use documents::{
     domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
     outbound::{
-        editing_worker_client::ReqwestEditingWorkerClient,
-        pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter,
+        editing_worker_client::ReqwestEditingWorkerClient, pg_document_repo::PgDocumentRepo,
+        s3_upload_url::S3UploadUrlAdapter,
     },
 };
 use email::domain::ports::ReadonlyEmailPreviewAdapter;

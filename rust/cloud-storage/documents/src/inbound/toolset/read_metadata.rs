@@ -1,6 +1,8 @@
 //! ReadMetadata tool for reading document metadata.
 
-use crate::domain::ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService};
+use crate::domain::ports::{
+    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
+};
 use crate::domain::response::DocumentMetadataWithContent;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
