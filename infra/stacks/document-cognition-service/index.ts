@@ -127,7 +127,6 @@ const aiProjectionsRefreshTrigger = new AiProjectionsRefreshTrigger(
   `ai-projections-refresh-trigger-${stack}`,
   {
     envVars: {
-      AI_PROJECTION_QUEUE: pulumi.interpolate`${aiProjectionQueue.queue.name}`,
       DATABASE_URL: pulumi.interpolate`${PROXY_DATABASE_URL}`,
       ENVIRONMENT: stack,
       RUST_LOG: 'ai_projections_refresh_handler=trace,sqs_client=trace',
