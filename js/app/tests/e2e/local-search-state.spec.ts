@@ -62,6 +62,7 @@ test.describe('local search bar state', () => {
     await search(page, SEEDED_DOCUMENT.document_name);
 
     await openFocusedResult(page);
+    await expect(page).not.toHaveURL(/\/component\/search$/);
     const resultUrl = page.url();
 
     await page.goBack();
