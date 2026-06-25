@@ -102,7 +102,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
-  const [isFocused, setIsFocused] = createSignal(false);
+  const [_isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
