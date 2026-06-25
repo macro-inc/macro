@@ -4,6 +4,7 @@ use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
+use macro_middleware::auth::internal_access::InternalApiKey;
 
 /// The path to the LibreOffice binary
 pub static LOK_PATH: LazyLock<String> = LazyLock::new(|| {
@@ -66,6 +67,9 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
