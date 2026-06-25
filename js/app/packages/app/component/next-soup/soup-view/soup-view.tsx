@@ -1092,18 +1092,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (handle) restoreListState();
   };
 
-  createEffect(
-    on(
-      () => panel.isPanelActive(),
-      (active, wasActive) => {
-        if (active && !wasActive) {
-          restoreListState(true);
-        }
-      },
-      { defer: true }
-    )
-  );
-
   const featuredCount = createMemo(() => featuredIds().length);
 
   const previewVisible = createMemo(
