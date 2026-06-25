@@ -1,15 +1,16 @@
 import { mapMediaItems } from '@channel/Media/media-items';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { UserIcon } from '@core/component/UserIcon';
+import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '@entity';
 import { stringToItemType } from '@service-storage/client';
 import type { SoupMessageAttachment } from '@service-storage/generated/schemas';
+import MacroLogo from '@icon/macro-logo.svg';
 import type { UnifiedNotification } from '@notifications/types';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
-import { Avatar, Button, type ButtonProps, cn, Layer } from '@ui';
-import { format } from 'date-fns';
+import { Avatar as UIAvatar, cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -17,7 +18,6 @@ import {
   For,
   type JSX,
   Show,
-  splitProps,
   useContext,
 } from 'solid-js';
 
@@ -79,6 +79,28 @@ export const useInboxItem = () => {
   if (!ctx) throw new Error('InboxItem must be used within InboxItem.Root');
   return ctx;
 };
+
+export function parseInboxSenderName(item: InboxItem) {
+  const name = item.senderName || item.senderId || '?';
+  const emailMatch = name.match(/^"?([^"<]+)"?\s*</);
+  if (emailMatch?.[1]) return emailMatch[1].trim();
+  const parsedMacroId = tryMacroId(name);
+  if (parsedMacroId) return macroIdToEmail(parsedMacroId);
+  return name;
+}
+
+export function useInboxItemSenderName(source?: Accessor<InboxItem>) {
+  const ctx = source ? undefined : useInboxItem();
+  const item = source ?? ctx!.item;
+  const macroId = () => {
+    const sender = item().senderId ?? item().senderName;
+    return sender ? tryMacroId(sender) : undefined;
+  };
+  const fallback = () => parseInboxSenderName(item());
+  const [displayName] = useDisplayName(macroId());
+  return () =>
+    displayName() || (macroId() ? macroIdToEmail(macroId()!) : fallback());
+}
 
 interface SlotProps {
   children?: JSX.Element;
@@ -166,42 +188,6 @@ function Content(props: ContentProps) {
   );
 }
 
-function Leading(props: SlotProps) {
-  return (
-    <span
-      class={cn('grid size-2.5 place-items-center self-center', props.class)}
-      aria-hidden="true"
-    >
-      {props.children}
-    </span>
-  );
-}
-
-function UnreadIndicator(props: { unread?: boolean; class?: string }) {
-  const ctx = useInboxItem();
-  const unread = () => props.unread ?? ctx.unread();
-
-  return (
-    <Show when={unread()}>
-      <span class={cn('size-2 rounded-full bg-accent', props.class)} />
-    </Show>
-  );
-}
-
-function Icon(props: SlotProps) {
-  return (
-    <span
-      class={cn(
-        'flex shrink-0 self-center items-center justify-center overflow-visible text-ink-muted',
-        'min-w-[var(--inbox-item-icon-size)] h-[var(--inbox-item-icon-size)]',
-        props.class
-      )}
-    >
-      {props.children}
-    </span>
-  );
-}
-
 function Body(props: SlotProps) {
   return (
     <div class={cn('flex min-w-0 flex-1 flex-col', 'gap-0.5', props.class)}>
@@ -210,38 +196,32 @@ function Body(props: SlotProps) {
   );
 }
 
-interface HeaderProps extends SlotProps {}
-
-function Header(props: HeaderProps) {
-  return (
-    <div class={cn('flex min-w-0 items-center', 'gap-1.5', props.class)}>
-      {props.children}
-    </div>
-  );
-}
-
-function useSenderDisplayName() {
-  const ctx = useInboxItem();
-  const fallbackName = () =>
-    ctx.item().senderName || ctx.item().senderId || '?';
-  const macroId = tryMacroId(ctx.item().senderId ?? fallbackName());
-  const [displayName] = useDisplayName(macroId);
-  const name = () => {
-    if (displayName()) return displayName();
-    if (macroId) return macroIdToEmail(macroId);
-    return fallbackName();
-  };
-
-  return { macroId, name };
-}
-
 interface SenderProps extends SlotProps {
+  item?: InboxItem;
   avatar?: boolean;
+  showName?: boolean;
+  avatarClass?: string;
+  fallbackClass?: string;
+  macroAgent?: boolean;
+  style?: JSX.CSSProperties;
 }
 
 function Sender(props: SenderProps) {
-  const { macroId, name } = useSenderDisplayName();
+  const ctx = props.item ? undefined : useInboxItem();
+  const item = () => props.item ?? ctx!.item();
+  const name = useInboxItemSenderName(item);
   const showAvatar = () => props.avatar ?? true;
+  const showName = () => props.showName ?? true;
+  const macroId = () => {
+    if (
+      props.macroAgent ||
+      item().notification?.notification_metadata.tag === 'ai_response'
+    ) {
+      return MACRO_AGENT_BOT_ID;
+    }
+    const sender = item().senderId;
+    return sender ? tryMacroId(sender) : undefined;
+  };
   const initials = () =>
     name()
       .split(/\s+/)
@@ -253,20 +233,35 @@ function Sender(props: SenderProps) {
   return (
     <span
       class={cn(
-        'min-w-0 shrink-0 inline-flex items-center gap-1',
-        'text-xs',
-        'text-ink',
+        'min-w-0 shrink-0 inline-flex items-center',
+        showName() && 'gap-1 text-xs text-ink',
         props.class
       )}
+      style={props.style}
     >
       <Show when={showAvatar()}>
-        <span class="size-3 shrink-0 overflow-hidden rounded-full">
+        <span
+          class={cn(
+            'inline-flex size-3 shrink-0 overflow-hidden rounded-full',
+            props.avatarClass
+          )}
+        >
           <Show
-            when={macroId}
+            when={macroId()}
             fallback={
-              <Avatar size="fill" class="text-[8px]">
-                <Avatar.Fallback>{initials()}</Avatar.Fallback>
-              </Avatar>
+              <Show
+                when={item().senderId === 'macro-agent'}
+                fallback={
+                  <UIAvatar
+                    size="fill"
+                    class={props.fallbackClass ?? 'text-[8px]'}
+                  >
+                    <UIAvatar.Fallback>{initials()}</UIAvatar.Fallback>
+                  </UIAvatar>
+                }
+              >
+                <MacroLogo class="m-auto size-1/2" />
+              </Show>
             }
           >
             {(senderId) => (
@@ -280,18 +275,11 @@ function Sender(props: SenderProps) {
           </Show>
         </span>
       </Show>
-      <span class="min-w-0 truncate">{name()}</span>
+      <Show when={showName()}>
+        <span class="min-w-0 truncate">{name()}</span>
+      </Show>
     </span>
   );
-}
-
-function formatTimestamp(value: JSX.Element) {
-  if (typeof value !== 'string') return value;
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return format(date, 'p');
 }
 
 function AttachmentPreviewTile(props: { attachment: SoupMessageAttachment }) {
@@ -367,182 +355,6 @@ function AttachmentPreviews(props: {
 function Timestamp(props: SlotProps) {
   return (
     <span class={cn('shrink-0 text-xs text-ink-extra-muted/70', props.class)}>
-      {formatTimestamp(props.children)}
-    </span>
-  );
-}
-
-interface LinkProps extends SlotProps {
-  href?: string;
-  title?: string;
-}
-
-function Link(props: LinkProps) {
-  const className = () =>
-    cn(
-      'min-w-0 truncate text-xs text-ink-muted/70 underline-offset-2 transition-colors hover:text-accent hover:underline',
-      props.class
-    );
-
-  return (
-    <Show
-      when={props.href}
-      fallback={
-        <span class={className()} title={props.title}>
-          {props.children}
-        </span>
-      }
-    >
-      {(href) => (
-        <a
-          class={className()}
-          href={href()}
-          title={props.title}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {props.children}
-        </a>
-      )}
-    </Show>
-  );
-}
-
-interface DescriptionProps extends SlotProps {
-  timestamp?: boolean;
-}
-
-function Description(props: DescriptionProps) {
-  const [local, rest] = splitProps(props, ['timestamp', 'class', 'children']);
-  const parent = useInboxItem();
-  const showTimestamp = () => local.timestamp ?? true;
-  const groupCount = () => {
-    const count = (parent.item().subItems?.length ?? 0) + 1;
-    return count > 1 ? count : undefined;
-  };
-  const unreadSubItemCount = () =>
-    parent.item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
-  const unreadGroupCount = () =>
-    (parent.item().unread ? 1 : 0) + unreadSubItemCount();
-  const showUnreadDot = () => {
-    if (groupCount()) return false;
-    return parent.unread() || parent.item().unread;
-  };
-  const badgeCount = () => {
-    if (unreadGroupCount() > 0) return unreadGroupCount();
-    return groupCount();
-  };
-  const context: InboxItemContextValue = {
-    ...parent,
-  };
-
-  return (
-    <InboxItemContext.Provider value={context}>
-      <div
-        class={cn(
-          'flex min-w-0 items-center gap-1 truncate text-ink-muted/70 text-xs',
-          local.class
-        )}
-        {...rest}
-      >
-        {local.children}
-        <Show when={showTimestamp()}>
-          <Show
-            when={showUnreadDot()}
-            fallback={
-              <Show
-                when={badgeCount()}
-                fallback={
-                  <Show when={parent.item().timestamp}>
-                    {(timestamp) => (
-                      <Timestamp class="ml-auto">{timestamp()}</Timestamp>
-                    )}
-                  </Show>
-                }
-              >
-                {(count) => (
-                  <Layer depth={5}>
-                    <span
-                      class={cn(
-                        'ml-auto grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                        unreadGroupCount() > 0
-                          ? 'bg-accent/10 text-accent'
-                          : 'bg-ink-muted/10 text-ink-muted'
-                      )}
-                    >
-                      {unreadGroupCount() > 0
-                        ? `${count()} new notifications`
-                        : count()}
-                    </span>
-                  </Layer>
-                )}
-              </Show>
-            }
-          >
-            <span class="ml-auto size-2 rounded-full bg-accent" />
-          </Show>
-        </Show>
-      </div>
-    </InboxItemContext.Provider>
-  );
-}
-
-interface ContextSlotProps extends SlotProps {}
-
-function Section(props: ContextSlotProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
-
-  return (
-    <div class={cn('flex min-w-0 flex-col gap-1', local.class)} {...rest}>
-      {local.children}
-    </div>
-  );
-}
-
-function ActionsRow(props: SlotProps) {
-  return (
-    <div class={cn('col-start-3 flex min-w-0 items-center gap-2', props.class)}>
-      {props.children}
-    </div>
-  );
-}
-
-interface ActionButtonProps extends ButtonProps {}
-
-function ActionButton(props: ActionButtonProps) {
-  const [local, rest] = splitProps(props, ['class', 'children', 'type']);
-
-  return (
-    <Button
-      class={cn('text-accent not-disabled:hover:text-accent', local.class)}
-      size="sm"
-      type={local.type ?? 'button'}
-      variant="ghost"
-      {...rest}
-    >
-      {local.children}
-    </Button>
-  );
-}
-
-interface PillProps extends SlotProps {
-  title?: string;
-  variant?: 'default' | 'muted' | 'accent';
-}
-
-export function Pill(props: PillProps) {
-  const variant = () => props.variant ?? 'default';
-
-  return (
-    <span
-      class={cn(
-        'inline-flex h-5 max-w-full min-w-0 items-center rounded-full border px-1.5 text-xs text-ink-muted',
-        variant() === 'default' && 'border-edge-muted',
-        variant() === 'muted' && 'border-edge-muted/70 text-ink-extra-muted',
-        variant() === 'accent' && 'border-accent/20 bg-accent/8 text-accent',
-        props.class
-      )}
-      title={props.title}
-    >
       {props.children}
     </span>
   );
@@ -564,52 +376,11 @@ export function PropertyPill(props: PropertyPillProps) {
   );
 }
 
-export function SharedPill(props: { label?: JSX.Element; class?: string }) {
-  return <Pill class={props.class}>{props.label ?? 'Shared'}</Pill>;
-}
-
-interface BreadcrumbProps {
-  items: readonly JSX.Element[];
-  class?: string;
-}
-
-export function Breadcrumb(props: BreadcrumbProps) {
-  return (
-    <span
-      class={cn(
-        'flex min-w-0 items-center overflow-hidden text-ink-muted/70',
-        props.class
-      )}
-    >
-      <For each={props.items}>
-        {(item, index) => (
-          <>
-            <Show when={index() > 0}>
-              <span class="shrink-0 px-1 text-ink-extra-muted">/</span>
-            </Show>
-            <span class="min-w-0 truncate">{item}</span>
-          </>
-        )}
-      </For>
-    </span>
-  );
-}
-
 export const InboxItem = {
   Root,
-  Section,
-  Leading,
-  UnreadIndicator,
-  Icon,
   Body,
-  Header,
   Sender,
   AttachmentPreviews,
   Timestamp,
   Content,
-  Link,
-  Description,
-  Pill,
-  ActionsRow,
-  ActionButton,
 };
