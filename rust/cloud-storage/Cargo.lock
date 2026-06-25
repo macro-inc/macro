@@ -13651,6 +13651,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "webhooks"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "axum",
+ "chrono",
+ "entity_access",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "webp"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

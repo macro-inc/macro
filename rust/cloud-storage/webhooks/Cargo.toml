@@ -1,0 +1,59 @@
+[package]
+edition = "2024"
+name = "webhooks"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+]
+default = ["axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "ports"]
+outbound = [
+  "dep:sqlx",
+  "dep:aes-gcm",
+  "dep:rand",
+  "dep:url",
+  "dep:tokio",
+  "ports",
+]
+ports = ["entity_access/ports"]
+
+[dependencies]
+# Core (always compiled)
+anyhow = { workspace = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Axum / inbound dependencies
+axum = { workspace = true, optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+aes-gcm = { version = "0.10", optional = true }
+rand = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = ["json"] }
+tokio = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }

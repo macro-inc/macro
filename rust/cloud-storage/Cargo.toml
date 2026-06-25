@@ -57,6 +57,7 @@ members = [
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
+  "webhooks",
   "worker_trigger",
   "macro_config",
   "macro_queues",
