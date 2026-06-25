@@ -4,7 +4,8 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, Sender, SimpleMention, TypingAction,
+        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
+        TypingAction,
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
@@ -292,6 +293,7 @@ struct MessagePostedSideEffects {
     has_attachments: bool,
     attachments: Vec<MutatedAttachment>,
     nonce: Option<String>,
+    notification_policy: PostMessageNotificationPolicy,
 }
 
 struct InviteNotificationRequest {
@@ -408,6 +410,7 @@ where
                 has_attachments,
                 attachments,
                 nonce,
+                notification_policy,
             } => {
                 self.handle_message_posted(MessagePostedSideEffects {
                     channel_id,
@@ -418,6 +421,7 @@ where
                     has_attachments,
                     attachments,
                     nonce,
+                    notification_policy,
                 })
                 .await;
             }
@@ -444,18 +448,32 @@ where
                 message,
                 recipients,
                 nonce,
+                posted_notification,
                 ..
             } => {
                 let message_id = message.id;
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
-                    message,
-                    bot_profile,
+                    message: message.clone(),
+                    bot_profile: bot_profile.clone(),
                     nonce,
                 })
                 .await;
                 self.search.index_message(channel_id, message_id).await;
+
+                if let Some(notification) = posted_notification {
+                    self.send_message_posted_notifications(PostedMessageNotificationInputs {
+                        channel_id,
+                        metadata: notification.metadata,
+                        participants: notification.participants,
+                        message,
+                        mentions: notification.mentions,
+                        has_attachments: notification.has_attachments,
+                        bot_profile,
+                    })
+                    .await;
+                }
             }
             ChannelEvent::MessageDeleted {
                 channel_id,
@@ -561,6 +579,7 @@ where
             has_attachments,
             attachments,
             nonce,
+            notification_policy,
         } = event;
         let recipients = participant_ids(&participants);
         let bot_profile = self.bot_profile_for_message(&message).await;
@@ -585,16 +604,18 @@ where
 
         self.search.index_message(channel_id, message.id).await;
         self.dispatch_bot_triggers(channel_id, &message, &mentions);
-        self.send_message_posted_notifications(PostedMessageNotificationInputs {
-            channel_id,
-            metadata,
-            participants,
-            message,
-            mentions,
-            has_attachments,
-            bot_profile,
-        })
-        .await;
+        if notification_policy == PostMessageNotificationPolicy::Default {
+            self.send_message_posted_notifications(PostedMessageNotificationInputs {
+                channel_id,
+                metadata,
+                participants,
+                message,
+                mentions,
+                has_attachments,
+                bot_profile,
+            })
+            .await;
+        }
     }
 
     /// Resolve the public bot profile when the message sender is a bot.
@@ -1313,6 +1334,7 @@ mod tests {
                 has_attachments: false,
                 attachments: Vec::new(),
                 nonce: Some("nonce-1".to_string()),
+                notification_policy: PostMessageNotificationPolicy::Default,
             })
             .await;
 
@@ -1395,7 +1417,150 @@ mod tests {
             has_attachments: false,
             attachments: Vec::new(),
             nonce: None,
+            notification_policy: PostMessageNotificationPolicy::Default,
         }
+    }
+
+    #[tokio::test]
+    async fn silent_message_posted_skips_notifications_only() {
+        let channel_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let sender = user("sender@example.com");
+        let recipient = user("recipient@example.com");
+        let realtime = FakeRealtime::default();
+        let notifications = FakeNotifications::default();
+        let search = FakeSearch::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext::default(),
+            realtime.clone(),
+            notifications.clone(),
+            search.clone(),
+            FakeContacts::default(),
+        );
+        let now = Utc::now();
+
+        service
+            .handle(ChannelEvent::MessagePosted {
+                channel_id,
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Private,
+                    channel_name: "Project".to_string(),
+                },
+                participants: vec![
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: sender.as_ref().to_string(),
+                        role: ParticipantRole::Member,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: recipient.as_ref().to_string(),
+                        role: ParticipantRole::Member,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                ],
+                message: MutatedMessage {
+                    id: message_id,
+                    channel_id,
+                    thread_id: None,
+                    sender_id: Sender::User(sender),
+                    content: "transient".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    edited_at: None,
+                    deleted_at: None,
+                },
+                mentions: Vec::new(),
+                has_attachments: false,
+                attachments: Vec::new(),
+                nonce: None,
+                notification_policy: PostMessageNotificationPolicy::Silent,
+            })
+            .await;
+
+        assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+        assert_eq!(
+            *search.indexed.lock().unwrap(),
+            vec![(channel_id, message_id)]
+        );
+        assert!(notifications.effects.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn message_changed_with_posted_notification_context_sends_notification() {
+        let channel_id = Uuid::new_v4();
+        let thread_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let parent_sender = user("parent@example.com");
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                thread_context: ThreadNotificationContext {
+                    participants: vec![recipient.clone(), parent_sender.clone()],
+                    parent_sender_id: Some(parent_sender.clone()),
+                },
+                ..FakeContext::default()
+            },
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeSearch::default(),
+            FakeContacts::default(),
+        );
+        let now = Utc::now();
+
+        service
+            .handle(ChannelEvent::MessageChanged {
+                channel_id,
+                actor: Sender::Bot(bot_id::MACRO_AI_BOT_ID),
+                message: MutatedMessage {
+                    id: message_id,
+                    channel_id,
+                    thread_id: Some(thread_id),
+                    sender_id: Sender::Bot(bot_id::MACRO_AI_BOT_ID),
+                    content: "final answer".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    edited_at: Some(now),
+                    deleted_at: None,
+                },
+                recipients: vec![recipient.clone(), parent_sender.clone()],
+                nonce: None,
+                posted_notification: Some(MessageChangedNotificationContext {
+                    metadata: ChannelMetadata {
+                        channel_type: ChannelType::Private,
+                        channel_name: "Project".to_string(),
+                    },
+                    participants: Vec::new(),
+                    mentions: Vec::new(),
+                    has_attachments: false,
+                }),
+            })
+            .await;
+
+        let notification_effects = notifications.effects.lock().unwrap();
+        assert_eq!(notification_effects.len(), 1);
+        let ChannelNotificationEffect::Reply {
+            message_id: notified_message_id,
+            sender,
+            recipient_ids,
+            ..
+        } = &notification_effects[0]
+        else {
+            panic!("expected reply notification effect");
+        };
+        assert_eq!(*notified_message_id, message_id);
+        assert_eq!(
+            *sender,
+            NotificationSender::Bot {
+                name: "Test Bot".to_string()
+            }
+        );
+        assert!(recipient_ids.contains(&recipient));
+        assert!(recipient_ids.contains(&parent_sender));
     }
 
     #[tokio::test]
@@ -1666,6 +1831,7 @@ mod tests {
                 has_attachments: false,
                 attachments: Vec::new(),
                 nonce: None,
+                notification_policy: PostMessageNotificationPolicy::Default,
             })
             .await;
 
@@ -1757,6 +1923,7 @@ mod tests {
                 has_attachments: false,
                 attachments: Vec::new(),
                 nonce: None,
+                notification_policy: PostMessageNotificationPolicy::Default,
             })
             .await;
 

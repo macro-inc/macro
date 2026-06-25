@@ -144,6 +144,13 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
 }
 
 async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {
+    if bot_id == bot_id::MACRO_AI_BOT_ID {
+        return Some(BotSenderProfile {
+            name: bot_id::MACRO_AI_NAME.to_string(),
+            avatar_url: None,
+        });
+    }
+
     sqlx::query!(
         r#"
         SELECT name, avatar_url

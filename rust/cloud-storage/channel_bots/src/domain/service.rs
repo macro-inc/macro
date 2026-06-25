@@ -4,7 +4,10 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use channels::domain::models::{ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender};
+use channels::domain::models::{
+    ParticipantRole, PatchMessageNotificationPolicy, PatchMessageRequest,
+    PostMessageNotificationPolicy, PostMessageRequest, Sender,
+};
 use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
@@ -268,6 +271,7 @@ where
                     thread_id: Some(event.reply_thread_id),
                     attachments: Vec::new(),
                     nonce: None,
+                    notification_policy: PostMessageNotificationPolicy::Silent,
                 },
             )
             .await?;
@@ -303,6 +307,7 @@ where
                     attachment_ids_to_delete: None,
                     attachments_to_add: None,
                     nonce: None,
+                    notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 },
             )
             .await

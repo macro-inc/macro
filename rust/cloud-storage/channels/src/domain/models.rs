@@ -916,6 +916,26 @@ impl ReferencedShareItem {
     }
 }
 
+/// Internal notification behavior for a posted channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PostMessageNotificationPolicy {
+    /// Apply the normal channel notification rules.
+    #[default]
+    Default,
+    /// Do not send notifications for this post. Realtime/search side effects still run.
+    Silent,
+}
+
+/// Internal notification behavior for a patched channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PatchMessageNotificationPolicy {
+    /// Apply the normal edit behavior: realtime/search only, no notifications.
+    #[default]
+    Default,
+    /// Notify as though the patched message content had just been posted.
+    NotifyAsPostedMessage,
+}
+
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -930,6 +950,10 @@ pub struct PostMessageRequest {
     pub attachments: Vec<NewChannelAttachment>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this post.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PostMessageNotificationPolicy,
 }
 
 /// Response returned after sending a message.
@@ -956,6 +980,10 @@ pub struct PatchMessageRequest {
     pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this patch.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
 }
 
 /// Query parameters for deleting a message.
