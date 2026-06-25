@@ -3,10 +3,11 @@ import { ENABLE_GIT_BLAME } from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
 import { syncServiceClient } from '@service-sync/client';
-import { debounce } from '@solid-primitives/scheduled';
+import { createScheduled, debounce } from '@solid-primitives/scheduled';
+import { createQuery } from '@tanstack/solid-query';
 import {
   createEffect,
-  createResource,
+  createMemo,
   createSignal,
   onCleanup,
   Show,
@@ -37,49 +38,37 @@ export function BlameTooltip(props: {
   documentId: string;
 }) {
   const [visible, setVisible] = createSignal(false);
-  // The nodeId we've actually committed to fetching for. Debounced from the
-  // raw hovered nodeId so we don't fire a request the instant the cursor
-  // crosses a text node.
-  const [armedNodeId, setArmedNodeId] = createSignal<string | null>(null);
   let shownAtX = 0;
   let shownAtY = 0;
   let showTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const debouncedArm = debounce((nodeId: string | null) => {
-    setArmedNodeId(nodeId);
-  }, FETCH_DELAY_MS);
+  // Only commits to a new nodeId after FETCH_DELAY_MS of hover stillness.
+  const scheduled = createScheduled(fn => debounce(fn, FETCH_DELAY_MS));
+  const queriedNodeId = createMemo<string | null>((prev) => {
+    const active = props.state.hovering ? props.state.nodeId : null;
+    return scheduled() ? active : prev;
+  }, null);
 
   const hide = () => {
-    debouncedArm.clear();
     if (showTimer) clearTimeout(showTimer);
     showTimer = null;
-    setArmedNodeId(null);
     setVisible(false);
   };
 
-  const [blame] = createResource(
-    () => (ENABLE_GIT_BLAME() ? armedNodeId() : null),
-    async (nodeId) => {
+  const query = createQuery(() => ({
+    queryKey: ['blame', props.documentId, queriedNodeId()],
+    queryFn: async () => {
       const res = await syncServiceClient.getNodeBlame({
         documentId: props.documentId,
-        nodeId,
+        nodeId: queriedNodeId()!,
       });
       return res.isOk() ? res.value : null;
-    }
-  );
+    },
+    enabled: ENABLE_GIT_BLAME() && queriedNodeId() !== null,
+    staleTime: Infinity,
+  }));
 
-  // Drive the fetch — debounced on nodeId only, ignores cursor x/y.
-  createEffect(() => {
-    const nodeId = props.state.hovering ? props.state.nodeId : null;
-    if (nodeId === null) {
-      debouncedArm.clear();
-      setArmedNodeId(null);
-    } else {
-      debouncedArm(nodeId);
-    }
-  });
-
-  // Drive the visibility — based on cursor stillness (x/y).
+  // Drive visibility based on cursor stillness (x/y).
   createEffect(() => {
     const { hovering, x, y } = props.state;
 
@@ -103,7 +92,7 @@ export function BlameTooltip(props: {
   onCleanup(hide);
 
   return (
-    <Show when={visible() && blame()?.userId ? blame() : null}>
+    <Show when={visible() && query.data?.userId ? query.data : null}>
       {(b) => (
         <div
           class="fixed z-50 text-xs text-ink-secondary/70 pointer-events-none"
