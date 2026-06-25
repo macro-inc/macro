@@ -36,6 +36,14 @@ export const envMiddleware = createMiddleware<{
   Bindings: Bindings;
   Variables: EnvVariables;
 }>(async (c, next) => {
-  c.set('env', validateEnv(c.env));
+  let env: Env;
+  try {
+    env = validateEnv(c.env);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[env] validation failed: ${msg}`);
+    return c.json({ error: `env misconfiguration: ${msg}` }, 500);
+  }
+  c.set('env', env);
   await next();
 });

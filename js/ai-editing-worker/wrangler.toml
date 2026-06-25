@@ -33,11 +33,11 @@ AUTH_SERVICE_BASE = "https://auth-service.macro.com"
 port = 8933
 
 [env.local.vars]
-SYNC_WS_BASE = "ws://localhost:8787"
-DSS_BASE = "http://localhost:8086"
-SEARCH_SERVICE_BASE = "http://localhost:8086"
-CONTACTS_SERVICE_BASE = "http://localhost:8083"
-AUTH_SERVICE_BASE = "http://localhost:8080"
+SYNC_WS_BASE = "ws://sync-service:8787"
+DSS_BASE = "http://document-storage-service:8080"
+SEARCH_SERVICE_BASE = "http://search-processing-service:8080"
+CONTACTS_SERVICE_BASE = "http://contacts-service:8080"
+AUTH_SERVICE_BASE = "http://connection-gateway:8080"
 
 [env.dev.vars]
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
