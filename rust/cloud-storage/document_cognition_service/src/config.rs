@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -81,6 +82,8 @@ pub struct Config {
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
     /// MCP credentials encryption key (base64-encoded, secret name or value)
     pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {
@@ -135,6 +138,7 @@ impl Config {
             mcp_credentials_key_secret_name: LocalOrRemoteSecret::Local(
                 McpCredentialsKeySecretName::Comptime("MCP_CREDENTIALS_KEY_SECRET_NAME"),
             ),
+            internal_api_key: InternalApiKey::Comptime(""),
         }
     }
 }

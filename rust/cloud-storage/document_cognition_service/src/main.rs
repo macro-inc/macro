@@ -29,7 +29,6 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::{
     ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
     LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
@@ -103,9 +102,7 @@ async fn main() -> anyhow::Result<()> {
         .search_event_queue(&config.search_event_queue)
         .ai_projection_queue(&config.ai_projection_queue);
 
-    let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
-        InternalApiSecretKey::new().context("failed to create internal auth key")?,
-    );
+    let internal_api_key = config.internal_api_key.to_string();
 
     let document_storage_client = DocumentStorageServiceClient::new(
         config
@@ -138,12 +135,12 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create jwt validation args")?;
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        internal_auth_key.as_ref().to_string(),
+        internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        internal_api_key.clone(),
         EmailServiceUrl::new()?.to_string(),
     ));
 
@@ -174,7 +171,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized connection repo");
     let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        internal_auth_key.as_ref().to_string(),
+        internal_api_key.clone(),
         ConnectionGatewayUrl::new()?.to_string(),
     ));
 
@@ -483,8 +480,8 @@ async fn main() -> anyhow::Result<()> {
         document_storage_client: Arc::new(document_storage_client),
         search_service_client,
         jwt_args,
+        internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        internal_auth_key,
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
         connection_gateway_client,
