@@ -171,10 +171,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("initialized s3 client");
 
-    let search_event_queue = macro_queues::SearchEventQueue::new()?;
-    let document_delete_queue = macro_queues::DocumentDeleteQueue::new()?;
-    let contacts_queue = macro_queues::ContactsQueue::new()?;
-    let notification_queue = macro_queues::NotificationQueue::new()?;
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
+    let contacts_queue = macro_queues::ContactsQueue::new();
+    let notification_queue = macro_queues::NotificationQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue);

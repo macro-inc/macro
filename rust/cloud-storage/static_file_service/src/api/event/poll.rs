@@ -9,15 +9,13 @@ enum PollError {
 
 // very important that long polling on the sqs queue is enabled
 pub async fn poll_s3_events(context: AppState) {
-    let queue_url = match macro_queues::StaticFileServiceS3EventQueueUrl::new() {
-        Ok(queue) => queue.to_string(),
-        Err(error) => {
-            tracing::error!(error = ?error, "failed to resolve static file S3 event queue");
-            return;
-        }
-    };
     loop {
-        if let Err(PollError::PollingError) = poll(queue_url.clone(), context.clone()).await {
+        if let Err(PollError::PollingError) = poll(
+            macro_queues::StaticFileServiceS3EventQueueUrl::new().to_string(),
+            context.clone(),
+        )
+        .await
+        {
             tokio::time::sleep(time::Duration::from_secs(20)).await;
         }
     }

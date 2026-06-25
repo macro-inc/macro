@@ -2,7 +2,6 @@ use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
 use macro_middleware::auth::internal_access::InternalApiKey;
-use macro_queues::StaticFileServiceS3EventQueueUrl;
 use macro_service_urls::StaticFileServiceUrl;
 
 env_vars! {
@@ -26,8 +25,6 @@ pub struct Config {
     /// service url
     #[macro_config_default(StaticFileServiceUrl::unwrap_new().to_string())]
     pub static_file_service_url: String,
-    /// s3 upload notification queue
-    pub static_file_service_s3_event_queue_url: StaticFileServiceS3EventQueueUrl,
     /// Internal API key
     pub internal_api_key: InternalApiKey,
 }

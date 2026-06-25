@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let search_event_queue = macro_queues::SearchEventQueue::new()?;
+    let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&search_event_queue);
 

@@ -66,18 +66,18 @@ async fn main() -> anyhow::Result<()> {
 
     let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new()?;
-    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new()?;
-    let gmail_ops_queue = macro_queues::GmailOpsQueue::new()?;
-    let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new()?;
-    let search_event_queue = macro_queues::SearchEventQueue::new()?;
-    let backfill_queue = macro_queues::BackfillQueue::new()?;
-    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new()?;
-    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new()?;
-    let sfs_delete_queue = macro_queues::SfsDeleteQueue::new()?;
-    let link_manager_queue = macro_queues::LinkManagerQueue::new()?;
-    let contacts_queue = macro_queues::ContactsQueue::new()?;
-    let notification_queue = macro_queues::NotificationQueue::new()?;
+    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
+    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let backfill_queue = macro_queues::BackfillQueue::new();
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
+    let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let contacts_queue = macro_queues::ContactsQueue::new();
+    let notification_queue = macro_queues::NotificationQueue::new();
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)

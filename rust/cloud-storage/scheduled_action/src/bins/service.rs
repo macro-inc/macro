@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     let notification_ingress = Arc::new(SqsNotificationIngress {
         queue: SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationQueue::new()?.to_string(),
+            macro_queues::NotificationQueue::new().to_string(),
         ),
     });
 

@@ -7143,7 +7143,6 @@ dependencies = [
  "macro_env",
  "paste",
  "serde",
- "thiserror 2.0.18",
  "workspace-hack",
 ]
 

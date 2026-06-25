@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
     tracing::trace!("initialized s3 client");
 
-    let convert_queue = macro_queues::ConvertQueue::new()?;
+    let convert_queue = macro_queues::ConvertQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))
         .convert_queue(&convert_queue);
     tracing::trace!("initialized sqs client");

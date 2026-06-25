@@ -19,21 +19,15 @@ fn missing_override(_: &'static str) -> Result<String, std::env::VarError> {
 fn defaults_are_selected_by_environment() {
     with_mock_override_env(missing_override, || {
         assert_eq!(
-            TestQueue::new_for_environment(Environment::Local)
-                .unwrap()
-                .as_ref(),
+            TestQueue::new_for_environment(Environment::Local).as_ref(),
             "test-queue",
         );
         assert_eq!(
-            TestQueue::new_for_environment(Environment::Develop)
-                .unwrap()
-                .as_ref(),
+            TestQueue::new_for_environment(Environment::Develop).as_ref(),
             "test-queue-dev",
         );
         assert_eq!(
-            TestQueue::new_for_environment(Environment::Production)
-                .unwrap()
-                .as_ref(),
+            TestQueue::new_for_environment(Environment::Production).as_ref(),
             "test-queue-prod",
         );
     });
@@ -56,7 +50,7 @@ fn mock_test_queue_override(var_name: &'static str) -> Result<String, std::env::
 #[test]
 fn override_env_var_wins_over_environment_default() {
     let queue = with_mock_override_env(mock_test_queue_override, || {
-        TestQueue::new_for_environment(Environment::Local).unwrap()
+        TestQueue::new_for_environment(Environment::Local)
     });
 
     assert_eq!(queue.as_ref(), "override-queue");
@@ -108,7 +102,7 @@ fn mock_group_overrides(var_name: &'static str) -> Result<String, std::env::VarE
 #[test]
 fn grouped_macro_resolves_all_queues() {
     let queues = with_mock_override_env(mock_group_overrides, || {
-        TestQueues::new_for_environment(Environment::Develop).unwrap()
+        TestQueues::new_for_environment(Environment::Develop)
     });
 
     assert_eq!(

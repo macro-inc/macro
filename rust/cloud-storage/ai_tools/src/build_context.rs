@@ -124,15 +124,15 @@ pub async fn build_tool_service_context_from_env(
 
     let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone());
     if enable_email_scheduled_queue {
-        let email_scheduled_queue = macro_queues::EmailScheduledQueue::new()?;
+        let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
         sqs_client = sqs_client.email_scheduled_queue(email_scheduled_queue.as_ref());
     }
     if enable_gmail_ops_queue {
-        let gmail_ops_queue = macro_queues::GmailOpsQueue::new()?;
+        let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
         sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue.as_ref());
     }
     let notification_queue = if enable_notification_queue {
-        let notification_queue = macro_queues::NotificationQueue::new()?;
+        let notification_queue = macro_queues::NotificationQueue::new();
         ToolNotificationQueue::Sqs(SqsQueue::new(
             aws_sqs_client,
             notification_queue.to_string(),

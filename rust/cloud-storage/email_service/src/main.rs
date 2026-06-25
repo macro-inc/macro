@@ -59,14 +59,14 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to db")?;
 
-    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new()?;
-    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new()?;
-    let gmail_ops_queue = macro_queues::GmailOpsQueue::new()?;
-    let search_event_queue = macro_queues::SearchEventQueue::new()?;
-    let backfill_queue = macro_queues::BackfillQueue::new()?;
-    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new()?;
-    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new()?;
-    let link_manager_queue = macro_queues::LinkManagerQueue::new()?;
+    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
+    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let backfill_queue = macro_queues::BackfillQueue::new();
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
     let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)

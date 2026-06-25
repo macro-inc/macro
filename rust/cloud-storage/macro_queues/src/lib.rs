@@ -20,14 +20,12 @@ pub use macro_env;
 pub use paste;
 #[doc(hidden)]
 pub use serde;
-use thiserror::Error;
 
 #[cfg(test)]
 mod test;
 
 #[cfg(test)]
 mod testing_harness {
-    use super::QueueVarErr;
     use std::cell::Cell;
 
     type MockValue = Cell<Option<Box<dyn Fn(&'static str) -> Result<String, std::env::VarError>>>>;
@@ -49,7 +47,7 @@ mod testing_harness {
         clippy::disallowed_methods,
         reason = "Test harness fallback used when no mock override is set"
     )]
-    pub fn read_override_env(var_name: &'static str) -> Result<Option<String>, QueueVarErr> {
+    pub fn read_override_env(var_name: &'static str) -> Option<String> {
         let cur_getter = MOCK_VAR_GETTER.replace(None);
         match cur_getter {
             Some(mock) => {
@@ -59,11 +57,7 @@ mod testing_harness {
             }
             None => std::env::var(var_name),
         }
-        .map(Some)
-        .or_else(|err| match err {
-            std::env::VarError::NotPresent => Ok(None),
-            err => Err(QueueVarErr { var_name, err }),
-        })
+        .ok()
     }
 
     pub(crate) fn with_mock_override_env<F, Cb, U>(f: F, cb: Cb) -> U
@@ -81,18 +75,16 @@ mod testing_harness {
 #[doc(hidden)]
 pub use testing_harness::read_override_env;
 
-/// Read an override environment variable for a queue.
+/// Read an override environment variable for a queue. Returns `None` if the
+/// variable is unset or cannot be read.
 #[cfg(not(test))]
 #[doc(hidden)]
 #[allow(
     clippy::disallowed_methods,
     reason = "Used when running locally to override queues"
 )]
-pub fn read_override_env(var_name: &'static str) -> Result<Option<String>, QueueVarErr> {
-    std::env::var(var_name).map(Some).or_else(|err| match err {
-        std::env::VarError::NotPresent => Ok(None),
-        err => Err(QueueVarErr { var_name, err }),
-    })
+pub fn read_override_env(var_name: &'static str) -> Option<String> {
+    std::env::var(var_name).ok()
 }
 
 /// A queue name string that can either borrow an existing string slice or own
@@ -192,27 +184,6 @@ impl<'a> fmt::Display for Queue<'a> {
     }
 }
 
-/// Error returned when a queue override environment variable cannot be read.
-#[derive(Debug, Error)]
-#[error("failed to read queue override env var `{var_name}`: {err}")]
-pub struct QueueVarErr {
-    var_name: &'static str,
-    #[source]
-    err: std::env::VarError,
-}
-
-impl QueueVarErr {
-    /// The environment variable name that failed to load.
-    pub const fn var_name(&self) -> &'static str {
-        self.var_name
-    }
-
-    /// The underlying environment-variable error.
-    pub const fn env_var_error(&self) -> &std::env::VarError {
-        &self.err
-    }
-}
-
 /// Define typed queue name values with per-environment defaults and override
 /// environment variables.
 ///
@@ -224,23 +195,17 @@ impl QueueVarErr {
 /// # Example
 ///
 /// ```
-/// fn example() -> Result<(), macro_queues::QueueVarErr> {
-///     macro_queues::queue! {
-///         #[derive(Debug, Clone)]
-///         pub struct ExampleQueue {
-///             local: "example-queue",
-///             dev: "example-queue-dev",
-///             prod: "example-queue-prod",
-///         }
+/// macro_queues::queue! {
+///     #[derive(Debug, Clone)]
+///     pub struct ExampleQueue {
+///         local: "example-queue",
+///         dev: "example-queue-dev",
+///         prod: "example-queue-prod",
 ///     }
-///
-///     let queue = ExampleQueue::new()?;
-///     assert_eq!(queue.override_env_var_name(), "OVERRIDE_EXAMPLE_QUEUE");
-///
-///     Ok(())
 /// }
 ///
-/// example().unwrap();
+/// let queue = ExampleQueue::new();
+/// assert_eq!(queue.override_env_var_name(), "OVERRIDE_EXAMPLE_QUEUE");
 /// ```
 #[macro_export]
 macro_rules! queue {
@@ -271,29 +236,19 @@ macro_rules! queue {
                 $v const PROD: &'static str = $prod;
 
                 #[doc = "Create a new instance of [`Self`], using the override env var if set and otherwise selecting a default from [`macro_env::Environment::new_or_prod`]."]
-                #[allow(dead_code)]
-                $v fn new() -> Result<Self, $crate::QueueVarErr> {
-                    if let Some(value) = $crate::read_override_env(Self::OVERRIDE_ENV_VAR_NAME)? {
-                        return Ok(Self($crate::Queue::owned(value)));
-                    }
-
-                    Ok(Self::default_for_environment($crate::macro_env::Environment::new_or_prod()))
-                }
-
-                #[doc = "Create a new instance of [`Self`], panicking if the override env var is set but cannot be read."]
-                #[allow(dead_code)]
-                $v fn unwrap_new() -> Self {
-                    Self::new().expect(concat!("Failed to resolve queue for ", stringify!($n)))
+                #[allow(dead_code, clippy::new_without_default)]
+                $v fn new() -> Self {
+                    Self::new_for_environment($crate::macro_env::Environment::new_or_prod())
                 }
 
                 #[doc = "Create a new instance of [`Self`] for a specific environment, using the override env var if set."]
                 #[allow(dead_code)]
-                $v fn new_for_environment(environment: $crate::macro_env::Environment) -> Result<Self, $crate::QueueVarErr> {
-                    if let Some(value) = $crate::read_override_env(Self::OVERRIDE_ENV_VAR_NAME)? {
-                        return Ok(Self($crate::Queue::owned(value)));
+                $v fn new_for_environment(environment: $crate::macro_env::Environment) -> Self {
+                    if let Some(value) = $crate::read_override_env(Self::OVERRIDE_ENV_VAR_NAME) {
+                        return Self($crate::Queue::owned(value));
                     }
 
-                    Ok(Self::default_for_environment(environment))
+                    Self::default_for_environment(environment)
                 }
 
                 #[doc = "Create a new instance of [`Self`] for a specific environment without checking the override env var."]
@@ -458,26 +413,20 @@ macro_rules! queue {
 
             impl $n {
                 #[doc = "Create a new instance of [`Self`] with all queues resolved for the current macro environment."]
-                #[allow(dead_code)]
-                $v fn new() -> Result<Self, $crate::QueueVarErr> {
+                #[allow(dead_code, clippy::new_without_default)]
+                $v fn new() -> Self {
                     let environment = $crate::macro_env::Environment::new_or_prod();
                     Self::new_for_environment(environment)
                 }
 
-                #[doc = "Create a new instance of [`Self`] with all queues resolved for the current macro environment, panicking if an override env var is set but cannot be read."]
-                #[allow(dead_code)]
-                $v fn unwrap_new() -> Self {
-                    Self::new().expect(concat!("Failed to resolve queue collection for ", stringify!($n)))
-                }
-
                 #[doc = "Create a new instance of [`Self`] with all queues resolved for a specific environment."]
                 #[allow(dead_code)]
-                $v fn new_for_environment(environment: $crate::macro_env::Environment) -> Result<Self, $crate::QueueVarErr> {
-                    Ok(Self {
+                $v fn new_for_environment(environment: $crate::macro_env::Environment) -> Self {
+                    Self {
                         $(
-                            [<$field_name:snake>]: $field_name::new_for_environment(environment)?,
+                            [<$field_name:snake>]: $field_name::new_for_environment(environment),
                         )*
-                    })
+                    }
                 }
 
                 #[doc = "Create a new instance of [`Self`] with all queues set to environment defaults without checking overrides."]

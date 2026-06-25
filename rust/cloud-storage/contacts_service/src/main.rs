@@ -36,12 +36,12 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     Ok(db)
 }
 
-async fn create_sqs_worker(config: &Config) -> anyhow::Result<SQSWorker> {
-    let queue_url = macro_queues::ContactsQueue::new()?.to_string();
+async fn create_sqs_worker(config: &Config) -> SQSWorker {
+    let queue_url = macro_queues::ContactsQueue::new().to_string();
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
-    Ok(sqs_worker::SQSWorker::new(
+    sqs_worker::SQSWorker::new(
         sqs_client,
         queue_url,
         config
@@ -54,7 +54,7 @@ async fn create_sqs_worker(config: &Config) -> anyhow::Result<SQSWorker> {
             .value()
             .map(|p| p.parse::<i32>().expect("valid number"))
             .unwrap_or(10),
-    ))
+    )
 }
 
 #[tokio::main]
@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
 
     let db = connect_to_database(&config).await?;
-    let sqs_worker = create_sqs_worker(&config).await?;
+    let sqs_worker = create_sqs_worker(&config).await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),

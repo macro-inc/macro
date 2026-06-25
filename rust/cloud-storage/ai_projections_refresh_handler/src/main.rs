@@ -32,7 +32,7 @@ async fn main() -> Result<(), Error> {
         .await
         .context("could not connect to db")?;
 
-    let ai_projection_queue = macro_queues::AiProjectionQueue::new()?;
+    let ai_projection_queue = macro_queues::AiProjectionQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))

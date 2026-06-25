@@ -32,9 +32,9 @@ async fn main() -> Result<(), Error> {
         .await
         .context("could not connect to db")?;
 
-    let document_delete_queue = macro_queues::DocumentDeleteQueue::new()?;
-    let chat_delete_queue = macro_queues::ChatDeleteQueue::new()?;
-    let search_event_queue = macro_queues::SearchEventQueue::new()?;
+    let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
+    let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
