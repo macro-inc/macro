@@ -1,19 +1,13 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{
-    Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
-};
+use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{steps, vars};
+use crate::workflows::{build_appimage_on_tag, steps, vars};
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
     Workflow::new("Build macOS DMG")
-        .permissions(Permissions {
-            contents: Some(Level::Write),
-            ..Default::default()
-        })
         .on(
             Event::default().workflow_call(WorkflowCall::default().add_input(
                 "ref",
@@ -26,6 +20,10 @@ pub fn build_dmg() -> Workflow {
             )),
         )
         .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
+        .add_job(
+            "publish-dmg",
+            publish_dmg_job("${{ inputs.ref }}").add_needs("build-dmg"),
+        )
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
@@ -42,7 +40,14 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .add_step(nix_build_dmg())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
-        .add_step(steps::upload_release_artifacts("artifacts/*"))
+        .add_step(steps::upload_artifact(
+            "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
+            "artifacts/*",
+        ))
+}
+
+fn publish_dmg_job(ref_expr: &str) -> Job {
+    build_appimage_on_tag::publish_job(ref_expr, "release-artifacts/*")
 }
 
 fn assert_arm64() -> Step<Run> {

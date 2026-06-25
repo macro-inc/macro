@@ -179,10 +179,40 @@ pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
         .add_env(("RAW_REF", raw_ref_expr))
 }
 
+/// Upload build artifacts within the workflow run for a later publish job.
+pub fn upload_artifact(name: &str, path: &str) -> Step<Use> {
+    Step::new(format!("Upload {name} artifact"))
+        .uses(
+            "actions",
+            "upload-artifact",
+            "ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ) // v4
+        .add_with(("name", name))
+        .add_with(("path", path))
+        .add_with(("if-no-files-found", "error"))
+        .add_with(("retention-days", 30))
+}
+
+/// Download all build artifacts into one directory for release publishing.
+pub fn download_artifacts(path: &str) -> Step<Use> {
+    Step::new("Download Build Artifacts")
+        .uses(
+            "actions",
+            "download-artifact",
+            "634f93cb2916e3fdff6788551b99b062d0335ce0",
+        ) // v5
+        .add_with(("path", path))
+        .add_with(("merge-multiple", true))
+}
+
 /// Attach build artifacts to the GitHub release for the resolved release tag.
 pub fn upload_release_artifacts(path: &str) -> Step<Use> {
     Step::new("Upload Release Artifacts")
-        .uses("softprops", "action-gh-release", "v2")
+        .uses(
+            "softprops",
+            "action-gh-release",
+            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
+        ) // v2
         .if_condition(Expression::new(
             "startsWith(steps.metadata.outputs.tag, 'v')",
         ))

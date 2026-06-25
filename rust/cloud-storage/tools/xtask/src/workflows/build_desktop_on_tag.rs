@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 
 use gh_workflow::{
-    Concurrency, Create, Event, Expression, Job, Level, Permissions, Push, Run, Step, Workflow,
-    WorkflowDispatch, WorkflowDispatchInput,
+    Concurrency, Event, Expression, Job, Push, Run, Step, Workflow, WorkflowDispatch,
+    WorkflowDispatchInput,
 };
 
 use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag};
@@ -19,10 +19,6 @@ const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
 /// Build the workflow.
 pub fn build_desktop_on_tag() -> Workflow {
     Workflow::new("Build Desktop on Tag")
-        .permissions(Permissions {
-            contents: Some(Level::Write),
-            ..Default::default()
-        })
         .on(desktop_events())
         .concurrency(
             Concurrency::new(Expression::new("desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}"))
@@ -36,6 +32,13 @@ pub fn build_desktop_on_tag() -> Workflow {
         .add_job(
             "build-dmg",
             build_dmg_on_tag::build_dmg_job(RESOLVED_REF).add_needs("resolve-ref"),
+        )
+        .add_job(
+            "publish-release",
+            build_appimage_on_tag::publish_job(RESOLVED_REF, "release-artifacts/*")
+                .add_needs("resolve-ref")
+                .add_needs("build-appimage")
+                .add_needs("build-dmg"),
         )
 }
 

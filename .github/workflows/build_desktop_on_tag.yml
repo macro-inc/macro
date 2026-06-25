@@ -2,7 +2,6 @@
 # Source: rust/cloud-storage/tools/xtask/src/workflows/build_desktop_on_tag.rs
 name: Build Desktop on Tag
 'on':
-  create: {}
   push:
     tags:
     - v[0-9]*
@@ -11,8 +10,6 @@ name: Build Desktop on Tag
       ref:
         description: Release tag to build (v* or refs/tags/v*). Defaults to the selected protected ref or release tag.
         type: string
-permissions:
-  contents: write
 jobs:
   resolve-ref:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag')
@@ -186,13 +183,13 @@ jobs:
         chmod 0755 artifacts/*.AppImage
         (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
       shell: bash
-    - name: Upload Release Artifacts
-      if: startsWith(steps.metadata.outputs.tag, 'v')
-      uses: softprops/action-gh-release@v2
+    - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        tag_name: ${{ steps.metadata.outputs.tag }}
-        files: artifacts/*
-        fail_on_unmatched_files: 'true'
+        name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -361,12 +358,48 @@ jobs:
 
         (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
+    - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
+  publish-release:
+    needs:
+    - resolve-ref
+    - build-appimage
+    - build-dmg
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: release-artifacts
+        merge-multiple: 'true'
     - name: Upload Release Artifacts
       if: startsWith(steps.metadata.outputs.tag, 'v')
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
       with:
         tag_name: ${{ steps.metadata.outputs.tag }}
-        files: artifacts/*
+        files: release-artifacts/*
         fail_on_unmatched_files: 'true'
 concurrency:
   group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
