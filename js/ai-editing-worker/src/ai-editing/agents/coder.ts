@@ -3,8 +3,7 @@ import type { Session } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
-import { createImBlockedTool } from '../tools/im-blocked';
-import { createRunCodeTool } from '../tools/run-code';
+import { createImBlockedTool, createRunCodeTool } from '../tools';
 import type { RunTaskDeps } from './types';
 
 export type { RunTaskDeps } from './types';

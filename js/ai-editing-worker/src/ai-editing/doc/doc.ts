@@ -72,7 +72,7 @@ import * as modify from '../ai-toolkit/modify';
 import type { Session } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
 import * as tree from '../ai-toolkit/tree';
-import { EditError } from '../editor/errors';
+import { EditError } from '../editor';
 import type {
   DocumentOp,
   Format,
@@ -82,7 +82,7 @@ import type {
   Offset,
   Position,
   Scope,
-} from '../editor/ops';
+} from '../editor';
 import type { DocReader, DocWriter, Match } from './interfaces';
 
 const FORMAT_BIT: Record<

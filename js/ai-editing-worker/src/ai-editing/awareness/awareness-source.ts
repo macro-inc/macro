@@ -18,11 +18,12 @@ import {
 } from 'loro-crdt';
 import { match } from 'ts-pattern';
 import type { MarkdownLoroSchemaType } from '../../../../lexical-core/markdown-loro-schema';
-import type { Awareness } from '../queue/types';
+import type { Awareness } from '../queue';
 
 export const AI_NAMES = [
   'Priya',
   'Wolf',
+  'Nora',
   'Finn',
   'Teo',
   'Maya',
@@ -30,11 +31,13 @@ export const AI_NAMES = [
   'Omar',
   'Julia',
   'Ravi',
+  'Lena',
   'Seamus',
   'Zoe',
   'Daniel',
   'Leo',
   'Evan',
+  'Soren',
   'Cleo',
   'Gab',
   'Iris',
@@ -42,12 +45,20 @@ export const AI_NAMES = [
   'Theo',
   'Peter',
   'Nadia',
+  'Milo',
   'Sean',
   'Mara',
   'Ethan',
   'Kai',
   'Luca',
+  'Ava',
   'Jess',
+  'Eric',
+  'Quinn',
+  'Amara',
+  'Juno',
+  'Silas',
+  'Noemi'
 ].map((n) => `${n} (AI)`);
 /** Palette names must resolve to `--color-<name>` (see collaboration/color.ts). */
 export const COLORS = [

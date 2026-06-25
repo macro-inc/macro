@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { args } from "./utils";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
 
 const {
 	port,
@@ -14,22 +15,21 @@ const {
 	"coding-model": codingModel,
 	debug,
 	_,
-} = await args(
-	"$0 <document-id> <prompt>",
-	(y) =>
-		y
-			.option("user-token", { type: "string", demandOption: true, describe: "user JWT or full browser cookie string" })
-			.option("port", { type: "number", default: 8933, describe: "worker port" })
-			.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
-			.option("provider", { type: "string", describe: "override provider for all roles: anthropic, cerebras, openai (defaults are per-role)" })
-			.option("supervisor-provider", { type: "string", describe: "provider for the supervisor agent (overrides --provider)" })
-			.option("interpret-provider", { type: "string", describe: "provider for the interpret pass (overrides --provider)" })
-			.option("coding-provider", { type: "string", describe: "provider for the coding agents (overrides --provider)" })
-			.option("supervisor-model", { type: "string", describe: "model ID for the supervisor agent" })
-			.option("interpret-model", { type: "string", describe: "model ID for the interpret pass" })
-			.option("coding-model", { type: "string", describe: "model ID for the coding (writer) agents" })
-			.option("debug", { type: "boolean", default: false, describe: "include the supervisor step trace in the response" }),
-);
+} = await yargs(hideBin(process.argv))
+	.usage("$0 <document-id> <prompt>")
+	.help()
+	.option("user-token", { type: "string", demandOption: true, describe: "user JWT or full browser cookie string" })
+	.option("port", { type: "number", default: 8933, describe: "worker port" })
+	.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
+	.option("provider", { type: "string", describe: "override provider for all roles: anthropic, cerebras, openai (defaults are per-role)" })
+	.option("supervisor-provider", { type: "string", describe: "provider for the supervisor agent (overrides --provider)" })
+	.option("interpret-provider", { type: "string", describe: "provider for the interpret pass (overrides --provider)" })
+	.option("coding-provider", { type: "string", describe: "provider for the coding agents (overrides --provider)" })
+	.option("supervisor-model", { type: "string", describe: "model ID for the supervisor agent" })
+	.option("interpret-model", { type: "string", describe: "model ID for the interpret pass" })
+	.option("coding-model", { type: "string", describe: "model ID for the coding (writer) agents" })
+	.option("debug", { type: "boolean", default: false, describe: "include the supervisor step trace in the response" })
+	.parse();
 
 const documentId = _[0] as string | undefined;
 const prompt = _[1] as string | undefined;

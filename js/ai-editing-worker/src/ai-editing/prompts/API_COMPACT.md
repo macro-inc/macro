@@ -1,6 +1,6 @@
-# Compact Editor API
+# Summary of Editor API
 
-The writer has the complete API reference. Use this compact list to plan native edits and describe writer tasks with the right capability names.
+The writer has the complete API reference. Use this compact list to help yourself understand what our editing team is capable of.
 
 ## Inline Formatting
 
@@ -37,4 +37,4 @@ The writer has the complete API reference. Use this compact list to plan native 
 - Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`, `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`
 - Updates: `setImageAlt`, `setImageUrl`, `setVideoUrl`, `setVideoControls`, `setDate`
 
-Prefer native objects over text simulations: use dividers, tables, headings, quotes, code blocks, images, videos, equations, dates, mentions, and document-cards when those are what the user means.
+Our editing team is very well versed in how to use the library and you should never tell them how to get the job done. But this is to help you understand what they are capable of.

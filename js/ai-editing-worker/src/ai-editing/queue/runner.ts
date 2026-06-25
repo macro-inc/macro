@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern';
-import type { DocReader, DocWriter } from '../doc/interfaces';
-import type { DocumentOp, NodeRef } from '../editor/ops';
+import type { DocReader, DocWriter } from '../doc';
+import type { DocumentOp, NodeRef } from '../editor';
 import { animate } from './animators';
 import type { RandomSource } from './random-source';
 import type { Awareness, DocumentOpStep } from './types';

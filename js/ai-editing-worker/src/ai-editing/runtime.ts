@@ -1,12 +1,10 @@
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import { $getId } from '../../../lexical-core/plugins/nodeIdPlugin';
 import type { Session } from './ai-toolkit/session';
-import type { AwarenessSource } from './awareness/awareness-source';
-import type { Doc } from './doc/doc';
-import type { DocumentOp } from './editor/ops';
-import { realRandomSource } from './queue/random-source';
-import { type OpResult, runQueue } from './queue/runner';
-import type { DocumentOpQueueParams } from './queue/types';
+import type { AwarenessSource } from './awareness';
+import type { Doc } from './doc';
+import type { DocumentOp } from './editor';
+import { realRandomSource, type OpResult, runQueue, type DocumentOpQueueParams } from './queue';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
 export function docIds(session: Session): Set<string> {

@@ -90,7 +90,7 @@ We have a big "ai-toolkit" lexical library that has a bunch of utility functions
 
 It's `apply` runs as a discrete Lexical update, delegating the actual mutation to
 the existing `ai-toolkit` `$`-helpers usually resolved by our durable lexical
-node ids.
+node ids. It is what turns DocumentOps into actual edits to the lexical document.
 
 ## Cursors and peer ids
 

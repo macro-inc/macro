@@ -1,9 +1,8 @@
-import type { AwarenessSource } from '../awareness/awareness-source';
-import type { PeerPool } from '../awareness/peer-pool';
-import type { Doc } from '../doc/doc';
-import type { DocumentOp } from '../editor/ops';
-import type { DocumentOpQueueParams } from '../queue/types';
-import type { RunCodeToolOptions } from '../tools/run-code';
+import type { AwarenessSource, PeerPool } from '../awareness';
+import type { Doc } from '../doc';
+import type { DocumentOp } from '../editor';
+import type { DocumentOpQueueParams } from '../queue';
+import type { RunCodeToolOptions } from '../tools';
 
 export type RunTaskDeps = {
   doc: Doc;

@@ -5,7 +5,7 @@ import {
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
-import type { DocumentOp } from './ai-editing/editor/ops';
+import type { DocumentOp } from './ai-editing/editor';
 import { SANDBOX_CODE } from './editor-sandbox-code';
 
 /** Upper bound on inserts per snippet. The host mints the ids (QuickJS has no

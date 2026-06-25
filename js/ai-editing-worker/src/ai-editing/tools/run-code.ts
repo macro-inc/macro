@@ -1,10 +1,10 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { Session } from '../ai-toolkit';
-import type { AwarenessSource } from '../awareness/awareness-source';
-import type { Doc } from '../doc/doc';
-import type { DocumentOp } from '../editor/ops';
-import type { DocumentOpQueueParams } from '../queue/types';
+import type { AwarenessSource } from '../awareness';
+import type { Doc } from '../doc';
+import type { DocumentOp } from '../editor';
+import type { DocumentOpQueueParams } from '../queue';
 import { type CodeRunner, runEditorCode } from '../runtime';
 
 export type RunCodeToolOptions = {

@@ -19,10 +19,8 @@ import {
   loadSnapshot,
   toSnapshot,
 } from './ai-editing/ai-toolkit';
-import { nextAiPeerId } from './ai-editing/awareness/ai-peer';
-import { realAwarenessSource } from './ai-editing/awareness/awareness-source';
-import { sharedPeerPool } from './ai-editing/awareness/peer-pool';
-import type { DocumentOp } from './ai-editing/editor/ops';
+import { nextAiPeerId, realAwarenessSource, sharedPeerPool } from './ai-editing/awareness';
+import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
@@ -218,6 +216,12 @@ export async function runEditSession(
           usage
         )
       : undefined;
+
+    if (trace) {
+      console.log(
+        `[debug-trace] ${JSON.stringify({ documentId: args.documentId, debug: trace })}`
+      );
+    }
 
     return { usage, ops: allOps, trace, clarification };
   } finally {
