@@ -1,6 +1,5 @@
 interface ImportMetaEnv {
   readonly __APP_VERSION__: string;
-  readonly __JS_BUNDLE_BUILD__: string;
   readonly __LOCAL_JWT__: string;
   readonly __GIT_BRANCH__: string;
 

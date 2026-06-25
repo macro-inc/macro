@@ -6,7 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
-import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown } from '@ui';
+import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown, cn } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -668,12 +668,78 @@ type BundleDebugInfo = {
   nativeBuild: number;
 };
 
-const runtimeJsBuildInfo = {
-  bundleBuild: import.meta.env.__JS_BUNDLE_BUILD__,
+type EntryAssetInfo = {
+  freshIndexEntryUrl: string | null;
+  loadedEntryUrl: string | null;
+  matches: boolean | null;
+  error?: string;
 };
 
-function runtimeBundleMatches(info: BundleDebugInfo): boolean {
-  return String(info.bundleBuild) === runtimeJsBuildInfo.bundleBuild;
+function normalizeAssetUrl(value: string): string {
+  const url = new URL(value, window.location.href);
+  url.hash = '';
+  url.search = '';
+  return url.href;
+}
+
+function formatAssetUrl(value: string | null | undefined): string {
+  if (!value) return 'Unavailable';
+  try {
+    const path = new URL(value, window.location.href).pathname;
+    return path.split('/').filter(Boolean).at(-1) ?? value;
+  } catch {
+    return value;
+  }
+}
+
+function extractEntryScriptUrl(html: string, indexUrl: string): string | null {
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  const entryScript = document.querySelector<HTMLScriptElement>(
+    'script[type="module"][src]'
+  );
+  const src = entryScript?.getAttribute('src');
+  return src ? new URL(src, indexUrl).href : null;
+}
+
+async function loadEntryAssetInfo(): Promise<EntryAssetInfo> {
+  const loadedEntryUrl = window.__MACRO_RUNTIME_ENTRY_URL__ ?? null;
+  if (!loadedEntryUrl) {
+    return {
+      freshIndexEntryUrl: null,
+      loadedEntryUrl,
+      matches: null,
+      error: 'Runtime entry URL unavailable',
+    };
+  }
+
+  try {
+    const indexUrl = new URL('index.html', loadedEntryUrl);
+    indexUrl.searchParams.set('__macro_bundle_probe', Date.now().toString());
+    const browserFetch = window.__MACRO_BROWSER_FETCH__ ?? window.fetch.bind(window);
+    const response = await browserFetch(indexUrl.href, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error(`Fresh index fetch failed with ${response.status}`);
+    }
+    const freshIndexEntryUrl = extractEntryScriptUrl(
+      await response.text(),
+      indexUrl.href
+    );
+    return {
+      freshIndexEntryUrl,
+      loadedEntryUrl,
+      matches:
+        freshIndexEntryUrl !== null &&
+        normalizeAssetUrl(loadedEntryUrl) ===
+          normalizeAssetUrl(freshIndexEntryUrl),
+    };
+  } catch (error) {
+    return {
+      freshIndexEntryUrl: null,
+      loadedEntryUrl,
+      matches: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function BundleVersionRow() {
@@ -685,6 +751,10 @@ function BundleVersionRow() {
       return null;
     })
   );
+  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
+    open ? loadEntryAssetInfo() : null
+  );
+  
   return (
     <Show when={bundleDebugInfo()}>
       {(info) => (
@@ -709,45 +779,80 @@ function BundleVersionRow() {
             <Panel active depth={2} class="rounded-xl">
               <Panel.Header class="px-6">
                 <Dialog.Title class="text-ink text-sm font-semibold">
-                  Version Info
+                  App Debug Info
                 </Dialog.Title>
               </Panel.Header>
               <Panel.Body class="p-6 font-sans flex flex-col gap-4">
                 <div class="grid gap-2 text-sm">
                   <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Served</span>
+                    <span class="text-ink-muted">Selected bundle</span>
                     <span class="text-ink">
                       {info().bundleBuild}{' '}
                       ({info().source === 'embedded' ? 'app' : 'ota'})
                     </span>
                   </div>
                   <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">iOS bundle</span>
+                    <span class="text-ink-muted">Native build</span>
                     <span class="text-ink">{info().nativeBuild}</span>
                   </div>
                   <div class="flex items-center justify-between gap-4">
-                    <span class="text-ink-muted">Runtime</span>
+                    <span class="text-ink-muted">Runtime entry</span>
                     <span
-                      class="text-right"
-                      classList={{
-                        'text-ink': runtimeBundleMatches(info()),
-                        'text-failure': !runtimeBundleMatches(info()),
-                      }}
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
                     >
-                      {runtimeJsBuildInfo.bundleBuild}
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Fresh index entry</span>
+                    <span
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
                     </span>
                   </div>
                   <div class="flex items-center justify-between gap-4">
                     <span class="text-ink-muted">Matches</span>
                     <span
-                      classList={{
-                        'text-ink': runtimeBundleMatches(info()),
-                        'text-failure': !runtimeBundleMatches(info()),
-                      }}
+                      class={cn(
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
                     >
-                      {runtimeBundleMatches(info()) ? 'true' : 'false'}
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : entryAssetInfo()?.matches == null
+                          ? 'unknown'
+                          : entryAssetInfo()?.matches
+                            ? 'true'
+                            : 'false'}
                     </span>
                   </div>
+                  <Show when={entryAssetInfo()?.error}>
+                    {(error) => (
+                      <div class="flex items-center justify-between gap-4">
+                        <span class="text-ink-muted">Error</span>
+                        <span class="text-right text-failure break-all">
+                          {error()}
+                        </span>
+                      </div>
+                    )}
+                  </Show>
                 </div>
               </Panel.Body>
             </Panel>
