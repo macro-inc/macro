@@ -131,7 +131,7 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
   "metrics",
   "trace",
 ] }
-opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
 pdfium-render = { version = "0.8.37", default-features = false, features = ["pdfium_7543", "thread_safe"] }
