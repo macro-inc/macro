@@ -26,6 +26,18 @@ import type {
 } from '@service-search/generated/models';
 import { type Accessor, createMemo, on, type Setter } from 'solid-js';
 
+// A fully-quoted term searches exactly, not as a prefix. Quotes stay in the
+// query so the backend tokenizer still groups a quoted phrase.
+function isSingleQuotedTerm(query: string): boolean {
+  const trimmed = query.trim();
+  return (
+    trimmed.length >= 2 &&
+    trimmed.startsWith('"') &&
+    trimmed.endsWith('"') &&
+    trimmed.indexOf('"', 1) === trimmed.length - 1
+  );
+}
+
 // Map the tasks-view property filters (status/priority/assignee/custom) into the
 // search request shape, mirroring the soup path so search and soup agree. Values
 // are grouped by property id: multiple values on one property are OR'd (a task
@@ -235,6 +247,7 @@ export const createSearchState = ({
       const state = filters();
       const query = debouncedSearchForService();
       const baseFilters = filterDataToQueryFilters(state);
+      const matchType = isSingleQuotedTerm(query) ? 'exact' : 'partial';
 
       // CRM is opt-in on the backend. A view includes CRM in search unless it
       // NIL-excludes the CRM target (the same sentinel pattern other entity
@@ -245,7 +258,7 @@ export const createSearchState = ({
       if (!includeCrm) {
         return {
           search_on: 'name_content',
-          match_type: 'partial',
+          match_type: matchType,
           query,
           filters: baseFilters,
         };
@@ -259,7 +272,7 @@ export const createSearchState = ({
       // Companies preset.
       return {
         search_on: 'name_content',
-        match_type: 'partial',
+        match_type: matchType,
         query,
         include_crm: true,
         filters: {
