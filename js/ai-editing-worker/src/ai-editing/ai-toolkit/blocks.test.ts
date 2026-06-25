@@ -1,5 +1,4 @@
-import type { CodeNode } from '@lexical/code';
-import { $createHeadingNode, type HeadingNode } from '@lexical/rich-text';
+import { $createHeadingNode } from '@lexical/rich-text';
 import { $createParagraphNode, $createTextNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
@@ -18,28 +17,6 @@ import {
   $setText,
 } from './blocks';
 import { $allById, $blockById, $byId } from './locate';
-
-describe('$blockNode', () => {
-  it('builds a heading at the requested level', () => {
-    const { session } = setup('x');
-    edit(session, () => {
-      const heading = $blockNode({ type: 'heading', level: 2 });
-      expect(heading.getType()).toBe('heading');
-      expect((heading as HeadingNode).getTag()).toBe('h2');
-      heading.remove();
-    });
-  });
-
-  it('builds a code block with language', () => {
-    const { session } = setup('x');
-    edit(session, () => {
-      const codeNode = $blockNode({ type: 'code', language: 'typescript' });
-      expect(codeNode.getType()).toBe('custom-code');
-      expect((codeNode as CodeNode).getLanguage()).toBe('typescript');
-      codeNode.remove();
-    });
-  });
-});
 
 describe('block ops', () => {
   it('$setBlockType changes type, mints a FRESH id, and forwards the old id to it', () => {

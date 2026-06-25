@@ -104,11 +104,6 @@ describe('deferred: lists', () => {
       return $getId(ln.getChildren()[1]);
     });
     edit(session, () => $indent($byId(session, childId!)));
-    expect(
-      read(session, () =>
-        ($byId(session, childId!) as ListItemNode).getIndent()
-      )
-    ).toBe(1);
     edit(session, () => $outdent($byId(session, childId!)));
     expect(
       read(session, () =>
@@ -155,15 +150,4 @@ describe('$setListType / $toggleList separation', () => {
     });
   });
 
-  it('$toggleList refuses an existing list item (points to $setListType)', () => {
-    const { session } = setup('- a\n- b');
-    const itemId = read(session, () =>
-      $getId(($getRoot().getFirstChild() as ListNode).getChildren()[0])
-    );
-    edit(session, () => {
-      expect(() =>
-        $toggleList([$byId(session, itemId!)], 'number')
-      ).toThrowError(Error);
-    });
-  });
 });

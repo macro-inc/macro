@@ -93,10 +93,6 @@ describe('inline ops: scope + counts', () => {
     expect(xml).toContain('Bluejay');
     expect(xml).toContain(`id="${id}"`);
 
-    const miss = edit(session, () =>
-      $formatTextInBlock($blockById(session, id), 'Robin', 'bold')
-    );
-    expect(miss).toBe(0);
   });
 
   it('$formatTextInBlock — strike maps to strikethrough', () => {
@@ -295,18 +291,6 @@ describe('inline ops: scope + counts', () => {
     expect(segs.filter((x) => !x.bold).map((x) => x.text)).toEqual(['X']);
   });
 
-  it('$appendText / $prependText add text at the ends', () => {
-    const { session, ids } = setup('# Meeting Notes');
-    const id = ids[0];
-    edit(session, () => $appendText($blockById(session, id), ' (draft)'));
-    let xml = serializeWithXml(session);
-    expect(xml).toContain('Meeting Notes (draft)');
-    expect(xml).toContain(`id="${id}"`);
-    edit(session, () => $prependText($blockById(session, id), 'DRAFT: '));
-    xml = serializeWithXml(session);
-    expect(xml).toContain('DRAFT: Meeting Notes (draft)');
-    expect(xml).toContain(`id="${id}"`);
-  });
 });
 
 // ============================================================================

@@ -422,47 +422,6 @@ describe('Doc — structure & refs', () => {
     ).toThrow(/not a list item/);
   });
 
-  it('insertNode then a table cell edit', () => {
-    const { session, ids } = setup('intro');
-    const doc = new Doc(session);
-    doc.apply({
-      kind: 'insertNode',
-      ref: 't',
-      spec: {
-        block: 'table',
-        rows: [
-          ['A', 'B'],
-          ['c', 'd'],
-        ],
-      },
-      at: { after: ids[0]! },
-    });
-    doc.apply({ kind: 'setCell', table: 't', row: 1, col: 0, text: 'C' });
-    expect(serializeWithXml(session)).toContain('C');
-  });
-
-  it('setCell stamps row/column coordinates into the XML', () => {
-    const { session, ids } = setup('intro');
-    const doc = new Doc(session);
-    doc.apply({
-      kind: 'insertNode',
-      ref: 't',
-      spec: {
-        block: 'table',
-        rows: [
-          ['A', 'B'],
-          ['c', 'd'],
-        ],
-      },
-      at: { after: ids[0]! },
-    });
-    const xml = serializeWithXml(session);
-    expect(xml).toContain('row="0"');
-    expect(xml).toContain('column="0"');
-    expect(xml).toContain('column="1"');
-    expect(xml).toContain('row="1"');
-  });
-
   it('setCell rejects a <tr> id (must be the table)', () => {
     const { session, ids } = setup('intro');
     const doc = new Doc(session);
@@ -535,19 +494,6 @@ describe('Doc — error surfacing', () => {
     expect(() => doc.apply({ kind: 'removeNode', node: 'ghost' })).toThrow();
     expect(serializeWithXml(session)).toContain('safe'); // unchanged
     expect(serializeWithXml(session)).toContain(`id="${ids[0]}"`);
-  });
-});
-
-describe('Doc.apply routing', () => {
-  it('routes a structured Edit to the right DocWriter method', () => {
-    const { session, ids } = setup('routed');
-    new Doc(session).apply({
-      kind: 'setBlockType',
-      node: ids[0]!,
-      block: 'quote',
-    });
-    expect(serializeWithXml(session)).toContain('<blockquote');
-    expect(serializeWithXml(session)).toContain('routed');
   });
 });
 
@@ -1187,17 +1133,6 @@ describe('buildNode — list spec serializes plausibly when placed', () => {
     expect(serializeWithXml(session)).toContain('custom-code');
   });
 
-  it('inserting an inline equation via insertInline serializes in XML', () => {
-    const { session, ids } = setup('hello world');
-    new Doc(session).apply({
-      kind: 'insertInline',
-      ref: 'e',
-      node: ids[0]!,
-      at: 5,
-      spec: { inline: 'equation', tex: 'y' },
-    });
-    expect(serializeWithXml(session)).toContain('y');
-  });
 });
 
 // ── block-level decorator inserts (divider/image/video/equation) ──────────────

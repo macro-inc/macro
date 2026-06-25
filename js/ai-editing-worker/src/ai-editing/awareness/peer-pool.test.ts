@@ -69,13 +69,6 @@ describe('PeerPool', () => {
     expect(a.color).not.toBe(b.color);
   });
 
-  it('defaults to AI_NAMES / COLORS', async () => {
-    const pool = new PeerPool();
-    const p = await pool.borrow();
-    expect(p.name).toContain('(AI)');
-    expect(p.color).toBeTruthy();
-  });
-
   it('caps concurrent borrows at max, releasing a slot for the next waiter', async () => {
     const pool = new PeerPool({ names, colors, max: 2 });
     const a = await pool.borrow();

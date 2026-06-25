@@ -4,32 +4,17 @@ use crate::domain::ports::editing::{EditResult, EditUsage, EditingWorkerService}
 use reqwest::Client;
 use std::sync::Arc;
 
-const DSS_AUTH_HEADER: &str = "x-document-storage-service-auth-key";
-const DSS_USER_ID_HEADER: &str = "x-document-storage-service-user-id";
-
 /// Reqwest-backed client for the AI editing worker.
 #[derive(Clone)]
 pub struct ReqwestEditingWorkerClient {
-    dss_url: String,
-    dss_auth_key: String,
     worker_url: String,
     client: Arc<Client>,
 }
 
 impl ReqwestEditingWorkerClient {
     /// Construct a new client.
-    pub fn new(
-        dss_url: String,
-        dss_auth_key: String,
-        worker_url: String,
-        client: Arc<Client>,
-    ) -> Self {
-        Self {
-            dss_url,
-            dss_auth_key,
-            worker_url,
-            client,
-        }
+    pub fn new(worker_url: String, client: Arc<Client>) -> Self {
+        Self { worker_url, client }
     }
 }
 
@@ -38,39 +23,11 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     async fn edit(
         &self,
         document_id: &str,
-        user_id: &str,
+        user_token: &str,
         instructions: &str,
     ) -> anyhow::Result<EditResult> {
-        let token_resp = self
-            .client
-            .post(format!(
-                "{}/documents/permissions_token/{}",
-                self.dss_url, document_id
-            ))
-            .header(DSS_AUTH_HEADER, &self.dss_auth_key)
-            .header(DSS_USER_ID_HEADER, user_id)
-            .send()
-            .await?;
-
-        let status = token_resp.status();
-        anyhow::ensure!(
-            status.as_u16() != 403 && status.as_u16() != 404,
-            "document not found or you don't have edit access"
-        );
-        anyhow::ensure!(
-            status.is_success(),
-            "failed to get document permission token: {status}"
-        );
-
-        // real type is in dss but we can't import from there
-        #[derive(serde::Deserialize)]
-        struct TokenResponse {
-            token: String,
-        }
-        let TokenResponse { token } = token_resp.json().await?;
-
         let request_body = serde_json::json!({
-            "token": token,
+            "userToken": user_token,
             "documentId": document_id,
             "prompt": instructions,
             "models": {

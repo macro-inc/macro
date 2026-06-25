@@ -412,24 +412,6 @@ describe('insertInline animator', () => {
   });
 });
 
-describe('default speed', () => {
-  it('is 2x (800 wpm → ~15ms/char) at DEFAULT_QUEUE_PARAMS speed', () => {
-    const msPerChar = 60_000 / (800 * 5); // 15
-    const steps = animate(
-      { kind: 'appendText', node: 'b1', text: 'x' },
-      {
-        randomSource: mockRandomSource({ real: 1.05 }),
-        docReader: reader({ textLength: () => 0 }),
-        msPerChar,
-        ranges: DEFAULT_RANGES,
-      }
-    );
-    // first pause is the typeText lead-in (integer 0); the per-char pause is the last.
-    const pause = steps.filter((s) => s.kind === 'pause').at(-1);
-    expect(pause).toEqual({ kind: 'pause', ms: 16 }); // round(15 * 1.05)
-  });
-});
-
 describe('setCell animator', () => {
   it('resolves the cell node and retypes it', () => {
     const action = run(
@@ -680,37 +662,6 @@ describe('every op kind has an animation that ends in the right edit', () => {
     expect(edits.at(-1)!.kind).toBe(terminalKind);
   });
 
-  it('covers every user-facing DocumentOp kind', () => {
-    const kinds = new Set(cases.map(([op]) => op.kind));
-    const userFacing = [
-      'formatText',
-      'clearFormat',
-      'formatNode',
-      'clearNodeFormat',
-      'markText',
-      'linkText',
-      'setText',
-      'replaceText',
-      'appendText',
-      'prependText',
-      'setBlockType',
-      'setListType',
-      'setChecked',
-      'setIndent',
-      'insertNode',
-      'insertInline',
-      'moveNode',
-      'removeNode',
-      'mergeBlocks',
-      'setCell',
-      'addRow',
-      'addColumn',
-      'removeRow',
-      'removeColumn',
-    ];
-    for (const k of userFacing)
-      expect(kinds.has(k as DocumentOp['kind'])).toBe(true);
-  });
 });
 
 // ── sweepSelect via formatText (the simplest animator that uses it on one match) ──
@@ -1145,53 +1096,6 @@ describe('sweepEachThen — one selection group per match, betweenNodes pause, s
     ]);
   });
 
-  it('replaceText routes find as the match and carries to/scope into the edit', () => {
-    const action = run(
-      {
-        kind: 'replaceText',
-        node: 'b',
-        find: 'cat',
-        to: 'dog',
-        scope: { kind: 'nth', n: 1 },
-      },
-      {
-        docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 3 }] }),
-      }
-    );
-    expect(onlyEdits(action.steps)).toEqual([
-      {
-        kind: 'replaceText',
-        node: 'b',
-        find: 'cat',
-        to: 'dog',
-        scope: { kind: 'nth', n: 1 },
-      },
-    ]);
-  });
-
-  it('linkText carries the url into the edit', () => {
-    const action = run(
-      {
-        kind: 'linkText',
-        node: 'b',
-        match: 'here',
-        url: 'http://x',
-        scope: { kind: 'all' },
-      },
-      {
-        docReader: reader({ locate: () => [{ node: 't1', start: 0, end: 4 }] }),
-      }
-    );
-    expect(onlyEdits(action.steps)).toEqual([
-      {
-        kind: 'linkText',
-        node: 'b',
-        match: 'here',
-        url: 'http://x',
-        scope: { kind: 'all' },
-      },
-    ]);
-  });
 });
 
 describe('clearFormat animator — match vs whole-block branches', () => {

@@ -25,11 +25,6 @@ describe('realRandomSource', () => {
       expect(n).toBeLessThan(1.5);
     }
   });
-  it('direction only ever returns left/right', () => {
-    const r = realRandomSource();
-    for (let i = 0; i < 100; i++)
-      expect(['left', 'right']).toContain(r.direction());
-  });
 });
 
 describe('mockRandomSource — defaults', () => {

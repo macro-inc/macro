@@ -55,6 +55,11 @@ pub struct DocumentToolContext<
 
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
+
+    /// The caller's Bearer token, set per-request. Used by EditDocument to
+    /// authenticate with the editing worker (which exchanges it for a
+    /// document-scoped JWT internally).
+    pub user_token: Option<String>,
 }
 
 impl<
@@ -71,6 +76,7 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            user_token: self.user_token.clone(),
         }
     }
 }
@@ -108,6 +114,7 @@ impl<
             sync_service_client,
             creator,
             editing,
+            user_token: None,
         }
     }
 }

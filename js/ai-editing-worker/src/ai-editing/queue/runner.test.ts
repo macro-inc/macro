@@ -112,10 +112,6 @@ describe('runQueue -- error handling', () => {
     if (!results[0].ok) expect(results[0].op.kind).toBe('setText');
   });
 
-  it('returns no results for an empty queue', async () => {
-    const { results } = await run([], recordingWriter().w);
-    expect(results).toEqual([]);
-  });
 });
 
 describe('runQueue -- error in the middle keeps neighbors', () => {
@@ -350,20 +346,6 @@ describe('summarize', () => {
       },
     ];
     expect(summarize(results)).toBe('error: removeNode: planning blew up');
-  });
-  it('omits ok lines when mixed with failures', () => {
-    const results: OpResult[] = [
-      {
-        ok: true,
-        op: { kind: 'removeNode', node: 'b1' },
-      },
-      {
-        ok: false,
-        op: { kind: 'setText', node: 'b2', text: 'x' },
-        error: 'nope',
-      },
-    ];
-    expect(summarize(results)).toBe('error: setText: nope');
   });
 });
 

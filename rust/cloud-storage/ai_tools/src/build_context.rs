@@ -228,8 +228,6 @@ pub async fn build_tool_service_context_from_env(
         lexical_client,
         sync_client.as_ref().clone(),
         Arc::new(ReqwestEditingWorkerClient::new(
-            document_storage_service_url.clone(),
-            env.document_storage_service_auth_key.to_string(),
             ai_editing_worker_url,
             Arc::new(reqwest::Client::new()),
         )),

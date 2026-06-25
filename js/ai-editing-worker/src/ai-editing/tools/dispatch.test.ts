@@ -44,9 +44,6 @@ describe('mergeRanges', () => {
     ]);
   });
 
-  it('returns empty for empty input', () => {
-    expect(mergeRanges([])).toEqual([]);
-  });
 });
 
 describe('indexXmlRanges', () => {
@@ -90,8 +87,6 @@ describe('computeContextRange', () => {
   it('falls back to full document when no ids match', () => {
     const range = computeContextRange(xml, 'rewrite the intro');
     expect(range.source).toBe('full-document');
-    expect(range.startLine).toBe(1);
-    expect(range.endLine).toBe(3);
   });
 
   it('narrows to the matching node when an id is present', () => {

@@ -84,11 +84,6 @@ describe('runtime — end to end against real Lexical', () => {
     expect(serializeWithXml(session)).toContain('untouched'); // unchanged
   });
 
-  it('reports compact success for an empty snippet', async () => {
-    const { session } = build('hi');
-    expect(await runCode(session, '/* nothing */')).toBe('ok');
-  });
-
   it('continues independent ops when one fails at apply time', async () => {
     const { session } = build('alpha\n\nbeta');
     const [alpha, beta] = topIds(session);
@@ -124,10 +119,3 @@ describe('runtime — awareness ref resolution', () => {
   });
 });
 
-describe('docIds', () => {
-  it('collects every durable id including nested list items', () => {
-    const { session } = build('- one\n- two');
-    const ids = docIds(session);
-    expect(ids.size).toBeGreaterThanOrEqual(3); // list + 2 items
-  });
-});

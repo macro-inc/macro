@@ -520,6 +520,7 @@ fn stream_and_save_message(
         // Carry the feature on the context so tool-spawned subagents attribute to it.
         let mut tool_context = tool_context;
         tool_context.usage_context = usage_ctx.clone();
+        tool_context.document_tool_context.user_token = Some(jwt_token.clone());
         let mut session = agent_loop
             .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
             .await;

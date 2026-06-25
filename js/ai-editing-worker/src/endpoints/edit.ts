@@ -8,6 +8,11 @@ import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
+import {
+  fetchDocToken,
+  makeSearchContacts,
+  makeSearchDocuments,
+} from '../service-clients';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -59,7 +64,7 @@ const DEFAULT_MODELS = {
 } satisfies Record<string, Model>;
 
 const EditBody = z.object({
-  token: z.string(),
+  userToken: z.string(),
   documentId: z.string(),
   prompt: z.string(),
   models: z
@@ -79,7 +84,7 @@ const edit = new Hono<{ Bindings: Bindings; Variables: EnvVariables }>();
 edit.post('/', zValidator('json', EditBody), async (c) => {
   const env = c.var.env;
   const {
-    token,
+    userToken,
     documentId,
     prompt,
     models: modelsSpec,
@@ -93,10 +98,12 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     return PROVIDERS[provider].create({ apiKey })(model);
   };
 
-  const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${token}`;
   const signal = c.req.raw.signal;
 
   try {
+    const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
+    const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
+
     const { usage, ops, trace } = await runEditSession({
       wsUrl,
       documentId,
@@ -115,15 +122,12 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       debug,
       runner: runInSandbox,
       signal,
-      searchContacts: async (_query) => [
-        {
-          kind: 'user',
-          userId: 'stub-amy-user-id',
-          email: 'amy@example.com',
-          name: 'Amy',
-        },
-      ],
-      searchDocuments: async (_query) => [],
+      searchContacts: makeSearchContacts(
+        env.CONTACTS_SERVICE_BASE,
+        env.AUTH_SERVICE_BASE,
+        userToken
+      ),
+      searchDocuments: makeSearchDocuments(env.SEARCH_SERVICE_BASE, userToken),
     });
     return c.json({ ok: true, usage, ops, trace });
   } catch (err) {

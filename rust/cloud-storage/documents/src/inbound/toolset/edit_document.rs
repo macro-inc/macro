@@ -53,11 +53,15 @@ where
     async fn call(
         &self,
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
-        request_context: RequestContext,
+        _request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
+        let user_token = ctx.user_token.as_deref().ok_or_else(|| {
+            let e = anyhow::anyhow!("user_token not available on DocumentToolContext");
+            ToolCallError { description: "editing worker requires a user token".to_string(), internal_error: e }
+        })?;
         let result = ctx
             .editing
-            .edit(&self.document_id, &request_context.user_id.to_string(), &self.instructions)
+            .edit(&self.document_id, user_token, &self.instructions)
             .await
             .map_err(|e| ToolCallError {
                 description: e.to_string(),

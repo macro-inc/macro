@@ -282,8 +282,6 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client.clone(),
         std::sync::Arc::new(
             documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
-                config.document_storage_service_url.clone(),
-                config.document_storage_service_auth_key.clone(),
                 config.ai_editing_worker_url.clone(),
                 std::sync::Arc::new(reqwest::Client::new()),
             ),

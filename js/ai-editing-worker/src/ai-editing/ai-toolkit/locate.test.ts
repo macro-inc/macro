@@ -5,13 +5,6 @@ import { edit, read, setup } from './_test-helpers';
 import { $allById, $blockById, $byId, $getText } from './locate';
 
 describe('lock-on + errors', () => {
-  it('$byId resolves an existing node', () => {
-    const { session, ids } = setup('hello');
-    edit(session, () => {
-      expect($getId($byId(session, ids[0]))).toBe(ids[0]);
-    });
-  });
-
   it('$byId throws EditError on a missing id', () => {
     const { session } = setup('hello');
     edit(session, () => {

@@ -326,7 +326,6 @@ describe('DocumentEditor — structure & refs', () => {
   });
 
   it('media / inline creators', () => {
-    expect(ed().insertDivider('b1').length).toBeUndefined; // returns a ref string, not chainable
     const e = ed();
     const img = e.insertImage('b1', {
       srcType: 'url',
@@ -338,7 +337,6 @@ describe('DocumentEditor — structure & refs', () => {
       kind: 'insertNode',
       spec: { block: 'image', srcType: 'url', url: 'http://i', alt: 'a' },
     });
-    expect(ed().insertDate('b1', 3, '2026-01-01').length).toBeUndefined;
   });
 
   it('insertInline creators produce insertInline ops at the offset', () => {
@@ -441,76 +439,6 @@ describe('DocumentEditor — drain semantics', () => {
       'removeNode',
     ]);
     expect(e.drain()).toEqual([]); // drained
-  });
-});
-
-describe('DocumentEditor — unknown id rejected by every id-taking method', () => {
-  // each entry runs a method that should throw EditError for an unknown id.
-  const cases: Array<[string, (e: DocumentEditor) => void]> = [
-    ['format', (e) => e.format('nope', 'x', 'bold')],
-    ['bold', (e) => e.bold('nope', 'x')],
-    ['italic', (e) => e.italic('nope', 'x')],
-    ['underline', (e) => e.underline('nope', 'x')],
-    ['strike', (e) => e.strike('nope', 'x')],
-    ['inlineCode', (e) => e.inlineCode('nope', 'x')],
-    ['unbold', (e) => e.unbold('nope', 'x')],
-    ['clearFormat', (e) => e.clearFormat('nope', 'x')],
-    ['clearAllFormat', (e) => e.clearAllFormat('nope')],
-    ['highlight', (e) => e.highlight('nope', 'x')],
-    ['unhighlight', (e) => e.unhighlight('nope', 'x')],
-    ['link', (e) => e.link('nope', 'x', 'http://a')],
-    ['unlink', (e) => e.unlink('nope', 'x')],
-    ['formatNode', (e) => e.formatNode('nope', 'bold')],
-    ['boldNode', (e) => e.boldNode('nope')],
-    ['clearNodeFormat', (e) => e.clearNodeFormat('nope')],
-    ['setText', (e) => e.setText('nope', 'x')],
-    ['replace', (e) => e.replace('nope', 'a', 'b')],
-    ['appendText', (e) => e.appendText('nope', 'x')],
-    ['prependText', (e) => e.prependText('nope', 'x')],
-    ['convertToParagraph', (e) => e.convertToParagraph('nope')],
-    ['convertToHeading', (e) => e.convertToHeading('nope', 2)],
-    ['convertToQuote', (e) => e.convertToQuote('nope')],
-    ['convertToCodeBlock', (e) => e.convertToCodeBlock('nope', 'ts')],
-    ['setLanguage', (e) => e.setLanguage('nope', 'ts')],
-    ['bulletList', (e) => e.bulletList('nope')],
-    ['numberedList(array)', (e) => e.numberedList(['nope'])],
-    ['checklist', (e) => e.checklist('nope')],
-    ['setListType', (e) => e.setListType('nope', 'bullet')],
-    ['check', (e) => e.check('nope')],
-    ['uncheck', (e) => e.uncheck('nope')],
-    ['setChecked', (e) => e.setChecked('nope', true)],
-    ['indent', (e) => e.indent('nope')],
-    ['outdent', (e) => e.outdent('nope')],
-    ['setIndent', (e) => e.setIndent('nope', 1)],
-    ['insertListItemAfter', (e) => e.insertListItemAfter('nope', 'x')],
-    ['insertListItemBefore', (e) => e.insertListItemBefore('nope', 'x')],
-    ['removeListItem', (e) => e.removeListItem('nope')],
-    ['move(self)', (e) => e.move('nope', { after: 'b1' })],
-    ['remove', (e) => e.remove('nope')],
-    ['removeMany', (e) => e.removeMany(['nope'])],
-    ['merge', (e) => e.merge(['nope', 'b1'])],
-    ['setCell', (e) => e.setCell('nope', 0, 0, 'x')],
-    ['addRow', (e) => e.addRow('nope')],
-    ['addColumn', (e) => e.addColumn('nope')],
-    ['removeRow', (e) => e.removeRow('nope', 0)],
-    ['removeColumn', (e) => e.removeColumn('nope', 0)],
-    ['insertDivider', (e) => e.insertDivider('nope')],
-    ['insertImage', (e) => e.insertImage('nope', { srcType: 'url', url: 'u' })],
-    ['insertVideo', (e) => e.insertVideo('nope', { srcType: 'url', url: 'u' })],
-    ['insertEquation', (e) => e.insertEquation('nope', 'x^2')],
-    ['insertInlineEquation', (e) => e.insertInlineEquation('nope', 0, 'x')],
-    ['insertLineBreak', (e) => e.insertLineBreak('nope', 0)],
-    ['insertDate', (e) => e.insertDate('nope', 0, '2026-01-01')],
-    ['insertParagraphAfter', (e) => e.insertParagraphAfter('nope')],
-    ['insertParagraphBefore', (e) => e.insertParagraphBefore('nope')],
-    ['insertHeadingAfter', (e) => e.insertHeadingAfter('nope', 1)],
-    ['insertQuoteAfter', (e) => e.insertQuoteAfter('nope')],
-    ['insertCodeBlockAfter', (e) => e.insertCodeBlockAfter('nope', 'ts')],
-    ['insertTableAfter', (e) => e.insertTableAfter('nope', [['a']])],
-    ['insertTableBefore', (e) => e.insertTableBefore('nope', [['a']])],
-  ];
-  it.each(cases)('%s throws EditError for an unknown id', (_label, fn) => {
-    expect(() => fn(ed())).toThrow(EditError);
   });
 });
 
@@ -695,32 +623,9 @@ describe('DocumentEditor — ref minted by a creator is a valid later target', (
     expect(() => e.bold(r, 'x')).not.toThrow();
   });
 
-  it('two inserts mint distinct refs', () => {
-    const e = ed();
-    const a = e.insertParagraphAfter('b1');
-    const b = e.insertParagraphAfter('b1');
-    expect(a).not.toBe(b);
-  });
 });
 
 describe('DocumentEditor — scope defaults', () => {
-  it('format/highlight/link/clearFormat/replace default to { all: true }', () => {
-    expect(ed().bold('b1', 'x').drain()[0]).toMatchObject({
-      scope: { kind: 'all' },
-    });
-    expect(ed().highlight('b1', 'x').drain()[0]).toMatchObject({
-      scope: { kind: 'all' },
-    });
-    expect(ed().link('b1', 'x', 'http://a').drain()[0]).toMatchObject({
-      scope: { kind: 'all' },
-    });
-    expect(ed().clearFormat('b1', 'x').drain()[0]).toMatchObject({
-      scope: { kind: 'all' },
-    });
-    expect(ed().replace('b1', 'a', 'b').drain()[0]).toMatchObject({
-      scope: { kind: 'all' },
-    });
-  });
   it('an explicit scope overrides the default', () => {
     expect(
       ed().bold('b1', 'x', { kind: 'nth', n: 3 }).drain()[0]

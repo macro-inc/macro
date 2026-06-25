@@ -24,15 +24,31 @@ enabled = true
 
 [vars]
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"
 
 [dev]
 port = 8933
 
 [env.local.vars]
 SYNC_WS_BASE = "ws://localhost:8787"
+DSS_BASE = "http://localhost:8086"
+SEARCH_SERVICE_BASE = "http://localhost:8086"
+CONTACTS_SERVICE_BASE = "http://localhost:8083"
+AUTH_SERVICE_BASE = "http://localhost:8080"
 
 [env.dev.vars]
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage-dev.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
 
 [env.prod.vars]
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"
