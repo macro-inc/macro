@@ -106,6 +106,7 @@ import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
 import {
@@ -1512,11 +1513,15 @@ const SoupList = (props: SoupListProps) => {
 
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+  const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacerRef);
 
   // Full-frame mobile: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
   const topInset = () =>
-    isMobile() ? (splitPanel?.contentOffsetTop() ?? 0) : 0;
+    isMobile()
+      ? (topSpacerSize.height ?? splitPanel?.contentOffsetTop() ?? 0)
+      : 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1564,7 +1569,11 @@ const SoupList = (props: SoupListProps) => {
         }}
         {...soupListContainerAttribute}
       >
-        <div aria-hidden style={{ height: `${topInset()}px` }} />
+        <div
+          ref={setTopSpacerRef}
+          aria-hidden
+          class="h-0 mobile:h-(--mobile-content-inset-top)"
+        />
         <Virtualizer
           cache={props.cache}
           ref={registerVirtualizerHandler}
