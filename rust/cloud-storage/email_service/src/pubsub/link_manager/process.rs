@@ -325,17 +325,17 @@ async fn handle_delete(
     // remove google fusionauth link with gmail inbox permissions. best-effort: the FA user may
     // already be gone (e.g. account deleted before we delete their email), so we warn and keep
     // going rather than failing the message and retrying.
-    if let Err(e) = ctx
-        .auth_service_client
+    ctx.auth_service_client
         .remove_link(
             &link.fusionauth_user_id,
             link.email_address.0.as_ref(),
             "google_gmail",
         )
         .await
-    {
-        tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
-    }
+        .inspect_err(|e| {
+            tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
+        })
+        .ok();
 
     // inform search of deletion so it can wipe the email records from OS
     ctx.sqs_client
