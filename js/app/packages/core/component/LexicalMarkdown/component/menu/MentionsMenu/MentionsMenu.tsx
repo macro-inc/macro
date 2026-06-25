@@ -528,7 +528,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
-          class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
+          class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           on:touchstart={(e) => e.stopPropagation()}
           ref={(el) => {
             floatWithElement(el, floatWithElementProps);

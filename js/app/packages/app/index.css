@@ -184,9 +184,11 @@
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: "Roboto Mono Variable",  monospace;
   --text-xxs: 0.625rem;
+  --text-sm: 0.8125rem;
 
   /* Animations */
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-menu-open: menu-open 140ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-typing-dot: typing-dot 1s infinite;
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
@@ -310,6 +312,17 @@
 @keyframes swipeOut {
   from { transform: translateX(var(--kb-toast-swipe-end-x)); }
   to   { transform: translateX(calc(100% + 16px))          ; }
+}
+
+@keyframes menu-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes long-press-message-highlight {
@@ -458,6 +471,15 @@ a {
 
 @utility portal-scope {
   --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+}
+
+@utility menu-open-animation {
+  transform-origin: var(--kb-popper-content-transform-origin, top center);
+  animation: var(--animate-menu-open);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @utility macro-message-width {

@@ -319,7 +319,7 @@ export function Email() {
         position="center"
         class="w-120"
       >
-        <Panel active depth={2} class="rounded-xl">
+        <Panel depth={2} class="rounded-xl">
           <Panel.Header class="px-6">
             <Dialog.Title class="text-ink text-sm font-semibold">
               Remove inbox
@@ -364,7 +364,7 @@ export function Email() {
         position="center"
         class="w-120"
       >
-        <Panel active depth={2} class="rounded-xl">
+        <Panel depth={2} class="rounded-xl">
           <Panel.Header class="px-6">
             <Dialog.Title class="text-ink text-sm font-semibold">
               Disconnect email

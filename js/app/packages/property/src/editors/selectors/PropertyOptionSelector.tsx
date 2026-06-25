@@ -129,7 +129,7 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
 ) => {
   return (
     <div
-      class="group flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md"
+      class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default"
       classList={{
         'bg-hover': props.isSelected,
       }}
@@ -311,7 +311,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     <div
       onClick={handleAddOption}
       class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+        'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
         props.isSelected && 'bg-hover'
       )}
     >

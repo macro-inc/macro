@@ -101,7 +101,7 @@ function AddServerForm(props: {
       <Layer depth={3}>
         <div class="absolute inset-0 z-10 flex items-center justify-center bg-overlay">
           <div class="w-100 max-w-[calc(100%-2rem)]">
-            <Panel active depth={3} class="shadow-md">
+            <Panel depth={3} class="shadow-md">
               <Panel.Header class="px-6">
                 <span class="text-ink text-sm font-semibold">Add MCP Server</span>
               </Panel.Header>

@@ -242,7 +242,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
     <Show when={props.menu.isOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
-          class="cursor-default select-none w-48 z-modal-content"
+          class="cursor-default select-none w-48 z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
