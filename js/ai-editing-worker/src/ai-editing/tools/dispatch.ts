@@ -13,8 +13,7 @@ export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
 
 type BlockedReport = {
-  reason: string;
-  suggestedContext?: { start_line: number; end_line: number };
+  message: string;
 };
 type ContextRange = {
   startLine: number;
@@ -270,6 +269,10 @@ export function createDispatchTool(opts: DispatchToolOptions) {
               runner,
               onOps,
             });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[dispatch] coder ${i + 1} threw: ${msg}`);
+            throw err;
           } finally {
             writer.release();
           }
@@ -280,9 +283,9 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         const blocked = findBlocked(res);
         if (blocked) {
           console.log(
-            `[round ${round}] writer ${i + 1} BLOCKED: ${blocked.reason}`
+            `[round ${round}] writer ${i + 1} BLOCKED: ${blocked.message}`
           );
-          return `${i + 1}. ⚠ BLOCKED -- ${blocked.reason}.`;
+          return `${i + 1}. ⚠ BLOCKED -- ${blocked.message}.`;
         }
         return `${i + 1}. ✓ APPLIED`;
       });

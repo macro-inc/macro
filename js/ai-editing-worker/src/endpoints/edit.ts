@@ -8,11 +8,7 @@ import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
-import {
-  fetchDocToken,
-  makeSearchContacts,
-  makeSearchDocuments,
-} from '../service-clients';
+import { fetchDocToken } from '../service-clients';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -104,7 +100,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
 
-    const { usage, ops, trace } = await runEditSession({
+    const { usage, ops, trace, clarification } = await runEditSession({
       wsUrl,
       documentId,
       prompt,
@@ -122,17 +118,10 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       debug,
       runner: runInSandbox,
       signal,
-      searchContacts: makeSearchContacts(
-        env.CONTACTS_SERVICE_BASE,
-        env.AUTH_SERVICE_BASE,
-        userToken
-      ),
-      searchDocuments: makeSearchDocuments(env.SEARCH_SERVICE_BASE, userToken),
     });
-    return c.json({ ok: true, usage, ops, trace });
+    return c.json({ ok: true, usage, ops, trace, clarification });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));
-    // 499 is non-standard (client closed request); cast past Hono's status union
     const status = (signal.aborted ? 499 : 502) as 502;
     return c.json({ error: err.message }, status);
   }

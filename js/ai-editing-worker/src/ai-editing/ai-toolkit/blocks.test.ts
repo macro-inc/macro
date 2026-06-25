@@ -179,9 +179,11 @@ describe('block ops', () => {
       return $getId(merged);
     });
     expect(resultId).toBe(idA); // first block's id preserved
-    const xml = serializeWithXml(session);
-    expect(xml).toContain(`id="${idA}"`);
-    expect(xml).toContain('We were behind.');
-    expect(xml).toContain('QA hadn');
+    expect(serializeWithXml(session)).toContain(`id="${idA}"`);
+    // both bodies land in the one surviving block, joined by the ' ' separator
+    const mergedText = read(session, () =>
+      $blockById(session, idA!).getTextContent()
+    );
+    expect(mergedText).toBe("We were behind. QA hadn't started.");
   });
 });

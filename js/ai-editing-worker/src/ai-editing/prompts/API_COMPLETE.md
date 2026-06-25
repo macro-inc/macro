@@ -156,7 +156,7 @@ After:
 - `indent(id, by?)` · `outdent(id, by?)` · `setIndent(id, level)`
 - `insertListItemAfter(liId, text, list?)` · `insertListItemBefore(liId, text, list?)` · `removeListItem(liId)`
 
-To add or remove items in an *existing* list, pass the id of a sibling `<li>` — never the `<ul>`/`<ol>` id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind. The insert methods return a handle to the new `<li>`.
+To add or remove items in an *existing* list, pass the id of a sibling `<li>` -- never the `<ul>`/`<ol>` id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind. The insert methods return a handle to the new `<li>`.
 
 ```ts
 editor.checklist(['b1', 'b2']);
@@ -363,6 +363,8 @@ After:
 
 ## Mentions
 
+Use the ids and details supplied in the task -- do not invent them.
+
 - `insertMention(blockId, at, mention)`
 - `mentionUser(blockId, at, { userId, email })`
 - `mentionContact(blockId, at, { contactId, name, emailOrDomain, isCompany })`
@@ -399,7 +401,7 @@ After:
 - `{ block: 'list', list: 'bullet'|'number'|'check', items: string[] }`
 - `{ block: 'table', rows }`
 - `{ block: 'divider' }`
-- `{ block: 'document-card', documentId, documentName, blockName, blockParams? }` where `blockParams` is `Record<string, string>`
+- `{ block: 'document-card', documentId, documentName, blockName, blockParams? }` where `blockParams` is `Record<string, string>`. Use the ids supplied in the task -- do not invent them.
 - `{ block: 'html-render', html }`
 - `{ block: 'image', srcType, url, alt?, width?, height? }`
 - `{ block: 'video', srcType, url, controls?, width?, height? }`

@@ -19,7 +19,7 @@ The writer has the complete API reference. Use this compact list to plan native 
 ## Lists
 
 - `bulletList`, `numberedList`, `checklist`, `setListType`, `check`, `uncheck`, `setChecked`, `indent`, `outdent`, `setIndent`
-- Add/remove items in an existing list: `insertListItemAfter(liId, text, list?)`, `insertListItemBefore(liId, text, list?)`, `removeListItem(liId)`. `list` is `'bullet'`|`'number'`|`'check'` (default `'bullet'`); a differing kind nests a sublist. Pass an existing `<li>` id — NOT the `<ul>`/`<ol>` id.
+- Add/remove items in an existing list: `insertListItemAfter(liId, text, list?)`, `insertListItemBefore(liId, text, list?)`, `removeListItem(liId)`. `list` is `'bullet'`|`'number'`|`'check'` (default `'bullet'`); a differing kind nests a sublist. Pass an existing `<li>` id -- NOT the `<ul>`/`<ol>` id.
 
 ## Structure
 
@@ -37,4 +37,4 @@ The writer has the complete API reference. Use this compact list to plan native 
 - Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`, `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`
 - Updates: `setImageAlt`, `setImageUrl`, `setVideoUrl`, `setVideoControls`, `setDate`
 
-Prefer native objects over text simulations: use dividers, tables, headings, quotes, code blocks, images, videos, equations, dates, and mentions when those are what the user means.
+Prefer native objects over text simulations: use dividers, tables, headings, quotes, code blocks, images, videos, equations, dates, mentions, and document-cards when those are what the user means.

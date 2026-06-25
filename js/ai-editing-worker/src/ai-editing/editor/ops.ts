@@ -76,7 +76,7 @@ export type NodeSpec =
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
-/** Entity-mention specs. The supervisor resolves names to ids via `searchContacts`. */
+/** Entity-mention specs. Ids are supplied with the edit request, not looked up. */
 export type MentionSpec =
   | { kind: 'user'; userId: string; email: string }
   | {

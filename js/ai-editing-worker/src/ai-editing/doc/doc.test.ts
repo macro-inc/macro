@@ -55,8 +55,7 @@ describe('Doc — text content writes', () => {
       at: 5,
       len: 6,
     }); // remove " world"
-    expect(serializeWithXml(session)).toContain('hello');
-    expect(serializeWithXml(session)).not.toContain('world');
+    expect(textRuns(session)[0]?.text).toBe('hello'); // exact, not just "contains"
     expect(serializeWithXml(session)).toContain(`id="${ids[0]}"`);
   });
 

@@ -94,8 +94,8 @@ describe('PeerPool', () => {
     void b;
   });
 
-  it('defaults max to 3', async () => {
-    const pool = new PeerPool({ names: ['A', 'B', 'C', 'D'], colors });
+  it('blocks borrows past max until a slot frees, reusing the freed name', async () => {
+    const pool = new PeerPool({ names: ['A', 'B', 'C', 'D'], colors, max: 3 });
     const three = await Promise.all([
       pool.borrow(),
       pool.borrow(),

@@ -3,13 +3,12 @@ import {
   hasToolCall,
   type LanguageModel,
   stepCountIs,
-  tool,
 } from 'ai';
-import { z } from 'zod';
 import type { Session } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
+import { createImBlockedTool } from '../tools/im-blocked';
 import { createRunCodeTool } from '../tools/run-code';
 import type { RunTaskDeps } from './types';
 
@@ -42,14 +41,10 @@ export async function coder(
         runner: deps.runner,
         onOps: deps.onOps,
       }),
-      reportBlocked: tool({
-        description:
-          'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. This ends your task.',
-        inputSchema: z.object({
-          reason: z.string().describe('what stopped you, in one line'),
-        }),
-        execute: async () => 'acknowledged',
-      }),
+      reportBlocked: createImBlockedTool(
+        'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need. This ends your task.',
+        false
+      ),
     },
     abortSignal: deps.signal,
   });

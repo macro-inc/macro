@@ -80,6 +80,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     .as_u64()
                     .unwrap_or(0) as u32,
             }),
+            clarification: body["clarification"].as_str().map(str::to_owned),
         })
     }
 }

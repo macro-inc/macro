@@ -212,26 +212,28 @@ describe('DocumentEditor — text / block / list → ops', () => {
   it('insertListItemAfter defaults to a bullet item and returns a usable ref', () => {
     const e = ed();
     const ref = e.insertListItemAfter('b1', 'next');
+    expect(ref).toBe('ref-1'); // first mint of a fresh editor's id pool
     e.setText(ref, 'NEXT'); // would throw if ref were not registered valid
     const ops = e.drain();
     expect(ops).toMatchObject([
       {
         kind: 'insertListItemAfter',
-        ref,
+        ref: 'ref-1',
         node: 'b1',
         text: 'next',
         list: 'bullet',
       },
-      { kind: 'setText', node: ref },
+      { kind: 'setText', node: 'ref-1' },
     ]);
   });
 
   it('insertListItemBefore carries an explicit list kind for nesting', () => {
     const e = ed();
     const ref = e.insertListItemBefore('b1', 'sub', 'number');
+    expect(ref).toBe('ref-1'); // first mint of a fresh editor's id pool
     expect(e.drain()[0]).toEqual({
       kind: 'insertListItemBefore',
-      ref,
+      ref: 'ref-1',
       node: 'b1',
       text: 'sub',
       list: 'number',
@@ -564,9 +566,12 @@ describe('DocumentEditor — list & merge cardinality', () => {
       kind: 'mergeBlocks',
     });
   });
-  it('merge default separator is a single space', () => {
-    expect(ed('b1', 'b2').merge(['b1', 'b2']).drain()[0]).toMatchObject({
-      separator: ' ',
+  it('merge forwards an explicit separator verbatim (even empty)', () => {
+    expect(ed('b1', 'b2').merge(['b1', 'b2'], '\n').drain()[0]).toMatchObject({
+      separator: '\n',
+    });
+    expect(ed('b1', 'b2').merge(['b1', 'b2'], '').drain()[0]).toMatchObject({
+      separator: '',
     });
   });
 });

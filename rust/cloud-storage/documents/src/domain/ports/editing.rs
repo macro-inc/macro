@@ -8,6 +8,9 @@ pub struct EditResult {
     pub edits_applied: usize,
     /// Token usage reported by the editing worker, if available.
     pub usage: Option<EditUsage>,
+    /// If set, the worker needs more information. Invoke again with the
+    /// requested details appended to the instructions.
+    pub clarification: Option<String>,
 }
 
 /// Token usage reported by the editing worker.

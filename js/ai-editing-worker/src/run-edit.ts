@@ -13,11 +13,7 @@ import {
   type MarkdownLoroSchemaType,
 } from '../../lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '../../lexical-core/plugins/nodeIdPlugin';
-import {
-  type SearchContacts,
-  type SearchDocuments,
-  supervisor,
-} from './ai-editing/agents/supervisor';
+import { supervisor } from './ai-editing/agents/supervisor';
 import {
   createEditingSession,
   loadSnapshot,
@@ -63,10 +59,6 @@ export type RunEditArgs = {
   interpret?: boolean;
   /** Include a markdown trace of all supervisor steps in the result. */
   debug?: boolean;
-  /** Resolve a name query to matching contacts/users. Enables mention support. */
-  searchContacts?: SearchContacts;
-  /** Resolve a name/keyword query to documents. Enables document-card insertion. */
-  searchDocuments?: SearchDocuments;
 };
 
 export type { UsageEntry };
@@ -75,6 +67,7 @@ export type RunEditResult = {
   usage: UsageEntry[];
   ops: DocumentOp[];
   trace?: string;
+  clarification?: string;
 };
 
 export async function runEditSession(
@@ -159,7 +152,7 @@ export async function runEditSession(
   const startedAt = new Date();
   const initialDocument = args.debug ? serializeWithXml(session) : undefined;
   try {
-    const { totalUsage, steps, intent } = await supervisor(
+    const { totalUsage, steps, intent, clarification } = await supervisor(
       session,
       args.prompt,
       args.models,
@@ -180,8 +173,6 @@ export async function runEditSession(
         runner: args.runner,
         onOps: (ops) => allOps.push(...ops),
         onCoderResult: (codes) => coderCodeBlocks.push(codes),
-        searchContacts: args.searchContacts ?? (() => Promise.resolve([])),
-        searchDocuments: args.searchDocuments ?? (() => Promise.resolve([])),
       }
     );
 
@@ -218,7 +209,7 @@ export async function runEditSession(
         )
       : undefined;
 
-    return { usage, ops: allOps, trace };
+    return { usage, ops: allOps, trace, clarification };
   } finally {
     engine.stop();
     wal.destroy();

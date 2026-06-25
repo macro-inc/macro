@@ -16,13 +16,13 @@ use super::DocumentToolContext;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
-    description = "Apply AI-driven edits to a Macro document in place. Use this when the user wants to make changes to the content of an existing document — rewriting sections, inserting new content, applying formatting, or restructuring. Returns the number of edits applied."
+    description = "Apply AI-driven edits to a Macro document in place -- rewriting, inserting, formatting, or restructuring. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName."
 )]
 pub struct EditDocument {
     #[schemars(description = "The ID of the document to edit.")]
     pub document_id: String,
     #[schemars(
-        description = "Natural language instructions describing the changes to make to the document."
+        description = "Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up."
     )]
     pub instructions: String,
 }
@@ -32,6 +32,8 @@ pub struct EditDocumentResponse {
     /// Number of individual edit operations applied to the document.
     pub edits_applied: usize,
     pub usage: Option<EditUsage>,
+    /// If present, invoke this tool again with this information appended to `instructions`.
+    pub clarification: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -74,6 +76,7 @@ where
                 input_tokens: u.input_tokens,
                 output_tokens: u.output_tokens,
             }),
+            clarification: result.clarification,
         })
     }
 }

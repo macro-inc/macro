@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from 'ai';
+import { generateText, hasToolCall, stepCountIs } from 'ai';
 import type { ResolvedModels } from '../../run-edit';
 import type { Session } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness/awareness-source';
@@ -10,20 +10,13 @@ import SHARED from '../prompts/SHARED.md';
 import SUPERVISOR from '../prompts/SUPERVISOR.md';
 import { TokenTracker } from '../token-tracker';
 import { createDispatchTool, type Writer } from '../tools/dispatch';
-import { createSearchContactsTool } from '../tools/search-contacts';
-import { createSearchDocumentsTool } from '../tools/search-documents';
+import { createImBlockedTool } from '../tools/im-blocked';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
 import type { RunAgentOptions } from './types';
 
-export type {
-  ContactResult,
-  DocumentResult,
-  RunAgentOptions,
-  SearchContacts,
-  SearchDocuments,
-} from './types';
+export type { RunAgentOptions } from './types';
 
 const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}\n${API_COMPACT}`;
 const INTERPRET_SYSTEM = `${SHARED}\n${INTERPRET}`;
@@ -38,15 +31,13 @@ export async function supervisor(
   const tracker = new TokenTracker();
   const doc = new Doc(session, opts.propagate);
 
-  // One writer identity per dispatched edit. Borrow a unique peer (name/color)
-  // for the writer'session lifetime; concurrent writers never share a name.
   const outstanding = new Map<Peer, AwarenessSource>();
   const makeWriter = async (): Promise<Writer> => {
     const peer = await opts.peerPool.borrow();
     const awarenessSource = opts.makeAwareness(peer.name, peer.color);
     outstanding.set(peer, awarenessSource);
     const release = () => {
-      if (!outstanding.delete(peer)) return; // already released
+      if (!outstanding.delete(peer)) return;
       awarenessSource.clear();
       opts.peerPool.release(peer);
     };
@@ -74,6 +65,10 @@ export async function supervisor(
   }
 
   const tools = {
+    reportBlocked: createImBlockedTool(
+      'Call this when you cannot proceed without more information or when the task is impossible. Your message must be a directive telling the caller to invoke you again with what is missing.',
+      true
+    ),
     dispatch: createDispatchTool({
       session,
       doc,
@@ -89,8 +84,6 @@ export async function supervisor(
       onOps: opts.onOps,
       onCoderResult: opts.onCoderResult,
     }),
-    searchContacts: createSearchContactsTool(opts.searchContacts),
-    searchDocuments: createSearchDocumentsTool(opts.searchDocuments),
   };
 
   const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
@@ -99,18 +92,31 @@ export async function supervisor(
   try {
     const result = await generateText({
       model: models.supervisor,
-      stopWhen: stepCountIs(12),
+      stopWhen: [stepCountIs(12), hasToolCall('reportBlocked')],
       system: MASTER_SYSTEM,
       prompt,
       tools,
       abortSignal: opts.signal,
     });
     tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
+
+    let clarification: string | undefined;
+    for (const step of result.steps) {
+      for (const call of step.toolCalls) {
+        if (call.toolName === 'reportBlocked') {
+          clarification = (call.input as { message: string }).message;
+          break;
+        }
+      }
+      if (clarification) break;
+    }
+
     return {
       text: result.text || 'Applied edits.',
       totalUsage: tracker,
       steps: result.steps,
       intent,
+      clarification,
     };
   } finally {
     for (const [peer, a] of outstanding) {
