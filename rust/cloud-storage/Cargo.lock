@@ -7124,6 +7124,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_queues"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "paste",
+ "serde",
+ "thiserror 2.0.18",
+ "workspace-hack",
+]
+
+[[package]]
 name = "macro_redis"
 version = "0.1.0"
 dependencies = [

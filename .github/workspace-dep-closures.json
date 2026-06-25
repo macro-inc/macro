@@ -2523,6 +2523,12 @@
       "macro_project_utils",
       "workspace-hack"
     ],
+    "macro_queues": [
+      "macro_env",
+      "macro_env_var",
+      "macro_queues",
+      "workspace-hack"
+    ],
     "macro_redis": [
       "macro_redis",
       "workspace-hack"
