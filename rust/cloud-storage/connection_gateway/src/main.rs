@@ -31,8 +31,6 @@ use last_online_tracker::{
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
@@ -123,9 +121,9 @@ async fn main() -> Result<()> {
 
     let app = router(AppState {
         context,
+        internal_api_key: config.internal_api_key.clone(),
         config: Arc::clone(&config),
         jwt_args,
-        internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?),
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
             PullAggregatorImpl::new(FrecencyPgProcessor::new(pgpool), DefaultTime),
             Duration::from_secs(60),
