@@ -18,10 +18,6 @@ env_vars! {
     #[derive(Debug, Clone)]
     pub(crate) struct BaseUrl;
     #[derive(Debug, Clone)]
-    pub(crate) struct NotificationQueue;
-    #[derive(Debug, Clone)]
-    pub(crate) struct NotificationIngressQueue;
-    #[derive(Debug, Clone)]
     pub(crate) struct AppleBundleId;
     #[derive(Debug, Clone)]
     pub(crate) struct SnsApnsPlatformArn;
@@ -29,8 +25,6 @@ env_vars! {
     pub(crate) struct SnsFcmPlatformArn;
     #[derive(Debug, Clone)]
     pub(crate) struct SenderBaseAddress;
-    #[derive(Debug, Clone)]
-    pub(crate) struct PushNotificationEventHandlerQueue;
     #[derive(Debug, Clone)]
     pub(crate) struct LastOnlineRedisUri;
 }
@@ -80,12 +74,6 @@ pub struct Config {
     #[macro_config_default(4)]
     pub(crate) notification_queue_wait_time_seconds: i32,
 
-    /// The SQS queue for egress notification delivery.
-    pub(crate) notification_queue: NotificationQueue,
-
-    /// The SQS queue for ingress notification creation.
-    pub(crate) notification_ingress_queue: NotificationIngressQueue,
-
     /// Redis used by notification-service for digest batching, rate limiting, etc.
     pub(crate) redis_uri: RedisUri,
 
@@ -103,9 +91,6 @@ pub struct Config {
 
     /// The SNS iOS VoIP platform ARN (APNS_VOIP). Optional locally.
     pub(crate) sns_apns_voip_platform_arn: SnsApnsVoipPlatformArn,
-
-    /// The push notification event handler queue.
-    pub(crate) push_notification_event_handler_queue: PushNotificationEventHandlerQueue,
 }
 
 impl Config {

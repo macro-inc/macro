@@ -58,7 +58,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
-        render_yaml: || Ok(build_desktop_on_tag::build_desktop_on_tag()),
+        render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
     },
     WorkflowFile {
         slug: "code_check_cloud_storage",

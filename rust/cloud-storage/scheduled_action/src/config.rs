@@ -17,8 +17,6 @@ use macro_env_var::env_vars;
 use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
-    /// SQS URL for the notification ingress queue.
-    pub struct NotificationQueue;
     /// Auth key used by the document storage / search / lexical clients.
     pub struct DocumentStorageServiceAuthKey;
     /// Secrets Manager secret name for the sync service auth key.
@@ -27,8 +25,6 @@ env_vars! {
     pub struct DocumentStorageBucket;
     /// S3 bucket for docx document uploads.
     pub struct DocxDocumentUploadBucket;
-    /// SQS URL for the email scheduled queue, consumed by the AI tools.
-    pub struct EmailScheduledQueue;
     /// CloudFront distribution URL for document storage.
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     /// CloudFront signer public key id for document storage.
@@ -49,12 +45,10 @@ pub struct Config {
     pub port: usize,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
-    pub notification_queue: NotificationQueue,
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: SyncServiceAuthKey,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
-    pub email_scheduled_queue: EmailScheduledQueue,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:

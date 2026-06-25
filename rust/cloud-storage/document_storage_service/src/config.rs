@@ -12,19 +12,15 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
-    pub struct DocumentDeleteQueue;
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct RedisUri;
-    pub struct NotificationQueue;
-    pub struct SearchEventQueue;
     pub struct BulkUploadRequestsTable;
     pub struct UploadStagingBucket;
     pub struct SyncServiceAuthKey;
     pub struct OpensearchUrl;
     pub struct OpensearchUsername;
     pub struct OpensearchPassword;
-    pub struct ContactsQueue;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
     pub struct LivekitServerUrl;
@@ -80,21 +76,17 @@ pub struct Config {
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
-    pub document_delete_queue: DocumentDeleteQueue,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
     pub redis_uri: RedisUri,
-    pub notification_queue: NotificationQueue,
-    pub search_event_queue: SearchEventQueue,
     pub bulk_upload_requests_table: BulkUploadRequestsTable,
     pub upload_staging_bucket: UploadStagingBucket,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
     pub opensearch_url: OpensearchUrl,
     pub opensearch_username: OpensearchUsername,
     pub opensearch_password: OpensearchPassword,
-    pub contacts_queue: ContactsQueue,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
     pub livekit_server_url: LivekitServerUrl,

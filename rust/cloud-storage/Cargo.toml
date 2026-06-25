@@ -59,6 +59,7 @@ members = [
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config",
+  "macro_queues",
   "prompt",
   "workspace-hack",
   "tools/xtask",

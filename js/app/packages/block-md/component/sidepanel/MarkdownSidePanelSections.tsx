@@ -1,5 +1,8 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { SidePanel } from '@app/component/side-panel';
+import {
+  GithubPullRequestDetailsRows,
+  SidePanel,
+} from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
@@ -21,9 +24,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -31,14 +32,16 @@ import {
 } from '@property/constants';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
-import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
+import {
+  type GithubPullRequestWithDetails,
+  useDocumentGithubPullRequestsQuery,
+} from '@queries/storage/github-pull-requests';
 import {
   useDocumentTeamShareQuery,
   useSetDocumentTeamShareMutation,
 } from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
-import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
@@ -472,7 +475,7 @@ function GithubSectionConditional(props: {
   );
   const { openWithSplit } = useSplitLayout();
 
-  const pullRequests = createMemo((): GithubPullRequest[] => {
+  const pullRequests = createMemo((): GithubPullRequestWithDetails[] => {
     if (!props.isTask || query.isLoading || query.isError) return [];
     return query.data?.pullRequests ?? [];
   });
@@ -485,65 +488,52 @@ function GithubSectionConditional(props: {
         title={<SidePanel.CountTitle label="GitHub" count={count()} />}
         order={35}
       >
-        <SidePanel.Grid>
-          <SidePanel.Row label={count() === 1 ? 'PR' : 'PRs'}>
-            <div class="flex min-w-0 flex-wrap items-center gap-x-1">
-              <For each={pullRequests()}>
-                {(pr, i) => (
-                  <>
-                    <Show when={i() > 0}>
-                      <span class="text-ink-extra-muted">,</span>
-                    </Show>
-                    <button
-                      type="button"
-                      disabled={!pr.url}
-                      class={cn(
-                        'inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink',
-                        !pr.url &&
-                          'cursor-not-allowed text-ink-placeholder hover:text-ink-placeholder'
-                      )}
-                      title={
-                        pr.name?.trim()
-                          ? `${pr.name.trim()} ${pr.displayName}`
-                          : pr.displayName
-                      }
-                      onClick={() => {
-                        if (USE_MACRO_PR_SUMMARY_BLOCK && pr.foreignEntityId) {
-                          openWithSplit(
-                            {
-                              type: 'pr',
-                              id: pr.foreignEntityId,
-                            },
-                            { referredFrom: null }
-                          );
-                          return;
-                        }
-                        if (pr.url) openExternalUrl(pr.url);
-                      }}
-                    >
-                      <GithubIcon
-                        class="size-3 shrink-0 text-ink-extra-muted"
-                        aria-hidden="true"
-                      />
-                      <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current">
-                        {pr.displayName}
-                      </span>
-                    </button>
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${pr.displayName} on GitHub`}
-                      class="shrink-0 text-ink-extra-muted hover:text-ink"
-                    >
-                      <ArrowSquareOutIcon class="size-3" aria-hidden="true" />
-                    </a>
-                  </>
-                )}
-              </For>
-            </div>
-          </SidePanel.Row>
-        </SidePanel.Grid>
+        <div class="flex flex-col gap-4">
+          <For each={pullRequests()}>
+            {(pr, index) => {
+              const title = () => pr.name?.trim() || pr.displayName;
+              const openPullRequest = () => {
+                if (USE_MACRO_PR_SUMMARY_BLOCK && pr.foreignEntityId) {
+                  openWithSplit(
+                    {
+                      type: 'pr',
+                      id: pr.foreignEntityId,
+                    },
+                    { referredFrom: null }
+                  );
+                  return;
+                }
+                openExternalUrl(pr.url);
+              };
+
+              return (
+                <div
+                  class={cn(
+                    'flex flex-col',
+                    index() > 0 && 'border-t border-edge-muted pt-4'
+                  )}
+                >
+                  <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)]">
+                    <span class="text-ink-muted truncate self-start pt-[0.3125rem]">
+                      PR
+                    </span>
+                    <div class="min-w-0 max-w-full overflow-hidden self-start py-0.5">
+                      <button
+                        type="button"
+                        class="block min-w-0 max-w-full text-left whitespace-normal wrap-break-word leading-snug underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
+                        title={title()}
+                        onClick={openPullRequest}
+                      >
+                        {title()}
+                      </button>
+                    </div>
+                    <GithubPullRequestDetailsRows enrichment={pr} />
+                  </SidePanel.Grid>
+                </div>
+              );
+            }}
+          </For>
+        </div>
       </SidePanel.Section>
     </Show>
   );

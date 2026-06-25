@@ -66,35 +66,48 @@ async fn main() -> anyhow::Result<()> {
 
     let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
 
+    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
+    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let backfill_queue = macro_queues::EmailBackfillQueue::new();
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
+    let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let contacts_queue = macro_queues::ContactsQueue::new();
+    let notification_queue = macro_queues::NotificationQueue::new();
+
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
-        .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)
-        .gmail_inbox_sync_retry_queue(&config.gmail_inbox_sync_retry_queue)
-        .gmail_ops_queue(&config.gmail_ops_queue)
-        .gmail_ops_retry_queue(&config.gmail_ops_retry_queue)
-        .search_event_queue(&config.search_event_queue)
-        .email_backfill_queue(&config.backfill_queue)
-        .email_scheduled_queue(&config.email_scheduled_queue)
-        .sfs_uploader_queue(&config.sfs_uploader_queue)
-        .sfs_delete_queue(&config.sfs_delete_queue)
-        .email_link_manager_queue(&config.link_manager_queue);
+        .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
+        .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
+        .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_ops_retry_queue(&gmail_ops_retry_queue)
+        .search_event_queue(&search_event_queue)
+        .email_backfill_queue(&backfill_queue)
+        .email_scheduled_queue(&email_scheduled_queue)
+        .sfs_uploader_queue(&sfs_uploader_queue)
+        .sfs_delete_queue(&sfs_delete_queue)
+        .email_link_manager_queue(&link_manager_queue);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            config.contacts_queue.to_string(),
+            contacts_queue.to_string(),
         ),
     });
 
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.link_manager_queue.to_string(),
+        link_manager_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
 
     let scheduled_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.email_scheduled_queue.to_string(),
+        email_scheduled_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -103,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.sfs_uploader_queue.to_string(),
+                sfs_uploader_queue.to_string(),
                 config.queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -112,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
 
     let sfs_delete_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-        config.sfs_delete_queue.to_string(),
+        sfs_delete_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -121,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.backfill_queue.to_string(),
+                backfill_queue.to_string(),
                 config.backfill_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -132,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_ops_queue.to_string(),
+                gmail_ops_queue.to_string(),
                 config.gmail_ops_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -143,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_ops_retry_queue.to_string(),
+                gmail_ops_retry_queue.to_string(),
                 config.gmail_ops_retry_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -154,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_queue.to_string(),
+                gmail_inbox_sync_queue.to_string(),
                 config.inbox_sync_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -165,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|_| {
             sqs_worker::SQSWorker::new(
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-                config.gmail_inbox_sync_retry_queue.to_string(),
+                gmail_inbox_sync_retry_queue.to_string(),
                 config.inbox_sync_retry_queue_max_messages,
                 config.queue_wait_time_seconds,
             )
@@ -196,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.to_string(),
+        notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,

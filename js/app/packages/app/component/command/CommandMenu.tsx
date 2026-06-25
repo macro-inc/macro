@@ -540,7 +540,6 @@ export function CommandMenuInner(props: {
       class={cn('max-h-[75vh] rounded-xl', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
-      active
     >
       <Panel.Header class="gap-2 px-2 bg-surface">
         <Show

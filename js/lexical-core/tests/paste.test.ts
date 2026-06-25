@@ -128,9 +128,8 @@ describe('PasteNode - external transformer', () => {
 });
 
 describe('PasteNode - convert to text', () => {
-  it('converts a paste node into paragraphs of plain text', async () => {
+  async function convertPaste(content: string) {
     const editor = makeEditor();
-    const content = 'first line\nsecond line';
 
     await new Promise<void>((resolve) => {
       editor.update(
@@ -154,11 +153,40 @@ describe('PasteNode - convert to text', () => {
       );
     });
 
+    return editor;
+  }
+
+  it('converts a paste node into in-document text', async () => {
+    const editor = await convertPaste('first line\nsecond line');
+
     editor.getEditorState().read(() => {
       const root = $getRoot();
       expect(root.getChildren().some($isPasteNode)).toBe(false);
       expect(root.getTextContent()).toContain('first line');
       expect(root.getTextContent()).toContain('second line');
     });
+  });
+
+  it('parses the content as markdown, just like a normal paste', async () => {
+    const content = '# Heading\n\n- one\n- two';
+    const editor = await convertPaste(content);
+
+    let markdown = '';
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      expect(root.getChildren().some($isPasteNode)).toBe(false);
+      // The heading marker and list markers should be parsed into structural
+      // nodes rather than left as literal text.
+      const types = root.getChildren().map((node) => node.getType());
+      expect(types).toContain('heading');
+      markdown = $convertToMarkdownString(INTERNAL_TRANSFORMERS);
+    });
+
+    // Round-tripping the resulting nodes back to markdown reproduces the
+    // original markdown, confirming it was parsed (not inserted as raw text).
+    expect(markdown).not.toContain('<m-paste>');
+    expect(markdown).toContain('# Heading');
+    expect(markdown).toContain('- one');
+    expect(markdown).toContain('- two');
   });
 });

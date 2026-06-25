@@ -26,27 +26,33 @@ x-local-e2e-env: &local-e2e-env
   CONNECTION_GATEWAY_TABLE: connection-gateway-table
   STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME: static-file-metadata
 
-  BACKFILL_QUEUE: email-service-backfill-queue
-  CHAT_DELETE_QUEUE: delete-chat-handler-queue
-  CONTACTS_QUEUE: contacts-queue
-  CONVERT_QUEUE: convert-service-queue
-  DOCUMENT_DELETE_QUEUE: delete-document-handler-queue
-  DOCUMENT_TEXT_EXTRACTOR_QUEUE: document-text-extractor-lambda-queue
-  EMAIL_SCHEDULED_QUEUE: email-service-scheduled-queue
-  GMAIL_INBOX_SYNC_QUEUE: email-service-gmail-inbox-sync-queue
-  GMAIL_INBOX_SYNC_RETRY_QUEUE: email-service-gmail-inbox-retry-queue
-  GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
-  GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
-  LINK_MANAGER_QUEUE: email-service-refresh-queue
-  NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
-  NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
-  PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
-  SEARCH_EVENT_QUEUE: search-event-queue
-  AI_PROJECTION_QUEUE: http://localstack:4566/000000000000/ai-projection-queue
-  SFS_DELETE_QUEUE: email-sfs-delete-queue
-  SFS_UPLOADER_QUEUE: email-service-sfs-mapper-queue
-  STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL: http://localstack:4566/000000000000/static-file-s3-event-notification-queue
-  EMAIL_BACKFILL_QUEUE: http://localstack:4566/000000000000/email-service-backfill-queue
+  # Queue names now live in the `macro_queues` crate; these OVERRIDE_* vars point
+  # the local-e2e services at the localstack queues (OVERRIDE_ wins over the
+  # per-environment constant regardless of ENVIRONMENT).
+  OVERRIDE_CHAT_DELETE_QUEUE: delete-chat-handler-queue
+  OVERRIDE_CONTACTS_QUEUE: contacts-queue
+  OVERRIDE_CONVERT_QUEUE: convert-service-queue
+  OVERRIDE_DOCUMENT_DELETE_QUEUE: delete-document-handler-queue
+  OVERRIDE_DOCUMENT_TEXT_EXTRACTOR_QUEUE: document-text-extractor-lambda-queue
+  OVERRIDE_EMAIL_SCHEDULED_QUEUE: email-service-scheduled-queue
+  OVERRIDE_GMAIL_INBOX_SYNC_QUEUE: email-service-gmail-inbox-sync-queue
+  OVERRIDE_GMAIL_INBOX_SYNC_RETRY_QUEUE: email-service-gmail-inbox-retry-queue
+  OVERRIDE_GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
+  OVERRIDE_GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
+  OVERRIDE_LINK_MANAGER_QUEUE: email-service-refresh-queue
+  OVERRIDE_NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
+  OVERRIDE_NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
+  OVERRIDE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
+  OVERRIDE_SEARCH_EVENT_QUEUE: search-event-queue
+  OVERRIDE_AI_PROJECTION_QUEUE: http://localstack:4566/000000000000/ai-projection-queue
+  OVERRIDE_SFS_DELETE_QUEUE: email-sfs-delete-queue
+  OVERRIDE_SFS_UPLOADER_QUEUE: email-service-sfs-mapper-queue
+  OVERRIDE_STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL: http://localstack:4566/000000000000/static-file-s3-event-notification-queue
+  OVERRIDE_EMAIL_BACKFILL_QUEUE: http://localstack:4566/000000000000/email-service-backfill-queue
+
+  # The ai_tools context wires these queues only when explicitly enabled.
+  ENABLE_EMAIL_SCHEDULED_QUEUE: "true"
+  ENABLE_GMAIL_OPS_QUEUE: "true"
 
 services:
   authentication-service:

@@ -59,7 +59,7 @@ export function InboxSelector() {
                 icon: () => <PlusIcon class="size-4" />,
                 onSelect: () =>
                   guardAddInbox(() => {
-                    openSettings('Email');
+                    openSettings('Connected');
                     openAddInboxDialog();
                   }),
               }

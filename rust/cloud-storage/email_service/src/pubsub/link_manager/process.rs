@@ -322,9 +322,9 @@ async fn handle_delete(
         tracing::debug!("Skipping Gmail stop_watch - no access token available");
     }
 
-    // remove google fusionauth link with gmail inbox permissions. must succeed before we delete
-    // the email_links row below, otherwise a failure leaves a stale FA IdP link with no macrodb
-    // counterpart (and the message is retried instead).
+    // remove google fusionauth link with gmail inbox permissions. best-effort: the FA user may
+    // already be gone (e.g. account deleted before we delete their email), so we warn and keep
+    // going rather than failing the message and retrying.
     ctx.auth_service_client
         .remove_link(
             &link.fusionauth_user_id,
@@ -332,7 +332,10 @@ async fn handle_delete(
             "google_gmail",
         )
         .await
-        .context("Failed to remove FusionAuth IdP link")?;
+        .inspect_err(|e| {
+            tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
+        })
+        .ok();
 
     // inform search of deletion so it can wipe the email records from OS
     ctx.sqs_client

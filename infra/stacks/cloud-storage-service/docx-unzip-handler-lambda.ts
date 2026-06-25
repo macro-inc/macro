@@ -16,7 +16,6 @@ export type DocxUnzipLambdaEnvVars = {
   DOCUMENT_STORAGE_BUCKET: pulumi.Output<string> | string;
   DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.Output<string> | string;
   WEB_SOCKET_RESPONSE_LAMBDA: pulumi.Output<string> | string;
-  CONVERT_QUEUE: pulumi.Output<string> | string;
 };
 
 type DocxUnzipHandlerLambdaArgs = {

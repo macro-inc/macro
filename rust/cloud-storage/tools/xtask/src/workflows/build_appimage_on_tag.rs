@@ -1,7 +1,9 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
+use gh_workflow::{
+    Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
+};
 
 use crate::workflows::{runners, steps};
 
@@ -23,18 +25,23 @@ pub fn build_appimage() -> Workflow {
                 },
             )),
         )
-        .add_job("build-appimage", build_appimage_job())
+        .add_job("build-appimage", build_appimage_job("${{ inputs.ref }}"))
+        .add_job(
+            "publish-appimage",
+            publish_appimage_job("${{ inputs.ref }}").add_needs("build-appimage"),
+        )
 }
 
-fn build_appimage_job() -> Job {
+/// Build the AppImage job, checking out and naming artifacts from `ref_expr`.
+pub fn build_appimage_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build AppImage")
         .runs_on(runners::Runner::LinuxRustCi.to_string())
-        .add_step(steps::checkout_ref("${{ inputs.ref }}"))
+        .add_step(steps::checkout_ref(ref_expr))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_cachix())
-        .add_step(steps::derive_artifact_metadata("${{ inputs.ref }}"))
+        .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
         .add_step(steps::upload_artifact(
@@ -42,6 +49,25 @@ fn build_appimage_job() -> Job {
             "artifacts/*",
         ))
         .add_step(steps::teardown_nix())
+}
+
+/// Publish AppImage artifacts from the workflow run to the release tag.
+pub fn publish_appimage_job(ref_expr: &str) -> Job {
+    publish_job(ref_expr, "release-artifacts/*")
+}
+
+/// Publish desktop artifacts from the workflow run to the release tag.
+pub fn publish_job(ref_expr: &str, artifacts_path: &str) -> Job {
+    Job::default()
+        .name("Upload Release Artifacts")
+        .runs_on("ubuntu-latest")
+        .permissions(Permissions {
+            contents: Some(Level::Write),
+            ..Default::default()
+        })
+        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(steps::download_artifacts("release-artifacts"))
+        .add_step(steps::upload_release_artifacts(artifacts_path))
 }
 
 fn nix_build_appimage() -> Step<Run> {

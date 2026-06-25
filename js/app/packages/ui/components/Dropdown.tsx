@@ -72,7 +72,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -114,7 +114,10 @@ function DropdownContent(props: DropdownContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.Content
-          class={cn('rounded-xl size-auto z-action-menu', local.class)}
+          class={cn(
+            'rounded-xl size-auto z-action-menu menu-open-animation',
+            local.class
+          )}
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
@@ -151,7 +154,10 @@ function DropdownSubContent(props: DropdownSubContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.SubContent
-          class={cn('rounded-xl size-auto z-action-menu', local.class)}
+          class={cn(
+            'rounded-xl size-auto z-action-menu menu-open-animation',
+            local.class
+          )}
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
@@ -170,7 +176,7 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5 gap-0.5 bg-surface', local.class)}
+      class={cn('flex flex-col p-1.5 bg-surface', local.class)}
       {...rest}
     />
   );

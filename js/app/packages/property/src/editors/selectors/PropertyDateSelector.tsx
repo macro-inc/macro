@@ -195,7 +195,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                     <div
                       data-date-index={index()}
                       class={cn(
-                        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md',
+                        'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
                         index() === selectedIndex() && 'bg-hover'
                       )}
                       onClick={() => handleSelectDate(option.date)}
@@ -221,7 +221,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                 <div
                   data-date-index={calendarOptionIndex()}
                   class={cn(
-                    'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md',
+                    'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
                     selectedIndex() === calendarOptionIndex() && 'bg-hover'
                   )}
                   onClick={() => setMode('calendar')}
@@ -246,7 +246,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   <div
                     data-date-index={clearOptionIndex()}
                     class={cn(
-                      'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md',
+                      'group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default',
                       selectedIndex() === clearOptionIndex() && 'bg-hover'
                     )}
                     onClick={() => handleClearDate()}

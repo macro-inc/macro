@@ -43,7 +43,7 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <Surface depth={2} active class="rounded-xl">
+      <Surface depth={2} class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="flex flex-col text-ink">
             <Show when={props.view === 'rename'}>
