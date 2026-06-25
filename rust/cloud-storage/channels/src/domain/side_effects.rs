@@ -621,7 +621,15 @@ where
     /// Resolve the public bot profile when the message sender is a bot.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
         match &message.sender_id {
-            Sender::Bot(bot_id) => self.context.get_bot_sender_profile(*bot_id).await,
+            Sender::Bot(bot_id) => {
+                if bot_id == bot_id::MACRO_AI_BOT_ID {
+                    return Some(BotSenderProfile {
+                        name: bot_id::MACRO_AI_NAME.to_string(),
+                        avatar_url: None,
+                    });
+                }
+                self.context.get_bot_sender_profile(*bot_id).await
+            }
             Sender::User(_) => None,
         }
     }
