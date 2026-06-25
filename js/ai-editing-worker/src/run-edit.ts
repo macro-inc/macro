@@ -219,7 +219,7 @@ export async function runEditSession(
 
     if (trace) {
       console.log(
-        `[debug-trace] ${JSON.stringify({ documentId: args.documentId, debug: trace })}`
+        JSON.stringify({ documentId: args.documentId, debug: trace })
       );
     }
 
