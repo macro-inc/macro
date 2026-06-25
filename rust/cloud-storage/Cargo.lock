@@ -4268,6 +4268,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_queues",
  "model",
  "models_email",
  "sqlx",
