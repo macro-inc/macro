@@ -49,7 +49,7 @@ where
     async fn call(
         &self,
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
-        _request_context: RequestContext,
+        request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let user_token = ctx.user_token.as_deref().ok_or_else(|| {
             let e = anyhow::anyhow!("user_token not available on DocumentToolContext");
@@ -63,6 +63,22 @@ where
                 description: e.to_string(),
                 internal_error: e,
             })?;
+
+        // The worker runs several models on the caller's behalf; record each so
+        // their tokens land on the usage ledger (attributed to this user).
+        let entity = macro_uuid::string_to_uuid(&self.document_id).ok();
+        for u in &result.usage {
+            let cx = ai_usage::UsageContext::new(
+                ai_usage::AiFeature::AiEditing,
+                request_context.user_id.clone(),
+            )
+            .with_entity(entity);
+            ctx.recorder.record(cx.into_event(
+                u.model.clone(),
+                u.input_tokens as u64,
+                u.output_tokens as u64,
+            ));
+        }
 
         let summary = if result.clarification.is_some() {
             "Paused for clarification; no edits applied.".to_string()

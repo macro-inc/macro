@@ -60,6 +60,10 @@ pub struct DocumentToolContext<
     /// authenticate with the editing worker (which exchanges it for a
     /// document-scoped JWT internally).
     pub user_token: Option<String>,
+
+    /// Records the token usage the editing worker reports. Defaults to a no-op;
+    /// the chat path injects the real (Postgres-backed) recorder per request.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
 }
 
 impl<
@@ -77,6 +81,7 @@ impl<
             creator: self.creator.clone(),
             editing: self.editing.clone(),
             user_token: self.user_token.clone(),
+            recorder: self.recorder.clone(),
         }
     }
 }
@@ -115,7 +120,14 @@ impl<
             creator,
             editing: Arc::new(editing),
             user_token: None,
+            recorder: Arc::new(ai_usage::NoOpUsageRecorder),
         }
+    }
+
+    /// Set the usage recorder the EditDocument tool logs worker token usage to.
+    pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
+        self.recorder = recorder;
+        self
     }
 }
 

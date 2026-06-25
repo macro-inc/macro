@@ -6,15 +6,18 @@ use std::future::Future;
 pub struct EditResult {
     /// Number of individual edit operations applied to the document.
     pub edits_applied: usize,
-    /// Token usage reported by the editing worker, if available.
-    pub usage: Option<EditUsage>,
+    /// Per-model token usage reported by the editing worker (the worker runs
+    /// several models, supervisor, interpret, coder; this is one entry each).
+    pub usage: Vec<EditUsage>,
     /// If set, the worker needs more information. Invoke again with the
     /// requested details appended to the instructions.
     pub clarification: Option<String>,
 }
 
-/// Token usage reported by the editing worker.
+/// Token usage for one model used by the editing worker.
 pub struct EditUsage {
+    /// The model api id (e.g. `claude-haiku-4-5-xxxx`).
+    pub model: String,
     /// Input tokens consumed.
     pub input_tokens: u32,
     /// Output tokens produced.

@@ -60,16 +60,26 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
 
         let body = edit_resp.json::<serde_json::Value>().await?;
 
+        // The worker reports `usage` as an array of per-model entries
+        // (`{ model, inputTokens, outputTokens }`, camelCase) — one per model it
+        // ran (supervisor, interpret, coder).
+        let usage = body["usage"]
+            .as_array()
+            .map(|entries| {
+                entries
+                    .iter()
+                    .map(|e| EditUsage {
+                        model: e["model"].as_str().unwrap_or_default().to_owned(),
+                        input_tokens: e["inputTokens"].as_u64().unwrap_or(0) as u32,
+                        output_tokens: e["outputTokens"].as_u64().unwrap_or(0) as u32,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Ok(EditResult {
             edits_applied: body["ops"].as_array().map(|a| a.len()).unwrap_or(0),
-            usage: body["usage"].as_object().map(|_| EditUsage {
-                input_tokens: body["usage"]["input_tokens"]
-                    .as_u64()
-                    .unwrap_or(0) as u32,
-                output_tokens: body["usage"]["output_tokens"]
-                    .as_u64()
-                    .unwrap_or(0) as u32,
-            }),
+            usage,
             clarification: body["clarification"].as_str().map(str::to_owned),
         })
     }
