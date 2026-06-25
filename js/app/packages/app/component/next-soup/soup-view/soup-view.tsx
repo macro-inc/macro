@@ -1009,9 +1009,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const contentId = panel.handle.content().id;
 
   const readListEntryState = () =>
-    panel.handle.currentEntryState()?.[
-      SOUP_LIST_STATE_ENTRY_KEY
-    ] as SoupListEntryState | undefined;
+    panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
+      | SoupListEntryState
+      | undefined;
 
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
@@ -1065,18 +1065,22 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const restoreListState = (force = false) => {
     if (isProjectList) return;
     if (restored && !force) return;
-    restored = true;
 
     const cached = readListEntryState();
     if (cached) {
       soup.focus.set(cached.focus);
-      virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
+      const handle = virtualizerHandle();
+      if (!handle) return;
+
+      handle.scrollTo(cached.scrollOffset ?? 0);
+      restored = true;
       registerFocusEffects(false);
       return;
     }
 
     if (force) return;
 
+    restored = true;
     registerFocusEffects();
   };
 
@@ -1085,7 +1089,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   ) => {
     setVirtualizerHandle(handle);
 
-    restoreListState();
+    if (handle) restoreListState();
   };
 
   createEffect(

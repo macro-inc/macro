@@ -244,6 +244,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // A signal so goToLocationFromParams can await it via the orchestrator's
   // availability primitive when the tab hasn't mounted yet.
   const [messagesHandle, setMessagesHandle] = createSignal<ChannelHandle>();
+  let lastMessagesStateSnapshot = persistedChannelState?.messages;
 
   const setActiveTab = (tab: ChannelTabId) => {
     tab = normalizeChannelTab(tab);
@@ -363,11 +364,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         CHANNEL_STATE_ENTRY_KEY,
         (): ChannelEntryStateSnapshot => {
           const handle = messagesHandle();
+          const messages = handle
+            ? handle.getMessagesStateSnapshot()
+            : lastMessagesStateSnapshot;
+          lastMessagesStateSnapshot = messages;
           return {
             activeTab: activeTab(),
-            messages: handle
-              ? handle.getMessagesStateSnapshot()
-              : persistedChannelState?.messages,
+            messages,
           };
         }
       );
