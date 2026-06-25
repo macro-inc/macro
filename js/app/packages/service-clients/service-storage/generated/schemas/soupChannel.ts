@@ -8,6 +8,9 @@ import type { ChannelWithParticipants } from './channelWithParticipants';
 import type { LatestMessage } from './latestMessage';
 import type { SoupChannelAllOf } from './soupChannelAllOf';
 
+/**
+ * A channel as displayed in Soup.
+ */
 export type SoupChannel = ChannelWithParticipants &
   LatestMessage &
   SoupChannelAllOf;

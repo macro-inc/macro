@@ -99,6 +99,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
+  const [isFocused, setIsFocused] = createSignal(false);
 
   const inputView = () => ({
     ...props.input,
@@ -207,7 +208,18 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Surface depth={2} class="rounded-xl">
+      <Surface
+        onFocusOut={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && event.currentTarget.contains(next)) return;
+          setIsFocused(false);
+        }}
+        onFocusIn={() => setIsFocused(true)}
+        active={isFocused()}
+        class="rounded-xl"
+        depth={2}
+        solid
+      >
         <Input.Layout>
           <Input.FormatRibbon>
             <FormatButtons

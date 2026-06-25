@@ -17,6 +17,10 @@ use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use ai_projections::domain::model::{Expiry, ProjectionStatus, RefreshCadence, TargetType};
+use ai_projections::inbound::axum_router::upsert_projection::{
+    ProjectionStateResponse, UpsertProjectionRequest,
+};
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
@@ -26,10 +30,7 @@ use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryRe
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
-use chat::domain::models::{
-    ChatResponse, GetChatResponse, ModelAccess, ModelsResponse, WebCitation,
-};
-use chat::inbound::http::models as chat_models;
+use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
@@ -74,7 +75,6 @@ use utoipa::OpenApi;
             chat_router::update_tool_response_handler,
             chat_router::call_tool_handler,
             chat_router::reject_tool_call_handler,
-            chat_models::list_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
@@ -86,6 +86,7 @@ use utoipa::OpenApi;
             memory_api::get_memory_handler,
             ai_usage_api::get_usage_handler,
             ai_usage_api::set_pricing_handler,
+            ai_projections::inbound::axum_router::upsert_projection::handler::<crate::api::context::DcsAiProjectionService>,
             mcp_api::list_servers,
             mcp_api::add_server,
             mcp_api::update_server,
@@ -96,8 +97,6 @@ use utoipa::OpenApi;
         components(
             schemas(
                 DocumentCognitionServiceApiVersion,
-                ModelAccess,
-                ModelsResponse,
                 // Generic
                 StringIDResponse,
                 GenericErrorResponse,
@@ -184,6 +183,14 @@ use utoipa::OpenApi;
                 ai_usage::Usage,
                 ai_usage::Price,
                 ai_usage::AiFeature,
+
+                // AI projections
+                UpsertProjectionRequest,
+                ProjectionStateResponse,
+                TargetType,
+                RefreshCadence,
+                Expiry,
+                ProjectionStatus,
 
                 // MCP
                 ServerResponse,

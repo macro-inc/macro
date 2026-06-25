@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import type {
   DiscussionComment,
   DiscussionSource,
@@ -54,13 +54,14 @@ function toViewThread(ct: CommentThread): DiscussionThread {
 
 /**
  * [`DiscussionSource`] backed by the document annotations system — the
- * `DISCUSSION:`-marked threads on a task document. Quarantines the numeric
+ * `DISCUSSION:`-marked threads on a markdown document. Quarantines the numeric
  * id ↔ string adaptation and the document-specific request shapes so the
  * shared discussion UI stays backend-agnostic. Must be called within a
  * block/component owner (it wires the existing block resources).
  */
 export function createDocumentDiscussionSource(): DiscussionSource {
   const blockId = useBlockId();
+  const blockAliasedName = useBlockAliasedName();
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
   const canComment = useCanComment();
   const userId = useUserId();
@@ -102,7 +103,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
     },
     buildCommentLink(comment) {
       return buildSimpleEntityUrl(
-        { type: 'task', id: blockId },
+        { type: blockAliasedName, id: blockId },
         { [URL_PARAMS.commentId]: comment.id }
       );
     },

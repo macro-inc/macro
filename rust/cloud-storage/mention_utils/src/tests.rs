@@ -670,3 +670,70 @@ fn parse_group_mention_with_user_mention() {
         assert_eq!(email.as_ref(), "a@b.com");
     });
 }
+
+// =============================================================================
+// Unknown / unrecognized tag tests
+// =============================================================================
+
+#[test]
+fn parse_await_tag_is_skipped() {
+    let input = r#"<m-await>{"awaitId":"a1","text":"Macro is thinking…","inline":true}</m-await>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert!(out.0.is_empty());
+}
+
+#[test]
+fn parse_await_tag_with_surrounding_text() {
+    let input = r#"before <m-await>{"text":"Macro is thinking…","inline":true}</m-await> after"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(
+        out.0,
+        [TextSegment::Plain("before "), TextSegment::Plain(" after"),]
+    );
+}
+
+#[test]
+fn parse_empty_await_tag_is_skipped() {
+    let input = r#"hi <m-await></m-await>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [TextSegment::Plain("hi ")]);
+}
+
+#[test]
+fn parse_arbitrary_unknown_tag_is_skipped() {
+    let input = r#"hello <m-foo>{"bar":1}</m-foo> world"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(
+        out.0,
+        [TextSegment::Plain("hello "), TextSegment::Plain(" world"),]
+    );
+}
+
+#[test]
+fn parse_self_closing_unknown_tag_is_skipped() {
+    let input = r#"hello <m-foo/> world"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(
+        out.0,
+        [TextSegment::Plain("hello "), TextSegment::Plain(" world"),]
+    );
+}
+
+#[test]
+fn parse_self_closing_unknown_tag_alone_is_skipped() {
+    let input = r#"<m-await/>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert!(out.0.is_empty());
+}
+
+#[test]
+fn parse_unknown_tag_mixed_with_recognized() {
+    let input = r#"<m-await>{"text":"thinking"}</m-await> Hi <m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Plain(" Hi "),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { email, .. })),
+    ] => {
+        assert_eq!(email.as_ref(), "a@b.com");
+    });
+}

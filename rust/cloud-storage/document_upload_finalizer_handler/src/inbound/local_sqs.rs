@@ -4,6 +4,7 @@ use std::time::Duration;
 use anyhow::Context as _;
 use aws_sdk_sqs::types::Message;
 use lambda_runtime::tracing;
+use macro_env_var::maybe_env_vars;
 
 use crate::AppContext;
 use crate::inbound::s3_notification::object_created_events_from_body;
@@ -11,18 +12,25 @@ use crate::inbound::s3_notification::object_created_events_from_body;
 const LOCALSTACK_ACCOUNT_ID: &str = "000000000000";
 const QUEUE_NAME: &str = "document-upload-finalizer-queue";
 
+maybe_env_vars! {
+    struct DocumentUploadFinalizerQueueUrl;
+    struct LocalAwsUrl;
+}
+
 /// Run the LocalStack SQS polling adapter.
 pub async fn run_local_sqs_worker(context: Arc<AppContext>) -> Result<(), anyhow::Error> {
-    let queue_url = std::env::var("DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL")
-        .unwrap_or_else(|_| default_queue_url());
+    let queue_url = DocumentUploadFinalizerQueueUrl::new()
+        .map(|queue_url| queue_url.to_string())
+        .unwrap_or_else(default_queue_url);
     let sqs_client = aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await);
 
     poll_forever(context, sqs_client, queue_url).await
 }
 
 fn default_queue_url() -> String {
-    let local_aws_url =
-        std::env::var("LOCAL_AWS_URL").unwrap_or_else(|_| "http://localstack:4566".to_string());
+    let local_aws_url = LocalAwsUrl::new()
+        .map(|local_aws_url| local_aws_url.to_string())
+        .unwrap_or_else(|| "http://localstack:4566".to_string());
     format!(
         "{}/{LOCALSTACK_ACCOUNT_ID}/{QUEUE_NAME}",
         local_aws_url.trim_end_matches('/')

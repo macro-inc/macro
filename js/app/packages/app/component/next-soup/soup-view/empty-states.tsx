@@ -3,8 +3,7 @@ import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import type { BlockAlias, BlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
-import { toast } from '@core/component/Toast/Toast';
-import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
+import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiIcon from '@design/empty-state-ai.svg';
 import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
 import EmptyStateCallsIcon from '@design/empty-state-calls.svg';
@@ -80,14 +79,11 @@ export function EmptyState(props: {
   onClearFilters?: () => void;
 }) {
   const emailActive = useEmailLinksStatus();
-  const { connect } = useEmailLinks();
+  const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();
 
   const onConnectEmail = () => {
-    connect().match(
-      () => {},
-      () => toast.failure('Failed to connect email')
-    );
+    void startAddInbox();
   };
 
   return (

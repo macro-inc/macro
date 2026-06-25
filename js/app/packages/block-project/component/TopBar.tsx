@@ -8,6 +8,7 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   type FileOperation,
@@ -168,13 +169,15 @@ export function TopBar() {
         {/* Mobile layout */}
         <SplitHeaderRight>
           <Show when={ops().length > 0 || !isSpecialProject}>
-            <SplitFileMenu
-              id={id}
-              itemType="project"
-              name={name()}
-              ops={ops()}
-              tools={[...tools, ...createTools]}
-            />
+            <HeaderIsland>
+              <SplitFileMenu
+                id={id}
+                itemType="project"
+                name={name()}
+                ops={ops()}
+                tools={[...tools, ...createTools]}
+              />
+            </HeaderIsland>
           </Show>
         </SplitHeaderRight>
       </Show>

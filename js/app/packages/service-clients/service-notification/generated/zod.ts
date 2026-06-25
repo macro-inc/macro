@@ -131,6 +131,7 @@ export const listTypedNotificationsResponse = zod
                 'user',
                 'chat',
                 'channel',
+                'channel_message',
                 'document',
                 'project',
                 'email_thread',
@@ -534,6 +535,31 @@ export const listTypedNotificationsResponse = zod
                     })
                     .describe(
                       'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channel_name: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The name of the channel the call started in, when available.'
+                            ),
+                          sender_profile_picture_url: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Profile picture URL of the user who started the call, when available.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                        ),
+                      tag: zod.enum(['call_started']),
+                    })
+                    .describe(
+                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
                     ),
                   zod
                     .object({
@@ -1366,6 +1392,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'user',
                 'chat',
                 'channel',
+                'channel_message',
                 'document',
                 'project',
                 'email_thread',
@@ -1769,6 +1796,31 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     })
                     .describe(
                       'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channel_name: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The name of the channel the call started in, when available.'
+                            ),
+                          sender_profile_picture_url: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Profile picture URL of the user who started the call, when available.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                        ),
+                      tag: zod.enum(['call_started']),
+                    })
+                    .describe(
+                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
                     ),
                   zod
                     .object({
@@ -2595,6 +2647,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'user',
                 'chat',
                 'channel',
+                'channel_message',
                 'document',
                 'project',
                 'email_thread',
@@ -2998,6 +3051,31 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     })
                     .describe(
                       'Someone replied to a thread in a channel that the user is part of.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channel_name: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The name of the channel the call started in, when available.'
+                            ),
+                          sender_profile_picture_url: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Profile picture URL of the user who started the call, when available.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                        ),
+                      tag: zod.enum(['call_started']),
+                    })
+                    .describe(
+                      'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
                     ),
                   zod
                     .object({
@@ -3835,6 +3913,7 @@ export const getTypedNotificationByIdResponse = zod
         'user',
         'chat',
         'channel',
+        'channel_message',
         'document',
         'project',
         'email_thread',
@@ -4212,6 +4291,31 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'Someone replied to a thread in a channel that the user is part of.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channel_name: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The name of the channel the call started in, when available.'
+                    ),
+                  sender_profile_picture_url: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Profile picture URL of the user who started the call, when available.'
+                    ),
+                })
+                .describe(
+                  'Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS\/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.'
+                ),
+              tag: zod.enum(['call_started']),
+            })
+            .describe(
+              'A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.'
             ),
           zod
             .object({

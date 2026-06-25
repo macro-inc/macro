@@ -8,7 +8,11 @@
 import type { SoupItemOneOfFiveTag } from './soupItemOneOfFiveTag';
 import type { SoupProject } from './soupProject';
 
+/**
+ * Project item.
+ */
 export type SoupItemOneOfFive = {
+  /** Project item. */
   data: SoupProject;
   tag: SoupItemOneOfFiveTag;
 };

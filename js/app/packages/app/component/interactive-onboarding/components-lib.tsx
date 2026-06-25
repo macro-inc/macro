@@ -220,8 +220,7 @@ export function ContinueButton(props: ContinueButtonProps) {
         {
           'bg-transparent text-ink/40 font-normal ring-1 ring-edge-muted':
             props.disabled,
-          'bg-accent text-surface hover:bg-accent hover:ring-2 ring-accent ring-offset-1 ring-offset-surface focus:ring-2':
-            !props.disabled,
+          'bg-accent text-surface hover:bg-accent/90': !props.disabled,
         }
       )}
       onClick={props.onClick}

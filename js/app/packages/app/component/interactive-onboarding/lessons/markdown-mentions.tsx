@@ -69,13 +69,14 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
 
   return (
     <MockAppChrome scopeId={props.scopeId}>
-      <div class="h-full flex flex-col px-8 py-6">
+      <div class="portal-scope h-full flex flex-col px-8 py-6">
         <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell
           class="flex-1 min-h-0 cursor-text"
           config={config}
           placeholder="Start typing... use @ to mention"
           autofocus
+          portalScope="local"
         />
       </div>
     </MockAppChrome>

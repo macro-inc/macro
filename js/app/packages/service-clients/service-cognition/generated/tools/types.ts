@@ -66,6 +66,39 @@ export type Content =
   | {
       markdown: MarkdownNode[];
     };
+/**
+ * A single node of a markdown document as seen by the AI.
+ */
+export type MarkdownNode =
+  | {
+      /**
+       * Human readable content
+       */
+      content: string;
+      /**
+       * The node id
+       */
+      nodeId: string;
+      /**
+       * The style on the node, h1, paragraph, code, etc.
+       */
+      tag: string;
+      type: 'generic';
+    }
+  | {
+      type: 'staticImage';
+      /**
+       * URL the image can be fetched from.
+       */
+      url: string;
+    }
+  | {
+      /**
+       * The DSS id of the image. Use the read tool with this id to read it.
+       */
+      id: string;
+      type: 'dssImage';
+    };
 export type UnifiedSearchIndex =
   | 'documents'
   | 'chats'
@@ -98,42 +131,106 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  */
 export type DocumentSubType = 'task' | 'snippet';
 export type EmailPreset = 'signal';
+/**
+ * Item returned by the list entities AI tool.
+ */
 export type EntityItem =
   | {
+      /**
+       * Document id.
+       */
       id: string;
+      /**
+       * Document name.
+       */
       name: string;
       type: 'document';
     }
   | {
+      /**
+       * Chat id.
+       */
       id: string;
+      /**
+       * Chat name.
+       */
       name: string;
       type: 'aiChat';
     }
   | {
+      /**
+       * Project id.
+       */
       id: string;
+      /**
+       * Project name.
+       */
       name: string;
       type: 'project';
     }
   | {
+      /**
+       * Email thread id.
+       */
       id: string;
+      /**
+       * Email subject, when present.
+       */
       subject?: string | null;
       type: 'email';
     }
   | {
+      /**
+       * Channel id.
+       */
       id: string;
+      /**
+       * Channel name, when present.
+       */
       name?: string | null;
       type: 'channel';
     }
   | {
+      /**
+       * Channel id containing the thread.
+       */
+      channelId: string;
+      /**
+       * Parent message id for the thread.
+       */
+      id: string;
+      type: 'channelThread';
+    }
+  | {
+      /**
+       * User or actor that created the call.
+       */
       createdBy: string;
+      /**
+       * Call id.
+       */
       id: string;
       type: 'call';
     }
   | {
+      /**
+       * Provider-specific foreign entity id.
+       */
       foreignEntityId: string;
+      /**
+       * Provider/source name for the foreign entity.
+       */
       foreignEntitySource: string;
+      /**
+       * Foreign entity row id.
+       */
       id: string;
-      metadata: unknown;
+      /**
+       * Foreign entity metadata.
+       */
+      metadata: {
+        [k: string]: unknown;
+      };
       type: 'foreignEntity';
     };
 export type ToolEntityType =
@@ -144,14 +241,21 @@ export type ToolEntityType =
   | 'thread'
   | 'channel'
   | 'user';
+/**
+ * Entity types that can be returned by the list entities AI tool.
+ */
 export type ItemType =
   | 'document'
   | 'ai_chat'
   | 'project'
   | 'email'
   | 'channel'
+  | 'channel_thread'
   | 'call'
   | 'foreign_entity';
+/**
+ * Sort order for the list entities AI tool.
+ */
 export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
@@ -743,27 +847,6 @@ export interface Thread {
   updatedAt?: string | null;
 }
 /**
- * Markdown node
- */
-export interface MarkdownNode {
-  /**
-   * Human readable content
-   */
-  content: string;
-  /**
-   * The node id
-   */
-  nodeId: string;
-  /**
-   * Json respresentation
-   */
-  rawContent: string;
-  /**
-   * The style on the node, H1, em, code, etc.
-   */
-  type: string;
-}
-/**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
@@ -771,6 +854,10 @@ export interface ContentSearch {
    * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
+  /**
+   * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
+   */
+  inbox?: string | null;
   /**
    * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
    */
@@ -878,6 +965,20 @@ export interface CrmCompanySearchResponseItem {
    * When the company was last updated (the sort key).
    */
   updatedAt: string;
+}
+/**
+ * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
+ */
+export interface DisplayResults {
+  /**
+   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
+   */
+  view: {
+    [k: string]: unknown;
+  };
+}
+export interface DisplayResultsResponse {
+  message: string;
 }
 /**
  * API-visible content lifecycle and location metadata.
@@ -1156,7 +1257,7 @@ export interface ToolPropertyOption {
   id: string;
 }
 /**
- * Retrieve an email thread and its messages. Returns the thread metadata and message contents including sender, recipients, subject, and body text. Use this to read the contents of a specific email conversation.
+ * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
  */
 export interface GetThread {
   /**
@@ -1176,6 +1277,11 @@ export interface GetThreadResponse {
    * Whether the thread has been read.
    */
   isRead: boolean;
+  /**
+   * The labels applied to the thread — the distinct set of label names across
+   * all of its messages (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+   */
+  labels: string[];
   /**
    * The messages in the thread (most recent first).
    */
@@ -1213,6 +1319,10 @@ export interface ToolMessage {
    * The message's unique identifier.
    */
   id: string;
+  /**
+   * The labels on this message (e.g. INBOX, UNREAD, STARRED, and any custom labels).
+   */
+  labels: string[];
   /**
    * The message subject.
    */
@@ -1284,6 +1394,12 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
+   * Full soup AST channel thread filter (cthf).
+   */
+  cthf?: {
+    [k: string]: unknown;
+  };
+  /**
    * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
@@ -1312,6 +1428,10 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
+   * Restrict email results to a single connected inbox, given as that inbox's email address. Omit to span every inbox the user can access (their own plus any delegated to them). Only set this when the user scopes the request to a specific mailbox (e.g. "my work inbox", "the shared inbox"); call ListInboxes first to get the exact address. Only affects email results.
+   */
+  inbox?: string | null;
+  /**
    * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
    */
   includeTypes?: ItemType[] | null;
@@ -1333,9 +1453,57 @@ export interface ListEntities {
   };
   sortBy?: SortBy;
 }
+/**
+ * Response returned by the list entities AI tool.
+ */
 export interface ListEntitiesResponse {
+  /**
+   * Items returned for the request.
+   */
   items: EntityItem[];
+  /**
+   * Human-readable summary of the returned items.
+   */
   summary: string;
+}
+/**
+ * List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).
+ *
+ * Use this when the user references a specific or non-default mailbox (e.g. "my work inbox", "the shared inbox", "the inbox Alex shared with me") so you can pass the exact `emailAddress` to the `inbox` parameter of ListEntities, ContentSearch, or NameSearch, or to ListLabels. Most users have a single inbox, in which case email tools operate on it by default and you do not need this tool. Do not guess inbox addresses — list them here first.
+ */
+export type ListInboxes = {};
+/**
+ * Response from the ListInboxes tool.
+ */
+export interface ListInboxesResponse {
+  /**
+   * The inboxes the caller can read or act on.
+   */
+  inboxes: ToolInbox[];
+  /**
+   * A human-readable summary of the inboxes.
+   */
+  summary: string;
+}
+/**
+ * A connected inbox surfaced to the AI.
+ */
+export interface ToolInbox {
+  /**
+   * The inbox's email address. Pass this as the `inbox` parameter to scope
+   * reads, searches, or label lookups to this inbox.
+   */
+  emailAddress: string;
+  /**
+   * Whether this inbox belongs to another user and was delegated to the
+   * caller (versus one of the caller's own connected inboxes).
+   */
+  isDelegated: boolean;
+  /**
+   * Whether this is the caller's primary (default) inbox — the one email
+   * tools use when no inbox is specified.
+   */
+  isPrimary: boolean;
 }
 /**
  * List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
@@ -1352,8 +1520,22 @@ export interface ListEntitiesResponse {
  * - Apply or remove a custom user label → look up the label by its display name and add/remove it
  *
  * Match label names case-insensitively when searching the response. You can also use this to understand how the user's mail is organized before filtering or searching by label.
+ *
+ * Labels are per-inbox: each inbox has its own label `id`s, so a label id from one inbox will not work on a thread in another. When acting on a specific thread, pass its `thread_id` and this returns the labels of the inbox that owns that thread (the matching ids to pass to UpdateThreadLabels). Otherwise, in a multi-inbox setup, pass `inbox` (an inbox email address from ListInboxes) to list a specific inbox's labels; omit both to use the primary inbox.
  */
-export type ListLabels = {};
+export interface ListLabels {
+  /**
+   * Restrict to a specific inbox by its email address (from ListInboxes).
+   * Omit to use the primary inbox. Ignored when `thread_id` is set.
+   */
+  inbox?: string | null;
+  /**
+   * List the labels of the inbox that owns this thread. Use this when you
+   * intend to add or remove a label on a specific thread so the label ids
+   * match that thread's inbox. Takes precedence over `inbox`.
+   */
+  thread_id?: string | null;
+}
 /**
  * Response from the ListLabels tool.
  */
@@ -1521,6 +1703,43 @@ export interface ToolTeamMember {
   userId: string;
 }
 /**
+ * Load tools by name (from `SearchTools` results) so you can call them. After loading, invoke each tool by its name. Only load the tools you actually need.
+ */
+export interface LoadTools {
+  /**
+   * Exact tool names to load, taken from SearchTools results.
+   */
+  names: string[];
+}
+/**
+ * Response from [`LoadTools`]: which requested tools were loaded, and any names
+ * that weren't found.
+ */
+export interface LoadToolsResponse {
+  /**
+   * Tools that are now loaded and callable by name.
+   */
+  loaded: ToolMatch[];
+  /**
+   * Requested names that don't exist (call `SearchTools` to find valid names).
+   */
+  not_found: string[];
+}
+/**
+ * A tool surfaced by [`SearchTools`] or loaded by [`LoadTools`] — just enough
+ * for the model to decide whether to load it and how to call it.
+ */
+export interface ToolMatch {
+  /**
+   * What the tool does.
+   */
+  description: string;
+  /**
+   * The exact name to load and then call the tool by.
+   */
+  name: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -1563,6 +1782,10 @@ export interface NameSearch {
    * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
    */
   entityTypes?: UnifiedSearchIndex[];
+  /**
+   * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
+   */
+  inbox?: string | null;
   /**
    * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching.
    */
@@ -2326,11 +2549,60 @@ export interface ReadThread {
    */
   messagesSince?: string | null;
 }
+/**
+ * Rename a document. Requires edit access to the document.
+ */
+export interface RenameDocument {
+  /**
+   * The id of the document you want to rename.
+   */
+  documentId: string;
+  /**
+   * The new name for the document without the file extension.
+   */
+  documentName: string;
+}
+/**
+ * The rename document response.
+ */
+export interface RenameDocumentResponse {
+  /**
+   * The id of the renamed document.
+   */
+  documentId: string;
+  /**
+   * A human-readable result message.
+   */
+  message: string;
+  /**
+   * Whether the rename succeeded.
+   */
+  success: boolean;
+}
 export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
 }
 /**
- * Compose and send an email. Creates the message and immediately queues it for delivery. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. Returns matching tools' names and descriptions but does NOT load them — pass the names you want to `LoadTools` to make them callable. Searching is cheap, so cast a wide net.
+ */
+export interface SearchTools {
+  /**
+   * Keywords describing the capability you need, e.g. "linear issue" or "github list commits".
+   */
+  query: string;
+}
+/**
+ * Response from [`SearchTools`]: matching tools (name + description), not yet
+ * loaded.
+ */
+export interface SearchToolsResponse {
+  /**
+   * Tools matching the query. Call `LoadTools` with the names you want to use.
+   */
+  results: ToolMatch[];
+}
+/**
+ * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**

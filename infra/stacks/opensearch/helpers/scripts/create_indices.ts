@@ -276,6 +276,18 @@ const DOCUMENT_BODY = {
         index: false,
         doc_values: true,
       },
+      // Parent-only entity properties (status, priority, assignees, custom).
+      // `nested` so a property filter matches definition_id + its value
+      // within the same entry rather than cross-matching across properties.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
       // Child-only fields
       node_id: {
         type: 'keyword',

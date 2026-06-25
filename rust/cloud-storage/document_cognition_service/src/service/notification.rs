@@ -65,6 +65,7 @@ async fn send_chat_notification(
 
     let req = SendNotificationRequestBuilder {
         notification_entity: EntityType::Chat.with_entity_string(chat_id.to_string()),
+        secondary_notification_entity: None,
         notification: AiResponseMetadata {
             summary: summary.to_string(),
             message_id: message_id.to_string(),

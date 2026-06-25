@@ -10,9 +10,8 @@ use crate::tool_context::{
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -62,6 +61,7 @@ env_var! {
 maybe_env_var! {
     struct ToolContextMaybeEnvVars {
         NotificationQueue,
+        GmailOpsQueue,
     }
 }
 
@@ -85,6 +85,7 @@ maybe_env_var! {
 ///
 /// Optional env vars:
 /// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
+/// - `GMAIL_OPS_QUEUE` (if omitted, thread-label updates can't enqueue Gmail sync ops)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -99,8 +100,11 @@ pub async fn build_tool_service_context_from_env(
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
-    let sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
+    let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
         .email_scheduled_queue(&env.email_scheduled_queue);
+    if let Some(gmail_ops_queue) = maybe_env.gmail_ops_queue.as_ref() {
+        sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue);
+    }
     let notification_queue = maybe_env
         .notification_queue
         .as_ref()
@@ -157,9 +161,9 @@ pub async fn build_tool_service_context_from_env(
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(pool.clone())),
-        PgUserRepo::new(pool.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
     let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());

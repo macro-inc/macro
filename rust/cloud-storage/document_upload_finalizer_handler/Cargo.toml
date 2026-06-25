@@ -18,6 +18,7 @@ lambda_runtime = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
 macro_service_urls = { path = "../macro_service_urls" }

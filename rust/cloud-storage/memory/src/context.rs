@@ -1,9 +1,9 @@
 use ai_tools::{
     NoOpConnectionService, NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
 };
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -87,9 +87,9 @@ pub async fn build_tool_service_context(
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
-        PgUserRepo::new(pool.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());

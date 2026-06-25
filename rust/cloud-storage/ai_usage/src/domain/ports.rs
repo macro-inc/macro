@@ -54,6 +54,8 @@ pub enum AiFeature {
     CallSummary,
     /// Channel bots.
     ChannelBot,
+    /// AI projection materialization.
+    AiProjection,
 }
 
 /// Resolved price for one completion.

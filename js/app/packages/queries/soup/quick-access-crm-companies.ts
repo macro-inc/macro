@@ -1,4 +1,4 @@
-import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { ENABLE_CRM } from '@core/constant/featureFlags';
 import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -17,9 +17,7 @@ const STALE_TIME = 5 * 60 * 1000;
  * `viewedAt`, this one widens the pool to all team companies up to a
  * cap so users can `@`-mention companies they've never opened.
  *
- * Every other entity type is filtered out via the nil-uuid sentinel
- * pattern — that's the established way to scope a soup call to a
- * single entity type (see `use-company-query.ts`).
+ * Every other entity type is filtered out by extending `QUERY_FILTERS_BASE`.
  */
 export function useQuickAccessCrmCompaniesQuery() {
   const query = useSoupItemsQuery(
@@ -29,14 +27,9 @@ export function useQuickAccessCrmCompaniesQuery() {
         sort_method: 'viewed_updated',
       },
       body: {
-        call_filters: { call_ids: [NIL_UUID] },
-        channel_filters: { channel_ids: [NIL_UUID] },
-        chat_filters: { chat_ids: [NIL_UUID] },
-        document_filters: { document_ids: [NIL_UUID] },
-        email_filters: { email_thread_ids: [NIL_UUID] },
-        foreign_entity_filters: { ids: [NIL_UUID] },
-        project_filters: { project_ids: [NIL_UUID] },
-        // crm_company_filters intentionally omitted = all visible companies
+        ...QUERY_FILTERS_BASE,
+        // crm_company_filters intentionally unset = all visible companies
+        crm_company_filters: undefined,
       },
     }),
     () => ({ staleTime: STALE_TIME, enabled: ENABLE_CRM })

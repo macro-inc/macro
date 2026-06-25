@@ -12,6 +12,8 @@ pub mod create;
 pub mod upload_finalize;
 
 pub mod models;
+#[cfg(feature = "axum")]
+pub mod permission_token;
 pub mod response;
 
 #[cfg(feature = "ports")]

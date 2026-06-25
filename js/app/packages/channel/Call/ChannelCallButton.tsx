@@ -1,4 +1,5 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
@@ -19,6 +20,12 @@ export function ChannelCallButton(props: { channelId: string }) {
   const tooltip = () => (isCallInProgress() ? 'Join Call' : 'Start Call');
   const label = () => (isCallInProgress() ? 'Join' : 'Call');
 
+  const variant = () => {
+    if (isMobile()) return 'ghost';
+    if (isCallInProgress()) return 'success';
+    return 'base';
+  };
+
   const handleClick = async () => {
     if (call.isJoining()) return;
     try {
@@ -33,10 +40,13 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Button
         onClick={handleClick}
         tooltip={tooltip()}
-        variant={isCallInProgress() ? 'success' : 'base'}
+        variant={variant()}
         size="sm"
         depth={2}
-        class={cn(!isCallInProgress() && 'bg-surface')}
+        class={cn(
+          !isCallInProgress() && !isMobile() && 'bg-surface',
+          isMobile() && 'active:bg-transparent'
+        )}
       >
         <PhoneIcon />
         <span>{label()}</span>

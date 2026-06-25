@@ -12,6 +12,8 @@ export type MediaItem = {
   id: string;
   /** Sized variant for previews (1080/ for images, original for videos) */
   src: string;
+  /** Small (320px) variant for the tiny grid thumbnails; images only. */
+  thumbSrc?: string;
   /** Full-resolution original — used when expanding */
   fullSrc: string;
   /** Local preview for optimistic media we just uploaded/sent. */
@@ -73,6 +75,10 @@ function mapAttachmentToMediaItem(
       kind === 'image'
         ? staticFileSizedEndpoint(attachment.entity_id, 'medium')
         : fullSrc,
+    thumbSrc:
+      kind === 'image'
+        ? staticFileSizedEndpoint(attachment.entity_id, 'small')
+        : undefined,
     fullSrc,
     previewSrc: attachment.previewSrc,
     kind,
@@ -110,6 +116,7 @@ function mapAttachmentsToMediaItems<T extends AttachmentWithMediaFields>(
     if (
       previousItem &&
       previousItem.src === nextItem.src &&
+      previousItem.thumbSrc === nextItem.thumbSrc &&
       previousItem.fullSrc === nextItem.fullSrc &&
       previousItem.previewSrc === nextItem.previewSrc &&
       previousItem.kind === nextItem.kind &&

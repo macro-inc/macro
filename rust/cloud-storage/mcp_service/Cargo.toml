@@ -5,6 +5,14 @@ name = "mcp_service"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "mcp_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "mcp_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
@@ -15,7 +23,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }
 call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
-comms = { path = "../comms", features = ["outbound"] }
+channels = { path = "../channels", features = ["outbound"] }
 crm = { path = "../crm" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["outbound"] }
@@ -32,8 +40,11 @@ macro_auth = { path = "../macro_auth" }
 macro_db_client = { path = "../macro_db_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_config = { path = "../macro_config" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+database_env_vars = { path = "../macro_env_vars/database_env_vars" }
+doppler-config = { workspace = true }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
@@ -41,6 +52,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_user_id = { path = "../macro_user_id" }
 notification = { path = "../notification", features = ["ai_tool"] }
+prompt = { path = "../prompt" }
 properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }

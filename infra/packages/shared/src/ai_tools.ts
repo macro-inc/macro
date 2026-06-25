@@ -60,6 +60,13 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getOutput('scheduledQueueArn')
     .apply((v) => v as string);
 
+  const gmailOpsQueueName: pulumi.Output<string> = emailServiceStack
+    .getOutput('gmailOpsQueueName')
+    .apply((v) => v as string);
+  const gmailOpsQueueArn: pulumi.Output<string> = emailServiceStack
+    .getOutput('gmailOpsQueueArn')
+    .apply((v) => v as string);
+
   const cloudfrontDistributionUrl: pulumi.Output<string> = linksharingStack
     .getOutput('cloudfrontDistributionUrl')
     .apply((v) => v as string);
@@ -159,6 +166,10 @@ export function getAiToolsInfra(): AiToolsInfra {
       value: pulumi.interpolate`${emailScheduledQueueName}`,
     },
     {
+      name: 'GMAIL_OPS_QUEUE',
+      value: pulumi.interpolate`${gmailOpsQueueName}`,
+    },
+    {
       name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
       value: pulumi.interpolate`${cloudfrontDistributionUrl}`,
     },
@@ -203,7 +214,7 @@ export function getAiToolsInfra(): AiToolsInfra {
       cloudfrontPrivateKeySecretArn,
       mcpCredentialsKeyArn,
     ],
-    queueArns: [emailScheduledQueueArn],
+    queueArns: [emailScheduledQueueArn, gmailOpsQueueArn],
     bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
   };
 }

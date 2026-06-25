@@ -17,6 +17,44 @@ export function getUniqueSenderIds(notifications: Notification[]): string[] {
 }
 
 /**
+ * GitHub PR notifications are triggered by GitHub users who usually aren't Macro
+ * users, so `sender_id` is empty. Their GitHub login lives in the notification
+ * metadata instead. Pull it out so the description can name who acted.
+ * @internal
+ */
+export function getGithubSenderLogin(
+  notification: Notification
+): string | undefined {
+  const metadata = notification.notification_metadata;
+  const content = (metadata as { content?: unknown }).content;
+  if (
+    content &&
+    typeof content === 'object' &&
+    'senderGithubLogin' in content
+  ) {
+    const login = (content as { senderGithubLogin?: string | null })
+      .senderGithubLogin;
+    return login ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Gets unique GitHub sender logins from a notification stack, preserving order.
+ * @internal
+ */
+export function getUniqueGithubLogins(notifications: Notification[]): string[] {
+  const logins = new Set<string>();
+  for (const notification of notifications) {
+    const login = getGithubSenderLogin(notification);
+    if (login) {
+      logins.add(login);
+    }
+  }
+  return Array.from(logins);
+}
+
+/**
  * Gets the action verb for a notification type
  * @internal
  */
@@ -40,7 +78,7 @@ export function getActionVerb(type: NotificationType): string {
     .with('github_pr_comment', () => 'commented on a pull request')
     .with('github_pr_mention', () => 'mentioned you on a pull request')
     .with('github_pr_review', () => 'reviewed your pull request')
-    .with('call-started', () => 'started a call')
+    .with('call_started', () => 'started a call')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
@@ -79,7 +117,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_comment', () => (count === 1 ? 'comment' : 'comments'))
     .with('github_pr_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('github_pr_review', () => (count === 1 ? 'review' : 'reviews'))
-    .with('call-started', () => (count === 1 ? 'call' : 'calls'))
+    .with('call_started', () => (count === 1 ? 'call' : 'calls'))
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .exhaustive();
 }

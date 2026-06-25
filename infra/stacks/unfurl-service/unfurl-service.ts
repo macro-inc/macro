@@ -13,10 +13,11 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'unfurl-service';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `unfurl-service${
@@ -137,6 +138,12 @@ export class UnfurlService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -156,6 +163,10 @@ export class UnfurlService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
+
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -166,6 +177,7 @@ export class UnfurlService extends pulumi.ComponentResource {
               cpu: 256,
               memory: 512,
               environment: containerEnvVars,
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

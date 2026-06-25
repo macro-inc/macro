@@ -4,9 +4,11 @@
 //! tools that are available in the DCS chat/stream API, with OAuth 2.1
 //! authentication backed by FusionAuth.
 
+mod config;
 mod context;
 mod tool_service;
 use anyhow::Context;
+use config::Config;
 use context::build_context;
 use macro_entrypoint::MacroEntrypoint;
 use mcp_auth_proxy::domain::service::McpAuthProxyService;
@@ -25,7 +27,13 @@ const AUTH_PROXY_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
-    let context = build_context().await?;
+    let config = Config::from_env()?;
+
+    // Base URL of the Macro web app, used to build links to Macro items in MCP
+    // responses.
+    let item_base_url = config.app_base_url.as_ref().to_string();
+
+    let context = build_context(&config).await?;
 
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
@@ -35,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
                 tools.toolset,
                 context.tool_context.clone(),
                 context.db.clone(),
+                item_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),
@@ -64,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = mcp_router(context.auth_proxy, context.jwt_args, mcp_service);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8090".to_string());
+    let port = config.port;
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await

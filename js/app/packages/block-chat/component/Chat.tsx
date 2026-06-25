@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
@@ -20,7 +21,10 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
-import { getPendingSend } from '@core/component/AI/signal/pendingSend';
+import {
+  getPendingSend,
+  peekPendingSend,
+} from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { parseModel } from '@core/component/AI/util/parse';
@@ -54,10 +58,19 @@ export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
   const { showPaywall } = usePaywallState();
 
-  // Seed the selector from the chat's stored model, then the local draft, then
-  // the default. The chat input reconciles to an available model if the user
-  // isn't entitled to this one.
-  const initialModel = parseModel(props.data.chat.model) ?? loadedState.model;
+  // Seed the model selector, highest priority first:
+  //  1. peekPendingSend — the model the user just sent with in the soup chat
+  //     input, carried over the new-chat redirect and reflected in the new chat.
+  //  2. loadedState.model — the per-chat draft: a model picked in this chat's
+  //     input but not yet sent (persisted per chat id, so it survives reload /
+  //     navigation, just like the draft text and attachments).
+  //  3. the chat's stored model.
+  // The chat input reconciles to an available model if the user isn't entitled
+  // to this one.
+  const initialModel =
+    peekPendingSend()?.model ??
+    loadedState.model ??
+    parseModel(props.data.chat.model);
 
   return (
     <ChatInputProvider
@@ -299,7 +312,7 @@ function ChatInner(props: {
           class="h-full min-h-0 overflow-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto w-full max-w-3xl">
+          <div class="mx-auto w-full max-w-3xl mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom)">
             <ChatMessages
               editDisabled={disabled()}
               pendingLocationParams={pendingLocationParamsSignal.get}
@@ -309,19 +322,21 @@ function ChatInner(props: {
         <CustomScrollbar scrollContainer={scrollRef} />
       </div>
       <Show when={!disabled()}>
-        <div class="flex w-full justify-center pb-2 px-2">
-          <div class="w-3xl">
-            <ChatInput
-              editor={editor}
-              initialValue={props.loadedInputText}
-              onChange={setMarkdownText}
-              chatId={chat.chatId()}
-              onSend={onSend}
-              onStop={onStop}
-              autoFocusOnMount={!isPreview && !navigatedFromJK()}
-            />
+        <FloatRegionOrInline region="accessory">
+          <div class="flex w-full justify-center pb-2 px-2 mobile:pb-0 mobile:px-(--mobile-chrome-gutter) mobile:pointer-events-auto">
+            <div class="w-3xl">
+              <ChatInput
+                editor={editor}
+                initialValue={props.loadedInputText}
+                onChange={setMarkdownText}
+                chatId={chat.chatId()}
+                onSend={onSend}
+                onStop={onStop}
+                autoFocusOnMount={!isPreview && !navigatedFromJK()}
+              />
+            </div>
           </div>
-        </div>
+        </FloatRegionOrInline>
       </Show>
     </DragDropWrapper>
   );

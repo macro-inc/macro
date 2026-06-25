@@ -4,7 +4,7 @@ use crate::{
         call::{CallRecordMessage, RemoveCallRecord},
         channel::{ChannelMessageUpdate, RemoveChannelMessage},
         chat::{ChatMessage, RemoveChatMessage},
-        document::{DocumentId, SearchExtractorMessage},
+        document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
     },
 };
@@ -70,6 +70,7 @@ pub enum SearchQueueMessage {
     ExtractDocumentText(SearchExtractorMessage),
     RemoveDocument(DocumentId),
     ExtractSync(SearchExtractorMessage),
+    UpdateDocumentProperties(DocumentPropertiesUpdate),
     // Chat
     ChatMessage(ChatMessage),
     RemoveChatMessage(RemoveChatMessage),
@@ -96,6 +97,7 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::ExtractDocumentText(message) => message.document_id.clone(),
             SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
+            SearchQueueMessage::UpdateDocumentProperties(message) => message.document_id.clone(),
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(), // needs
             // to be the message id to ensure it's unique for batch
             SearchQueueMessage::RemoveChatMessage(message) => message.chat_id.clone(),
@@ -133,6 +135,7 @@ impl SearchQueueMessage {
             SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
+            SearchQueueMessage::UpdateDocumentProperties(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveChatMessage(_) => Operation::Remove,

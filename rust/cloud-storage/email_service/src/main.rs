@@ -10,14 +10,14 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use secretsmanager_client::{LocalOrRemoteSecret, SecretManager};
+use macro_service_urls::{AuthServiceUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
+use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -40,22 +40,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
-        .await?;
-
-    // Parse our configuration from the environment.
-    let config = email_service::config::Config::from_env(cloudfront_signer_private_key)
-        .context("expected to be able to generate config")?;
-
-    let auth_service_secret_key = match config.environment {
-        Environment::Local => config.auth_service_secret_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(config.auth_service_secret_key.clone())
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = email_service::config::Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     // limiting to max of 200 connections (12.5% of macrodb total) in prod.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
@@ -82,13 +72,16 @@ async fn main() -> anyhow::Result<()> {
         .email_link_manager_queue(&config.link_manager_queue);
 
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
-        auth_service_secret_key,
-        config.auth_service_url.clone(),
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
     );
 
-    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.clone());
+    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.as_ref().to_string());
 
-    let redis_inner_client = redis::Client::open(config.redis_uri.as_str())
+    let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
         .inspect(|client| {
             client
                 .get_connection()
@@ -111,12 +104,12 @@ async fn main() -> anyhow::Result<()> {
 
     let sfs_client = StaticFileServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.static_file_service_url.clone(),
+        StaticFileServiceUrl::new()?.to_string(),
     );
 
     let dss_client = DocumentStorageServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.document_storage_service_url.clone(),
+        DocumentStorageServiceUrl::new()?.to_string(),
     );
 
     let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(

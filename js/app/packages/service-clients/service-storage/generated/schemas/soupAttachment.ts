@@ -10,13 +10,24 @@ import type { SoupAttachmentMimeType } from './soupAttachmentMimeType';
 import type { SoupAttachmentProviderAttachmentId } from './soupAttachmentProviderAttachmentId';
 import type { SoupAttachmentSizeBytes } from './soupAttachmentSizeBytes';
 
+/**
+ * An email attachment as displayed in Soup.
+ */
 export interface SoupAttachment {
+  /** Content id for inline attachments. */
   contentId?: SoupAttachmentContentId;
+  /** Timestamp when the attachment was created. */
   createdAt: string;
+  /** Attachment filename. */
   filename?: SoupAttachmentFilename;
+  /** Attachment id. */
   id: string;
+  /** Message id that owns this attachment. */
   messageId: string;
+  /** Attachment MIME type. */
   mimeType?: SoupAttachmentMimeType;
+  /** Provider-specific attachment id. */
   providerAttachmentId?: SoupAttachmentProviderAttachmentId;
+  /** Attachment size in bytes. */
   sizeBytes?: SoupAttachmentSizeBytes;
 }

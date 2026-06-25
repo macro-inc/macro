@@ -6,10 +6,10 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
-use config::{Config, EnvVars, Environment};
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
+use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
@@ -30,6 +30,10 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::{
+    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+};
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
 };
@@ -38,7 +42,6 @@ use notification::outbound::repository::DbNotificationRepository;
 use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
-use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
@@ -55,9 +58,18 @@ mod service;
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
+
     // Parse our configuration from the environment.
-    let config = Config::from_env(EnvVars::unwrap_new())
-        .context("failed to parse config from environment")?;
+    let config = Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(Environment::new_or_prod(), &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     tracing::info!("initialized config");
 
@@ -80,7 +92,6 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
@@ -88,43 +99,39 @@ async fn main() -> anyhow::Result<()> {
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
-        .search_event_queue(&config.search_event_queue);
-
-    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&aws_config),
-    );
+        .gmail_ops_queue(&config.gmail_ops_queue)
+        .search_event_queue(&config.search_event_queue)
+        .ai_projection_queue(&config.ai_projection_queue);
 
     let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
     );
 
     let document_storage_client = DocumentStorageServiceClient::new(
-        config.document_storage_service_auth_key.clone(),
-        config.document_storage_service_url.clone(),
+        config
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_string(),
+        DocumentStorageServiceUrl::new()?.to_string(),
     );
 
     tracing::info!("initialized dss client");
-    let sync_service_auth_key = match config.environment {
-        Environment::Local => config.sync_service_auth_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.sync_service_auth_key)
-            .await
-            .context("failed to get sync service auth key from secrets manager")?
-            .to_string(),
-    };
 
     let sync_service_client = SyncServiceClient::new(
-        sync_service_auth_key.clone(),
-        config.sync_service_url.clone(),
+        config.sync_service_auth_key.as_ref().to_string(),
+        SyncServiceUrl::new()?.to_string(),
     );
-
     tracing::info!("initialized sync service client");
-    let search_service_client = SearchServiceClient::new(
-        config.document_storage_service_auth_key.clone(),
-        config.document_storage_service_url.clone(),
-    );
 
+    let search_service_client = SearchServiceClient::new(
+        config
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_string(),
+        DocumentStorageServiceUrl::new()?.to_string(),
+    );
     tracing::info!("initialized search service client");
+
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await
@@ -132,12 +139,12 @@ async fn main() -> anyhow::Result<()> {
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.lexical_service_url.clone(),
+        LexicalServiceUrl::new()?.to_string(),
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.email_service_url.clone(),
+        EmailServiceUrl::new()?.to_string(),
     ));
 
     tracing::info!("initialized static file service client");
@@ -168,12 +175,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized connection repo");
     let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
+        ConnectionGatewayUrl::new()?.to_string(),
     ));
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
+        config.notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
@@ -181,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
 
     let notification_reader_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
+        config.notification_queue.to_string(),
     );
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(db.clone()),
@@ -215,9 +222,9 @@ async fn main() -> anyhow::Result<()> {
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
@@ -238,22 +245,22 @@ async fn main() -> anyhow::Result<()> {
     let s3_client = macro_aws_config::s3_client().await;
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
-        config.document_storage_bucket.clone(),
-        config.docx_document_upload_bucket.clone(),
+        config.document_storage_bucket.to_string(),
+        config.docx_document_upload_bucket.to_string(),
     );
     let document_repo = PgDocumentRepo::new(db.clone());
-    let cloudfront_private_key = match config.environment {
-        Environment::Local => config.cloudfront_signer_private_key.replace("\\n", "\n"),
-        _ => secretsmanager_client
-            .get_secret_value(&config.cloudfront_signer_private_key)
-            .await
-            .context("failed to get CloudFront signer private key from secrets manager")?
-            .to_string(),
-    };
+
     let cloudfront_config = CloudFrontConfig {
-        distribution_url: config.cloudfront_distribution_url.clone(),
-        signer_public_key_id: config.cloudfront_signer_public_key_id.clone(),
-        signer_private_key: cloudfront_private_key,
+        distribution_url: config
+            .document_storage_service_cloudfront_distribution_url
+            .to_string(),
+        signer_public_key_id: config
+            .document_storage_service_cloudfront_signer_public_key_id
+            .to_string(),
+        signer_private_key: config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref()
+            .to_string(),
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
@@ -297,12 +304,12 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
-        channel: comms::inbound::attachment::CommsAttachmentService::new(
-            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+            Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
         static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
-            static_file::outbound::CdnStaticFileRepo::new(config.static_file_service_url.clone()),
+            static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         )),
     };
     let message_service = Arc::new(chat::domain::service::MessageServiceImpl::new(
@@ -412,22 +419,50 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized ai cost service");
 
-    let mcp_credentials_key_b64 = match config.environment {
-        Environment::Local => config.mcp_credentials_key_secret_name.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.mcp_credentials_key_secret_name)
-            .await
-            .context("failed to get MCP credentials key from secrets manager")?
-            .to_string(),
-    };
-    let mcp_encryption_key =
-        mcp_client::domain::models::AesKey::try_from(mcp_credentials_key_b64.as_str())
-            .context("invalid MCP credentials encryption key")?;
+    // Generator that materializes projections by running their prompt through
+    // the shared AI toolset, attributed to the requesting user.
+    let projection_generator =
+        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+            tool_service_context.clone(),
+            ai_tools::all_tools(),
+        );
+    let ai_projections_service_impl =
+        ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
+            ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
+                db.clone(),
+            ),
+            sqs_client.clone(),
+            projection_generator,
+        );
+
+    // Spawn the inbound worker that polls ai_projection_queue and materializes
+    // projection instances. It owns its own clone of the service.
+    let ai_projection_worker = ai_projections::worker::AiProjectionWorker::new(
+        sqs_worker::SQSWorker::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.ai_projection_queue.to_string(),
+            10,
+            10,
+        ),
+        ai_projections_service_impl.clone(),
+    );
+    tokio::spawn(async move {
+        ai_projection_worker.poll().await;
+    });
+
+    let ai_projections_service = Arc::new(ai_projections_service_impl);
+
+    tracing::info!("initialized ai projections service");
+
+    let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
+        config.mcp_credentials_key_secret_name.as_ref(),
+    )
+    .context("invalid MCP credentials encryption key")?;
     let mcp_server_repo =
         mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
     let mcp_redirect_uri = format!(
         "{}/mcp/servers/auth/callback",
-        config.document_cognition_service_url
+        DocumentCognitionServiceUrl::new()?,
     );
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
@@ -459,6 +494,7 @@ async fn main() -> anyhow::Result<()> {
         document_tool_context,
         memory_service,
         usage_service,
+        ai_projections_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
         call_tool_context,

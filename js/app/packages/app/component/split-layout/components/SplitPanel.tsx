@@ -1,3 +1,4 @@
+import { MobileTopEdgeFade } from '@app/component/mobile/MobileEdgeFade';
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
@@ -5,6 +6,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
+import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
@@ -120,7 +122,12 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   const offsetTop = createMemo(() => {
-    const offset = (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
+    // Full-frame mobile: panels start at the screen edge, so anything that
+    // offsets from the panel top (drawers, content insets) must clear the
+    // status bar as well as the header.
+    const safeTop = isMobile() ? getSafeAreaInset('top') : 0;
+    const offset =
+      safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
     return offset;
   });
@@ -175,6 +182,15 @@ export function SplitPanel(props: SplitPanelProps) {
               'opacity-100': props.active || props.handle.isSpotLight(),
               'relative size-full': !props.handle.isSpotLight(),
             }}
+            style={{
+              '--split-header-height': `${
+                shouldHideSplitHeader() ? 0 : (headerSize.height ?? 0)
+              }px`,
+              // The hard spacer for top-anchored content on full-frame
+              // mobile: status bar + floating header strip.
+              '--mobile-content-inset-top':
+                'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
+            }}
             ref={(ref) => {
               setPanelRef(ref);
               props.setPanelRef(ref);
@@ -192,12 +208,15 @@ export function SplitPanel(props: SplitPanelProps) {
                 multipleSplits() &&
                 !props.handle.isSpotLight()
               }
-              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:!border-0"
+              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
               depth={1}
             >
               <Panel.Header
                 class={cn(
                   'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
+                  // On mobile the header collapses to a zero-height grid row;
+                  // SplitHeader overlays the body as floating islands.
+                  'mobile:min-h-0 mobile:border-b-0',
                   shouldHideSplitHeader() && 'hidden'
                 )}
               >
@@ -208,6 +227,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 class={cn(
                   'items-start py-2 overflow-visible',
                   !hasToolbarContent() && 'hidden',
+                  isMobile() && 'hidden',
                   (!previewState() ||
                     isListViewID(props.handle.content().id)) &&
                     'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
@@ -253,6 +273,7 @@ export function SplitPanel(props: SplitPanelProps) {
                     )}
                   </Show>
                 </div>
+                <MobileTopEdgeFade />
               </Panel.Body>
             </Panel>
           </div>

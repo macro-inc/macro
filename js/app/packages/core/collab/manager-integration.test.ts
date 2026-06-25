@@ -42,7 +42,7 @@ function pushToServer(
   server.applyUpdate(manager.getDoc().export({ mode: 'update' }));
 }
 
-describe('LoroManager + DocInitMachine — two-client merge', () => {
+describe('LoroManager seed + converge — two-client merge', () => {
   it("client B reconnects dirty: requestUpdatesSince merges its offline edits with A's concurrent edits", async () => {
     await createRoot(async (dispose) => {
       // ── X: shared initial snapshot ────────────────────────────────────
@@ -53,14 +53,14 @@ describe('LoroManager + DocInitMachine — two-client merge', () => {
       // ── Client A — always online ──────────────────────────────────────
       const clientA = createLoroManager(TEST_SCHEMA, {
         liveSyncSource: () => server.asLiveSyncSource(),
-        wasDirty: false,
+        documentId: 'test-doc-a',
       });
       await clientA.ingest({ kind: 'dss', snapshot: initialSnapshotX });
 
       // ── Client B — will go offline ────────────────────────────────────
       const clientB = createLoroManager(TEST_SCHEMA, {
         liveSyncSource: () => server.asLiveSyncSource(),
-        wasDirty: false,
+        documentId: 'test-doc-b',
       });
       await clientB.ingest({ kind: 'dss', snapshot: initialSnapshotX });
 
@@ -87,11 +87,11 @@ describe('LoroManager + DocInitMachine — two-client merge', () => {
       });
       pushToServer(clientA, server);
 
-      // ── B reconnects: fresh manager seeded with wasDirty=true ─────────
+      // ── B reconnects: fresh manager seeds from its local snapshot ─────
       const reconnectSource = server.asLiveSyncSource();
       const reconnectedB = createLoroManager(TEST_SCHEMA, {
         liveSyncSource: () => reconnectSource,
-        wasDirty: true,
+        documentId: 'test-doc-b-reconnect',
       });
 
       await reconnectedB.ingest({
@@ -101,7 +101,7 @@ describe('LoroManager + DocInitMachine — two-client merge', () => {
 
       // ── Assertions ────────────────────────────────────────────────────
 
-      // 1. The state machine triggered exactly one requestUpdatesSince.
+      // 1. Seeding triggered exactly one requestUpdatesSince to converge.
       expect(reconnectSource.requestUpdatesSince).toHaveBeenCalledTimes(1);
 
       // 2. It was called with B's post-offline version vector (so the

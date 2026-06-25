@@ -52,6 +52,7 @@ export * from './channelSearchResultSenderId';
 export * from './channelSearchResultThreadId';
 export * from './channelSearchResultUpdatedAt';
 export * from './channelSortTimestamp';
+export * from './channelThreadFilters';
 export * from './chatFilters';
 export * from './chatFiltersImportance';
 export * from './chatMessageSearchResult';

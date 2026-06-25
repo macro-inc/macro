@@ -156,7 +156,7 @@ function AlignmentOption(props: {
 }) {
   return (
     <div
-      class="size-6 mx-1 flex justify-center items-center rounded-sm hover:bg-hover hover-transition-bg hover:border hover:border-edge"
+      class="size-6 mx-1 flex justify-center items-center rounded-sm hover:bg-hover hover-transition-bg"
       onClick={() => {
         props.onClick(props.alignment);
       }}
@@ -480,6 +480,8 @@ export function FloatingMenu() {
     <div
       class={cn(
         'absolute flex flex-row top-4 z-5 cursor-auto',
+        // Full-frame mobile: clear the floating split chrome at the top.
+        'mobile:top-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         !isMobileWidth() && 'right-4'
       )}
     >

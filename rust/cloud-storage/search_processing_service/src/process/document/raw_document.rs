@@ -2,12 +2,17 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
+use document_sub_type::DocumentSubType;
 use model::document::{DocumentMetadata, FileType};
+use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
+    OpensearchClient,
+    date_format::EpochSeconds,
+    upsert::document::{IndexedProperty, UpsertDocumentArgs},
 };
+use properties_db_client::entity_properties::get::get_entity_properties_for_index;
 use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,
@@ -18,7 +23,7 @@ use crate::{
     process::document::document_info::{DocumentInfo, get_document_info},
 };
 
-use super::SearchExtractorMessage;
+use super::{DocumentPropertiesUpdate, SearchExtractorMessage};
 
 async fn upsert_document(
     opensearch_client: &OpensearchClient,
@@ -58,6 +63,55 @@ async fn upsert_document(
 
     tracing::trace!("upserted document");
 
+    Ok(())
+}
+
+/// Properties are keyed under the task entity type for tasks, otherwise the
+/// document entity type.
+fn properties_entity_type(sub_type: Option<&str>) -> EntityType {
+    sub_type
+        .and_then(|s| s.parse::<DocumentSubType>().ok())
+        .map(EntityType::from)
+        .unwrap_or(EntityType::Document)
+}
+
+/// Fetch the entity's indexed properties and attach them to every chunk upsert
+/// (parent metadata is denormalized identically across chunks).
+///
+/// A full index overwrites the parent doc, so an *empty* `properties` clears
+/// previously-indexed values — the deliberate "omit == remove" behavior used
+/// for `sub_type`. That is correct when the entity genuinely has no
+/// properties, but a fetch *failure* must not be mistaken for "empty": we
+/// propagate the error so the doc isn't overwritten and the message is retried
+/// (mirroring the partial-update path).
+async fn attach_indexed_properties(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    document_id: &str,
+    sub_type: Option<&str>,
+    upserts: &mut [UpsertDocumentArgs],
+) -> anyhow::Result<()> {
+    if upserts.is_empty() {
+        return Ok(());
+    }
+    let properties =
+        get_entity_properties_for_index(db, document_id, properties_entity_type(sub_type))
+            .await
+            .context("failed to fetch properties for search index")?;
+    if properties.is_empty() {
+        return Ok(());
+    }
+    let indexed: Vec<IndexedProperty> = properties
+        .into_iter()
+        .map(|p| IndexedProperty {
+            definition_id: p.definition_id,
+            values: p.values,
+            number_value: p.number_value,
+            date_value: p.date_value,
+        })
+        .collect();
+    for upsert in upserts.iter_mut() {
+        upsert.properties = indexed.clone();
+    }
     Ok(())
 }
 
@@ -166,7 +220,7 @@ pub async fn update_search_with_raw_document(
     let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
     let uuid = macro_uuid::generate_uuid_v7().to_string();
 
-    let upserts: Vec<UpsertDocumentArgs> = match file_type {
+    let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
             let pages_content = parse_pdf_pages(content).context("unable to parse pdf")?;
             pages_content
@@ -182,6 +236,7 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 })
                 .collect()
         }
@@ -198,6 +253,7 @@ pub async fn update_search_with_raw_document(
                 file_type: file_type.to_string(),
                 updated_at_seconds: updated_at,
                 sub_type: sub_type.clone(),
+                properties: vec![],
             }]
         }
         FileType::Md => {
@@ -218,6 +274,7 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
@@ -236,10 +293,19 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 }]
             }
         }
     };
+
+    attach_indexed_properties(
+        db,
+        &search_extractor_message.document_id,
+        sub_type.as_deref(),
+        &mut upserts,
+    )
+    .await?;
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 
@@ -273,6 +339,7 @@ fn generate_upserts(
             file_type: file_type.to_string(),
             updated_at_seconds: updated_at,
             sub_type: sub_type.clone(),
+            properties: vec![],
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -338,10 +405,44 @@ pub async fn update_search_with_sync_document(
         }
     };
 
-    let upserts = generate_upserts(document_info, result).context("unable to generate upserts")?;
+    let sub_type = document_info.sub_type.as_ref().map(|st| st.to_string());
+    let mut upserts =
+        generate_upserts(document_info, result).context("unable to generate upserts")?;
 
+    attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await?;
+
+    let chunk_count = upserts.len();
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
+    tracing::info!(document_id = %document_id, chunk_count, "sync document indexed");
 
+    Ok(())
+}
+
+/// Refresh only the indexed `properties` of a document after a property
+/// mutation, without re-extracting its content.
+pub async fn update_search_with_property_update(
+    opensearch_client: &OpensearchClient,
+    db: &sqlx::Pool<sqlx::Postgres>,
+    message: &DocumentPropertiesUpdate,
+) -> anyhow::Result<()> {
+    let entity_type = EntityType::from_str(&message.entity_type)
+        .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
+    let properties = get_entity_properties_for_index(db, &message.document_id, entity_type)
+        .await
+        .context("failed to fetch properties for reindex")?;
+    let indexed: Vec<IndexedProperty> = properties
+        .into_iter()
+        .map(|p| IndexedProperty {
+            definition_id: p.definition_id,
+            values: p.values,
+            number_value: p.number_value,
+            date_value: p.date_value,
+        })
+        .collect();
+    opensearch_client
+        .update_document_properties(&message.document_id, &indexed)
+        .await
+        .context("failed to update document properties in search index")?;
     Ok(())
 }
 

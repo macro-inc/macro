@@ -1,4 +1,5 @@
 disallowed-methods = [
+    { path = "std::env::var", reason = "use macro_env_var so APP_SECRETS_JSON is honored" },
     { path = "sqlx::query", replacement = "sqlx::query!" },
     { path = "sqlx::query_as", replacement = "sqlx::query_as!" },
     { path = "sqlx::query_scalar", replacement = "sqlx::query_scalar!" },

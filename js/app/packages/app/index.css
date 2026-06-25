@@ -61,6 +61,11 @@
   --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
 
+  /* Horizontal gutter shared by the full-frame mobile chrome: the dock row,
+     header island strip, and accessory-region contributions all pad with
+     this so their edges line up. Use `px-(--mobile-chrome-gutter)`. */
+  --mobile-chrome-gutter: 0.75rem;
+
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
@@ -110,7 +115,7 @@
   --color-accent-hover:    oklch(var(--a0) / 0.20);
 
   --color-surface:         var(--b0);
-  --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
+  --color-drop-shadow:     oklch(0.15 0 0 / 0.04);
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
   --color-hover:           var(--b2);
   --color-active:          var(--b1);
@@ -189,6 +194,9 @@
   --z-index-modal-overlay: 100;
   --z-index-modal:         110;
   --z-index-modal-content: 120;
+  /* Dropdowns/popovers (`z-action-menu`). Above modal content so menus opened
+     from inside a modal render on top of it, below tooltips. */
+  --z-index-action-menu:   150;
   --z-index-tool-tip:      200;
 
   /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
@@ -210,6 +218,23 @@
       @slot;
     }
   }
+}
+
+/* Floating "island" chrome shared by the mobile dock buttons, header islands,
+   and other floating mobile controls. Consumers add their own shape classes
+   (e.g. `size-10 rounded-full` or `h-10 rounded-full px-3`). Defined as a
+   utility so it composes with variants — `mobile:island` — instead of
+   hand-prefixing each part. */
+@utility island {
+  @apply bg-surface text-ink ring ring-edge shadow-md;
+}
+
+[data-press-pulse] {
+  transition: transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[data-press-pulse][data-pressed] {
+  transform: scale(1.08);
+  transition: transform 100ms ease-out;
 }
 
 @layer base {
@@ -381,6 +406,39 @@ a {
   }
 }
 
+/* Subtle, inset divider between settings rows (Account/Appearance/Email/Agent).
+   Apply to a list container whose direct children are full-width rows with px-6
+   padding; draws the line under every row except the last. */
+@utility settings-row-dividers {
+  & > *:not(:last-child) {
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: calc(var(--spacing) * 6);
+      bottom: 0;
+      height: 1px;
+      background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+      pointer-events: none;
+    }
+  }
+}
+
+/* Row-level variant of `settings-row-dividers` for lists that render rows
+   individually (e.g. virtualized). Apply to the row; gate on "not the last row". */
+@utility settings-row-divider {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: calc(var(--spacing) * 6);
+    bottom: 0;
+    height: 1px;
+    background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+    pointer-events: none;
+  }
+}
+
 @utility no-select-children {
   * {
     user-select: none;
@@ -440,6 +498,19 @@ a {
   }
 }
 
+/* Mobile bottom chrome: accessory contributions animate in when they mount
+   or swap (enter-only; losers unmount immediately). The Portal wrapper div
+   is the region slot's direct child. */
+[data-float-region='accessory'] > * {
+  animation: float-region-in 150ms ease-out;
+}
+@keyframes float-region-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
 @media (pointer: coarse) {
   .md-table-cell-resizer {
     background-color: #adf;
@@ -457,9 +528,10 @@ a {
 
 /* Channel message hover + non-selection highlight */
 /* Suppressed on touch devices */
+/* Background-only — borders/rings are reserved for structural UI edges. */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
+  @apply bg-ink/5 rounded-sm;
 }
 
 /* Channel message long-press animation */

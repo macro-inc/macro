@@ -17,8 +17,10 @@ use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
-/// Emit a `refresh_email` event once per this many completed threads, plus
-/// once at job completion, rather than per-thread.
+/// Emit a `refresh_email` event once per this many completed threads, plus on
+/// the first completed thread and at job completion, rather than per-thread.
+/// The first-thread emit ensures backfills smaller than this interval still
+/// surface a progress event before completing.
 const REFRESH_EMAIL_THREAD_INTERVAL: i32 = 50;
 
 /// called when a thread has completed processing. checks if it is the last thread to be processed
@@ -40,17 +42,22 @@ pub async fn incr_completed_threads(
             })
         })?;
 
-    if progress.job_complete || progress.completed_threads % REFRESH_EMAIL_THREAD_INTERVAL == 0 {
+    if progress.job_complete
+        || progress.completed_threads == 1
+        || progress.completed_threads % REFRESH_EMAIL_THREAD_INTERVAL == 0
+    {
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
-            RefreshEmailEvent::Backfill {
+            RefreshEmailEvent::BackfillProgress {
                 link_id: link.id,
                 status: if progress.job_complete {
                     BackfillStatus::Complete
                 } else {
                     BackfillStatus::Progress
                 },
+                completed_threads: progress.completed_threads,
+                total_threads: progress.total_threads,
             },
         )
         .await;

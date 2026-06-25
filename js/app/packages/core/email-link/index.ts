@@ -1,12 +1,6 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
-import {
-  authenticateWithEmailPermissions,
-  type TimeoutError,
-} from '@core/auth/channel';
-import { openEmailAuthPopup } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
-
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -168,20 +162,6 @@ function resyncInbox(
 }
 
 /**
- * Connects to the email service and authenticates with email permissions.
- *
- * @returns A promise that resolves when the auth success message is received.
- */
-function connectEmail(): ResultAsync<void, TimeoutError> {
-  openEmailAuthPopup({
-    idpName: 'google_gmail',
-    returnPath: `${ROUTER_BASE_CONCAT}login/popup/success`,
-  });
-
-  return authenticateWithEmailPermissions();
-}
-
-/**
  * Initializes email syncing, starts polling, and invalidates relevant queries.
  * Unlike useEmailLinks().initEmailLink, this does not require SolidJS context.
  */
@@ -301,11 +281,6 @@ export function useEmailLinks() {
     isConnected: () => hasEmailLinks(query),
     initEmailLink: (args?: { linkId?: string; forceShare?: boolean }) =>
       initEmailLink(args).map(startEmailPolling).map(invalidations),
-    connect: () =>
-      connectEmail()
-        .andThen(() => initEmailLink())
-        .map(startEmailPolling)
-        .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
     resyncInbox: (linkId: string) =>
       resyncInbox(linkId).andTee(() => invalidateEmailLinks()),

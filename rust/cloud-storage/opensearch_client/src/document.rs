@@ -1,6 +1,9 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{self, document::UpsertDocumentArgs},
+    upsert::{
+        self,
+        document::{IndexedProperty, UpsertDocumentArgs},
+    },
 };
 
 impl OpensearchClient {
@@ -37,6 +40,17 @@ impl OpensearchClient {
         document_name: &str,
     ) -> Result<()> {
         upsert::document::update_document_metadata(&self.inner, document_id, document_name).await
+    }
+
+    /// Refresh only the denormalized `properties` on an existing parent doc.
+    #[tracing::instrument(skip(self, properties))]
+    pub async fn update_document_properties(
+        &self,
+        document_id: &str,
+        properties: &[IndexedProperty],
+    ) -> Result<()> {
+        upsert::document::update_document_properties(&self.inner, document_id, properties, None)
+            .await
     }
 
     #[tracing::instrument(skip(self))]

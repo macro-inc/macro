@@ -5,7 +5,12 @@ use aws_lambda_events::event::s3::S3Event;
 use call_recording_preview_handler::{HandlerConfig, HandlerState, handler};
 use lambda_runtime::{Error, LambdaEvent, run, service_fn, tracing};
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_vars;
 use sqlx::postgres::PgPoolOptions;
+
+env_vars! {
+    struct DatabaseUrl;
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -14,11 +19,11 @@ async fn main() -> Result<(), Error> {
     tracing::trace!("initiating call recording preview lambda");
 
     let config = HandlerConfig::from_env();
-    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+    let database_url = DatabaseUrl::new().context("DATABASE_URL must be provided")?;
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(1)
-        .connect(&database_url)
+        .connect(database_url.as_ref())
         .await
         .context("could not connect to db")?;
 

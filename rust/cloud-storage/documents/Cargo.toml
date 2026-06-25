@@ -31,6 +31,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:model-error-response",
   "dep:model_user",
@@ -97,6 +98,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
@@ -111,6 +113,7 @@ tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
+jsonwebtoken = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }

@@ -97,7 +97,7 @@ function NotificationRowContent(props: {
       <Match when={tag() === 'invite_to_team'}>
         <span class="text-xs text-ink-muted/80 italic">to join the team</span>
       </Match>
-      <Match when={tag() === 'call-started'}>
+      <Match when={tag() === 'call_started'}>
         <span class="text-xs text-ink-muted/80 italic">
           started a call you can join
         </span>
@@ -116,7 +116,7 @@ interface NotificationRowProps {
   content?: JSX.Element;
   /**
    * Whether the "Mark done" affordance is available. Defaults to true except
-   * for `call-started`, which has no meaningful "done" state.
+   * for `call_started`, which has no meaningful "done" state.
    */
   showMarkDone?: boolean;
   /**
@@ -172,7 +172,7 @@ function HeaderLeading(props: {
       <NotificationSenderIcon notification={props.notification} size="sm" />
       <span
         class={cn(
-          'ph-no-capture truncate min-w-0 text-xs text-ink',
+          'ph-no-capture min-w-0 shrink truncate text-xs text-ink',
           props.unread && 'font-medium'
         )}
       >
@@ -235,7 +235,7 @@ function CompactBody(props: BodyProps) {
         ("Gabriel mentioned you") + timestamp already tell the story. Hide
         below the container's md breakpoint.
       */}
-      <span class="hidden @md/notif-row:flex flex-1 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+      <span class="hidden @md/notif-row:flex flex-1 min-w-0 overflow-hidden ph-no-capture truncate text-xs text-ink-muted/60">
         {props.contentOverride ?? (
           <NotificationRowContent
             notification={props.notification}
@@ -260,12 +260,12 @@ function ExpandedBody(props: BodyProps) {
         props.class
       )}
     >
-      <div class="flex items-center gap-2.5 min-w-0">
+      <div class="flex items-center gap-2.5 min-w-0 overflow-hidden">
         <HeaderLeading
           notification={props.notification}
           unread={props.unread}
         />
-        <span class="flex-1" />
+        <span class="min-w-0 flex-1" />
         <HeaderTrailing
           notification={props.notification}
           canMarkDone={props.canMarkDone}
@@ -305,7 +305,7 @@ export function NotificationRow(props: NotificationRowProps) {
   const canMarkDone = () =>
     props.showMarkDone !== false &&
     (props.notification.notification_metadata.tag as NotificationType) !==
-      'call-started';
+      'call_started';
 
   const { markAsDone, markAsRead } = useNotificationActions({
     notification: props.notification,

@@ -1,54 +1,41 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_env_var::env_vars;
+use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::StaticFileServiceUrl;
+use secretsmanager_client::LocalOrRemoteSecret;
 
-#[derive(Debug, Clone)]
+env_vars! {
+    pub struct StaticFileServiceDynamodbTableName;
+    pub struct StaticStorageBucket;
+    pub struct StaticFileServiceS3EventQueueUrl;
+}
+
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
     /// self explanatory
+    #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
     /// port (8080)
+    #[macro_config_default(8080)]
     pub port: usize,
     /// the tablename of the metadata table
-    pub dynamodb_table: String,
+    pub static_file_service_dynamodb_table_name: StaticFileServiceDynamodbTableName,
     /// s3 storage bucket
-    pub storage_bucket_name: String,
+    pub static_storage_bucket: StaticStorageBucket,
     /// service url
-    pub service_url: String,
+    #[macro_config_default(StaticFileServiceUrl::unwrap_new().to_string())]
+    pub static_file_service_url: String,
     /// s3 upload notification queue
-    pub s3_event_queue_url: String,
+    pub static_file_service_s3_event_queue_url: StaticFileServiceS3EventQueueUrl,
     /// Internal API secret key
-    pub internal_api_secret_key: String,
+    pub internal_api_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let environment = Environment::new_or_prod();
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .unwrap();
-        let dynamodb_table = std::env::var("STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME")
-            .context("STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME must be provided")?;
-
-        let storage_bucket_name = std::env::var("STATIC_STORAGE_BUCKET")
-            .context("STATIC_STORAGE_BUCKET must be provided")?;
-
-        let service_url = StaticFileServiceUrl::new()?.to_string();
-
-        let s3_event_queue_url = std::env::var("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL")
-            .context("S3_EVENT_QUEUE_URL must be provided")?;
-
-        let internal_api_secret_key = std::env::var("INTERNAL_API_SECRET_KEY")
-            .context("INTERNAL_API_SECRET_KEY must be provided")?;
-
-        Ok(Config {
-            environment,
-            port,
-            dynamodb_table,
-            storage_bucket_name,
-            service_url,
-            s3_event_queue_url,
-            internal_api_secret_key,
-        })
+        macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load static file service config")
     }
 }

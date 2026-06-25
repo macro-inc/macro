@@ -53,7 +53,6 @@ model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type" }
 model_notifications = { path = "../model_notifications" }
 model_user = { path = "../model_user", features = ["axum"] }
-models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 notification = { path = "../notification", features = ["axum"] }
 notification_db_client = { path = "../notification_db_client" }

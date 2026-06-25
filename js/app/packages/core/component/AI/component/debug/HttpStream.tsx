@@ -97,7 +97,7 @@ export default function HttpStreamDebug() {
           body: JSON.stringify({
             chat_id: chatId(),
             content: messageContent(),
-            model: 'claude-haiku-4-5',
+            model: 'anthropic/claude-haiku-4-5',
             token: '',
           }),
         }

@@ -57,7 +57,7 @@ export function NotificationStackRow(props: {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
   const canMarkDone = () =>
-    props.showMarkDone !== false && props.stack.type !== 'call-started';
+    props.showMarkDone !== false && props.stack.type !== 'call_started';
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
     stack: props.stack,
@@ -135,18 +135,21 @@ export function NotificationStackRow(props: {
             <NotificationSenderIcon stack={props.stack} size="sm" />
           </div>
           <span
-            class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
-              'font-medium': unread(),
-            })}
+            class={cn(
+              'ph-no-capture min-w-0 shrink truncate text-xs text-ink',
+              {
+                'font-medium': unread(),
+              }
+            )}
           >
             <NotificationDescription stack={props.stack} />
           </span>
-          <span class="ph-no-capture truncate min-w-0 text-xs text-ink-muted/60 flex-1">
+          <span class="ph-no-capture min-w-0 flex-1 overflow-hidden truncate text-xs text-ink-muted/60">
             {props.content ?? (
               <NotificationContent stack={props.stack} singleLine />
             )}
           </span>
-          <div class="shrink-0 ml-auto">
+          <div class="shrink-0 ml-auto h-5 flex items-center justify-end">
             <span
               class={cn('text-ink-extra-muted text-xs tabular-nums', {
                 'group-hover/notif:hidden': canMarkDone(),

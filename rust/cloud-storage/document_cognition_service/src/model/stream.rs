@@ -24,7 +24,7 @@ pub struct SendChatMessagePayload {
     pub content: String,
     /// Id of the chat the message belongs to
     pub chat_id: String,
-    /// the chat model to respond with (provider api id)
+    /// the chat model to respond with (`provider/model` id)
     pub model: String,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -25,8 +25,8 @@ import type {
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
-  ModelsResponse,
   PatchChatRequest,
+  ProjectionStateResponse,
   RejectToolCallRequest,
   SendChatMessageResponse,
   ServerResponse,
@@ -43,6 +43,7 @@ import type {
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
+  UpsertProjectionRequest,
   UsageRequest,
   UsageSummary,
 } from './schemas';
@@ -165,6 +166,70 @@ export const getUsageHandler = async (
     status: res.status,
     headers: res.headers,
   } as getUsageHandlerResponse;
+};
+
+/**
+ * @summary Gets or creates an ai projection and the requesting user's cold instance.
+ */
+export type upsertAiProjectionResponse200 = {
+  data: ProjectionStateResponse;
+  status: 200;
+};
+
+export type upsertAiProjectionResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type upsertAiProjectionResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type upsertAiProjectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type upsertAiProjectionResponseSuccess =
+  upsertAiProjectionResponse200 & {
+    headers: Headers;
+  };
+export type upsertAiProjectionResponseError = (
+  | upsertAiProjectionResponse400
+  | upsertAiProjectionResponse403
+  | upsertAiProjectionResponse500
+) & {
+  headers: Headers;
+};
+
+export type upsertAiProjectionResponse =
+  | upsertAiProjectionResponseSuccess
+  | upsertAiProjectionResponseError;
+
+export const getUpsertAiProjectionUrl = () => {
+  return `/ai-projections`;
+};
+
+export const upsertAiProjection = async (
+  upsertProjectionRequest: UpsertProjectionRequest,
+  options?: RequestInit
+): Promise<upsertAiProjectionResponse> => {
+  const res = await fetch(getUpsertAiProjectionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(upsertProjectionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertAiProjectionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertAiProjectionResponse;
 };
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -578,53 +643,6 @@ export const getChatHistoryBatchMessagesHandler = async (
     status: res.status,
     headers: res.headers,
   } as getChatHistoryBatchMessagesHandlerResponse;
-};
-
-/**
- * @summary List all chat models, each flagged with whether the requesting user has
-access (free users get Haiku; professional users get everything).
- */
-export type listModelsResponse200 = {
-  data: ModelsResponse;
-  status: 200;
-};
-
-export type listModelsResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type listModelsResponseSuccess = listModelsResponse200 & {
-  headers: Headers;
-};
-export type listModelsResponseError = listModelsResponse500 & {
-  headers: Headers;
-};
-
-export type listModelsResponse =
-  | listModelsResponseSuccess
-  | listModelsResponseError;
-
-export const getListModelsUrl = () => {
-  return `/chats/models`;
-};
-
-export const listModels = async (
-  options?: RequestInit
-): Promise<listModelsResponse> => {
-  const res = await fetch(getListModelsUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listModelsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listModelsResponse;
 };
 
 /**

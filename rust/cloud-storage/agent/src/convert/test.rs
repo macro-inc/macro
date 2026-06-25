@@ -255,6 +255,60 @@ fn tool_call_round_trip_carries_call_id_and_fc_item_id() {
 }
 
 #[test]
+fn trailing_separator_ids_are_trimmed_before_replay() {
+    // A persisted nanoid can end in `_` or `-`; the OpenAI Responses API
+    // rejects replayed `function_call` item ids / `call_id`s ending in a
+    // separator. Both the item id and call_id must be trimmed, and a call and
+    // its result must stay paired afterwards.
+    for raw in ["74JQSgjB6MEaTtCNVdDG_", "abcDEF123-"] {
+        let msg = assistant_parts(vec![
+            AssistantMessagePart::ToolCall {
+                name: "search".to_owned(),
+                json: json!({}),
+                id: raw.to_owned(),
+            },
+            AssistantMessagePart::ToolCallResponseJson {
+                name: "search".to_owned(),
+                json: json!({}),
+                id: raw.to_owned(),
+            },
+        ]);
+        let messages = to_rig_messages(&[msg]);
+
+        let trimmed = raw.trim_end_matches(['_', '-']);
+        let expected_item = format!("fc_{trimmed}");
+
+        let Message::Assistant { content, .. } = &messages[0] else {
+            panic!("expected assistant");
+        };
+        let AssistantContent::ToolCall(call) = content.first() else {
+            panic!("expected tool call");
+        };
+        assert_eq!(call.id, expected_item, "item id must be trimmed for {raw}");
+        assert_eq!(
+            call.call_id.as_deref(),
+            Some(trimmed),
+            "call_id must be trimmed for {raw}"
+        );
+        assert!(
+            !call.id.ends_with(['_', '-'])
+                && !call.call_id.as_deref().unwrap().ends_with(['_', '-']),
+            "no replayed id may end in a separator ({raw})"
+        );
+
+        let Message::User { content } = &messages[1] else {
+            panic!("expected tool result");
+        };
+        let UserContent::ToolResult(result) = content.first() else {
+            panic!("expected tool result");
+        };
+        // Result must pair to its call on both ids.
+        assert_eq!(result.id, expected_item);
+        assert_eq!(result.call_id.as_deref(), Some(trimmed));
+    }
+}
+
+#[test]
 fn mcp_tool_call_converts_like_regular_tool_call() {
     let msg = assistant_parts(vec![AssistantMessagePart::McpToolCall {
         name: "slack_search".to_owned(),

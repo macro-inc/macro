@@ -13,22 +13,42 @@ import type { SoupEmailThreadPreviewSenderPhotoUrl } from './soupEmailThreadPrev
 import type { SoupEmailThreadPreviewSnippet } from './soupEmailThreadPreviewSnippet';
 import type { SoupEmailThreadPreviewViewedAt } from './soupEmailThreadPreviewViewedAt';
 
+/**
+ * Email thread preview data as displayed in Soup.
+ */
 export interface SoupEmailThreadPreview {
+  /** Timestamp when the thread was created. */
   createdAt: string;
+  /** Thread id. */
   id: string;
+  /** Whether the thread should appear in the inbox. */
   inboxVisible: boolean;
+  /** Whether the thread contains a draft. */
   isDraft: boolean;
+  /** Whether the thread is marked important. */
   isImportant: boolean;
+  /** Whether the thread has been read. */
   isRead: boolean;
+  /** Thread display name or subject. */
   name?: SoupEmailThreadPreviewName;
+  /** Owner user id. */
   ownerId: string;
+  /** Project id associated with the thread. */
   projectId?: SoupEmailThreadPreviewProjectId;
+  /** Provider-specific thread id. */
   providerId?: SoupEmailThreadPreviewProviderId;
+  /** Sender email address for the preview. */
   senderEmail?: SoupEmailThreadPreviewSenderEmail;
+  /** Sender display name for the preview. */
   senderName?: SoupEmailThreadPreviewSenderName;
+  /** Sender photo URL for the preview. */
   senderPhotoUrl?: SoupEmailThreadPreviewSenderPhotoUrl;
+  /** Thread snippet. */
   snippet?: SoupEmailThreadPreviewSnippet;
+  /** Timestamp used for email thread sorting. */
   sortTs: string;
+  /** Timestamp when the thread was last updated. */
   updatedAt: string;
+  /** Timestamp when the requesting user last viewed the thread. */
   viewedAt?: SoupEmailThreadPreviewViewedAt;
 }

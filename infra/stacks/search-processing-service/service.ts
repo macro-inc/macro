@@ -14,8 +14,10 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   stack,
+  DopplerEcsEnvironment,
 } from '../../packages/shared';
 
+// NOTE: the BASE_NAME for sps does not match the pulumi project name so do not change
 const BASE_NAME = 'search-processing';
 const BASE_PATH = '../../../rust/cloud-storage';
 
@@ -24,7 +26,6 @@ export const SERVICE_DOMAIN_NAME = `search-processing${
 }.${BASE_DOMAIN}`;
 
 type Args = {
-  secretKeyArns: (pulumi.Output<string> | string)[];
   clusterName: pulumi.Output<string> | string;
   ecsClusterArn: pulumi.Output<string> | string;
   documentStorageBucketArn: pulumi.Output<string> | string;
@@ -71,7 +72,6 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       containerEnvVars,
       clusterName,
       tags,
-      secretKeyArns,
       searchEventQueueArn,
       extraManagedPolicyArns = [],
     }: Args,
@@ -81,6 +81,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
     this.tags = tags;
 
     this.clusterName = clusterName;
+
+    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
 
     // role
     const docStorageBucketPolicy = new aws.iam.Policy(
@@ -96,23 +98,6 @@ export class SearchProcessingService extends pulumi.ComponentResource {
                 documentStorageBucketArn,
                 pulumi.interpolate`${documentStorageBucketArn}/*`,
               ],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-    const secretsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-secrets-policy`,
-      {
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: [...secretKeyArns],
               Effect: 'Allow',
             },
           ],
@@ -160,7 +145,6 @@ export class SearchProcessingService extends pulumi.ComponentResource {
         tags: this.tags,
         managedPolicyArns: [
           docStorageBucketPolicy.arn,
-          secretsPolicy.arn,
           sqsPolicy.arn,
           ...extraManagedPolicyArns,
         ],
@@ -209,6 +193,12 @@ export class SearchProcessingService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      pulumi.getProject(),
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -228,6 +218,9 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -237,7 +230,11 @@ export class SearchProcessingService extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 6000 : 1024,
-              environment: containerEnvVars ?? [],
+              environment: [
+                { name: 'BASE_URL', value: this.domain },
+                ...(containerEnvVars ?? []),
+              ],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
@@ -302,8 +299,6 @@ export class SearchProcessingService extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
   }
 
   initializeSecurityGroups({

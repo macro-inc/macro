@@ -6,8 +6,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use chat::domain::service::{ChatServiceImpl, ModelAccessServiceImpl};
-use chat::inbound::http::models::models_router;
+use chat::domain::service::ChatServiceImpl;
 use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
@@ -35,7 +34,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     );
 
     Router::new()
-        // Create route — needs ensure_user_exists + quota middleware, no ensure_chat_exists
+        // Create route — needs ensure_user_exists, no ensure_chat_exists.
+        // Note: free users are intentionally no longer capped by chat/document count,
+        // so no quota-enforcement middleware is applied here.
         .merge(
             chat_create_router(chat_state.clone()).layer(
                 ServiceBuilder::new()
@@ -46,10 +47,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),
                         macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::ai_chat_message_handler,
                     )),
             ),
         )
@@ -61,19 +58,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                         macro_middleware::auth::ensure_user_exists::handler,
                     ))
                     .layer(ensure_chat_exists.clone()),
-            ),
-        )
-        // Per-user model access list — needs user + permissions populated.
-        .merge(
-            models_router(ModelAccessServiceImpl).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    )),
             ),
         )
         // History routes — remain in DCS

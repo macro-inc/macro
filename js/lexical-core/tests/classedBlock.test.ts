@@ -2,6 +2,7 @@ import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
 } from '@lexical/markdown';
+import { $isQuoteNode } from '@lexical/rich-text';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -14,7 +15,11 @@ import {
   $createClassedBlockNode,
   $isClassedBlockNode,
 } from '../nodes/ClassedBlockNode';
-import { INTERNAL_TRANSFORMERS } from '../transformers';
+import {
+  ALL_TRANSFORMERS,
+  EXTERNAL_TRANSFORMERS,
+  INTERNAL_TRANSFORMERS,
+} from '../transformers';
 
 describe('ClassedBlockNode - macro_quote transformer', () => {
   it('serializes and deserializes a simple macro_quote block', async () => {
@@ -238,6 +243,100 @@ describe('ClassedBlockNode - macro_quote transformer', () => {
         expect(text).toContain('Line 2');
         expect(text).toContain('Line 3');
       }
+    });
+  });
+});
+
+describe('HTML blockquote transformer', () => {
+  it('imports multiline html blockquotes as quote nodes', async () => {
+    const editor = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: console.error,
+    });
+
+    const markdown =
+      '<blockquote>\n[!IMPORTANT]\n## Review skipped\n\nDisabled.\n</blockquote>';
+
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          $convertFromMarkdownString(markdown, ALL_TRANSFORMERS);
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    editor.getEditorState().read(() => {
+      const firstChild = $getRoot().getFirstChild();
+      expect($isQuoteNode(firstChild)).toBe(true);
+      expect(firstChild?.getTextContent()).toContain('[!IMPORTANT]');
+      expect(firstChild?.getTextContent()).toContain('Review skipped');
+      expect(firstChild?.getTextContent()).toContain('Disabled.');
+    });
+  });
+
+  it('exports imported html blockquotes as markdown blockquotes', async () => {
+    const editor = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: console.error,
+    });
+
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          $convertFromMarkdownString(
+            '<blockquote>\nReview skipped\n</blockquote>',
+            ALL_TRANSFORMERS
+          );
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    let markdown = '';
+    editor.getEditorState().read(() => {
+      markdown = $convertToMarkdownString(EXTERNAL_TRANSFORMERS);
+    });
+
+    expect(markdown).toContain('> Review skipped');
+  });
+
+  it('imports nested html blockquotes as nested quote nodes', async () => {
+    const editor = createEditor({
+      nodes: SupportedNodeTypes,
+      onError: console.error,
+    });
+
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          $convertFromMarkdownString(
+            [
+              '<blockquote>',
+              'Outer',
+              '<blockquote>',
+              'Inner',
+              '</blockquote>',
+              'After',
+              '</blockquote>',
+            ].join('\n'),
+            ALL_TRANSFORMERS
+          );
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    editor.getEditorState().read(() => {
+      const outer = $getRoot().getFirstChild();
+      expect($isQuoteNode(outer)).toBe(true);
+      if (!$isQuoteNode(outer)) return;
+
+      const nested = outer.getChildren().find((child) => $isQuoteNode(child));
+      expect($isQuoteNode(nested)).toBe(true);
+      expect(outer.getTextContent()).toContain('Outer');
+      expect(outer.getTextContent()).toContain('After');
+      expect(nested?.getTextContent()).toContain('Inner');
     });
   });
 });

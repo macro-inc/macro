@@ -37,6 +37,11 @@ import type {
   HtmlRenderNode,
 } from './nodes/HtmlRenderNode';
 import type { ImageDecoratorProps, ImageNode } from './nodes/ImageNode';
+import type { PasteNode, PasteNodeDecoratorProps } from './nodes/PasteNode';
+import type {
+  PullRequestMentionDecoratorProps,
+  PullRequestMentionNode,
+} from './nodes/PullRequestMentionNode';
 import type {
   SnapshotDecoratorProps,
   SnapshotNode,
@@ -90,6 +95,10 @@ export interface NodeDecoratorMap {
     klass: typeof DocumentCardNode;
     props: DocumentCardDecoratorProps;
   };
+  PasteNode: {
+    klass: typeof PasteNode;
+    props: PasteNodeDecoratorProps;
+  };
   ContactMentionNode: {
     klass: typeof ContactMentionNode;
     props: ContactMentionDecoratorProps;
@@ -97,6 +106,10 @@ export interface NodeDecoratorMap {
   DateMentionNode: {
     klass: typeof DateMentionNode;
     props: DateMentionDecoratorProps;
+  };
+  PullRequestMentionNode: {
+    klass: typeof PullRequestMentionNode;
+    props: PullRequestMentionDecoratorProps;
   };
   EquationNode: {
     klass: typeof EquationNode;

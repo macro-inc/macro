@@ -22,7 +22,7 @@ use tower_http::{
     ServiceBuilderExt,
     classify::{ServerErrorsAsFailures, SharedClassifier},
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
-    trace::{DefaultMakeSpan, DefaultOnRequest, OnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnRequest, OnFailure, OnResponse, TraceLayer},
 };
 use tracing::{Level, Span};
 
@@ -55,67 +55,18 @@ impl CustomOnResponse {
     }
 }
 
-/// dynamic tracing event macro
-/// copied from [`tower_http`] source (its not public)
-macro_rules! event_dynamic_lvl {
-    ( $(target: $target:expr,)? $(parent: $parent:expr,)? $lvl:expr, $($tt:tt)* ) => {
-        match $lvl {
-            tracing::Level::ERROR => {
-                tracing::event!(
-                    $(target: $target,)?
-                    $(parent: $parent,)?
-                    tracing::Level::ERROR,
-                    $($tt)*
-                );
-            }
-            tracing::Level::WARN => {
-                tracing::event!(
-                    $(target: $target,)?
-                    $(parent: $parent,)?
-                    tracing::Level::WARN,
-                    $($tt)*
-                );
-            }
-            tracing::Level::INFO => {
-                tracing::event!(
-                    $(target: $target,)?
-                    $(parent: $parent,)?
-                    tracing::Level::INFO,
-                    $($tt)*
-                );
-            }
-            tracing::Level::DEBUG => {
-                tracing::event!(
-                    $(target: $target,)?
-                    $(parent: $parent,)?
-                    tracing::Level::DEBUG,
-                    $($tt)*
-                );
-            }
-            tracing::Level::TRACE => {
-                tracing::event!(
-                    $(target: $target,)?
-                    $(parent: $parent,)?
-                    tracing::Level::TRACE,
-                    $($tt)*
-                );
-            }
-        }
-    };
+struct Latency {
+    duration: Duration,
+}
+
+impl std::fmt::Display for Latency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ms", self.duration.as_millis())
+    }
 }
 
 impl<B> OnResponse<B> for CustomOnResponse {
-    fn on_response(self, response: &Response<B>, latency: Duration, _span: &Span) {
-        struct Latency {
-            duration: Duration,
-        }
-
-        impl std::fmt::Display for Latency {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{} ms", self.duration.as_millis())
-            }
-        }
-
+    fn on_response(self, response: &Response<B>, latency: Duration, span: &Span) {
         let level = match latency.cmp(&self.warning_threshold) {
             cmp::Ordering::Less => Level::INFO,
             cmp::Ordering::Equal | cmp::Ordering::Greater => Level::WARN,
@@ -124,12 +75,62 @@ impl<B> OnResponse<B> for CustomOnResponse {
         let latency = Latency { duration: latency };
 
         let response_headers = tracing::field::debug(response.headers());
-        event_dynamic_lvl!(
-            level,
+        match level {
+            Level::ERROR => tracing::error!(
+                parent: span,
+                %latency,
+                status = response.status().as_u16(),
+                response_headers,
+                "finished processing request"
+            ),
+            Level::WARN => tracing::warn!(
+                parent: span,
+                %latency,
+                status = response.status().as_u16(),
+                response_headers,
+                "finished processing request"
+            ),
+            Level::INFO => tracing::info!(
+                parent: span,
+                %latency,
+                status = response.status().as_u16(),
+                response_headers,
+                "finished processing request"
+            ),
+            Level::DEBUG => tracing::debug!(
+                parent: span,
+                %latency,
+                status = response.status().as_u16(),
+                response_headers,
+                "finished processing request"
+            ),
+            Level::TRACE => tracing::trace!(
+                parent: span,
+                %latency,
+                status = response.status().as_u16(),
+                response_headers,
+                "finished processing request"
+            ),
+        }
+    }
+}
+
+/// Emits failed-request logs with the request span as the parent so logs include route context.
+#[derive(Clone)]
+pub struct CustomOnFailure;
+
+impl<FailureClass> OnFailure<FailureClass> for CustomOnFailure
+where
+    FailureClass: std::fmt::Display,
+{
+    fn on_failure(&mut self, failure_classification: FailureClass, latency: Duration, span: &Span) {
+        let latency = Latency { duration: latency };
+
+        tracing::error!(
+            parent: span,
+            classification = %failure_classification,
             %latency,
-            status = response.status().as_u16(),
-            response_headers,
-            "finished processing request"
+            "response failed"
         );
     }
 }
@@ -143,6 +144,9 @@ type ServiceBuilderAlias = ServiceBuilder<
                 DefaultMakeSpan,
                 DefaultOnRequest,
                 CustomOnResponse,
+                tower_http::trace::DefaultOnBodyChunk,
+                tower_http::trace::DefaultOnEos,
+                CustomOnFailure,
             >,
             Stack<SetRequestIdLayer<RequestIdBuilder>, Identity>,
         >,
@@ -195,7 +199,8 @@ impl MacroRequestIdAndTracingLayer {
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(DefaultMakeSpan::new().include_headers(true))
-                    .on_response(CustomOnResponse::new_with_threshold(warning_threshold)),
+                    .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
+                    .on_failure(CustomOnFailure),
             )
             .propagate_x_request_id();
 

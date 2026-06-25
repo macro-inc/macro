@@ -32,7 +32,7 @@ export function useTeamQuery(teamId: Accessor<string>) {
   }));
 }
 
-/** The current user's team (`getTeam()` always returns it). */
+/** The current user's team, or `null` if they don't belong to one. */
 export function useCurrentTeamQuery() {
   return useQuery(() => ({
     queryKey: teamKeys.currentTeam.queryKey,
@@ -52,7 +52,9 @@ export function useIsTeamAdmin(): Accessor<boolean> {
     const uid = userId();
     if (!uid) return false;
     if (!queryReadyGate(teamQuery)) return false;
-    const member = teamQuery.data.members.find((m) => m.user_id === uid);
+    const team = teamQuery.data;
+    if (!team) return false;
+    const member = team.members.find((m) => m.user_id === uid);
     return member?.role === TeamRole.admin || member?.role === TeamRole.owner;
   };
 }

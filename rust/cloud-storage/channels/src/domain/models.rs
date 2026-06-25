@@ -1,7 +1,15 @@
 use chrono::{DateTime, Utc};
-use macro_user_id::user_id::MacroUserIdStr;
+#[cfg(feature = "list")]
+use item_filters::ast::{
+    LiteralTree,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+};
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+#[cfg(feature = "list")]
+use models_pagination::{Query, SimpleSortMethod};
 use serde::{Deserialize, Serialize, Serializer};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub use bot_id::BotId;
@@ -209,7 +217,7 @@ pub enum MessagePageDirection {
 }
 
 /// A top-level message with thread info, reactions, and attachments.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelMessage {
     /// Message id.
     pub id: Uuid,
@@ -245,6 +253,27 @@ impl Identify for ChannelMessage {
     }
 }
 
+/// Lightweight channel message used when rendering a channel as an AI attachment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentChannelMessage {
+    /// Message id.
+    pub message_id: Uuid,
+    /// Thread parent id, if this message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Sender actor id.
+    pub sender_id: String,
+    /// Message body.
+    pub content: String,
+    /// Message creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Message update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Message deletion timestamp, if any.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.
+    pub mentions: Vec<String>,
+}
+
 impl SortOn<CreatedAt> for ChannelMessage {
     fn sort_on(sort_type: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
         move |msg| CursorVal {
@@ -255,7 +284,7 @@ impl SortOn<CreatedAt> for ChannelMessage {
 }
 
 /// Thread metadata + preview replies for a top-level message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ThreadInfo {
     /// Total number of replies in the thread.
     pub reply_count: i64,
@@ -355,7 +384,8 @@ impl SortOn<CreatedAt> for ChannelAttachment {
 }
 
 /// Role of a channel participant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
@@ -367,6 +397,7 @@ pub enum ParticipantRole {
     /// Channel admin.
     Admin,
     /// Regular member.
+    #[default]
     Member,
 }
 
@@ -384,7 +415,7 @@ impl std::str::FromStr for ParticipantRole {
 }
 
 /// An active participant in a channel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelParticipant {
     /// Channel id.
     pub channel_id: Uuid,
@@ -539,6 +570,132 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
+}
+
+impl std::fmt::Display for ChannelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChannelType::Public => f.write_str("public"),
+            ChannelType::Private => f.write_str("private"),
+            ChannelType::DirectMessage => f.write_str("direct_message"),
+            ChannelType::Team => f.write_str("team"),
+        }
+    }
+}
+
+/// Request to add a user to all organization channels.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AddUserToOrgChannelsRequest {
+    /// User to add.
+    pub user_id: String,
+    /// Organization id.
+    pub org_id: i64,
+}
+
+/// Request to remove a user from all organization channels.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct RemoveUserFromOrgChannelsRequest {
+    /// User to remove.
+    pub user_id: String,
+    /// Organization id.
+    pub org_id: i64,
+}
+
+/// Request to check user membership in channels.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckChannelsForUserRequest {
+    /// User id to check.
+    pub user_id: String,
+    /// Channel ids to check.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// User activity data for a channel.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserActivityForChannel {
+    /// User id for the activity.
+    pub user_id: String,
+    /// Activity update timestamp.
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// Information about a channel used in search responses.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChannelHistoryInfo {
+    /// Channel id.
+    pub item_id: Uuid,
+    /// Channel creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Channel update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Last viewed timestamp for requesting user.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// Last interaction timestamp for requesting user.
+    pub interacted_at: Option<DateTime<Utc>>,
+    /// Channel owner user id.
+    pub user_id: String,
+    /// Channel type string.
+    pub channel_type: String,
+}
+
+/// Request for channel history data.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelsHistoryRequest {
+    /// Requesting user id.
+    pub user_id: String,
+    /// Channel ids to fetch.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// Response for channel history data.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelsHistoryResponse {
+    /// History data keyed by channel id.
+    pub channels_history: HashMap<Uuid, ChannelHistoryInfo>,
+}
+
+/// Request to create a welcome message.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateWelcomeMessageRequest {
+    /// User id the welcome message is from/for.
+    pub welcome_user_id: MacroUserIdStr<'static>,
+    /// User id to send the welcome message to.
+    pub to_user_id: MacroUserIdStr<'static>,
+}
+
+/// Channel message response used by search indexing.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelMessageResponse {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Channel name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    pub org_id: Option<i64>,
+    /// Message data.
+    pub channel_message: RecentChannelMessage,
+}
+
+/// Request to fetch channel metadata.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChannelMetadataRequest {
+    /// Channel id.
+    pub channel_id: Uuid,
+}
+
+/// Request to fetch channel attachment text.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChannelAttachmentTextRequest {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Optional lower bound.
+    pub since: Option<chrono::DateTime<chrono::Utc>>,
+    /// Optional row limit.
+    pub limit: Option<i64>,
 }
 
 /// A user's activity (view/interaction) within a channel.
@@ -968,6 +1125,203 @@ pub struct WithChannelId {
     pub channel_id: String,
 }
 
+/// User display-name components used for channel-name resolution.
+#[cfg(feature = "list")]
+#[derive(Debug, Deserialize)]
+pub struct UserName {
+    /// Macro user id.
+    pub id: MacroUserIdStr<'static>,
+    /// First name, if present.
+    pub first_name: Option<String>,
+    /// Last name, if present.
+    pub last_name: Option<String>,
+}
+
+#[cfg(feature = "list")]
+impl UserName {
+    /// Attempt to create a display name for this user.
+    pub fn display_name(&self) -> Option<String> {
+        const NA: &str = "N/A";
+        match (
+            self.first_name.as_deref().filter(|v| *v != NA),
+            self.last_name.as_deref().filter(|v| *v != NA),
+        ) {
+            (None, None) => None,
+            (None, Some(last)) => Some(last.to_string()),
+            (Some(first), None) => Some(first.to_string()),
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+        }
+    }
+}
+
+/// Lookup from Macro user id to display name.
+pub(crate) type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
+
+/// Produce the human-readable fallback for a Macro user id.
+pub(crate) fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
+    user_id.email_part().local_part().to_string()
+}
+
+/// Channel list request.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetChannelsRequest {
+    /// Requesting user id.
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Optional result limit.
+    pub limit: Option<u32>,
+    /// Cursor, sort, and channel-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetChannelsRequest {
+    /// Convert into repository params.
+    pub fn into_params(self) -> GetChannelsParams {
+        GetChannelsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+/// Channel list repository parameters.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetChannelsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+/// Channel thread reply rows request.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsRequest {
+    /// Requesting user id.
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Optional result limit.
+    pub limit: Option<u32>,
+    /// Cursor, sort, and channel-thread-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsRequest {
+    /// Convert into repository params.
+    pub fn into_params(self) -> GetThreadReplyRowsParams {
+        GetThreadReplyRowsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+/// Channel thread reply rows repository parameters.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsParams {
+    /// Requesting user id.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    /// Optional result limit.
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    /// Cursor, sort, and channel-thread-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>> {
+        &self.query
+    }
+}
+
+#[cfg(feature = "list")]
+impl GetChannelsParams {
+    /// Requesting user id.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    /// Optional result limit.
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    /// Cursor, sort, and channel-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+        &self.query
+    }
+}
+
+/// Channel data plus active participants.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelWithParticipants {
+    /// Channel info.
+    pub channel: ChannelListItem,
+    /// Active channel participants.
+    pub participants: Vec<ChannelParticipant>,
+}
+
+/// Channel list item.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelListItem {
+    /// Channel id.
+    pub id: Uuid,
+    /// Resolved or stored name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    pub org_id: Option<i64>,
+    /// Team id.
+    pub team_id: Option<Uuid>,
+    /// Creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Channel owner user id.
+    pub owner_id: MacroUserIdStr<'static>,
+}
+
+/// Latest-message bundle for channel list results.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, Default)]
+pub struct LatestMessage {
+    /// Latest message including thread replies.
+    pub latest_message: Option<RecentChannelMessage>,
+    /// Latest non-thread top-level message.
+    pub latest_non_thread_message: Option<RecentChannelMessage>,
+}
+
+/// Channel list result enriched with latest messages, activity, and frecency.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelWithLatest {
+    /// Channel plus participants.
+    pub channel: ChannelWithParticipants,
+    /// Latest message data.
+    pub latest_message: LatestMessage,
+    /// Last viewed timestamp for requesting user.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// Last interaction timestamp for requesting user.
+    pub interacted_at: Option<DateTime<Utc>>,
+    /// Aggregate frecency score.
+    pub frecency_score: Option<frecency::domain::models::AggregateFrecency>,
+}
+
 /// Raw preview row returned from the repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelPreviewRow {
@@ -1074,5 +1428,12 @@ mod tests {
 
         assert_eq!(sender.to_storage_string(), storage);
         assert_eq!(serde_json::to_value(&sender).unwrap(), storage);
+    }
+
+    #[test]
+    fn fallback_user_name_uses_email_local_part() {
+        let user_id = MacroUserIdStr::parse_from_str("macro|shepherd.hatton@gmail.com").unwrap();
+
+        assert_eq!(fallback_user_name(&user_id), "shepherd.hatton");
     }
 }

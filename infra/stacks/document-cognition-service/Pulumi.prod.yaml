@@ -15,3 +15,4 @@ config:
   document-cognition:sync_service_auth_key: sync-service-key-prod
   document-cognition:perplexity-api-key: perplexity-api-key
   document-cognition:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
+  document-cognition:macro_db_proxy_secret_key: macrodb-rds-proxy-prod

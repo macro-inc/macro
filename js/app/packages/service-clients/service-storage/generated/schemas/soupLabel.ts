@@ -8,13 +8,24 @@ import type { SoupLabelListVisibility } from './soupLabelListVisibility';
 import type { SoupLabelType } from './soupLabelType';
 import type { SoupMessageListVisibility } from './soupMessageListVisibility';
 
+/**
+ * An email label as displayed in Soup.
+ */
 export interface SoupLabel {
+  /** Timestamp when the label was created. */
   createdAt: string;
+  /** Label id. */
   id: string;
+  /** Label visibility in label lists. */
   labelListVisibility: SoupLabelListVisibility;
+  /** Connected account link id for the label. */
   linkId: string;
+  /** Label visibility in message lists. */
   messageListVisibility: SoupMessageListVisibility;
+  /** Label display name. */
   name: string;
+  /** Provider-specific label id. */
   providerLabelId: string;
+  /** Label type. */
   type: SoupLabelType;
 }

@@ -31,12 +31,22 @@ export function mapRegisterDelete(
 }
 
 type WidthChangeCallback = (width: number) => void;
+type EditorMutationCallback = () => void;
 
 const observersByEditor = new WeakMap<
   LexicalEditor,
   {
     observer: ResizeObserver;
     callbacks: Set<WidthChangeCallback>;
+  }
+>();
+
+const mutationObserversByEditor = new WeakMap<
+  LexicalEditor,
+  {
+    observer: MutationObserver;
+    callbacks: Set<EditorMutationCallback>;
+    cleanupRootListener: () => void;
   }
 >();
 
@@ -98,6 +108,59 @@ export function registerEditorWidthObserver(
       }
     }
   );
+}
+
+/**
+ * Register a callback that runs when the editor root mutates. Observing is
+ * shared per editor so multiple floating controls do not each attach their own
+ * MutationObserver to the same root.
+ */
+export function registerEditorMutationObserver(
+  editor: LexicalEditor,
+  onMutation: EditorMutationCallback
+) {
+  let editorObserver = mutationObserversByEditor.get(editor);
+
+  if (!editorObserver) {
+    const callbacks = new Set<EditorMutationCallback>();
+    const observer = new MutationObserver(() => {
+      callbacks.forEach((callback) => callback());
+    });
+
+    const cleanupRootListener = editor.registerRootListener(
+      (root, prevRoot) => {
+        if (prevRoot) {
+          observer.disconnect();
+        }
+        if (root) {
+          observer.observe(root, {
+            attributes: true,
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
+      }
+    );
+
+    editorObserver = { observer, callbacks, cleanupRootListener };
+    mutationObserversByEditor.set(editor, editorObserver);
+  }
+
+  editorObserver.callbacks.add(onMutation);
+
+  return () => {
+    const editorObserver = mutationObserversByEditor.get(editor);
+    if (!editorObserver) return;
+
+    editorObserver.callbacks.delete(onMutation);
+
+    if (editorObserver.callbacks.size === 0) {
+      editorObserver.observer.disconnect();
+      editorObserver.cleanupRootListener();
+      mutationObserversByEditor.delete(editor);
+    }
+  };
 }
 
 /**

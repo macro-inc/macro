@@ -7,6 +7,9 @@
 import type { SoupApiItem } from './soupApiItem';
 import type { SoupPageNextCursor } from './soupPageNextCursor';
 
+/**
+ * Response page for non-grouped soup endpoints.
+ */
 export interface SoupPage {
   items: SoupApiItem[];
   next_cursor?: SoupPageNextCursor;

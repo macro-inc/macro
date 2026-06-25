@@ -168,7 +168,9 @@ function SidePanelLayoutInner(
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
           <Scroll>
-            <div class="w-full max-w-2xl mx-auto min-w-0">
+            {/* Full-frame mobile: the overlay spans the whole panel, so the
+                content must clear the floating header islands + status bar. */}
+            <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
               <SidePanelOutlet
                 sections={props.sections}
                 openIds={props.openIds}
@@ -285,6 +287,9 @@ function useSidePanel() {
  * Pill-style tabs that switch between the main content and the side panel
  * overlay in narrow mode. Renders nothing when the layout is wide or when no
  * sections are registered, so it's safe to mount unconditionally.
+ *
+ * Hidden on mobile, where the header title island doubles as the
+ * Content/Info switcher instead (see BlockItemSplitLabel).
  */
 function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   const ctx = useContext(SidePanelContext);
@@ -293,7 +298,7 @@ function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   const value = () => (ctx.isOpen() ? 'info' : 'content');
 
   return (
-    <Show when={ctx.isNarrow() && ctx.hasSections()}>
+    <Show when={ctx.isNarrow() && ctx.hasSections() && !isMobile()}>
       <TabsInset
         list={[
           { value: 'content', label: props.contentLabel ?? 'Content' },

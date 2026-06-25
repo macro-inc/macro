@@ -9,6 +9,9 @@ import type { SoupProjectParentId } from './soupProjectParentId';
 import type { SoupProjectViewedAt } from './soupProjectViewedAt';
 import type { SoupProperty } from './soupProperty';
 
+/**
+ * A project as displayed in Soup.
+ */
 export interface SoupProject {
   /** The time the project was created */
   createdAt: string;

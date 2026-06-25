@@ -2,6 +2,7 @@ import {
   type EntityData,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
+  isGithubPrEntity,
   isTaskEntity,
   type TaskEntityWithProperties,
   toNotificationEntity,
@@ -99,6 +100,10 @@ export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
   return !['md', 'canvas'].includes(fileType);
+}
+
+export function githubPrFilter(entity: EntityData): boolean {
+  return isGithubPrEntity(entity);
 }
 
 export function channelsFilter(entity: EntityData): boolean {

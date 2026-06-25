@@ -164,5 +164,44 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
     Ok(jobs)
 }
 
+/// Retrieves a user's most recent backfill jobs, newest first. Spans all of the
+/// user's links and all statuses; `link_id` is intentionally not used so jobs
+/// survive a link being deleted and recreated. Capped at 100 so frequent
+/// resyncs can't grow the response unbounded — the settings UI only needs the
+/// current per-link state, which the newest jobs cover.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_all_jobs_by_fusionauth_user_id(
+    pool: &PgPool,
+    fusionauth_user_id: &str,
+) -> anyhow::Result<Vec<service::backfill::BackfillJob>> {
+    let records = sqlx::query_as!(
+        db::backfill::BackfillJob,
+        r#"
+        SELECT
+            id,
+            link_id,
+            fusionauth_user_id,
+            threads_requested_limit,
+            total_threads,
+            threads_retrieved_count,
+            status as "status: db::backfill::BackfillJobStatus",
+            created_at,
+            updated_at
+        FROM email_backfill_jobs
+        WHERE fusionauth_user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 100
+        "#,
+        fusionauth_user_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    // Convert all database records to service models
+    let jobs = records.into_iter().map(Into::into).collect();
+
+    Ok(jobs)
+}
+
 #[cfg(test)]
 mod test;

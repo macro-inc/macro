@@ -14,6 +14,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
     .with('channel_message_send', () => 'sent a message in')
     .with('ai_response', () => 'AI responded')
     .with('channel_message_reply', () => 'replied in')
+    .with('call_started', () => 'started a call')
     .with('channel_invite', () => 'invited you to')
     .with('new_email', () => 'sent a new email')
     .with('invite_to_team', () => 'invited you to')
@@ -64,6 +65,7 @@ export function getNotificationTargetName(
     .with({ tag: 'channel_message_send' }, () => undefined)
     .with({ tag: 'ai_response' }, () => undefined)
     .with({ tag: 'channel_message_reply' }, () => undefined)
+    .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? undefined)
     .with({ tag: 'new_email' }, () => undefined)
     .with({ tag: 'inbox_reauth_required' }, () => undefined)
     .exhaustive();
@@ -78,6 +80,7 @@ export function getNotificationContent(
     .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
     .with({ tag: 'ai_response' }, (m) => m.content.summary)
     .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
+    .with({ tag: 'call_started' }, () => undefined)
     .with({ tag: 'document_mention' }, (m) => m.content.documentName)
     .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text)
     .with({ tag: 'replied_to_document_comment_thread' }, (m) => m.content.text)
@@ -127,6 +130,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       (m) => m.content.channelType !== 'directMessage'
     )
     .with({ tag: 'ai_response' }, () => false)
+    .with({ tag: 'call_started' }, () => true)
     .with({ tag: 'new_email' }, () => false)
     .with({ tag: 'task_assigned' }, () => true)
     .with({ tag: P.union(...GITHUB_EVENT_TYPES) }, () => true)

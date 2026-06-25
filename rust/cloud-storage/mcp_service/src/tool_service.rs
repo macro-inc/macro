@@ -20,15 +20,25 @@ pub struct AuthenticatedToolService<Context> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
     db: PgPool,
+    /// Base URL of the Macro web app used to build links to Macro items in MCP
+    /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
+    /// environment variable.
+    item_base_url: String,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
     /// Creates a new authenticated tool service.
-    pub fn new(toolset: Arc<AsyncToolCollection<Context>>, context: Context, db: PgPool) -> Self {
+    pub fn new(
+        toolset: Arc<AsyncToolCollection<Context>>,
+        context: Context,
+        db: PgPool,
+        item_base_url: String,
+    ) -> Self {
         Self {
             toolset,
             context,
             db,
+            item_base_url,
         }
     }
 
@@ -71,9 +81,7 @@ impl<Context> AuthenticatedToolService<Context> {
             rmcp::ErrorData::internal_error("failed to check permissions", None)
         })?;
 
-        let is_paid = permissions.contains(&PermissionId::WriteOpus.to_string())
-            || permissions.contains(&PermissionId::WriteSonnet.to_string())
-            || permissions.contains(&PermissionId::WriteHaiku.to_string());
+        let is_paid = permissions.contains(&PermissionId::WriteProAi.to_string());
 
         if !is_paid {
             return Err(rmcp::ErrorData::new(
@@ -104,14 +112,15 @@ where
         .with_description(
             "Search, read, and create content across documents, emails, and messages in Macro.",
         );
-        info.instructions = Some(
+        let base_url = self.item_base_url.trim_end_matches('/');
+        info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
-             Use ListEntities to browse recent items."
-                .into(),
-        );
+             Use ListEntities to browse recent items.\n\n{}",
+            prompt::mcp_instructions(base_url),
+        ));
         info
     }
 
@@ -137,7 +146,7 @@ where
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         self.require_paid_subscription(&user_id).await?;
 
-        let request_context = RequestContext { user_id };
+        let request_context = RequestContext::new(user_id);
 
         let arguments = request
             .arguments

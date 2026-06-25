@@ -23,7 +23,6 @@ chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
-comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }

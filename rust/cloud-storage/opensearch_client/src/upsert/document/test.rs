@@ -12,6 +12,7 @@ fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
         content: format!("content {doc_id} {node_id}"),
         updated_at_seconds: EpochSeconds::new(1_700_000_000).unwrap(),
         sub_type: None,
+        properties: vec![],
     }
 }
 
@@ -36,6 +37,44 @@ fn parent_doc_body_includes_optional_sub_type() {
     a.sub_type = Some("task".to_string());
     let doc = parent_doc_body(&a);
     assert_eq!(doc["sub_type"], "task");
+}
+
+#[test]
+fn parent_doc_body_includes_properties_when_present() {
+    let mut a = args("doc1", "n1");
+    a.properties = vec![
+        IndexedProperty {
+            definition_id: "status-def".to_string(),
+            values: vec!["not-started".to_string()],
+            ..Default::default()
+        },
+        IndexedProperty {
+            definition_id: "assignees-def".to_string(),
+            values: vec!["macro|gab@macro.com".to_string()],
+            ..Default::default()
+        },
+        IndexedProperty {
+            definition_id: "due-date-def".to_string(),
+            date_value: Some(1_700_000_000_000),
+            ..Default::default()
+        },
+    ];
+    let doc = parent_doc_body(&a);
+    let props = doc["properties"].as_array().expect("properties array");
+    assert_eq!(props.len(), 3);
+    assert_eq!(props[0]["definition_id"], "status-def");
+    assert_eq!(props[0]["values"][0], "not-started");
+    // Empty value fields are skipped, not serialized as empty/null.
+    assert!(props[0].get("number_value").is_none());
+    assert_eq!(props[1]["values"][0], "macro|gab@macro.com");
+    assert_eq!(props[2]["date_value"], 1_700_000_000_000i64);
+    assert!(props[2].get("values").is_none());
+}
+
+#[test]
+fn parent_doc_body_omits_properties_when_empty() {
+    let doc = parent_doc_body(&args("doc1", "n1"));
+    assert!(doc.get("properties").is_none());
 }
 
 #[test]

@@ -51,7 +51,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       {...others}
     >
       <KobalteSwitch.Input class="sr-only" />
-      <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-edge transition-colors duration-100 data-checked:bg-accent">
+      <KobalteSwitch.Control class="relative h-4 w-6 rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent">
         <KobalteSwitch.Thumb
           class={cn(
             'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-100 ease-in-out',

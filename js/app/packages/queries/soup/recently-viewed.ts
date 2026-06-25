@@ -1,4 +1,4 @@
-import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { ENABLE_CRM } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
@@ -21,15 +21,14 @@ const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
   body: {
-    // No viewed_at signal on calls — exclude.
-    call_filters: {
-      call_ids: [NIL_UUID],
-    },
-    foreign_entity_filters: {
-      ids: [NIL_UUID],
-    },
+    ...QUERY_FILTERS_BASE,
+    channel_filters: undefined,
+    chat_filters: undefined,
+    document_filters: undefined,
+    email_filters: undefined,
+    project_filters: undefined,
     // CRM companies only surface in recently-viewed when the feature is enabled.
-    ...(ENABLE_CRM ? {} : { crm_company_filters: { company_ids: [NIL_UUID] } }),
+    ...(ENABLE_CRM ? { crm_company_filters: undefined } : {}),
   },
 };
 
@@ -50,7 +49,11 @@ export function useRecentlyViewedSoupQuery() {
           })
       );
       return page.items.flatMap((item): RecentlyViewedItem[] => {
-        if (item.tag === 'call' || item.tag === 'foreignEntity') {
+        if (
+          item.tag === 'call' ||
+          item.tag === 'foreignEntity' ||
+          item.tag === 'channelThread'
+        ) {
           return [];
         }
 

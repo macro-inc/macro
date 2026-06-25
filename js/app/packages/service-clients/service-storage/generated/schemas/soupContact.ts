@@ -8,10 +8,18 @@ import type { SoupContactEmailAddress } from './soupContactEmailAddress';
 import type { SoupContactName } from './soupContactName';
 import type { SoupContactSfsPhotoUrl } from './soupContactSfsPhotoUrl';
 
+/**
+ * A contact participating in an email thread as displayed in Soup.
+ */
 export interface SoupContact {
+  /** Contact email address. */
   emailAddress?: SoupContactEmailAddress;
+  /** Contact id. */
   id: string;
+  /** Connected account link id for the contact. */
   linkId: string;
+  /** Contact display name. */
   name?: SoupContactName;
+  /** Contact photo URL from SFS, if available. */
   sfsPhotoUrl?: SoupContactSfsPhotoUrl;
 }

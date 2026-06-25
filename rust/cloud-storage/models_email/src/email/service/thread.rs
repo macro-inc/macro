@@ -181,6 +181,11 @@ pub struct ThreadUserInfo {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct ListThreadsPayload {
     pub next_page_token: Option<String>,
+    /// When true, this is the priority first pass: list only the user's most
+    /// important threads (CATEGORY_PERSONAL) so they backfill first, then hand
+    /// off to the normal most-recent-to-least sweep.
+    #[serde(default)]
+    pub priority_pass: bool,
 }
 
 /// A mapping from provider IDs to thread IDs

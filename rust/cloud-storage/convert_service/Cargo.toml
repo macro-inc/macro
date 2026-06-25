@@ -1,8 +1,13 @@
 [package]
+default-run = "convert_service"
 edition = "2024"
 name = "convert_service"
 publish = false
 version = "0.1.0"
+
+[[bin]]
+name = "convert_service_doppler_config"
+path = "src/doppler_config.rs"
 
 [features]
 disable_cleanup = []
@@ -17,6 +22,7 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 database_env_vars = { path = "../macro_env_vars/database_env_vars" }
+doppler-config = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lambda_client = { path = "../lambda_client" }

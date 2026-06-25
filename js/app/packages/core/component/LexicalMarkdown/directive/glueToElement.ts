@@ -2,6 +2,7 @@ import { autoUpdate, computePosition, hide } from '@floating-ui/dom';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, onCleanup } from 'solid-js';
+import { registerEditorMutationObserver } from '../plugins/shared/utils';
 
 type GlueToElementProps = {
   editor: LexicalEditor;
@@ -33,12 +34,23 @@ export function glueToElement(
   style(floatingElement, { position: 'absolute' });
 
   let cleanupAutoUpdate: () => void = () => {};
+  let cleanupEditorMutationObserver: () => void = () => {};
+  let animationFrame: number | undefined;
+
+  const scheduleUpdatePosition = () => {
+    if (animationFrame !== undefined) return;
+    animationFrame = requestAnimationFrame(() => {
+      animationFrame = undefined;
+      void updatePosition();
+    });
+  };
 
   async function updatePosition() {
     const el = propAccessor().element();
     const root = propAccessor().editor.getRootElement();
+    const mount = floatingElement.offsetParent as HTMLElement | null;
 
-    if (!el || !root) {
+    if (!el || !root || !mount) {
       style(floatingElement, { display: 'none' });
       return;
     }
@@ -48,11 +60,12 @@ export function glueToElement(
     });
 
     const rect = el.getBoundingClientRect();
-    const rootRect = root.getBoundingClientRect();
-    const offsetLeft = rect.left - rootRect.left;
-    const offsetTop = rect.top - rootRect.top;
+    const mountRect = mount.getBoundingClientRect();
+    const offsetLeft = rect.left - mountRect.left + mount.scrollLeft;
+    const offsetTop = rect.top - mountRect.top + mount.scrollTop;
 
     style(floatingElement, {
+      display: '',
       left: `${offsetLeft}px`,
       top: `${offsetTop}px`,
       width: `${rect.width}px`,
@@ -63,6 +76,7 @@ export function glueToElement(
 
   createEffect(() => {
     cleanupAutoUpdate();
+    cleanupEditorMutationObserver();
     const referenceEl = propAccessor().element() ?? null;
     if (!referenceEl) return;
     cleanupAutoUpdate = autoUpdate(
@@ -70,9 +84,17 @@ export function glueToElement(
       floatingElement,
       updatePosition
     );
+    cleanupEditorMutationObserver = registerEditorMutationObserver(
+      propAccessor().editor,
+      scheduleUpdatePosition
+    );
   });
 
   onCleanup(() => {
     cleanupAutoUpdate();
+    cleanupEditorMutationObserver();
+    if (animationFrame !== undefined) {
+      cancelAnimationFrame(animationFrame);
+    }
   });
 }

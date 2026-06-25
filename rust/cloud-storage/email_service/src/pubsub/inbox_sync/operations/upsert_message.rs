@@ -595,6 +595,7 @@ async fn send_notifications(
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::EmailThread
             .with_entity_string(message.thread_db_id.to_string()),
+        secondary_notification_entity: None,
         notification,
         sender_id,
         recipient_ids,

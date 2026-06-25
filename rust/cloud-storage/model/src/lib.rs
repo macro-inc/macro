@@ -4,7 +4,6 @@ pub mod annotations;
 pub mod authentication;
 pub mod chat;
 pub mod citations;
-pub mod comms;
 pub mod convert;
 pub mod document;
 pub mod document_storage_service_internal;

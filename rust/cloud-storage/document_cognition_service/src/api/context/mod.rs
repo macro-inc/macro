@@ -7,11 +7,11 @@ use ai_tools::{
 };
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use channels::inbound::attachment::ChannelAttachmentService;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::MessageServiceImpl;
 use chat::inbound::attachment::ChatAttachmentService;
 use chat::outbound::postgres::PgChatRepo;
-use comms::inbound::attachment::CommsAttachmentService;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
@@ -38,7 +38,7 @@ pub type DcsAttachmentProvider = AttachmentProvider<
     DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
     EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
     ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
-    CommsAttachmentService<PgCommsRepo, ToolEntityAccessService>,
+    ChannelAttachmentService<PgChannelsRepo, ToolEntityAccessService>,
     StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
 
@@ -57,6 +57,15 @@ pub type DcsMemoryService =
 /// The AI cost service wired to the Postgres usage repo.
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
+
+/// The AI projections service wired to the Postgres projection repo and the SQS
+/// materialization queue.
+pub type DcsAiProjectionService =
+    ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
+        ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
+        sqs_client::SQS,
+        ai_projections::outbound::agent_generator::AgentProjectionGenerator,
+    >;
 
 /// Concrete MCP router state for DCS.
 pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
@@ -86,6 +95,7 @@ pub struct ApiContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub usage_service: Arc<DcsUsageService>,
+    pub ai_projections_service: Arc<DcsAiProjectionService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,

@@ -4,11 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentResponseMetadata } from './documentResponseMetadata';
 
 /**
  * Response for creating a markdown document.
  */
 export interface CreateMarkdownDocumentResponse {
-  /** The document ID of the created markdown document. */
+  /** The document ID of the created markdown document */
   documentId: string;
+  /** Metadata for the created document */
+  documentMetadata: DocumentResponseMetadata;
+  /** A pre-generated permission token that you can use for SS */
+  token: string;
 }

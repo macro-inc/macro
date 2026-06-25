@@ -1,0 +1,32 @@
+[package]
+edition = "2024"
+name = "ai_projections_refresh_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
+aws-smithy-types = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+models_ai_projection = { path = "../models_ai_projection" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "ai_projection",
+] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+macro_config = { path = "../macro_config" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }

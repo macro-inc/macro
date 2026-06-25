@@ -199,7 +199,7 @@ export function CommandItem(props: CommandItemProps) {
       class={cn(
         'rounded-md group flex items-center h-10 px-2 text-sm font-semibold relative',
         {
-          'bg-active ring ring-edge': props.selected,
+          'bg-active': props.selected,
           'hover:bg-hover/50': !props.selected,
         }
       )}

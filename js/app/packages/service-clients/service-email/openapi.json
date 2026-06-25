@@ -153,6 +153,43 @@
       }
     },
     "/email/backfill/gmail": {
+      "get": {
+        "tags": ["Init"],
+        "summary": "List all backfill jobs for the authenticated user, across every link they\nown. Scoped by the user's fusionauth id from the request context rather than\na single resolved link.",
+        "operationId": "list_backfill_gmail",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBackfillJobsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": ["Init"],
         "summary": "Cancel a backfill job.",
@@ -4253,6 +4290,19 @@
           }
         }
       },
+      "ListBackfillJobsResponse": {
+        "type": "object",
+        "description": "The response returned from the list backfill jobs endpoint",
+        "required": ["jobs"],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackfillJob"
+            }
+          }
+        }
+      },
       "ListBlockedResponse": {
         "type": "object",
         "description": "Response containing list of blocked email addresses.",
@@ -4715,6 +4765,38 @@
               "link_id": {
                 "type": "string",
                 "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Live backfill progress for `link_id`, for driving a progress indicator on\nthe frontend: `completed_threads` out of `total_threads`, plus `status`.\nCounts reflect the Redis progress counters; the priority pass may bump\nboth above the raw mailbox size, but in lockstep, so the ratio holds.\nAppended last so existing variants keep their generated TS names.",
+            "required": [
+              "link_id",
+              "status",
+              "completed_threads",
+              "total_threads",
+              "event"
+            ],
+            "properties": {
+              "completed_threads": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "event": {
+                "type": "string",
+                "enum": ["backfill_progress"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "$ref": "#/components/schemas/BackfillStatus"
+              },
+              "total_threads": {
+                "type": "integer",
+                "format": "int32"
               }
             }
           }

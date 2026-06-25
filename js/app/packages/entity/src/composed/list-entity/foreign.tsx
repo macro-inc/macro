@@ -330,7 +330,7 @@ function GithubPullRequestChecksPopover(props: {
                     class={cn(
                       'group/check-card relative flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium outline-none',
                       hasUrl()
-                        ? 'cursor-default hover:bg-active hover:ring hover:ring-edge focus-visible:bg-ink/5'
+                        ? 'cursor-default hover:bg-active focus-visible:bg-ink/5'
                         : 'cursor-not-allowed opacity-50'
                     )}
                     href={check.url ? check.url : undefined}

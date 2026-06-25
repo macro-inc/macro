@@ -1,7 +1,10 @@
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, For, Show, Suspense } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import { Button, Layer, Panel } from '@ui';
+import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
+import { Button, Layer, Panel, ToggleSwitch } from '@ui';
+import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
 import type {
@@ -196,11 +199,47 @@ function AddServerForm(props: {
   );
 }
 
+// We have no server-side signal for a failed auth, so we remember locally that a
+// connect attempt was made. A disconnected server with a recorded attempt is
+// treated as a failed connection; the flag is cleared once it authenticates.
+const AUTH_ATTEMPT_PREFIX = 'mcp:auth-attempted:';
+
+function readAuthAttempted(url: string): boolean {
+  try {
+    return localStorage.getItem(AUTH_ATTEMPT_PREFIX + url) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeAuthAttempted(url: string, attempted: boolean): void {
+  try {
+    if (attempted) localStorage.setItem(AUTH_ATTEMPT_PREFIX + url, '1');
+    else localStorage.removeItem(AUTH_ATTEMPT_PREFIX + url);
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.)
+  }
+}
+
 function ServerRow(props: { server: ServerResponse }) {
   const updateMutation = useUpdateMcpServerMutation();
   const deleteMutation = useDeleteMcpServerMutation();
   const authMutation = useStartMcpAuthMutation();
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const [attempted, setAttempted] = createSignal(
+    readAuthAttempted(props.server.url)
+  );
+
+  // A recorded attempt on a still-disconnected server means the last connect
+  // attempt didn't succeed. Clear the flag once the server authenticates.
+  createEffect(() => {
+    if (props.server.authenticated && attempted()) {
+      writeAuthAttempted(props.server.url, false);
+      setAttempted(false);
+    }
+  });
+
+  const connectionFailed = () => !props.server.authenticated && attempted();
 
   const handleToggleEnabled = () => {
     updateMutation.mutate(
@@ -238,33 +277,49 @@ function ServerRow(props: { server: ServerResponse }) {
       {
         onSuccess: (result: StartAuthResponse) => {
           window.open(result.authorization_url, '_blank');
+          writeAuthAttempted(props.server.url, true);
+          setAttempted(true);
         },
         onError: () => {
+          writeAuthAttempted(props.server.url, true);
+          setAttempted(true);
           toast.failure('Failed to start authorization');
         },
       }
     );
   };
 
-  const Icon = () => QUICK_CONNECT_ICON_MAP.get(props.server.url);
+  const Icon = (): SvgIcon =>
+    QUICK_CONNECT_ICON_MAP.get(props.server.url) ?? (PlugIcon as SvgIcon);
 
   return (
-    <div class="bg-panel flex items-center gap-4 px-6 py-3">
-      <Show when={Icon()}>
-        {(IconComp) => {
-          const C = IconComp() as SvgIcon;
-          return <C class="size-5 shrink-0 text-accent" />;
-        }}
-      </Show>
+    <div class="bg-panel flex items-center gap-4 @max-[480px]:gap-2 px-6 @max-[480px]:px-3 py-3">
+      {(() => {
+        const C = Icon();
+        return <C class="size-5 shrink-0 text-accent" />;
+      })()}
       <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium text-ink truncate">
-          {props.server.server_name}
+        <div class="flex items-center gap-1.5">
+          <span class="min-w-0 truncate text-sm font-medium text-ink">
+            {props.server.server_name}
+          </span>
+          <Show when={props.server.authenticated}>
+            <CheckIcon class="size-3 shrink-0 text-success" />
+          </Show>
+          <Show when={connectionFailed()}>
+            <XIcon class="size-3 shrink-0 text-failure" />
+          </Show>
         </div>
-        <div class="text-xs text-muted truncate">{props.server.url}</div>
+        <div class="text-xs text-ink-muted truncate">{props.server.url}</div>
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
         <Show when={!props.server.authenticated}>
+          <Show when={connectionFailed()}>
+            <span class="text-xs text-failure whitespace-nowrap">
+              Last connection attempt failed
+            </span>
+          </Show>
           <Button
             variant="active"
             size="sm"
@@ -272,21 +327,22 @@ function ServerRow(props: { server: ServerResponse }) {
             disabled={authMutation.isPending}
             onClick={handleAuth}
           >
-            {authMutation.isPending ? 'Connecting...' : 'Connect'}
+            {authMutation.isPending
+              ? 'Connecting...'
+              : connectionFailed()
+                ? 'Try Again'
+                : 'Connect'}
           </Button>
         </Show>
 
         <Show when={props.server.authenticated}>
-          <span class="text-xs text-green-500">Connected</span>
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
+          <ToggleSwitch
+            checked={props.server.enabled}
             disabled={updateMutation.isPending}
-            onClick={handleToggleEnabled}
-          >
-            {props.server.enabled ? 'Disable' : 'Enable'}
-          </Button>
+            onChange={handleToggleEnabled}
+            label={props.server.enabled ? 'Enabled' : 'Disabled'}
+            labelClass="@max-[480px]:hidden inline-block w-14 text-left text-xs text-ink-muted whitespace-nowrap"
+          />
         </Show>
 
         <Show
@@ -317,9 +373,12 @@ function ServerRow(props: { server: ServerResponse }) {
             variant="base"
             size="sm"
             depth={3}
+            tooltip="Remove"
+            class="@max-[480px]:border-transparent"
             onClick={() => setConfirmDelete(true)}
           >
-            Remove
+            <span class="@max-[480px]:hidden">Remove</span>
+            <XIcon class="hidden size-4 @max-[480px]:block" />
           </Button>
         </Show>
       </div>
@@ -330,24 +389,16 @@ function ServerRow(props: { server: ServerResponse }) {
 function Connectors() {
   const serversQuery = useMcpServersQuery();
   const [showAddDialog, setShowAddDialog] = createSignal(false);
+  const hasServers = () => (serversQuery.data?.length ?? 0) > 0;
 
   return (
-    <div class="px-6 py-4 flex flex-col gap-4">
-      <div class="flex items-center justify-between gap-4">
+    <div class="@container">
+    <div class="px-6 @max-[480px]:px-2 py-4 flex flex-col gap-4">
+      <Show when={!hasServers()}>
         <div class="text-sm">
           Connect the Macro agent to external MCP servers
         </div>
-        <Button
-          variant="active"
-          size="sm"
-          depth={3}
-          class="shrink-0"
-          onClick={() => { setShowAddDialog(true) }}
-        >
-          <PlusIcon class="size-4" />
-          Add Server
-        </Button>
-      </div>
+      </Show>
 
       <Show when={serversQuery.isLoading}>
         <div class="text-sm text-ink-muted py-8 text-center">Loading...</div>
@@ -378,7 +429,7 @@ function Connectors() {
               </div>
             }
           >
-            <div class="grid gap-px bg-edge-muted rounded-sm overflow-hidden border border-edge-muted">
+            <div class="flex flex-col rounded-sm overflow-hidden border border-edge-muted settings-row-dividers @max-[480px]:[&>*:not(:last-child)]:after:inset-x-3">
               <For each={servers()}>
                 {(server) => <ServerRow server={server} />}
               </For>
@@ -387,11 +438,24 @@ function Connectors() {
         )}
       </Show>
 
+      <div class="flex justify-center">
+        <Button
+          variant="active"
+          size="sm"
+          depth={3}
+          onClick={() => setShowAddDialog(true)}
+        >
+          <PlusIcon class="size-4" />
+          Add Server
+        </Button>
+      </div>
+
       <AddServerForm
         open={showAddDialog()}
         onOpenChange={setShowAddDialog}
         existingUrls={new Set(serversQuery.data?.map((s) => s.url) ?? [])}
       />
+    </div>
     </div>
   );
 }
@@ -399,7 +463,7 @@ function Connectors() {
 function McpServer() {
   return (
     <div class="px-6">
-      <div class="text-sm py-4"> Connect agents to Macro </div>
+      <div class="text-sm py-4"> Connect agents to Macro's MCP Server </div>
       <McpSetupCards class="max-w-none" />
     </div>
   );

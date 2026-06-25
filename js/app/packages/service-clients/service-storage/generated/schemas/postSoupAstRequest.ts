@@ -8,6 +8,9 @@ import type { ApiEntityFilterAst } from './apiEntityFilterAst';
 import type { Params } from './params';
 import type { PostSoupAstRequestAllOf } from './postSoupAstRequestAllOf';
 
+/**
+ * Request body for the AST soup endpoint.
+ */
 export type PostSoupAstRequest = ApiEntityFilterAst &
   Params &
   PostSoupAstRequestAllOf;

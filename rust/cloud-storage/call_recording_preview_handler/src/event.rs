@@ -4,6 +4,7 @@ use anyhow::{Context, bail};
 use aws_lambda_events::event::s3::{S3Event, S3EventRecord};
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use lambda_runtime::{Error, LambdaEvent};
+use macro_env_var::env_vars;
 use sqlx::{PgPool, Postgres};
 use tracing::Instrument;
 
@@ -21,6 +22,10 @@ pub struct HandlerConfig {
     presigned_url_duration: Duration,
 }
 
+env_vars! {
+    pub struct CallRecordingBucketName;
+}
+
 impl HandlerConfig {
     /// Builds handler configuration from environment variables.
     ///
@@ -34,9 +39,10 @@ impl HandlerConfig {
         let ffprobe_path = std::env::var_os("FFPROBE_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/opt/bin/ffprobe"));
-        let default_bucket_name = std::env::var("CALL_RECORDING_BUCKET_NAME")
+        let default_bucket_name = CallRecordingBucketName::new()
             .ok()
-            .filter(|bucket| !bucket.trim().is_empty());
+            .filter(|bucket| !bucket.trim().is_empty())
+            .map(|d| d.to_string());
 
         Self {
             ffmpeg_path,

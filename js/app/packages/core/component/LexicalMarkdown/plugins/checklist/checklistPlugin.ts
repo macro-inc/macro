@@ -3,7 +3,7 @@ import {
   $insertList,
   $isListItemNode,
   INSERT_CHECK_LIST_COMMAND,
-  type ListItemNode,
+  ListItemNode,
 } from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -122,6 +122,27 @@ function registerMouseEvents(editor: LexicalEditor) {
   });
 }
 
+function removeChecklistItemTabIndex(editor: LexicalEditor, nodeKey: string) {
+  const element = editor.getElementByKey(nodeKey);
+  if (element?.getAttribute('role') === 'checkbox') {
+    element.removeAttribute('tabindex');
+  }
+}
+
+function registerChecklistTabIndexGuard(editor: LexicalEditor) {
+  return editor.registerMutationListener(
+    ListItemNode,
+    (mutations) => {
+      for (const [nodeKey, mutation] of mutations) {
+        if (mutation !== 'destroyed') {
+          removeChecklistItemTabIndex(editor, nodeKey);
+        }
+      }
+    },
+    { skipInitialization: false }
+  );
+}
+
 /**
  * Toggle the check boxes in a selection.
  */
@@ -179,6 +200,7 @@ function registerChecklistPlugin(editor: LexicalEditor) {
       COMMAND_PRIORITY_LOW
     ),
     registerMouseEvents(editor),
+    registerChecklistTabIndexGuard(editor),
     editor.registerCommand(
       KEY_ENTER_COMMAND,
       (e) => {

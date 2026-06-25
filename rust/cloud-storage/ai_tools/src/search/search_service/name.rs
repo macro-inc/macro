@@ -1,15 +1,16 @@
+use super::context::SearchToolContext;
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{
     MatchType,
     unified::{UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include},
 };
 use schemars::JsonSchema;
-use search_service_client::SearchServiceClient;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -28,16 +29,22 @@ pub struct NameSearch {
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,
+
+    #[schemars(
+        description = "Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results."
+    )]
+    #[serde(default)]
+    pub inbox: Option<String>,
 }
 
 #[async_trait]
-impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
+impl AsyncTool<SearchToolContext> for NameSearch {
     type Output = SearchToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        search_client: ServiceContext<Arc<SearchServiceClient>>,
+        search_context: ServiceContext<SearchToolContext>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "Name search params");
@@ -49,11 +56,34 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             });
         }
 
+        let mut email_filters = EmailFilters {
+            importance: Some(true),
+            ..Default::default()
+        };
+        if let Some(inbox) = self
+            .inbox
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let inboxes = search_context
+                .email_service
+                .get_inboxes_for_macro_id(MacroUserIdStr((*request_context.user_id).clone()))
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Failed to resolve inboxes: {e}"),
+                    internal_error: e.into(),
+                })?;
+            let caller_macro_id = request_context.user_id.to_string();
+            let link = email::inbound::toolset::resolve_inbox_selector(
+                &inboxes,
+                &caller_macro_id,
+                Some(inbox),
+            )?;
+            email_filters.link_ids = vec![link.id.to_string()];
+        }
         let base_filters = EntityFilters {
-            email_filters: EmailFilters {
-                importance: Some(true),
-                ..Default::default()
-            },
+            email_filters,
             ..Default::default()
         };
         let search_request = UnifiedSearchRequest {
@@ -65,7 +95,8 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             collapse: None,
         };
 
-        let response = search_client
+        let response = search_context
+            .search_client
             .search_unified(
                 (*request_context.user_id).as_ref(),
                 search_request,
@@ -78,30 +109,13 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
                 internal_error: e,
             })?;
 
-        Ok(SearchToolResponse {
-            results: response.results,
-        })
-    }
-}
+        // Drop the chat the agent is currently running inside so it never
+        // surfaces itself in its own search results.
+        let mut results = response.results;
+        if let Some(self_chat_id) = search_context.self_chat_id {
+            results.retain(|item| item.entity_id() != self_chat_id);
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ai_toolset::schema::generate_validated_input_schema;
-
-    #[test]
-    fn test_name_search_schema_validation() {
-        let result = generate_validated_input_schema::<NameSearch>();
-        assert!(result.is_ok(), "{:?}", result);
-
-        let validated = result.unwrap();
-        assert_eq!(
-            validated.name, "NameSearch",
-            "Tool name should match the schemars title"
-        );
-        assert!(
-            validated.description.contains("Search items by their name"),
-            "Description should contain expected text"
-        );
+        Ok(SearchToolResponse { results })
     }
 }

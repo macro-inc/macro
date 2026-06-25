@@ -19,11 +19,13 @@ mod expanded;
 pub mod grouping;
 mod unexpanded;
 
+/// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,
 }
 
 impl PgSoupRepo {
+    /// Creates a PostgreSQL soup repository using the provided read-only pool.
     pub fn new(pool: ReadOnlyPool) -> Self {
         PgSoupRepo { pool }
     }
@@ -200,6 +202,7 @@ pub(crate) async fn populate_properties(
             SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
             // Channels, calls, CRM companies, and foreign entities are not in entity_properties.
             SoupItem::Channel(_)
+            | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
             | SoupItem::CrmCompany(_)
             | SoupItem::ForeignEntity(_) => None,
@@ -213,6 +216,7 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
                 SoupItem::Channel(_)
+                | SoupItem::ChannelThread(_)
                 | SoupItem::Call(_)
                 | SoupItem::CrmCompany(_)
                 | SoupItem::ForeignEntity(_) => {}
