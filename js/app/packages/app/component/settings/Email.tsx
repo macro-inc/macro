@@ -37,7 +37,7 @@ import {
 } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
-import { ConnectAction, IntegrationButton, StatusDot } from './integration-ui';
+import { ConnectAction, StatusDot } from './integration-ui';
 
 /**
  * Gmail integration as a single Connected-accounts card: a header row with the
@@ -53,11 +53,7 @@ export function EmailCard() {
   });
   const guardAddInbox = useAddInboxGate();
 
-  const {
-    query: emailLinksQuery,
-    disconnect: disconnectEmail,
-    resyncInbox,
-  } = useEmailLinks();
+  const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
 
@@ -92,7 +88,6 @@ export function EmailCard() {
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  const [showDisableDialog, setShowDisableDialog] = createSignal(false);
   const [isEmailActionPending, setIsEmailActionPending] = createSignal(false);
 
   // The primary inbox is the user's own is_primary link; it sorts to the top
@@ -115,19 +110,6 @@ export function EmailCard() {
     } finally {
       setIsEmailActionPending(false);
     }
-  };
-
-  const onDisconnectEmail = async () => {
-    if (isEmailActionPending()) return;
-    setIsEmailActionPending(true);
-    await disconnectEmail().match(
-      () => {
-        setShowDisableDialog(false);
-        toast.success('Email disabled — clearing your data.');
-      },
-      () => toast.failure('Failed to disable email. Please try again.')
-    );
-    setIsEmailActionPending(false);
   };
 
   const handleResyncInbox = async (linkId: string) => {
@@ -230,25 +212,19 @@ export function EmailCard() {
               label="Add another inbox"
               description="Connect more Gmail accounts."
             >
-              <IntegrationButton
-                onClick={() => guardAddInbox(openAddInboxDialog)}
-              >
-                <PlusIcon class="size-4" />
-                Add inbox
-              </IntegrationButton>
+              <Tooltip label="Add inbox">
+                <Button
+                  variant="base"
+                  size="icon-sm"
+                  depth={3}
+                  aria-label="Add inbox"
+                  onClick={() => guardAddInbox(openAddInboxDialog)}
+                >
+                  <PlusIcon class="size-4" />
+                </Button>
+              </Tooltip>
             </SettingsRow>
           </Show>
-          <SettingsRow
-            label="Disconnect Gmail"
-            description="Clears all email data from Macro."
-          >
-            <ConnectAction
-              label="Disconnect"
-              variant="danger"
-              onClick={() => setShowDisableDialog(true)}
-              disabled={isEmailActionPending()}
-            />
-          </SettingsRow>
         </Show>
       </SettingsCard>
 
@@ -295,45 +271,6 @@ export function EmailCard() {
               </Button>
               <Button variant="danger" depth={3} onClick={handleRemoveInbox}>
                 Remove
-              </Button>
-            </div>
-          </Panel.Body>
-        </Panel>
-      </Dialog>
-
-      <Dialog
-        open={showDisableDialog()}
-        onOpenChange={setShowDisableDialog}
-        position="center"
-        class="w-120"
-      >
-        <Panel active depth={2} class="rounded-xl">
-          <Panel.Header class="px-6">
-            <Dialog.Title class="text-ink text-sm font-semibold">
-              Disconnect email
-            </Dialog.Title>
-          </Panel.Header>
-          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-              Disconnecting will clear all email data from Macro. This cannot be
-              undone.
-            </Dialog.Description>
-            <div class="pt-3 justify-end items-center gap-3 inline-flex">
-              <Button
-                variant="base"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={() => setShowDisableDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={onDisconnectEmail}
-              >
-                Disconnect
               </Button>
             </div>
           </Panel.Body>
@@ -517,7 +454,7 @@ function InboxRow(props: {
           <Tooltip label="Force sync">
             <Button
               variant="base"
-              size="sm"
+              size="icon-sm"
               depth={3}
               disabled={
                 props.resyncing ||
@@ -534,7 +471,7 @@ function InboxRow(props: {
         <Tooltip label="Remove inbox">
           <Button
             variant="base"
-            size="sm"
+            size="icon-sm"
             depth={3}
             onClick={props.onRemove}
             aria-label={`Remove ${props.link.email_address}`}

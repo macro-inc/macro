@@ -1,6 +1,5 @@
-import { Button } from '@ui';
 import { cn } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 
@@ -69,29 +68,5 @@ export function StatusDot(props: { state: ConnectionState; label?: string }) {
         props.state === 'disconnected' && 'bg-ink-muted'
       )}
     />
-  );
-}
-
-/**
- * Inline secondary button used inside integration cards for compact actions
- * (Reconnect, Add inbox, …). Thin wrapper over Button so callers don't repeat
- * the size/depth/rounding each time.
- */
-export function IntegrationButton(props: {
-  children: JSX.Element;
-  onClick: () => void;
-  disabled?: boolean;
-  variant?: 'base' | 'cta' | 'danger';
-}) {
-  return (
-    <Button
-      variant={props.variant ?? 'base'}
-      size="sm"
-      depth={3}
-      disabled={props.disabled}
-      onClick={() => props.onClick()}
-    >
-      {props.children}
-    </Button>
   );
 }
