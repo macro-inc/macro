@@ -111,7 +111,7 @@ function ActorIcon() {
       : 0;
 
   return (
-    <InboxItem.Icon class="size-9 self-center">
+    <InboxItem.Icon class="size-9 self-start">
       <span class="relative size-9 shrink-0">
         <Show
           when={channelGroupParticipants().length >= 2 || callGroupCount() >= 2}
@@ -224,7 +224,7 @@ function fallbackEntityIconType(
   type: string | undefined,
   subType?: string
 ): EntityIconSelector | undefined {
-  if (type === 'channel_message') return 'channel';
+  if (type === 'channel_message' || type === 'channel_thread') return 'channel';
   if (type === 'document') return subType === 'task' ? 'task' : 'md';
   if (type === 'crm_contact' || type === 'foreign') return undefined;
   return type as EntityIconSelector | undefined;
@@ -359,7 +359,7 @@ function emailSubject() {
   };
 }
 
-function TitleRow() {
+function TitleRow(props: { nested?: boolean } = {}) {
   const { item } = useInboxItem();
   const type = useNotificationType();
   const title = itemTitle();
@@ -380,6 +380,7 @@ function TitleRow() {
     return channelDisplayName() || macroIdToEmail(id);
   };
   const displayTitle = () => {
+    if (props.nested && type()?.startsWith('channel_')) return undefined;
     if (type() === 'new_email') return subject() || title();
     if (type() === 'document_mention')
       return documentMentionChannelName() || title();
@@ -387,14 +388,21 @@ function TitleRow() {
   };
 
   return (
-    <div class="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
-      <Show when={type() === 'document_mention'} fallback={<EntityTypeIcon />}>
-        <span class="size-3.5 shrink-0">
-          <EntityIcon targetType="channel" size="fill" />
-        </span>
-      </Show>
-      <span class="min-w-0 truncate">{displayTitle()}</span>
-    </div>
+    <Show when={displayTitle()}>
+      {(title) => (
+        <div class="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
+          <Show
+            when={type() === 'document_mention'}
+            fallback={<EntityTypeIcon />}
+          >
+            <span class="size-3.5 shrink-0">
+              <EntityIcon targetType="channel" size="fill" />
+            </span>
+          </Show>
+          <span class="min-w-0 truncate">{title()}</span>
+        </div>
+      )}
+    </Show>
   );
 }
 
@@ -875,8 +883,11 @@ export function InboxItemInlineTypeLayout(
     onClick?: (event: MouseEvent) => void;
     onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
     onToggleExpanded?: () => void;
+    nested?: boolean;
   } = {}
 ) {
+  const { item } = useInboxItem();
+
   return (
     <InboxItem.Content class="min-h-16" onClick={props.onClick}>
       <InboxItem.Leading>
@@ -888,9 +899,13 @@ export function InboxItemInlineTypeLayout(
           <div class="flex min-w-0 flex-col gap-1">
             <ActionRow />
             <div class="flex min-w-0 flex-col">
-              <TitleRow />
+              <TitleRow nested={props.nested} />
               <Description
                 onSelectRelatedDocument={props.onSelectRelatedDocument}
+              />
+              <InboxItem.AttachmentPreviews
+                attachments={item().attachments}
+                class="mt-1"
               />
             </div>
           </div>

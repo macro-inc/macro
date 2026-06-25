@@ -51,6 +51,7 @@ import {
   type InboxRelatedDocument,
 } from './InboxItem';
 import { InboxItemActionLocationLayout } from './layouts/InboxItemActionLocationLayout';
+import { InboxItemActionLocationThirdRowLayout } from './layouts/InboxItemActionLocationThirdRowLayout';
 import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
 import {
   notificationAction,
@@ -70,6 +71,7 @@ type InboxSourceItem = {
   entity: EntityData;
   notification: UnifiedNotification;
   relatedDocuments?: InboxRelatedDocument[];
+  attachments?: InboxItemData['attachments'];
 };
 
 type InboxDateGroup = {
@@ -86,7 +88,10 @@ type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
 type ReadFilter = 'all' | 'unread' | 'read';
 type InboxMode = 'signal' | 'noise' | 'all';
-type InboxLayoutMode = 'inline' | 'action-location';
+type InboxLayoutMode =
+  | 'inline'
+  | 'action-location'
+  | 'action-location-third-row';
 
 type DevNotificationFilter = {
   id: string;
@@ -148,6 +153,31 @@ const notificationSubType = (notification: UnifiedNotification) => {
   return subTypeName(content.subType);
 };
 
+const channelItemAttachments = (
+  entity: EntityData | undefined,
+  notification: UnifiedNotification
+): InboxItemData['attachments'] => {
+  if (entity?.type !== 'channel_thread') return undefined;
+
+  const content = notification.notification_metadata.content as
+    | { messageId?: string; threadId?: string }
+    | undefined;
+  const messageId = content?.messageId;
+
+  if (messageId) {
+    if (messageId === entity.messageId || messageId === entity.threadId) {
+      return entity.attachments;
+    }
+
+    const reply = entity.thread.preview.find((reply) => reply.id === messageId);
+    if (reply) return reply.attachments;
+  }
+
+  if (content?.threadId === entity.threadId) return entity.attachments;
+
+  return entity.attachments;
+};
+
 const taskProperties = (entity: EntityData | undefined) => {
   if (entity?.type !== 'document') return undefined;
   if (!('properties' in entity) || !entity.properties?.length) {
@@ -167,6 +197,7 @@ const transformNotificationItem = (args: {
   notification: UnifiedNotification;
   entity?: EntityData;
   relatedDocuments?: InboxRelatedDocument[];
+  attachments?: InboxItemData['attachments'];
   callStatuses?: string[];
   subItems?: InboxItemData[];
 }): InboxItemData => {
@@ -190,7 +221,9 @@ const transformNotificationItem = (args: {
         : notificationSubType(args.notification),
     entityName: title,
     channelType:
-      args.entity?.type === 'channel_message' || args.entity?.type === 'channel'
+      args.entity?.type === 'channel_message' ||
+      args.entity?.type === 'channel_thread' ||
+      args.entity?.type === 'channel'
         ? args.entity.channelType
         : undefined,
     senderId: args.notification.sender_id ?? undefined,
@@ -199,12 +232,16 @@ const transformNotificationItem = (args: {
     targetName: title,
     content:
       notificationContent(args.notification) ||
-      (args.entity?.type === 'channel_message' ? args.entity.content : ''),
+      (args.entity?.type === 'channel_message' ||
+      args.entity?.type === 'channel_thread'
+        ? args.entity.content
+        : ''),
     properties:
       metadata.tag === 'task_assigned'
         ? taskProperties(args.entity)
         : undefined,
     relatedDocuments: args.relatedDocuments,
+    attachments: args.attachments,
     callStatuses: args.callStatuses,
     timestamp: args.notification.created_at ?? args.notification.updated_at,
     unread: !args.notification.viewed_at && !args.notification.done,
@@ -287,6 +324,11 @@ const getInboxSourceItemGroupKey = (item: InboxSourceItem) => {
   return getInboxItemGroupKey(item.notification);
 };
 
+const inboxSourceItemAttachments = (item: InboxSourceItem) =>
+  item.attachments ??
+  channelItemAttachments(item.entity, item.notification) ??
+  [];
+
 const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
   const groups: InboxSourceItem[][] = [];
   const rootChannelGroups = new Map<string, InboxSourceItem[]>();
@@ -335,6 +377,7 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
           : `notification:${root.notification.id}`,
       notification: root.notification,
       entity: root.entity,
+      attachments: inboxSourceItemAttachments(root),
       relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
       callStatuses:
         root.entity.type === 'call'
@@ -349,6 +392,7 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
                 id: `notification:${item.notification.id}`,
                 notification: item.notification,
                 entity: item.entity,
+                attachments: inboxSourceItemAttachments(item),
               })
             )
           : undefined,
@@ -433,6 +477,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
         documentId: [],
         threadId: [],
         channelId: [],
+        channelThreadId: [],
         chatId: [],
         callId: [],
         foreignEntityRecordId: [],
@@ -449,6 +494,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
         emailDone: false,
         emailImportance: false,
         channelDone: false,
+        channelThreadId: [],
         chatDone: false,
         callId: [],
         folderDone: false,
@@ -468,6 +514,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
       emailImportance: true,
       emailUpdatedAt: { gte: twoWeeksAgo },
       channelDone: false,
+      channelThreadId: [],
       chatDone: false,
       chatUpdatedAt: { gte: twoWeeksAgo },
       callId: [],
@@ -506,6 +553,36 @@ const getChannelPreviewEntity = (
       ? metadata.content.userId
       : (notification.sender_id ?? undefined);
   const date = getNotificationDateValue(notification);
+
+  if (metadata.tag === 'channel_message_reply' && metadata.content.threadId) {
+    const threadId = metadata.content.threadId;
+    return {
+      id: threadId,
+      type: 'channel_thread',
+      name: metadata.content.channelName ?? 'Channel',
+      ownerId: '',
+      createdAt: date,
+      updatedAt: date,
+      channelId: notification.entity_id,
+      channelName: metadata.content.channelName ?? 'Channel',
+      channelType:
+        channelType === 'direct_message' ? 'direct_message' : channelType,
+      messageId: threadId,
+      threadId,
+      senderId: senderId ?? '',
+      sender: {
+        id: senderId ?? '',
+        type: 'user',
+      },
+      content: metadata.content.messageContent ?? '',
+      attachments: [],
+      reactions: [],
+      thread: {
+        replyCount: 0,
+        preview: [],
+      },
+    } as EntityData;
+  }
 
   return {
     id: metadata.content.messageId,
@@ -975,11 +1052,23 @@ function NotificationInboxList(props: {
                           size="sm"
                           variant="base"
                         >
-                          {props.layoutMode === 'inline' ? 'Inline' : 'Action'}
+                          {props.layoutMode === 'inline'
+                            ? 'Inline'
+                            : props.layoutMode === 'action-location-third-row'
+                              ? 'Action third row'
+                              : 'Action'}
                         </Dropdown.Trigger>
                         <Dropdown.Content>
                           <Dropdown.Group>
-                            <For each={['inline', 'action-location'] as const}>
+                            <For
+                              each={
+                                [
+                                  'inline',
+                                  'action-location',
+                                  'action-location-third-row',
+                                ] as const
+                              }
+                            >
                               {(mode) => (
                                 <Dropdown.Item
                                   class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
@@ -989,7 +1078,9 @@ function NotificationInboxList(props: {
                                 >
                                   {mode === 'inline'
                                     ? 'Inline'
-                                    : 'Action/location'}
+                                    : mode === 'action-location-third-row'
+                                      ? 'Action/location third row'
+                                      : 'Action/location'}
                                 </Dropdown.Item>
                               )}
                             </For>
@@ -1147,9 +1238,10 @@ function NotificationInboxList(props: {
                     selected={props.selectedItem?.id === row.item.id}
                   >
                     <Show
-                      when={props.layoutMode === 'action-location'}
+                      when={props.layoutMode !== 'inline'}
                       fallback={
                         <InboxItemInlineTypeLayout
+                          nested={row.depth > 0}
                           onClick={onItemClick}
                           onSelectRelatedDocument={onSelectRelatedDocument}
                           onToggleExpanded={() =>
@@ -1158,14 +1250,28 @@ function NotificationInboxList(props: {
                         />
                       }
                     >
-                      <InboxItemActionLocationLayout
-                        nested={row.depth > 0}
-                        onClick={onItemClick}
-                        onSelectRelatedDocument={onSelectRelatedDocument}
-                        onToggleExpanded={() =>
-                          setExpanded(row.item, !isExpanded(row.item))
+                      <Show
+                        when={props.layoutMode === 'action-location-third-row'}
+                        fallback={
+                          <InboxItemActionLocationLayout
+                            nested={row.depth > 0}
+                            onClick={onItemClick}
+                            onSelectRelatedDocument={onSelectRelatedDocument}
+                            onToggleExpanded={() =>
+                              setExpanded(row.item, !isExpanded(row.item))
+                            }
+                          />
                         }
-                      />
+                      >
+                        <InboxItemActionLocationThirdRowLayout
+                          nested={row.depth > 0}
+                          onClick={onItemClick}
+                          onSelectRelatedDocument={onSelectRelatedDocument}
+                          onToggleExpanded={() =>
+                            setExpanded(row.item, !isExpanded(row.item))
+                          }
+                        />
+                      </Show>
                     </Show>
                   </InboxItem.Root>
                 </div>
@@ -1214,6 +1320,39 @@ export function NotificationInbox2() {
     const seen = new Set<string>();
     const items: InboxSourceItem[] = [];
     const notificationsByEntity = notificationSource.notificationsByEntity();
+    const channelThreadsById = new Map(
+      entities
+        .filter((entity) => entity.type === 'channel_thread')
+        .map((entity) => [entity.threadId, entity])
+    );
+    const channelThreadsByReplyId = new Map(
+      entities
+        .filter((entity) => entity.type === 'channel_thread')
+        .flatMap((entity) =>
+          entity.thread.preview.map((reply) => [reply.id, entity] as const)
+        )
+    );
+    const notificationAttachments = (
+      entity: EntityData,
+      notification: UnifiedNotification
+    ): InboxItemData['attachments'] => {
+      const direct = channelItemAttachments(entity, notification);
+      if (direct?.length) return direct;
+
+      const content = notification.notification_metadata.content as
+        | { threadId?: string; messageId?: string }
+        | undefined;
+      const thread =
+        (content?.threadId
+          ? channelThreadsById.get(content.threadId)
+          : undefined) ??
+        (content?.messageId
+          ? (channelThreadsById.get(content.messageId) ??
+            channelThreadsByReplyId.get(content.messageId))
+          : undefined);
+
+      return thread ? channelItemAttachments(thread, notification) : undefined;
+    };
 
     for (const entity of entities) {
       const keys = new Set([
@@ -1246,14 +1385,32 @@ export function NotificationInbox2() {
             return content?.messageId === entity.messageId;
           }
 
+          if (entity.type === 'channel_thread') {
+            const content = notification.notification_metadata.content as
+              | { threadId?: string; messageId?: string }
+              | undefined;
+            return (
+              content?.threadId === entity.threadId ||
+              content?.messageId === entity.messageId
+            );
+          }
+
           return true;
         }
       );
 
       for (const notification of matchingNotifications) {
-        if (notification.deleted_at || seen.has(notification.id)) continue;
-        seen.add(notification.id);
-        items.push({ entity, notification });
+        const seenKey =
+          entity.type === 'channel_thread'
+            ? `channel_thread:${entity.id}:${notification.id}`
+            : notification.id;
+        if (notification.deleted_at || seen.has(seenKey)) continue;
+        seen.add(seenKey);
+        items.push({
+          entity,
+          notification,
+          attachments: notificationAttachments(entity, notification),
+        });
       }
     }
 

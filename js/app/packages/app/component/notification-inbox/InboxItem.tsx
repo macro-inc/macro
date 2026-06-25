@@ -1,6 +1,10 @@
+import { mapMediaItems } from '@channel/Media/media-items';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { UserIcon } from '@core/component/UserIcon';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '@entity';
+import { stringToItemType } from '@service-storage/client';
+import type { SoupMessageAttachment } from '@service-storage/generated/schemas';
 import type { UnifiedNotification } from '@notifications/types';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
@@ -9,6 +13,7 @@ import { format } from 'date-fns';
 import {
   type Accessor,
   createContext,
+  createMemo,
   For,
   type JSX,
   Show,
@@ -51,6 +56,7 @@ export interface InboxItem {
   content?: string;
   properties?: PropertyT[];
   relatedDocuments?: InboxRelatedDocument[];
+  attachments?: SoupMessageAttachment[];
   callStatuses?: string[];
   breadcrumb?: string[];
   subItems?: InboxItem[];
@@ -286,6 +292,76 @@ function formatTimestamp(value: JSX.Element) {
   if (Number.isNaN(date.getTime())) return value;
 
   return format(date, 'p');
+}
+
+function AttachmentPreviewTile(props: { attachment: SoupMessageAttachment }) {
+  const mediaItem = () => mapMediaItems([props.attachment])[0];
+
+  return (
+    <Show
+      when={mediaItem()}
+      fallback={
+        <ItemPreview
+          id={props.attachment.entity_id}
+          type={stringToItemType(props.attachment.entity_type)}
+        />
+      }
+    >
+      {(item) => (
+        <Show
+          when={item().kind === 'image'}
+          fallback={
+            <video
+              class="size-12 rounded-lg border border-edge object-cover"
+              muted
+              playsinline
+              preload="metadata"
+              src={item().src}
+            />
+          }
+        >
+          <img
+            alt="Attachment preview"
+            class="size-12 rounded-lg border border-edge object-cover"
+            loading="lazy"
+            src={item().thumbSrc ?? item().src}
+          />
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+function AttachmentPreviews(props: {
+  attachments?: SoupMessageAttachment[];
+  class?: string;
+}) {
+  const visibleAttachments = createMemo(() =>
+    (props.attachments ?? []).slice(0, 4)
+  );
+  const overflowCount = createMemo(() =>
+    Math.max((props.attachments?.length ?? 0) - visibleAttachments().length, 0)
+  );
+
+  return (
+    <Show when={props.attachments?.length}>
+      <div
+        class={cn(
+          'flex max-w-full flex-wrap items-center gap-1.5',
+          props.class
+        )}
+      >
+        <For each={visibleAttachments()}>
+          {(attachment) => <AttachmentPreviewTile attachment={attachment} />}
+        </For>
+        <Show when={overflowCount() > 0}>
+          <div class="grid size-12 place-items-center rounded-lg border border-edge bg-surface text-xs font-medium text-ink-muted">
+            +{overflowCount()}
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
 }
 
 function Timestamp(props: SlotProps) {
@@ -528,6 +604,7 @@ export const InboxItem = {
   Body,
   Header,
   Sender,
+  AttachmentPreviews,
   Timestamp,
   Content,
   Link,

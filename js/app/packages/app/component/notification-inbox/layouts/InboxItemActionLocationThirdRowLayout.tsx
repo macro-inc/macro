@@ -221,61 +221,55 @@ function locationText(nested?: boolean) {
   const { item } = useInboxItem();
   const github = githubLocation();
   const isDirectMessage = isDirectMessageChannel();
-  return () => {
-    if (
-      nested ||
-      isDirectMessage() ||
-      notificationTag()() === 'task_assigned'
-    ) {
-      return undefined;
-    }
-    if (item().entityType === 'email' || notificationTag()() === 'new_email') {
-      return undefined;
-    }
-    if (item().entityType === 'channel')
-      return item().targetName ?? item().entityName;
-    if (item().notification?.notification_metadata.tag?.startsWith('github_')) {
-      return github() ?? item().targetName ?? item().entityName;
-    }
+
+  if (nested || isDirectMessage() || notificationTag()() === 'task_assigned') {
+    return undefined;
+  }
+  if (item().entityType === 'email' || notificationTag()() === 'new_email') {
+    return undefined;
+  }
+  if (item().entityType === 'channel')
     return item().targetName ?? item().entityName;
-  };
+  if (item().notification?.notification_metadata.tag?.startsWith('github_')) {
+    return github() ?? item().targetName ?? item().entityName;
+  }
+
+  return item().targetName ?? item().entityName;
 }
 
 function actionText(nested?: boolean) {
   const tag = notificationTag();
   const { item } = useInboxItem();
-  return () => {
-    switch (tag()) {
-      case 'channel_mention':
-        return nested ? 'mentioned you' : 'mentioned you in';
-      case 'channel_message_reply':
-        return 'replied';
-      case 'channel_message_send':
-        return 'sent a message';
-      case 'document_mention':
-        return 'shared';
-      case 'mentioned_in_document_comment':
-        return nested ? 'mentioned you' : 'mentioned you in';
-      case 'replied_to_document_comment_thread':
-        return nested ? 'replied' : 'replied in';
-      case 'new_email':
-        return 'sent an email';
-      case 'task_assigned':
-        return 'assigned you a task';
-      case 'ai_response':
-        return 'responded';
-      case 'github_pr_status_changed': {
-        const content = item().notification?.notification_metadata.content as
-          | { status?: string }
-          | undefined;
-        return content?.status === 'merged'
-          ? 'merged a PR'
-          : (item().action ?? 'updated');
-      }
-      default:
-        return item().action ?? 'updated';
+  switch (tag()) {
+    case 'channel_mention':
+      return nested ? 'mentioned you' : 'mentioned you in';
+    case 'channel_message_reply':
+      return 'replied';
+    case 'channel_message_send':
+      return 'sent a message';
+    case 'document_mention':
+      return 'shared';
+    case 'mentioned_in_document_comment':
+      return nested ? 'mentioned you' : 'mentioned you in';
+    case 'replied_to_document_comment_thread':
+      return nested ? 'replied' : 'replied in';
+    case 'new_email':
+      return 'sent an email';
+    case 'task_assigned':
+      return 'assigned you a task';
+    case 'ai_response':
+      return 'responded';
+    case 'github_pr_status_changed': {
+      const content = item().notification?.notification_metadata.content as
+        | { status?: string }
+        | undefined;
+      return content?.status === 'merged'
+        ? 'merged a PR'
+        : (item().action ?? 'updated');
     }
-  };
+    default:
+      return item().action ?? 'updated';
+  }
 }
 
 function emailSubject() {
@@ -304,28 +298,34 @@ function contentText(groupRoot?: boolean) {
   const { item } = useInboxItem();
   const subject = emailSubject();
   const prTitle = githubTitle();
-  return () => {
-    if (groupRoot) {
-      return item().content || item().entityName || item().targetName;
-    }
-    if (item().notification?.notification_metadata.tag === 'new_email') {
-      return (
-        subject() || item().entityName || item().targetName || item().content
-      );
-    }
-    if (item().notification?.notification_metadata.tag === 'document_mention') {
-      return item().entityName || item().targetName || item().content;
-    }
-    if (item().notification?.notification_metadata.tag === 'task_assigned') {
-      return item().entityName || item().targetName || item().content;
-    }
-    if (item().notification?.notification_metadata.tag?.startsWith('github_')) {
-      return (
-        prTitle() || item().entityName || item().targetName || item().content
-      );
-    }
+  if (groupRoot) {
     return item().content || item().entityName || item().targetName;
-  };
+  }
+  if (item().notification?.notification_metadata.tag === 'new_email') {
+    return (
+      subject() || item().entityName || item().targetName || item().content
+    );
+  }
+  if (item().notification?.notification_metadata.tag === 'document_mention') {
+    return item().entityName || item().targetName || item().content;
+  }
+  if (item().notification?.notification_metadata.tag === 'task_assigned') {
+    return item().entityName || item().targetName || item().content;
+  }
+  if (item().notification?.notification_metadata.tag?.startsWith('github_')) {
+    return (
+      prTitle() || item().entityName || item().targetName || item().content
+    );
+  }
+
+  if (
+    item().entityType === 'channel' ||
+    item().entityType === 'channel_thread'
+  ) {
+    return;
+  }
+
+  return item().content || item().entityName || item().targetName || undefined;
 }
 
 function formatRelativeInboxTimestamp(value: string) {
@@ -478,10 +478,10 @@ function RowLayout(props: {
   nested?: boolean;
   onToggleExpanded?: () => void;
 }) {
-  const { item, unread, selected } = useInboxItem();
-  const location = locationText(props.nested);
-  const action = actionText(props.nested);
-  const content = contentText(props.groupRoot);
+  const { item, unread, selected, expanded } = useInboxItem();
+  const location = () => locationText(props.nested);
+  const action = () => actionText(props.nested);
+  const content = () => contentText(props.groupRoot);
   const senderName = useSenderName();
   const count = groupCount();
   const unreadCount = groupUnreadCount();
@@ -552,11 +552,19 @@ function RowLayout(props: {
                     </>
                   }
                 >
-                  <span class="min-w-0 flex-1 truncate font-medium">
-                    {displayLocation() ??
+                  <Show
+                    when={
+                      displayLocation() ??
                       item().targetName ??
-                      item().entityName}
-                  </span>
+                      item().entityName
+                    }
+                  >
+                    {(content) => (
+                      <span class="min-w-0 flex-1 truncate font-medium">
+                        {content()}
+                      </span>
+                    )}
+                  </Show>
                 </Show>
                 <Show
                   when={badgeCount() || (!props.groupRoot && item().unread)}
@@ -634,18 +642,36 @@ function RowLayout(props: {
                     </For>
                   </span>
                 </Show>
-                <Show when={item().timestamp}>
-                  <span class="ml-auto flex shrink-0 items-center gap-1.5">
-                    <InboxItem.Timestamp>
-                      {formatRelativeInboxTimestamp(item().timestamp ?? '')}
-                    </InboxItem.Timestamp>
-                  </span>
-                </Show>
               </div>
               <InboxItem.AttachmentPreviews
                 attachments={item().attachments}
                 class="mt-1"
               />
+              <Show when={item().timestamp || props.groupRoot}>
+                <div class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+                  <Show when={item().timestamp}>
+                    <InboxItem.Timestamp>
+                      {formatRelativeInboxTimestamp(item().timestamp ?? '')}
+                    </InboxItem.Timestamp>
+                  </Show>
+                  <Show when={item().timestamp && props.groupRoot}>
+                    <span aria-hidden="true">•</span>
+                  </Show>
+                  <Show when={props.groupRoot}>
+                    <button
+                      type="button"
+                      class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        props.onToggleExpanded?.();
+                      }}
+                    >
+                      {expanded() ? 'Hide sub items' : 'Show sub items'}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           </div>
         </InboxItem.Body>
@@ -654,7 +680,7 @@ function RowLayout(props: {
   );
 }
 
-export function InboxItemActionLocationLayout(props: {
+export function InboxItemActionLocationThirdRowLayout(props: {
   onClick?: (event: MouseEvent) => void;
   onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
   onToggleExpanded?: () => void;
