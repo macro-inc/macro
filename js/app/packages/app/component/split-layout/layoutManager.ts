@@ -183,22 +183,36 @@ function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
 }
 
-// Find the history index of the entry matching `predicate`, preferring the
-// closest match looking backward from the current index (the common back case),
-// then forward. Excludes the current index. Returns -1 if none match.
+// Find the history index of the entry matching `predicate`, excluding the
+// current index. Returns -1 if none match. By default prefers the nearest
+// backward match then forward (jumping back to a prior view). With `nearest`,
+// prefers the closest match in either direction, which browser back/forward
+// needs so a duplicate entry on the far side isn't chosen over the adjacent one.
 function findHistoryIndex(
   split: SplitState,
-  predicate: (content: SplitContent) => boolean
+  predicate: (content: SplitContent) => boolean,
+  nearest = false
 ): number {
   const items = split.history.items;
   const currentIdx = split.history.index;
+  let back = -1;
   for (let j = currentIdx - 1; j >= 0; j--) {
-    if (predicate(items[j])) return j;
+    if (predicate(items[j])) {
+      back = j;
+      break;
+    }
   }
+  let forward = -1;
   for (let j = currentIdx + 1; j < items.length; j++) {
-    if (predicate(items[j])) return j;
+    if (predicate(items[j])) {
+      forward = j;
+      break;
+    }
   }
-  return -1;
+  if (back === -1) return forward;
+  if (forward === -1) return back;
+  if (!nearest) return back;
+  return currentIdx - back <= forward - currentIdx ? back : forward;
 }
 
 export type UrlCapabilities = {
@@ -1125,8 +1139,10 @@ export function createSplitLayout(
     for (let i = 0; i < newSplits.length; i++) {
       const split = visibleSplits[i];
       if (sameContent(split.content, newSplits[i])) continue;
-      const targetIdx = findHistoryIndex(split, (item) =>
-        sameContent(item, newSplits[i])
+      const targetIdx = findHistoryIndex(
+        split,
+        (item) => sameContent(item, newSplits[i]),
+        true
       );
       if (targetIdx === -1) return false;
       plan.push({ split, targetIdx });
