@@ -51,6 +51,7 @@ import {
 } from 'solid-js';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
+import { HistorySessionList } from '../../history/HistorySessionList';
 import { mdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -132,6 +133,7 @@ function HistorySectionContent() {
           <HistoryScrubber
             sessions={sessions()}
             pins={history.pins()}
+            selectedAt={history.selectedAt}
             isViewingHistory={history.isViewingHistory}
             setViewingHistory={history.setViewingHistory}
             isScrubbedRightmost={history.isScrubbedRightmost}
@@ -140,6 +142,11 @@ function HistorySectionContent() {
             onCreatePin={history.createPin}
             onDeletePin={history.deletePin}
             compact
+          />
+          <HistorySessionList
+            sessions={sessions()}
+            selectedAt={history.selectedAt}
+            onSelect={history.enterAt}
           />
         </div>
       )}

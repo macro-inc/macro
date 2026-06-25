@@ -14,6 +14,7 @@ import {
   createResource,
   createSignal,
   type JSX,
+  onCleanup,
   type Setter,
   useContext,
 } from 'solid-js';
@@ -30,19 +31,33 @@ async function fetchHistoryMeta(
 }
 
 type HistoryContextValue = {
+  /** Whether history mode is active. */
   isViewingHistory: Accessor<boolean>;
+  /** Sets history mode directly. */
   setViewingHistory: Setter<boolean>;
+  /** Selected history cursor time. Null means current state. */
   selectedAt: Accessor<Date | null>;
+  /** Sets the selected cursor time. */
   setSelectedAt: Setter<Date | null>;
+  /** Whether the cursor is at current state. */
   isScrubbedRightmost: Accessor<boolean>;
+  /** Sets current-state cursor mode. */
   setIsScrubbedRightmost: Setter<boolean>;
+  /** Enters history mode at a timestamp. */
   enterAt: (at: Date | null) => void;
+  /** Enters history mode at current state. */
   enterRightmost: () => void;
+  /** Leaves history mode. */
   exit: () => void;
+  /** Per-user edit sessions for this document. */
   sessions: Accessor<readonly HistorySession[]>;
+  /** Whether sessions are loading. */
   isLoadingSessions: Accessor<boolean>;
+  /** Saved version pins for this document. */
   pins: Accessor<readonly VersionPin[]>;
+  /** Creates a version pin. */
   createPin: (atMs: number, label: string) => void;
+  /** Deletes a version pin. */
   deletePin: (pinId: string) => void;
 };
 
@@ -55,10 +70,18 @@ export function HistoryProvider(props: {
   const [isViewingHistory, setViewingHistory] = createSignal(false);
   const [selectedAt, setSelectedAt] = createSignal<Date | null>(null);
   const [isScrubbedRightmost, setIsScrubbedRightmost] = createSignal(true);
-  const [history] = createResource(props.documentId, fetchHistoryMeta);
+  const [history, { refetch: refetchHistory }] = createResource(
+    props.documentId,
+    fetchHistoryMeta
+  );
   const pins = usePinsQuery(props.documentId);
   const createPin = useCreatePinMutation(props.documentId);
   const deletePin = useDeletePinMutation(props.documentId);
+
+  const refreshInterval = window.setInterval(() => {
+    refetchHistory();
+  }, 30_000);
+  onCleanup(() => window.clearInterval(refreshInterval));
 
   const enterAt = (at: Date | null) => {
     setSelectedAt(at);

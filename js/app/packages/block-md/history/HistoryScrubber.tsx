@@ -26,6 +26,7 @@ const DOUBLE_CLICK_MS = 300;
 export type HistoryScrubberProps = {
   sessions: readonly HistorySession[];
   pins: readonly VersionPin[];
+  selectedAt: Accessor<Date | null>;
   isViewingHistory: Accessor<boolean>;
   setViewingHistory: Setter<boolean>;
   isScrubbedRightmost: Accessor<boolean>;
@@ -142,7 +143,10 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const thumbPx = createMemo<number | null>(() => {
     if (!props.isViewingHistory()) return null;
     if (props.isScrubbedRightmost()) return width();
-    const cursor = cursorMs();
+    const cursor =
+      drag()?.mode === 'scrub'
+        ? cursorMs()
+        : (props.selectedAt()?.getTime() ?? cursorMs());
     if (cursor === null) return null;
     const totalWidth = width();
     const candidatePx = timestampToContainerPosition(cursor);
@@ -164,7 +168,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     const pointerPx = localPx(e.clientX);
     const thumbPosition = thumbPx();
     if (!wasViewingHistory) {
-      setDrag({ mode: 'scrub', startPx: pointerPx });
+      return;
     } else if (
       thumbPosition !== null &&
       Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX
