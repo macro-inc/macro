@@ -1,4 +1,4 @@
 export const splitPanelLayer = {
-  oldOverlay: 'z-20',
+  oldOverlay: 'z-[25]',
   controls: 'z-30',
 } as const;

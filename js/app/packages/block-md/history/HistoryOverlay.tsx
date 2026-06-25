@@ -4,6 +4,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
+import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { useHistoryStateQuery } from '@queries/history';
 import { storageServiceClient } from '@service-storage/client';
 import { Button } from '@ui';
@@ -61,13 +62,15 @@ export function HistoryOverlay(props: {
 
   const [forking, setForking] = createSignal(false);
   const handleFork = async (keepOpen = false) => {
-    const current = stateAtCursor.data;
-    if (!current || forking()) return;
+    const versionId = props.isScrubbedRightmost
+      ? undefined
+      : (stateAtCursor.data?.versionId ?? undefined);
+    if ((!props.isScrubbedRightmost && !versionId) || forking()) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
       documentId: props.documentId,
       documentName: nameForkedDocument(props.documentName),
-      syncServiceVersion: current.versionId ?? undefined,
+      syncServiceVersion: versionId,
     });
     setForking(false);
     if (res.isErr()) {
@@ -87,13 +90,23 @@ export function HistoryOverlay(props: {
       <Show when={props.visible}>
         <SplitToolbarLeft>
           <Button
-            variant="active"
-            size="sm"
+            variant="danger"
+            size="md"
             class="order-first"
-            onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
-            disabled={forking() || !stateAtCursor.data}
+            onClick={props.onExit}
           >
-            <GitFork />
+            <XIcon />
+            Exit history
+          </Button>
+          <Button
+            variant="active"
+            size="md"
+            onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
+            disabled={
+              forking() || (!props.isScrubbedRightmost && !stateAtCursor.data)
+            }
+          >
+            <GitFork class="size-4 shrink-0" />
             {forking() ? 'Forking…' : 'Fork'}
           </Button>
         </SplitToolbarLeft>
