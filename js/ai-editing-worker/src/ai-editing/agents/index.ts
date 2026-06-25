@@ -1,4 +1,4 @@
-export { coder, CHILD_SYSTEM } from './coder';
-export { supervisor } from './supervisor';
+export { CHILD_SYSTEM, coder } from './coder';
 export { interpreter } from './interpreter';
-export type { RunTaskDeps, RunAgentOptions } from './types';
+export { supervisor } from './supervisor';
+export type { RunAgentOptions, RunTaskDeps } from './types';
