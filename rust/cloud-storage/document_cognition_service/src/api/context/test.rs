@@ -371,7 +371,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client_external,
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
-        internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
+        internal_api_key: InternalApiKey::Comptime("testing"),
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         connection_gateway_client: Arc::new(
