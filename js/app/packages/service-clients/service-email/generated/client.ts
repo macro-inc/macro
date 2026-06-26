@@ -45,6 +45,7 @@ import type {
   SendMessageResponse,
   SharedInboxConflictResponse,
   UnblockSenderRequest,
+  UnresolvedSignatureImagesError,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -2279,6 +2280,11 @@ export type patchSettingsResponse401 = {
   status: 401;
 };
 
+export type patchSettingsResponse422 = {
+  data: UnresolvedSignatureImagesError;
+  status: 422;
+};
+
 export type patchSettingsResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -2290,6 +2296,7 @@ export type patchSettingsResponseSuccess = patchSettingsResponse200 & {
 export type patchSettingsResponseError = (
   | patchSettingsResponse400
   | patchSettingsResponse401
+  | patchSettingsResponse422
   | patchSettingsResponse500
 ) & {
   headers: Headers;

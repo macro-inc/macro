@@ -97,6 +97,54 @@ pub async fn store_message_images(
     Ok(())
 }
 
+/// Rehosts every publicly-fetchable `<img>` in an HTML fragment onto SFS and
+/// rewrites the markup to the stable URLs. Returns the rewritten HTML and the
+/// number of remote images that could NOT be fetched (e.g. auth-gated
+/// webmail-embedded URLs like Gmail's `disp=emb`) so the caller can warn the
+/// user to re-add them.
+///
+/// Provider-agnostic on purpose: it only does unauthenticated HTTP GETs, so
+/// anything requiring a provider session simply lands in the unresolved count
+/// instead of needing per-provider (Gmail/Outlook/…) resolution. Already-SFS
+/// images are skipped so re-saving a signature doesn't re-upload them.
+#[tracing::instrument(skip(db, sfs_client, html), err)]
+pub async fn rehost_html_images(
+    db: &PgPool,
+    sfs_client: &StaticFileServiceClient,
+    html: &str,
+) -> anyhow::Result<(String, usize)> {
+    if cfg!(not(feature = "sfs_map")) {
+        return Ok((html.to_string(), 0));
+    }
+
+    let urls: HashSet<String> = extract_all_image_urls(html)?
+        .into_iter()
+        // Skip images already on SFS so a re-save doesn't re-upload them.
+        .filter(|url| !url.contains("static-file-service"))
+        .collect();
+
+    if urls.is_empty() {
+        return Ok((html.to_string(), 0));
+    }
+
+    let sfs_map = cache_images(db, sfs_client, urls.clone()).await?;
+
+    // Remote images we couldn't move to SFS stay as-is and are counted so the
+    // caller can tell the user which ones won't render for recipients.
+    let unresolved = urls
+        .iter()
+        .filter(|url| !sfs_map.contains_key(*url))
+        .count();
+
+    let new_html = if sfs_map.is_empty() {
+        html.to_string()
+    } else {
+        rewrite_html_image_links(html, &sfs_map)?
+    };
+
+    Ok((new_html, unresolved))
+}
+
 // extracts the src/srcset attributes from all <img> tags in the passed HTML
 #[tracing::instrument(skip(html_content), err)]
 fn extract_all_image_urls(html_content: &str) -> anyhow::Result<HashSet<String>> {
