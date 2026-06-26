@@ -118,6 +118,9 @@ export class Doc implements DocReader, DocWriter {
       .with({ kind: 'setEquation' }, (e) => this.setEquation(e.node, e.tex))
       .with({ kind: 'appendText' }, (e) => this.appendText(e.node, e.text))
       .with({ kind: 'prependText' }, (e) => this.prependText(e.node, e.text))
+      .with({ kind: 'insertTextAfterInline' }, (e) =>
+        this.insertTextAfterInline(e.inline, e.text)
+      )
       .with({ kind: 'replaceText' }, (e) =>
         this.replaceText(e.node, e.find, e.to, e.scope)
       )
@@ -145,7 +148,10 @@ export class Doc implements DocReader, DocWriter {
       )
       .with({ kind: 'setListType' }, (e) => this.setListType(e.nodes, e.list))
       .with({ kind: 'appendListItem' }, (e) =>
-        this.appendListItem(e.ref, e.node, e.checked)
+        this.appendListItem(e.ref, e.node, e.text, e.checked)
+      )
+      .with({ kind: 'prependListItem' }, (e) =>
+        this.prependListItem(e.ref, e.node, e.text, e.checked)
       )
       .with({ kind: 'setChecked' }, (e) => this.setChecked(e.node, e.checked))
       .with({ kind: 'setIndent' }, (e) => this.setIndent(e.node, e.indent))
@@ -280,6 +286,13 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => inline.$prependText(this.block(node), text));
   }
 
+  private insertTextAfterInline(inlineRef: NodeRef, text: string): void {
+    this.tx(() => {
+      const node = locate.$byId(this.session, inlineRef);
+      node.insertAfter($createTextNode(text));
+    });
+  }
+
   private replaceText(
     node: NodeRef,
     find: string,
@@ -406,13 +419,38 @@ export class Doc implements DocReader, DocWriter {
     );
   }
 
-  private appendListItem(ref: string, node: NodeRef, checked?: boolean): void {
+  private appendListItem(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    checked?: boolean
+  ): void {
     this.tx(() => {
       const list = locate.$byId(this.session, node);
       if (!$isListNode(list))
-        throw new EditError('appendListItem target is not a list');
-      const li = $createListItemNode(checked);
+        throw new EditError(`{${node}} is not a list`);
+      const li = $createListItemNode(checked ?? listItemChecked(list));
+      if (text) li.append($createTextNode(text));
       list.append(li);
+      this.assignRef(ref, li);
+    });
+  }
+
+  private prependListItem(
+    ref: string,
+    node: NodeRef,
+    text: string,
+    checked?: boolean
+  ): void {
+    this.tx(() => {
+      const list = locate.$byId(this.session, node);
+      if (!$isListNode(list))
+        throw new EditError(`{${node}} is not a list`);
+      const li = $createListItemNode(checked ?? listItemChecked(list));
+      if (text) li.append($createTextNode(text));
+      const first = list.getFirstChild();
+      if (first) first.insertBefore(li);
+      else list.append(li);
       this.assignRef(ref, li);
     });
   }
@@ -676,6 +714,11 @@ export class Doc implements DocReader, DocWriter {
     $setId(node, ref);
     $updateAllNodeIds(this.session.ids);
   }
+}
+
+/** A check-list item carries an (unchecked) checkbox; other list kinds don't. */
+function listItemChecked(list: LexicalNode): boolean | undefined {
+  return $isListNode(list) && list.getListType() === 'check' ? false : undefined;
 }
 
 function resolveTable(node: LexicalNode): TableNode {

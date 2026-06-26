@@ -224,7 +224,13 @@ function animateInsertNode(
     spec.items.forEach((text, i) => {
       const itemRef = `${o.ref}~li-${i}`;
       steps.push(
-        edit({ kind: 'appendListItem', ref: itemRef, node: o.ref, checked })
+        edit({
+          kind: 'appendListItem',
+          ref: itemRef,
+          node: o.ref,
+          text: '',
+          checked,
+        })
       );
       steps.push(cursor(itemRef, 0));
       steps.push(...typeText(itemRef, text, 0, ctx));
@@ -445,6 +451,30 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         cursor(o.ref, 0),
         ...typeText(o.ref, o.text, 0, ctx),
       ])
+      .with({ kind: 'appendListItem' }, (o) => [
+        ...focus(o.node, ctx),
+        edit({
+          kind: 'appendListItem',
+          ref: o.ref,
+          node: o.node,
+          text: '',
+          checked: o.checked,
+        }),
+        cursor(o.ref, 0),
+        ...typeText(o.ref, o.text, 0, ctx),
+      ])
+      .with({ kind: 'prependListItem' }, (o) => [
+        ...focus(o.node, ctx),
+        edit({
+          kind: 'prependListItem',
+          ref: o.ref,
+          node: o.node,
+          text: '',
+          checked: o.checked,
+        }),
+        cursor(o.ref, 0),
+        ...typeText(o.ref, o.text, 0, ctx),
+      ])
       .with({ kind: 'removeListItem' }, (o) => [
         ...selectAll(o.node, ctx),
         {
@@ -503,7 +533,14 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       // but they should never be dispatched through animate() in normal use)
       .with({ kind: 'insertText' }, (o) => [edit(o)])
       .with({ kind: 'removeText' }, (o) => [edit(o)])
-      .with({ kind: 'appendListItem' }, (o) => [edit(o)])
+      // inline text insert: brief caret beat on the inline node, then the text
+      // appears after it. (Typed-out animation would need a ref to the new text
+      // node; the suffix is short, so it just lands.)
+      .with({ kind: 'insertTextAfterInline' }, (o) => [
+        cursor(o.inline, 0),
+        { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) },
+        edit(o),
+      ])
       .exhaustive()
   );
 }

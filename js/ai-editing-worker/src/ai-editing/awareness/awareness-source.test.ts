@@ -7,7 +7,13 @@ import {
 
 // Duck-typed fake loro containers (kind/get), matching what resolveTextOwner reads.
 function textC() {
-  return { kind: () => 'Text' };
+  return {
+    kind: () => 'Text',
+    length: 10,
+    getCursor: (offset: number) => ({
+      encode: () => new Uint8Array([offset]),
+    }),
+  };
 }
 function mapC(id: string, fields: { text?: unknown; children?: unknown[] }) {
   return {
@@ -97,5 +103,64 @@ describe('realAwarenessSource (no live mirror)', () => {
     expect(send).not.toHaveBeenCalled();
     src.clear(); // no peers → still no broadcast, and no throw
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('keeps live awareness alive until clear removes it', () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi.fn();
+      const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+      const src = realAwarenessSource({
+        mirror,
+        doc,
+        send,
+        name: 'Sam (AI)',
+        color: 'accent-30',
+      });
+
+      src.apply({ type: 'cursor', node: 't1', at: 3 });
+      expect(send).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1_999);
+      expect(send).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1);
+      expect(send).toHaveBeenCalledTimes(2);
+
+      src.clear();
+      vi.advanceTimersByTime(2_000);
+      expect(send).toHaveBeenCalledTimes(3);
+
+      vi.advanceTimersByTime(2_000);
+      expect(send).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears live awareness when the latest target no longer resolves', () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi.fn();
+      const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+      const src = realAwarenessSource({
+        mirror,
+        doc,
+        send,
+        name: 'Sam (AI)',
+        color: 'accent-30',
+      });
+
+      src.apply({ type: 'cursor', node: 't1', at: 3 });
+      expect(send).toHaveBeenCalledTimes(1);
+
+      src.apply({ type: 'cursor', node: 'missing', at: 0 });
+      expect(send).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(2_000);
+      expect(send).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

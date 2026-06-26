@@ -8,6 +8,7 @@ import type {
   ListKind,
   MentionSpec,
   NodeId,
+  NodeRef,
   NodeSpec,
   Position,
   Ref,
@@ -351,6 +352,25 @@ export class DocumentEditor {
     return ref;
   }
 
+  /** Append a new item to the end of a list, addressed by the list's own
+   *  `<ul>`/`<ol>` id — works even when the list is empty (unlike
+   *  `insertListItemAfter`, which needs an existing sibling item). */
+  public appendListItem(listId: NodeId, text: string): Ref {
+    this.requireId(listId);
+    const ref = this.mintRef();
+    this.push({ kind: 'appendListItem', ref, node: listId, text });
+    return ref;
+  }
+
+  /** Prepend a new item to the start of a list, addressed by the list's own
+   *  `<ul>`/`<ol>` id — works even when the list is empty. */
+  public prependListItem(listId: NodeId, text: string): Ref {
+    this.requireId(listId);
+    const ref = this.mintRef();
+    this.push({ kind: 'prependListItem', ref, node: listId, text });
+    return ref;
+  }
+
   public removeListItem(id: NodeId): this {
     this.requireId(id);
     return this.push({ kind: 'removeListItem', node: id });
@@ -533,6 +553,10 @@ export class DocumentEditor {
 
   public insertInlineEquation(blockId: NodeId, at: number, tex: string): Ref {
     return this.insertInline(blockId, at, { inline: 'equation', tex });
+  }
+
+  public insertTextAfterInline(inlineRef: NodeRef, text: string): this {
+    return this.push({ kind: 'insertTextAfterInline', inline: inlineRef, text });
   }
 
   public insertLineBreak(blockId: NodeId, at: number): Ref {

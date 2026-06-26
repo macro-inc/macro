@@ -72,6 +72,7 @@ export const COLORS = [
 
 /** How long the cursor lingers after a writer finishes before it disappears. */
 const LINGER_MS = 700;
+const KEEPALIVE_MS = 2_000;
 
 export interface AwarenessSource {
   apply(x: Awareness): void;
@@ -111,14 +112,41 @@ export function realAwarenessSource(
   const store = new EphemeralStore<Record<string, AwarenessPayload>>(30_000);
   const peerKey = crypto.randomUUID();
   let lingerTimer: ReturnType<typeof setTimeout> | null = null;
+  let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  let lastAwareness: Awareness | null = null;
   let shown = false;
+
+  function stopKeepalive(): void {
+    if (!keepaliveTimer) return;
+    clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+  }
+
+  function deletePresence(): void {
+    stopKeepalive();
+    store.delete(peerKey);
+    send(store.encodeAll());
+    shown = false;
+    lastAwareness = null;
+  }
+
+  function startKeepalive(): void {
+    if (keepaliveTimer) return;
+    keepaliveTimer = setInterval(() => {
+      if (!lastAwareness || !shown) {
+        stopKeepalive();
+        return;
+      }
+      if (!publish(lastAwareness, false)) deletePresence();
+    }, KEEPALIVE_MS);
+  }
 
   function setRange(
     nodeId: string,
     text: LoroText,
     a: number,
     b: number
-  ): void {
+  ): boolean {
     if (lingerTimer) {
       clearTimeout(lingerTimer);
       lingerTimer = null;
@@ -126,7 +154,7 @@ export function realAwarenessSource(
     const len = text.length;
     const anchor = text.getCursor(Math.max(0, Math.min(a, len)));
     const focus = text.getCursor(Math.max(0, Math.min(b, len)));
-    if (!anchor || !focus) return;
+    if (!anchor || !focus) return false;
     store.set(peerKey, {
       user: { userId: name, color, peerId: peerKey },
       selection: {
@@ -136,16 +164,17 @@ export function realAwarenessSource(
     });
     shown = true;
     send(store.encodeAll());
+    return true;
   }
 
-  function apply(x: Awareness): void {
+  function publish(x: Awareness, keepalive: boolean): boolean {
     // Resolve to the node that actually OWNS the text (a block's text lives in a
     // child text-node container). The cursor blob must be tagged with that id, or
     // the receiver can't map the Loro cursor to a caret and it never walks.
     const owner = resolveTextOwner(mirror, doc, x.node);
-    if (!owner) return;
+    if (!owner) return false;
     const { text, nodeId: ownerNodeId } = owner;
-    match(x)
+    const didPublish = match(x)
       .with({ type: 'cursor' }, ({ at = 0 }) =>
         setRange(ownerNodeId, text, at, at)
       )
@@ -153,16 +182,25 @@ export function realAwarenessSource(
         setRange(ownerNodeId, text, span?.start ?? 0, span?.end ?? text.length)
       )
       .exhaustive();
+    if (didPublish && keepalive) startKeepalive();
+    return didPublish;
+  }
+
+  function apply(x: Awareness): void {
+    lastAwareness = x;
+    if (!publish(x, true)) {
+      if (shown) deletePresence();
+      lastAwareness = null;
+    }
   }
 
   function clear(): void {
     if (!shown) return;
+    stopKeepalive();
     if (lingerTimer) return;
     lingerTimer = setTimeout(() => {
       lingerTimer = null;
-      store.delete(peerKey);
-      send(store.encodeAll());
-      shown = false;
+      deletePresence();
     }, LINGER_MS);
   }
 
@@ -173,10 +211,8 @@ function isLoroMap(c: Container | undefined): c is LoroMap {
   return c?.kind() === 'Map';
 }
 
-/** The `$.id` of a loro container (duck-typed: loro classes can come from
- *  multiple bundle copies, so `instanceof` is unreliable). */
+/** The `$.id` of a loro container. */
 function containerId(c: LoroMap): string | undefined {
-  // Duck-typed: loro values cross bundle copies, so `.get` is typed `unknown`.
   const dollar = c.get('$') as
     | { getShallowValue?: () => { id?: string } | undefined; id?: string }
     | undefined;

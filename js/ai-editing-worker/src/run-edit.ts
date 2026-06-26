@@ -98,9 +98,7 @@ export async function runEditSession(
   // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
   const startedAt = new Date();
-  const initialDocument = args.debug
-    ? serializeWithXml(workspace.session)
-    : undefined;
+  const initialDocument = serializeWithXml(workspace.session);
   try {
     const { totalUsage, steps, intent, clarification } = await supervisor(
       workspace.session,
@@ -124,28 +122,22 @@ export async function runEditSession(
 
     const usage = totalUsage.toEntries();
 
-    const trace = args.debug
-      ? buildTraceLog(
-          {
-            documentId: args.documentId,
-            prompt: args.prompt,
-            startedAt,
-            initialDocument,
-            intent,
-            coderCodeBlocks,
-          },
-          steps as any,
-          usage
-        )
-      : undefined;
+    const trace = buildTraceLog(
+      {
+        documentId: args.documentId,
+        prompt: args.prompt,
+        startedAt,
+        initialDocument,
+        intent,
+        coderCodeBlocks,
+      },
+      steps as any,
+      usage
+    );
 
-    if (trace) {
-      console.log(
-        JSON.stringify({ documentId: args.documentId, debug: trace })
-      );
-    }
+    console.log(JSON.stringify({ documentId: args.documentId, debug: trace }));
 
-    return { usage, ops: allOps, trace, clarification };
+    return { usage, ops: allOps, trace: args.debug ? trace : undefined, clarification };
   } finally {
     workspace.dispose();
     wal.destroy();

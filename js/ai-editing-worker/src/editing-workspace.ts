@@ -18,6 +18,7 @@ import {
 } from './ai-editing/ai-toolkit';
 import {
   nextAiPeerId,
+  type AwarenessSource,
   type Peer,
   PeerPool,
   realAwarenessSource,
@@ -31,7 +32,7 @@ export class EditingWorkspace {
   readonly session: LexicalSession;
   private readonly engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown>;
   private chain: Promise<void> = Promise.resolve();
-  private readonly outstanding = new Set<Peer>();
+  private readonly outstanding = new Map<Peer, AwarenessSource>();
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
@@ -76,7 +77,6 @@ export class EditingWorkspace {
    *  `release` (on the returned writer) clears the cursor and returns the peer. */
   async borrowWriter(): Promise<Writer> {
     const peer = await this.pool.borrow();
-    this.outstanding.add(peer);
     const doc = new Doc(this.session, () => this.propagate(peer.peerId));
     const awarenessSource = realAwarenessSource({
       mirror: this.manager.mirror!,
@@ -85,6 +85,7 @@ export class EditingWorkspace {
       name: peer.name,
       color: peer.color,
     });
+    this.outstanding.set(peer, awarenessSource);
     const release = () => {
       if (!this.outstanding.delete(peer)) return;
       awarenessSource.clear();
@@ -102,7 +103,10 @@ export class EditingWorkspace {
   /** Stop syncing and release any writers still outstanding. */
   dispose(): void {
     this.engine.stop();
-    for (const peer of this.outstanding) this.pool.release(peer);
+    for (const [peer, awarenessSource] of this.outstanding) {
+      awarenessSource.clear();
+      this.pool.release(peer);
+    }
     this.outstanding.clear();
   }
 

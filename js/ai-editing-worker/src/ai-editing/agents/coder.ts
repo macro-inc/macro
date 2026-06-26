@@ -3,7 +3,11 @@ import type { LexicalSession } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
-import { createImBlockedTool, createRunCodeTool } from '../tools';
+import {
+  createImBlockedTool,
+  createReadDocumentTool,
+  createRunCodeTool,
+} from '../tools';
 import type { RunTaskDeps } from './types';
 
 export type { RunTaskDeps } from './types';
@@ -35,8 +39,9 @@ export async function coder(
         runner: deps.runner,
         onOps: deps.onOps,
       }),
+      readDocument: createReadDocumentTool({ session }),
       reportBlocked: createImBlockedTool(
-        'Call this instead of guessing when you cannot do the edit -- usually the context window is too narrow to see what you need.',
+        'Call this instead of guessing when you cannot do the edit -- but only after `readDocument` failed to surface what you need.',
         false
       ),
     },

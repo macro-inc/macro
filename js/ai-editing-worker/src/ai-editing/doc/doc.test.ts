@@ -123,8 +123,43 @@ describe('Doc — structure & refs', () => {
         kind: 'appendListItem',
         ref: 'x',
         node: ids[0]!,
+        text: 'x',
       })
     ).toThrow(/not a list/);
+  });
+
+  it('appendListItem / prependListItem populate a list by its container id (even when empty)', () => {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'number', items: [] },
+      at: { after: ids[0]! },
+    });
+    // empty list: no <li> to anchor on — must work off the <ol> id
+    doc.apply({ kind: 'appendListItem', ref: 'a', node: 'L', text: 'middle' });
+    doc.apply({ kind: 'appendListItem', ref: 'b', node: 'L', text: 'last' });
+    doc.apply({ kind: 'prependListItem', ref: 'c', node: 'L', text: 'first' });
+    const xml = serializeWithXml(session);
+    expect((xml.match(/<ol/g) ?? []).length).toBe(1);
+    expect(xml.indexOf('first')).toBeLessThan(xml.indexOf('middle'));
+    expect(xml.indexOf('middle')).toBeLessThan(xml.indexOf('last'));
+  });
+
+  it('appendListItem on a check list creates an (unchecked) checkbox item', () => {
+    const { session, ids } = setup('intro');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 'L',
+      spec: { block: 'list', list: 'check', items: [] },
+      at: { after: ids[0]! },
+    });
+    doc.apply({ kind: 'appendListItem', ref: 'a', node: 'L', text: 'task' });
+    // the appended item is a real checkbox item: toggling it renders checked.
+    doc.apply({ kind: 'setChecked', node: 'a', checked: true });
+    expect(serializeWithXml(session)).toMatch(/checked="true"/);
   });
 
   it('insertListItemAfter/Before add same-kind siblings into an existing list', () => {
@@ -136,8 +171,7 @@ describe('Doc — structure & refs', () => {
       spec: { block: 'list', list: 'bullet', items: [] },
       at: { after: ids[0]! },
     });
-    doc.apply({ kind: 'appendListItem', ref: 'L~li-0', node: 'L' });
-    doc.apply({ kind: 'setText', node: 'L~li-0', text: 'middle' });
+    doc.apply({ kind: 'appendListItem', ref: 'L~li-0', node: 'L', text: 'middle' });
     doc.apply({
       kind: 'insertListItemAfter',
       ref: 'after',
@@ -167,8 +201,12 @@ describe('Doc — structure & refs', () => {
       spec: { block: 'list', list: 'bullet', items: [] },
       at: { after: ids[0]! },
     });
-    doc.apply({ kind: 'appendListItem', ref: 'L~li-0', node: 'L' });
-    doc.apply({ kind: 'setText', node: 'L~li-0', text: 'bullet item' });
+    doc.apply({
+      kind: 'appendListItem',
+      ref: 'L~li-0',
+      node: 'L',
+      text: 'bullet item',
+    });
     doc.apply({
       kind: 'insertListItemAfter',
       ref: 'nested',

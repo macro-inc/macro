@@ -1026,9 +1026,21 @@ describe('insertNode animator — typed vs whole', () => {
         spec: { block: 'list', list: 'bullet', items: [] },
         at: { appendToRoot: true },
       },
-      { kind: 'appendListItem', ref: 'r~li-0', node: 'r', checked: undefined },
+      {
+        kind: 'appendListItem',
+        ref: 'r~li-0',
+        node: 'r',
+        text: '',
+        checked: undefined,
+      },
       { kind: 'insertText', node: 'r~li-0', at: 0, text: 'a' },
-      { kind: 'appendListItem', ref: 'r~li-1', node: 'r', checked: undefined },
+      {
+        kind: 'appendListItem',
+        ref: 'r~li-1',
+        node: 'r',
+        text: '',
+        checked: undefined,
+      },
       { kind: 'insertText', node: 'r~li-1', at: 0, text: 'b' },
     ]);
     // each item's caret drops into its own fresh node before typing
@@ -1046,6 +1058,7 @@ describe('insertNode animator — typed vs whole', () => {
       kind: 'appendListItem',
       ref: 'r~li-0',
       node: 'r',
+      text: '',
       checked: false,
     });
   });

@@ -70,7 +70,7 @@ export async function supervisor(
 
   const result = await generateText({
     model: models.supervisor,
-    stopWhen: [stepCountIs(12), hasToolCall('reportBlocked')],
+    stopWhen: [stepCountIs(6), hasToolCall('reportBlocked')],
     system: MASTER_SYSTEM,
     prompt,
     tools,

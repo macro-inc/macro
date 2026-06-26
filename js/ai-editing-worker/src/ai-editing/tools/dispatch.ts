@@ -164,10 +164,24 @@ export function computeContextRange(
   };
 }
 
-function xmlWindow(xml: string, range: ContextRange, padding = 2): string {
+/** Lines of context to show a writer around its target region. Generous on
+ *  purpose: a roomy window means the writer rarely has to call `readDocument`. */
+const MIN_WINDOW_LINES = 20;
+
+function xmlWindow(
+  xml: string,
+  range: ContextRange,
+  padding = 2,
+  minLines = MIN_WINDOW_LINES
+): string {
   const numbered = numberLines(xml).split('\n');
-  const lo = Math.max(0, range.startLine - 1 - padding);
-  const hi = Math.min(numbered.length - 1, range.endLine - 1 + padding);
+  let lo = Math.max(0, range.startLine - 1 - padding);
+  let hi = Math.min(numbered.length - 1, range.endLine - 1 + padding);
+  // Grow symmetrically until we show at least `minLines` (or hit the doc edges).
+  while (hi - lo + 1 < minLines && (lo > 0 || hi < numbered.length - 1)) {
+    if (lo > 0) lo--;
+    if (hi < numbered.length - 1) hi++;
+  }
   return numbered.slice(lo, hi + 1).join('\n');
 }
 

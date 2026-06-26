@@ -19,7 +19,8 @@ The writer has the complete API reference. Use this compact list to help yoursel
 ## Lists
 
 - `bulletList`, `numberedList`, `checklist`, `setListType`, `check`, `uncheck`, `setChecked`, `indent`, `outdent`, `setIndent`
-- Add/remove items in an existing list: `insertListItemAfter(liId, text, list?)`, `insertListItemBefore(liId, text, list?)`, `removeListItem(liId)`. `list` is `'bullet'`|`'number'`|`'check'` (default `'bullet'`); a differing kind nests a sublist. Pass an existing `<li>` id -- NOT the `<ul>`/`<ol>` id.
+- Add/remove items next to an existing item: `insertListItemAfter(liId, text, list?)`, `insertListItemBefore(liId, text, list?)`, `removeListItem(liId)`. `list` is `'bullet'`|`'number'`|`'check'` (default `'bullet'`); a differing kind nests a sublist. Pass an existing `<li>` id.
+- Add an item to a list as a whole (incl. an **empty** list): `appendListItem(listId, text)`, `prependListItem(listId, text)`. Pass the `<ul>`/`<ol>` id; the item inherits the list's kind. All item inserts return the new `<li>` id.
 
 ## Structure
 
@@ -35,6 +36,7 @@ The writer has the complete API reference. Use this compact list to help yoursel
 
 - Block objects: `insertDivider`, `insertImage`, `insertVideo`, `insertEquation`; or via `insertBlockAfter`/`appendBlock` with specs `document-card` (documentId, documentName, blockName, blockParams?) and `html-render` (html)
 - Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`, `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`
+- To place text after an inline object: `insertTextAfterInline(inlineRef, text)`. Do **not** use `appendText` for this — it targets the block's last text node and misplaces the text when an inline object is the last child.
 - Updates: `setImageAlt`, `setImageUrl`, `setVideoUrl`, `setVideoControls`, `setDate`
 
 Our editing team is very well versed in how to use the library and you should never tell them how to get the job done. But this is to help you understand what they are capable of.

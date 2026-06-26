@@ -106,12 +106,26 @@ export type DocumentOp =
   // animation primitives (emitted by animators, not DocumentEditor)
   | { kind: 'insertText'; node: NodeRef; at: Offset; text: string }
   | { kind: 'removeText'; node: NodeRef; at: Offset; len: number }
-  | { kind: 'appendListItem'; ref: string; node: NodeRef; checked?: boolean }
+  | {
+      kind: 'appendListItem';
+      ref: string;
+      node: NodeRef;
+      text: string;
+      checked?: boolean;
+    }
+  | {
+      kind: 'prependListItem';
+      ref: string;
+      node: NodeRef;
+      text: string;
+      checked?: boolean;
+    }
   // text content
   | { kind: 'setText'; node: NodeRef; text: string }
   | { kind: 'setEquation'; node: NodeRef; tex: string }
   | { kind: 'appendText'; node: NodeRef; text: string }
   | { kind: 'prependText'; node: NodeRef; text: string }
+  | { kind: 'insertTextAfterInline'; inline: NodeRef; text: string }
   | {
       kind: 'replaceText';
       node: NodeRef;

@@ -155,8 +155,11 @@ After:
 - `check(id)` · `uncheck(id)` · `setChecked(id, bool)`
 - `indent(id, by?)` · `outdent(id, by?)` · `setIndent(id, level)`
 - `insertListItemAfter(liId, text, list?)` · `insertListItemBefore(liId, text, list?)` · `removeListItem(liId)`
+- `appendListItem(listId, text)` · `prependListItem(listId, text)`
 
-To add or remove items in an *existing* list, pass the id of a sibling `<li>` -- never the `<ul>`/`<ol>` id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind. The insert methods return a handle to the new `<li>`.
+To add an item relative to an *existing* sibling, use `insertListItemAfter`/`Before` with that `<li>`'s id. `list` (`'bullet'`|`'number'`|`'check'`, default `'bullet'`) sets the new item's kind; when it differs from the surrounding list, the item is wrapped in a nested sublist of that kind.
+
+To add an item to a list as a whole -- including a list that is currently **empty** (no `<li>` to anchor on) -- use `appendListItem`/`prependListItem` with the `<ul>`/`<ol>` id; the item inherits the list's kind. All four methods return a handle to the new `<li>` you can use in later calls.
 
 ```ts
 editor.checklist(['b1', 'b2']);
@@ -167,6 +170,8 @@ editor.setChecked('b2', false);
 const li = editor.insertListItemAfter('li1', 'second item');
 editor.insertListItemAfter(li, 'nested', 'number');
 editor.removeListItem('li2');
+const first = editor.appendListItem('ol3', 'first step'); // populate an empty list
+editor.appendListItem('ol3', 'second step');
 ```
 
 Before:
@@ -294,13 +299,15 @@ After:
 - `insertEquation(afterId, tex)` · `insertInlineEquation(blockId, at, tex)`
 - `insertLineBreak(blockId, at)`
 - `insertDate(blockId, at, isoDate, displayFormat?)`
+- `insertTextAfterInline(inlineRef, text)` — inserts a plain text node immediately after an inline object. Use this (not `appendText`) when you need text to follow an inline equation, date, or other inline node.
 
 ```ts
 editor.insertDivider('b1');
 editor.insertImage('b1', { srcType: 'url', url: 'https://x/cat.png', alt: 'cat' });
 editor.insertVideo('b1', { srcType: 'url', url: 'https://x/movie.mp4', controls: true });
 editor.insertEquation('b1', 'E=mc^2');
-editor.insertInlineEquation('b2', 0, 'x^2');
+const eq = editor.insertInlineEquation('b2', 0, 'x^2');
+editor.insertTextAfterInline(eq, ' is x squared');
 editor.insertLineBreak('b2', 3);
 editor.insertDate('b2', 4, '2026-06-23', 'MMM d, yyyy');
 ```
