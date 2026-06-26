@@ -1,34 +1,18 @@
-import type { InferType } from '@loro-mirror/packages/core/src';
 import type { LanguageModel } from 'ai';
-import type { SerializedEditorState } from 'lexical';
-import { SyncEngine } from '../../app/packages/core/collab/engine';
 import { LoroManager } from '../../app/packages/core/collab/manager';
 import type { RawUpdate } from '../../app/packages/core/collab/shared';
 import {
   InMemoryWALStore,
   WALSyncer,
 } from '../../app/packages/core/collab/wal';
-import {
-  MARKDOWN_LORO_SCHEMA,
-  type MarkdownLoroSchemaType,
-} from '../../lexical-core/markdown-loro-schema';
-import { $updateAllNodeIds } from '../../lexical-core/plugins/nodeIdPlugin';
+import { MARKDOWN_LORO_SCHEMA } from '../../lexical-core/markdown-loro-schema';
 import { supervisor } from './ai-editing/agents';
-import {
-  createEditingSession,
-  loadSnapshot,
-  toSnapshot,
-} from './ai-editing/ai-toolkit';
-import {
-  nextAiPeerId,
-  realAwarenessSource,
-  sharedPeerPool,
-} from './ai-editing/awareness';
 import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
-import { createWorkerAwareness, createWorkerSyncSource } from './sources';
+import { EditingWorkspace } from './editing-workspace';
+import { createWorkerSyncSource } from './sources';
 import { buildTraceLog } from './trace-log';
 
 export type Model = {
@@ -88,16 +72,10 @@ export async function runEditSession(
   }
   const initial = initialResult.value;
 
-  // The manager owns the one true (merged) doc + mirror. Defer state changes to
-  // the engine on a microtask: loro fires the mirror subscriber synchronously
-  // during `importUpdate`, and the engine guards remote handling with a mutex —
-  // calling `onStateUpdate` inline would re-enter that lock. (The browser gets
-  // this deferral for free via a Solid effect; here we do it by hand.)
-  let engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown> | undefined;
+  // The manager owns the one true (merged) doc + mirror.
   const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, {
     documentId: args.documentId,
   });
-  manager.onStateChange((u) => queueMicrotask(() => engine?.onStateUpdate(u)));
 
   const initResult = await manager.initializeFromSnapshot(initial.snapshot);
   if (initResult.isErr()) {
@@ -107,78 +85,29 @@ export async function runEditSession(
     );
   }
 
-  // The AI's editing surface — seeded from the merged state and kept current.
-  const session = createEditingSession();
-  loadSnapshot(
-    session,
-    manager.mirror!.getState() as unknown as SerializedEditorState
-  );
-
-  const awareness = createWorkerAwareness(manager.peerIdStr);
   const wal = new WALSyncer<RawUpdate>(
     new InMemoryWALStore<RawUpdate>(),
     (updates) => source.pushUpdate(updates)
   );
 
-  engine = new SyncEngine({
-    loroManager: manager,
-    awareness,
-    syncs: { wal, live: source },
-    bindings: {
-      // A remote (human) edit landed — fold it into the AI's session so its
-      // next diff is a clean delta and the user's text is preserved.
-      onRemoteState: (state) =>
-        loadSnapshot(session, state as unknown as SerializedEditorState),
-    },
-  });
-  engine.start();
-
-  // Each `propagate` syncs the *current* session state through the engine. We
-  // serialize on a promise chain. By the time we are done we have a queue of
-  // stuff that we have to finish waiting to complete.
-  //
-  // The agents don't care WHEN their changes are applied.
-  let chain: Promise<void> = Promise.resolve();
-  const propagate = () => {
-    chain = chain.then(async () => {
-      const newPeer = nextAiPeerId();
-      manager.doc.commit();
-      manager.doc.setPeerId(newPeer);
-      source.registerPeerId(newPeer);
-      // Prism creates code-highlight nodes without ids (skipTransforms).
-      // Stamp ids before snapshotting so the Loro mirror matches them by id
-      // instead of re-inserting duplicates on every sync.
-      session.editor.update(() => $updateAllNodeIds(session.ids), {
-        discrete: true,
-      });
-      const snap = toSnapshot(session);
-      await engine!.syncStateToLoro(
-        snap as unknown as InferType<MarkdownLoroSchemaType>
-      );
-    });
-  };
+  // The workspace owns the editing surface + its two-way sync with Loro, and
+  // hands out per-coder writers.
+  const workspace = new EditingWorkspace(manager, source, wal);
 
   const allOps: DocumentOp[] = [];
   // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
   const startedAt = new Date();
-  const initialDocument = args.debug ? serializeWithXml(session) : undefined;
+  const initialDocument = args.debug
+    ? serializeWithXml(workspace.session)
+    : undefined;
   try {
     const { totalUsage, steps, intent, clarification } = await supervisor(
-      session,
+      workspace.session,
       args.prompt,
       args.models,
       {
-        propagate,
-        peerPool: sharedPeerPool,
-        makeAwareness: (name, color) =>
-          realAwarenessSource({
-            mirror: manager.mirror!,
-            doc: manager.doc,
-            send: (bytes) => source.pushAwareness(bytes),
-            name,
-            color,
-          }),
+        borrowWriter: () => workspace.borrowWriter(),
         typingAnimations: args.typingAnimations,
         signal: args.signal,
         interpret: args.interpret,
@@ -188,10 +117,9 @@ export async function runEditSession(
       }
     );
 
-    propagate();
-    // Drain the last queued propagate + ensure every commit reached the server
-    // before we disconnect.
-    await chain;
+    // Drain the queued propagates (plus a final catch-all sync) and ensure every
+    // commit reached the server before we disconnect.
+    await workspace.flush();
     await wal.flush();
 
     const usage = totalUsage.toEntries();
@@ -219,7 +147,7 @@ export async function runEditSession(
 
     return { usage, ops: allOps, trace, clarification };
   } finally {
-    engine.stop();
+    workspace.dispose();
     wal.destroy();
     manager.dispose();
     source.cleanup();

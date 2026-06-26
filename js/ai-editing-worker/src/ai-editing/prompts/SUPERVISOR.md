@@ -26,7 +26,7 @@ Use the `<intent>` block as the resolved task. Apply it by calling `dispatch`. S
 - If applied and the document shown in the result looks correct, finish.
 - If blocked, failed, or wrong, dispatch a clearer correction using current ids from the latest result.
 - Judge by content and structure, not id stability.
-- It is up to you to determine when we are "done" and the result is satisfactory; don't go on forever.
+- It is up to you to determine when we are "done" and the result is satisfactory; don't go on forever. Also don't make changes that undo all of your hard work if it's mostly done.
 
 ## When You Cannot Proceed
 

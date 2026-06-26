@@ -20,7 +20,7 @@ import {
   $getId,
   $updateAllNodeIds,
 } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import type { Session } from './session';
+import type { LexicalSession } from './session';
 
 export type BlockData =
   | { type: 'paragraph' }
@@ -48,7 +48,7 @@ export function $blockNode(data: BlockData): ElementNode {
  * can't reshape a container in place.
  */
 export function $setBlockType(
-  session: Session,
+  session: LexicalSession,
   block: ElementNode,
   make: () => ElementNode
 ): ElementNode {
@@ -116,7 +116,7 @@ export function $prependBlock(...nodes: ElementNode[]): ElementNode[] {
 export function $moveBlock(
   block: LexicalNode,
   to: { placement: 'after' | 'before'; id: string },
-  session?: Session
+  session?: LexicalSession
 ): void {
   // `to` id is resolved against the active editor state via key mappings if a
   // session is provided; otherwise the target is resolved by walking the root.
@@ -132,7 +132,7 @@ export function $moveBlock(
   }
 }
 
-function findTopLevelById(id: string, session?: Session): ElementNode | null {
+function findTopLevelById(id: string, session?: LexicalSession): ElementNode | null {
   if (session) {
     const key = session.ids.idToNodeKeyMap.get(id);
     if (key) {

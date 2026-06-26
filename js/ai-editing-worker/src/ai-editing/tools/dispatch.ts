@@ -1,7 +1,7 @@
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
 import type { coder } from '../agents';
-import type { Session } from '../ai-toolkit';
+import type { LexicalSession } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOpQueueParams } from '../queue';
@@ -171,13 +171,14 @@ function xmlWindow(xml: string, range: ContextRange, padding = 2): string {
   return numbered.slice(lo, hi + 1).join('\n');
 }
 
-/** A borrowed writer identity (its own cursor). `release` clears the cursor and
- *  returns the peer to the pool; call it when the writer ends. */
-export type Writer = { awarenessSource: AwarenessSource; release: () => void };
+export type Writer = {
+  doc: Doc;
+  awarenessSource: AwarenessSource;
+  release: () => void;
+};
 
 export type DispatchToolOptions = {
-  session: Session;
-  doc: Doc;
+  session: LexicalSession;
   childModel: LanguageModel;
   tracker: TokenTracker;
   runner: RunCodeToolOptions['runner'];
@@ -186,7 +187,7 @@ export type DispatchToolOptions = {
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
   runTask: typeof coder;
-  serialize?: (session: Session) => string;
+  serialize?: (session: LexicalSession) => string;
   onOps?: RunCodeToolOptions['onOps'];
   /** Called after each dispatch batch with the JS code blocks run by each coder. */
   onCoderResult?: (codes: string[][]) => void;
@@ -195,7 +196,6 @@ export type DispatchToolOptions = {
 export function createDispatchTool(opts: DispatchToolOptions) {
   const {
     session,
-    doc,
     childModel,
     tracker,
     params,
@@ -238,7 +238,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
       const results = await Promise.all(
         edits.map(async ({ editing_instruction, snippets }, i) => {
           const writer = await makeWriter();
-          const { awarenessSource } = writer;
+          const { doc, awarenessSource } = writer;
           try {
             return await runTask(session, editing_instruction, childModel, {
               doc,

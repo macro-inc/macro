@@ -7,10 +7,10 @@ import {
   type TextNode,
 } from 'lexical';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import type { Session } from './session';
+import type { LexicalSession } from './session';
 import { collectTextNodes } from './tree';
 
-export function $byId(session: Session, id: string): LexicalNode {
+export function $byId(session: LexicalSession, id: string): LexicalNode {
   const key = session.ids.idToNodeKeyMap.get(id);
   const node = key != null ? $getNodeByKey(key) : null;
   if (!node) {
@@ -25,7 +25,7 @@ export function $byId(session: Session, id: string): LexicalNode {
  * nearest block-level element (the containing paragraph, heading, list item,
  * quote, …). Throws `Error` only if nothing block-level is found.
  */
-export function $blockById(session: Session, id: string): ElementNode {
+export function $blockById(session: LexicalSession, id: string): ElementNode {
   let node: LexicalNode | null = $byId(session, id);
   while (node && !($isElementNode(node) && !node.isInline())) {
     node = node.getParent();
@@ -41,7 +41,7 @@ export function $blockById(session: Session, id: string): ElementNode {
  * this in XML mode when you want to act on a specific text span without
  * knowing its parent block id. Throws if the id resolves to a non-text node.
  */
-export function $textById(session: Session, id: string): TextNode {
+export function $textById(session: LexicalSession, id: string): TextNode {
   const node = $byId(session, id);
   if (!$isTextNode(node)) throw new Error(`Node "${id}" is not a TextNode`);
   return node;

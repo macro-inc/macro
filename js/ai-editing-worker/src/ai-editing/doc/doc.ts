@@ -69,7 +69,7 @@ import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
 import * as modify from '../ai-toolkit/modify';
-import type { Session } from '../ai-toolkit/session';
+import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
 import * as tree from '../ai-toolkit/tree';
 import type {
@@ -98,7 +98,7 @@ const FORMAT_BIT: Record<
 
 export class Doc implements DocReader, DocWriter {
   constructor(
-    private readonly session: Session,
+    private readonly session: LexicalSession,
     /** Push the new state out (snapshot to mirror to Loro). Noop in unit tests. */
     private readonly propagate: () => void = () => {}
   ) {}

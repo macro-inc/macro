@@ -44,7 +44,7 @@ describe('PeerPool', () => {
   it('release of an unknown peer is a no-op', async () => {
     const pool = new PeerPool({ names, colors });
     const a = await pool.borrow();
-    pool.release({ name: 'X', color: 'blue' }); // never borrowed
+    pool.release({ name: 'X', color: 'blue', peerId: 0n }); // never borrowed
     pool.release(a);
     pool.release(a); // double release
     expect(pool.outstanding).toBe(0);

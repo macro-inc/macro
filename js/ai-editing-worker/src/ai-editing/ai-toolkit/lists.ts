@@ -8,7 +8,7 @@ import {
 } from '@lexical/list';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 import { $updateAllNodeIds } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import type { Session } from './session';
+import type { LexicalSession } from './session';
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
@@ -65,7 +65,7 @@ export function $toggleList(blocks: LexicalNode[], type: ListKind): ListNode {
 export function $setListType(
   node: LexicalNode,
   type: ListKind,
-  session: Session
+  session: LexicalSession
 ): ListNode {
   let list: LexicalNode | null = node;
   while (list && !$isListNode(list)) {

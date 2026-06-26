@@ -1,5 +1,5 @@
 import { toXml } from '../../../lexical-core/transformers/xml';
-import type { Session } from './ai-toolkit';
+import type { LexicalSession } from './ai-toolkit';
 
 /** Prefix each line with a 1-indexed `N | ` gutter -- the line addressing the agents read. */
 export function numberLines(text: string): string {
@@ -9,6 +9,6 @@ export function numberLines(text: string): string {
     .join('\n');
 }
 
-export function serializeWithXml(session: Session): string {
+export function serializeWithXml(session: LexicalSession): string {
   return toXml(session.editor.getEditorState().toJSON());
 }

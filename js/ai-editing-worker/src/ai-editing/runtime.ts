@@ -1,6 +1,6 @@
 import { $getRoot, $isElementNode, type LexicalNode } from 'lexical';
 import { $getId } from '../../../lexical-core/plugins/nodeIdPlugin';
-import type { Session } from './ai-toolkit/session';
+import type { LexicalSession } from './ai-toolkit/session';
 import type { AwarenessSource } from './awareness';
 import type { Doc } from './doc';
 import type { DocumentOp } from './editor';
@@ -12,7 +12,7 @@ import {
 } from './queue';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
-export function docIds(session: Session): Set<string> {
+export function docIds(session: LexicalSession): Set<string> {
   return session.editor.getEditorState().read(() => {
     const ids = new Set<string>();
     const walk = (node: LexicalNode) => {
@@ -33,7 +33,7 @@ export type CodeRunner = (
 ) => DocumentOp[] | Promise<DocumentOp[]>;
 
 export type RunEditorCodeArgs = {
-  session: Session;
+  session: LexicalSession;
   doc: Doc;
   code: string;
   awarenessSource: AwarenessSource;

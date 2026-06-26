@@ -1,5 +1,5 @@
 import { generateText, hasToolCall, type LanguageModel, stepCountIs } from 'ai';
-import type { Session } from '../ai-toolkit';
+import type { LexicalSession } from '../ai-toolkit';
 import API_COMPLETE from '../prompts/API_COMPLETE.md';
 import CODER from '../prompts/CODER.md';
 import SHARED from '../prompts/SHARED.md';
@@ -12,7 +12,7 @@ export const CHILD_SYSTEM = `${SHARED}\n${CODER}\n${API_COMPLETE}`;
 
 /** One writer: carry out a single edit instruction via the `editor` surface. */
 export async function coder(
-  session: Session,
+  session: LexicalSession,
   task: string,
   model: LanguageModel,
   deps: RunTaskDeps

@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { Session } from '../ai-toolkit';
+import type { LexicalSession } from '../ai-toolkit';
 import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOp } from '../editor';
@@ -8,7 +8,7 @@ import type { DocumentOpQueueParams } from '../queue';
 import { type CodeRunner, runEditorCode } from '../runtime';
 
 export type RunCodeToolOptions = {
-  session: Session;
+  session: LexicalSession;
   doc: Doc;
   awarenessSource: AwarenessSource;
   runner: CodeRunner;

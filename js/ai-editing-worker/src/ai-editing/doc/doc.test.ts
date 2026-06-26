@@ -9,11 +9,11 @@ import {
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { read, setup } from '../ai-toolkit/_test-helpers';
-import type { Session } from '../ai-toolkit/session';
+import type { LexicalSession } from '../ai-toolkit/session';
 import { serializeWithXml } from '../utils';
 import { Doc } from './doc';
 
-function textRuns(session: Session, blockIdx = 0) {
+function textRuns(session: LexicalSession, blockIdx = 0) {
   return read(session, () => {
     const block = $getRoot().getChildren()[blockIdx] as ElementNode;
     const runs: Array<{ text: string; bold: boolean; italic: boolean }> = [];
@@ -31,7 +31,7 @@ function textRuns(session: Session, blockIdx = 0) {
   });
 }
 
-function childIds(session: Session, topLevelIndex = 0): string[] {
+function childIds(session: LexicalSession, topLevelIndex = 0): string[] {
   return read(session, () => {
     const block = $getRoot().getChildren()[topLevelIndex] as ElementNode;
     return block.getChildren().map((c) => $getId(c) ?? '?');
@@ -556,7 +556,7 @@ describe('Doc — tables', () => {
   });
 });
 
-function tableRows(session: Session) {
+function tableRows(session: LexicalSession) {
   return read(session, () => {
     let table: LexicalNode | undefined;
     const walk = (n: LexicalNode) => {
@@ -568,7 +568,7 @@ function tableRows(session: Session) {
   });
 }
 
-function rowCellCounts(session: Session): number[] {
+function rowCellCounts(session: LexicalSession): number[] {
   return read(session, () => {
     let table: LexicalNode | undefined;
     const walk = (n: LexicalNode) => {

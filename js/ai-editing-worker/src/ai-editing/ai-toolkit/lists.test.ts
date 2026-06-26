@@ -11,7 +11,7 @@ import { serializeWithXml } from '../utils';
 import { edit, read, setup, topLevelIds } from './_test-helpers';
 import { $setListType, $toggleList } from './lists';
 import { $byId } from './locate';
-import { createEditingSession, loadMarkdown, type Session } from './session';
+import { createEditingSession, loadMarkdown, type LexicalSession } from './session';
 
 describe('deferred: lists', () => {
   it('$toggleList creates one list block (fresh id); items get fresh ids', () => {
@@ -60,7 +60,7 @@ describe('deferred: lists', () => {
 
 describe('$setListType / $toggleList separation', () => {
   // find the deepest list item with the given text
-  const deepItemId = (session: Session, text: string) =>
+  const deepItemId = (session: LexicalSession, text: string) =>
     read(session, () => {
       let target: ListItemNode | undefined;
       const walk = (n: LexicalNode) => {

@@ -1,7 +1,8 @@
 import PQueue from 'p-queue';
+import { nextAiPeerId } from './ai-peer';
 import { AI_NAMES, COLORS } from './awareness-source';
 
-export type Peer = { name: string; color: string };
+export type Peer = { name: string; color: string; peerId: bigint };
 
 export class PeerPool {
   private readonly names: string[];
@@ -15,7 +16,7 @@ export class PeerPool {
   constructor(opts?: { names?: string[]; colors?: string[]; max?: number }) {
     this.names = [...(opts?.names ?? AI_NAMES)];
     this.colors = [...(opts?.colors ?? COLORS)];
-    this.gate = new PQueue({ concurrency: opts?.max ?? 8 });
+    this.gate = new PQueue({ concurrency: opts?.max ?? 6 });
   }
 
   /** Acquire a unique identity, waiting if `max` are already out (semaphore). */
@@ -55,7 +56,7 @@ export class PeerPool {
     const used = new Set([...this.out, ...this.free].map((p) => p.name));
     const name = this.names.find((n) => !used.has(n)) ?? this.growName(used);
     const color = this.colors[this.issued() % this.colors.length] ?? '';
-    return { name, color };
+    return { name, color, peerId: nextAiPeerId() };
   }
 
   private growName(used: Set<string>): string {

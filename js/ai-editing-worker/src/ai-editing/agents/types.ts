@@ -1,8 +1,8 @@
-import type { AwarenessSource, PeerPool } from '../awareness';
+import type { AwarenessSource } from '../awareness';
 import type { Doc } from '../doc';
 import type { DocumentOp } from '../editor';
 import type { DocumentOpQueueParams } from '../queue';
-import type { RunCodeToolOptions } from '../tools';
+import type { RunCodeToolOptions, Writer } from '../tools';
 
 export type RunTaskDeps = {
   doc: Doc;
@@ -17,9 +17,7 @@ export type RunTaskDeps = {
 };
 
 export type RunAgentOptions = {
-  propagate: () => void;
-  peerPool: PeerPool;
-  makeAwareness: (name: string, color: string) => AwarenessSource;
+  borrowWriter: () => Promise<Writer>;
   docFormat?: 'markdown' | 'xml';
   interpret?: boolean;
   runner: RunCodeToolOptions['runner'];

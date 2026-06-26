@@ -17,11 +17,11 @@ const newFunctionRunner: CodeRunner = (validIds, code) => {
   return editor.drain();
 };
 
-import type { Session } from './ai-toolkit/session';
+import type { LexicalSession } from './ai-toolkit/session';
 import { createEditingSession, loadMarkdown } from './ai-toolkit/session';
 import { serializeWithXml } from './utils';
 
-function build(md: string): { session: Session; ids: string[] } {
+function build(md: string): { session: LexicalSession; ids: string[] } {
   const session = createEditingSession();
   loadMarkdown(session, md);
   const ids = [...docIds(session)];
@@ -29,7 +29,7 @@ function build(md: string): { session: Session; ids: string[] } {
 }
 
 /** Top-level block ids in document order. */
-function topIds(session: Session): string[] {
+function topIds(session: LexicalSession): string[] {
   return session.editor.getEditorState().read(() =>
     $getRoot()
       .getChildren()
@@ -38,7 +38,7 @@ function topIds(session: Session): string[] {
 }
 
 /** Run a snippet end-to-end (editor → ops → queue → real Doc), no timers/awareness delay. */
-async function runCode(session: Session, code: string): Promise<string> {
+async function runCode(session: LexicalSession, code: string): Promise<string> {
   return runEditorCode({
     session,
     doc: new Doc(session),

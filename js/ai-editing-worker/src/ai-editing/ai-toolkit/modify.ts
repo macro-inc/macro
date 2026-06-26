@@ -5,7 +5,7 @@ import { $isEquationNode } from '../../../../lexical-core/nodes/EquationNode';
 import { $blockNode, $setBlockType, $setText, type BlockData } from './blocks';
 import { $setListType, type ListKind } from './lists';
 import { $byId } from './locate';
-import type { Session } from './session';
+import type { LexicalSession } from './session';
 
 /**
  * A single in-place modification, discriminated by `op`. Each variant carries
@@ -59,7 +59,7 @@ function $asListItem(node: LexicalNode, id: string) {
  * retyped) primary node.
  */
 export function $modifyNode(
-  session: Session,
+  session: LexicalSession,
   target: string | LexicalNode,
   change: NodeChange
 ): LexicalNode {

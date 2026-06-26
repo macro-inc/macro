@@ -18,12 +18,12 @@ import {
 } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '../../../../lexical-core/transformers';
 
-export type Session = {
+export type LexicalSession = {
   editor: LexicalEditor;
   ids: NodeIdMappings;
 };
 
-export function createEditingSession(): Session {
+export function createEditingSession(): LexicalSession {
   const ids: NodeIdMappings = {
     idToNodeKeyMap: new Map(),
     nodeKeyToIdMap: new Map(),
@@ -43,7 +43,7 @@ export function createEditingSession(): Session {
 }
 
 /** Load a document from markdown, replacing any existing content. */
-export function loadMarkdown(session: Session, md: string): void {
+export function loadMarkdown(session: LexicalSession, md: string): void {
   session.editor.update(
     () => {
       $getRoot().clear();
@@ -63,7 +63,7 @@ export function loadMarkdown(session: Session, md: string): void {
 
 /** Load a document from a serialized editor-state snapshot. */
 export function loadSnapshot(
-  session: Session,
+  session: LexicalSession,
   raw: SerializedEditorState
 ): void {
   // Lexical forbids an empty root (setEditorState throws). A document can be
@@ -89,6 +89,6 @@ export function loadSnapshot(
 }
 
 /** Export the current document as a serialized editor-state snapshot. */
-export function toSnapshot(session: Session): SerializedEditorState {
+export function toSnapshot(session: LexicalSession): SerializedEditorState {
   return session.editor.getEditorState().toJSON();
 }
