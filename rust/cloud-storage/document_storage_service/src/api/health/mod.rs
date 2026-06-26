@@ -9,7 +9,7 @@ use axum::{Router, routing::get};
         )
     )]
 pub async fn health_handler() -> String {
-    "healthy gab 2".to_string()
+    "healthy gab 4".to_string()
 }
 
 pub fn router() -> Router {

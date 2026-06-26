@@ -81,13 +81,12 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .arg(target.zig_target())
         .arg("-j")
         .arg(jobs)
-        // Zig does the linking; clear the workspace's mold/lld link arg.
-        .env("RUSTFLAGS", "")
         .env("SQLX_OFFLINE", "true")
         .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .env("AWS_LC_SYS_CMAKE_BUILDER", "1")
         .env("ZIG_GLOBAL_CACHE_DIR", zig_cache)
         .env("ZIG_LOCAL_CACHE_DIR", zig_cache)
+        .env("RUSTC_WRAPPER", "sccache")
         .env("XDG_CACHE_HOME", zig_cache);
     cmd
 }

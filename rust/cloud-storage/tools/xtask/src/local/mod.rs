@@ -266,7 +266,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
         Some(mut fe) if stage.is_tty() => {
-            interact(&stage, mode, &instance, &env, target, &mut fe)?;
+            interact(&stage, mode, &instance, target, &mut fe)?;
         }
         // Non-interactive (piped/CI): just hold the dev server until it exits.
         Some(mut fe) => {
@@ -289,19 +289,24 @@ fn print_hotkeys(stage: &Stage) {
     stage.note("  [r] rebuild & reload services   [q] quit (tears the stack down)");
 }
 
-/// Re-build the service binaries on the host and restart their containers so
-/// the bind-mounted binaries reload — the body of the `r` hotkey. The zigbuild
-/// and restart steps run under a single parent spinner (quiet sub-stage) so a
-/// reload is one resolving line, not a stacked multi-line block.
+/// Re-build the service binaries on the host and restart only the containers
+/// whose binary actually changed — the body of the `r` hotkey. The binaries are
+/// bind-mounted at `/app/out`, so a rebuild updates them in-place; the container
+/// just needs to re-exec. We snapshot binary mtimes around the build so a small
+/// change relinks (and restarts) one or two services, not all twelve — and a
+/// no-op build restarts nothing. Runs under a single parent spinner (quiet
+/// sub-stage) so a reload is one resolving line.
 fn rebuild_and_reload(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
-    env: &env_layer::ResolvedEnv,
     target: arch::Target,
 ) -> Result<()> {
     stage.run_step("Rebuilding & reloading services", || {
         let quiet = stage.quiet();
+        let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
+            .map(|svc| binary_mtime(target, svc))
+            .collect();
         build::resolve(
             &quiet,
             target,
@@ -310,8 +315,28 @@ fn rebuild_and_reload(
                 binaries_dir: None,
             },
         )?;
-        restart_services(&quiet, mode, instance, env)
+        let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
+            .zip(before)
+            .filter(|(svc, was)| binary_mtime(target, svc) != *was)
+            .map(|(svc, _)| svc)
+            .collect();
+        if changed.is_empty() {
+            return Ok(()); // nothing rebuilt → nothing to reload
+        }
+        reload_services(&quiet, instance, &changed)
     })
+}
+
+/// Modification time of a service's built binary (`None` if absent). Used to tell
+/// which binaries a rebuild rewrote.
+fn binary_mtime(
+    target: arch::Target,
+    svc: &inventory::RustService,
+) -> Option<std::time::SystemTime> {
+    let path = workspace_root()
+        .join(target.debug_dir())
+        .join(svc.cargo_bin);
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 /// Stay attached to the running stack, handling hotkeys until the user quits or
@@ -323,7 +348,6 @@ fn interact(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
-    env: &env_layer::ResolvedEnv,
     target: arch::Target,
     fe: &mut frontend::Frontend,
 ) -> Result<()> {
@@ -352,7 +376,7 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(stage, mode, instance, env, target);
+                let _ = rebuild_and_reload(stage, mode, instance, target);
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {
@@ -504,41 +528,37 @@ fn bring_up_app(
     stage.run("Starting services (docker compose up -d)", &mut up)
 }
 
-/// Restart the mode's Rust service containers so they re-exec the freshly built
-/// binaries from the `/app/out` bind mount (no image rebuild).
-fn restart_services(
+/// Restart the given services' containers so they re-exec their freshly built
+/// binaries (bind-mounted at `/app/out`). Uses plain `docker restart -t 0` by
+/// container name — no `docker compose` config parse, no graceful-stop grace,
+/// and only the changed containers — so a reload after a small change is ~1s
+/// rather than bouncing all twelve. Restarting only the changed subset also
+/// avoids the `depends_on` race a full restart hits (a service coming back
+/// before a peer it depends on).
+fn reload_services(
     stage: &Stage,
-    mode: Mode,
     instance: &Instance,
-    env: &env_layer::ResolvedEnv,
+    services: &[&inventory::RustService],
 ) -> Result<()> {
     if stage.is_dry_run() {
         return Ok(());
     }
-    let services: Vec<&str> = inventory::services_for_mode(mode)
+    let mut cmd = Command::new("docker");
+    cmd.arg("restart").arg("-t").arg("0");
+    for svc in services {
+        // Compose names containers `<project>-<service>-1`.
+        cmd.arg(format!(
+            "{}-{}-1",
+            instance.project_name(),
+            svc.compose_name
+        ));
+    }
+    let names = services
+        .iter()
         .map(|s| s.compose_name)
-        .collect();
-
-    // Stop then `up` — NOT `docker compose restart`. The services depend on each
-    // other (connection_gateway → DSS, etc.), and `restart` ignores `depends_on`,
-    // so bouncing them all at once races their startup: a service comes back
-    // before a peer it connects to, errors, and (no restart policy) stays down.
-    // `up` brings them back in dependency order, and starting a stopped container
-    // re-execs its command — picking up the freshly-built binary. The short stop
-    // timeout keeps the reload snappy (the default is 10s of SIGTERM grace each).
-    let mut stop = compose_cmd(instance, env);
-    stop.arg("stop").arg("-t").arg("2");
-    for svc in &services {
-        stop.arg(svc);
-    }
-    stage.run("Stopping services", &mut stop)?;
-
-    let mut up = compose_cmd(instance, env);
-    up.arg("up").arg("-d");
-    for svc in &services {
-        up.arg(svc);
-    }
-    stage.run("Reloading services", &mut up)
+        .collect::<Vec<_>>()
+        .join(", ");
+    stage.run(&format!("Reloading {names}"), &mut cmd)
 }
 
 /// Every Docker volume an instance owns: the app DB/cache/search plus the
@@ -569,8 +589,21 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     let project = instance.project_name();
+    // `-t 0`: SIGKILL immediately, no graceful-shutdown grace. The default 10s
+    // SIGTERM timeout per container (Postgres' smart shutdown, OpenSearch, …)
+    // dominates teardown — and we're wiping the volumes anyway, so a clean
+    // shutdown buys nothing.
     let _ = Command::new("docker")
-        .args(["compose", "-p", project, "down", "-v", "--remove-orphans"])
+        .args([
+            "compose",
+            "-p",
+            project,
+            "down",
+            "-v",
+            "--remove-orphans",
+            "-t",
+            "0",
+        ])
         .output();
     for vol in instance_volumes(instance) {
         let _ = Command::new("docker")

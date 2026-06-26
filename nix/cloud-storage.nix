@@ -18,6 +18,11 @@
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
         file = ../rust/rust-toolchain.toml;
+        # Hash of the fetched rust channel manifest for the pinned toolchain. It's
+        # target-independent (the targets in rust-toolchain.toml are selected from
+        # the manifest after fetch), so adding linux-gnu targets did not change
+        # it. If you bump the channel and nix reports a mismatch, paste the
+        # "got: sha256-..." value here.
         sha256 = "sha256-qqF33vNuAdU5vua96VKVIwuc43j4EFeEXbjQ6+l4mO4=";
       };
 

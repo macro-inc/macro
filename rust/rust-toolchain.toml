@@ -2,9 +2,9 @@
 channel = "1.94.0"
 components = ["clippy", "rustfmt", "rust-analyzer", "rust-src"]
 # The linux-gnu targets are required by `cargo x zigbuild` (the local
-# orchestrator cross-compiles service binaries for the runtime image). The
-# fenix toolchain hash in flake.nix must be recomputed whenever this list
-# changes — see the comment there.
+# orchestrator cross-compiles service binaries for the runtime image). They
+# don't affect the fenix channel-manifest hash in nix/cloud-storage.nix (targets
+# are selected after the manifest is fetched), so adding one needs no hash bump.
 targets = [
   "wasm32-unknown-unknown",
   "aarch64-unknown-linux-gnu",
