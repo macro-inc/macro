@@ -47,10 +47,17 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
 
-  // Read the current search-text signal once at mount so the editor opens
-  // with whatever was captured into per-entry state by the last visit.
-  // Falls back to the explicit `initialValue` prop when entry state is empty.
-  const initialEditorValue = searchText() || props.initialValue;
+  // Open the editor with the text persisted on this history entry. Read the
+  // entry blob directly rather than the provider's searchText() signal: the soup
+  // provider persists across content swaps (#3935), so on re-entry the signal can
+  // lag the per-entry restore, and the editor reads its initial value only once
+  // (it would open empty and never recover). Fall back to the signal, then the
+  // explicit initialValue prop.
+  const persistedSearchText = panel.handle.currentEntryState()?.['search.text'];
+  const initialEditorValue =
+    (typeof persistedSearchText === 'string' && persistedSearchText) ||
+    searchText() ||
+    props.initialValue;
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
