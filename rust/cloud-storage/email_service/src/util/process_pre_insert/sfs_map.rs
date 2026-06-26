@@ -119,8 +119,13 @@ pub async fn rehost_html_images(
 
     let urls: HashSet<String> = extract_all_image_urls(html)?
         .into_iter()
-        // Skip images already on SFS so a re-save doesn't re-upload them.
-        .filter(|url| !url.contains("static-file-service"))
+        // Skip images we never rehost: ones already on SFS (so a re-save doesn't
+        // re-upload them) and Barracuda link-protected URLs (which cache_images
+        // also excludes). Counting either as unresolved would wrongly 422 the save.
+        .filter(|url| {
+            !url.contains("static-file-service")
+                && !url.starts_with("https://linkprotect.cudasvc.com")
+        })
         .collect();
 
     if urls.is_empty() {
