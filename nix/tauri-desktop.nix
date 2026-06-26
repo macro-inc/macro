@@ -64,7 +64,7 @@
         nativeBuildInputs = [
           bun2nix.hook
           pkgs.git
-          pkgs.nodejs
+          pkgs.python3
         ];
 
         inherit bunDeps;
@@ -74,8 +74,7 @@
         dontUseBunInstall = true;
 
         preBunNodeModulesInstallPhase = ''
-          node ${./pin-bun-workspace-deps.mjs} .
-          node ${./prepare-tauri-frontend-source.mjs}
+          python3 ${./prepare-tauri-frontend.py} .
 
           ln -sfn @GH@macro-inc-pdf.js-f9b2ce6@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-pdf.js-v2.16.52-web@@@1"
           ln -sfn @GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
@@ -84,7 +83,7 @@
           ln -sfn ../../@GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@inkibra/tauri-plugins/macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
           chmod -R u+w "$BUN_INSTALL_CACHE_DIR"
 
-          node ${./local-bun-registry.mjs} ${bunDeps}/share/bun-packages > "$TMPDIR/npm-registry-port" &
+          python3 ${./local-bun-registry.py} ${bunDeps}/share/bun-packages > "$TMPDIR/npm-registry-port" &
           registry_pid=$!
           trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
           while [ ! -s "$TMPDIR/npm-registry-port" ]; do
