@@ -1,8 +1,14 @@
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon, type EntityIconSelector } from '@core/component/EntityIcon';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
+import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
+import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
+import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
+import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import { cn, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   InboxItem,
   type InboxItem as InboxItemData,
@@ -86,15 +92,89 @@ export function InboxItemCard(props: {
   );
 }
 
+type ActionIcon = (props: { class?: string }) => JSX.Element;
+
+/** Maps a notification tag to the icon shown in the avatar's action bubble. */
+function actionBubbleIcon(tag: string | undefined): ActionIcon | undefined {
+  if (!tag) return undefined;
+  if (
+    [
+      'channel_mention',
+      'document_mention',
+      'mentioned_in_document_comment',
+      'github_pr_mention',
+    ].includes(tag)
+  ) {
+    return AtIcon;
+  }
+  if (
+    [
+      'channel_message_reply',
+      'replied_to_document_comment_thread',
+      'github_pr_review',
+    ].includes(tag)
+  ) {
+    return ArrowBendUpLeftIcon;
+  }
+  if (['commented_on_document', 'github_pr_comment'].includes(tag)) {
+    return ChatCircleIcon;
+  }
+  if (tag === 'channel_message_send') return ChatTextIcon;
+  if (tag === 'channel_invite' || tag === 'invite_to_team') return UserPlusIcon;
+  if (tag === 'call_started' || tag === 'call-started') return PhoneIcon;
+  if (tag.startsWith('github_')) return GithubIcon;
+  return undefined;
+}
+
+/** Tags whose action bubble uses the full entity icon instead of a glyph. */
+function actionBubbleEntityTarget(
+  tag: string | undefined
+): EntityIconSelector | undefined {
+  if (tag === 'task_assigned') return 'task';
+  if (tag === 'new_email') return 'email';
+  if (tag === 'ai_response') return 'chat';
+  return undefined;
+}
+
+/** Floating icon at the avatar's bottom-right showing the action type. */
+export function InboxItemActionBubble(props: { item: InboxItemData }) {
+  const tag = () => getNotificationTag(props.item);
+  const entityTarget = () => actionBubbleEntityTarget(tag());
+  const icon = () => actionBubbleIcon(tag());
+
+  return (
+    <Show when={entityTarget() || icon()}>
+      <span class="absolute -bottom-1 -right-1 grid size-5 place-items-center overflow-hidden rounded-full bg-surface text-ink-muted ring-2 ring-surface">
+        <Show
+          when={entityTarget()}
+          fallback={
+            <Show when={icon()}>
+              {(Icon) => <Dynamic component={Icon()} class="size-3" />}
+            </Show>
+          }
+        >
+          {(target) => (
+            <span class="grid size-3 place-items-center">
+              <EntityIcon targetType={target()} size="fill" />
+            </span>
+          )}
+        </Show>
+      </span>
+    </Show>
+  );
+}
+
 /** Leading sender avatar used for single (non-grouped) items. */
 export function InboxItemLeadingAvatar(props: { item: InboxItemData }) {
   return (
-    <InboxItem.Sender
-      item={props.item}
-      showName={false}
-      avatarClass="size-10 bg-active text-xs text-ink-muted"
-      class="relative shrink-0 self-start"
-    />
+    <span class="relative inline-flex shrink-0 self-start">
+      <InboxItem.Sender
+        item={props.item}
+        showName={false}
+        avatarClass="size-10 bg-active text-xs text-ink-muted"
+      />
+      <InboxItemActionBubble item={props.item} />
+    </span>
   );
 }
 
