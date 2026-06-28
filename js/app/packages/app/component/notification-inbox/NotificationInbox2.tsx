@@ -31,10 +31,12 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
+import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { Button, cn, Dropdown, Layer } from '@ui';
+import { Button, cn, Dropdown, Layer, Tooltip } from '@ui';
 import { startOfDay, subWeeks } from 'date-fns';
 import {
   createEffect,
@@ -673,6 +675,8 @@ function NotificationInboxList(props: {
   onLoadMore: () => void;
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
+  previewVisible: boolean;
+  onTogglePreview: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [showDevFilters, setShowDevFilters] = createSignal(false);
@@ -947,6 +951,18 @@ function NotificationInboxList(props: {
               </Popover.Content>
             </Popover.Portal>
           </Popover>
+          <Tooltip label="Preview">
+            <Button
+              class="h-7 bg-surface text-ink-muted"
+              depth={2}
+              size="sm"
+              variant={props.previewVisible ? 'active' : 'base'}
+              onClick={props.onTogglePreview}
+            >
+              {props.previewVisible ? <EyeSlashIcon /> : <EyeIcon />}
+              <span>Preview</span>
+            </Button>
+          </Tooltip>
         </div>
       </SplitHeaderLeft>
       <div
@@ -1278,7 +1294,7 @@ export function NotificationInbox2() {
     setSelectedItem(item);
   };
 
-  const previewVisible = () => true;
+  const [previewVisible, setPreviewVisible] = createSignal(true);
 
   createEffect(() => {
     const [getPreview, setPreview] = panel.previewState;
@@ -1314,36 +1330,40 @@ export function NotificationInbox2() {
               }}
               onReadFilterChange={setReadFilter}
               onSelect={handleListSelect}
+              onTogglePreview={() => setPreviewVisible((value) => !value)}
               onToggleFilter={toggleFilter}
+              previewVisible={previewVisible()}
               selectedItem={listSelectedItem()}
             />
           </div>
         </Resize.Panel>
-        <Resize.Panel
-          id="notification-inbox-preview"
-          index={2}
-          minSize={300}
-          target={{ kind: 'percent', percent: 70 }}
-        >
-          <div class="size-full min-h-0 min-w-0">
-            <Show
-              fallback={
-                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                  Select a notification to preview it
-                </div>
-              }
-              when={selectedEntity()}
-            >
-              {(entity) => (
-                <PreviewPanel
-                  orchestrator={orchestrator}
-                  selectedEntity={entity()}
-                  splitPanelContext={panel}
-                />
-              )}
-            </Show>
-          </div>
-        </Resize.Panel>
+        <Show when={previewVisible()}>
+          <Resize.Panel
+            id="notification-inbox-preview"
+            index={2}
+            minSize={300}
+            target={{ kind: 'percent', percent: 70 }}
+          >
+            <div class="size-full min-h-0 min-w-0">
+              <Show
+                fallback={
+                  <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                    Select a notification to preview it
+                  </div>
+                }
+                when={selectedEntity()}
+              >
+                {(entity) => (
+                  <PreviewPanel
+                    orchestrator={orchestrator}
+                    selectedEntity={entity()}
+                    splitPanelContext={panel}
+                  />
+                )}
+              </Show>
+            </div>
+          </Resize.Panel>
+        </Show>
       </Resize.Zone>
     </div>
   );
