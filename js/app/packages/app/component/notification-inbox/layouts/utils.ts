@@ -71,11 +71,11 @@ export function getLocationText(item: InboxItemData, nested?: boolean) {
     return undefined;
   }
   if (item.entityType === 'email' || tag === 'new_email') return undefined;
-  if (item.entityType === 'channel') return item.targetName ?? item.entityName;
+  if (item.entityType === 'channel') return item.entityName ?? item.targetName;
   if (item.notification?.notification_metadata.tag?.startsWith('github_')) {
     return getGithubLocationLabel(item) ?? item.targetName ?? item.entityName;
   }
-  return item.targetName ?? item.entityName;
+  return item.entityName ?? item.targetName;
 }
 
 export function getActionText(item: InboxItemData, nested?: boolean) {
@@ -131,6 +131,7 @@ export function getGroupUnreadCount(item: InboxItemData) {
 
 export function getContentText(item: InboxItemData, groupRoot?: boolean) {
   if (groupRoot) return item.content || item.entityName || item.targetName;
+
   if (item.notification?.notification_metadata.tag === 'new_email') {
     return (
       getEmailSubject(item) ||
@@ -139,18 +140,22 @@ export function getContentText(item: InboxItemData, groupRoot?: boolean) {
       item.content
     );
   }
+
   if (item.notification?.notification_metadata.tag === 'document_mention') {
     return item.entityName || item.targetName || item.content;
   }
+
   if (item.notification?.notification_metadata.tag === 'task_assigned') {
     return item.entityName || item.targetName || item.content;
   }
+
   if (item.notification?.notification_metadata.tag?.startsWith('github_')) {
     return (
       getGithubTitle(item) || item.entityName || item.targetName || item.content
     );
   }
-  return item.content || item.entityName || item.targetName || undefined;
+
+  return item.content || undefined;
 }
 
 export function formatCompactRelativeTimestamp(value: string) {

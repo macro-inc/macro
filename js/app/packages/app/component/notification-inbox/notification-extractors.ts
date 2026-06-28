@@ -54,6 +54,10 @@ export const notificationTitle = (
   const metadata = notificationMetadata(notification);
 
   switch (metadata.tag) {
+    case 'channel_mention':
+    case 'channel_message_send':
+    case 'channel_message_reply':
+      return metadata.content.channelName ?? undefined;
     case 'new_email':
       return (
         metadata.content.sender ||

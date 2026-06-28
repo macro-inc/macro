@@ -19,6 +19,7 @@ import {
   getGroupUnreadCount,
   shouldUseGroupIcon,
 } from './utils';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 
 /**
  * Grouped notifications (an item with sub-items): the channel/thread is the
@@ -49,36 +50,43 @@ export function ChannelThreadGroupLayout(props: InboxItemLayoutProps) {
       >
         <InboxItemLeadingGroupIcon item={item()} />
       </Show>
-      <InboxItemBody>
-        <InboxItemActionRow unread={props.unread}>
-          <Show when={title()}>
-            {(value) => <StaticMarkdown markdown={value()} singleLine />}
-          </Show>
-          <InboxItemBadge count={count()} countUnread={unreadCount() > 0} />
-        </InboxItemActionRow>
-        <Show when={content()}>
-          {(value) => (
-            <div class="flex min-w-0 flex-1 items-center gap-1 text-sm text-ink/60">
-              <InboxItem.Sender
-                item={item()}
-                showName={false}
-                avatarClass="size-4 text-[8px]"
-                class="relative"
-              />
-              <span class="shrink-0 font-medium text-ink/70">
-                <InboxItemSenderSummary items={groupItems()} />
-              </span>
-              <span class="shrink-0">replied:</span>
-              <span class="min-w-0 truncate">
-                <StaticMarkdown markdown={value()} singleLine />
-              </span>
-            </div>
-          )}
-        </Show>
-        <InboxItem.AttachmentPreviews
-          attachments={item().attachments}
-          class="mt-1"
-        />
+      <InboxItemBody class="gap-2">
+        <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1">
+            <InboxItemActionRow unread={props.unread}>
+              <span>{title()}</span>
+              <InboxItemBadge count={count()} countUnread={unreadCount() > 0} />
+            </InboxItemActionRow>
+            <Show when={content()}>
+              {(value) => (
+                <div class="flex min-w-0 flex-1 items-center gap-1 text-sm text-ink/60">
+                  <InboxItem.Sender
+                    item={item()}
+                    showName={false}
+                    avatarClass="size-4 text-[8px]"
+                    class="relative"
+                  />
+                  <span class="shrink-0 font-medium text-ink/70">
+                    <InboxItemSenderSummary items={groupItems()} />
+                  </span>
+                  <span class="shrink-0">replied:</span>
+                  <span class="min-w-0 truncate">
+                    <StaticMarkdown
+                      markdown={value()}
+                      theme={unifiedListMarkdownTheme}
+                      singleLine
+                    />
+                  </span>
+                </div>
+              )}
+            </Show>
+          </div>
+          <InboxItem.AttachmentPreviews
+            attachments={item().attachments}
+            class="mt-1"
+          />
+        </div>
+
         <InboxItemMetaRow
           item={item()}
           expandable

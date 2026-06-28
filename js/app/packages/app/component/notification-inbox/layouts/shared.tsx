@@ -65,7 +65,7 @@ export function InboxItemCard(props: {
           class={cn(
             'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] rounded-lg bg-surface px-2 py-1.5',
             'relative min-h-16 grid-cols-[var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 transition-opacity !ring-0 hover:opacity-100 hover:!ring-0 [--inbox-item-icon-size:2.5rem]',
-            props.unread === false && 'opacity-70',
+            props.unread === false && 'opacity-80',
             !props.selected &&
               !props.highlighted &&
               'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
@@ -130,12 +130,13 @@ export function InboxItemLeadingGroupIcon(props: { item: InboxItemData }) {
 }
 
 /** Body column: the consistent vertical stack of rows next to the icon. */
-export function InboxItemBody(props: { children: JSX.Element }) {
+export function InboxItemBody(props: {
+  class?: string;
+  children: JSX.Element;
+}) {
   return (
-    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-      <div class="flex min-w-0 flex-col gap-1.5">
-        <div class="flex min-w-0 flex-col gap-0.5">{props.children}</div>
-      </div>
+    <div class={cn('flex min-w-0 flex-col gap-0.5', props.class)}>
+      {props.children}
     </div>
   );
 }
@@ -166,7 +167,11 @@ export function InboxItemActionText(props: {
 }) {
   const senderName = useInboxItemSenderName(() => props.item);
   const text = () =>
-    [senderName(), getActionText(props.item, props.nested), getDisplayLocation(props.item, props.nested)]
+    [
+      senderName(),
+      getActionText(props.item, props.nested),
+      getDisplayLocation(props.item, props.nested),
+    ]
       .filter(Boolean)
       .join(' ');
   return <span class="min-w-0 flex-1 truncate">{text()}</span>;
@@ -209,7 +214,9 @@ export function InboxItemContentRow(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class={cn('flex min-w-0 items-center gap-2', props.class)}>
+    <div
+      class={cn('flex min-w-0 items-center gap-2 empty:hidden', props.class)}
+    >
       {props.children}
     </div>
   );
@@ -258,19 +265,21 @@ export function InboxItemMetaRow(props: {
 
   return (
     <Show when={timestamp() || props.expandable}>
-      <div class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+      <div class="flex min-w-0 items-center gap-1.5 text-xs">
         <Show when={timestamp()}>
-          <span class="shrink-0 text-xs text-ink-extra-muted/70">
+          <span class="shrink-0 text-xs text-ink-extra-muted">
             {formatCompactRelativeTimestamp(timestamp() ?? '')}
           </span>
         </Show>
         <Show when={timestamp() && props.expandable}>
-          <span aria-hidden="true">•</span>
+          <span class="text-ink-extra-muted" aria-hidden="true">
+            •
+          </span>
         </Show>
         <Show when={props.expandable}>
           <button
             type="button"
-            class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+            class="text-ink-extra-muted hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

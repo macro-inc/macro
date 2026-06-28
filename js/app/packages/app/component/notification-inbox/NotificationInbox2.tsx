@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { NIL_UUID } from '@app/component/next-soup/filters/configs';
 import {
   compileToAst,
   defineQueryFilters,
@@ -13,6 +14,7 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { TabsInset } from '@core/component/TabsInset';
+import { DefaultFilename } from '@core/constant/filename';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -30,7 +32,6 @@ import {
   compositeEntity,
   type UnifiedNotification,
 } from '@notifications';
-import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
@@ -64,7 +65,6 @@ import {
   getDateGroupLabel,
   getNotificationTime,
 } from './notification-utils';
-import { NIL_UUID } from '@app/component/next-soup/filters/configs';
 
 type InboxSourceItem = {
   entity: EntityData;
@@ -210,9 +210,13 @@ const transformNotificationItem = (args: {
   const notification = args.notification;
   const metadata = notification?.notification_metadata;
   const displayMessage = channelDisplayMessage(args.entity);
+  // A document with no name comes back named with the `DefaultFilename`
+  // placeholder; don't let that win over the notification's real title.
+  const entityName = String(args.entity?.name ?? '');
   const title =
-    String(args.entity?.name ?? '') ||
-    (notification ? notificationTitle(notification) : '');
+    entityName ||
+    (notification ? notificationTitle(notification) : '') ||
+    entityName;
   const showSubItems = metadata?.tag !== 'github_pr_status_changed';
   const subType = notification ? notificationSubType(notification) : undefined;
 
@@ -257,7 +261,9 @@ const transformNotificationItem = (args: {
       displayMessage?.createdAt != null
         ? String(displayMessage.createdAt)
         : (notification?.created_at ?? notification?.updated_at ?? undefined),
-    unread: notification ? !notification.viewed_at && !notification.done : false,
+    unread: notification
+      ? !notification.viewed_at && !notification.done
+      : false,
     subItems: showSubItems ? args.subItems : undefined,
   };
 };

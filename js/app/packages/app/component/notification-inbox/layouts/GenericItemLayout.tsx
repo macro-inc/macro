@@ -14,6 +14,7 @@ import {
   InboxItemMetaRow,
 } from './shared';
 import { getContentText } from './utils';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 
 /**
  * Default single-item layout: leading avatar, an action-text title, a content
@@ -42,31 +43,39 @@ export function GenericItemLayout(
       onClick={props.onClick}
     >
       <InboxItemLeadingAvatar item={item()} />
-      <InboxItemBody>
-        <InboxItemActionRow unread={props.unread}>
-          {props.actionLeading}
-          <InboxItemActionText item={item()} nested={props.nested} />
-          <InboxItemBadge unread={item().unread} />
-        </InboxItemActionRow>
-        <InboxItemContentRow>
-          <Show when={content()}>
-            {(value) => (
-              <p
-                class={cn(
-                  'min-w-0 truncate text-sm text-ink/60',
-                  props.contentClass ?? 'flex-1'
+      <InboxItemBody class="gap-2">
+        <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1">
+            <InboxItemActionRow unread={props.unread}>
+              {props.actionLeading}
+              <InboxItemActionText item={item()} nested={props.nested} />
+              <InboxItemBadge unread={item().unread} />
+            </InboxItemActionRow>
+            <InboxItemContentRow>
+              <Show when={content()?.trim()}>
+                {(value) => (
+                  <p
+                    class={cn(
+                      'min-w-0 truncate text-sm text-ink/60',
+                      props.contentClass ?? 'flex-1'
+                    )}
+                  >
+                    <StaticMarkdown
+                      markdown={value()}
+                      singleLine
+                      theme={unifiedListMarkdownTheme}
+                    />
+                  </p>
                 )}
-              >
-                <StaticMarkdown markdown={value()} singleLine />
-              </p>
-            )}
-          </Show>
-          {props.contentTrailing}
-        </InboxItemContentRow>
-        <InboxItem.AttachmentPreviews
-          attachments={item().attachments}
-          class="mt-1"
-        />
+              </Show>
+              {props.contentTrailing}
+            </InboxItemContentRow>
+          </div>
+          <InboxItem.AttachmentPreviews
+            attachments={item().attachments}
+            class="mt-1"
+          />
+        </div>
         <InboxItemMetaRow item={item()} />
       </InboxItemBody>
     </InboxItemCard>
