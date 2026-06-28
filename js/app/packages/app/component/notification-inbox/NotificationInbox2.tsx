@@ -50,7 +50,7 @@ import {
   type InboxItem as InboxItemData,
   type InboxRelatedDocument,
 } from './InboxItem';
-import { InboxItemActionLocationThirdRowLayout } from './layouts/InboxItemActionLocationThirdRowLayout';
+import { InboxItemLayout } from './layouts/InboxItemLayout';
 import {
   notificationAction,
   notificationContent,
@@ -60,14 +60,13 @@ import {
 import {
   getDateGroupKey,
   getDateGroupLabel,
-  getNotificationGroupKey,
   getNotificationTime,
-  isChannelNotification,
 } from './notification-utils';
+import { NIL_UUID } from '@app/component/next-soup/filters/configs';
 
 type InboxSourceItem = {
   entity: EntityData;
-  notification: UnifiedNotification;
+  notification?: UnifiedNotification;
   relatedDocuments?: InboxRelatedDocument[];
   attachments?: InboxItemData['attachments'];
 };
@@ -185,33 +184,48 @@ const taskProperties = (entity: EntityData | undefined) => {
   return keyProperties.length ? keyProperties : undefined;
 };
 
+const channelDisplayMessage = (entity: EntityData | undefined) => {
+  if (entity?.type === 'channel') return entity.latestMessage;
+  if (entity?.type === 'channel_message' || entity?.type === 'channel_thread') {
+    return {
+      content: entity.content,
+      senderId: entity.senderId,
+      createdAt: entity.createdAt ?? entity.updatedAt,
+    };
+  }
+  return undefined;
+};
+
 const transformNotificationItem = (args: {
   id: string;
-  notification: UnifiedNotification;
+  notification?: UnifiedNotification;
   entity?: EntityData;
   relatedDocuments?: InboxRelatedDocument[];
   attachments?: InboxItemData['attachments'];
   callStatuses?: string[];
   subItems?: InboxItemData[];
 }): InboxItemData => {
-  const metadata = args.notification.notification_metadata;
-  const notificationTitleValue = notificationTitle(args.notification);
-  const title = metadata.tag.startsWith('channel_')
-    ? String(args.entity?.name ?? '') || notificationTitleValue
-    : String(args.entity?.name ?? '') || notificationTitleValue;
-  const showSubItems = metadata.tag !== 'github_pr_status_changed';
+  const notification = args.notification;
+  const metadata = notification?.notification_metadata;
+  const displayMessage = channelDisplayMessage(args.entity);
+  const title =
+    String(args.entity?.name ?? '') ||
+    (notification ? notificationTitle(notification) : '');
+  const showSubItems = metadata?.tag !== 'github_pr_status_changed';
+  const subType = notification ? notificationSubType(notification) : undefined;
 
   return {
     id: args.id,
-    notification: args.notification,
+    notification,
     previewEntity: args.entity,
-    entityId: args.notification.entity_id,
+    entityId: notification?.entity_id ?? args.entity?.id,
     entityType: (String(args.entity?.type ?? '') ||
-      args.notification.entity_type) as InboxItemData['entityType'],
+      notification?.entity_type ||
+      '') as InboxItemData['entityType'],
     entitySubType:
       args.entity?.type === 'document'
-        ? (args.entity.subType?.type ?? notificationSubType(args.notification))
-        : notificationSubType(args.notification),
+        ? (args.entity.subType?.type ?? subType)
+        : subType,
     entityName: title,
     channelType:
       args.entity?.type === 'channel_message' ||
@@ -219,37 +233,46 @@ const transformNotificationItem = (args: {
       args.entity?.type === 'channel'
         ? args.entity.channelType
         : undefined,
-    senderId: args.notification.sender_id ?? undefined,
-    senderName: notificationSenderName(args.notification),
-    action: notificationAction(args.notification),
+    senderId: displayMessage?.senderId ?? notification?.sender_id ?? undefined,
+    senderName:
+      displayMessage || !notification
+        ? undefined
+        : notificationSenderName(notification),
+    action: notification ? notificationAction(notification) : undefined,
     targetName: title,
     content:
-      notificationContent(args.notification) ||
-      (args.entity?.type === 'channel_message' ||
-      args.entity?.type === 'channel_thread'
-        ? args.entity.content
-        : ''),
+      displayMessage?.content ??
+      (notification ? notificationContent(notification) : undefined) ??
+      '',
     properties:
-      metadata.tag === 'task_assigned'
+      metadata?.tag === 'task_assigned'
         ? taskProperties(args.entity)
         : undefined,
     relatedDocuments: args.relatedDocuments,
     attachments: args.attachments,
     callStatuses: args.callStatuses,
-    timestamp: args.notification.created_at ?? args.notification.updated_at,
-    unread: !args.notification.viewed_at && !args.notification.done,
+    timestamp:
+      displayMessage?.createdAt != null
+        ? String(displayMessage.createdAt)
+        : (notification?.created_at ?? notification?.updated_at ?? undefined),
+    unread: notification ? !notification.viewed_at && !notification.done : false,
     subItems: showSubItems ? args.subItems : undefined,
   };
+};
+
+const getInboxItemTime = (item: InboxItemData): number => {
+  if (item.notification) {
+    return getNotificationTime(item.notification as UnifiedNotification);
+  }
+  const time = Date.parse(item.timestamp ?? '');
+  return Number.isNaN(time) ? 0 : time;
 };
 
 const groupInboxItemsByDate = (items: InboxItemData[]): InboxDateGroup[] => {
   const groups = new Map<string, InboxDateGroup>();
 
   for (const item of items) {
-    const notification = item.notification;
-    if (!notification) continue;
-
-    const time = getNotificationTime(notification as UnifiedNotification);
+    const time = getInboxItemTime(item);
     const id = getDateGroupKey(time);
     const existing = groups.get(id);
 
@@ -265,89 +288,91 @@ const groupInboxItemsByDate = (items: InboxItemData[]): InboxDateGroup[] => {
     });
   }
 
-  return Array.from(groups.values()).toSorted(
-    (a, b) =>
-      getNotificationTime(b.items[0].notification as UnifiedNotification) -
-      getNotificationTime(a.items[0].notification as UnifiedNotification)
-  );
-};
-
-const getInboxItemGroupKey = (notification: UnifiedNotification) => {
-  const metadata = notification.notification_metadata;
-  const content = metadata.content as unknown as Record<string, unknown>;
-
-  if (metadata.tag === 'new_email') return `email:${notification.entity_id}`;
-
-  if (isChannelNotification(notification)) {
-    const threadId = content.threadId ? String(content.threadId) : undefined;
-    if (threadId) return `channel-thread:${notification.entity_id}:${threadId}`;
-    return `channel-root:${notification.entity_id}`;
-  }
-
-  if (metadata.tag.startsWith('github_')) {
-    const owner = String(content.owner ?? '');
-    const repo = String(content.repo ?? '');
-    const number = String(content.number ?? '');
-    if (owner || repo || number) return `github:${owner}/${repo}#${number}`;
-  }
-
-  const groupKey = getNotificationGroupKey(notification);
-  if (groupKey) return groupKey;
-
-  if (
-    metadata.tag === 'mentioned_in_document_comment' ||
-    metadata.tag === 'replied_to_document_comment_thread' ||
-    metadata.tag === 'commented_on_document' ||
-    metadata.tag === 'document_mention'
-  ) {
-    return `document:${notification.entity_id}:${String(
-      content.commentId ?? content.threadId ?? content.blockId ?? 'root'
-    )}`;
-  }
-
-  return undefined;
-};
-
-const getInboxSourceItemGroupKey = (item: InboxSourceItem) => {
-  if (item.entity.type === 'call') {
-    if (item.entity.isActive) return undefined;
-    return `call:${item.entity.channelId}`;
-  }
-
-  return getInboxItemGroupKey(item.notification);
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      items: group.items.toSorted(
+        (a, b) => getInboxItemTime(b) - getInboxItemTime(a)
+      ),
+    }))
+    .toSorted(
+      (a, b) => getInboxItemTime(b.items[0]) - getInboxItemTime(a.items[0])
+    );
 };
 
 const inboxSourceItemAttachments = (item: InboxSourceItem) =>
   item.attachments ??
-  channelItemAttachments(item.entity, item.notification) ??
+  (item.notification
+    ? channelItemAttachments(item.entity, item.notification)
+    : undefined) ??
   [];
 
-const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
+const sourceItemId = (item: InboxSourceItem) =>
+  item.notification
+    ? `notification:${item.notification.id}`
+    : `entity:${String(item.entity.type)}:${item.entity.id}`;
+
+// Items that share a group key collapse together; everything else stays on its
+// own. Threads (channel threads and email threads) group per thread; top-level
+// channel messages without a thread join into a single per-channel item.
+const getInboxGroupKey = (entity: EntityData): string | undefined => {
+  if (entity.type === 'channel') return `channel:${entity.id}`;
+  if (entity.type === 'channel_message') {
+    return entity.threadId
+      ? `channel:${entity.channelId}:thread:${entity.threadId}`
+      : `channel:${entity.channelId}`;
+  }
+  if (entity.type === 'channel_thread') {
+    return `channel:${entity.channelId}:thread:${entity.threadId}`;
+  }
+  if (entity.type === 'email') return `email:${entity.id}`;
+  return undefined;
+};
+
+const sourceItemTime = (item: InboxSourceItem): number => {
+  const message = channelDisplayMessage(item.entity);
+  const raw =
+    message?.createdAt ??
+    item.notification?.created_at ??
+    item.notification?.updated_at;
+  const time = raw != null ? Date.parse(String(raw)) : Number.NaN;
+  return Number.isNaN(time) ? 0 : time;
+};
+
+// Threads (channel threads and email threads) group no matter where they fall
+// in the list, so they're clustered together up front. Root channel items and
+// keyless items keep their original order and only group when consecutive.
+const isClusterableGroupKey = (key: string | undefined) =>
+  key !== undefined && (key.includes(':thread:') || key.startsWith('email:'));
+
+const orderForGrouping = (items: InboxSourceItem[]): InboxSourceItem[] =>
+  items.toSorted((a, b) => {
+    const keyA = getInboxGroupKey(a.entity);
+    const keyB = getInboxGroupKey(b.entity);
+    const clusterA = isClusterableGroupKey(keyA);
+    const clusterB = isClusterableGroupKey(keyB);
+    if (!clusterA || !clusterB) {
+      if (clusterA) return -1;
+      if (clusterB) return 1;
+      return 0; // both stay in their original order
+    }
+    if (keyA !== keyB) return keyA! < keyB! ? -1 : 1;
+    return sourceItemTime(b) - sourceItemTime(a);
+  });
+
+// Merges runs of adjacent items that share a group key. Only consecutive items
+// group, so the upstream ordering decides what ends up together.
+const groupConsecutiveSourceItems = (
+  items: InboxSourceItem[]
+): InboxSourceItem[][] => {
   const groups: InboxSourceItem[][] = [];
-  const rootChannelGroups = new Map<string, InboxSourceItem[]>();
   let currentKey: string | undefined;
 
   for (const item of items) {
-    const key = getInboxSourceItemGroupKey(item);
-
-    if (key?.startsWith('channel-root:')) {
-      const existing = rootChannelGroups.get(key);
-      if (existing) {
-        existing.push(item);
-        currentKey = undefined;
-        continue;
-      }
-
-      const group = [item];
-      rootChannelGroups.set(key, group);
-      groups.push(group);
-      currentKey = undefined;
-      continue;
-    }
-
+    const key = getInboxGroupKey(item.entity);
     const current = groups.at(-1);
 
-    if (key && key === currentKey && current) {
+    if (key !== undefined && key === currentKey && current) {
       current.push(item);
       continue;
     }
@@ -356,95 +381,39 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
     groups.push([item]);
   }
 
-  return groups.map((group) => {
-    const root = group[0];
-    const groupKey = getInboxSourceItemGroupKey(root);
-    const groupDateKey = getDateGroupKey(
-      getNotificationTime(root.notification)
-    );
+  return groups;
+};
 
-    return transformNotificationItem({
-      id:
-        group.length > 1
-          ? `${groupDateKey}:${groupKey ?? `notification:${root.notification.id}`}`
-          : `notification:${root.notification.id}`,
-      notification: root.notification,
-      entity: root.entity,
-      attachments: inboxSourceItemAttachments(root),
-      relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
-      callStatuses:
-        root.entity.type === 'call'
-          ? group.flatMap((item) =>
-              item.entity.type === 'call' ? [item.entity.status] : []
-            )
-          : undefined,
-      subItems:
-        group.length > 1
-          ? group.map((item) =>
-              transformNotificationItem({
-                id: `notification:${item.notification.id}`,
-                notification: item.notification,
-                entity: item.entity,
-                attachments: inboxSourceItemAttachments(item),
-              })
-            )
-          : undefined,
-    });
+const buildInboxItem = (group: InboxSourceItem[]): InboxItemData => {
+  const root = group[0];
+  const grouped = group.length > 1;
+
+  return transformNotificationItem({
+    id: grouped ? `group:${sourceItemId(root)}` : sourceItemId(root),
+    notification: root.notification,
+    entity: root.entity,
+    attachments: inboxSourceItemAttachments(root),
+    relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
+    callStatuses:
+      root.entity.type === 'call' ? [root.entity.status] : undefined,
+    subItems: grouped
+      ? group.map((item) =>
+          transformNotificationItem({
+            id: sourceItemId(item),
+            notification: item.notification,
+            entity: item.entity,
+            attachments: inboxSourceItemAttachments(item),
+          })
+        )
+      : undefined,
   });
 };
 
-const isChannelBackedDocumentMention = (item: InboxSourceItem) => {
-  const metadata = item.notification.notification_metadata;
-  return (
-    metadata.tag === 'document_mention' && Boolean(metadata.content.messageId)
-  );
-};
-
-const isChannelInboxItem = (item: InboxSourceItem) =>
-  isChannelNotification(item.notification);
-
-const documentMentionRelatedDocument = (
-  item: InboxSourceItem
-): InboxRelatedDocument | undefined => {
-  const metadata = item.notification.notification_metadata;
-  if (metadata.tag !== 'document_mention') return undefined;
-
-  return {
-    id: item.notification.entity_id,
-    name: metadata.content.documentName,
-    fileType: metadata.content.fileType ?? 'md',
-    senderName: notificationSenderName(item.notification),
-    subType: subTypeName(metadata.content.subType),
-  };
-};
-
-const attachChannelDocumentMentions = (items: InboxSourceItem[]) => {
-  const filtered: InboxSourceItem[] = [];
-
-  for (const item of items) {
-    const previous = filtered.at(-1);
-    const relatedDocument = documentMentionRelatedDocument(item);
-    if (
-      previous &&
-      relatedDocument &&
-      isChannelInboxItem(previous) &&
-      isChannelBackedDocumentMention(item)
-    ) {
-      previous.relatedDocuments = [
-        ...(previous.relatedDocuments ?? []),
-        relatedDocument,
-      ];
-      continue;
-    }
-
-    filtered.push(item);
-  }
-
-  return filtered;
-};
+const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] =>
+  groupConsecutiveSourceItems(orderForGrouping(items)).map(buildInboxItem);
 
 const buildInboxGroups = (items: InboxSourceItem[]): InboxDateGroup[] =>
-  groupInboxItemsByDate(buildInboxItems(attachChannelDocumentMentions(items)));
+  groupInboxItemsByDate(buildInboxItems(items));
 
 const readFilterSeen = (readFilter: ReadFilter) => {
   if (readFilter === 'all') return undefined;
@@ -457,6 +426,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
     seen === undefined
       ? {}
       : {
+          channelId: [NIL_UUID],
           documentSeen: seen,
           emailSeen: seen,
           channelSeen: seen,
@@ -469,7 +439,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
       include: {
         documentId: [],
         threadId: [],
-        channelId: [],
+        channelId: [NIL_UUID],
         channelThreadId: [],
         chatId: [],
         callId: [],
@@ -507,6 +477,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
       emailImportance: true,
       emailUpdatedAt: { gte: twoWeeksAgo },
       channelDone: false,
+      channelId: [NIL_UUID],
       channelThreadId: [],
       chatDone: false,
       chatUpdatedAt: { gte: twoWeeksAgo },
@@ -599,51 +570,6 @@ const getChannelPreviewEntity = (
   } as EntityData;
 };
 
-function getGithubUrl(item: InboxItemData) {
-  const metadata = item.notification?.notification_metadata;
-  if (
-    metadata?.tag !== 'github_pr_status_changed' &&
-    metadata?.tag !== 'github_review_requested' &&
-    metadata?.tag !== 'github_pr_comment' &&
-    metadata?.tag !== 'github_pr_mention' &&
-    metadata?.tag !== 'github_pr_review'
-  ) {
-    return undefined;
-  }
-
-  return `https://github.com/${metadata.content.owner}/${metadata.content.repo}/pull/${metadata.content.number}`;
-}
-
-function GithubPreviewFallback(props: { item: InboxItemData }) {
-  const url = () => getGithubUrl(props.item);
-
-  return (
-    <div class="flex size-full items-center justify-center p-6">
-      <div class="flex max-w-sm flex-col items-center gap-3 text-center">
-        <div class="flex flex-col gap-1">
-          <div class="text-sm font-medium text-ink">PR block coming soon</div>
-          <p class="text-xs text-ink-muted">
-            GitHub pull request previews are not available here yet.
-          </p>
-        </div>
-        <Show when={url()}>
-          {(href) => (
-            <a
-              class="inline-flex h-7 items-center gap-1 rounded-md border border-edge-muted bg-active px-2 text-xs text-ink-muted shadow-sm transition-colors hover:bg-hover hover:text-ink active:bg-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              href={href()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Open in GitHub
-              <ArrowSquareOutIcon class="size-4" />
-            </a>
-          )}
-        </Show>
-      </div>
-    </div>
-  );
-}
-
 function previewEntity(item: InboxItemData): EntityData | undefined {
   if (item.previewEntity) return item.previewEntity;
 
@@ -734,48 +660,6 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
           : {}),
       } as EntityData;
   }
-}
-
-function NotificationInboxGroupItemsPanel(props: {
-  groupItem: InboxItemData;
-  selectedItem: InboxItemData | undefined;
-  onSelect: (item: InboxItemData) => void;
-}) {
-  return (
-    <div class="flex size-full min-h-0 flex-col bg-surface p-2">
-      <div class="mb-2 flex shrink-0 flex-col gap-0.5 px-2 py-1">
-        <h2 class="truncate text-sm font-medium text-ink">
-          {props.groupItem.entityName || props.groupItem.targetName || 'Group'}
-        </h2>
-        <span class="text-xs text-ink-extra-muted">
-          {props.groupItem.subItems?.length ?? 0} notifications
-        </span>
-      </div>
-      <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
-        <For each={props.groupItem.subItems ?? []}>
-          {(item) => (
-            <div class="pb-1">
-              <InboxItem.Root
-                item={item}
-                selected={props.selectedItem?.id === item.id}
-              >
-                <InboxItemActionLocationThirdRowLayout
-                  item={item}
-                  nested
-                  selected={props.selectedItem?.id === item.id}
-                  unread={Boolean(
-                    item.unread ||
-                      item.subItems?.some((subItem) => subItem.unread)
-                  )}
-                  onClick={() => props.onSelect(item)}
-                />
-              </InboxItem.Root>
-            </div>
-          )}
-        </For>
-      </div>
-    </div>
-  );
 }
 
 function NotificationInboxList(props: {
@@ -1184,7 +1068,7 @@ function NotificationInboxList(props: {
                     item={row.item}
                     selected={props.selectedItem?.id === row.item.id}
                   >
-                    <InboxItemActionLocationThirdRowLayout
+                    <InboxItemLayout
                       expanded={isExpanded(row.item)}
                       highlighted={focusedRow()?.item.id === row.item.id}
                       item={row.item}
@@ -1338,17 +1222,21 @@ export function NotificationInbox2() {
           attachments: notificationAttachments(entity, notification),
         });
       }
+
+      // Entities without a notification of their own (e.g. the current user's
+      // own messages) still belong in the inbox — don't filter them out.
+      if (matchingNotifications.length === 0) {
+        const seenKey = `entity:${String(entity.type)}:${entity.id}`;
+        if (!seen.has(seenKey)) {
+          seen.add(seenKey);
+          items.push({ entity });
+        }
+      }
     }
 
     return items;
   });
-  const groups = createMemo(() =>
-    buildInboxGroups(
-      queryItems().filter(
-        (item) => !hiddenTags().has(item.notification.notification_metadata.tag)
-      )
-    )
-  );
+  const groups = createMemo(() => buildInboxGroups(queryItems()));
   const toggleFilter = (filterId: string) => {
     setHiddenFilterIds((ids) =>
       ids.includes(filterId)
@@ -1376,12 +1264,9 @@ export function NotificationInbox2() {
     if (!item) return undefined;
     return previewEntity(item);
   };
-  const selectedGithubUrl = () => {
-    const item = selectedItem();
-    if (!item) return undefined;
-    return getGithubUrl(item);
-  };
+
   const listSelectedItem = () => selectedGroupItem() ?? selectedItem();
+
   const handleListSelect = (item: InboxItemData) => {
     if (item.subItems?.length) {
       setSelectedGroupItem(item);
@@ -1392,6 +1277,7 @@ export function NotificationInbox2() {
     setSelectedGroupItem(undefined);
     setSelectedItem(item);
   };
+
   const previewVisible = () => true;
 
   createEffect(() => {
@@ -1441,29 +1327,20 @@ export function NotificationInbox2() {
         >
           <div class="size-full min-h-0 min-w-0">
             <Show
-              when={selectedGithubUrl()}
               fallback={
-                <Show
-                  fallback={
-                    <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                      Select a notification to preview it
-                    </div>
-                  }
-                  when={selectedEntity()}
-                >
-                  {(entity) => (
-                    <PreviewPanel
-                      orchestrator={orchestrator}
-                      selectedEntity={entity()}
-                      splitPanelContext={panel}
-                    />
-                  )}
-                </Show>
+                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                  Select a notification to preview it
+                </div>
               }
+              when={selectedEntity()}
             >
-              <Show when={selectedItem()}>
-                {(item) => <GithubPreviewFallback item={item()} />}
-              </Show>
+              {(entity) => (
+                <PreviewPanel
+                  orchestrator={orchestrator}
+                  selectedEntity={entity()}
+                  splitPanelContext={panel}
+                />
+              )}
             </Show>
           </div>
         </Resize.Panel>

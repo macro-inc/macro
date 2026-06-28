@@ -1,4 +1,5 @@
 import { type EntityIconSelector } from '@core/component/EntityIcon';
+import { macroIdToEmail, tryMacroId } from '@core/user';
 import {
   differenceInDays,
   differenceInHours,
@@ -149,8 +150,6 @@ export function getContentText(item: InboxItemData, groupRoot?: boolean) {
       getGithubTitle(item) || item.entityName || item.targetName || item.content
     );
   }
-  if (item.entityType === 'channel' || item.entityType === 'channel_thread')
-    return;
   return item.content || item.entityName || item.targetName || undefined;
 }
 
@@ -190,4 +189,42 @@ export function uniqueItemsBySender(items: InboxItemData[]) {
 export function getFirstName(value: string) {
   const name = value.includes('@') ? value.split('@')[0] : value;
   return name.split(/[\s._-]+/).filter(Boolean)[0] ?? name;
+}
+
+export function getDisplayLocation(item: InboxItemData, nested?: boolean) {
+  const value = getLocationText(item, nested);
+  if (!value) return undefined;
+  if (
+    item.entityType === 'channel' ||
+    item.entityType === 'channel_message' ||
+    item.entityType === 'channel_thread'
+  ) {
+    return value.startsWith('#') ? value : `#${value}`;
+  }
+  return value;
+}
+
+// Assumes the item is grouped; callers only render the group icon for groups.
+export function shouldUseGroupIcon(item: InboxItemData) {
+  const tag = getNotificationTag(item);
+  return (
+    item.channelType !== 'direct_message' &&
+    item.entityType !== 'email' &&
+    tag !== 'new_email' &&
+    !(
+      item.entitySubType === 'task' &&
+      (tag === 'mentioned_in_document_comment' ||
+        tag === 'replied_to_document_comment_thread' ||
+        tag === 'commented_on_document')
+    )
+  );
+}
+
+export function getSenderDisplayName(item: InboxItemData) {
+  const macroId = tryMacroId(item.senderId ?? item.senderName ?? '');
+  return macroId ? macroIdToEmail(macroId) : parseInboxSenderName(item);
+}
+
+export function getSenderFirstName(item: InboxItemData) {
+  return getFirstName(getSenderDisplayName(item));
 }
