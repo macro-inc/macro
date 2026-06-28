@@ -15,6 +15,7 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { TabsInset } from '@core/component/TabsInset';
 import { DefaultFilename } from '@core/constant/filename';
+import { useChannelsContext } from '@core/context/channels';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -1121,6 +1122,7 @@ export function NotificationInbox2() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
+  const channelsContext = useChannelsContext();
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
   const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
   const [inboxMode, setInboxMode] = createSignal<InboxMode>('signal');
@@ -1186,12 +1188,28 @@ export function NotificationInbox2() {
       return thread ? channelItemAttachments(thread, notification) : undefined;
     };
 
+    // Channel entities (esp. threads) come back with a generic name, so resolve
+    // the real channel name from channels context when mapping.
+    const channelsById = channelsContext.channelsById();
+    const mapEntityName = (entity: EntityData): EntityData => {
+      const channelId =
+        entity.type === 'channel'
+          ? entity.id
+          : entity.type === 'channel_message' ||
+              entity.type === 'channel_thread'
+            ? entity.channelId
+            : undefined;
+      if (!channelId) return entity;
+      const name = channelsById[channelId]?.name;
+      return name ? { ...entity, name } : entity;
+    };
+
     for (const entity of entities) {
       const keys = new Set([
         compositeEntity(toNotificationEntity(entity)),
         `${String(entity.type)}@${entity.id}` as CompositeEntity,
       ]);
-      if (entity.type === 'call') {
+      if (entity.type === 'call' || entity.type === 'channel_thread') {
         keys.add(compositeEntity({ type: 'channel', id: entity.channelId }));
       }
       const entityNotifications: UnifiedNotification[] = [];
@@ -1217,6 +1235,7 @@ export function NotificationInbox2() {
             return content?.messageId === entity.messageId;
           }
 
+          console.log(entity, notification);
           if (entity.type === 'channel_thread') {
             const content = notification.notification_metadata.content as
               | { threadId?: string; messageId?: string }
@@ -1239,7 +1258,7 @@ export function NotificationInbox2() {
         if (notification.deleted_at || seen.has(seenKey)) continue;
         seen.add(seenKey);
         items.push({
-          entity,
+          entity: mapEntityName(entity),
           notification,
           attachments: notificationAttachments(entity, notification),
         });
@@ -1251,7 +1270,7 @@ export function NotificationInbox2() {
         const seenKey = `entity:${String(entity.type)}:${entity.id}`;
         if (!seen.has(seenKey)) {
           seen.add(seenKey);
-          items.push({ entity });
+          items.push({ entity: mapEntityName(entity) });
         }
       }
     }

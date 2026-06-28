@@ -622,9 +622,8 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       const out: ChannelThreadEntity = {
         type: 'channel_thread',
         id: item.data.id,
-        name: blockNameToDefaultFile('channel'),
+        name: 'Channel thread',
         channelId: item.data.channel_id,
-        channelName: blockNameToDefaultFile('channel'),
         messageId: item.data.id,
         threadId: item.data.id,
         senderId: item.data.sender_id,

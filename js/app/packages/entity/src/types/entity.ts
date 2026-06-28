@@ -86,7 +86,6 @@ export type ChannelMessageEntity = EntityBase & {
 export type ChannelThreadEntity = EntityBase & {
   type: 'channel_thread';
   channelId: string;
-  channelName: string;
   channelType?: ChannelEntity['channelType'];
   messageId: string;
   threadId: string;

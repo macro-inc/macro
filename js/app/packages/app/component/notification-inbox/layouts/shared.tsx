@@ -1,4 +1,7 @@
-import { EntityIcon, type EntityIconSelector } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
 import GithubIcon from '@icon/mcp-github.svg';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
@@ -26,7 +29,6 @@ import {
   uniqueItemsBySender,
 } from './utils';
 
-/** Props shared by the dispatcher and every per-item layout. */
 export interface InboxItemLayoutProps {
   item: InboxItemData;
   unread?: boolean;
@@ -39,10 +41,6 @@ export interface InboxItemLayoutProps {
   onToggleExpanded?: () => void;
 }
 
-/**
- * Outer card shell: handles selected/highlighted/unread styling and keyboard
- * interactivity. Children are the two grid cells: a leading icon and the body.
- */
 export function InboxItemCard(props: {
   unread?: boolean;
   selected?: boolean;
@@ -94,7 +92,6 @@ export function InboxItemCard(props: {
 
 type ActionIcon = (props: { class?: string }) => JSX.Element;
 
-/** Maps a notification tag to the icon shown in the avatar's action bubble. */
 function actionBubbleIcon(tag: string | undefined): ActionIcon | undefined {
   if (!tag) return undefined;
   if (
@@ -126,7 +123,6 @@ function actionBubbleIcon(tag: string | undefined): ActionIcon | undefined {
   return undefined;
 }
 
-/** Tags whose action bubble uses the full entity icon instead of a glyph. */
 function actionBubbleEntityTarget(
   tag: string | undefined
 ): EntityIconSelector | undefined {
@@ -136,7 +132,6 @@ function actionBubbleEntityTarget(
   return undefined;
 }
 
-/** Floating icon at the avatar's bottom-right showing the action type. */
 export function InboxItemActionBubble(props: { item: InboxItemData }) {
   const tag = () => getNotificationTag(props.item);
   const entityTarget = () => actionBubbleEntityTarget(tag());
@@ -164,7 +159,6 @@ export function InboxItemActionBubble(props: { item: InboxItemData }) {
   );
 }
 
-/** Leading sender avatar used for single (non-grouped) items. */
 export function InboxItemLeadingAvatar(props: { item: InboxItemData }) {
   return (
     <span class="relative inline-flex shrink-0 self-start">
@@ -178,7 +172,6 @@ export function InboxItemLeadingAvatar(props: { item: InboxItemData }) {
   );
 }
 
-/** Leading group icon (channel thread / github / entity) used for groups. */
 export function InboxItemLeadingGroupIcon(props: { item: InboxItemData }) {
   return (
     <span class="self-start">
@@ -209,7 +202,6 @@ export function InboxItemLeadingGroupIcon(props: { item: InboxItemData }) {
   );
 }
 
-/** Body column: the consistent vertical stack of rows next to the icon. */
 export function InboxItemBody(props: {
   class?: string;
   children: JSX.Element;
@@ -221,7 +213,6 @@ export function InboxItemBody(props: {
   );
 }
 
-/** Top row (title / action text + trailing badge). */
 export function InboxItemActionRow(props: {
   unread?: boolean;
   class?: string;
@@ -240,7 +231,6 @@ export function InboxItemActionRow(props: {
   );
 }
 
-/** Sender + action + location summary shown as the single-item title. */
 export function InboxItemActionText(props: {
   item: InboxItemData;
   nested?: boolean;
@@ -257,7 +247,6 @@ export function InboxItemActionText(props: {
   return <span class="min-w-0 flex-1 truncate">{text()}</span>;
 }
 
-/** Trailing badge: an unread count pill for groups or a dot for single items. */
 export function InboxItemBadge(props: {
   count?: number;
   countUnread?: boolean;
@@ -288,7 +277,6 @@ export function InboxItemBadge(props: {
   );
 }
 
-/** Content row container (holds the message preview and any trailing pills). */
 export function InboxItemContentRow(props: {
   class?: string;
   children: JSX.Element;
@@ -302,7 +290,6 @@ export function InboxItemContentRow(props: {
   );
 }
 
-/** Collapsed list of who participated, e.g. "Ada", "Ada, Linus", "Ada and 3 others". */
 export function InboxItemSenderSummary(props: { items: InboxItemData[] }) {
   const uniqueSenders = () => uniqueItemsBySender(props.items);
   const firstSender = () => uniqueSenders()[0];
@@ -334,7 +321,6 @@ export function InboxItemSenderSummary(props: { items: InboxItemData[] }) {
   );
 }
 
-/** Bottom row: relative timestamp and (for groups) the expand/collapse toggle. */
 export function InboxItemMetaRow(props: {
   item: InboxItemData;
   expandable?: boolean;
