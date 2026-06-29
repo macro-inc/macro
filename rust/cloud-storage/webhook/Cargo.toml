@@ -22,6 +22,7 @@ outbound = [
   "dep:hmac",
   "dep:reqwest",
   "dep:sha2",
+  "dep:macro_uuid",
   "dep:sqlx",
   "dep:url",
   "ports",
@@ -36,6 +37,7 @@ chrono = { workspace = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rate_limit = { path = "../rate_limit", optional = true, default-features = false }
@@ -51,6 +53,7 @@ utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", default-features = false, features = [
   "axum",
   "testing",
