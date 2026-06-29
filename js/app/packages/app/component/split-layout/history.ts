@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 
 export type History<T extends object> = {
   readonly items: ReadonlyArray<T>;
@@ -22,7 +22,11 @@ const inc = (x: number) => x + 1;
 const dec = (x: number) => x - 1;
 
 export function createHistory<T extends object>(): History<T> {
-  let items: T[] = [];
+  // `items` is a signal rather than a plain mutated array because SplitState.history
+  // is held in the splits store. In-place array mutation is invisible to store
+  // readers, which would leave `items` stale while the `index` signal stays live —
+  // their lengths desync and bounds checks (e.g. entry-state capture) misfire.
+  const [items, setItems] = createSignal<T[]>([]);
   const [index, setIndex] = createSignal(-1);
 
   const canGoBack = () => {
@@ -30,12 +34,13 @@ export function createHistory<T extends object>(): History<T> {
   };
 
   const canGoForward = () => {
-    return index() < items.length - 1;
+    return index() < items().length - 1;
   };
 
   const isAtEnd = () => {
-    if (items.length === 0) return true;
-    return index() === items.length - 1;
+    const len = items().length;
+    if (len === 0) return true;
+    return index() === len - 1;
   };
 
   const push = (next: T) => {
@@ -43,41 +48,47 @@ export function createHistory<T extends object>(): History<T> {
       fork(next);
       return;
     }
-    items.push(next);
-    setIndex(inc);
+    batch(() => {
+      setItems((prev) => [...prev, next]);
+      setIndex(inc);
+    });
   };
 
   const merge = (next: T) => {
-    items.splice(index(), items.length - index());
-    items.push(next);
+    setItems((prev) => [...prev.slice(0, index()), next]);
   };
 
   const replaceCurrent = (next: T) => {
     const i = index();
-    if (i < 0 || i >= items.length) return;
-    items[i] = next;
+    if (i < 0 || i >= items().length) return;
+    setItems((prev) => {
+      const copy = prev.slice();
+      copy[i] = next;
+      return copy;
+    });
   };
 
   const fork = (next: T) => {
-    items.splice(index() + 1, items.length - index() - 1);
-    items.push(next);
-    setIndex(inc);
+    batch(() => {
+      setItems((prev) => [...prev.slice(0, index() + 1), next]);
+      setIndex(inc);
+    });
   };
 
   const back = () => {
     if (!canGoBack()) return null;
     setIndex(dec);
-    return items[index()];
+    return items()[index()];
   };
 
   const forward = () => {
     if (!canGoForward()) return null;
     setIndex(inc);
-    return items[index()];
+    return items()[index()];
   };
 
   const remove = (predicate: (item: T) => boolean) => {
-    const prevItems = items;
+    const prevItems = items();
     const prevIndex = index();
 
     let newIndex = prevIndex;
@@ -95,8 +106,10 @@ export function createHistory<T extends object>(): History<T> {
     }
 
     if (nextItems.length === 0) {
-      items = [];
-      setIndex(-1);
+      batch(() => {
+        setItems([]);
+        setIndex(-1);
+      });
       return null;
     }
 
@@ -104,13 +117,15 @@ export function createHistory<T extends object>(): History<T> {
       newIndex = nextItems.length - 1;
     }
 
-    items = nextItems;
-    setIndex(newIndex);
-    return items[newIndex] ?? null;
+    batch(() => {
+      setItems(nextItems);
+      setIndex(newIndex);
+    });
+    return nextItems[newIndex] ?? null;
   };
   return {
     get items() {
-      return items;
+      return items();
     },
     get index() {
       return index();
