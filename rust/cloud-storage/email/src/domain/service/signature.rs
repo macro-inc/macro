@@ -81,16 +81,34 @@ pub(crate) fn inject_signature(body_html: &str, signature_html: &str) -> String 
     result
 }
 
+/// Removes any server-wrapped signature (the `.macro-email-signature` element
+/// and its contents) from the body. Used to honor an explicit
+/// `include_signature = false` even when a client already baked one in.
+pub(crate) fn strip_signature(body_html: &str) -> String {
+    let selector = format!(".{SIGNATURE_CLASS}");
+    let mut output = Vec::new();
+    let mut rewriter = HtmlRewriter::new(
+        Settings {
+            element_content_handlers: vec![element!(selector.as_str(), |el| {
+                el.remove();
+                Ok(())
+            })],
+            ..Settings::default()
+        },
+        |c: &[u8]| output.extend_from_slice(c),
+    );
+    if rewriter.write(body_html.as_bytes()).is_err() {
+        return body_html.to_string();
+    }
+    if rewriter.end().is_err() {
+        return body_html.to_string();
+    }
+    String::from_utf8(output).unwrap_or_else(|_| body_html.to_string())
+}
+
 /// Extracts the signature's visible text for the `text/plain` MIME alternative.
-/// Joins text nodes with newlines (after trimming/dropping empties) so words
-/// don't run together across block boundaries (e.g. `<div>A</div><div>B</div>`
-/// becomes `A\nB`, not `AB`).
+/// Uses a block-aware HTML->text conversion so inline tags (`<strong>`, `<a>`, …)
+/// stay on one line and only block boundaries introduce newlines.
 pub(crate) fn signature_plain_text(signature_html: &str) -> String {
-    Html::parse_fragment(signature_html)
-        .root_element()
-        .text()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+    email_utils::body_parsed::html_to_plaintext(signature_html).unwrap_or_default()
 }

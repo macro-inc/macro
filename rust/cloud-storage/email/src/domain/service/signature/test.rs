@@ -39,9 +39,34 @@ fn is_idempotent_when_signature_already_present() {
 
 #[test]
 fn plain_text_joins_block_nodes_with_newlines() {
-    // Without newline joining this would collapse to "ThanksAlice".
+    // Block boundaries become newlines (not run together as "ThanksAlice").
     assert_eq!(
         signature_plain_text("<div>Thanks</div><div>Alice</div>"),
         "Thanks\nAlice"
+    );
+}
+
+#[test]
+fn plain_text_keeps_inline_markup_on_one_line() {
+    // Inline tags must not introduce a line break (regression for the previous
+    // text-node join that produced "Thanks\nAlice").
+    assert_eq!(
+        signature_plain_text("<div>Thanks <strong>Alice</strong></div>"),
+        "Thanks **Alice**"
+    );
+}
+
+#[test]
+fn strips_server_wrapped_signature() {
+    let body = inject_signature("<body><p>Hi there</p></body>", "<p>Regards</p>");
+    assert!(has_signature(&body));
+    let stripped = strip_signature(&body);
+    assert!(
+        !has_signature(&stripped),
+        "signature not removed: {stripped}"
+    );
+    assert!(
+        stripped.contains("Hi there"),
+        "message body must remain: {stripped}"
     );
 }

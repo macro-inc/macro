@@ -132,6 +132,16 @@ where
     /// `signature_on_replies_forwards`. Best-effort — any failure just skips.
     async fn maybe_inject_signature(&self, link: &Link, input: &mut CreateDraftInput) {
         if input.include_signature == Some(false) {
+            // Honor "exclude" literally: drop any server-wrapped signature a
+            // client may have baked in, rather than just declining to add one.
+            if input
+                .body_html
+                .as_deref()
+                .is_some_and(super::signature::has_signature)
+                && let Some(body_html) = input.body_html.take()
+            {
+                input.body_html = Some(super::signature::strip_signature(&body_html));
+            }
             return;
         }
         // Idempotent: if the body already carries a signature — a client still
@@ -171,11 +181,13 @@ where
             input.body_html = Some(super::signature::inject_signature(&body_html, &signature));
         }
         let plain = super::signature::signature_plain_text(&signature);
-        if !plain.is_empty() {
-            input.body_text = Some(match input.body_text.take() {
-                Some(existing) if !existing.is_empty() => format!("{existing}\n\n{plain}"),
-                _ => plain,
-            });
+        if !plain.is_empty()
+            && let Some(existing) = input.body_text.take().filter(|s| !s.is_empty())
+        {
+            // Only append to an existing plain-text body. HTML-only sends
+            // (body_text None/empty, e.g. the AI path) keep no text part rather
+            // than getting a signature-only one that drops the message body.
+            input.body_text = Some(format!("{existing}\n\n{plain}"));
         }
     }
 
