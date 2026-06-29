@@ -26,9 +26,9 @@ export const I_VIDEO: ElementTransformer = {
 
     return `<m-video>${data}</m-video>`;
   },
-  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data = JSON.parse(match[1]);
+      const data = JSON.parse(match[1] ?? '');
       if (typeof data.url !== 'string' || !data.url) {
         throw new Error('Missing or invalid url field');
       }

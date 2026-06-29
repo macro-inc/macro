@@ -201,7 +201,8 @@ export abstract class MediaNode<
     return { element: wrapper };
   }
 
-  decorate(): DecoratorComponent<MediaInfo & T> | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  decorate(): DecoratorComponent<any> | undefined {
     return undefined;
   }
 

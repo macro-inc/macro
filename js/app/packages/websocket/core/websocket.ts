@@ -1,6 +1,6 @@
 import { platformWebSocketFactory } from '@websocket/platform/factory';
-import type { MinimalWebSocket } from '../platform/minimal-websocket';
 import { match, P } from 'ts-pattern';
+import type { MinimalWebSocket } from '../platform/minimal-websocket';
 import type { Backoff } from './backoff/backoff';
 import type { WebsocketBuffer } from './websocket-buffer';
 import { WebsocketConnectionState } from './websocket-connection-state';

@@ -32,9 +32,9 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
 
     return `<m-image>${data}</m-image>`;
   },
-  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data = JSON.parse(match[1]);
+      const data = JSON.parse(match[1] ?? '');
       if (!data.url) throw new Error('Missing url field');
 
       const imageNode = $createImageNode({

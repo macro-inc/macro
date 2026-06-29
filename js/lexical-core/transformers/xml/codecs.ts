@@ -12,9 +12,11 @@ import type {
   UnknownNode,
 } from './nodes';
 
-export type FxpNode =
-  | ({ ':@'?: Record<string, string> } & Record<string, FxpNode[]>)
-  | { '#text': string };
+export interface FxpElementNode {
+  ':@'?: Record<string, string>;
+  [key: string]: FxpNode[] | Record<string, string> | undefined;
+}
+export type FxpNode = FxpElementNode | { '#text': string };
 
 const FORMAT_FLAGS = defineBitflags({
   bold: 1 << 0,
