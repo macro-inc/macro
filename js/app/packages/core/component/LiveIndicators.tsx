@@ -40,21 +40,12 @@ export function LiveIndicators(props: {
 }
 
 export function BlockLiveIndicators() {
-  const _indicators = useUserIndicators();
+  const indicators = useUserIndicators();
   const userId = useUserId();
 
   return (
     <Show when={ENABLE_LIVE_INDICATORS}>
-      <LiveIndicators
-        userIds={[
-          'macro|teo@macro.com',
-          'macro|amy@macro.com',
-          'macro|peter@macro.com',
-          'macro|wolf@macro.com',
-        ]}
-        currentUserId={userId()}
-      />
-      {/*<LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />*/}
+      <LiveIndicators userIds={indicators() ?? []} currentUserId={userId()} />
     </Show>
   );
 }

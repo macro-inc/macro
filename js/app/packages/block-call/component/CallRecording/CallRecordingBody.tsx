@@ -1,6 +1,7 @@
 import { AskMacroButton } from '@app/component/ChatWithAgentButton';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
@@ -138,6 +139,18 @@ export function CallRecordingBody(props: {
     <>
       <CallRecordingSplitHeader record={record} />
       <div class="relative flex-1 min-h-0 overflow-hidden">
+        <ScopedPortal scope="block">
+          <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: blockId,
+                name: callTitle(),
+                fileType: 'call',
+              }}
+            />
+          </div>
+        </ScopedPortal>
         <div
           class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
           ref={setScrollRef}
@@ -146,16 +159,7 @@ export function CallRecordingBody(props: {
             <div class="flex flex-col gap-10">
               <header>
                 <Show when={!isMobile()}>
-                  <div class="mb-4 flex items-center gap-2">
-                    <AskMacroButton
-                      entity={{
-                        type: 'document',
-                        id: blockId,
-                        name: callTitle(),
-                        fileType: 'call',
-                      }}
-                    />
-                  </div>
+                  <div class="h-8 mb-4" />
                 </Show>
                 <h1 class="text-2xl font-semibold text-ink text-balance">
                   {callTitle()}

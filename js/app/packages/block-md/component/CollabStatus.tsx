@@ -41,7 +41,7 @@ export function CollabStatus() {
                 aria-label="Reconnecting"
                 tooltip="Reconnecting to the document…"
               >
-                <CloudIcon class="ink-text-extra-mutes animate-pulse" />
+                <CloudIcon class="text-ink-extra-muted animate-pulse" />
               </Button>
             </Match>
           </Switch>

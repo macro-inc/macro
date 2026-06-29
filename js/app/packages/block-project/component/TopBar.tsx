@@ -124,8 +124,7 @@ export function TopBar() {
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
-  const toolbarTools = () =>
-    tools.filter((tool) => tool.label !== 'Share' && tool.label !== 'Chat');
+  const toolbarTools = () => tools.filter((tool) => tool.label !== 'Share');
   const showShare = () => ENABLE_PROJECT_SHARING && !isSpecialProject;
 
   return (

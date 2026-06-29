@@ -10,6 +10,7 @@ import {
 import { EmailInput } from '@block-email/component/EmailInput';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -580,6 +581,24 @@ function EmailContent(props: EmailViewProps) {
                     emailReplyInfo()?.draft !== null
                   }
                 />
+                <ScopedPortal scope="block">
+                  <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+                    <Show when={context.thread()?.db_id}>
+                      {(threadId) => (
+                        <AskMacroButton
+                          entity={{
+                            type: 'email',
+                            id: threadId(),
+                            name: props.title,
+                          }}
+                        />
+                      )}
+                    </Show>
+                    <Show when={context.thread()?.db_id}>
+                      <EmailTaskButton onClick={openTaskCompose} />
+                    </Show>
+                  </div>
+                </ScopedPortal>
                 <div
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
@@ -593,21 +612,8 @@ function EmailContent(props: EmailViewProps) {
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <div class="pt-12 pb-4 flex items-center gap-2">
-                          <Show when={context.thread()?.db_id}>
-                            {(threadId) => (
-                              <AskMacroButton
-                                entity={{
-                                  type: 'email',
-                                  id: threadId(),
-                                  name: props.title,
-                                }}
-                              />
-                            )}
-                          </Show>
-                          <Show when={context.thread()?.db_id}>
-                            <EmailTaskButton onClick={openTaskCompose} />
-                          </Show>
+                        <div class="pt-12">
+                          <div class="h-8 mb-4" />
                         </div>
                         <h1 class="ph-no-capture text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
                           {props.title}
@@ -700,7 +706,7 @@ function EmailTaskButton(props: { onClick: () => void }) {
       onMouseLeave={() => setHovering(false)}
       onClick={props.onClick}
       depth={2}
-      class="gap-1.5 rounded-sm bg-ink/[0.04] px-3 text-ink-extra-muted hover:bg-ink/[0.06]"
+      class="gap-1.5 rounded-full bg-hover/20 px-2 text-ink-extra-muted ring ring-edge-muted"
     >
       <AnimatedTaskIcon triggerAnimation={hovering()} />
       <span class="text-xs font-semibold">Task</span>
