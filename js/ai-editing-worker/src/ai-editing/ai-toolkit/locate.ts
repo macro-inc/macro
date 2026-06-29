@@ -8,7 +8,7 @@ import {
 } from 'lexical';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import type { LexicalSession } from './session';
-import { collectTextNodes } from './tree';
+import { climbWhile, collectTextNodes } from './tree';
 
 export function $byId(session: LexicalSession, id: string): LexicalNode {
   const key = session.ids.idToNodeKeyMap.get(id);
@@ -26,10 +26,10 @@ export function $byId(session: LexicalSession, id: string): LexicalNode {
  * quote, …). Throws `Error` only if nothing block-level is found.
  */
 export function $blockById(session: LexicalSession, id: string): ElementNode {
-  let node: LexicalNode | null = $byId(session, id);
-  while (node && !($isElementNode(node) && !node.isInline())) {
-    node = node.getParent();
-  }
+  const node = climbWhile(
+    $byId(session, id),
+    (n) => $isElementNode(n) && !n.isInline()
+  );
   if (!node || !$isElementNode(node)) {
     throw new Error(`No block-level node for id "${id}"`);
   }

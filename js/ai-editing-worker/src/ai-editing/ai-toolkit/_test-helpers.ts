@@ -1,6 +1,10 @@
 import { $getRoot } from 'lexical';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import { createEditingSession, loadMarkdown, type LexicalSession } from './session';
+import {
+  createEditingSession,
+  type LexicalSession,
+  loadMarkdown,
+} from './session';
 
 /** Run a `$`-helper inside a discrete update so it commits before we assert. */
 export function edit<T>(session: LexicalSession, fn: () => T): T {

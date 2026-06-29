@@ -14,6 +14,7 @@ import {
   $isElementNode,
   type LexicalNode,
 } from 'lexical';
+import { climbWhile } from './tree';
 
 /** A cell's content: plain text, or a node you build (for rich/formatted cells). */
 export type CellContent = string | LexicalNode;
@@ -75,10 +76,7 @@ export function $setCell(
   col: number,
   content: CellContent
 ): void {
-  let table: LexicalNode | null = node;
-  while (table && !$isTableNode(table)) {
-    table = table.getParent();
-  }
+  const table = climbWhile(node, $isTableNode);
   if (!$isTableNode(table)) {
     throw new Error('$setCell: no enclosing table');
   }

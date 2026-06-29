@@ -8,6 +8,7 @@ import {
 } from '@lexical/list';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 import { $retypeContainer, type LexicalSession } from './session';
+import { climbWhile } from './tree';
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
@@ -58,10 +59,7 @@ export function $setListType(
   type: ListKind,
   session: LexicalSession
 ): ListNode {
-  let list: LexicalNode | null = node;
-  while (list && !$isListNode(list)) {
-    list = list.getParent();
-  }
+  const list = climbWhile(node, $isListNode);
   if (!$isListNode(list)) {
     throw new Error('$setListType: no enclosing list');
   }

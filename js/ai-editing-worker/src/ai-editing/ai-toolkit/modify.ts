@@ -6,6 +6,7 @@ import { $blockNode, $setBlockType, $setText, type BlockData } from './blocks';
 import { $setListType, type ListKind } from './lists';
 import { $byId } from './locate';
 import type { LexicalSession } from './session';
+import { climbWhile } from './tree';
 
 /**
  * A single in-place modification, discriminated by `op`. Each variant carries
@@ -25,17 +26,6 @@ export type NodeChange =
   | { op: 'listType'; list: ListKind }
   | { op: 'checked'; checked: boolean }
   | { op: 'indent'; indent: number | 'in' | 'out' };
-
-function climbWhile(
-  node: LexicalNode,
-  pred: (n: LexicalNode) => boolean
-): LexicalNode | null {
-  let n: LexicalNode | null = node;
-  while (n && !pred(n)) {
-    n = n.getParent();
-  }
-  return n;
-}
 
 function $asBlock(node: LexicalNode, id: string): ElementNode {
   const b = climbWhile(node, (n) => $isElementNode(n) && !n.isInline());

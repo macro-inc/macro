@@ -9,7 +9,6 @@
 
 import { $createCodeNode } from '@lexical/code';
 import { $createLinkNode, $isLinkNode } from '@lexical/link';
-import { $createMarkNode, $isMarkNode } from '@lexical/mark';
 import {
   $createListItemNode,
   $createListNode,
@@ -17,6 +16,7 @@ import {
   $isListNode,
   type ListType,
 } from '@lexical/list';
+import { $createMarkNode, $isMarkNode } from '@lexical/mark';
 import {
   $createHeadingNode,
   $createQuoteNode,

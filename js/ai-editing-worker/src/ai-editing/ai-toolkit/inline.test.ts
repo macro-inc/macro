@@ -1,5 +1,5 @@
-import { $createLinkNode, $isLinkNode } from '@lexical/link';
-import { $createMarkNode, $isMarkNode } from '@lexical/mark';
+import { $createLinkNode } from '@lexical/link';
+import { $createMarkNode } from '@lexical/mark';
 import { $getRoot, $isTextNode, type ElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
@@ -235,9 +235,7 @@ describe('inline ops: scope + counts', () => {
   });
 });
 
-// Links and marks do NOT round-trip through serializeWithXml, so inspect the
-// node tree with $isLinkNode / $isMarkNode.
-describe('deferred: links / highlight (node-tree assertions)', () => {
+describe('links / highlight', () => {
   it('$wrapInBlock wraps a substring in a LinkNode; count returned', () => {
     const { session, ids } = setup('see the docs');
     const id = ids[0];
@@ -247,27 +245,11 @@ describe('deferred: links / highlight (node-tree assertions)', () => {
       )
     );
     expect(count).toBe(1);
-    const { hasLink, url, linkText, leading } = read(session, () => {
-      const block = $getRoot().getFirstChild() as ElementNode;
-      let hasLink = false;
-      let url = '';
-      let linkText = '';
-      let leading = '';
-      for (const c of block.getChildren()) {
-        if ($isLinkNode(c)) {
-          hasLink = true;
-          url = c.getURL();
-          linkText = c.getTextContent();
-        } else if ($isTextNode(c)) {
-          leading += c.getTextContent();
-        }
-      }
-      return { hasLink, url, linkText, leading };
-    });
-    expect(hasLink).toBe(true);
-    expect(url).toBe('https://docs.example.com');
-    expect(linkText).toBe('the docs');
-    expect(leading).toBe('see ');
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('href="https://docs.example.com"');
+    // the link wraps 'the docs', leaving 'see ' as a sibling text node
+    expect(xml).toMatch(/see /);
+    expect(xml).toMatch(/<a[^>]*>[\s\S]*the docs[\s\S]*<\/a>/);
   });
 
   it('$wrapInBlock wraps matches in MarkNodes; all:true returns count', () => {
@@ -279,13 +261,8 @@ describe('deferred: links / highlight (node-tree assertions)', () => {
       })
     );
     expect(count).toBe(2);
-    const marks = read(session, () => {
-      const block = $getRoot().getFirstChild() as ElementNode;
-      return block
-        .getChildren()
-        .filter($isMarkNode)
-        .map((c) => c.getTextContent());
-    });
-    expect(marks).toEqual(['important', 'important']);
+    const xml = serializeWithXml(session);
+    expect(xml.match(/<mark/g)).toHaveLength(2);
+    expect(xml).toMatch(/<mark[^>]*>[\s\S]*important[\s\S]*<\/mark>/);
   });
 });

@@ -7,7 +7,7 @@ import {
   type TextFormatType,
   type TextNode,
 } from 'lexical';
-import { collectTextNodes } from './tree';
+import { climbWhile, collectTextNodes } from './tree';
 
 export type Scope = { kind: 'nth'; n: number } | { kind: 'all' };
 
@@ -239,8 +239,7 @@ function $unwrapWrapper(
   matchNode: TextNode,
   pred: (n: LexicalNode) => boolean
 ): void {
-  let parent: LexicalNode | null = matchNode.getParent();
-  while (parent && !pred(parent)) parent = parent.getParent();
+  const parent = climbWhile(matchNode.getParent(), pred);
   if (!parent || !$isElementNode(parent)) return;
   for (const child of parent.getChildren()) parent.insertBefore(child);
   parent.remove();

@@ -11,9 +11,13 @@ import { serializeWithXml } from '../utils';
 import { edit, read, setup, topLevelIds } from './_test-helpers';
 import { $setListType, $toggleList } from './lists';
 import { $byId } from './locate';
-import { createEditingSession, loadMarkdown, type LexicalSession } from './session';
+import {
+  createEditingSession,
+  type LexicalSession,
+  loadMarkdown,
+} from './session';
 
-describe('deferred: lists', () => {
+describe('lists', () => {
   it('$toggleList creates one list block (fresh id); items get fresh ids', () => {
     const { session, ids } = setup('todo a\n\ntodo b');
     const list = edit(session, () =>
