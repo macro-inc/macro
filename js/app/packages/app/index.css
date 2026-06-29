@@ -54,6 +54,11 @@
 @property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
+@property --safe-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --safe-top    { syntax: "<length>"; inherits: true; initial-value: 0px; }
+
 :root {
   /* mobile safe areas */
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));

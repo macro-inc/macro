@@ -56,10 +56,7 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
-import {
-  useSplitPanel,
-  useSplitPanelOrThrow,
-} from '@app/component/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -1519,7 +1516,6 @@ interface SoupListProps {
 const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
-  const splitPanel = useSplitPanel();
 
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
@@ -1528,10 +1524,7 @@ const SoupList = (props: SoupListProps) => {
 
   // Full-frame mobile: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
-  const topInset = () =>
-    isMobile()
-      ? (topSpacerSize.height ?? splitPanel?.contentOffsetTop() ?? 0)
-      : 0;
+  const topInset = () => (isMobile() ? (topSpacerSize.height ?? 0) : 0);
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();

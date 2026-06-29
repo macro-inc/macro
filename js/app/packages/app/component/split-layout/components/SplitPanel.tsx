@@ -121,15 +121,11 @@ export function SplitPanel(props: SplitPanelProps) {
     onCleanup(() => observer.disconnect());
   });
 
-  const offsetTop = createMemo(() => {
-    // Full-frame mobile: panels start at the screen edge, so anything that
-    // offsets from the panel top (drawers, content insets) must clear the
-    // status bar as well as the header.
+  createEffect(() => {
     const safeTop = isMobile() ? getSafeAreaInset('top') : 0;
     const offset =
       safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
-    return offset;
   });
 
   function multipleSplits() {
@@ -166,7 +162,7 @@ export function SplitPanel(props: SplitPanelProps) {
           panelRef,
         }}
       >
-        <SplitDrawerGroup contentOffsetTop={offsetTop} panelSize={panelSize}>
+        <SplitDrawerGroup panelSize={panelSize}>
           <Show when={props.handle.isSpotLight()}>
             <div
               class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
