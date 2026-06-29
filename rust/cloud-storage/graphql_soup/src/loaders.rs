@@ -1,13 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityReference;
 use models_soup::SoupProperty;
-use notification::domain::models::{UserNotificationRow, request::NotificationEntityRef};
-
-use crate::mappings::{
-    notification_item_type_from_key, notification_item_type_key, property_entity_type_from_key,
+use notification::domain::models::{
+    UserNotificationRow,
+    request::{NotificationEntityRef, NotificationItemType},
 };
 
 /// Key for loading properties attached to an entity.
@@ -17,6 +16,23 @@ pub struct EntityPropertiesKey {
     pub entity_type: String,
     /// Entity ID used by the property service.
     pub entity_id: String,
+}
+
+impl EntityPropertiesKey {
+    fn property_entity_type(
+        &self,
+    ) -> Result<Option<models_properties::EntityType>, rootcause::Report> {
+        match self.entity_type.as_str() {
+            "email" | "email_thread" => Ok(Some(models_properties::EntityType::Thread)),
+            "crm_company" => Ok(Some(models_properties::EntityType::Company)),
+            "call" | "channel_message" | "channel_thread" | "foreign_entity" | "github" => Ok(None),
+            other => models_properties::EntityType::from_str(other)
+                .map(Some)
+                .map_err(|err| {
+                    rootcause::report!("invalid entity type {other} for property edge: {err}")
+                }),
+        }
+    }
 }
 
 /// Object-safe reader used by GraphQL property edges.
@@ -46,15 +62,13 @@ where
 
         let entity_refs = keys
             .iter()
-            .filter_map(
-                |key| match property_entity_type_from_key(&key.entity_type) {
-                    Ok(Some(entity_type)) => {
-                        Some(Ok(EntityReference::new(key.entity_id.clone(), entity_type)))
-                    }
-                    Ok(None) => None,
-                    Err(err) => Some(Err(err)),
-                },
-            )
+            .filter_map(|key| match key.property_entity_type() {
+                Ok(Some(entity_type)) => {
+                    Some(Ok(EntityReference::new(key.entity_id.clone(), entity_type)))
+                }
+                Ok(None) => None,
+                Err(err) => Some(Err(err)),
+            })
             .collect::<Result<Vec<_>, rootcause::Report>>()?;
 
         let properties_by_entity = self
@@ -119,6 +133,39 @@ pub struct EntityNotificationsKey {
     pub entity_id: String,
 }
 
+impl EntityNotificationsKey {
+    fn notification_item_type(&self) -> Result<NotificationItemType, rootcause::Report> {
+        match self.entity_type.as_str() {
+            "email" | "email_thread" => Ok(NotificationItemType::Email),
+            "message" | "channel_message" => Ok(NotificationItemType::Message),
+            "channel" => Ok(NotificationItemType::Channel),
+            "document" => Ok(NotificationItemType::Document),
+            "project" => Ok(NotificationItemType::Project),
+            "chat" => Ok(NotificationItemType::Chat),
+            "call" => Ok(NotificationItemType::Call),
+            "task" => Ok(NotificationItemType::Task),
+            "github" | "foreign_entity" => Ok(NotificationItemType::Github),
+            other => Err(rootcause::report!(
+                "unsupported notification entity type {other}"
+            )),
+        }
+    }
+
+    fn entity_type_key(item_type: NotificationItemType) -> &'static str {
+        match item_type {
+            NotificationItemType::Email => "email",
+            NotificationItemType::Message => "message",
+            NotificationItemType::Channel => "channel",
+            NotificationItemType::Document => "document",
+            NotificationItemType::Project => "project",
+            NotificationItemType::Chat => "chat",
+            NotificationItemType::Call => "call",
+            NotificationItemType::Task => "task",
+            NotificationItemType::Github => "github",
+        }
+    }
+}
+
 /// Object-safe reader used by GraphQL notification edges.
 #[async_trait::async_trait]
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
@@ -156,7 +203,7 @@ where
             .iter()
             .map(|key| {
                 Ok(NotificationEntityRef {
-                    entity_type: notification_item_type_from_key(&key.entity_type)?,
+                    entity_type: key.notification_item_type()?,
                     id: key.entity_id.clone(),
                 })
             })
@@ -170,7 +217,8 @@ where
         for (key, notifications) in notifications_by_entity {
             result.insert(
                 EntityNotificationsKey {
-                    entity_type: notification_item_type_key(key.entity_type).to_owned(),
+                    entity_type: EntityNotificationsKey::entity_type_key(key.entity_type)
+                        .to_owned(),
                     entity_id: key.id,
                 },
                 notifications,

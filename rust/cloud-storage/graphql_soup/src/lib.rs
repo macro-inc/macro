@@ -7,7 +7,6 @@
 mod auth;
 mod inputs;
 mod loaders;
-mod mappings;
 mod objects;
 mod request_context;
 mod schema;

@@ -1,11 +1,12 @@
 use async_graphql::{Context, ID, Json, Object, SimpleObject, Union, dataloader::DataLoader};
+use model_entity::EntityType;
 use models_pagination::PaginatedOpaqueCursor;
 use models_properties::service::property_value::PropertyValue;
 use models_soup::{
     SoupProperty,
     call_record::SoupCallRecord,
     chat::SoupChat,
-    comms::{SoupChannel, SoupChannelThread},
+    comms::{ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
     document::{SoupDocument, SoupDocumentSubType},
     email_thread::SoupEnrichedEmailThreadPreview,
@@ -17,12 +18,8 @@ use notification::domain::models::UserNotificationRow;
 use serde_json::Value;
 use soup::domain::models::FrecencySoupItem;
 
-use crate::{
-    loaders::{
-        EntityNotificationsKey, EntityNotificationsLoader, EntityPropertiesKey,
-        EntityPropertiesLoader,
-    },
-    mappings::{channel_type_name, entity_type_name},
+use crate::loaders::{
+    EntityNotificationsKey, EntityNotificationsLoader, EntityPropertiesKey, EntityPropertiesLoader,
 };
 
 /// Page returned by `Query.soup`.
@@ -55,6 +52,23 @@ pub struct GraphqlSoupItem {
     entity: GraphqlSoupEntity,
 }
 
+impl GraphqlSoupItem {
+    fn entity_type_name(entity_type: EntityType) -> &'static str {
+        match entity_type {
+            EntityType::Document => "document",
+            EntityType::Chat => "chat",
+            EntityType::Project => "project",
+            EntityType::EmailThread => "email_thread",
+            EntityType::Channel => "channel",
+            EntityType::ChannelMessage => "channel_message",
+            EntityType::Call => "call",
+            EntityType::CrmCompany => "crm_company",
+            EntityType::ForeignEntity => "foreign_entity",
+            _ => "unknown",
+        }
+    }
+}
+
 #[Object]
 impl GraphqlSoupItem {
     async fn id(&self) -> &str {
@@ -85,7 +99,7 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
 
         Self {
             id: entity_ref.entity_id.into_owned(),
-            entity_type: entity_type_name(entity_ref.entity_type).to_owned(),
+            entity_type: Self::entity_type_name(entity_ref.entity_type).to_owned(),
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
@@ -657,6 +671,17 @@ impl GraphqlSoupEmailThread {
 /// GraphQL channel entity.
 pub struct GraphqlSoupChannel(SoupChannel);
 
+impl GraphqlSoupChannel {
+    fn channel_type_name(channel_type: ChannelType) -> &'static str {
+        match channel_type {
+            ChannelType::Public => "public",
+            ChannelType::Private => "private",
+            ChannelType::DirectMessage => "direct_message",
+            ChannelType::Team => "team",
+        }
+    }
+}
+
 #[Object]
 impl GraphqlSoupChannel {
     async fn id(&self) -> ID {
@@ -668,7 +693,7 @@ impl GraphqlSoupChannel {
     }
 
     async fn channel_type(&self) -> &'static str {
-        channel_type_name(self.0.channel.channel.channel_type)
+        Self::channel_type_name(self.0.channel.channel.channel_type)
     }
 
     async fn owner_id(&self) -> String {
