@@ -9043,6 +9043,57 @@
       }
     },
     "/webhook/webhooks/{webhook_id}": {
+      "delete": {
+        "tags": ["webhook"],
+        "summary": "Delete a webhook.",
+        "operationId": "delete_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook deleted"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": ["webhook"],
         "summary": "Patch a webhook.",
@@ -12264,7 +12315,7 @@
       "CreateWebhookRequest": {
         "type": "object",
         "description": "Request to create a webhook.",
-        "required": ["workspace_id", "name", "endpoint_url", "rule"],
+        "required": ["scope", "name", "endpoint_url", "rule"],
         "properties": {
           "endpoint_url": {
             "type": "string",
@@ -12288,9 +12339,9 @@
           "rule": {
             "description": "Rule definition used to match events."
           },
-          "workspace_id": {
-            "type": "string",
-            "description": "Workspace that owns the webhook."
+          "scope": {
+            "$ref": "#/components/schemas/WebhookScope",
+            "description": "Scope that owns the webhook."
           }
         }
       },
@@ -19327,6 +19378,11 @@
             "description": "Owning workspace id."
           }
         }
+      },
+      "WebhookScope": {
+        "type": "string",
+        "description": "Scope that owns a newly-created webhook.",
+        "enum": ["user", "team"]
       },
       "WebhookStatus": {
         "type": "string",

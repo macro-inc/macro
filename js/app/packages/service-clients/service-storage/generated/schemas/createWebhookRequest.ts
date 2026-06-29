@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateWebhookRequestHeaders } from './createWebhookRequestHeaders';
+import type { WebhookScope } from './webhookScope';
 
 /**
  * Request to create a webhook.
@@ -17,6 +18,6 @@ export interface CreateWebhookRequest {
   name: string;
   /** Rule definition used to match events. */
   rule: unknown;
-  /** Workspace that owns the webhook. */
-  workspace_id: string;
+  /** Scope that owns the webhook. */
+  scope: WebhookScope;
 }

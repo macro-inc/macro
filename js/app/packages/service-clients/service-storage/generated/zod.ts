@@ -18909,9 +18909,18 @@ export const createWebhookBody = zod
       .optional(),
     name: zod.string().describe('Display name.'),
     rule: zod.unknown().describe('Rule definition used to match events.'),
-    workspace_id: zod.string().describe('Workspace that owns the webhook.'),
+    scope: zod
+      .enum(['user', 'team'])
+      .describe('Scope that owns a newly-created webhook.'),
   })
   .describe('Request to create a webhook.');
+
+/**
+ * @summary Delete a webhook.
+ */
+export const deleteWebhookParams = zod.object({
+  webhook_id: zod.string().describe('Webhook id'),
+});
 
 /**
  * @summary Patch a webhook.

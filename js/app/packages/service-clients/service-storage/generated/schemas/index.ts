@@ -998,6 +998,7 @@ export * from './viewPatchName';
 export * from './viewsResponse';
 export * from './webhook';
 export * from './webhookDeletedAt';
+export * from './webhookScope';
 export * from './webhookStatus';
 export * from './withCallId';
 export * from './withChannelId';
