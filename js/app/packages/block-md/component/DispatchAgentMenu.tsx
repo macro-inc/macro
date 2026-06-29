@@ -202,7 +202,7 @@ export function DispatchAgentButton() {
         variant="ghost"
         size="icon-sm"
         depth={2}
-        class="rounded-sm bg-ink/[0.04] text-ink-extra-muted"
+        class="rounded-full bg-hover/20 text-ink-extra-muted ring ring-edge-muted"
       >
         <Button
           onClick={handlePrimaryClick}

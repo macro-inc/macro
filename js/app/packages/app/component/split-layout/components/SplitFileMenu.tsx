@@ -8,9 +8,9 @@ import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
+import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Copy from '@phosphor/copy.svg';
-import DotsThreeCircle from '@phosphor/dots-three-circle.svg';
 import Rename from '@phosphor/pencil-line.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
@@ -94,7 +94,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         size="icon-sm"
         variant="ghost"
       >
-        <DotsThreeCircle class="size-3.5!" />
+        <DotsThree />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-fit">
         <Show when={primaryOps().length > 0}>

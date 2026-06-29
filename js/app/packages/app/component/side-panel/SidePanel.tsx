@@ -1,12 +1,12 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
-import SidePanelIcon from '@phosphor/square-half.svg';
 import { Button, Layer, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -210,21 +210,25 @@ function SidePanelHeaderToggle() {
   const ToggleButton = () => (
     <Button
       depth={2}
-      variant={isMobile() ? 'ghost' : 'base'}
+      variant="base"
       size="icon-sm"
       class={cn(
         !isMobile() && 'bg-surface',
-        !isMobile() && ctx.isOpen() && 'bg-active',
         isMobile() &&
-          'hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent active:text-accent',
+          'hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
         isMobile() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
       hotkey={TOKENS.block.toggleSidePanel}
       onClick={() => ctx.toggle()}
     >
-      <Show when={ctx.isNarrow()} fallback={<SidePanelIcon class="size-4" />}>
-        <InfoIcon class="size-4" />
+      <Show
+        when={ctx.isNarrow()}
+        fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
+      >
+        <InfoIcon
+          class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
+        />
       </Show>
     </Button>
   );
@@ -232,7 +236,7 @@ function SidePanelHeaderToggle() {
   return (
     <Show when={ctx.hasSections()}>
       <SplitHeaderRight>
-        <div class="order-[1100] flex items-center">
+        <div class="order-last flex items-center">
           <HeaderIsland
             class={cn(
               'size-10 justify-center !px-0',

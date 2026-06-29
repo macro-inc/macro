@@ -7,7 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -133,7 +133,7 @@ export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
       variant="ghost"
       size="sm"
       depth={2}
-      class="gap-1.5 rounded-sm bg-ink/[0.04] px-3 text-ink-extra-muted hover:bg-ink/[0.06]"
+      class="gap-1.5 rounded-full bg-hover/20 px-2 text-ink-extra-muted ring ring-edge-muted"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs font-medium">Ask Macro</span>

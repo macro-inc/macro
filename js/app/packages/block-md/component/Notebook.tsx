@@ -11,6 +11,7 @@ import { useBlockAliasedName, useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
@@ -291,19 +292,21 @@ export function Notebook(props: { loroManager: LoroManager }) {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <div class="mb-4 flex items-center gap-2 mobile:hidden">
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: blockId,
-              name: documentName(),
-              fileType: 'md',
-            }}
-          />
-          <Show when={blockAliasedName === 'task' && !isMobile()}>
-            <DispatchAgentButton />
-          </Show>
-        </div>
+        <ScopedPortal scope="block">
+          <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: blockId,
+                name: documentName(),
+                fileType: 'md',
+              }}
+            />
+            <Show when={blockAliasedName === 'task' && !isMobile()}>
+              <DispatchAgentButton />
+            </Show>
+          </div>
+        </ScopedPortal>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
