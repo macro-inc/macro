@@ -8,13 +8,26 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{gen_compose, kickstart, stage::Stage};
 
-/// The local populate-JWT lambda, embedded at compile time from its canonical
-/// source in the FusionAuth stack. It's tiny and effectively static, so there's
-/// no reason to read it from disk at runtime (and `include_str!` fails the build
-/// if the file ever moves). FA gets the body inlined into `kickstart.json`.
-const POPULATE_JWT_LAMBDA: &str = include_str!(
-    "../../../../../../infra/stacks/fusionauth-instance/kickstart/lambdas/populate_jwt_local.js"
-);
+/// The local populate-JWT lambda body, inlined into `kickstart.json`.
+///
+/// LOCAL-ONLY variant of the production populate-JWT lambda. Production enriches
+/// the JWT by calling authentication-service over HTTP, but Lambda HTTP Connect
+/// is a licensed FusionAuth feature that silently fails without a Reactor
+/// license. Local runs unlicensed, so we derive the claims instead: password
+/// users follow the `macro|<email>` convention (see `seed_cli`) and no Google
+/// IdP is configured locally, so every local user is a `macro|` user.
+/// Divergence from production: `root_macro_id` / `macro_organization_id` are
+/// never populated — org-scoped JWT flows need the licensed lambda + a license.
+///
+/// Inlined (not `include_str!`) because the canonical `.js` lives under
+/// `infra/` where a blanket `*.js` gitignore makes it untracked — a fresh
+/// checkout / CI / devcontainer wouldn't have it, breaking the build. Kept
+/// comment-free so it survives FusionAuth flattening the body to one line.
+const POPULATE_JWT_LAMBDA: &str = "function populate(jwt, user, _registration) {
+  jwt.fusion_user_id = user.id;
+  jwt.email = user.email;
+  jwt.macro_user_id = 'macro|' + user.email;
+}";
 
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
@@ -25,20 +38,10 @@ pub fn write_kickstart(instance: &Instance) -> Result<()> {
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
 
-    // FusionAuth's kickstart processor strips newlines from string values, which
-    // would collapse the leading `//` comments into a single line that swallows
-    // `function populate(...)` (FA then rejects it: functionMissing). Drop
-    // comment-only lines so the body stays valid even when flattened to one line.
-    let lambda_body: String = POPULATE_JWT_LAMBDA
-        .lines()
-        .filter(|l| !l.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        &lambda_body,
+        POPULATE_JWT_LAMBDA,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
