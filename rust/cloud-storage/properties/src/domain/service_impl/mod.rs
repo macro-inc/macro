@@ -3,17 +3,20 @@
 mod helpers;
 mod task_properties;
 
-use models_properties::EntityType;
+use std::collections::HashMap;
+
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::convert_set_property_value_to_property_value;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::error::PropertiesErr;
-use super::model::EntityPropertyInfo;
 use std::sync::Arc;
 
+use super::error::PropertiesErr;
+use super::model::{EntityPropertiesKey, EntityPropertyInfo};
 use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::PropertiesService;
 
@@ -184,6 +187,19 @@ where
         Ok(self
             .repository
             .get_entity_properties(entity_id, entity_type)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr>
+    {
+        Ok(self
+            .repository
+            .get_entity_properties_batch(entity_refs)
             .await
             .map_err(anyhow::Error::from)?)
     }

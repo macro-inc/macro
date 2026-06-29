@@ -103,19 +103,17 @@ type DssEmailService = EmailServiceImpl<
 pub(crate) type DssCrmState =
     crm::inbound::axum_router::CrmRouterState<DssCrmService, EntityAccessService>;
 
-type DssSoupState = SoupRouterState<
-    SoupImpl<
-        PgSoupRepo,
-        FrecencyQueryServiceImpl<FrecencyPgStorage>,
-        ReadonlyEmailPreviewAdapter<DssEmailService>,
-        ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
-        call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
-        DssCrmService,
-        ForeignEntityServiceType,
-    >,
-    DssEmailService,
-    EntityAccessService,
+pub(crate) type DssSoupService = SoupImpl<
+    PgSoupRepo,
+    FrecencyQueryServiceImpl<FrecencyPgStorage>,
+    ReadonlyEmailPreviewAdapter<DssEmailService>,
+    ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
+    call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
+    DssCrmService,
+    ForeignEntityServiceType,
 >;
+
+type DssSoupState = SoupRouterState<DssSoupService, DssEmailService, EntityAccessService>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -306,6 +304,10 @@ pub(crate) struct ApiContext {
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
+    #[cfg(feature = "graphql")]
+    pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
+    #[cfg(feature = "graphql")]
+    pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,

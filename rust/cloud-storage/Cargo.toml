@@ -63,6 +63,7 @@ members = [
   "prompt",
   "workspace-hack",
   "tools/xtask",
+  "graphql_soup",
 ]
 
 [workspace.dependencies]
@@ -74,6 +75,7 @@ async-openai = { version = "0.36.1", features = [
   "completions",
   "embedding",
 ] }
+async-graphql = "7.2.1"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
