@@ -20,7 +20,7 @@ path = "src/doppler_config.rs"
 
 [features]
 connection_gateway = []
-default = ["connection_gateway", "delete_document_worker", "location_check"]
+default = ["connection_gateway", "delete_document_worker", "graphql", "location_check"]
 delete_document_worker = []
 graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
 local = ["local_auth"]
