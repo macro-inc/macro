@@ -1,6 +1,10 @@
 import { type EntityIconSelector } from '@core/component/EntityIcon';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import {
+  getSortedKeyProperties,
+  soupPropertyToProperty,
+} from '@entity/extractors-property/property-helpers';
+import {
   differenceInDays,
   differenceInHours,
   differenceInMilliseconds,
@@ -9,14 +13,63 @@ import {
   differenceInYears,
   format,
 } from 'date-fns';
+import type { UnifiedNotification } from '@notifications/types';
+import type { Property as PropertyT } from '@property/types';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { match } from 'ts-pattern';
 import {
   type InboxItem as InboxItemData,
+  inboxItemSenderId,
+  inboxItemSenderName,
   parseInboxSenderName,
 } from '../InboxItem';
+import { notificationContent } from '../notification-extractors';
+
+// ---------------------------------------------------------------------------
+// Entity/notification accessors — everything is derived from these now that
+// `InboxItem` is just { entity, notification, …generic state }.
+// ---------------------------------------------------------------------------
+
+const notificationOf = (item: InboxItemData) =>
+  item.notification as UnifiedNotification | undefined;
 
 export function getNotificationTag(item: InboxItemData) {
   return item.notification?.notification_metadata.tag;
 }
+
+export function getEntityName(item: InboxItemData): string | undefined {
+  return item.entity.name || undefined;
+}
+
+const channelTypeOf = (item: InboxItemData): string | undefined => {
+  const entity = item.entity;
+  return entity.type === 'channel' ||
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+    ? entity.channelType
+    : undefined;
+};
+
+const entitySubTypeOf = (item: InboxItemData): string | undefined =>
+  item.entity.type === 'document' ? item.entity.subType?.type : undefined;
+
+const channelMessageContent = (item: InboxItemData): string | undefined => {
+  const entity = item.entity;
+  if (entity.type === 'channel') return entity.latestMessage?.content;
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+    return entity.content;
+  }
+  return undefined;
+};
+
+const itemContent = (item: InboxItemData): string | undefined => {
+  const channel = channelMessageContent(item);
+  if (channel) return channel;
+  const notification = notificationOf(item);
+  return notification ? notificationContent(notification) : undefined;
+};
+
+// ---------------------------------------------------------------------------
 
 export function isGroupedChannelThread(item: InboxItemData) {
   const content = item.notification?.notification_metadata.content as
@@ -32,16 +85,14 @@ export function isGroupedChannelThread(item: InboxItemData) {
 export function getInboxItemIconTarget(
   item: InboxItemData
 ): EntityIconSelector {
-  if (item.entitySubType === 'task') return 'task';
-  if (
-    item.entityType === 'channel_message' ||
-    item.entityType === 'channel_thread'
-  ) {
+  const entity = item.entity;
+  if (entitySubTypeOf(item) === 'task') return 'task';
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
     return 'channel';
   }
-  if (item.entityType === 'document') return 'md';
-  if (item.entityType === 'foreign') return 'default';
-  return item.entityType as EntityIconSelector;
+  if (entity.type === 'document') return 'md';
+  if (entity.type === 'foreign') return 'default';
+  return entity.type as EntityIconSelector;
 }
 
 export function getGithubLocationLabel(item: InboxItemData) {
@@ -61,54 +112,126 @@ export function getGithubTitle(item: InboxItemData) {
   return content?.title;
 }
 
-export function getLocationText(item: InboxItemData, nested?: boolean) {
-  const tag = getNotificationTag(item);
+const hashChannel = (
+  item: InboxItemData,
+  value: string | undefined
+): string | undefined => {
+  if (!value) return undefined;
+  const type = item.entity.type;
   if (
-    nested ||
-    item.channelType === 'direct_message' ||
-    tag === 'task_assigned'
+    type === 'channel' ||
+    type === 'channel_message' ||
+    type === 'channel_thread'
   ) {
-    return undefined;
+    return value.startsWith('#') ? value : `#${value}`;
   }
-  if (item.entityType === 'email' || tag === 'new_email') return undefined;
-  if (item.entityType === 'channel') return item.entityName ?? item.targetName;
-  if (item.notification?.notification_metadata.tag?.startsWith('github_')) {
-    return getGithubLocationLabel(item) ?? item.targetName ?? item.entityName;
+  return value;
+};
+
+const githubActionText = (item: InboxItemData): string => {
+  if (getNotificationTag(item) === 'github_pr_status_changed') {
+    const content = item.notification?.notification_metadata.content as
+      | { status?: string }
+      | undefined;
+    if (content?.status === 'merged') return 'merged a PR';
   }
-  return item.entityName ?? item.targetName;
+  return 'updated';
+};
+
+export interface InboxItemText {
+  /** Verb shown in the action row, e.g. "replied in". */
+  action: string;
+  /** Where it happened, display-ready (channels prefixed with #). */
+  location?: string;
+  /** Message / preview body. */
+  content?: string;
 }
 
-export function getActionText(item: InboxItemData, nested?: boolean) {
-  switch (getNotificationTag(item)) {
-    case 'channel_mention':
-      return nested ? 'mentioned you' : 'mentioned you in';
-    case 'channel_message_reply':
-      return 'replied';
-    case 'channel_message_send':
-      return 'sent a message';
-    case 'document_mention':
-      return 'shared';
-    case 'mentioned_in_document_comment':
-      return nested ? 'mentioned you' : 'mentioned you in';
-    case 'replied_to_document_comment_thread':
-      return nested ? 'replied' : 'replied in';
-    case 'new_email':
-      return 'sent an email';
-    case 'task_assigned':
-      return 'assigned you a task';
-    case 'ai_response':
-      return 'responded';
-    case 'github_pr_status_changed': {
-      const content = item.notification?.notification_metadata.content as
-        | { status?: string }
-        | undefined;
-      return content?.status === 'merged'
-        ? 'merged a PR'
-        : (item.action ?? 'updated');
-    }
-    default:
-      return item.action ?? 'updated';
-  }
+/**
+ * Single source for an item's rendered text: one `match` over the notification
+ * tag yields the action verb, location, and content together — replacing the
+ * separate getActionText / getLocationText / getContentText switches.
+ */
+export function getInboxItemText(
+  item: InboxItemData,
+  opts: { nested?: boolean; groupRoot?: boolean } = {}
+): InboxItemText {
+  const nested = opts.nested ?? false;
+  const name = getEntityName(item);
+  const content = itemContent(item);
+  const dm = channelTypeOf(item) === 'direct_message';
+
+  const channelLocation = nested || dm ? undefined : hashChannel(item, name);
+  const githubLocation = nested
+    ? undefined
+    : (getGithubLocationLabel(item) ?? name);
+  const entityLocation = nested ? undefined : name;
+
+  const text = match(getNotificationTag(item))
+    .with('channel_mention', () => ({
+      action: nested ? 'mentioned you' : 'mentioned you in',
+      location: channelLocation,
+      content,
+    }))
+    .with('channel_message_reply', () => ({
+      action: 'replied',
+      location: channelLocation,
+      content,
+    }))
+    .with('channel_message_send', () => ({
+      action: 'sent a message',
+      location: channelLocation,
+      content,
+    }))
+    .with('document_mention', () => ({
+      action: 'shared',
+      location: entityLocation,
+      content: name || content,
+    }))
+    .with('mentioned_in_document_comment', () => ({
+      action: nested ? 'mentioned you' : 'mentioned you in',
+      location: entityLocation,
+      content,
+    }))
+    .with('replied_to_document_comment_thread', () => ({
+      action: nested ? 'replied' : 'replied in',
+      location: entityLocation,
+      content,
+    }))
+    .with('new_email', () => ({
+      action: 'sent an email',
+      location: undefined,
+      content: getEmailSubject(item) || name || content,
+    }))
+    .with('task_assigned', () => ({
+      action: 'assigned you a task',
+      location: undefined,
+      content: name || content,
+    }))
+    .with('ai_response', () => ({
+      action: 'responded',
+      location: entityLocation,
+      content,
+    }))
+    .with(
+      'github_pr_status_changed',
+      'github_review_requested',
+      'github_pr_comment',
+      'github_pr_mention',
+      'github_pr_review',
+      () => ({
+        action: githubActionText(item),
+        location: githubLocation,
+        content: getGithubTitle(item) || name || content,
+      })
+    )
+    .otherwise(() => ({
+      action: 'updated',
+      location: entityLocation,
+      content,
+    }));
+
+  return opts.groupRoot ? { ...text, content: content || name } : text;
 }
 
 export function getEmailSubject(item: InboxItemData) {
@@ -129,33 +252,20 @@ export function getGroupUnreadCount(item: InboxItemData) {
   );
 }
 
-export function getContentText(item: InboxItemData, groupRoot?: boolean) {
-  if (groupRoot) return item.content || item.entityName || item.targetName;
+/** Key task properties (pills), derived from the document entity. */
+export function getInboxTaskProperties(
+  item: InboxItemData
+): PropertyT[] | undefined {
+  const entity = item.entity;
+  if (entity.type !== 'document') return undefined;
+  if (!('properties' in entity) || !entity.properties?.length) return undefined;
 
-  if (item.notification?.notification_metadata.tag === 'new_email') {
-    return (
-      getEmailSubject(item) ||
-      item.entityName ||
-      item.targetName ||
-      item.content
-    );
-  }
-
-  if (item.notification?.notification_metadata.tag === 'document_mention') {
-    return item.entityName || item.targetName || item.content;
-  }
-
-  if (item.notification?.notification_metadata.tag === 'task_assigned') {
-    return item.entityName || item.targetName || item.content;
-  }
-
-  if (item.notification?.notification_metadata.tag?.startsWith('github_')) {
-    return (
-      getGithubTitle(item) || item.entityName || item.targetName || item.content
-    );
-  }
-
-  return item.content || undefined;
+  const keyProperties = getSortedKeyProperties(
+    entity.properties.map((property: SoupProperty) =>
+      soupPropertyToProperty(property)
+    )
+  );
+  return keyProperties.length ? keyProperties : undefined;
 }
 
 export function formatCompactRelativeTimestamp(value: string) {
@@ -184,7 +294,8 @@ export function formatCompactRelativeTimestamp(value: string) {
 export function uniqueItemsBySender(items: InboxItemData[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = item.senderId ?? parseInboxSenderName(item) ?? item.id;
+    const key =
+      inboxItemSenderId(item) ?? parseInboxSenderName(item) ?? item.id;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -196,28 +307,15 @@ export function getFirstName(value: string) {
   return name.split(/[\s._-]+/).filter(Boolean)[0] ?? name;
 }
 
-export function getDisplayLocation(item: InboxItemData, nested?: boolean) {
-  const value = getLocationText(item, nested);
-  if (!value) return undefined;
-  if (
-    item.entityType === 'channel' ||
-    item.entityType === 'channel_message' ||
-    item.entityType === 'channel_thread'
-  ) {
-    return value.startsWith('#') ? value : `#${value}`;
-  }
-  return value;
-}
-
 // Assumes the item is grouped; callers only render the group icon for groups.
 export function shouldUseGroupIcon(item: InboxItemData) {
   const tag = getNotificationTag(item);
   return (
-    item.channelType !== 'direct_message' &&
-    item.entityType !== 'email' &&
+    channelTypeOf(item) !== 'direct_message' &&
+    item.entity.type !== 'email' &&
     tag !== 'new_email' &&
     !(
-      item.entitySubType === 'task' &&
+      entitySubTypeOf(item) === 'task' &&
       (tag === 'mentioned_in_document_comment' ||
         tag === 'replied_to_document_comment_thread' ||
         tag === 'commented_on_document')
@@ -226,7 +324,9 @@ export function shouldUseGroupIcon(item: InboxItemData) {
 }
 
 export function getSenderDisplayName(item: InboxItemData) {
-  const macroId = tryMacroId(item.senderId ?? item.senderName ?? '');
+  const macroId = tryMacroId(
+    inboxItemSenderId(item) ?? inboxItemSenderName(item) ?? ''
+  );
   return macroId ? macroIdToEmail(macroId) : parseInboxSenderName(item);
 }
 

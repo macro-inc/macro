@@ -11,6 +11,7 @@ import type { UnifiedNotification } from '@notifications/types';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { Avatar as UIAvatar, cn } from '@ui';
+import { notificationSenderName } from './notification-extractors';
 import {
   type Accessor,
   createContext,
@@ -42,26 +43,15 @@ export type InboxRelatedDocument = {
 
 export interface InboxItem {
   id: string;
+  /** The entity this row represents; render fields are derived from it. */
+  entity: EntityData;
   notification?: InboxItemNotification;
-  previewEntity?: EntityData;
-  entityId?: string;
-  entityType?: EntityData['type'];
-  entitySubType?: string;
-  entityName?: string;
-  channelType?: string;
-  senderId?: string;
-  senderName?: string;
-  action?: string;
-  targetName?: string;
-  content?: string;
-  properties?: PropertyT[];
-  relatedDocuments?: InboxRelatedDocument[];
-  attachments?: SoupMessageAttachment[];
-  callStatuses?: string[];
-  breadcrumb?: string[];
-  subItems?: InboxItem[];
-  timestamp?: string;
+  // Generic render state kept on the item (not derivable from the entity):
   unread?: boolean;
+  timestamp?: string;
+  subItems?: InboxItem[];
+  // Generic render payloads (kept for now; derivable from the entity later):
+  attachments?: SoupMessageAttachment[];
 }
 
 type InboxItemContextValue = {
@@ -80,8 +70,35 @@ export const useInboxItem = () => {
   return ctx;
 };
 
+/** The sender's macro id / raw id, derived from the entity or notification. */
+export function inboxItemSenderId(item: InboxItem): string | undefined {
+  const entity = item.entity;
+  if (entity?.type === 'channel') return entity.latestMessage?.senderId;
+  if (entity?.type === 'channel_message' || entity?.type === 'channel_thread') {
+    return entity.senderId;
+  }
+  return (
+    (item.notification as UnifiedNotification | undefined)?.sender_id ??
+    undefined
+  );
+}
+
+/** A pre-formatted sender name (email-style senders), when not id-resolvable. */
+export function inboxItemSenderName(item: InboxItem): string | undefined {
+  const entity = item.entity;
+  if (
+    entity?.type === 'channel' ||
+    entity?.type === 'channel_message' ||
+    entity?.type === 'channel_thread'
+  ) {
+    return undefined; // resolved from the sender id instead
+  }
+  const notification = item.notification as UnifiedNotification | undefined;
+  return notification ? notificationSenderName(notification) : undefined;
+}
+
 export function parseInboxSenderName(item: InboxItem) {
-  const name = item.senderName || item.senderId || '?';
+  const name = inboxItemSenderName(item) || inboxItemSenderId(item) || '?';
   const emailMatch = name.match(/^"?([^"<]+)"?\s*</);
   if (emailMatch?.[1]) return emailMatch[1].trim();
   const parsedMacroId = tryMacroId(name);
@@ -93,7 +110,7 @@ export function useInboxItemSenderName(source?: Accessor<InboxItem>) {
   const ctx = source ? undefined : useInboxItem();
   const item = source ?? ctx!.item;
   const macroId = () => {
-    const sender = item().senderId ?? item().senderName;
+    const sender = inboxItemSenderId(item()) ?? inboxItemSenderName(item());
     return sender ? tryMacroId(sender) : undefined;
   };
   const fallback = () => parseInboxSenderName(item());
@@ -219,7 +236,7 @@ function Sender(props: SenderProps) {
     ) {
       return MACRO_AGENT_BOT_ID;
     }
-    const sender = item().senderId;
+    const sender = inboxItemSenderId(item());
     return sender ? tryMacroId(sender) : undefined;
   };
   const initials = () =>
@@ -250,7 +267,7 @@ function Sender(props: SenderProps) {
             when={macroId()}
             fallback={
               <Show
-                when={item().senderId === 'macro-agent'}
+                when={inboxItemSenderId(item()) === 'macro-agent'}
                 fallback={
                   <UIAvatar
                     size="fill"

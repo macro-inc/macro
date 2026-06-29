@@ -14,7 +14,6 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { TabsInset } from '@core/component/TabsInset';
-import { DefaultFilename } from '@core/constant/filename';
 import { useChannelsContext } from '@core/context/channels';
 import {
   createHotkeyGroup,
@@ -22,10 +21,6 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { type EntityData, toNotificationEntity } from '@entity';
-import {
-  getSortedKeyProperties,
-  soupPropertyToProperty,
-} from '@entity/extractors-property/property-helpers';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { Popover } from '@kobalte/core/popover';
 import {
@@ -37,7 +32,6 @@ import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { Button, cn, Dropdown, Layer, Tooltip } from '@ui';
 import { startOfDay, subWeeks } from 'date-fns';
 import {
@@ -49,18 +43,8 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import {
-  InboxItem,
-  type InboxItem as InboxItemData,
-  type InboxRelatedDocument,
-} from './InboxItem';
+import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
 import { InboxItemLayout } from './layouts/InboxItemLayout';
-import {
-  notificationAction,
-  notificationContent,
-  notificationSenderName,
-  notificationTitle,
-} from './notification-extractors';
 import {
   getDateGroupKey,
   getDateGroupLabel,
@@ -70,7 +54,6 @@ import {
 type InboxSourceItem = {
   entity: EntityData;
   notification?: UnifiedNotification;
-  relatedDocuments?: InboxRelatedDocument[];
   attachments?: InboxItemData['attachments'];
 };
 
@@ -132,22 +115,6 @@ const devNotificationFilters: DevNotificationFilter[] = [
   },
 ];
 
-const subTypeName = (subType: unknown) => {
-  if (typeof subType === 'string') return subType.toLowerCase();
-  if (subType && typeof subType === 'object' && 'type' in subType) {
-    return String((subType as { type: unknown }).type).toLowerCase();
-  }
-  return undefined;
-};
-
-const notificationSubType = (notification: UnifiedNotification) => {
-  const content = notification.notification_metadata.content as unknown as {
-    subType?: unknown;
-  };
-
-  return subTypeName(content.subType);
-};
-
 const channelItemAttachments = (
   entity: EntityData | undefined,
   notification: UnifiedNotification
@@ -173,20 +140,6 @@ const channelItemAttachments = (
   return entity.attachments;
 };
 
-const taskProperties = (entity: EntityData | undefined) => {
-  if (entity?.type !== 'document') return undefined;
-  if (!('properties' in entity) || !entity.properties?.length) {
-    return undefined;
-  }
-
-  const properties = entity.properties;
-
-  const keyProperties = getSortedKeyProperties(
-    properties.map((property: SoupProperty) => soupPropertyToProperty(property))
-  );
-  return keyProperties.length ? keyProperties : undefined;
-};
-
 const channelDisplayMessage = (entity: EntityData | undefined) => {
   if (entity?.type === 'channel') return entity.latestMessage;
   if (entity?.type === 'channel_message' || entity?.type === 'channel_thread') {
@@ -202,70 +155,28 @@ const channelDisplayMessage = (entity: EntityData | undefined) => {
 const transformNotificationItem = (args: {
   id: string;
   notification?: UnifiedNotification;
-  entity?: EntityData;
-  relatedDocuments?: InboxRelatedDocument[];
+  entity: EntityData;
   attachments?: InboxItemData['attachments'];
-  callStatuses?: string[];
   subItems?: InboxItemData[];
 }): InboxItemData => {
-  const notification = args.notification;
-  const metadata = notification?.notification_metadata;
-  const displayMessage = channelDisplayMessage(args.entity);
-  // A document with no name comes back named with the `DefaultFilename`
-  // placeholder; don't let that win over the notification's real title.
-  const entityName = String(args.entity?.name ?? '');
-  const title =
-    entityName ||
-    (notification ? notificationTitle(notification) : '') ||
-    entityName;
-  const showSubItems = metadata?.tag !== 'github_pr_status_changed';
-  const subType = notification ? notificationSubType(notification) : undefined;
+  const { notification, entity } = args;
+  const displayMessage = channelDisplayMessage(entity);
+  const showSubItems =
+    notification?.notification_metadata.tag !== 'github_pr_status_changed';
 
   return {
     id: args.id,
+    entity,
     notification,
-    previewEntity: args.entity,
-    entityId: notification?.entity_id ?? args.entity?.id,
-    entityType: (String(args.entity?.type ?? '') ||
-      notification?.entity_type ||
-      '') as InboxItemData['entityType'],
-    entitySubType:
-      args.entity?.type === 'document'
-        ? (args.entity.subType?.type ?? subType)
-        : subType,
-    entityName: title,
-    channelType:
-      args.entity?.type === 'channel_message' ||
-      args.entity?.type === 'channel_thread' ||
-      args.entity?.type === 'channel'
-        ? args.entity.channelType
-        : undefined,
-    senderId: displayMessage?.senderId ?? notification?.sender_id ?? undefined,
-    senderName:
-      displayMessage || !notification
-        ? undefined
-        : notificationSenderName(notification),
-    action: notification ? notificationAction(notification) : undefined,
-    targetName: title,
-    content:
-      displayMessage?.content ??
-      (notification ? notificationContent(notification) : undefined) ??
-      '',
-    properties:
-      metadata?.tag === 'task_assigned'
-        ? taskProperties(args.entity)
-        : undefined,
-    relatedDocuments: args.relatedDocuments,
-    attachments: args.attachments,
-    callStatuses: args.callStatuses,
+    unread: notification
+      ? !notification.viewed_at && !notification.done
+      : false,
     timestamp:
       displayMessage?.createdAt != null
         ? String(displayMessage.createdAt)
         : (notification?.created_at ?? notification?.updated_at ?? undefined),
-    unread: notification
-      ? !notification.viewed_at && !notification.done
-      : false,
     subItems: showSubItems ? args.subItems : undefined,
+    attachments: args.attachments,
   };
 };
 
@@ -402,9 +313,6 @@ const buildInboxItem = (group: InboxSourceItem[]): InboxItemData => {
     notification: root.notification,
     entity: root.entity,
     attachments: inboxSourceItemAttachments(root),
-    relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
-    callStatuses:
-      root.entity.type === 'call' ? [root.entity.status] : undefined,
     subItems: grouped
       ? group.map((item) =>
           transformNotificationItem({
@@ -500,175 +408,8 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
   });
 };
 
-const getNotificationDateValue = (
-  notification: UnifiedNotification
-): string | null => notification.created_at ?? notification.updated_at ?? null;
-
-const getChannelPreviewEntity = (
-  notification: UnifiedNotification
-): EntityData | undefined => {
-  const metadata = notification.notification_metadata;
-
-  if (
-    metadata.tag !== 'channel_message_send' &&
-    metadata.tag !== 'channel_message_reply' &&
-    metadata.tag !== 'channel_mention'
-  ) {
-    return undefined;
-  }
-
-  const channelType =
-    metadata.content.channelType === 'directMessage'
-      ? 'direct_message'
-      : metadata.content.channelType;
-  const senderId =
-    metadata.tag === 'channel_message_reply'
-      ? metadata.content.userId
-      : (notification.sender_id ?? undefined);
-  const date = getNotificationDateValue(notification);
-
-  if (metadata.tag === 'channel_message_reply' && metadata.content.threadId) {
-    const threadId = metadata.content.threadId;
-    return {
-      id: threadId,
-      type: 'channel_thread',
-      name: metadata.content.channelName ?? 'Channel',
-      ownerId: '',
-      createdAt: date,
-      updatedAt: date,
-      channelId: notification.entity_id,
-      channelName: metadata.content.channelName ?? 'Channel',
-      channelType:
-        channelType === 'direct_message' ? 'direct_message' : channelType,
-      messageId: threadId,
-      threadId,
-      senderId: senderId ?? '',
-      sender: {
-        id: senderId ?? '',
-        type: 'user',
-      },
-      content: metadata.content.messageContent ?? '',
-      attachments: [],
-      reactions: [],
-      thread: {
-        replyCount: 0,
-        preview: [],
-      },
-    } as EntityData;
-  }
-
-  return {
-    id: metadata.content.messageId,
-    type: 'channel_message',
-    name: metadata.content.messageContent || metadata.content.channelName || '',
-    ownerId: '',
-    createdAt: date,
-    updatedAt: date,
-    channelId: notification.entity_id,
-    channelName: metadata.content.channelName ?? 'Channel',
-    channelType:
-      channelType === 'direct_message' ? 'direct_message' : channelType,
-    messageId: metadata.content.messageId,
-    threadId:
-      metadata.tag === 'channel_message_reply' ||
-      metadata.tag === 'channel_mention'
-        ? (metadata.content.threadId ?? undefined)
-        : undefined,
-    senderId: senderId ?? '',
-    content: metadata.content.messageContent ?? '',
-  } as EntityData;
-};
-
 function previewEntity(item: InboxItemData): EntityData | undefined {
-  if (item.previewEntity) return item.previewEntity;
-
-  const notification = item.notification as UnifiedNotification | undefined;
-  if (!notification) return undefined;
-
-  const channelEntity = getChannelPreviewEntity(notification);
-  if (channelEntity) return channelEntity;
-
-  const metadata = notification.notification_metadata;
-  const date = getNotificationDateValue(notification);
-
-  switch (metadata.tag) {
-    case 'new_email':
-      return {
-        id: notification.entity_id,
-        type: 'email',
-        name: metadata.content.subject || 'Email',
-        ownerId: '',
-        createdAt: date,
-        updatedAt: date,
-        viewedAt: notification.viewed_at ?? null,
-        isRead: !!notification.viewed_at,
-        isDraft: false,
-        snippet: metadata.content.snippet ?? undefined,
-        isImportant: false,
-        done: !!notification.done,
-        senderEmail: metadata.content.sender ?? undefined,
-        senderName: metadata.content.sender ?? undefined,
-      } as EntityData;
-    case 'task_assigned':
-      return {
-        id: notification.entity_id,
-        type: 'document',
-        name: metadata.content.taskName ?? 'Task',
-        ownerId: '',
-        createdAt: date,
-        updatedAt: date,
-        viewedAt: notification.viewed_at ?? null,
-        fileType: 'md',
-        subType: { type: 'task' },
-      } as EntityData;
-    case 'document_mention':
-    case 'mentioned_in_document_comment':
-    case 'replied_to_document_comment_thread':
-    case 'commented_on_document': {
-      const subType = metadata.content.subType?.type;
-
-      return {
-        id: notification.entity_id,
-        type: 'document',
-        name: metadata.content.documentName ?? 'Document',
-        ownerId: '',
-        createdAt: date,
-        updatedAt: date,
-        viewedAt: notification.viewed_at ?? null,
-        fileType: metadata.content.fileType ?? 'md',
-        subType:
-          subType === 'task'
-            ? { type: 'task' }
-            : subType === 'snippet'
-              ? { type: 'snippet' }
-              : null,
-      } as EntityData;
-    }
-    case 'ai_response':
-      return {
-        id: notification.entity_id,
-        type: 'chat',
-        name: item.entityName || metadata.content.summary || 'AI response',
-        ownerId: '',
-        createdAt: date,
-        updatedAt: date,
-        viewedAt: notification.viewed_at ?? null,
-      } as EntityData;
-    default:
-      if (!item.entityId || !item.entityType) return undefined;
-
-      return {
-        id: item.entityId,
-        type: item.entityType,
-        name: item.entityName || item.targetName || 'Preview',
-        ownerId: '',
-        createdAt: date,
-        updatedAt: date,
-        ...(item.entityType === 'document' && item.entitySubType === 'task'
-          ? { fileType: 'md', subType: { type: 'task' as const } }
-          : {}),
-      } as EntityData;
-  }
+  return item.entity;
 }
 
 function NotificationInboxList(props: {
@@ -1055,30 +796,6 @@ function NotificationInboxList(props: {
               const onItemClick = () => {
                 selectItem(row.item);
               };
-              const onSelectRelatedDocument = (
-                document: InboxRelatedDocument
-              ) => {
-                props.onSelect({
-                  id: `related-document:${document.id}`,
-                  previewEntity: {
-                    id: document.id,
-                    type: 'document',
-                    name: document.name,
-                    ownerId: '',
-                    fileType: document.fileType ?? 'md',
-                    subType:
-                      document.subType === 'task'
-                        ? { type: 'task' as const }
-                        : document.subType === 'snippet'
-                          ? { type: 'snippet' as const }
-                          : undefined,
-                  } as EntityData,
-                  entityId: document.id,
-                  entityType: 'document',
-                  entitySubType: document.subType,
-                  entityName: document.name,
-                });
-              };
               return (
                 <div
                   class={cn(
@@ -1102,7 +819,6 @@ function NotificationInboxList(props: {
                           row.item.subItems?.some((subItem) => subItem.unread)
                       )}
                       onClick={onItemClick}
-                      onSelectRelatedDocument={onSelectRelatedDocument}
                       onToggleExpanded={() =>
                         setExpanded(row.item, !isExpanded(row.item))
                       }
@@ -1235,7 +951,6 @@ export function NotificationInbox2() {
             return content?.messageId === entity.messageId;
           }
 
-          console.log(entity, notification);
           if (entity.type === 'channel_thread') {
             const content = notification.notification_metadata.content as
               | { threadId?: string; messageId?: string }

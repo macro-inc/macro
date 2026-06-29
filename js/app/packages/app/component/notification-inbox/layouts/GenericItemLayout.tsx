@@ -1,6 +1,6 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { cn } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { createMemo, type JSX, Show } from 'solid-js';
 import { InboxItem } from '../InboxItem';
 import {
   InboxItemActionRow,
@@ -13,7 +13,7 @@ import {
   type InboxItemLayoutProps,
   InboxItemMetaRow,
 } from './shared';
-import { getContentText } from './utils';
+import { getInboxItemText } from './utils';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 
 /**
@@ -33,7 +33,7 @@ export function GenericItemLayout(
   }
 ) {
   const item = () => props.item;
-  const content = () => getContentText(item(), false);
+  const content = createMemo(() => getInboxItemText(item()).content);
 
   return (
     <InboxItemCard

@@ -10,19 +10,17 @@ import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-s
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import { cn, Layer } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { createMemo, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   InboxItem,
   type InboxItem as InboxItemData,
-  type InboxRelatedDocument,
   useInboxItemSenderName,
 } from '../InboxItem';
 import {
   formatCompactRelativeTimestamp,
-  getActionText,
-  getDisplayLocation,
   getInboxItemIconTarget,
+  getInboxItemText,
   getNotificationTag,
   getSenderFirstName,
   isGroupedChannelThread,
@@ -37,7 +35,6 @@ export interface InboxItemLayoutProps {
   expanded?: boolean;
   nested?: boolean;
   onClick?: (event: MouseEvent) => void;
-  onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
   onToggleExpanded?: () => void;
 }
 
@@ -236,15 +233,13 @@ export function InboxItemActionText(props: {
   nested?: boolean;
 }) {
   const senderName = useInboxItemSenderName(() => props.item);
-  const text = () =>
-    [
-      senderName(),
-      getActionText(props.item, props.nested),
-      getDisplayLocation(props.item, props.nested),
-    ]
-      .filter(Boolean)
-      .join(' ');
-  return <span class="min-w-0 flex-1 truncate">{text()}</span>;
+  const label = createMemo(() => {
+    const { action, location } = getInboxItemText(props.item, {
+      nested: props.nested,
+    });
+    return [senderName(), action, location].filter(Boolean).join(' ');
+  });
+  return <span class="min-w-0 flex-1 truncate">{label()}</span>;
 }
 
 export function InboxItemBadge(props: {
@@ -291,7 +286,7 @@ export function InboxItemContentRow(props: {
 }
 
 export function InboxItemSenderSummary(props: { items: InboxItemData[] }) {
-  const uniqueSenders = () => uniqueItemsBySender(props.items);
+  const uniqueSenders = createMemo(() => uniqueItemsBySender(props.items));
   const firstSender = () => uniqueSenders()[0];
   const secondSender = () => uniqueSenders()[1];
   const overflow = () => Math.max(0, uniqueSenders().length - 1);

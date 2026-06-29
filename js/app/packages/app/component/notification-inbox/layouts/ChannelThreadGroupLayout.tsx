@@ -1,5 +1,5 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { InboxItem } from '../InboxItem';
 import {
   InboxItemActionRow,
@@ -13,10 +13,10 @@ import {
   InboxItemSenderSummary,
 } from './shared';
 import {
-  getContentText,
-  getDisplayLocation,
+  getEntityName,
   getGroupCount,
   getGroupUnreadCount,
+  getInboxItemText,
   shouldUseGroupIcon,
 } from './utils';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -28,14 +28,14 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
  */
 export function ChannelThreadGroupLayout(props: InboxItemLayoutProps) {
   const item = () => props.item;
-  const content = () => getContentText(item(), true);
-  const title = () =>
-    getDisplayLocation(item(), props.nested) ??
-    item().targetName ??
-    item().entityName;
-  const unreadCount = () => getGroupUnreadCount(item());
+  const text = createMemo(() =>
+    getInboxItemText(item(), { nested: props.nested, groupRoot: true })
+  );
+  const content = () => text().content;
+  const title = () => text().location ?? getEntityName(item());
+  const unreadCount = createMemo(() => getGroupUnreadCount(item()));
   const count = () => unreadCount() || getGroupCount(item());
-  const groupItems = () => item().subItems ?? [item()];
+  const groupItems = createMemo(() => item().subItems ?? [item()]);
 
   return (
     <InboxItemCard
