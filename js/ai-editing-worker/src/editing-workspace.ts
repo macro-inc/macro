@@ -20,9 +20,8 @@ import {
   type AwarenessSource,
   nextAiPeerId,
   type Peer,
-  type PeerPool,
+  PeerPool,
   realAwarenessSource,
-  sharedPeerPool,
 } from './ai-editing/awareness';
 import { Doc } from './ai-editing/doc';
 import type { Writer } from './ai-editing/tools';
@@ -45,7 +44,7 @@ export class EditingWorkspace {
     wal: WALSyncer<RawUpdate>,
     opts: EditingWorkspaceOptions = {}
   ) {
-    this.pool = opts.pool ?? sharedPeerPool;
+    this.pool = opts.pool ?? new PeerPool();
     // Seed the editing surface from the merged state.
     this.session = createEditingSession();
     loadSnapshot(

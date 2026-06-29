@@ -64,8 +64,3 @@ export class PeerPool {
     return this.out.size + this.free.length;
   }
 }
-
-/**
- * Process-wide pool.
- */
-export const sharedPeerPool = new PeerPool();
