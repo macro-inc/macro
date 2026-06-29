@@ -20,9 +20,9 @@ pub use loaders::{
 pub use objects::{
     GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelThread, GraphqlSoupChat,
     GraphqlSoupCrmCompany, GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread,
-    GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupItem, GraphqlSoupNotification,
-    GraphqlSoupProject, GraphqlSoupProperty, GraphqlSoupPropertyEntityReference,
-    GraphqlSoupPropertyValue, SoupPage,
+    GraphqlSoupEntity, GraphqlSoupEntityType, GraphqlSoupForeignEntity, GraphqlSoupItem,
+    GraphqlSoupNotification, GraphqlSoupProject, GraphqlSoupProperty,
+    GraphqlSoupPropertyEntityReference, GraphqlSoupPropertyValue, SoupPage,
 };
 pub use request_context::GraphqlSoupRequestContext;
 pub use schema::{

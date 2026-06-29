@@ -1,4 +1,4 @@
-use async_graphql::{Context, ID, Json, Object, SimpleObject, Union, dataloader::DataLoader};
+use async_graphql::{Context, Enum, ID, Json, Object, SimpleObject, Union, dataloader::DataLoader};
 use model_entity::EntityType;
 use models_pagination::PaginatedOpaqueCursor;
 use models_properties::service::property_value::PropertyValue;
@@ -47,24 +47,49 @@ impl From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage {
 /// GraphQL Soup item envelope.
 pub struct GraphqlSoupItem {
     id: String,
-    entity_type: String,
+    entity_type: GraphqlSoupEntityType,
     frecency_score: f64,
     entity: GraphqlSoupEntity,
 }
 
-impl GraphqlSoupItem {
-    fn entity_type_name(entity_type: EntityType) -> &'static str {
+/// GraphQL representation of Soup entity types.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlSoupEntityType {
+    /// Document entity.
+    Document,
+    /// Chat entity.
+    Chat,
+    /// Project entity.
+    Project,
+    /// Email thread entity.
+    EmailThread,
+    /// Channel entity.
+    Channel,
+    /// Channel message entity.
+    ChannelMessage,
+    /// Call entity.
+    Call,
+    /// CRM company entity.
+    CrmCompany,
+    /// Foreign entity.
+    ForeignEntity,
+    /// Unknown or unsupported entity type.
+    Unknown,
+}
+
+impl From<EntityType> for GraphqlSoupEntityType {
+    fn from(entity_type: EntityType) -> Self {
         match entity_type {
-            EntityType::Document => "document",
-            EntityType::Chat => "chat",
-            EntityType::Project => "project",
-            EntityType::EmailThread => "email_thread",
-            EntityType::Channel => "channel",
-            EntityType::ChannelMessage => "channel_message",
-            EntityType::Call => "call",
-            EntityType::CrmCompany => "crm_company",
-            EntityType::ForeignEntity => "foreign_entity",
-            _ => "unknown",
+            EntityType::Document => Self::Document,
+            EntityType::Chat => Self::Chat,
+            EntityType::Project => Self::Project,
+            EntityType::EmailThread => Self::EmailThread,
+            EntityType::Channel => Self::Channel,
+            EntityType::ChannelMessage => Self::ChannelMessage,
+            EntityType::Call => Self::Call,
+            EntityType::CrmCompany => Self::CrmCompany,
+            EntityType::ForeignEntity => Self::ForeignEntity,
+            _ => Self::Unknown,
         }
     }
 }
@@ -75,8 +100,8 @@ impl GraphqlSoupItem {
         &self.id
     }
 
-    async fn entity_type(&self) -> &str {
-        &self.entity_type
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        self.entity_type
     }
 
     async fn frecency_score(&self) -> f64 {
@@ -99,7 +124,7 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
 
         Self {
             id: entity_ref.entity_id.into_owned(),
-            entity_type: Self::entity_type_name(entity_ref.entity_type).to_owned(),
+            entity_type: GraphqlSoupEntityType::from(entity_ref.entity_type),
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
