@@ -13,7 +13,7 @@ export type PropertyScope = (typeof PropertyScope)[keyof typeof PropertyScope];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyScope = {
   user: 'user',
-  org: 'org',
+  team: 'team',
   system: 'system',
   all: 'all',
 } as const;

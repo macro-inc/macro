@@ -15,7 +15,7 @@ pub enum PropertiesDatabaseError {
         property_id: Uuid,
     },
 
-    #[error("Either organization_id or user_id is required when creating property definitions")]
+    #[error("Either team_id or user_id is required when creating property definitions")]
     MissingOwner,
 
     #[error("Failed to serialize property value to JSON: {0}")]

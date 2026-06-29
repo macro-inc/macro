@@ -11,10 +11,10 @@ VALUES ('user1', 'user1@test.com', 'Test User 1', 'cus_test1', 'a1111111-1111-11
 ON CONFLICT (id) DO NOTHING;
 
 -- Custom property definitions
-INSERT INTO property_definitions (id, organization_id, user_id, display_name, data_type, is_multi_select, specific_entity_type)
-VALUES 
-    ('cccccccc-cccc-cccc-cccc-cccccccccc01', NULL, 'user1', 'Custom Notes', 'STRING', false, 'TASK'),
-    ('cccccccc-cccc-cccc-cccc-cccccccccc02', NULL, 'user1', 'Custom Tags', 'SELECT_STRING', true, 'TASK')
+INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select, specific_entity_type)
+VALUES
+    ('cccccccc-cccc-cccc-cccc-cccccccccc01', 'user1', 'Custom Notes', 'STRING', false, 'TASK'),
+    ('cccccccc-cccc-cccc-cccc-cccccccccc02', 'user1', 'Custom Tags', 'SELECT_STRING', true, 'TASK')
 ON CONFLICT (id) DO NOTHING;
 
 -- Property options for Custom Tags

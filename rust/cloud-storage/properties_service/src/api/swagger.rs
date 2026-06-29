@@ -31,6 +31,7 @@ use utoipa::OpenApi;
     components(
         schemas(
             api::CreatePropertyDefinitionRequest,
+            api::CreatePropertyScope,
             api::PropertyDataType,
             api::SelectStringOption,
             api::SelectNumberOption,

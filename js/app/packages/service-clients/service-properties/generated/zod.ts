@@ -11,8 +11,8 @@ import * as zod from 'zod';
  */
 export const listPropertiesQueryParams = zod.object({
   scope: zod
-    .enum(['user', 'org', 'system', 'all'])
-    .describe("Filter by scope: 'user', 'org', 'system', or 'all'"),
+    .enum(['user', 'team', 'system', 'all'])
+    .describe("Filter by scope: 'user', 'team', 'system', or 'all'"),
   include_options: zod
     .boolean()
     .optional()
@@ -71,28 +71,21 @@ export const listPropertiesResponseItem = zod
                 scope: zod.enum(['user']),
                 user_id: zod.string(),
               })
-              .describe('User-scoped property only'),
+              .describe('User-scoped property.'),
             zod
               .object({
-                organization_id: zod.number(),
-                scope: zod.enum(['organization']),
+                scope: zod.enum(['team']),
+                team_id: zod.uuid(),
               })
-              .describe('Organization-scoped property only'),
-            zod
-              .object({
-                organization_id: zod.number(),
-                scope: zod.enum(['user_and_organization']),
-                user_id: zod.string(),
-              })
-              .describe('Both user and organization-scoped'),
+              .describe('Team-scoped property.'),
             zod
               .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or org owner)'),
+              .describe('System-owned property (no user or team owner).'),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+            'Defines who owns a property - user-scoped, team-scoped, or system.'
           ),
         specific_entity_type: zod
           .union([
@@ -155,28 +148,21 @@ export const listPropertiesResponseItem = zod
                     scope: zod.enum(['user']),
                     user_id: zod.string(),
                   })
-                  .describe('User-scoped property only'),
+                  .describe('User-scoped property.'),
                 zod
                   .object({
-                    organization_id: zod.number(),
-                    scope: zod.enum(['organization']),
+                    scope: zod.enum(['team']),
+                    team_id: zod.uuid(),
                   })
-                  .describe('Organization-scoped property only'),
-                zod
-                  .object({
-                    organization_id: zod.number(),
-                    scope: zod.enum(['user_and_organization']),
-                    user_id: zod.string(),
-                  })
-                  .describe('Both user and organization-scoped'),
+                  .describe('Team-scoped property.'),
                 zod
                   .object({
                     scope: zod.enum(['system']),
                   })
-                  .describe('System-owned property (no user or org owner)'),
+                  .describe('System-owned property (no user or team owner).'),
               ])
               .describe(
-                'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                'Defines who owns a property - user-scoped, team-scoped, or system.'
               ),
             specific_entity_type: zod
               .union([
@@ -247,125 +233,99 @@ export const listPropertiesResponse = zod.array(listPropertiesResponseItem);
  * @summary Create a new property definition
  */
 export const createPropertyDefinitionBody = zod
-  .union([
-    zod
-      .object({
-        scope: zod.enum(['user']),
-        user_id: zod.string(),
-      })
-      .describe('User-scoped property only'),
-    zod
-      .object({
-        organization_id: zod.number(),
-        scope: zod.enum(['organization']),
-      })
-      .describe('Organization-scoped property only'),
-    zod
-      .object({
-        organization_id: zod.number(),
-        scope: zod.enum(['user_and_organization']),
-        user_id: zod.string(),
-      })
-      .describe('Both user and organization-scoped'),
-    zod
-      .object({
-        scope: zod.enum(['system']),
-      })
-      .describe('System-owned property (no user or org owner)'),
-  ])
-  .describe(
-    'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
-  )
-  .and(
-    zod.object({
-      data_type: zod
-        .union([
-          zod
-            .object({
-              type: zod.enum(['boolean']),
-            })
-            .describe('Boolean true\/false values.'),
-          zod
-            .object({
-              type: zod.enum(['date']),
-            })
-            .describe('Date and time values.'),
-          zod
-            .object({
-              type: zod.enum(['number']),
-            })
-            .describe('Numeric values.'),
-          zod
-            .object({
-              type: zod.enum(['string']),
-            })
-            .describe('String\/text values.'),
-          zod
-            .object({
-              multi: zod.boolean(),
-              options: zod.array(
+  .object({
+    data_type: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['boolean']),
+          })
+          .describe('Boolean true\/false values.'),
+        zod
+          .object({
+            type: zod.enum(['date']),
+          })
+          .describe('Date and time values.'),
+        zod
+          .object({
+            type: zod.enum(['number']),
+          })
+          .describe('Numeric values.'),
+        zod
+          .object({
+            type: zod.enum(['string']),
+          })
+          .describe('String\/text values.'),
+        zod
+          .object({
+            multi: zod.boolean(),
+            options: zod.array(
+              zod
+                .object({
+                  display_order: zod.number(),
+                  value: zod.number(),
+                })
+                .describe('Option for select number properties in requests.')
+            ),
+            type: zod.enum(['select_number']),
+          })
+          .describe('Select property with numeric options.'),
+        zod
+          .object({
+            multi: zod.boolean(),
+            options: zod.array(
+              zod
+                .object({
+                  display_order: zod.number(),
+                  value: zod.string(),
+                })
+                .describe('Option for select-type properties in requests.')
+            ),
+            type: zod.enum(['select_string']),
+          })
+          .describe('Select property with string options.'),
+        zod
+          .object({
+            multi: zod.boolean(),
+            specific_type: zod
+              .union([
+                zod.null(),
                 zod
-                  .object({
-                    display_order: zod.number(),
-                    value: zod.number(),
-                  })
-                  .describe('Option for select number properties in requests.')
-              ),
-              type: zod.enum(['select_number']),
-            })
-            .describe('Select property with numeric options.'),
-          zod
-            .object({
-              multi: zod.boolean(),
-              options: zod.array(
-                zod
-                  .object({
-                    display_order: zod.number(),
-                    value: zod.string(),
-                  })
-                  .describe('Option for select-type properties in requests.')
-              ),
-              type: zod.enum(['select_string']),
-            })
-            .describe('Select property with string options.'),
-          zod
-            .object({
-              multi: zod.boolean(),
-              specific_type: zod
-                .union([
-                  zod.null(),
-                  zod
-                    .enum([
-                      'CHANNEL',
-                      'CHAT',
-                      'COMPANY',
-                      'DOCUMENT',
-                      'PROJECT',
-                      'TASK',
-                      'THREAD',
-                      'USER',
-                    ])
-                    .describe(
-                      'Type of entity that can be referenced by entity properties.'
-                    ),
-                ])
-                .optional(),
-              type: zod.enum(['entity']),
-            })
-            .describe('Entity reference property.'),
-          zod
-            .object({
-              multi: zod.boolean(),
-              type: zod.enum(['link']),
-            })
-            .describe('Link property.'),
-        ])
-        .describe(
-          'Data type with embedded options for requests - provides compile-time validation.'
-        ),
-      display_name: zod.string(),
-    })
-  )
+                  .enum([
+                    'CHANNEL',
+                    'CHAT',
+                    'COMPANY',
+                    'DOCUMENT',
+                    'PROJECT',
+                    'TASK',
+                    'THREAD',
+                    'USER',
+                  ])
+                  .describe(
+                    'Type of entity that can be referenced by entity properties.'
+                  ),
+              ])
+              .optional(),
+            type: zod.enum(['entity']),
+          })
+          .describe('Entity reference property.'),
+        zod
+          .object({
+            multi: zod.boolean(),
+            type: zod.enum(['link']),
+          })
+          .describe('Link property.'),
+      ])
+      .describe(
+        'Data type with embedded options for requests - provides compile-time validation.'
+      ),
+    display_name: zod.string(),
+    scope: zod
+      .enum(['user', 'team'])
+      .describe(
+        'Ownership scope a client may request when creating a property definition.\nThe owning user or team is derived server-side from the authenticated caller -\nclients never supply owner ids. System properties are not creatable via the API.'
+      ),
+  })
   .describe('Request to create a new property definition.');
 
 /**
@@ -555,28 +515,23 @@ export const getBulkEntityPropertiesResponse = zod.record(
                         scope: zod.enum(['user']),
                         user_id: zod.string(),
                       })
-                      .describe('User-scoped property only'),
+                      .describe('User-scoped property.'),
                     zod
                       .object({
-                        organization_id: zod.number(),
-                        scope: zod.enum(['organization']),
+                        scope: zod.enum(['team']),
+                        team_id: zod.uuid(),
                       })
-                      .describe('Organization-scoped property only'),
-                    zod
-                      .object({
-                        organization_id: zod.number(),
-                        scope: zod.enum(['user_and_organization']),
-                        user_id: zod.string(),
-                      })
-                      .describe('Both user and organization-scoped'),
+                      .describe('Team-scoped property.'),
                     zod
                       .object({
                         scope: zod.enum(['system']),
                       })
-                      .describe('System-owned property (no user or org owner)'),
+                      .describe(
+                        'System-owned property (no user or team owner).'
+                      ),
                   ])
                   .describe(
-                    'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                    'Defines who owns a property - user-scoped, team-scoped, or system.'
                   ),
                 specific_entity_type: zod
                   .union([
@@ -867,28 +822,21 @@ export const getEntityPropertiesResponse = zod
                       scope: zod.enum(['user']),
                       user_id: zod.string(),
                     })
-                    .describe('User-scoped property only'),
+                    .describe('User-scoped property.'),
                   zod
                     .object({
-                      organization_id: zod.number(),
-                      scope: zod.enum(['organization']),
+                      scope: zod.enum(['team']),
+                      team_id: zod.uuid(),
                     })
-                    .describe('Organization-scoped property only'),
-                  zod
-                    .object({
-                      organization_id: zod.number(),
-                      scope: zod.enum(['user_and_organization']),
-                      user_id: zod.string(),
-                    })
-                    .describe('Both user and organization-scoped'),
+                    .describe('Team-scoped property.'),
                   zod
                     .object({
                       scope: zod.enum(['system']),
                     })
-                    .describe('System-owned property (no user or org owner)'),
+                    .describe('System-owned property (no user or team owner).'),
                 ])
                 .describe(
-                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                 ),
               specific_entity_type: zod
                 .union([

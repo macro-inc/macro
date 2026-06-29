@@ -12,9 +12,9 @@ pub async fn get_property_definition(
 ) -> anyhow::Result<Option<PropertyDefinition>> {
     let row = sqlx::query!(
         r#"
-        SELECT 
+        SELECT
             id,
-            organization_id,
+            team_id,
             user_id,
             display_name,
             data_type as "data_type: DataType",
@@ -34,7 +34,7 @@ pub async fn get_property_definition(
     let result = row.map(|row| {
         let db_prop = db::PropertyDefinition {
             id: row.id,
-            organization_id: row.organization_id,
+            team_id: row.team_id,
             user_id: row.user_id,
             display_name: row.display_name,
             data_type: row.data_type,

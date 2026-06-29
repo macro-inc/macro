@@ -19,7 +19,7 @@
           {
             "name": "scope",
             "in": "query",
-            "description": "Filter by scope: 'user', 'org', 'system', or 'all'",
+            "description": "Filter by scope: 'user', 'team', 'system', or 'all'",
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/PropertyScope"
@@ -93,6 +93,9 @@
           },
           "400": {
             "description": "Invalid request"
+          },
+          "403": {
+            "description": "Team membership required for team scope"
           },
           "500": {
             "description": "Internal server error"
@@ -560,24 +563,25 @@
         }
       },
       "CreatePropertyDefinitionRequest": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/PropertyOwner"
+        "type": "object",
+        "description": "Request to create a new property definition.",
+        "required": ["scope", "display_name", "data_type"],
+        "properties": {
+          "data_type": {
+            "$ref": "#/components/schemas/PropertyDataType"
           },
-          {
-            "type": "object",
-            "required": ["display_name", "data_type"],
-            "properties": {
-              "data_type": {
-                "$ref": "#/components/schemas/PropertyDataType"
-              },
-              "display_name": {
-                "type": "string"
-              }
-            }
+          "display_name": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/CreatePropertyScope"
           }
-        ],
-        "description": "Request to create a new property definition."
+        }
+      },
+      "CreatePropertyScope": {
+        "type": "string",
+        "description": "Ownership scope a client may request when creating a property definition.\nThe owning user or team is derived server-side from the authenticated caller -\nclients never supply owner ids. System properties are not creatable via the API.",
+        "enum": ["user", "team"]
       },
       "DataType": {
         "type": "string",
@@ -1128,7 +1132,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-scoped property only",
+            "description": "User-scoped property.",
             "required": ["user_id", "scope"],
             "properties": {
               "scope": {
@@ -1142,40 +1146,22 @@
           },
           {
             "type": "object",
-            "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
             "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
           {
             "type": "object",
-            "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
-            "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["user_and_organization"]
-              },
-              "user_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "System-owned property (no user or org owner)",
+            "description": "System-owned property (no user or team owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -1185,12 +1171,12 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
       },
       "PropertyScope": {
         "type": "string",
         "description": "Scope filter for property queries",
-        "enum": ["user", "org", "system", "all"]
+        "enum": ["user", "team", "system", "all"]
       },
       "PropertyValue": {
         "oneOf": [

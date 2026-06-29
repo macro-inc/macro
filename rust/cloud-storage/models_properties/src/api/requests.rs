@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::api::error::{
     PropertyDefinitionValidationError, PropertyOptionValidationError, PropertyValueValidationError,
 };
-use crate::shared::{DataType, EntityReference, EntityType, PropertyOwner};
+use crate::shared::{DataType, EntityReference, EntityType};
 
 // ===== Property Definition Requests =====
 
@@ -96,11 +96,22 @@ impl PropertyDataType {
     }
 }
 
+/// Ownership scope a client may request when creating a property definition.
+/// The owning user or team is derived server-side from the authenticated caller -
+/// clients never supply owner ids. System properties are not creatable via the API.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum CreatePropertyScope {
+    /// Owned by the requesting user.
+    User,
+    /// Owned by the requesting user's team. Requires team membership.
+    Team,
+}
+
 /// Request to create a new property definition.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreatePropertyDefinitionRequest {
-    #[serde(flatten)]
-    pub owner: PropertyOwner,
+    pub scope: CreatePropertyScope,
     pub display_name: String,
     pub data_type: PropertyDataType,
 }

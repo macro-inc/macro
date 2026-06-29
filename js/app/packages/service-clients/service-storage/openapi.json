@@ -16613,7 +16613,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-scoped property only",
+            "description": "User-scoped property.",
             "required": ["user_id", "scope"],
             "properties": {
               "scope": {
@@ -16627,40 +16627,22 @@
           },
           {
             "type": "object",
-            "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
             "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
           {
             "type": "object",
-            "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
-            "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["user_and_organization"]
-              },
-              "user_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "System-owned property (no user or org owner)",
+            "description": "System-owned property (no user or team owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -16670,7 +16652,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [

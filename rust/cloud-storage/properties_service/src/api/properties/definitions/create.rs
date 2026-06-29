@@ -7,9 +7,11 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::PropertiesHandlerState;
+use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
-use models_properties::api::{CreatePropertyDefinitionRequest, PropertyDataType};
+use models_properties::api::{
+    CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType,
+};
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use properties_db_client::{
@@ -24,6 +26,8 @@ pub enum CreatePropertyDefinitionErr {
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("{0}")]
     InvalidRequest(String),
+    #[error("You must be on a team to create a team property")]
+    TeamMembershipRequired,
 }
 
 impl IntoResponse for CreatePropertyDefinitionErr {
@@ -32,6 +36,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
             CreatePropertyDefinitionErr::InternalError(_)
             | CreatePropertyDefinitionErr::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             CreatePropertyDefinitionErr::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            CreatePropertyDefinitionErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 
         if status_code.is_server_error() {
@@ -54,22 +59,18 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     responses(
         (status = 201, description = "Property definition created successfully", body = PropertyDefinition),
         (status = 400, description = "Invalid request"),
+        (status = 403, description = "Team membership required for team scope"),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id), err)]
 pub async fn create_property_definition(
     State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
-    tracing::info!(
-        organization_id = ?request.owner.organization_id(),
-        user_id = ?request.owner.user_id(),
-        "creating property definition"
-    );
-
     if let Err(err) = request.validate() {
         tracing::error!(
             error = %err,
@@ -77,6 +78,22 @@ pub async fn create_property_definition(
         );
         return Err(CreatePropertyDefinitionErr::InvalidRequest(err.to_string()));
     }
+
+    // Derive the owner from the authenticated caller - clients never supply owner ids.
+    let (team_id, user_id): (Option<Uuid>, Option<&str>) = match request.scope {
+        CreatePropertyScope::User => (None, Some(user_context.user_id.as_str())),
+        CreatePropertyScope::Team => {
+            let team_id =
+                caller_team_id(&team).ok_or(CreatePropertyDefinitionErr::TeamMembershipRequired)?;
+            (Some(team_id), None)
+        }
+    };
+
+    tracing::info!(
+        team_id = ?team_id,
+        scope = ?request.scope,
+        "creating property definition"
+    );
 
     let (base_data_type, property_options) = match &request.data_type {
         PropertyDataType::SelectString { options, .. } => {
@@ -115,8 +132,8 @@ pub async fn create_property_definition(
 
         property_definitions_insert::create_property_definition(
             &state.db,
-            request.owner.organization_id(),
-            request.owner.user_id(),
+            team_id,
+            user_id,
             &request.display_name,
             base_data_type,
             request.data_type.is_multi_select(),
@@ -138,8 +155,8 @@ pub async fn create_property_definition(
 
         property_definitions_insert::create_property_definition_with_options(
             &state.db,
-            request.owner.organization_id(),
-            request.owner.user_id(),
+            team_id,
+            user_id,
             &request.display_name,
             base_data_type,
             request.data_type.is_multi_select(),

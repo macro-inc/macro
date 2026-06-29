@@ -15,8 +15,8 @@ pub use error::{
 pub use query_params::{BulkEntityQueryParams, EntityQueryParams};
 pub use requests::{
     AddNumberOptionRequest, AddPropertyOptionRequest, AddStringOptionRequest,
-    CreatePropertyDefinitionRequest, PropertyDataType, SelectNumberOption, SelectStringOption,
-    SetPropertyValue,
+    CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
+    SelectStringOption, SetPropertyValue,
 };
 pub use responses::{
     BulkEntityPropertiesResponse, EntityPropertiesResponse, EntityPropertyResponse,
