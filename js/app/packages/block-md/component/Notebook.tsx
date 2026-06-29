@@ -115,6 +115,7 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
+  const showComments = () => hasComment() && !history.isViewingHistory();
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -135,7 +136,7 @@ export function Notebook(props: {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const mode = hasComment() ? widthToMode(width) : CommentLayoutMode.none;
+      const mode = showComments() ? widthToMode(width) : CommentLayoutMode.none;
       setLayoutMode(mode);
       const leftFloat =
         contentRef.getBoundingClientRect().right - left + GapTargetWidth;
@@ -157,7 +158,7 @@ export function Notebook(props: {
   });
 
   createEffect(() => {
-    if (!hasComment()) {
+    if (!showComments()) {
       setLayoutMode(CommentLayoutMode.none);
     } else {
       setLayoutMode(widthToMode(untrack(width)));
@@ -165,8 +166,10 @@ export function Notebook(props: {
   });
 
   createEffect(() => {
-    if (hasComment()) {
+    if (showComments()) {
       setWideEnoughForComments(width() >= BreaksPoints.md);
+    } else {
+      setWideEnoughForComments(false);
     }
   });
 
@@ -345,8 +348,8 @@ export function Notebook(props: {
         }}
         ref={commentMarginRef}
         classList={{
-          block: hasComment(),
-          hidden: !hasComment(),
+          block: showComments(),
+          hidden: !showComments(),
         }}
       >
         <CommentMargin />

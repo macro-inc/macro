@@ -42,7 +42,6 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const size = createElementSize(() => containerRef);
   const width = () => size.width ?? 0;
   const [cursorMs, setCursorMs] = createSignal<number | null>(null);
-  const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
   const [view, setView] = createSignal<WindowRange | null>(null);
 
   type Drag =
@@ -53,6 +52,11 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const [drag, setDrag] = createSignal<Drag | null>(null);
 
   const [hoverPx, setHoverPx] = createSignal<number | null>(null);
+  const [hoverUser, setHoverUser] = createSignal<{
+    user: ScrubberUser;
+    x: number;
+    y: number;
+  } | null>(null);
   const [createPinAt, setCreatePinAt] = createSignal<{
     leftPx: number;
     atMs: number;
@@ -68,18 +72,8 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     }));
   });
 
-  const toggleUser = (id: string) => {
-    const next = new Set(hidden());
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setHidden(next);
-  };
-
   const lanes = createMemo<ScrubberLane[]>(() => {
-    const visible = props.sessions.filter(
-      (session) => !hidden().has(session.userId)
-    );
-    const byUser = group(visible, (session) => session.userId);
+    const byUser = group(props.sessions, (session) => session.userId);
     return users()
       .filter((user) => byUser.has(user.id))
       .map((user) => ({ user, sessions: byUser.get(user.id)! }));
@@ -276,7 +270,10 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={() => setHoverPx(null)}
+        onPointerLeave={() => {
+          setHoverPx(null);
+          setHoverUser(null);
+        }}
         onWheel={onWheel}
         onDblClick={() =>
           setView({ start: 0, end: compressedTimeline().total })
@@ -413,7 +410,21 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
                     return (
                       <div
                         class="absolute inset-y-0 rounded-full"
-                        title={lane.user.label}
+                        onPointerEnter={(e) =>
+                          setHoverUser({
+                            user: lane.user,
+                            x: localPx(e.clientX),
+                            y: localY(e.clientY),
+                          })
+                        }
+                        onPointerMove={(e) =>
+                          setHoverUser({
+                            user: lane.user,
+                            x: localPx(e.clientX),
+                            y: localY(e.clientY),
+                          })
+                        }
+                        onPointerLeave={() => setHoverUser(null)}
                         style={{
                           left: `${left()}px`,
                           width: `${Math.max(3, right() - left())}px`,
@@ -428,6 +439,24 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
           </For>
         </div>
 
+        <Show when={hoverUser()}>
+          {(hover) => (
+            <div
+              class="pointer-events-none absolute z-30 flex items-center gap-1.5 rounded-md bg-surface px-2 py-1 text-ink text-xs shadow-lg ring-1 ring-edge-muted"
+              style={{
+                left: `${Math.max(0, Math.min(width() - 160, hover().x + 10))}px`,
+                top: `${Math.max(0, hover().y - 30)}px`,
+              }}
+            >
+              <span
+                class="size-2 rounded-full"
+                style={{ background: hover().user.color }}
+              />
+              <span class="max-w-40 truncate">{hover().user.label}</span>
+            </div>
+          )}
+        </Show>
+
         {/* Edge time labels */}
         <span class="absolute top-full left-0 origin-top-left -rotate-12 text-[10px] text-ink-muted">
           {formatTimestamp(
@@ -440,42 +469,6 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
           )}
         </span>
       </div>
-
-      {/* Legend */}
-      <Show when={props.isViewingHistory() && users().length > 0}>
-        <div
-          class={cn(
-            'flex shrink-0 flex-col gap-0.5 pr-1 text-xs',
-            props.compact
-              ? 'w-full'
-              : 'max-h-32 overflow-y-auto overscroll-contain'
-          )}
-        >
-          <For each={users()}>
-            {(user) => (
-              <button
-                type="button"
-                class="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-hover"
-                classList={{ 'opacity-40': hidden().has(user.id) }}
-                onClick={() => toggleUser(user.id)}
-              >
-                <span
-                  class="size-2 shrink-0 rounded-full"
-                  style={{ background: user.color }}
-                />
-                <span
-                  class={cn(
-                    'truncate',
-                    props.compact ? 'max-w-full' : 'max-w-40'
-                  )}
-                >
-                  {user.label}
-                </span>
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
     </div>
   );
 }

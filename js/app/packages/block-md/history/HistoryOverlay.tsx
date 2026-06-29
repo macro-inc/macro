@@ -1,5 +1,5 @@
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -10,6 +10,7 @@ import { storageServiceClient } from '@service-storage/client';
 import { Button } from '@ui';
 import type { SerializedEditorState } from 'lexical';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 
 const nameForkedDocument = (name: string) => `${name} (forked)`;
 
@@ -23,6 +24,8 @@ export function HistoryOverlay(props: {
   onExit: () => void;
 }) {
   const { insertSplit } = useSplitLayout();
+  const splitPanel = useSplitPanel();
+  const controlMount = () => splitPanel?.layoutRefs.overlay;
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
@@ -87,29 +90,29 @@ export function HistoryOverlay(props: {
       style={{ display: props.visible ? undefined : 'none' }}
     >
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
-      <Show when={props.visible}>
-        <SplitToolbarLeft>
-          <Button
-            variant="danger"
-            size="md"
-            class="order-first"
-            onClick={props.onExit}
+      <Show when={props.visible && controlMount()}>
+        <Portal mount={controlMount()!}>
+          <div
+            class="pointer-events-auto absolute bottom-4 left-4 flex items-center gap-1"
+            style={{ 'z-index': 35 }}
           >
-            <XIcon />
-            Exit history
-          </Button>
-          <Button
-            variant="active"
-            size="md"
-            onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
-            disabled={
-              forking() || (!props.isScrubbedRightmost && !stateAtCursor.data)
-            }
-          >
-            <GitFork class="size-4 shrink-0" />
-            {forking() ? 'Forking…' : 'Fork'}
-          </Button>
-        </SplitToolbarLeft>
+            <Button variant="danger" size="md" onClick={props.onExit}>
+              <XIcon />
+              Exit history
+            </Button>
+            <Button
+              variant="active"
+              size="md"
+              onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
+              disabled={
+                forking() || (!props.isScrubbedRightmost && !stateAtCursor.data)
+              }
+            >
+              <GitFork class="size-4 shrink-0" />
+              {forking() ? 'Forking…' : 'Fork'}
+            </Button>
+          </div>
+        </Portal>
       </Show>
       {/* placeholderData keeps the last rendered state visible while the next loads. */}
       <Show keyed when={previewState()}>
@@ -123,7 +126,7 @@ export function HistoryOverlay(props: {
             <MarkdownShell
               config={config}
               initialState={state}
-              placeholder="No history found"
+              placeholder=""
               disabled
               class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
             />

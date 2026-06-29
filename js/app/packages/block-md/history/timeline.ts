@@ -1,5 +1,5 @@
-import { max } from 'd3-array';
-import { area, curveCatmullRom } from 'd3-shape';
+import { blur, max } from 'd3-array';
+import { area, curveBasis } from 'd3-shape';
 
 export const SESSION_GAP_MS = 10 * 60 * 1000;
 const GAP_COMPRESSION_MULTIPLIER = 0.5;
@@ -58,8 +58,8 @@ export type VolumeShape = { area: string; line: string };
 // Height in pixels of the volume band SVG. Exported so the caller can size the viewBox to match.
 export const VOLUME_BAND_H = 32;
 
-const VOLUME_BUCKETS = 80;
-const VOLUME_CURVE_ALPHA = 0.75;
+const VOLUME_BUCKETS = 160;
+const VOLUME_BLUR_RADIUS = 5;
 
 // Histogram of edit intensity across the timeline. Each session contributes
 // edits/minute to the buckets it spans (in pixel space), normalized to the
@@ -90,7 +90,8 @@ export function buildVolumeShape(
     for (let i = firstBucket; i <= lastBucket; i++) buckets[i] += rate;
   }
 
-  const peak = max(buckets) ?? 0;
+  const roundedBuckets = Array.from(blur([...buckets], VOLUME_BLUR_RADIUS));
+  const peak = max(roundedBuckets) ?? 0;
   if (peak <= 0) return null;
 
   // y1 leaves 2px headroom at the top so the line is always visible at peak.
@@ -98,10 +99,10 @@ export function buildVolumeShape(
     .x((_, i) => (i / (VOLUME_BUCKETS - 1)) * width)
     .y0(bandH)
     .y1((value) => bandH - (value / peak) * (bandH - 2))
-    .curve(curveCatmullRom.alpha(VOLUME_CURVE_ALPHA));
+    .curve(curveBasis);
 
   return {
-    area: areaGenerator(buckets) ?? '',
-    line: areaGenerator.lineY1()(buckets) ?? '',
+    area: areaGenerator(roundedBuckets) ?? '',
+    line: areaGenerator.lineY1()(roundedBuckets) ?? '',
   };
 }

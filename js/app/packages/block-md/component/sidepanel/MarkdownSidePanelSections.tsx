@@ -53,7 +53,11 @@ import {
 } from 'solid-js';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
-import { HistorySessionList } from '../../history/HistorySessionList';
+import {
+  HistorySessionList,
+  MIN_HISTORY_EDITS,
+  NO_HISTORY_MESSAGE,
+} from '../../history/HistorySessionList';
 import { mdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -126,14 +130,22 @@ function HistorySectionContent() {
   const activityMaxHeightPx = () =>
     activityBounds.top === null
       ? null
-      : Math.max(120, window.innerHeight - activityBounds.top - 12);
+      : Math.max(120, window.innerHeight - activityBounds.top - 36);
 
   return (
     <Show
       when={!history.isLoadingSessions() && history.sessions()}
       fallback={<p class="text-xs text-ink-muted">No history found</p>}
     >
-      {(sessions) => (
+      {(sessions) => {
+        const totalEdits = createMemo(() =>
+          sessions().reduce((sum, s) => sum + s.count, 0)
+        );
+        return (
+        <Show
+          when={totalEdits() >= MIN_HISTORY_EDITS}
+          fallback={<p class="text-xs text-ink-muted">{NO_HISTORY_MESSAGE}</p>}
+        >
         <div class="min-w-0 overflow-hidden">
           <HistoryScrubber
             sessions={sessions()}
@@ -182,7 +194,9 @@ function HistorySectionContent() {
             </div>
           </Show>
         </div>
-      )}
+        </Show>
+        );
+      }}
     </Show>
   );
 }

@@ -5,7 +5,9 @@ use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result
 
 use crate::{
     constants::header_names::{AUTHORIZATION, MACRO_INTERNAL_AUTH_KEY_HEADER_KEY},
-    durable_object::{CopyDocumentRequest, GetSnapshotRequest, response, status_codes},
+    durable_object::{
+        CopyDocumentRequest, GetSnapshotRequest, cors, is_origin_allowed, response, status_codes,
+    },
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     timeit_log,
@@ -139,17 +141,32 @@ pub async fn pass_to_durable_object(
     req: Request,
     document_id: &str,
 ) -> Result<Response> {
-    let stub = get_durable_object(env, document_id)?;
+    let origin = req.headers().get("Origin")?;
+    let allowed_origin = origin.as_deref().filter(|o| is_origin_allowed(o));
 
+    if req.method() == worker::Method::Options {
+        return Ok(Response::builder()
+            .with_status(status_codes::OK)
+            .with_cors(&cors(allowed_origin))?
+            .empty());
+    }
+
+    // Block disallowed origins early (mirrors the DO's own check).
+    if origin.is_some() && allowed_origin.is_none() {
+        return Ok(response(status_codes::FORBIDDEN));
+    }
+
+    let stub = get_durable_object(env, document_id)?;
     let fut = timeout(stub.fetch_with_request(req), DEFAULT_TIMEOUT_MS);
     let res = timeit_log!("worker -> do_fetch", fut.await);
-    Ok(match res {
+    let response = match res {
         crate::timeout::TimeoutResult::Ok(x) => x?,
         crate::timeout::TimeoutResult::Timeout(timeout_error) => {
             error!(err =? timeout_error, "A durable object RPC call has timed out");
             response(408)
         }
-    })
+    };
+    response.with_cors(&cors(allowed_origin))
 }
 
 fn get_durable_object(env: &Env, document_id: &str) -> Result<Stub> {

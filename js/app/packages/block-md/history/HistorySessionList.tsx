@@ -1,9 +1,12 @@
 import { tryMacroId, useDisplayNameParts } from '@core/user';
-import { formatRelativeTimestamp } from '@entity';
 import type { HistorySession } from '@service-sync/client';
 import { cn } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
+import { buildActivityRows } from './activityRows';
 import { userColor, userLabel } from './utils';
+
+export const MIN_HISTORY_EDITS = 3;
+export const NO_HISTORY_MESSAGE = 'No history yet';
 
 type HistorySessionListProps = {
   sessions: readonly HistorySession[];
@@ -11,43 +14,6 @@ type HistorySessionListProps = {
   onSelect: (at: Date | null) => void;
   maxHeightPx?: number | null;
 };
-
-type HistorySessionRow = {
-  id: string;
-  userIds: string[];
-  startMs: number;
-  endMs: number;
-  count: number;
-};
-
-function isYesterday(date: Date, now: Date) {
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  return (
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate()
-  );
-}
-
-function isLastWeek(date: Date, now: Date) {
-  const thisWeekStart = new Date(now);
-  thisWeekStart.setHours(0, 0, 0, 0);
-  thisWeekStart.setDate(now.getDate() - now.getDay());
-
-  const lastWeekStart = new Date(thisWeekStart);
-  lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-
-  return date >= lastWeekStart && date < thisWeekStart;
-}
-
-function formatHistoryRelative(ms: number) {
-  const date = new Date(ms);
-  const now = new Date();
-  if (isYesterday(date, now)) return 'yesterday';
-  if (isLastWeek(date, now)) return 'last week';
-  return formatRelativeTimestamp(date);
-}
 
 function UserName(props: { userId: string }) {
   const { firstName, fullName } = useDisplayNameParts(
@@ -75,22 +41,18 @@ function UserList(props: { userIds: readonly string[] }) {
 }
 
 export function HistorySessionList(props: HistorySessionListProps) {
-  const rows = createMemo<HistorySessionRow[]>(() =>
-    [...props.sessions]
-      .sort((a, b) => b.endMs - a.endMs || b.startMs - a.startMs)
-      .map((session) => ({
-        id: `${session.userId}:${session.startMs}:${session.endMs}`,
-        userIds: [session.userId],
-        startMs: session.startMs,
-        endMs: session.endMs,
-        count: session.count,
-      }))
-  );
+  const rows = createMemo(() => buildActivityRows(props.sessions));
+  const totalEdits = createMemo(() => rows().reduce((sum, r) => sum + r.count, 0));
 
   const selectedMs = () => props.selectedAt()?.getTime() ?? null;
 
   return (
-    <Show when={rows().length > 0}>
+    <Show
+      when={totalEdits() >= MIN_HISTORY_EDITS}
+      fallback={
+        <p class="mt-2 text-ink-muted text-xs">{NO_HISTORY_MESSAGE}</p>
+      }
+    >
       <div class="mt-2 min-w-0">
         <div
           class="min-h-0 space-y-1 overflow-y-auto pr-1"
@@ -114,16 +76,19 @@ export function HistorySessionList(props: HistorySessionListProps) {
                   )}
                   onClick={() => props.onSelect(new Date(row.endMs))}
                 >
-                  <span
-                    class="size-2 shrink-0 rounded-full"
-                    style={{
-                      'background-color': userColor(row.userIds[0] ?? ''),
-                    }}
-                  />
+                  <span class="flex shrink-0 items-center -space-x-1">
+                    <For each={row.userIds.slice(0, 4)}>
+                      {(userId) => (
+                        <span
+                          class="size-2 rounded-full ring-1 ring-surface"
+                          style={{ 'background-color': userColor(userId) }}
+                        />
+                      )}
+                    </For>
+                  </span>
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-ink text-xs">
-                      <UserList userIds={row.userIds} /> edited{' '}
-                      {formatHistoryRelative(row.endMs)}
+                      <UserList userIds={row.userIds} /> edited {row.label}
                     </span>
                     <span class="block truncate text-ink-muted text-[11px]">
                       {edits()}

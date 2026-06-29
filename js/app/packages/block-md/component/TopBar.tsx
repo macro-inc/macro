@@ -46,6 +46,7 @@ import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Accessor, createEffect, on, onCleanup, Show } from 'solid-js';
+import { useHistory } from '../history/HistoryContext';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 
 export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
@@ -119,6 +120,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
   const sidePanel = useSidePanel();
   const splitPanel = useSplitPanel();
+  const history = useHistory();
 
   // Register at the split scope so `]` works from anywhere in the split
   // (header, toolbar, drawer), but tie disposal to this TopBar so the
@@ -229,6 +231,11 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
+        <Show when={history.isViewingHistory()}>
+          <div class="rounded-full bg-black/70 px-3 py-1 font-medium text-white/85 text-xs tracking-wide shadow-sm">
+            Viewing history
+          </div>
+        </Show>
         {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
         <div class="-order-1 mobile:hidden">
           <BlockLiveIndicators />
