@@ -120,6 +120,8 @@ where
             body_macro: None,
             headers_json: None,
             send_time: None,
+            // None = let the backend apply the default signature policy.
+            include_signature: None,
         };
 
         let sent = service_context

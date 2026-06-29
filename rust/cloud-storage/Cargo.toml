@@ -123,6 +123,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 ] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
+lol_html = "2.4.0"
 mockall = "0.13"
 nom = "8"
 opentelemetry = "0.31.0"
