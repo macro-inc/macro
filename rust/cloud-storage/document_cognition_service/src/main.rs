@@ -463,7 +463,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized ai projections service");
 
     let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
-        config.mcp_credentials_key_secret_name.as_ref().as_ref(),
+        config.mcp_credentials_key_secret_name.as_ref(),
     )
     .context("invalid MCP credentials encryption key")?;
     let mcp_server_repo =

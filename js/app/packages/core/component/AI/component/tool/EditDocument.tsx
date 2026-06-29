@@ -7,11 +7,7 @@ import { createToolRenderer } from './ToolRenderer';
 const handler = createToolRenderer({
   name: 'EditDocument',
   render: (ctx) => (
-    <BaseTool
-      icon={PencilSimple}
-      renderContext={ctx.renderContext}
-      type="call"
-    >
+    <BaseTool icon={PencilSimple} renderContext={ctx.renderContext} type="call">
       <div class="min-w-0 flex-1">
         Edit{' '}
         <Suspense>
