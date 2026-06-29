@@ -3,7 +3,7 @@ import type { ResultError } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { type Result, err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { queryClient } from '../../client';
 import { documentLoadKeys } from './keys';
 

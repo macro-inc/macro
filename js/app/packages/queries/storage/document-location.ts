@@ -6,7 +6,7 @@ import {
 } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
-import { type Result, err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { queryClient } from '../client';
 import { documentLocationKeys } from './keys';
 
