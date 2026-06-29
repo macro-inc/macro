@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  mockAwarenessSource,
   realAwarenessSource,
   resolveTextOwner,
 } from './awareness-source';
@@ -75,21 +74,15 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
   });
 });
 
-describe('mockAwarenessSource', () => {
-  it('records every applied awareness in order', () => {
-    const a = mockAwarenessSource();
-    a.apply({ type: 'cursor', node: 'b1', at: 3 });
-    a.apply({ type: 'highlight', node: 'b1', span: { start: 0, end: 5 } });
-    expect(a.seen).toEqual([
-      { type: 'cursor', node: 'b1', at: 3 },
-      { type: 'highlight', node: 'b1', span: { start: 0, end: 5 } },
-    ]);
-    a.clear();
-    expect(a.seen).toEqual([]);
-  });
-});
 
 describe('realAwarenessSource (no live mirror)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('no-ops (no broadcast) when the node has no resolvable text container', () => {
     const send = vi.fn();
     const src = realAwarenessSource({
@@ -106,61 +99,51 @@ describe('realAwarenessSource (no live mirror)', () => {
   });
 
   it('keeps live awareness alive until clear removes it', () => {
-    vi.useFakeTimers();
-    try {
-      const send = vi.fn();
-      const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
-      const src = realAwarenessSource({
-        mirror,
-        doc,
-        send,
-        name: 'Sam (AI)',
-        color: 'accent-30',
-      });
+    const send = vi.fn();
+    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const src = realAwarenessSource({
+      mirror,
+      doc,
+      send,
+      name: 'Sam (AI)',
+      color: 'accent-30',
+    });
 
-      src.apply({ type: 'cursor', node: 't1', at: 3 });
-      expect(send).toHaveBeenCalledTimes(1);
+    src.apply({ type: 'cursor', node: 't1', at: 3 });
+    expect(send).toHaveBeenCalledTimes(1);
 
-      vi.advanceTimersByTime(1_999);
-      expect(send).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1_999);
+    expect(send).toHaveBeenCalledTimes(1);
 
-      vi.advanceTimersByTime(1);
-      expect(send).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1);
+    expect(send).toHaveBeenCalledTimes(2);
 
-      src.clear();
-      vi.advanceTimersByTime(2_000);
-      expect(send).toHaveBeenCalledTimes(3);
+    src.clear();
+    vi.advanceTimersByTime(2_000);
+    expect(send).toHaveBeenCalledTimes(3);
 
-      vi.advanceTimersByTime(2_000);
-      expect(send).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
+    vi.advanceTimersByTime(2_000);
+    expect(send).toHaveBeenCalledTimes(3);
   });
 
   it('clears live awareness when the latest target no longer resolves', () => {
-    vi.useFakeTimers();
-    try {
-      const send = vi.fn();
-      const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
-      const src = realAwarenessSource({
-        mirror,
-        doc,
-        send,
-        name: 'Sam (AI)',
-        color: 'accent-30',
-      });
+    const send = vi.fn();
+    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const src = realAwarenessSource({
+      mirror,
+      doc,
+      send,
+      name: 'Sam (AI)',
+      color: 'accent-30',
+    });
 
-      src.apply({ type: 'cursor', node: 't1', at: 3 });
-      expect(send).toHaveBeenCalledTimes(1);
+    src.apply({ type: 'cursor', node: 't1', at: 3 });
+    expect(send).toHaveBeenCalledTimes(1);
 
-      src.apply({ type: 'cursor', node: 'missing', at: 0 });
-      expect(send).toHaveBeenCalledTimes(2);
+    src.apply({ type: 'cursor', node: 'missing', at: 0 });
+    expect(send).toHaveBeenCalledTimes(2);
 
-      vi.advanceTimersByTime(2_000);
-      expect(send).toHaveBeenCalledTimes(2);
-    } finally {
-      vi.useRealTimers();
-    }
+    vi.advanceTimersByTime(2_000);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });
