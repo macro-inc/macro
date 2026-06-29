@@ -1,28 +1,3 @@
-CREATE TABLE event_ingestion (
-    event_id TEXT PRIMARY KEY,
-    event TEXT NOT NULL,
-    event_schema_version INTEGER NOT NULL,
-    source TEXT NOT NULL,
-    workspace_id TEXT NOT NULL,
-    entity_type TEXT NOT NULL,
-    entity_id TEXT NOT NULL,
-    ordering_key TEXT NOT NULL,
-    occurred_at TIMESTAMPTZ NOT NULL,
-    received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    processed_at TIMESTAMPTZ NULL,
-    status TEXT NOT NULL DEFAULT 'processing',
-    matched_webhook_count INTEGER NOT NULL DEFAULT 0,
-    error_kind TEXT NULL,
-    error_message TEXT NULL,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-);
-
-CREATE INDEX event_ingestion_workspace_event_idx
-    ON event_ingestion (workspace_id, event);
-
-CREATE INDEX event_ingestion_ordering_key_idx
-    ON event_ingestion (ordering_key);
-
 CREATE TABLE webhook (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
@@ -31,7 +6,7 @@ CREATE TABLE webhook (
     name TEXT NOT NULL,
     endpoint_url TEXT NOT NULL,
     signing_secret TEXT NOT NULL,
-    headers_encrypted JSONB NOT NULL DEFAULT '{}'::jsonb,
+    headers JSONB NOT NULL DEFAULT '{}'::jsonb,
     rule JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'active'
         CONSTRAINT webhook_status CHECK (status IN ('active', 'paused', 'disabled')),
