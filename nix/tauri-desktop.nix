@@ -64,7 +64,6 @@
         nativeBuildInputs = [
           pkgs.bun
           pkgs.darkhttpd
-          pkgs.git
           pkgs.jq
           pkgs.yq-go
         ];
@@ -123,12 +122,12 @@
           bun install --linker=hoisted --ignore-scripts --no-progress --registry http://127.0.0.1:54321
 
           rm -rf node_modules/pdfjs-dist
-          cp -aL ${bunDeps}/share/bun-packages/github:macro-inc-pdf.js-f9b2ce6 node_modules/pdfjs-dist
+          cp -aL ${bunDeps}/share/bun-packages/github:macro-inc-pdf.js-v2.16.52-web node_modules/pdfjs-dist
           chmod -R u+w node_modules/pdfjs-dist
 
           rm -rf node_modules/@inkibra
           mkdir -p node_modules/@inkibra node_modules/@tauri-apps
-          cp -a ${bunDeps}/share/bun-packages/github:macro-inc-tauri-plugins-26537c8 node_modules/@inkibra/tauri-plugins
+          cp -a ${bunDeps}/share/bun-packages/github:macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef node_modules/@inkibra/tauri-plugins
           chmod -R u+w node_modules/@inkibra/tauri-plugins
           for package in node_modules/@inkibra/tauri-plugins/packages/*; do
             if [ -L "$package" ]; then

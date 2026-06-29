@@ -3740,13 +3740,13 @@
     url = "https://registry.npmjs.org/getpass/-/getpass-0.1.7.tgz";
     hash = "sha512-0fzj9JxOLfJ+XGLhR8ze3unN0KZCgZwiSSDz168VERjK8Wl8kVSdcu2kspd4s4wtAa1y/qrVRiAA0WclVsu0ng==";
   };
-  "github:macro-inc-pdf.js-f9b2ce6" = fetchFromGitHub {
+  "github:macro-inc-pdf.js-v2.16.52-web" = fetchFromGitHub {
     owner = "macro-inc";
     repo = "pdf.js";
     rev = "v2.16.52-web";
     hash = "sha256-Ruoj7qXkHl/oCDGyX5jGMObCppno32UrkeUM0lhlNJo=";
   };
-  "github:macro-inc-tauri-plugins-26537c8" = fetchFromGitHub {
+  "github:macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef" = fetchFromGitHub {
     owner = "macro-inc";
     repo = "tauri-plugins";
     rev = "26537c8a46bb8424f9cf4021d08aa76aa7cd66ef";
