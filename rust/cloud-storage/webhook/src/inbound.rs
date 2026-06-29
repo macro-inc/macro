@@ -1,0 +1,1 @@
+//! Inbound HTTP adapter placeholders.

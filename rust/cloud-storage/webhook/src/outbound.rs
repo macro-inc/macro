@@ -1,0 +1,1 @@
+//! Outbound adapter placeholders.
