@@ -343,16 +343,27 @@ enum GraphqlSimpleSortMethod {
 type GraphqlSoupCall {
 	id: ID!
 	channelId: ID!
+	channelName: String
 	createdBy: String!
+	customName: String
 	name: String
 	summary: String
 	startedAt: String!
 	endedAt: String
 	durationMs: Int
 	isActive: Boolean!
+	status: String!
 	attended: Boolean!
 	participantCount: Int!
+	participantIds: [String!]!
+	participants: [GraphqlSoupCallParticipant!]!
 	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupCallParticipant {
+	userId: String!
+	joinedAt: String!
+	leftAt: String
 }
 
 type GraphqlSoupChannel {
@@ -360,12 +371,37 @@ type GraphqlSoupChannel {
 	name: String
 	channelType: String!
 	ownerId: String!
+	organizationId: Int
 	teamId: ID
 	createdAt: String!
 	updatedAt: String!
 	viewedAt: String
+	interactedAt: String
 	participantCount: Int!
+	participantIds: [String!]!
+	participants: [GraphqlSoupChannelParticipant!]!
+	latestMessage: GraphqlSoupChannelMessage
+	latestNonThreadMessage: GraphqlSoupChannelMessage
 	notifications: [GraphqlSoupNotification!]!
+}
+
+type GraphqlSoupChannelMessage {
+	messageId: ID!
+	threadId: ID
+	senderId: String!
+	content: String!
+	createdAt: String!
+	updatedAt: String!
+	deletedAt: String
+	mentions: [String!]!
+}
+
+type GraphqlSoupChannelParticipant {
+	channelId: ID!
+	userId: String!
+	role: String!
+	joinedAt: String!
+	leftAt: String
 }
 
 type GraphqlSoupChannelThread {
@@ -389,6 +425,8 @@ type GraphqlSoupChat {
 	createdAt: String!
 	updatedAt: String!
 	viewedAt: String
+	deletedAt: String
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -426,13 +464,47 @@ type GraphqlSoupDocumentSubType {
 	isCompleted: Boolean
 }
 
+type GraphqlSoupEmailAttachment {
+	id: ID!
+	messageId: ID!
+	providerAttachmentId: String
+	filename: String
+	mimeType: String
+	sizeBytes: Int
+	contentId: String
+	createdAt: String!
+}
+
+type GraphqlSoupEmailLabel {
+	id: ID!
+	linkId: ID!
+	providerLabelId: String!
+	name: String!
+	createdAt: String!
+	messageListVisibility: String!
+	labelListVisibility: String!
+	type: String!
+}
+
+type GraphqlSoupEmailParticipant {
+	id: ID!
+	linkId: ID!
+	name: String
+	email: String
+	sfsPhotoUrl: String
+}
+
 type GraphqlSoupEmailThread {
 	id: ID!
+	providerId: String
 	ownerId: String!
+	inboxVisible: Boolean!
+	linkId: ID
 	name: String
 	snippet: String
 	senderEmail: String
 	senderName: String
+	senderPhotoUrl: String
 	isRead: Boolean!
 	isDraft: Boolean!
 	isImportant: Boolean!
@@ -443,6 +515,10 @@ type GraphqlSoupEmailThread {
 	viewedAt: String
 	attachmentCount: Int!
 	participantCount: Int!
+	participants: [GraphqlSoupEmailParticipant!]!
+	attachments: [GraphqlSoupEmailAttachment!]!
+	labels: [GraphqlSoupEmailLabel!]!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
@@ -539,6 +615,8 @@ type GraphqlSoupProject {
 	createdAt: String!
 	updatedAt: String!
 	viewedAt: String
+	deletedAt: String
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
 }
 
