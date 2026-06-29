@@ -32,3 +32,24 @@ pub enum AgentError {
     #[error(transparent)]
     RigHttpClient(#[from] rig_core::http_client::Error),
 }
+
+impl AgentError {
+    /// is the error caused by a cancellation
+    pub fn was_cancelled(&self) -> bool {
+        use rig_core::agent::StreamingError;
+        use rig_core::completion::PromptError;
+        match self {
+            // A direct prompt error.
+            Self::Prompt(PromptError::PromptCancelled { .. }) => true,
+            // The agent loop streams its errors, so a cancellation surfaces
+            // wrapped: `Streaming(Prompt(PromptCancelled { .. }))`.
+            Self::Streaming(StreamingError::Prompt(e)) => {
+                matches!(**e, PromptError::PromptCancelled { .. })
+            }
+            _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;
