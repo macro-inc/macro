@@ -9,6 +9,7 @@ import {
   type OpResult,
   realRandomSource,
   runQueue,
+  summarize,
 } from './queue';
 
 /** Every durable id currently in the document (what the model is allowed to reference). */
@@ -73,7 +74,7 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
         return { ok: false, op, error: e.message };
       }
     });
-    return summarizeErrorsOnly(results);
+    return summarize(results);
   }
 
   const results = await runQueue({
@@ -86,16 +87,6 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
     resolveNode: (n) => args.doc.resolveRef(n), // point cursors at inserted nodes
     sleep: args.sleep,
   });
-  return summarizeErrorsOnly(results);
+  return summarize(results);
 }
 
-/**
- * Give the model a brief summary of errors that occured.
- */
-function summarizeErrorsOnly(results: OpResult[]): string {
-  const failures = results.filter(
-    (r): r is Extract<OpResult, { ok: false }> => !r.ok
-  );
-  if (failures.length === 0) return 'ok';
-  return failures.map((r) => `error: ${r.op.kind}: ${r.error}`).join('\n');
-}

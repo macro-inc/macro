@@ -5,4 +5,3 @@ export * from './locate';
 export * from './modify';
 export * from './session';
 export * from './tables';
-export * from './tree';

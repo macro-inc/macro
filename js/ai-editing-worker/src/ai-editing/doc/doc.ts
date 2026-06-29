@@ -35,6 +35,7 @@ import {
   $createLineBreakNode,
   $createParagraphNode,
   $createTextNode,
+  $findMatchingParent,
   $getRoot,
   $isElementNode,
   $isTextNode,
@@ -74,7 +75,6 @@ import * as locate from '../ai-toolkit/locate';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
-import * as tree from '../ai-toolkit/tree';
 import type {
   DocumentOp,
   Format,
@@ -746,8 +746,7 @@ function listItemChecked(list: LexicalNode): boolean | undefined {
 }
 
 function resolveTable(node: LexicalNode): TableNode {
-  let t: LexicalNode | null = node;
-  while (t && !$isTableNode(t)) t = t.getParent();
+  const t = $findMatchingParent(node, $isTableNode);
   if (!$isTableNode(t)) throw new EditError('no enclosing table');
   return t;
 }
@@ -765,7 +764,7 @@ function emptyCell(header: boolean) {
  *  after a bold word, or prepending before one, stays plain) rather than
  *  inheriting that run'session format. Past the end appends; empty block creates a new node. */
 function insertTextAt(block: ElementNode, at: Offset, text: string): void {
-  const texts = tree.collectTextNodes(block);
+  const texts = block.getAllTextNodes();
   if (texts.length === 0) {
     block.append($createTextNode(text));
     return;
@@ -803,7 +802,7 @@ function insertTextAt(block: ElementNode, at: Offset, text: string): void {
 function removeTextAt(block: ElementNode, at: Offset, len: number): void {
   let skip = at;
   let left = len;
-  for (const tn of tree.collectTextNodes(block)) {
+  for (const tn of block.getAllTextNodes()) {
     if (left <= 0) break;
     const content = tn.getTextContent();
     if (skip >= content.length) {
@@ -825,7 +824,7 @@ function insertInlineAt(
   inline: LexicalNode
 ): void {
   let remaining = at;
-  for (const tn of tree.collectTextNodes(block)) {
+  for (const tn of block.getAllTextNodes()) {
     const len = tn.getTextContent().length;
     if (remaining <= len) {
       if (remaining === 0) tn.insertBefore(inline);

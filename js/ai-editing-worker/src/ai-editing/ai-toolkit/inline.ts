@@ -1,5 +1,6 @@
 import {
   $createTextNode,
+  $findMatchingParent,
   $isElementNode,
   $isTextNode,
   type ElementNode,
@@ -7,7 +8,6 @@ import {
   type TextFormatType,
   type TextNode,
 } from 'lexical';
-import { climbWhile, collectTextNodes } from './tree';
 
 export type Scope = { kind: 'nth'; n: number } | { kind: 'all' };
 
@@ -57,7 +57,7 @@ export function $clearFormat(
 
 /** Strip all inline formatting (bold, italic, underline, etc.) from every text node in a block. */
 export function $stripFormat(block: ElementNode): void {
-  for (const node of collectTextNodes(block)) {
+  for (const node of block.getAllTextNodes()) {
     node.setFormat(0);
   }
 }
@@ -82,7 +82,7 @@ export function $replaceString(
   const nth = scope?.kind === 'nth' ? scope.n : undefined;
   let occ = 0; // global, 1-based occurrence counter across the block's text nodes
   let count = 0;
-  for (const tn of collectTextNodes(block)) {
+  for (const tn of block.getAllTextNodes()) {
     const content = tn.getTextContent();
     if (!content.includes(find)) continue;
     let next = '';
@@ -157,7 +157,7 @@ function mutateMatches(
 
   // 1) Collect every (textNode, offset) occurrence in document order.
   const occurrences: Array<{ node: TextNode; offset: number }> = [];
-  for (const tn of collectTextNodes(block)) {
+  for (const tn of block.getAllTextNodes()) {
     const content = tn.getTextContent();
     let from = 0;
     let idx = content.indexOf(needle, from);
@@ -239,7 +239,8 @@ function $unwrapWrapper(
   matchNode: TextNode,
   pred: (n: LexicalNode) => boolean
 ): void {
-  const parent = climbWhile(matchNode.getParent(), pred);
+  const p = matchNode.getParent();
+  const parent = p ? $findMatchingParent(p, pred) : null;
   if (!parent || !$isElementNode(parent)) return;
   for (const child of parent.getChildren()) parent.insertBefore(child);
   parent.remove();

@@ -1,4 +1,5 @@
 import {
+  $findMatchingParent,
   $getNodeByKey,
   $isElementNode,
   $isTextNode,
@@ -8,7 +9,6 @@ import {
 } from 'lexical';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
 import type { LexicalSession } from './session';
-import { climbWhile, collectTextNodes } from './tree';
 
 export function $byId(session: LexicalSession, id: string): LexicalNode {
   const key = session.ids.idToNodeKeyMap.get(id);
@@ -26,10 +26,7 @@ export function $byId(session: LexicalSession, id: string): LexicalNode {
  * quote, …). Throws `Error` only if nothing block-level is found.
  */
 export function $blockById(session: LexicalSession, id: string): ElementNode {
-  const node = climbWhile(
-    $byId(session, id),
-    (n) => $isElementNode(n) && !n.isInline()
-  );
+  const node = $findMatchingParent($byId(session, id), (n) => $isElementNode(n) && !n.isInline());
   if (!node || !$isElementNode(node)) {
     throw new Error(`No block-level node for id "${id}"`);
   }
@@ -60,7 +57,7 @@ export function $locate(
   const nth = scope?.kind === 'nth' ? scope.n : undefined;
   const out: TextMatch[] = [];
   let occurrences = 0;
-  for (const textNode of collectTextNodes(block)) {
+  for (const textNode of block.getAllTextNodes()) {
     const content = textNode.getTextContent();
     const nodeId = $getId(textNode);
     let index = content.indexOf(match);

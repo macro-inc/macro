@@ -1,12 +1,11 @@
 import { $isListItemNode } from '@lexical/list';
-import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import { $findMatchingParent, $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 import { match } from 'ts-pattern';
 import { $isEquationNode } from '../../../../lexical-core/nodes/EquationNode';
 import { $blockNode, $setBlockType, $setText, type BlockData } from './blocks';
 import { $setListType, type ListKind } from './lists';
 import { $byId } from './locate';
 import type { LexicalSession } from './session';
-import { climbWhile } from './tree';
 
 /**
  * A single in-place modification, discriminated by `op`. Each variant carries
@@ -28,7 +27,7 @@ export type NodeChange =
   | { op: 'indent'; indent: number | 'in' | 'out' };
 
 function $asBlock(node: LexicalNode, id: string): ElementNode {
-  const b = climbWhile(node, (n) => $isElementNode(n) && !n.isInline());
+  const b = $findMatchingParent(node, (n) => $isElementNode(n) && !n.isInline());
   if (!$isElementNode(b)) {
     throw new Error(`$modifyNode: no block-level node for "${id}"`);
   }
@@ -36,7 +35,7 @@ function $asBlock(node: LexicalNode, id: string): ElementNode {
 }
 
 function $asListItem(node: LexicalNode, id: string) {
-  const item = climbWhile(node, $isListItemNode);
+  const item = $findMatchingParent(node, $isListItemNode);
   if (!$isListItemNode(item)) {
     throw new Error(`$modifyNode: no list item for "${id}"`);
   }
