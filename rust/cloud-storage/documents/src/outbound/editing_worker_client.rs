@@ -36,8 +36,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "documentId": document_id,
             "prompt": instructions,
             "models": {
-                "supervisor": { "provider": "cerebras", "model": "glm-4.7" },
-                "interpret": { "provider": "cerebras", "model": "glm-4.7" },
+                "supervisor": { "provider": "cerebras", "model": "zai-glm-4.7" },
+                "interpret": { "provider": "cerebras", "model": "zai-glm-4.7" },
                 "coding": { "provider": "cerebras", "model": "gpt-oss-120b" },
             },
             "interpret": true,
