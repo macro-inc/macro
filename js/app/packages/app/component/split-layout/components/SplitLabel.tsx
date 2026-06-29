@@ -1,11 +1,14 @@
-import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
+import { isInBlock, useBlockAliasedName } from '@core/block';
+import {
+  ContextMenuContent,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import {
   EntityIcon,
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
-import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -15,12 +18,16 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { type BuildEntityDataArgs, buildEntityData } from '@entity';
+import type { BuildEntityDataArgs } from '@entity';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
+  type Component,
   createEffect,
+  createMemo,
+  For,
   type JSX,
   type ParentProps,
   Show,
@@ -50,44 +57,46 @@ export function StaticSplitLabel(props: {
     trigger();
   };
   return (
-    <HeaderIsland
-      class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-      onClick={openTitleFileMenu}
-    >
-      <div
-        class={cn(
-          'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
-          props.class
-        )}
+    <SplitLabelContextMenu>
+      <HeaderIsland
+        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
+        onClick={openTitleFileMenu}
       >
-        <Show when={props.iconType}>
-          <EntityIcon
-            class="shrink-0"
-            targetType={props.iconType}
-            size="xs"
-            theme={props.colorIcon ? undefined : 'monochrome'}
-          />
-        </Show>
-        <Show when={props.icon}>
-          <div class="shrink-0">{props.icon}</div>
-        </Show>
-        <Show when={props.badges}>{props.badges}</Show>
-        <span class="inline-flex min-w-0 items-center gap-1">
-          <span class="inline-block truncate text-sm font-semibold">
-            {props.label}
-          </span>
-          <Show when={panel.titleFileMenuTrigger()}>
-            <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted mobile:block" />
-          </Show>
-        </span>
         <div
-          class="shrink-0 flex items-center h-full"
-          ref={(ref) => {
-            panel.setTitleFileMenuRef(ref);
-          }}
-        />
-      </div>
-    </HeaderIsland>
+          class={cn(
+            'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
+            props.class
+          )}
+        >
+          <Show when={props.iconType}>
+            <EntityIcon
+              class="shrink-0"
+              targetType={props.iconType}
+              size="xs"
+              theme={props.colorIcon ? undefined : 'monochrome'}
+            />
+          </Show>
+          <Show when={props.icon}>
+            <div class="shrink-0">{props.icon}</div>
+          </Show>
+          <Show when={props.badges}>{props.badges}</Show>
+          <span class="inline-flex min-w-0 items-center gap-1">
+            <span class="inline-block truncate text-sm font-semibold">
+              {props.label}
+            </span>
+            <Show when={panel.titleFileMenuTrigger()}>
+              <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted mobile:block" />
+            </Show>
+          </span>
+          <div
+            class="shrink-0 flex items-center h-full"
+            ref={(ref) => {
+              panel.setTitleFileMenuRef(ref);
+            }}
+          />
+        </div>
+      </HeaderIsland>
+    </SplitLabelContextMenu>
   );
 }
 
@@ -100,8 +109,6 @@ export function SplitLabel(props: {
   maxDisplayLength?: number;
 }) {
   const panel = useSplitPanelOrThrow();
-  const blockId = useBlockId();
-  const aliasedBlockName = useBlockAliasedName();
 
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
@@ -111,29 +118,6 @@ export function SplitLabel(props: {
     if (!props.maxDisplayLength) return props.label;
     if (props.label.length <= props.maxDisplayLength) return props.label;
     return props.label.slice(0, props.maxDisplayLength - 3) + '...';
-  };
-
-  const startEditing = (e: MouseEvent) => {
-    if (props.lockRename) return;
-    if (e.type === 'contextmenu') {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    const entity = buildEntityData({
-      id: blockId,
-      name: props.label,
-      blockName: aliasedBlockName,
-      ...props.renameOverrides,
-    });
-    if (!entity) return;
-
-    openBulkEditModal({
-      view: 'rename',
-      entities: [entity],
-      onFinish: () => toast.success('Renamed'),
-      onError: () => toast.failure('Failed to rename'),
-    });
   };
 
   const openTitleFileMenu = (e: MouseEvent) => {
@@ -147,11 +131,7 @@ export function SplitLabel(props: {
 
   return (
     <span class="flex min-w-0 items-center gap-1" onClick={openTitleFileMenu}>
-      <span
-        class="inline-block truncate text-sm font-semibold"
-        onContextMenu={startEditing}
-        onDblClick={startEditing}
-      >
+      <span class="inline-block truncate text-sm font-semibold">
         {truncatedLabel()}
       </span>
       <Show when={panel.titleFileMenuTrigger()}>
@@ -236,25 +216,114 @@ export function BlockItemSplitLabel(props: {
   };
 
   return (
-    <HeaderIsland
-      class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-      onClick={openTitleFileMenu}
-    >
-      <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
-        <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
-        <Show when={props.badges}>{props.badges}</Show>
-        <SplitLabel
-          label={displayName() ?? ''}
-          lockRename={!isOwner() || props.lockRename}
-        />
-        <div
-          class="shrink-0 flex items-center h-full"
-          ref={(ref) => {
-            panel.setTitleFileMenuRef(ref);
-          }}
-        />
-      </div>
-    </HeaderIsland>
+    <SplitLabelContextMenu>
+      <HeaderIsland
+        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
+        onClick={openTitleFileMenu}
+      >
+        <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
+          <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
+          <Show when={props.badges}>{props.badges}</Show>
+          <SplitLabel
+            label={displayName() ?? ''}
+            lockRename={!isOwner() || props.lockRename}
+          />
+          <div
+            class="shrink-0 flex items-center h-full"
+            ref={(ref) => {
+              panel.setTitleFileMenuRef(ref);
+            }}
+          />
+        </div>
+      </HeaderIsland>
+    </SplitLabelContextMenu>
+  );
+}
+
+function SplitLabelContextMenu(props: ParentProps) {
+  const panel = useSplitPanelOrThrow();
+  const actions = () => panel.titleFileMenuActions();
+  const hasActions = createMemo(() => {
+    const groups = actions();
+    if (!groups) return false;
+    return (
+      groups.primaryOps.length > 0 ||
+      groups.tools.length > 0 ||
+      groups.deleteOps.length > 0
+    );
+  });
+
+  const item = (
+    action: NonNullable<ReturnType<typeof actions>>['tools'][0]
+  ) => (
+    <MenuItem
+      icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+      text={action.label}
+      onClick={() => action.action()}
+    />
+  );
+
+  const openOnDoubleClick = (e: MouseEvent) => {
+    if (!hasActions()) return;
+    const target = e.currentTarget;
+    if (!target) return;
+    e.preventDefault();
+    e.stopPropagation();
+    target.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        button: 2,
+      })
+    );
+  };
+
+  return (
+    <Show when={hasActions()} fallback={props.children}>
+      <ContextMenu>
+        <ContextMenu.Trigger class="contents" onDblClick={openOnDoubleClick}>
+          {props.children}
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenuContent width="w-fit">
+            <Show when={actions()}>
+              {(groups) => (
+                <>
+                  <Show when={groups().primaryOps.length > 0}>
+                    <For each={groups().primaryOps}>{item}</For>
+                  </Show>
+                  <Show
+                    when={
+                      groups().tools.length > 0 &&
+                      groups().primaryOps.length > 0
+                    }
+                  >
+                    <MenuSeparator />
+                  </Show>
+                  <Show when={groups().tools.length > 0}>
+                    <For each={groups().tools}>{item}</For>
+                  </Show>
+                  <Show
+                    when={
+                      groups().deleteOps.length > 0 &&
+                      (groups().primaryOps.length > 0 ||
+                        groups().tools.length > 0)
+                    }
+                  >
+                    <MenuSeparator />
+                  </Show>
+                  <Show when={groups().deleteOps.length > 0}>
+                    <For each={groups().deleteOps}>{item}</For>
+                  </Show>
+                </>
+              )}
+            </Show>
+          </ContextMenuContent>
+        </ContextMenu.Portal>
+      </ContextMenu>
+    </Show>
   );
 }
 

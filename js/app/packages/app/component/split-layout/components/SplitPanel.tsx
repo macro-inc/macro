@@ -24,6 +24,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import {
   type SplitBottomPanelRegistration,
+  type SplitFileMenuActionGroups,
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
@@ -54,6 +55,8 @@ export function SplitPanel(props: SplitPanelProps) {
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
     createSignal<() => void>();
+  const [titleFileMenuActions, setTitleFileMenuActions] =
+    createSignal<SplitFileMenuActionGroups>();
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
@@ -170,6 +173,8 @@ export function SplitPanel(props: SplitPanelProps) {
           setTitleFileMenuRef,
           titleFileMenuTrigger,
           setTitleFileMenuTrigger,
+          titleFileMenuActions,
+          setTitleFileMenuActions,
           panelSize,
           panelRef,
         }}

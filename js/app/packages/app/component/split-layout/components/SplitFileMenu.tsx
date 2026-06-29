@@ -27,7 +27,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitPanelContext } from '../context';
+import { type SplitFileMenuAction, SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
@@ -50,14 +50,9 @@ const isDefaultFileOperation = (
 
 export type FileOperation = DefaultFileOperation | CustomFileOperation;
 
-type SplitMenuAction = {
-  label: string | JSX.Element;
-  icon: Component;
-  action: (e?: MouseEvent) => void;
-  group?: 'delete';
-};
-
-function SplitMenuItemContent(props: Pick<SplitMenuAction, 'icon' | 'label'>) {
+function SplitMenuItemContent(
+  props: Pick<SplitFileMenuAction, 'icon' | 'label'>
+) {
   return (
     <>
       <Dynamic
@@ -73,15 +68,15 @@ type SplitFileMenuRenderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerClass?: string;
-  ops: SplitMenuAction[];
-  tools: SplitMenuAction[];
+  ops: SplitFileMenuAction[];
+  tools: SplitFileMenuAction[];
 };
 
 function DesktopRender(props: SplitFileMenuRenderProps) {
   const primaryOps = () => props.ops.filter((op) => op.group !== 'delete');
   const deleteOps = () => props.ops.filter((op) => op.group === 'delete');
 
-  const item = (action: SplitMenuAction) => (
+  const item = (action: SplitFileMenuAction) => (
     <Dropdown.Item
       onSelect={() => {
         action.action();
@@ -95,7 +90,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
-        class={cn('text-ink/50 rounded-md', props.triggerClass)}
+        class={cn(props.triggerClass)}
         size="icon-sm"
         variant="ghost"
       >
@@ -123,7 +118,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
 }
 
 function MobileRender(props: SplitFileMenuRenderProps) {
-  const item = (action: SplitMenuAction) => (
+  const item = (action: SplitFileMenuAction) => (
     <button
       type="button"
       class="w-full bg-surface flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px text-ink"
@@ -197,7 +192,7 @@ export function SplitFileMenu(props: {
     onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
   });
 
-  const ops = createMemo<CustomFileOperation[]>(() => {
+  const ops = createMemo<SplitFileMenuAction[]>(() => {
     return props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
@@ -217,7 +212,7 @@ export function SplitFileMenu(props: {
                   }
                 },
                 icon: Trash,
-                group: 'delete',
+                group: 'delete' as const,
               };
 
             case 'rename':
@@ -303,7 +298,7 @@ export function SplitFileMenu(props: {
     (props.tools ?? []).filter((t) => !t.condition || t.condition())
   );
 
-  const tools = createMemo<SplitMenuAction[]>(() =>
+  const tools = createMemo<SplitFileMenuAction[]>(() =>
     filteredTools().map((tool) => ({
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
       icon: tool.icon,
@@ -319,6 +314,18 @@ export function SplitFileMenu(props: {
       },
     }))
   );
+
+  const actionGroups = createMemo(() => ({
+    primaryOps: ops().filter((op) => op.group !== 'delete'),
+    tools: tools(),
+    deleteOps: ops().filter((op) => op.group === 'delete'),
+  }));
+
+  createEffect(() => {
+    ctx.setTitleFileMenuActions(actionGroups());
+  });
+
+  onCleanup(() => ctx.setTitleFileMenuActions(undefined));
 
   return (
     <Show
