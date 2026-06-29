@@ -19,10 +19,9 @@ ALTER TABLE property_definitions DROP COLUMN organization_id;
 ALTER TABLE property_definitions
     ADD COLUMN team_id UUID REFERENCES "team"(id) ON DELETE CASCADE;
 
+-- Exactly one owner: a definition belongs to the system, a user, or a team.
 ALTER TABLE property_definitions ADD CONSTRAINT owned_by_team_or_user_or_system CHECK (
-    is_system = TRUE
-    OR team_id IS NOT NULL
-    OR user_id IS NOT NULL
+    is_system::int + (team_id IS NOT NULL)::int + (user_id IS NOT NULL)::int = 1
 );
 
 ALTER TABLE property_definitions
