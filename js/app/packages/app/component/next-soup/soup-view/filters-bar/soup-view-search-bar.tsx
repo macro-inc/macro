@@ -49,7 +49,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   // Open the editor with the text persisted on this history entry. Read the
   // entry blob directly rather than the provider's searchText() signal: the soup
-  // provider persists across content swaps (#3935), so on re-entry the signal can
+  // provider persists across content swaps, so on re-entry the signal can
   // lag the per-entry restore, and the editor reads its initial value only once
   // (it would open empty and never recover). Fall back to the signal, then the
   // explicit initialValue prop.
