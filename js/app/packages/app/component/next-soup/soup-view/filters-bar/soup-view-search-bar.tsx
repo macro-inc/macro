@@ -55,9 +55,9 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
   // explicit initialValue prop.
   const persistedSearchText = panel.handle.currentEntryState()?.['search.text'];
   const initialEditorValue =
-    (typeof persistedSearchText === 'string' && persistedSearchText) ||
-    searchText() ||
-    props.initialValue;
+    typeof persistedSearchText === 'string'
+      ? persistedSearchText
+      : searchText() || props.initialValue;
 
   const [hasContent, setHasContent] = createSignal(false);
   const [latestMarkdown, setLatestMarkdown] = createSignal('');
