@@ -587,12 +587,25 @@ describe('Doc — tables', () => {
     ]);
     doc.apply({ kind: 'removeColumn', table: 't', col: 1 });
     expect(rowCellCounts(session)).toEqual([2, 2]);
-    const out = serializeWithXml(session);
-    expect(out).toContain('H1');
-    expect(out).not.toContain('H2');
-    expect(out).toContain('H3');
+    // assert on actual cell text, not raw XML: random node ids can contain the
+    // substring 'H2', which would make a `not.toContain('H2')` check flaky.
+    expect(cellTexts(session)).toEqual([
+      ['H1', 'H3'],
+      ['aa', 'cc'],
+    ]);
   });
 });
+
+function cellTexts(session: LexicalSession): string[][] {
+  return read(session, () =>
+    tableRows(session).map((row) =>
+      row
+        .getChildren()
+        .filter($isTableCellNode)
+        .map((cell) => cell.getTextContent())
+    )
+  );
+}
 
 function tableRows(session: LexicalSession) {
   return read(session, () => {

@@ -125,7 +125,7 @@ export type DocumentOp =
   | { kind: 'setEquation'; node: NodeRef; tex: string }
   | { kind: 'appendText'; node: NodeRef; text: string }
   | { kind: 'prependText'; node: NodeRef; text: string }
-  | { kind: 'insertTextAfterInline'; inline: NodeRef; text: string }
+  | { kind: 'insertTextAfterInline'; inline: NodeRef; text: string; ref?: Ref }
   | {
       kind: 'replaceText';
       node: NodeRef;

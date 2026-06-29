@@ -145,7 +145,7 @@ function sweepEachThen(
   return steps;
 }
 
-/** Replace a node's text by selecting all, deleting, and typing the new content. */
+/* Replace a node's text by selecting all, deleting, and typing the new content.*/
 function retype(
   node: NodeRef,
   text: string,
@@ -162,6 +162,7 @@ function retype(
     steps.push(cursor(node, 0));
   }
   steps.push(...typeText(node, text, 0, ctx));
+  steps.push(edit({ kind: 'setText', node, text }));
   return steps;
 }
 
@@ -533,14 +534,38 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
       // but they should never be dispatched through animate() in normal use)
       .with({ kind: 'insertText' }, (o) => [edit(o)])
       .with({ kind: 'removeText' }, (o) => [edit(o)])
-      // inline text insert: brief caret beat on the inline node, then the text
-      // appears after it. (Typed-out animation would need a ref to the new text
-      // node; the suffix is short, so it just lands.)
-      .with({ kind: 'insertTextAfterInline' }, (o) => [
-        cursor(o.inline, 0),
-        { kind: 'pause', ms: ctx.randomSource.integer(ctx.ranges.settlePauseMs) },
-        edit(o),
-      ])
+      // inline text insert: caret to the inline node, then type the run out. The
+      // first chunk creates the text node (stamped with a derived ref so it's
+      // addressable); later chunks grow it via `insertText` on that ref.
+      .with({ kind: 'insertTextAfterInline' }, (o) => {
+        if (o.text.length === 0) return [edit(o)];
+        const ref = `${o.inline}~after-text`;
+        const { randomSource, ranges, msPerChar } = ctx;
+        const typePause = (n: number): DocumentOpStep => ({
+          kind: 'pause',
+          ms: Math.round(msPerChar * n * randomSource.real(ranges.typeJitter)),
+        });
+        const first = o.text.slice(0, TYPE_CHUNK);
+        const steps: DocumentOpStep[] = [
+          cursor(o.inline, 0),
+          { kind: 'pause', ms: randomSource.integer(ranges.settlePauseMs) },
+          edit({
+            kind: 'insertTextAfterInline',
+            ref,
+            inline: o.inline,
+            text: first,
+          }),
+          cursor(ref, first.length),
+          typePause(first.length),
+        ];
+        for (let k = TYPE_CHUNK; k < o.text.length; k += TYPE_CHUNK) {
+          const chunk = o.text.slice(k, k + TYPE_CHUNK);
+          steps.push(edit({ kind: 'insertText', node: ref, at: k, text: chunk }));
+          steps.push(cursor(ref, k + chunk.length));
+          steps.push(typePause(chunk.length));
+        }
+        return steps;
+      })
       .exhaustive()
   );
 }

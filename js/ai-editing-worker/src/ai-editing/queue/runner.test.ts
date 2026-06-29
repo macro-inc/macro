@@ -53,7 +53,12 @@ describe('runQueue -- happy path', () => {
     await run([{ kind: 'setText', node: 'b1', text: 'Hi' }], w, {
       docReader: reader({ textLength: () => 4 }),
     });
-    expect(edits.map((e) => e.kind)).toEqual(['removeText', 'insertText']);
+    // trailing setText canonicalizes the committed state (purges stray inlines).
+    expect(edits.map((e) => e.kind)).toEqual([
+      'removeText',
+      'insertText',
+      'setText',
+    ]);
     expect(edits[1]).toMatchObject({
       kind: 'insertText',
       node: 'b1',

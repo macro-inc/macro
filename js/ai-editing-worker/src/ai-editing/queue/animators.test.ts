@@ -194,6 +194,8 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
       },
       { kind: 'awareness', x: { type: 'cursor', node: 'b1', at: 2 } },
       { kind: 'pause', ms: 63 },
+      // canonicalizing setText: purges any stray inline nodes, text unchanged
+      { kind: 'edit', y: { kind: 'setText', node: 'b1', text: 'Hi' } },
     ]);
   });
 
@@ -204,6 +206,7 @@ describe('setText animator — select-all, delete, type (full flow)', () => {
     );
     expect(onlyEdits(action.steps)).toEqual([
       { kind: 'insertText', node: 'b1', at: 0, text: 'A' },
+      { kind: 'setText', node: 'b1', text: 'A' },
     ]);
   });
 });
@@ -311,6 +314,33 @@ describe('insertInline animator', () => {
   });
 });
 
+describe('insertTextAfterInline animator', () => {
+  it('types the run out: first chunk creates a ref-stamped node, rest grow it by ref', () => {
+    const action = run({
+      kind: 'insertTextAfterInline',
+      inline: 'br1',
+      text: 'Ripple',
+    });
+    const edits = onlyEdits(action.steps);
+    // first chunk creates + stamps the run after the inline; later chunks append
+    expect(edits).toEqual([
+      { kind: 'insertTextAfterInline', ref: 'br1~after-text', inline: 'br1', text: 'Rip' },
+      { kind: 'insertText', node: 'br1~after-text', at: 3, text: 'ple' },
+    ]);
+  });
+
+  it('empty text → a single one-shot edit (no typing)', () => {
+    const action = run({
+      kind: 'insertTextAfterInline',
+      inline: 'br1',
+      text: '',
+    });
+    expect(onlyEdits(action.steps)).toEqual([
+      { kind: 'insertTextAfterInline', inline: 'br1', text: '' },
+    ]);
+  });
+});
+
 describe('setCell animator', () => {
   it('resolves the cell node and retypes it', () => {
     const action = run(
@@ -320,6 +350,7 @@ describe('setCell animator', () => {
     expect(onlyEdits(action.steps)).toEqual([
       { kind: 'removeText', node: 'cellX', at: 0, len: 3 },
       { kind: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
+      { kind: 'setText', node: 'cellX', text: 'Hi' },
     ]);
   });
 
@@ -331,6 +362,7 @@ describe('setCell animator', () => {
     );
     expect(onlyEdits(action.steps)).toEqual([
       { kind: 'insertText', node: 'cellX', at: 0, text: 'Hi' },
+      { kind: 'setText', node: 'cellX', text: 'Hi' },
     ]);
     // the cursor lands at the end of the typed chunk (offset 2)
     const cursors = action.steps
@@ -387,7 +419,7 @@ describe('every op kind has an animation that ends in the right edit', () => {
       },
       'linkText',
     ],
-    [{ kind: 'setText', node: 'b1', text: 'a' }, 'insertText'],
+    [{ kind: 'setText', node: 'b1', text: 'a' }, 'setText'],
     [
       {
         kind: 'replaceText',
@@ -432,7 +464,7 @@ describe('every op kind has an animation that ends in the right edit', () => {
       { kind: 'mergeBlocks', nodes: ['b1', 'b2'], separator: ' ' },
       'mergeBlocks',
     ],
-    [{ kind: 'setCell', table: 't', row: 0, col: 0, text: 'a' }, 'insertText'],
+    [{ kind: 'setCell', table: 't', row: 0, col: 0, text: 'a' }, 'setText'],
     [{ kind: 'addRow', table: 't' }, 'addRow'],
     [{ kind: 'addColumn', table: 't' }, 'addColumn'],
     [{ kind: 'removeRow', table: 't', row: 1 }, 'removeRow'],
@@ -775,6 +807,7 @@ describe('retype (setText) — delete branch and ordering', () => {
       { kind: 'edit', y: { kind: 'insertText', node: 'b', at: 0, text: 'Z' } },
       { kind: 'awareness', x: { type: 'cursor', node: 'b', at: 1 } },
       { kind: 'pause', ms: 18 }, // typeJitter real 0.6 → round(30*0.6)
+      { kind: 'edit', y: { kind: 'setText', node: 'b', text: 'Z' } }, // canonicalize
     ]);
   });
 
@@ -792,6 +825,7 @@ describe('retype (setText) — delete branch and ordering', () => {
     // selectAll over a 0-length node still emits cursor + one final highlight + preSelect + settle pause
     expect(onlyEdits(action.steps)).toEqual([
       { kind: 'insertText', node: 'b', at: 0, text: 'Hi' },
+      { kind: 'setText', node: 'b', text: 'Hi' },
     ]);
     // removeText must NOT appear (delete branch skipped for empty target)
     expect(
@@ -803,7 +837,7 @@ describe('retype (setText) — delete branch and ordering', () => {
     expect(pauses(action.steps)).toEqual([30, 90, 150, 36]);
   });
 
-  it('empty target with empty text → just selectAll, no edits at all', () => {
+  it('empty target with empty text → selectAll then a canonicalizing setText (clears stray inlines)', () => {
     const action = run(
       { kind: 'setText', node: 'b', text: '' },
       {
@@ -811,7 +845,9 @@ describe('retype (setText) — delete branch and ordering', () => {
         docReader: reader({ textLength: () => 0 }),
       }
     );
-    expect(onlyEdits(action.steps)).toEqual([]);
+    expect(onlyEdits(action.steps)).toEqual([
+      { kind: 'setText', node: 'b', text: '' },
+    ]);
   });
 });
 

@@ -68,7 +68,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
 
-    const { usage, ops, trace, clarification } = await runEditSession({
+    const { usage, ops, trace, replay, clarification } = await runEditSession({
       wsUrl,
       documentId,
       prompt,
@@ -83,7 +83,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       runner: runInSandbox,
       signal,
     });
-    return c.json({ ok: true, usage, ops, trace, clarification });
+    return c.json({ ok: true, usage, ops, trace, replay, clarification });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));
     if (!signal.aborted) {

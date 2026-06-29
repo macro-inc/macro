@@ -35,6 +35,7 @@ import {
   $createTextNode,
   $getRoot,
   $isElementNode,
+  $isTextNode,
   type ElementNode,
   type LexicalNode,
 } from 'lexical';
@@ -119,7 +120,7 @@ export class Doc implements DocReader, DocWriter {
       .with({ kind: 'appendText' }, (e) => this.appendText(e.node, e.text))
       .with({ kind: 'prependText' }, (e) => this.prependText(e.node, e.text))
       .with({ kind: 'insertTextAfterInline' }, (e) =>
-        this.insertTextAfterInline(e.inline, e.text)
+        this.insertTextAfterInline(e.inline, e.text, e.ref)
       )
       .with({ kind: 'replaceText' }, (e) =>
         this.replaceText(e.node, e.find, e.to, e.scope)
@@ -267,7 +268,15 @@ export class Doc implements DocReader, DocWriter {
   }
 
   private insertText(node: NodeRef, at: Offset, text: string): void {
-    this.tx(() => insertTextAt(this.block(node), at, text));
+    this.tx(() => {
+      const target = locate.$byId(this.session, node);
+      if ($isTextNode(target)) {
+        const c = target.getTextContent();
+        target.setTextContent(c.slice(0, at) + text + c.slice(at));
+      } else {
+        insertTextAt(this.block(node), at, text);
+      }
+    });
   }
 
   private removeText(node: NodeRef, at: Offset, len: number): void {
@@ -286,10 +295,16 @@ export class Doc implements DocReader, DocWriter {
     this.tx(() => inline.$prependText(this.block(node), text));
   }
 
-  private insertTextAfterInline(inlineRef: NodeRef, text: string): void {
+  private insertTextAfterInline(
+    inlineRef: NodeRef,
+    text: string,
+    ref?: string
+  ): void {
     this.tx(() => {
       const node = locate.$byId(this.session, inlineRef);
-      node.insertAfter($createTextNode(text));
+      const tn = $createTextNode(text);
+      node.insertAfter(tn);
+      if (ref !== undefined) this.assignRef(ref, tn);
     });
   }
 

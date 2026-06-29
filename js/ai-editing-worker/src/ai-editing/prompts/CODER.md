@@ -21,6 +21,24 @@ editor.bold('b5', 'Bluejay');
   const p = editor.insertParagraphAfter('b14', 'Intro');
   editor.bold(p, 'Intro');
   ```
+- **Offsets (`at`) are character positions in the block's plain text** — `0` is the
+  start, `text.length` is the end. Inline objects (line breaks, equations, dates)
+  do NOT count as characters. **Never guess an offset.** Compute it from the actual
+  text: `snippets.line1.length` for the end of a line, `text.indexOf('word')` for a
+  position inside it. Guessing small integers like `1, 2, 3` will split words apart.
+- **Multi-line content → separate paragraphs, not line breaks:** if you need to
+  write multiple lines of content, insert separate paragraph nodes. `insertLineBreak`
+  produces a *soft* break (Shift+Enter) within a single block — only use it when the
+  content is semantically one unit split across visual lines (poetry, addresses,
+  signature blocks). For ordinary multi-line content:
+  ```js
+  editor.setText(id, snippets.line1);
+  const p2 = editor.insertParagraphAfter(id, snippets.line2);
+  editor.insertParagraphAfter(p2, snippets.line3);
+  ```
+  When you do need `insertLineBreak`, the `at` offset counts only characters (inline
+  objects don't count). Append each line with `insertTextAfterInline(brRef, text)` and
+  accumulate the running text length manually.
 - Pass **plain text only** -- never XML/markdown syntax. `editor.setText(id, '# x')`
   inserts the literal characters `# x`, it does not make a heading. We do not support or understand Markdown or XML in our editor.
 - **`setText(id, text)` fully replaces a node's content and clears all inline formatting** -- use it whenever you want to overwrite a text node entirely with plain text. `replace(id, find, to)` is only for partial substitutions where `find` is a known substring and you want to preserve surrounding formatting.

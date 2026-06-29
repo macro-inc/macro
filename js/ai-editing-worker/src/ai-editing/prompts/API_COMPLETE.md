@@ -297,9 +297,19 @@ After:
 - `insertImage(afterId, { srcType, url, alt?, width?, height? })`
 - `insertVideo(afterId, { srcType, url, controls?, width?, height? })`
 - `insertEquation(afterId, tex)` · `insertInlineEquation(blockId, at, tex)`
-- `insertLineBreak(blockId, at)`
+- `insertLineBreak(blockId, at)` — inserts a **soft line break** (Shift+Enter) within a block. Use only when multiple lines must live in a single semantic block (poetry, addresses, signature blocks). For ordinary multi-line content, insert separate paragraph nodes instead.
 - `insertDate(blockId, at, isoDate, displayFormat?)`
-- `insertTextAfterInline(inlineRef, text)` — inserts a plain text node immediately after an inline object. Use this (not `appendText`) when you need text to follow an inline equation, date, or other inline node.
+- `insertTextAfterInline(inlineRef, text)` — inserts a plain text node immediately after an inline object. Use this (not `appendText`) when you need text to follow an inline equation, date, line break, or other inline node.
+
+The `at` in `insertInlineEquation`/`insertLineBreak`/`insertDate` is a **character offset into the block's plain text** — inline objects don't count toward it. Compute it (`text.length`, `text.indexOf('word')`) rather than guessing. When you do use `insertLineBreak` for soft-break content, set the first line then add each break at the running text length and `insertTextAfterInline` the next line:
+
+```ts
+editor.setText('b1', 'Lily pad hoppers');
+const br1 = editor.insertLineBreak('b1', 'Lily pad hoppers'.length);
+editor.insertTextAfterInline(br1, 'Croaking through the night');
+const br2 = editor.insertLineBreak('b1', 'Lily pad hoppers'.length + 'Croaking through the night'.length);
+editor.insertTextAfterInline(br2, 'Splash, then silence');
+```
 
 ```ts
 editor.insertDivider('b1');
