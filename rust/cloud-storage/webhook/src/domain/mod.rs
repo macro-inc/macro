@@ -1,1 +1,7 @@
-//! Domain placeholders for webhook models, ports, and service logic.
+//! Domain layer for webhooks.
+
+/// Webhook domain models.
+pub mod models;
+#[cfg(feature = "ports")]
+/// Webhook ports.
+pub mod ports;
