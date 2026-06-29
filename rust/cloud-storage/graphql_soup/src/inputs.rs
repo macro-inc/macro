@@ -150,23 +150,6 @@ fn parse_macro_user_id(
         .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
 }
 
-fn exactly_one<'a>(type_name: &str, present: &[(&'a str, bool)]) -> async_graphql::Result<&'a str> {
-    let selected: Vec<&'a str> = present
-        .iter()
-        .filter_map(|(name, is_present)| is_present.then_some(*name))
-        .collect();
-    match selected.as_slice() {
-        [name] => Ok(name),
-        [] => Err(async_graphql::Error::new(format!(
-            "{type_name} must set exactly one field"
-        ))),
-        fields => Err(async_graphql::Error::new(format!(
-            "{type_name} must set exactly one field, got {}",
-            fields.join(", ")
-        ))),
-    }
-}
-
 fn fold_exprs<T>(
     type_name: &str,
     op_name: &str,
@@ -184,40 +167,22 @@ fn fold_exprs<T>(
 
 macro_rules! filter_expr_input {
     ($name:ident, $literal:ty, $target:ty, $type_name:literal) => {
-        #[derive(async_graphql::InputObject)]
-        struct $name {
-            and: Option<Vec<$name>>,
-            or: Option<Vec<$name>>,
-            not: Option<Box<$name>>,
-            literal: Option<$literal>,
+        #[derive(async_graphql::OneofObject)]
+        enum $name {
+            And(Vec<$name>),
+            Or(Vec<$name>),
+            Not(Box<$name>),
+            Literal($literal),
         }
 
         impl IntoFilterExpr<$target> for $name {
             fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
-                let has_and = self.and.as_ref().is_some_and(|v| !v.is_empty());
-                let has_or = self.or.as_ref().is_some_and(|v| !v.is_empty());
-                exactly_one(
-                    $type_name,
-                    &[
-                        ("and", has_and),
-                        ("or", has_or),
-                        ("not", self.not.is_some()),
-                        ("literal", self.literal.is_some()),
-                    ],
-                )?;
-
-                if has_and {
-                    return fold_exprs($type_name, "and", self.and.unwrap_or_default(), Expr::and);
+                match self {
+                    Self::And(exprs) => fold_exprs($type_name, "and", exprs, Expr::and),
+                    Self::Or(exprs) => fold_exprs($type_name, "or", exprs, Expr::or),
+                    Self::Not(expr) => expr.into_expr().map(Expr::is_not),
+                    Self::Literal(literal) => literal.into_expr(),
                 }
-                if has_or {
-                    return fold_exprs($type_name, "or", self.or.unwrap_or_default(), Expr::or);
-                }
-                if let Some(not) = self.not {
-                    return not.into_expr().map(Expr::is_not);
-                }
-                self.literal
-                    .expect("literal presence checked above")
-                    .into_expr()
             }
         }
     };
@@ -299,143 +264,89 @@ impl GraphqlEmailFilterAst {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlCrmScope {
-    domains: Option<Vec<String>>,
-    addresses: Option<Vec<String>>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlCrmScope {
+    Domains(Vec<String>),
+    Addresses(Vec<String>),
 }
 
 impl GraphqlCrmScope {
     fn into_ast(self) -> async_graphql::Result<CrmScope> {
-        let domains = self.domains.unwrap_or_default();
-        let addresses = self.addresses.unwrap_or_default();
-        match (domains.is_empty(), addresses.is_empty()) {
-            (false, true) => Ok(CrmScope::Domains(domains)),
-            (true, false) => Ok(CrmScope::Addresses(addresses)),
-            (true, true) => Err(async_graphql::Error::new(
-                "CrmScope requires non-empty domains or addresses",
+        match self {
+            Self::Domains(domains) if domains.is_empty() => Err(async_graphql::Error::new(
+                "CrmScope.domains cannot be empty",
             )),
-            (false, false) => Err(async_graphql::Error::new(
-                "CrmScope domains and addresses are mutually exclusive",
+            Self::Domains(domains) => Ok(CrmScope::Domains(domains)),
+            Self::Addresses(addresses) if addresses.is_empty() => Err(async_graphql::Error::new(
+                "CrmScope.addresses cannot be empty",
             )),
+            Self::Addresses(addresses) => Ok(CrmScope::Addresses(addresses)),
         }
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlDateLiteral {
-    gt: Option<String>,
-    lt: Option<String>,
-    gte: Option<String>,
-    lte: Option<String>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlDateLiteral {
+    Gt(String),
+    Lt(String),
+    Gte(String),
+    Lte(String),
 }
 
 impl GraphqlDateLiteral {
-    fn into_ast(self) -> async_graphql::Result<DateLiteral> {
-        let field = exactly_one(
-            "DateLiteral",
-            &[
-                ("gt", self.gt.is_some()),
-                ("lt", self.lt.is_some()),
-                ("gte", self.gte.is_some()),
-                ("lte", self.lte.is_some()),
-            ],
-        )?;
-        let value = match field {
-            "gt" => self.gt,
-            "lt" => self.lt,
-            "gte" => self.gte,
-            "lte" => self.lte,
-            _ => unreachable!(),
-        }
-        .expect("date field presence checked above");
-        let parsed = DateTime::parse_from_rfc3339(&value)
+    fn parse(value: String) -> async_graphql::Result<DateTime<Utc>> {
+        DateTime::parse_from_rfc3339(&value)
             .map(|dt| dt.with_timezone(&Utc))
             .map_err(|err| {
                 async_graphql::Error::new(format!("invalid RFC3339 date `{value}`: {err}"))
-            })?;
-        Ok(match field {
-            "gt" => DateLiteral::GreaterThan(parsed),
-            "lt" => DateLiteral::LessThan(parsed),
-            "gte" => DateLiteral::GreaterThanOrEqual(parsed),
-            "lte" => DateLiteral::LessThanOrEqual(parsed),
-            _ => unreachable!(),
+            })
+    }
+
+    fn into_ast(self) -> async_graphql::Result<DateLiteral> {
+        Ok(match self {
+            Self::Gt(value) => DateLiteral::GreaterThan(Self::parse(value)?),
+            Self::Lt(value) => DateLiteral::LessThan(Self::parse(value)?),
+            Self::Gte(value) => DateLiteral::GreaterThanOrEqual(Self::parse(value)?),
+            Self::Lte(value) => DateLiteral::LessThanOrEqual(Self::parse(value)?),
         })
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlDocumentLiteral {
-    file_type: Option<String>,
-    id: Option<ID>,
-    project_id: Option<ID>,
-    owner: Option<String>,
-    importance: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
-    include_cbm_atm_nc: Option<bool>,
-    sub_type: Option<GraphqlDocumentSubType>,
-    is_email_attachment: Option<bool>,
-    created_at: Option<GraphqlDateLiteral>,
-    updated_at: Option<GraphqlDateLiteral>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlDocumentLiteral {
+    FileType(String),
+    Id(ID),
+    ProjectId(ID),
+    Owner(String),
+    Importance(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
+    IncludeCbmAtmNc(bool),
+    SubType(GraphqlDocumentSubType),
+    IsEmailAttachment(bool),
+    CreatedAt(GraphqlDateLiteral),
+    UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<DocumentLiteral>> {
-        let field = exactly_one(
-            "DocumentLiteral",
-            &[
-                ("fileType", self.file_type.is_some()),
-                ("id", self.id.is_some()),
-                ("projectId", self.project_id.is_some()),
-                ("owner", self.owner.is_some()),
-                ("importance", self.importance.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-                ("includeCbmAtmNc", self.include_cbm_atm_nc.is_some()),
-                ("subType", self.sub_type.is_some()),
-                ("isEmailAttachment", self.is_email_attachment.is_some()),
-                ("createdAt", self.created_at.is_some()),
-                ("updatedAt", self.updated_at.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "fileType" => {
-                let value = self.file_type.expect("field checked");
+        let literal = match self {
+            Self::FileType(value) => {
                 DocumentLiteral::FileType(FileType::from_str(&value).map_err(|err| {
                     async_graphql::Error::new(format!("invalid fileType `{value}`: {err}"))
                 })?)
             }
-            "id" => DocumentLiteral::Id(parse_id(self.id.expect("field checked"), "id")?),
-            "projectId" => DocumentLiteral::ProjectId(parse_id(
-                self.project_id.expect("field checked"),
-                "projectId",
-            )?),
-            "owner" => DocumentLiteral::Owner(parse_macro_user_id(
-                self.owner.expect("field checked"),
-                "owner",
-            )?),
-            "importance" => DocumentLiteral::Importance(self.importance.expect("field checked")),
-            "notificationDone" => {
-                DocumentLiteral::NotificationDone(self.notification_done.expect("field checked"))
-            }
-            "notificationSeen" => {
-                DocumentLiteral::NotificationSeen(self.notification_seen.expect("field checked"))
-            }
-            "includeCbmAtmNc" => {
-                DocumentLiteral::IncludeCbmAtmNc(self.include_cbm_atm_nc.expect("field checked"))
-            }
-            "subType" => DocumentLiteral::SubType(self.sub_type.expect("field checked").into()),
-            "isEmailAttachment" => {
-                DocumentLiteral::IsEmailAttachment(self.is_email_attachment.expect("field checked"))
-            }
-            "createdAt" => {
-                DocumentLiteral::CreatedAt(self.created_at.expect("field checked").into_ast()?)
-            }
-            "updatedAt" => {
-                DocumentLiteral::UpdatedAt(self.updated_at.expect("field checked").into_ast()?)
-            }
-            _ => unreachable!(),
+            Self::Id(id) => DocumentLiteral::Id(parse_id(id, "id")?),
+            Self::ProjectId(id) => DocumentLiteral::ProjectId(parse_id(id, "projectId")?),
+            Self::Owner(owner) => DocumentLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Importance(importance) => DocumentLiteral::Importance(importance),
+            Self::NotificationDone(done) => DocumentLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => DocumentLiteral::NotificationSeen(seen),
+            Self::IncludeCbmAtmNc(include) => DocumentLiteral::IncludeCbmAtmNc(include),
+            Self::SubType(sub_type) => DocumentLiteral::SubType(sub_type.into()),
+            Self::IsEmailAttachment(value) => DocumentLiteral::IsEmailAttachment(value),
+            Self::CreatedAt(date) => DocumentLiteral::CreatedAt(date.into_ast()?),
+            Self::UpdatedAt(date) => DocumentLiteral::UpdatedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }
@@ -456,121 +367,61 @@ impl From<GraphqlDocumentSubType> for DocumentSubType {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlProjectLiteral {
-    project_id: Option<ID>,
-    project_id_self: Option<ID>,
-    owner: Option<String>,
-    importance: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
-    created_at: Option<GraphqlDateLiteral>,
-    updated_at: Option<GraphqlDateLiteral>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlProjectLiteral {
+    ProjectId(ID),
+    ProjectIdSelf(ID),
+    Owner(String),
+    Importance(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
+    CreatedAt(GraphqlDateLiteral),
+    UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ProjectLiteral>> {
-        let field = exactly_one(
-            "ProjectLiteral",
-            &[
-                ("projectId", self.project_id.is_some()),
-                ("projectIdSelf", self.project_id_self.is_some()),
-                ("owner", self.owner.is_some()),
-                ("importance", self.importance.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-                ("createdAt", self.created_at.is_some()),
-                ("updatedAt", self.updated_at.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "projectId" => ProjectLiteral::ProjectId(parse_id(
-                self.project_id.expect("field checked"),
-                "projectId",
-            )?),
-            "projectIdSelf" => ProjectLiteral::ProjectIdSelf(parse_id(
-                self.project_id_self.expect("field checked"),
-                "projectIdSelf",
-            )?),
-            "owner" => ProjectLiteral::Owner(parse_macro_user_id(
-                self.owner.expect("field checked"),
-                "owner",
-            )?),
-            "importance" => ProjectLiteral::Importance(self.importance.expect("field checked")),
-            "notificationDone" => {
-                ProjectLiteral::NotificationDone(self.notification_done.expect("field checked"))
+        let literal = match self {
+            Self::ProjectId(id) => ProjectLiteral::ProjectId(parse_id(id, "projectId")?),
+            Self::ProjectIdSelf(id) => {
+                ProjectLiteral::ProjectIdSelf(parse_id(id, "projectIdSelf")?)
             }
-            "notificationSeen" => {
-                ProjectLiteral::NotificationSeen(self.notification_seen.expect("field checked"))
-            }
-            "createdAt" => {
-                ProjectLiteral::CreatedAt(self.created_at.expect("field checked").into_ast()?)
-            }
-            "updatedAt" => {
-                ProjectLiteral::UpdatedAt(self.updated_at.expect("field checked").into_ast()?)
-            }
-            _ => unreachable!(),
+            Self::Owner(owner) => ProjectLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Importance(importance) => ProjectLiteral::Importance(importance),
+            Self::NotificationDone(done) => ProjectLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => ProjectLiteral::NotificationSeen(seen),
+            Self::CreatedAt(date) => ProjectLiteral::CreatedAt(date.into_ast()?),
+            Self::UpdatedAt(date) => ProjectLiteral::UpdatedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlChatLiteral {
-    project_id: Option<ID>,
-    role: Option<GraphqlChatRole>,
-    chat_id: Option<ID>,
-    owner: Option<String>,
-    importance: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
-    created_at: Option<GraphqlDateLiteral>,
-    updated_at: Option<GraphqlDateLiteral>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlChatLiteral {
+    ProjectId(ID),
+    Role(GraphqlChatRole),
+    ChatId(ID),
+    Owner(String),
+    Importance(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
+    CreatedAt(GraphqlDateLiteral),
+    UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ChatLiteral>> {
-        let field = exactly_one(
-            "ChatLiteral",
-            &[
-                ("projectId", self.project_id.is_some()),
-                ("role", self.role.is_some()),
-                ("chatId", self.chat_id.is_some()),
-                ("owner", self.owner.is_some()),
-                ("importance", self.importance.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-                ("createdAt", self.created_at.is_some()),
-                ("updatedAt", self.updated_at.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "projectId" => ChatLiteral::ProjectId(parse_id(
-                self.project_id.expect("field checked"),
-                "projectId",
-            )?),
-            "role" => ChatLiteral::Role(self.role.expect("field checked").into()),
-            "chatId" => {
-                ChatLiteral::ChatId(parse_id(self.chat_id.expect("field checked"), "chatId")?)
-            }
-            "owner" => ChatLiteral::Owner(parse_macro_user_id(
-                self.owner.expect("field checked"),
-                "owner",
-            )?),
-            "importance" => ChatLiteral::Importance(self.importance.expect("field checked")),
-            "notificationDone" => {
-                ChatLiteral::NotificationDone(self.notification_done.expect("field checked"))
-            }
-            "notificationSeen" => {
-                ChatLiteral::NotificationSeen(self.notification_seen.expect("field checked"))
-            }
-            "createdAt" => {
-                ChatLiteral::CreatedAt(self.created_at.expect("field checked").into_ast()?)
-            }
-            "updatedAt" => {
-                ChatLiteral::UpdatedAt(self.updated_at.expect("field checked").into_ast()?)
-            }
-            _ => unreachable!(),
+        let literal = match self {
+            Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
+            Self::Role(role) => ChatLiteral::Role(role.into()),
+            Self::ChatId(id) => ChatLiteral::ChatId(parse_id(id, "chatId")?),
+            Self::Owner(owner) => ChatLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Importance(importance) => ChatLiteral::Importance(importance),
+            Self::NotificationDone(done) => ChatLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => ChatLiteral::NotificationSeen(seen),
+            Self::CreatedAt(date) => ChatLiteral::CreatedAt(date.into_ast()?),
+            Self::UpdatedAt(date) => ChatLiteral::UpdatedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }
@@ -593,114 +444,67 @@ impl From<GraphqlChatRole> for ChatRole {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlEmailLiteral {
-    sender: Option<GraphqlEmailValue>,
-    cc: Option<GraphqlEmailValue>,
-    bcc: Option<GraphqlEmailValue>,
-    recipient: Option<GraphqlEmailValue>,
-    thread_id: Option<ID>,
-    owner: Option<ID>,
-    project_id: Option<String>,
-    importance: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
-    shared: Option<GraphqlSharedEmailFilter>,
-    calendar_only: Option<bool>,
-    created_at: Option<GraphqlDateLiteral>,
-    updated_at: Option<GraphqlDateLiteral>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlEmailLiteral {
+    Sender(GraphqlEmailValue),
+    Cc(GraphqlEmailValue),
+    Bcc(GraphqlEmailValue),
+    Recipient(GraphqlEmailValue),
+    ThreadId(ID),
+    Owner(ID),
+    ProjectId(String),
+    Importance(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
+    Shared(GraphqlSharedEmailFilter),
+    CalendarOnly(bool),
+    CreatedAt(GraphqlDateLiteral),
+    UpdatedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<EmailLiteral>> {
-        let field = exactly_one(
-            "EmailLiteral",
-            &[
-                ("sender", self.sender.is_some()),
-                ("cc", self.cc.is_some()),
-                ("bcc", self.bcc.is_some()),
-                ("recipient", self.recipient.is_some()),
-                ("threadId", self.thread_id.is_some()),
-                ("owner", self.owner.is_some()),
-                ("projectId", self.project_id.is_some()),
-                ("importance", self.importance.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-                ("shared", self.shared.is_some()),
-                ("calendarOnly", self.calendar_only.is_some()),
-                ("createdAt", self.created_at.is_some()),
-                ("updatedAt", self.updated_at.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "sender" => EmailLiteral::Sender(self.sender.expect("field checked").into_ast()?),
-            "cc" => EmailLiteral::Cc(self.cc.expect("field checked").into_ast()?),
-            "bcc" => EmailLiteral::Bcc(self.bcc.expect("field checked").into_ast()?),
-            "recipient" => {
-                EmailLiteral::Recipient(self.recipient.expect("field checked").into_ast()?)
-            }
-            "threadId" => EmailLiteral::ThreadId(parse_id(
-                self.thread_id.expect("field checked"),
-                "threadId",
-            )?),
-            "owner" => EmailLiteral::Owner(parse_id(self.owner.expect("field checked"), "owner")?),
-            "projectId" => EmailLiteral::ProjectId(self.project_id.expect("field checked")),
-            "importance" => EmailLiteral::Importance(self.importance.expect("field checked")),
-            "notificationDone" => {
-                EmailLiteral::NotificationDone(self.notification_done.expect("field checked"))
-            }
-            "notificationSeen" => {
-                EmailLiteral::NotificationSeen(self.notification_seen.expect("field checked"))
-            }
-            "shared" => EmailLiteral::Shared(self.shared.expect("field checked").into()),
-            "calendarOnly" => {
-                EmailLiteral::CalendarOnly(self.calendar_only.expect("field checked"))
-            }
-            "createdAt" => {
-                EmailLiteral::CreatedAt(self.created_at.expect("field checked").into_ast()?)
-            }
-            "updatedAt" => {
-                EmailLiteral::UpdatedAt(self.updated_at.expect("field checked").into_ast()?)
-            }
-            _ => unreachable!(),
+        let literal = match self {
+            Self::Sender(value) => EmailLiteral::Sender(value.into_ast()?),
+            Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
+            Self::Bcc(value) => EmailLiteral::Bcc(value.into_ast()?),
+            Self::Recipient(value) => EmailLiteral::Recipient(value.into_ast()?),
+            Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
+            Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
+            Self::ProjectId(id) => EmailLiteral::ProjectId(id),
+            Self::Importance(importance) => EmailLiteral::Importance(importance),
+            Self::NotificationDone(done) => EmailLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => EmailLiteral::NotificationSeen(seen),
+            Self::Shared(shared) => EmailLiteral::Shared(shared.into()),
+            Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
+            Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
+            Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlEmailValue {
-    partial: Option<String>,
-    complete: Option<String>,
-    domain: Option<String>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlEmailValue {
+    Partial(String),
+    Complete(String),
+    Domain(String),
 }
 
 impl GraphqlEmailValue {
     fn into_ast(self) -> async_graphql::Result<Email> {
-        let field = exactly_one(
-            "EmailValue",
-            &[
-                ("partial", self.partial.is_some()),
-                ("complete", self.complete.is_some()),
-                ("domain", self.domain.is_some()),
-            ],
-        )?;
-        Ok(match field {
-            "partial" => Email::Partial(self.partial.expect("field checked")),
-            "complete" => {
-                let value = self.complete.expect("field checked");
-                Email::Complete(
-                    EmailStr::parse_from_str(&value)
-                        .map(CowLike::into_owned)
-                        .map_err(|err| {
-                            async_graphql::Error::new(format!(
-                                "invalid complete email `{value}`: {err}"
-                            ))
-                        })?,
-                )
-            }
-            "domain" => Email::Domain(self.domain.expect("field checked")),
-            _ => unreachable!(),
+        Ok(match self {
+            Self::Partial(value) => Email::Partial(value),
+            Self::Complete(value) => Email::Complete(
+                EmailStr::parse_from_str(&value)
+                    .map(CowLike::into_owned)
+                    .map_err(|err| {
+                        async_graphql::Error::new(format!(
+                            "invalid complete email `{value}`: {err}"
+                        ))
+                    })?,
+            ),
+            Self::Domain(value) => Email::Domain(value),
         })
     }
 }
@@ -722,71 +526,35 @@ impl From<GraphqlSharedEmailFilter> for SharedEmailFilter {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlChannelLiteral {
-    thread_id: Option<ID>,
-    mention: Option<String>,
-    organization_id: Option<i64>,
-    team_id: Option<ID>,
-    channel_id: Option<ID>,
-    sender: Option<String>,
-    channel_type: Option<GraphqlChannelTypeFilter>,
-    importance: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlChannelLiteral {
+    ThreadId(ID),
+    Mention(String),
+    OrganizationId(i64),
+    TeamId(ID),
+    ChannelId(ID),
+    Sender(String),
+    ChannelType(GraphqlChannelTypeFilter),
+    Importance(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ChannelLiteral>> {
-        let field = exactly_one(
-            "ChannelLiteral",
-            &[
-                ("threadId", self.thread_id.is_some()),
-                ("mention", self.mention.is_some()),
-                ("organizationId", self.organization_id.is_some()),
-                ("teamId", self.team_id.is_some()),
-                ("channelId", self.channel_id.is_some()),
-                ("sender", self.sender.is_some()),
-                ("channelType", self.channel_type.is_some()),
-                ("importance", self.importance.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "threadId" => ChannelLiteral::ThreadId(parse_id(
-                self.thread_id.expect("field checked"),
-                "threadId",
-            )?),
-            "mention" => ChannelLiteral::Mention(parse_macro_user_id(
-                self.mention.expect("field checked"),
-                "mention",
-            )?),
-            "organizationId" => {
-                ChannelLiteral::OrganizationId(self.organization_id.expect("field checked"))
+        let literal = match self {
+            Self::ThreadId(id) => ChannelLiteral::ThreadId(parse_id(id, "threadId")?),
+            Self::Mention(mention) => {
+                ChannelLiteral::Mention(parse_macro_user_id(mention, "mention")?)
             }
-            "teamId" => {
-                ChannelLiteral::TeamId(parse_id(self.team_id.expect("field checked"), "teamId")?)
-            }
-            "channelId" => ChannelLiteral::ChannelId(parse_id(
-                self.channel_id.expect("field checked"),
-                "channelId",
-            )?),
-            "sender" => ChannelLiteral::Sender(parse_macro_user_id(
-                self.sender.expect("field checked"),
-                "sender",
-            )?),
-            "channelType" => {
-                ChannelLiteral::ChannelType(self.channel_type.expect("field checked").into())
-            }
-            "importance" => ChannelLiteral::Importance(self.importance.expect("field checked")),
-            "notificationDone" => {
-                ChannelLiteral::NotificationDone(self.notification_done.expect("field checked"))
-            }
-            "notificationSeen" => {
-                ChannelLiteral::NotificationSeen(self.notification_seen.expect("field checked"))
-            }
-            _ => unreachable!(),
+            Self::OrganizationId(id) => ChannelLiteral::OrganizationId(id),
+            Self::TeamId(id) => ChannelLiteral::TeamId(parse_id(id, "teamId")?),
+            Self::ChannelId(id) => ChannelLiteral::ChannelId(parse_id(id, "channelId")?),
+            Self::Sender(sender) => ChannelLiteral::Sender(parse_macro_user_id(sender, "sender")?),
+            Self::ChannelType(channel_type) => ChannelLiteral::ChannelType(channel_type.into()),
+            Self::Importance(importance) => ChannelLiteral::Importance(importance),
+            Self::NotificationDone(done) => ChannelLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => ChannelLiteral::NotificationSeen(seen),
         };
         Ok(Expr::val(literal))
     }
@@ -811,88 +579,49 @@ impl From<GraphqlChannelTypeFilter> for ChannelTypeFilter {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlChannelThreadLiteral {
-    thread_id: Option<ID>,
-    channel_id: Option<ID>,
-    root_sender: Option<String>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlChannelThreadLiteral {
+    ThreadId(ID),
+    ChannelId(ID),
+    RootSender(String),
+    NotificationDone(bool),
+    NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ChannelThreadLiteral>> {
-        let field = exactly_one(
-            "ChannelThreadLiteral",
-            &[
-                ("threadId", self.thread_id.is_some()),
-                ("channelId", self.channel_id.is_some()),
-                ("rootSender", self.root_sender.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "threadId" => ChannelThreadLiteral::ThreadId(parse_id(
-                self.thread_id.expect("field checked"),
-                "threadId",
-            )?),
-            "channelId" => ChannelThreadLiteral::ChannelId(parse_id(
-                self.channel_id.expect("field checked"),
-                "channelId",
-            )?),
-            "rootSender" => ChannelThreadLiteral::RootSender(parse_macro_user_id(
-                self.root_sender.expect("field checked"),
-                "rootSender",
-            )?),
-            "notificationDone" => ChannelThreadLiteral::NotificationDone(
-                self.notification_done.expect("field checked"),
-            ),
-            "notificationSeen" => ChannelThreadLiteral::NotificationSeen(
-                self.notification_seen.expect("field checked"),
-            ),
-            _ => unreachable!(),
+        let literal = match self {
+            Self::ThreadId(id) => ChannelThreadLiteral::ThreadId(parse_id(id, "threadId")?),
+            Self::ChannelId(id) => ChannelThreadLiteral::ChannelId(parse_id(id, "channelId")?),
+            Self::RootSender(sender) => {
+                ChannelThreadLiteral::RootSender(parse_macro_user_id(sender, "rootSender")?)
+            }
+            Self::NotificationDone(done) => ChannelThreadLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => ChannelThreadLiteral::NotificationSeen(seen),
         };
         Ok(Expr::val(literal))
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlCallLiteral {
-    call_id: Option<ID>,
-    channel_id: Option<ID>,
-    speaker: Option<String>,
-    status: Option<GraphqlCallStatus>,
-    attended: Option<bool>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlCallLiteral {
+    CallId(ID),
+    ChannelId(ID),
+    Speaker(String),
+    Status(GraphqlCallStatus),
+    Attended(bool),
 }
 
 impl IntoFilterExpr<CallLiteral> for GraphqlCallLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<CallLiteral>> {
-        let field = exactly_one(
-            "CallLiteral",
-            &[
-                ("callId", self.call_id.is_some()),
-                ("channelId", self.channel_id.is_some()),
-                ("speaker", self.speaker.is_some()),
-                ("status", self.status.is_some()),
-                ("attended", self.attended.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "callId" => {
-                CallLiteral::CallId(parse_id(self.call_id.expect("field checked"), "callId")?)
+        let literal = match self {
+            Self::CallId(id) => CallLiteral::CallId(parse_id(id, "callId")?),
+            Self::ChannelId(id) => CallLiteral::ChannelId(parse_id(id, "channelId")?),
+            Self::Speaker(speaker) => {
+                CallLiteral::Speaker(parse_macro_user_id(speaker, "speaker")?)
             }
-            "channelId" => CallLiteral::ChannelId(parse_id(
-                self.channel_id.expect("field checked"),
-                "channelId",
-            )?),
-            "speaker" => CallLiteral::Speaker(parse_macro_user_id(
-                self.speaker.expect("field checked"),
-                "speaker",
-            )?),
-            "status" => CallLiteral::Status(self.status.expect("field checked").into()),
-            "attended" => CallLiteral::Attended(self.attended.expect("field checked")),
-            _ => unreachable!(),
+            Self::Status(status) => CallLiteral::Status(status.into()),
+            Self::Attended(attended) => CallLiteral::Attended(attended),
         };
         Ok(Expr::val(literal))
     }
@@ -915,73 +644,46 @@ impl From<GraphqlCallStatus> for CallStatus {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlCrmCompanyLiteral {
-    id: Option<ID>,
-    hidden: Option<bool>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlCrmCompanyLiteral {
+    Id(ID),
+    Hidden(bool),
 }
 
 impl IntoFilterExpr<CrmCompanyLiteral> for GraphqlCrmCompanyLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<CrmCompanyLiteral>> {
-        let field = exactly_one(
-            "CrmCompanyLiteral",
-            &[("id", self.id.is_some()), ("hidden", self.hidden.is_some())],
-        )?;
-        let literal = match field {
-            "id" => CrmCompanyLiteral::Id(parse_id(self.id.expect("field checked"), "id")?),
-            "hidden" => CrmCompanyLiteral::Hidden(self.hidden.expect("field checked")),
-            _ => unreachable!(),
+        let literal = match self {
+            Self::Id(id) => CrmCompanyLiteral::Id(parse_id(id, "id")?),
+            Self::Hidden(hidden) => CrmCompanyLiteral::Hidden(hidden),
         };
         Ok(Expr::val(literal))
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlForeignEntityLiteral {
-    id: Option<ID>,
-    foreign_entity_id: Option<String>,
-    foreign_entity_source: Option<String>,
-    includes_me: Option<bool>,
-    notification_done: Option<bool>,
-    notification_seen: Option<bool>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlForeignEntityLiteral {
+    Id(ID),
+    ForeignEntityId(String),
+    ForeignEntitySource(String),
+    IncludesMe(bool),
+    NotificationDone(bool),
+    NotificationSeen(bool),
 }
 
 impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<ForeignEntityLiteral>> {
-        let field = exactly_one(
-            "ForeignEntityLiteral",
-            &[
-                ("id", self.id.is_some()),
-                ("foreignEntityId", self.foreign_entity_id.is_some()),
-                ("foreignEntitySource", self.foreign_entity_source.is_some()),
-                ("includesMe", self.includes_me.is_some()),
-                ("notificationDone", self.notification_done.is_some()),
-                ("notificationSeen", self.notification_seen.is_some()),
-            ],
-        )?;
-        let literal = match field {
-            "id" => ForeignEntityLiteral::Id(parse_id(self.id.expect("field checked"), "id")?),
-            "foreignEntityId" => ForeignEntityLiteral::ForeignEntityId(
-                self.foreign_entity_id.expect("field checked"),
-            ),
-            "foreignEntitySource" => ForeignEntityLiteral::ForeignEntitySource(
-                self.foreign_entity_source.expect("field checked"),
-            ),
-            "includesMe" => {
-                if !self.includes_me.expect("field checked") {
-                    return Err(async_graphql::Error::new(
-                        "ForeignEntityLiteral.includesMe must be true",
-                    ));
-                }
-                ForeignEntityLiteral::IncludesMe
+        let literal = match self {
+            Self::Id(id) => ForeignEntityLiteral::Id(parse_id(id, "id")?),
+            Self::ForeignEntityId(id) => ForeignEntityLiteral::ForeignEntityId(id),
+            Self::ForeignEntitySource(source) => ForeignEntityLiteral::ForeignEntitySource(source),
+            Self::IncludesMe(true) => ForeignEntityLiteral::IncludesMe,
+            Self::IncludesMe(false) => {
+                return Err(async_graphql::Error::new(
+                    "ForeignEntityLiteral.includesMe must be true",
+                ));
             }
-            "notificationDone" => ForeignEntityLiteral::NotificationDone(
-                self.notification_done.expect("field checked"),
-            ),
-            "notificationSeen" => ForeignEntityLiteral::NotificationSeen(
-                self.notification_seen.expect("field checked"),
-            ),
-            _ => unreachable!(),
+            Self::NotificationDone(done) => ForeignEntityLiteral::NotificationDone(done),
+            Self::NotificationSeen(seen) => ForeignEntityLiteral::NotificationSeen(seen),
         };
         Ok(Expr::val(literal))
     }
@@ -1004,33 +706,23 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     }
 }
 
-#[derive(async_graphql::InputObject)]
-struct GraphqlPropertyMatchValue {
-    select_option: Option<ID>,
-    entity_ref: Option<String>,
+#[derive(async_graphql::OneofObject)]
+enum GraphqlPropertyMatchValue {
+    SelectOption(ID),
+    EntityRef(String),
 }
 
 impl GraphqlPropertyMatchValue {
     fn into_ast(self) -> async_graphql::Result<PropertyMatchValue> {
-        let field = exactly_one(
-            "PropertyMatchValue",
-            &[
-                ("selectOption", self.select_option.is_some()),
-                ("entityRef", self.entity_ref.is_some()),
-            ],
-        )?;
-        Ok(match field {
-            "selectOption" => PropertyMatchValue::SelectOption(parse_id(
-                self.select_option.expect("field checked"),
-                "selectOption",
-            )?),
-            "entityRef" => {
-                let value = self.entity_ref.expect("field checked");
+        Ok(match self {
+            Self::SelectOption(id) => {
+                PropertyMatchValue::SelectOption(parse_id(id, "selectOption")?)
+            }
+            Self::EntityRef(value) => {
                 PropertyMatchValue::EntityRef(EntityRefId::new(value).map_err(|err| {
                     async_graphql::Error::new(format!("invalid entityRef: {err}"))
                 })?)
             }
-            _ => unreachable!(),
         })
     }
 }
