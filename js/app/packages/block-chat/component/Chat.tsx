@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
@@ -34,7 +33,6 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -46,11 +44,9 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { createRenameDssEntityMutation } from '@macro-entity';
-import ChatDebugIcon from '@phosphor/chat-text.svg';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 
@@ -276,23 +272,12 @@ function ChatInner(props: {
     >
       <Show when={!isNestedBlock}>
         <Suspense>
-          <TopBar />
+          <TopBar
+            showStreamDebug={showStreamDebug}
+            toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
+          />
         </Suspense>
       </Show>
-      <SplitToolbarLeft>
-        <Show when={DEV_MODE_ENV}>
-          <Button
-            size="icon-sm"
-            class="rounded-xs"
-            onClick={() => setShowStreamDebug((p) => !p)}
-            tooltip={
-              showStreamDebug() ? 'Hide Stream Debug' : 'Show Stream Debug'
-            }
-          >
-            <ChatDebugIcon />
-          </Button>
-        </Show>
-      </SplitToolbarLeft>
       <Show when={showStreamDebug()}>
         <div class="px-2 py-1 bg-surface border-b border-edge text-ink font-mono text-sm">
           <Show when={chat.stream()} fallback={<div>No active stream</div>}>

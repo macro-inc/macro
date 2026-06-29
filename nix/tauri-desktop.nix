@@ -84,7 +84,7 @@
           if isAarch64Darwin then
             "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
           else
-            "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+            "sha256-T7LUQ6yNLxTnq6TK9nFzYKSqvrZ9MYRwCK/cYzPzuv8=";
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {

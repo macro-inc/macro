@@ -1,5 +1,4 @@
 import { SidePanel } from '@app/component/side-panel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useContactQuery } from '@queries/crm/contacts';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Show } from 'solid-js';
@@ -12,9 +11,8 @@ import { ContactSharingSection } from './ContactSharingSection';
 /**
  * Root of the contact detail view. Owns the contact query and pushes the
  * resolved entity down to presentational children. Layout mirrors the
- * company block: middle content constrained to a centered column,
- * additional info in the right-hand SidePanel, Content/Info pill tabs
- * in narrow mode via SplitToolbarLeft.
+ * company block: middle content constrained to a centered column, with
+ * additional info in the right-hand SidePanel.
  */
 export function Contact(props: { contactId: string }) {
   const contactQuery = useContactQuery(() => props.contactId);
@@ -23,9 +21,6 @@ export function Contact(props: { contactId: string }) {
 
   return (
     <SidePanel.Layout>
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
       <div class="flex h-full flex-col overflow-y-auto scrollbar-hidden">
         <div class="mx-auto flex w-full max-w-3xl min-w-0 grow flex-col gap-6 px-6 pt-12 pb-12">
           <ContactHeader contact={contact()} />

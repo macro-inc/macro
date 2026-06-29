@@ -2,6 +2,7 @@ use crate::tool_search::{SearchableTool, ToolLoader};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 /// Service context wrapper for shared state passed to tools.
 ///
@@ -36,6 +37,9 @@ pub struct RequestContext {
     /// Loader used by `SearchTools` to load matched tools into the active
     /// request. `None` when tool search is not wired up (e.g. non-agent callers).
     pub tool_loader: Option<ToolLoader>,
+    /// user has requested stream stop
+    /// long-running tools should comsume this
+    pub cancel: CancellationToken,
 }
 
 impl RequestContext {
@@ -46,6 +50,7 @@ impl RequestContext {
             user_id,
             searchable_tools: Arc::new(Vec::new()),
             tool_loader: None,
+            cancel: CancellationToken::new(),
         }
     }
 

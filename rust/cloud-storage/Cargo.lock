@@ -74,6 +74,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -252,6 +253,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio-util",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -3904,6 +3906,7 @@ dependencies = [
  "properties",
  "properties_db_client",
  "properties_service",
+ "rate_limit",
  "rayon",
  "readonly_pool",
  "redis",
@@ -3934,6 +3937,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "webhook",
  "workspace-hack",
  "zip 2.4.2",
 ]
@@ -13942,6 +13946,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "webhook"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "hex",
+ "hmac 0.12.1",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rate_limit",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "webp"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14561,6 +14596,7 @@ dependencies = [
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",
+ "rig-core",
  "rmcp",
  "rsa",
  "rustc-hash 2.1.2",
@@ -14625,6 +14661,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gh-workflow",
+ "graphql_soup",
  "guppy",
  "hakari",
  "indoc",

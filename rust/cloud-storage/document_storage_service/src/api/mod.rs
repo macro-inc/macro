@@ -235,6 +235,10 @@ fn api_router(state: ApiContext) -> Router {
             call::inbound::axum_router::call_router(state.call_state.clone()),
         )
         .nest(
+            "/webhook",
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
+        )
+        .nest(
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone()),
         )

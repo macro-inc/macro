@@ -488,7 +488,7 @@ fn stream_and_save_message(
     // the whole subscription; the subscription itself is moved into the
     // stream closure so the Redis subscriber task is aborted when the stream
     // finishes.
-    let cancellation_token = cancellation_sub.token.clone();
+    let user_cancellsation = cancellation_sub.token.clone();
 
     let payload_stream = stream! {
         // Keep the subscription alive for the duration of the stream. When
@@ -514,6 +514,8 @@ fn stream_and_save_message(
         );
         let agent_loop =
             AgentLoop::new(tool_context.recorder.clone()).with_model(&model);
+
+
         let rig_messages = agent::to_rig_messages(&request);
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user_id.clone())
             .with_entity(macro_uuid::string_to_uuid(&chat_id).ok());
@@ -522,9 +524,10 @@ fn stream_and_save_message(
         tool_context.usage_context = usage_ctx.clone();
         tool_context.document_tool_context.user_token = Some(jwt_token.clone());
         tool_context.document_tool_context.recorder = tool_context.recorder.clone();
-        let mut session = agent_loop
+        let (mut session, cancel) = agent_loop
             .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
-            .await;
+            .await
+            .cancellable();
 
         // Create the AI stream - yield error if it fails
         let mut ai_stream = match session.send_message(rig_messages).await {
@@ -548,15 +551,21 @@ fn stream_and_save_message(
 
         loop {
             let next_item = tokio::select! {
-                biased;
-                _ = cancellation_token.cancelled() => {
-                    tracing::info!(chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "AI stream cancelled by user");
+                // A `CancellationToken` stays cancelled once fired, so this
+                // branch must be disabled after it runs (`if !was_cancelled`).
+                // Otherwise `biased` would re-take it every iteration and never
+                // poll `ai_stream`, so the cooperative end (`Ok(None)`) is never
+                // observed and the stream "stays alive". After cancelling the
+                // agent we keep draining until it winds down and ends.
+                _ = user_cancellsation.cancelled(), if !cancel.is_cancelled() => {
+                    cancel.cancel();
                     was_cancelled = true;
-                    None
+                    continue;
                 }
                 timed = tokio::time::timeout(idle_timeout, ai_stream.next()) => {
                     match timed {
-                        Ok(item) => item,
+                        Ok(Some(item)) => item,
+                        Ok(None) => break,
                         Err(_) => {
                             tracing::error!(chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "AI stream idle timeout: no token received within {idle_timeout:?}");
                             let stream_error = StreamError::InternalError {
@@ -565,21 +574,18 @@ fn stream_and_save_message(
                             if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                                 yield json;
                             }
-                            None
+                            break
                         }
                     }
                 }
             };
-
-            let Some(response) = next_item else { break; };
-            tracing::trace!("{:#?}", response);
 
             if !is_first_token {
                 is_first_token = true;
                 log::log_timing(log::LatencyMetric::TimeToFirstToken, &model, now.elapsed());
             }
 
-            match response {
+            match next_item {
                 Ok(response_chunk) => {
                     // Accumulate the part for persistence; the accumulator merges
                     // consecutive text/thinking when accessed below. Parts with no
@@ -601,6 +607,9 @@ fn stream_and_save_message(
                     }
                 }
                 Err(e) => {
+                    if e.was_cancelled() {
+                        break;
+                    }
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
                     let stream_error = StreamError::InternalError {
                         stream_id: stream_id.clone(),

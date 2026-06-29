@@ -1,4 +1,8 @@
+import { AskMacroButton } from '@app/component/ChatWithAgentButton';
+import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { isMobile } from '@core/mobile/isMobile';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { format } from 'date-fns';
 import type { Accessor } from 'solid-js';
@@ -25,6 +29,7 @@ export function CallRecordingBody(props: {
   transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
 }) {
   const record = props.data;
+  const blockId = useBlockId();
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
@@ -134,13 +139,28 @@ export function CallRecordingBody(props: {
     <>
       <CallRecordingSplitHeader record={record} />
       <div class="relative flex-1 min-h-0 overflow-hidden">
+        <ScopedPortal scope="block">
+          <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: blockId,
+                name: callTitle(),
+                fileType: 'call',
+              }}
+            />
+          </div>
+        </ScopedPortal>
         <div
           class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-10 pb-16">
+          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16">
             <div class="flex flex-col gap-10">
               <header>
+                <Show when={!isMobile()}>
+                  <div class="h-8 mb-4" />
+                </Show>
                 <h1 class="text-2xl font-semibold text-ink text-balance">
                   {callTitle()}
                 </h1>

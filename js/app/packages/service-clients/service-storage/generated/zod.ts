@@ -18897,3 +18897,113 @@ export const editProjectV2Response = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Create a webhook.
+ */
+export const createWebhookBody = zod
+  .object({
+    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    headers: zod
+      .union([zod.null(), zod.record(zod.string(), zod.string())])
+      .optional(),
+    name: zod.string().describe('Display name.'),
+    rule: zod.unknown().describe('Rule definition used to match events.'),
+    scope: zod
+      .enum(['user', 'team'])
+      .describe('Scope that owns a newly-created webhook.'),
+  })
+  .describe('Request to create a webhook.');
+
+/**
+ * @summary Delete a webhook.
+ */
+export const deleteWebhookParams = zod.object({
+  webhook_id: zod.string().describe('Webhook id'),
+});
+
+/**
+ * @summary Patch a webhook.
+ */
+export const patchWebhookParams = zod.object({
+  webhook_id: zod.string().describe('Webhook id'),
+});
+
+export const patchWebhookBody = zod
+  .object({
+    endpoint_url: zod.string().nullish().describe('HTTPS endpoint URL.'),
+    headers: zod
+      .union([zod.null(), zod.record(zod.string(), zod.string())])
+      .optional(),
+    name: zod.string().nullish().describe('Display name.'),
+    rule: zod
+      .unknown()
+      .optional()
+      .describe('Rule definition used to match events.'),
+    status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['active', 'paused', 'disabled'])
+          .describe('Webhook lifecycle status.'),
+      ])
+      .optional(),
+  })
+  .describe('Request to patch a webhook.');
+
+export const patchWebhookResponse = zod
+  .object({
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by_user_id: zod.string().describe('User that created the webhook.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    headers: zod.record(zod.string(), zod.string()),
+    id: zod.string(),
+    is_valid: zod
+      .boolean()
+      .describe(
+        'Whether the current endpoint configuration has passed validation.'
+      ),
+    name: zod.string().describe('Display name.'),
+    rule: zod.unknown().describe('Event matching rule.'),
+    status: zod
+      .enum(['active', 'paused', 'disabled'])
+      .describe('Webhook lifecycle status.'),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_id: zod.string().describe('Owning workspace id.'),
+  })
+  .describe('Webhook row returned by application APIs.');
+
+/**
+ * @summary Validate a webhook endpoint.
+ */
+export const validateWebhookParams = zod.object({
+  webhook_id: zod.string().describe('Webhook id'),
+});
+
+export const validateWebhookResponseResponseStatusMin = 0;
+
+export const validateWebhookResponse = zod
+  .object({
+    is_valid: zod
+      .boolean()
+      .describe(
+        'Whether the endpoint accepted the signed validation delivery.'
+      ),
+    message: zod
+      .string()
+      .nullish()
+      .describe('Sanitized message explaining validation failure.'),
+    response_status: zod
+      .number()
+      .min(validateWebhookResponseResponseStatusMin)
+      .nullish()
+      .describe(
+        'HTTP response status returned by the webhook endpoint, when available.'
+      ),
+    webhook_id: zod.string(),
+  })
+  .describe('Sanitized result of validating a webhook endpoint.');

@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use ai_toolset::SearchableTool;
+use ai_toolset::{RequestContext, SearchableTool};
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
@@ -127,6 +127,10 @@ pub(crate) enum ProviderAgent {
     OpenAiChatCompletions(Agent<openai::completion::CompletionModel>),
     /// An agent over the OpenAI Responses model.
     OpenAiResponses(Agent<openai::responses_api::ResponsesCompletionModel>),
+    /// A test-only agent over an arbitrary completion model (e.g. a scripted
+    /// fake), type-erased so the enum itself stays non-generic.
+    #[cfg(test)]
+    Test(Box<dyn DynStreamAgent>),
 }
 
 impl ProviderAgent {
@@ -144,6 +148,7 @@ impl ProviderAgent {
         recorder: Arc<dyn UsageRecorder>,
         usage_ctx: UsageContext,
         model: String,
+        request_context: RequestContext,
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
@@ -158,6 +163,7 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
             }
@@ -173,6 +179,7 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
             }
@@ -188,8 +195,26 @@ impl ProviderAgent {
                     recorder,
                     usage_ctx,
                     model,
+                    request_context.clone(),
                 )
                 .await
+            }
+            #[cfg(test)]
+            ProviderAgent::Test(agent) => {
+                agent
+                    .run_stream_dyn(
+                        prompt,
+                        history,
+                        max_turns,
+                        routing,
+                        loaded_buffer,
+                        register_loaded,
+                        recorder,
+                        usage_ctx,
+                        model,
+                        request_context.clone(),
+                    )
+                    .await
             }
         }
     }
@@ -381,12 +406,18 @@ async fn drive_stream<M>(
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
     model: String,
+    request_context: RequestContext,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
     M::StreamingResponse: GetTokenUsage + Send + Sync,
 {
-    let (bridge, mut rx) = StreamBridge::channel(routing, loaded_buffer, register_loaded);
+    let (bridge, mut rx) = StreamBridge::channel(
+        routing,
+        loaded_buffer,
+        register_loaded,
+        request_context.cancel.clone(),
+    );
 
     let mut rig_stream = agent
         .stream_prompt(prompt)
@@ -443,6 +474,92 @@ where
     };
 
     Box::pin(stream)
+}
+
+/// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
+/// [`Agent<M>`] (e.g. a scripted fake model) without the enum becoming generic.
+/// Mirrors the production arms: it just drives [`drive_stream`].
+#[cfg(test)]
+pub(crate) trait DynStreamAgent: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
+    fn run_stream_dyn<'a>(
+        &'a self,
+        prompt: Message,
+        history: Vec<Message>,
+        max_turns: usize,
+        routing: ToolRouter,
+        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
+        register_loaded: RegisterFn,
+        recorder: Arc<dyn UsageRecorder>,
+        usage_ctx: UsageContext,
+        model: String,
+        request_context: RequestContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
+    >;
+}
+
+#[cfg(test)]
+impl<M> DynStreamAgent for Agent<M>
+where
+    M: CompletionModel + 'static,
+    M::StreamingResponse: GetTokenUsage + Send + Sync,
+{
+    fn run_stream_dyn<'a>(
+        &'a self,
+        prompt: Message,
+        history: Vec<Message>,
+        max_turns: usize,
+        routing: ToolRouter,
+        loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
+        register_loaded: RegisterFn,
+        recorder: Arc<dyn UsageRecorder>,
+        usage_ctx: UsageContext,
+        model: String,
+        request_context: RequestContext,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
+    > {
+        Box::pin(drive_stream(
+            self,
+            prompt,
+            history,
+            max_turns,
+            routing,
+            loaded_buffer,
+            register_loaded,
+            recorder,
+            usage_ctx,
+            model,
+            request_context,
+        ))
+    }
+}
+
+#[cfg(test)]
+impl ProviderAgent {
+    /// Build a test-only [`ProviderAgent`] backed by `model` (a fake completion
+    /// model), wired through the same [`build_agent`] used in production.
+    pub(crate) fn test<M>(
+        model: M,
+        system_prompt: &str,
+        max_turns: usize,
+        max_tokens: u64,
+        handle: ToolServerHandle,
+    ) -> Self
+    where
+        M: CompletionModel + 'static,
+        M::StreamingResponse: GetTokenUsage + Send + Sync,
+    {
+        ProviderAgent::Test(Box::new(build_agent(
+            model,
+            None,
+            handle,
+            system_prompt,
+            max_turns,
+            max_tokens,
+        )))
+    }
 }
 
 #[cfg(test)]

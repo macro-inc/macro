@@ -1,3 +1,4 @@
+import { AskMacroButton } from '@app/component/ChatWithAgentButton';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -6,10 +7,11 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
@@ -18,6 +20,7 @@ import {
 import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -32,8 +35,10 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  Show,
   untrack,
 } from 'solid-js';
+import { DispatchAgentButton } from './DispatchAgentMenu';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -92,6 +97,8 @@ function useCanUseLexicalStateDebugger() {
 
 export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
+  const blockId = useBlockId();
+  const blockAliasedName = useBlockAliasedName();
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
   const documentName = useBlockDocumentName();
@@ -141,7 +148,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   createEffect(() => {
     const goToTempRedirect = useGoToTempRedirect();
-    const documentId = useBlockId();
+    const documentId = blockId;
     const recentState = tempRedirectLocation();
     if (!documentId || !recentState) return;
 
@@ -285,6 +292,21 @@ export function Notebook(props: { loroManager: LoroManager }) {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
+        <ScopedPortal scope="block">
+          <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: blockId,
+                name: documentName(),
+                fileType: 'md',
+              }}
+            />
+            <Show when={blockAliasedName === 'task' && !isMobile()}>
+              <DispatchAgentButton />
+            </Show>
+          </div>
+        </ScopedPortal>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">

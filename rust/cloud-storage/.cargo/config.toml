@@ -6,5 +6,6 @@
 #   cargo x deps [--check]           # regenerate / verify workspace-hack + dep closures
 #   cargo x nextest-filter <file>    # nextest rdeps filter for changed files
 #   cargo x doppler-bins <file>      # Doppler config-validation bins affected by changed files
+#   cargo x graphql-soup-schema <file> # export GraphQL Soup SDL to a file
 [alias]
 x = "run -p xtask --"

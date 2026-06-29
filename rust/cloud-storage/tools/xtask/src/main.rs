@@ -17,6 +17,7 @@
 
 mod closures;
 mod doppler_bins;
+mod graphql_soup_schema;
 mod hakari_ops;
 mod nextest_filter;
 mod workflows;
@@ -40,10 +41,11 @@ fn main() -> Result<()> {
             let graph = build_graph(false)?;
             doppler_bins::run(&graph, Path::new(changed_files_path))
         }
+        ["graphql-soup-schema", output_path] => graphql_soup_schema::run(Path::new(output_path)),
         ["workflows"] => workflows::generate(),
         ["workflows", "--check"] => workflows::check(),
         _ => bail!(
-            "usage (from rust/cloud-storage):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x workflows [--check]"
+            "usage (from rust/cloud-storage):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x graphql-soup-schema <output-path>\n  cargo x workflows [--check]"
         ),
     }
 }

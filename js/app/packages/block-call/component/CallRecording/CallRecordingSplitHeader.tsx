@@ -8,13 +8,12 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
-import { SidePanel } from '@app/component/side-panel';
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useCall } from '@channel/Call/use-call';
 import { useBlockId } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -23,10 +22,12 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { isMobile } from '@core/mobile/isMobile';
 import PhoneCallIcon from '@icon/wide-call.svg';
 import IconShared from '@icon/wide-share.svg';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import type { Accessor } from 'solid-js';
+import { Button } from '@ui';
+import { type Accessor, Show } from 'solid-js';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -56,10 +57,16 @@ export function CallRecordingSplitHeader(props: {
 
   const tools: BlockTool[] = [
     {
-      label: 'Call Again',
-      icon: PhoneCallIcon,
-      action: () => call.joinCall(),
-      condition: () => !record().isActive,
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
+      condition: isMobile,
     },
     {
       label: 'Chat',
@@ -110,6 +117,22 @@ export function CallRecordingSplitHeader(props: {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
+        <Show when={!record().isActive}>
+          <div class="order-[900] flex items-center">
+            <HeaderIsland>
+              <Button
+                depth={2}
+                variant="base"
+                size="icon-sm"
+                class="bg-surface"
+                tooltip="Call Again"
+                onClick={() => call.joinCall()}
+              >
+                <PhoneCallIcon class="size-4" />
+              </Button>
+            </HeaderIsland>
+          </div>
+        </Show>
       </SplitHeaderRight>
 
       <ResponsivePermissionsBadge />
@@ -121,9 +144,6 @@ export function CallRecordingSplitHeader(props: {
         itemType="call"
         name={callName()}
       />
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
     </>
   );
 }

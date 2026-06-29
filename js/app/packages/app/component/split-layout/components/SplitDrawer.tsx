@@ -51,9 +51,11 @@ export function SplitDrawer(
     title?: JSX.Element;
   }>
 ) {
-  const { panelSize, contentOffsetTop } = useDrawerGroup();
+  const { panelSize } = useDrawerGroup();
+  const splitPanel = useSplitPanel();
   const drawerControl = useDrawerControl(props.id);
   const isHorizontal = () => props.side === 'left' || props.side === 'right';
+  const contentOffsetTop = () => splitPanel?.contentOffsetTop() ?? 0;
 
   const getConstrainedSize = () => {
     const size = isHorizontal() ? panelSize.width : panelSize.height;
@@ -90,9 +92,15 @@ export function SplitDrawer(
     const constrainedSize = getConstrainedSize();
 
     if (isHorizontal()) {
-      return { width: constrainedSize, top: `${contentOffsetTop()}px` };
+      return {
+        width: constrainedSize,
+        top: `${contentOffsetTop()}px`,
+      };
     } else {
-      return { height: constrainedSize, top: `${contentOffsetTop()}px` };
+      return {
+        height: constrainedSize,
+        top: `${contentOffsetTop()}px`,
+      };
     }
   };
 
