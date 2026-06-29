@@ -8,7 +8,7 @@ import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
-import { fetchDocToken } from '../service-clients';
+import { fetchDocToken, hasHumanEditors } from '../service-clients';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -68,6 +68,16 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
 
+    // Animations are only worth rendering when a human is watching; with nobody
+    // on the document, apply edits instantly.
+    const humansPresent = await hasHumanEditors(
+      env.SYNC_WS_BASE,
+      documentId,
+      docToken,
+      signal
+    );
+    const effectiveTypingAnimations = humansPresent ? typingAnimations : false;
+
     const { usage, ops, trace, clarification } = await runEditSession({
       wsUrl,
       documentId,
@@ -77,7 +87,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         interpret: resolveModel(models.interpret),
         coding: resolveModel(models.coding),
       },
-      typingAnimations,
+      typingAnimations: effectiveTypingAnimations,
       interpret,
       debug,
       runner: runInSandbox,

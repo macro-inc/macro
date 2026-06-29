@@ -11,7 +11,6 @@ export class PeerPool {
   private readonly out = new Set<Peer>();
   private readonly releasers = new Map<Peer, () => void>(); // peer → free its slot
   private readonly gate: PQueue;
-  private grown = 0; // suffix counter for names minted past the base list
 
   constructor(opts?: { names?: string[]; colors?: string[]; max?: number }) {
     this.names = [...(opts?.names ?? AI_NAMES)];
@@ -54,17 +53,11 @@ export class PeerPool {
   /** A never-before-issued identity: next unused base name, else a suffixed one. */
   private mint(): Peer {
     const used = new Set([...this.out, ...this.free].map((p) => p.name));
-    const name = this.names.find((n) => !used.has(n)) ?? this.growName(used);
+    const name = this.names.find((n) => !used.has(n));
+    if (!name) throw new Error('PeerPool: exhausted all available names');
+
     const color = this.colors[this.issued() % this.colors.length] ?? '';
     return { name, color, peerId: nextAiPeerId() };
-  }
-
-  private growName(used: Set<string>): string {
-    let name: string;
-    do {
-      name = `Writer ${++this.grown} (AI)`;
-    } while (used.has(name));
-    return name;
   }
 
   private issued(): number {
