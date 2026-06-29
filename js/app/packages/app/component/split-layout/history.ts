@@ -55,7 +55,14 @@ export function createHistory<T extends object>(): History<T> {
   };
 
   const merge = (next: T) => {
-    setItems((prev) => [...prev.slice(0, index()), next]);
+    // Keep back entries, drop the current + forward, and land on `next`. Set the
+    // index explicitly so merging from a non-end (or empty) entry can't strand it
+    // past the truncated array.
+    batch(() => {
+      const keep = Math.max(index(), 0);
+      setItems((prev) => [...prev.slice(0, keep), next]);
+      setIndex(keep);
+    });
   };
 
   const replaceCurrent = (next: T) => {
