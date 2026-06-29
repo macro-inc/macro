@@ -74,7 +74,8 @@ where
     ) -> Result<Self, Self::Rejection> {
         let user = MacroUserExtractor::from_request_parts(parts, state).await?;
 
-        let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await? else {
+        let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
+        else {
             return Err(PremiumUserRejection::NotPremium);
         };
 

@@ -802,7 +802,10 @@ async fn test_create_team_moves_github_installation_to_created_team() {
         NoOpTeamCrmSettingsRepository,
     );
 
-    let created_team = service.create_team(&user_id, "New Team", &"sub_test".parse().unwrap()).await.unwrap();
+    let created_team = service
+        .create_team(&user_id, "New Team", &"sub_test".parse().unwrap())
+        .await
+        .unwrap();
 
     assert_eq!(created_team.id(), team.id());
     assert_eq!(

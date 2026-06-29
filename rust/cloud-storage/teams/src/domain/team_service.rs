@@ -321,7 +321,9 @@ where
             .await
         {
             Ok(subscription_id) => Ok(Some(subscription_id)),
-            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => Ok(None),
+            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
+                Ok(None)
+            }
             Err(e) => Err(TeamError::StorageLayerError(e.into())),
         }
     }
@@ -340,7 +342,54 @@ where
             .get_team_payment_status(&team_id)
             .await?
         {
-            return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+                .is_some()
+            {
+                return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            // If the team doesn't have a subscription id it is due to a legacy issue where team used to be able to
+            // be created on free user accounts.
+            // This is a backfill that runs as needed to fix any broken teams.
+            let team_owner = self
+                .team_repository
+                .get_team_by_id(&team_id)
+                .await?
+                .team
+                .owner_id;
+
+            let Some(customer_id) = self
+                .team_repository
+                .get_stripe_customer_id(&team_owner)
+                .await?
+            else {
+                return Err(InviteUsersToTeamError::CustomerError(
+                    CustomerError::NoStripeCustomerId,
+                ));
+            };
+
+            let subscription_id = self
+                .customer_repository
+                .get_subscription_id_for_customer(&customer_id)
+                .await?;
+
+            self.customer_repository
+                .convert_subscription_to_team(&subscription_id, &team_id, &team_owner)
+                .await?;
+
+            // Sets team subscription id
+            self.team_repository
+                .update_team_subscription(&team_id, &subscription_id)
+                .await?;
+
+            // Sets the team to be marked as paying
+            self.team_repository
+                .update_team_payment_status(&team_id, true)
+                .await?;
         }
 
         let invited_by = entity_access_receipt
@@ -660,7 +709,14 @@ where
             .get_team_payment_status(&team_member.team_id)
             .await?
         {
-            self.team_repository
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&accepted_invite.member.team_id)
+                .await?
+                .is_some()
+            {
+                self.team_repository
                     .rollback_accept_team_invite(&accepted_invite)
                     .await
                     .inspect_err(|rollback_err| {
@@ -670,7 +726,51 @@ where
                         );
                     })
                     .ok();
-            return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            // If the team doesn't have a subscription id it is due to a legacy issue where team used to be able to
+            // be created on free user accounts.
+            // This is a backfill that runs as needed to fix any broken teams.
+            let team_owner = self
+                .team_repository
+                .get_team_by_id(&accepted_invite.member.team_id)
+                .await?
+                .team
+                .owner_id;
+
+            let Some(customer_id) = self
+                .team_repository
+                .get_stripe_customer_id(&team_owner)
+                .await?
+            else {
+                return Err(JoinTeamError::CustomerError(
+                    CustomerError::NoStripeCustomerId,
+                ));
+            };
+
+            let subscription_id = self
+                .customer_repository
+                .get_subscription_id_for_customer(&customer_id)
+                .await?;
+
+            self.customer_repository
+                .convert_subscription_to_team(
+                    &subscription_id,
+                    &accepted_invite.member.team_id,
+                    &team_owner,
+                )
+                .await?;
+
+            // Sets team subscription id
+            self.team_repository
+                .update_team_subscription(&accepted_invite.member.team_id, &subscription_id)
+                .await?;
+
+            // Sets the team to be marked as paying
+            self.team_repository
+                .update_team_payment_status(&accepted_invite.member.team_id, true)
+                .await?;
         }
 
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
