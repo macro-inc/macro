@@ -40,6 +40,8 @@ pub struct SoupInput {
     sort_method: Option<GraphqlSimpleSortMethod>,
     /// Opaque cursor returned by a previous GraphQL Soup response.
     cursor: Option<String>,
+    /// Email preview view used when hydrating email Soup items.
+    email_view: Option<GraphqlEmailView>,
     /// AST-shaped filters applied to each Soup entity type.
     filters: Option<GraphqlEntityFilterAst>,
 }
@@ -79,9 +81,39 @@ impl SoupInput {
             limit: self.limit.unwrap_or(20).min(500),
             cursor,
             user: request_context.macro_user_id.clone(),
-            email_preview_view: Default::default(),
+            email_preview_view: self
+                .email_view
+                .map(GraphqlEmailView::as_preview_view_str)
+                .unwrap_or("inbox")
+                .parse()
+                .map_err(async_graphql::Error::new)?,
             link_ids: request_context.link_ids.clone(),
         })
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlEmailView {
+    Inbox,
+    Drafts,
+    Sent,
+    All,
+    Starred,
+    Important,
+    Other,
+}
+
+impl GraphqlEmailView {
+    fn as_preview_view_str(self) -> &'static str {
+        match self {
+            Self::Inbox => "inbox",
+            Self::Drafts => "drafts",
+            Self::Sent => "sent",
+            Self::All => "all",
+            Self::Starred => "starred",
+            Self::Important => "important",
+            Self::Other => "other",
+        }
     }
 }
 
@@ -150,12 +182,32 @@ fn parse_macro_user_id(
         .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
 }
 
+fn fold_filter_exprs<I, T>(
+    exprs: Vec<I>,
+    operator_name: &str,
+    fold: fn(Expr<T>, Expr<T>) -> Expr<T>,
+) -> async_graphql::Result<Expr<T>>
+where
+    I: IntoFilterExpr<T>,
+{
+    let mut iter = exprs.into_iter();
+    let Some(first) = iter.next() else {
+        return Err(async_graphql::Error::new(format!(
+            "{operator_name} expressions cannot be empty"
+        )));
+    };
+
+    iter.try_fold(first.into_expr()?, |acc, expr| {
+        Ok(fold(acc, expr.into_expr()?))
+    })
+}
+
 macro_rules! filter_expr_input {
     ($name:ident, $literal:ty, $target:ty, $type_name:literal) => {
         #[derive(async_graphql::OneofObject)]
         enum $name {
-            And(Box<[$name; 2]>),
-            Or(Box<[$name; 2]>),
+            And(Vec<$name>),
+            Or(Vec<$name>),
             Not(Box<$name>),
             Literal($literal),
         }
@@ -163,14 +215,8 @@ macro_rules! filter_expr_input {
         impl IntoFilterExpr<$target> for $name {
             fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
                 match self {
-                    Self::And(exprs) => {
-                        let [left, right] = *exprs;
-                        Ok(Expr::and(left.into_expr()?, right.into_expr()?))
-                    }
-                    Self::Or(exprs) => {
-                        let [left, right] = *exprs;
-                        Ok(Expr::or(left.into_expr()?, right.into_expr()?))
-                    }
+                    Self::And(exprs) => fold_filter_exprs(exprs, "and", Expr::and),
+                    Self::Or(exprs) => fold_filter_exprs(exprs, "or", Expr::or),
                     Self::Not(expr) => expr.into_expr().map(Expr::is_not),
                     Self::Literal(literal) => literal.into_expr(),
                 }
@@ -314,6 +360,7 @@ enum GraphqlDocumentLiteral {
     NotificationSeen(bool),
     IncludeCbmAtmNc(bool),
     SubType(GraphqlDocumentSubType),
+    FileAssoc(String),
     IsEmailAttachment(bool),
     CreatedAt(GraphqlDateLiteral),
     UpdatedAt(GraphqlDateLiteral),
@@ -322,6 +369,16 @@ enum GraphqlDocumentLiteral {
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
     fn into_expr(self) -> async_graphql::Result<Expr<DocumentLiteral>> {
         let literal = match self {
+            Self::FileAssoc(value) => {
+                let (_, file_types) = item_filters::ast::document::parse_to_file_types(&value)
+                    .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+                return file_types
+                    .map(|file_type| Expr::val(DocumentLiteral::FileType(file_type)))
+                    .reduce(Expr::or)
+                    .ok_or_else(|| {
+                        async_graphql::Error::new("fileAssoc expansion cannot be empty")
+                    });
+            }
             Self::FileType(value) => {
                 DocumentLiteral::FileType(FileType::from_str(&value).map_err(|err| {
                     async_graphql::Error::new(format!("invalid fileType `{value}`: {err}"))
@@ -766,5 +823,95 @@ impl From<GraphqlSimpleSortMethod> for SimpleSortMethod {
             GraphqlSimpleSortMethod::UpdatedAt => SimpleSortMethod::UpdatedAt,
             GraphqlSimpleSortMethod::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use filter_ast::Expr;
+    use item_filters::ast::{chat::ChatLiteral, document::DocumentLiteral};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+
+    use super::*;
+
+    fn test_request_context() -> GraphqlSoupRequestContext {
+        GraphqlSoupRequestContext {
+            macro_user_id: MacroUserIdStr::parse_from_str("macro|user@example.com")
+                .unwrap()
+                .into_owned(),
+            link_ids: vec![],
+            team_receipt: None,
+        }
+    }
+
+    #[test]
+    fn maps_email_view_to_soup_request() {
+        let request = SoupInput {
+            limit: None,
+            expand: None,
+            sort_method: None,
+            cursor: None,
+            email_view: Some(GraphqlEmailView::Sent),
+            filters: None,
+        }
+        .into_request(&test_request_context())
+        .unwrap();
+
+        assert_eq!(request.email_preview_view.to_string(), "sent");
+    }
+
+    #[test]
+    fn defaults_email_view_to_inbox() {
+        let request = SoupInput {
+            limit: None,
+            expand: None,
+            sort_method: None,
+            cursor: None,
+            email_view: None,
+            filters: None,
+        }
+        .into_request(&test_request_context())
+        .unwrap();
+
+        assert_eq!(request.email_preview_view.to_string(), "inbox");
+    }
+
+    #[test]
+    fn expands_document_file_assoc() {
+        let expr = GraphqlDocumentLiteral::FileAssoc("assoc:pdf".to_owned())
+            .into_expr()
+            .unwrap();
+
+        assert!(matches!(expr, Expr::Literal(DocumentLiteral::FileType(_))));
+    }
+
+    #[test]
+    fn folds_n_ary_filter_expressions() {
+        let ids = [
+            "00000000-0000-0000-0000-000000000001",
+            "00000000-0000-0000-0000-000000000002",
+            "00000000-0000-0000-0000-000000000003",
+        ];
+        let expr = GraphqlChatExpr::And(
+            ids.into_iter()
+                .map(|id| GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(id.to_owned()))))
+                .collect(),
+        )
+        .into_expr()
+        .unwrap();
+
+        assert!(matches!(
+            expr,
+            Expr::And(left, right)
+                if matches!(*left, Expr::And(_, _))
+                    && matches!(*right, Expr::Literal(ChatLiteral::ChatId(_)))
+        ));
+    }
+
+    #[test]
+    fn rejects_empty_n_ary_filter_expressions() {
+        let err = GraphqlChatExpr::And(vec![]).into_expr().unwrap_err();
+
+        assert!(err.message.contains("and expressions cannot be empty"));
     }
 }
