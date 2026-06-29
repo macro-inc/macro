@@ -182,32 +182,18 @@ fn parse_macro_user_id(
         .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
 }
 
-fn fold_filter_exprs<I, T>(
-    exprs: Vec<I>,
-    operator_name: &str,
-    fold: fn(Expr<T>, Expr<T>) -> Expr<T>,
-) -> async_graphql::Result<Expr<T>>
-where
-    I: IntoFilterExpr<T>,
-{
-    let mut iter = exprs.into_iter();
-    let Some(first) = iter.next() else {
-        return Err(async_graphql::Error::new(format!(
-            "{operator_name} expressions cannot be empty"
-        )));
-    };
-
-    iter.try_fold(first.into_expr()?, |acc, expr| {
-        Ok(fold(acc, expr.into_expr()?))
-    })
-}
-
 macro_rules! filter_expr_input {
-    ($name:ident, $literal:ty, $target:ty, $type_name:literal) => {
+    ($name:ident, $binary_name:ident, $literal:ty, $target:ty, $type_name:literal) => {
+        #[derive(async_graphql::InputObject)]
+        struct $binary_name {
+            left: Box<$name>,
+            right: Box<$name>,
+        }
+
         #[derive(async_graphql::OneofObject)]
         enum $name {
-            And(Vec<$name>),
-            Or(Vec<$name>),
+            And($binary_name),
+            Or($binary_name),
             Not(Box<$name>),
             Literal($literal),
         }
@@ -215,8 +201,12 @@ macro_rules! filter_expr_input {
         impl IntoFilterExpr<$target> for $name {
             fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
                 match self {
-                    Self::And(exprs) => fold_filter_exprs(exprs, "and", Expr::and),
-                    Self::Or(exprs) => fold_filter_exprs(exprs, "or", Expr::or),
+                    Self::And(exprs) => {
+                        Ok(Expr::and(exprs.left.into_expr()?, exprs.right.into_expr()?))
+                    }
+                    Self::Or(exprs) => {
+                        Ok(Expr::or(exprs.left.into_expr()?, exprs.right.into_expr()?))
+                    }
                     Self::Not(expr) => expr.into_expr().map(Expr::is_not),
                     Self::Literal(literal) => literal.into_expr(),
                 }
@@ -227,60 +217,70 @@ macro_rules! filter_expr_input {
 
 filter_expr_input!(
     GraphqlDocumentExpr,
+    GraphqlDocumentBinaryExpr,
     GraphqlDocumentLiteral,
     DocumentLiteral,
     "DocumentFilterExpr"
 );
 filter_expr_input!(
     GraphqlProjectExpr,
+    GraphqlProjectBinaryExpr,
     GraphqlProjectLiteral,
     ProjectLiteral,
     "ProjectFilterExpr"
 );
 filter_expr_input!(
     GraphqlChatExpr,
+    GraphqlChatBinaryExpr,
     GraphqlChatLiteral,
     ChatLiteral,
     "ChatFilterExpr"
 );
 filter_expr_input!(
     GraphqlEmailExpr,
+    GraphqlEmailBinaryExpr,
     GraphqlEmailLiteral,
     EmailLiteral,
     "EmailFilterExpr"
 );
 filter_expr_input!(
     GraphqlChannelExpr,
+    GraphqlChannelBinaryExpr,
     GraphqlChannelLiteral,
     ChannelLiteral,
     "ChannelFilterExpr"
 );
 filter_expr_input!(
     GraphqlChannelThreadExpr,
+    GraphqlChannelThreadBinaryExpr,
     GraphqlChannelThreadLiteral,
     ChannelThreadLiteral,
     "ChannelThreadFilterExpr"
 );
 filter_expr_input!(
     GraphqlCallExpr,
+    GraphqlCallBinaryExpr,
     GraphqlCallLiteral,
     CallLiteral,
     "CallFilterExpr"
 );
 filter_expr_input!(
     GraphqlCrmCompanyExpr,
+    GraphqlCrmCompanyBinaryExpr,
     GraphqlCrmCompanyLiteral,
     CrmCompanyLiteral,
     "CrmCompanyFilterExpr"
 );
 filter_expr_input!(
     GraphqlForeignEntityExpr,
+    GraphqlForeignEntityBinaryExpr,
     GraphqlForeignEntityLiteral,
     ForeignEntityLiteral,
     "ForeignEntityFilterExpr"
 );
 filter_expr_input!(
     GraphqlPropertiesExpr,
+    GraphqlPropertiesBinaryExpr,
     GraphqlPropertiesLiteral,
     PropertiesLiteral,
     "PropertiesFilterExpr"
@@ -886,32 +886,23 @@ mod tests {
     }
 
     #[test]
-    fn folds_n_ary_filter_expressions() {
-        let ids = [
-            "00000000-0000-0000-0000-000000000001",
-            "00000000-0000-0000-0000-000000000002",
-            "00000000-0000-0000-0000-000000000003",
-        ];
-        let expr = GraphqlChatExpr::And(
-            ids.into_iter()
-                .map(|id| GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(id.to_owned()))))
-                .collect(),
-        )
+    fn builds_binary_filter_expressions() {
+        let expr = GraphqlChatExpr::And(GraphqlChatBinaryExpr {
+            left: Box::new(GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(
+                "00000000-0000-0000-0000-000000000001".to_owned(),
+            )))),
+            right: Box::new(GraphqlChatExpr::Literal(GraphqlChatLiteral::ChatId(ID(
+                "00000000-0000-0000-0000-000000000002".to_owned(),
+            )))),
+        })
         .into_expr()
         .unwrap();
 
         assert!(matches!(
             expr,
             Expr::And(left, right)
-                if matches!(*left, Expr::And(_, _))
+                if matches!(*left, Expr::Literal(ChatLiteral::ChatId(_)))
                     && matches!(*right, Expr::Literal(ChatLiteral::ChatId(_)))
         ));
-    }
-
-    #[test]
-    fn rejects_empty_n_ary_filter_expressions() {
-        let err = GraphqlChatExpr::And(vec![]).into_expr().unwrap_err();
-
-        assert!(err.message.contains("and expressions cannot be empty"));
     }
 }

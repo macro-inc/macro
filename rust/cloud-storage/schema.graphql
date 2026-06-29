@@ -1,6 +1,11 @@
+input GraphqlCallBinaryExpr {
+	left: GraphqlCallExpr!
+	right: GraphqlCallExpr!
+}
+
 input GraphqlCallExpr @oneOf {
-	and: [GraphqlCallExpr!]
-	or: [GraphqlCallExpr!]
+	and: GraphqlCallBinaryExpr
+	or: GraphqlCallBinaryExpr
 	not: GraphqlCallExpr
 	literal: GraphqlCallLiteral
 }
@@ -19,9 +24,14 @@ enum GraphqlCallStatus {
 	UNATTENDED
 }
 
+input GraphqlChannelBinaryExpr {
+	left: GraphqlChannelExpr!
+	right: GraphqlChannelExpr!
+}
+
 input GraphqlChannelExpr @oneOf {
-	and: [GraphqlChannelExpr!]
-	or: [GraphqlChannelExpr!]
+	and: GraphqlChannelBinaryExpr
+	or: GraphqlChannelBinaryExpr
 	not: GraphqlChannelExpr
 	literal: GraphqlChannelLiteral
 }
@@ -39,9 +49,14 @@ input GraphqlChannelLiteral @oneOf {
 	notificationSeen: Boolean
 }
 
+input GraphqlChannelThreadBinaryExpr {
+	left: GraphqlChannelThreadExpr!
+	right: GraphqlChannelThreadExpr!
+}
+
 input GraphqlChannelThreadExpr @oneOf {
-	and: [GraphqlChannelThreadExpr!]
-	or: [GraphqlChannelThreadExpr!]
+	and: GraphqlChannelThreadBinaryExpr
+	or: GraphqlChannelThreadBinaryExpr
 	not: GraphqlChannelThreadExpr
 	literal: GraphqlChannelThreadLiteral
 }
@@ -61,9 +76,14 @@ enum GraphqlChannelTypeFilter {
 	TEAM
 }
 
+input GraphqlChatBinaryExpr {
+	left: GraphqlChatExpr!
+	right: GraphqlChatExpr!
+}
+
 input GraphqlChatExpr @oneOf {
-	and: [GraphqlChatExpr!]
-	or: [GraphqlChatExpr!]
+	and: GraphqlChatBinaryExpr
+	or: GraphqlChatBinaryExpr
 	not: GraphqlChatExpr
 	literal: GraphqlChatLiteral
 }
@@ -86,9 +106,14 @@ enum GraphqlChatRole {
 	ASSISTANT
 }
 
+input GraphqlCrmCompanyBinaryExpr {
+	left: GraphqlCrmCompanyExpr!
+	right: GraphqlCrmCompanyExpr!
+}
+
 input GraphqlCrmCompanyExpr @oneOf {
-	and: [GraphqlCrmCompanyExpr!]
-	or: [GraphqlCrmCompanyExpr!]
+	and: GraphqlCrmCompanyBinaryExpr
+	or: GraphqlCrmCompanyBinaryExpr
 	not: GraphqlCrmCompanyExpr
 	literal: GraphqlCrmCompanyLiteral
 }
@@ -110,9 +135,14 @@ input GraphqlDateLiteral @oneOf {
 	lte: String
 }
 
+input GraphqlDocumentBinaryExpr {
+	left: GraphqlDocumentExpr!
+	right: GraphqlDocumentExpr!
+}
+
 input GraphqlDocumentExpr @oneOf {
-	and: [GraphqlDocumentExpr!]
-	or: [GraphqlDocumentExpr!]
+	and: GraphqlDocumentBinaryExpr
+	or: GraphqlDocumentBinaryExpr
 	not: GraphqlDocumentExpr
 	literal: GraphqlDocumentLiteral
 }
@@ -138,9 +168,14 @@ enum GraphqlDocumentSubType {
 	SNIPPET
 }
 
+input GraphqlEmailBinaryExpr {
+	left: GraphqlEmailExpr!
+	right: GraphqlEmailExpr!
+}
+
 input GraphqlEmailExpr @oneOf {
-	and: [GraphqlEmailExpr!]
-	or: [GraphqlEmailExpr!]
+	and: GraphqlEmailBinaryExpr
+	or: GraphqlEmailBinaryExpr
 	not: GraphqlEmailExpr
 	literal: GraphqlEmailLiteral
 }
@@ -199,9 +234,14 @@ input GraphqlEntityFilterAst {
 	propertiesFilter: GraphqlPropertiesExpr
 }
 
+input GraphqlForeignEntityBinaryExpr {
+	left: GraphqlForeignEntityExpr!
+	right: GraphqlForeignEntityExpr!
+}
+
 input GraphqlForeignEntityExpr @oneOf {
-	and: [GraphqlForeignEntityExpr!]
-	or: [GraphqlForeignEntityExpr!]
+	and: GraphqlForeignEntityBinaryExpr
+	or: GraphqlForeignEntityBinaryExpr
 	not: GraphqlForeignEntityExpr
 	literal: GraphqlForeignEntityLiteral
 }
@@ -215,9 +255,14 @@ input GraphqlForeignEntityLiteral @oneOf {
 	notificationSeen: Boolean
 }
 
+input GraphqlProjectBinaryExpr {
+	left: GraphqlProjectExpr!
+	right: GraphqlProjectExpr!
+}
+
 input GraphqlProjectExpr @oneOf {
-	and: [GraphqlProjectExpr!]
-	or: [GraphqlProjectExpr!]
+	and: GraphqlProjectBinaryExpr
+	or: GraphqlProjectBinaryExpr
 	not: GraphqlProjectExpr
 	literal: GraphqlProjectLiteral
 }
@@ -233,9 +278,14 @@ input GraphqlProjectLiteral @oneOf {
 	updatedAt: GraphqlDateLiteral
 }
 
+input GraphqlPropertiesBinaryExpr {
+	left: GraphqlPropertiesExpr!
+	right: GraphqlPropertiesExpr!
+}
+
 input GraphqlPropertiesExpr @oneOf {
-	and: [GraphqlPropertiesExpr!]
-	or: [GraphqlPropertiesExpr!]
+	and: GraphqlPropertiesBinaryExpr
+	or: GraphqlPropertiesBinaryExpr
 	not: GraphqlPropertiesExpr
 	literal: GraphqlPropertiesLiteral
 }
