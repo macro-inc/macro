@@ -55,6 +55,14 @@ export function CallRecordingSplitHeader(props: {
   const callName = () => record().customName ?? record().channelName ?? 'Call';
   const call = useCall(() => record().channelId);
 
+  const shareTool: BlockTool = {
+    label: 'Share',
+    icon: IconShared,
+    action: () => shareCtx.open(),
+    buttonComponent: () => <ShareTrigger />,
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
   const tools: BlockTool[] = [
     {
       label: 'Ask Macro',
@@ -89,13 +97,7 @@ export function CallRecordingSplitHeader(props: {
         />
       ),
     },
-    {
-      label: 'Share',
-      icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
+    shareTool,
   ];
 
   const menuTools: BlockTool[] = [
@@ -110,6 +112,7 @@ export function CallRecordingSplitHeader(props: {
           fileType: 'call',
         }),
     },
+    shareTool,
   ];
 
   return (
