@@ -187,6 +187,52 @@ where
         Ok(customer_subscription_id)
     }
 
+    /// Backfills legacy teams that were created without a team subscription id.
+    #[tracing::instrument(skip(self), err)]
+    async fn backfill_legacy_team_subscription(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<(), GetTeamSubscriptionError> {
+        let team_owner = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .team
+            .owner_id;
+
+        let customer_id = self
+            .team_repository
+            .get_stripe_customer_id(&team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .ok_or(CustomerError::NoStripeCustomerId)
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        let subscription_id = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.customer_repository
+            .convert_subscription_to_team(&subscription_id, team_id, &team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.team_repository
+            .update_team_subscription(team_id, &subscription_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        self.team_repository
+            .update_team_payment_status(team_id, true)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        Ok(())
+    }
+
     /// Sends an invite notification for a team invite
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
@@ -226,6 +272,14 @@ enum GetTeamSubscriptionError {
 }
 
 impl GetTeamSubscriptionError {
+    fn into_invite_users_to_team_error(self) -> InviteUsersToTeamError {
+        match self {
+            Self::Team(e) => InviteUsersToTeamError::TeamError(e),
+            Self::Customer(e) => InviteUsersToTeamError::CustomerError(e),
+            Self::Storage(e) => InviteUsersToTeamError::StorageLayerError(e),
+        }
+    }
+
     fn into_join_team_error(self) -> JoinTeamError {
         match self {
             Self::Team(e) => JoinTeamError::TeamError(e),
@@ -352,44 +406,9 @@ where
                 return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
             }
 
-            // If the team doesn't have a subscription id it is due to a legacy issue where team used to be able to
-            // be created on free user accounts.
-            // This is a backfill that runs as needed to fix any broken teams.
-            let team_owner = self
-                .team_repository
-                .get_team_by_id(&team_id)
-                .await?
-                .team
-                .owner_id;
-
-            let Some(customer_id) = self
-                .team_repository
-                .get_stripe_customer_id(&team_owner)
-                .await?
-            else {
-                return Err(InviteUsersToTeamError::CustomerError(
-                    CustomerError::NoStripeCustomerId,
-                ));
-            };
-
-            let subscription_id = self
-                .customer_repository
-                .get_subscription_id_for_customer(&customer_id)
-                .await?;
-
-            self.customer_repository
-                .convert_subscription_to_team(&subscription_id, &team_id, &team_owner)
-                .await?;
-
-            // Sets team subscription id
-            self.team_repository
-                .update_team_subscription(&team_id, &subscription_id)
-                .await?;
-
-            // Sets the team to be marked as paying
-            self.team_repository
-                .update_team_payment_status(&team_id, true)
-                .await?;
+            self.backfill_legacy_team_subscription(&team_id)
+                .await
+                .map_err(GetTeamSubscriptionError::into_invite_users_to_team_error)?;
         }
 
         let invited_by = entity_access_receipt
@@ -729,48 +748,9 @@ where
                 return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
             }
 
-            // If the team doesn't have a subscription id it is due to a legacy issue where team used to be able to
-            // be created on free user accounts.
-            // This is a backfill that runs as needed to fix any broken teams.
-            let team_owner = self
-                .team_repository
-                .get_team_by_id(&accepted_invite.member.team_id)
-                .await?
-                .team
-                .owner_id;
-
-            let Some(customer_id) = self
-                .team_repository
-                .get_stripe_customer_id(&team_owner)
-                .await?
-            else {
-                return Err(JoinTeamError::CustomerError(
-                    CustomerError::NoStripeCustomerId,
-                ));
-            };
-
-            let subscription_id = self
-                .customer_repository
-                .get_subscription_id_for_customer(&customer_id)
-                .await?;
-
-            self.customer_repository
-                .convert_subscription_to_team(
-                    &subscription_id,
-                    &accepted_invite.member.team_id,
-                    &team_owner,
-                )
-                .await?;
-
-            // Sets team subscription id
-            self.team_repository
-                .update_team_subscription(&accepted_invite.member.team_id, &subscription_id)
-                .await?;
-
-            // Sets the team to be marked as paying
-            self.team_repository
-                .update_team_payment_status(&accepted_invite.member.team_id, true)
-                .await?;
+            self.backfill_legacy_team_subscription(&accepted_invite.member.team_id)
+                .await
+                .map_err(GetTeamSubscriptionError::into_join_team_error)?;
         }
 
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
