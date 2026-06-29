@@ -89,6 +89,7 @@ export * from './apiMessageAttachmentWidth';
 export * from './apiMessageSender';
 export * from './apiMessageSenderAvatarUrl';
 export * from './apiMessageSenderName';
+export * from './apiMessageSenderTriggeredBy';
 export * from './apiMessageSenderType';
 export * from './apiParticipantRole';
 export * from './apiPropertyEntityType';

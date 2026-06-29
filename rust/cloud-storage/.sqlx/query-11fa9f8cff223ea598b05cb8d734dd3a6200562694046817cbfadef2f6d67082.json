@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                channel_id,\n                thread_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages\n            WHERE channel_id = $1\n              AND (created_at, id) < ($2, $3)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $4\n            ",
+  "query": "\n            INSERT INTO comms_messages (id, channel_id, sender_id, triggered_by_user_id, content, thread_id)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -15,12 +15,12 @@
       },
       {
         "ordinal": 2,
-        "name": "thread_id",
-        "type_info": "Uuid"
+        "name": "sender_id",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "sender_id",
+        "name": "triggered_by_user_id",
         "type_info": "Text"
       },
       {
@@ -40,11 +40,16 @@
       },
       {
         "ordinal": 7,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
         "name": "edited_at?",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at?",
         "type_info": "Timestamptz"
       }
@@ -52,22 +57,25 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Timestamptz",
         "Uuid",
-        "Int8"
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       true,
       false,
       false,
       false,
-      false,
+      true,
       null,
       null
     ]
   },
-  "hash": "f0c307220a9a497860462656f53da3e5786501c7b07a41983acb8459df610b8b"
+  "hash": "11fa9f8cff223ea598b05cb8d734dd3a6200562694046817cbfadef2f6d67082"
 }

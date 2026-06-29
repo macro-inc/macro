@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                channel_id,\n                thread_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages\n            WHERE id = $1 AND channel_id = $2\n            ",
+  "query": "\n            SELECT\n                m.id,\n                m.channel_id,\n                m.sender_id,\n                m.triggered_by_user_id,\n                m.content,\n                m.created_at,\n                m.updated_at,\n                m.edited_at::timestamptz AS \"edited_at?\",\n                m.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages m\n            WHERE m.channel_id = $1\n              AND m.thread_id IS NULL\n              AND (m.deleted_at IS NULL OR EXISTS (\n                  SELECT 1 FROM comms_messages r\n                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL\n              ))\n              AND (m.created_at, m.id) > ($2, $3)\n            ORDER BY m.created_at ASC, m.id ASC\n            LIMIT $4\n            ",
   "describe": {
     "columns": [
       {
@@ -15,12 +15,12 @@
       },
       {
         "ordinal": 2,
-        "name": "thread_id",
-        "type_info": "Uuid"
+        "name": "sender_id",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "sender_id",
+        "name": "triggered_by_user_id",
         "type_info": "Text"
       },
       {
@@ -52,14 +52,16 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Timestamptz",
+        "Uuid",
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
-      true,
       false,
+      true,
       false,
       false,
       false,
@@ -67,5 +69,5 @@
       null
     ]
   },
-  "hash": "5dc0e1bcbf170bd9bbf24c739411500b574a43db370a9c995599ae8aaca20f23"
+  "hash": "6220297009a6be311ae935bd69ad9a2235af5d38bf380330fa1b2d40777a3b53"
 }
