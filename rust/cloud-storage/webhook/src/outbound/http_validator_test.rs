@@ -2,12 +2,22 @@ use super::*;
 
 #[test]
 fn builds_deterministic_validation_body() {
-    let body = validation_body("wh_test").expect("body should serialize");
+    let body = validation_body("wh_test", "evt_test").expect("body should serialize");
     let value: serde_json::Value = serde_json::from_slice(&body).expect("body should be json");
 
-    assert_eq!(value["id"], EVENT_ID);
+    assert_eq!(value["id"], "evt_test");
     assert_eq!(value["event"], EVENT_NAME);
     assert_eq!(value["webhook_id"], "wh_test");
+}
+
+#[test]
+fn generates_unique_validation_event_ids() {
+    let first = new_validation_event_id();
+    let second = new_validation_event_id();
+
+    assert!(first.starts_with("evt_"));
+    assert!(second.starts_with("evt_"));
+    assert_ne!(first, second);
 }
 
 #[test]
@@ -35,6 +45,23 @@ fn rejects_localhost_and_private_ips() {
     assert!(validate_endpoint_url("https://10.1.2.3/webhook").is_err());
     assert!(validate_endpoint_url("https://169.254.169.254/latest/meta-data").is_err());
     assert!(validate_endpoint_url("https://[::1]/webhook").is_err());
+    assert!(validate_endpoint_url("https://[fe80::1]/webhook").is_err());
+}
+
+#[tokio::test]
+async fn rejects_hosts_that_resolve_to_blocked_addresses() {
+    let error = validate_resolved_endpoint_url("https://localhost/webhook")
+        .await
+        .expect_err("localhost is invalid");
+
+    assert_eq!(error, "webhook endpoint host is not allowed");
+}
+
+#[test]
+fn blocks_ipv6_link_local_addresses() {
+    let ip = "fe80::1".parse().expect("valid ipv6");
+
+    assert!(is_blocked_ip(ip));
 }
 
 #[test]

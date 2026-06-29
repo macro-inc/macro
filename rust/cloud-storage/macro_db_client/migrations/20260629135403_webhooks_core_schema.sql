@@ -32,7 +32,9 @@ CREATE TABLE webhook (
     endpoint_url TEXT NOT NULL,
     signing_secret TEXT NOT NULL,
     headers_encrypted JSONB NOT NULL DEFAULT '{}'::jsonb,
-    status TEXT NOT NULL DEFAULT 'enabled',
+    rule JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+        CONSTRAINT webhook_status CHECK (status IN ('active', 'paused', 'disabled')),
     is_valid BOOLEAN NOT NULL DEFAULT false,
     paused_at TIMESTAMPTZ NULL,
     pause_reason TEXT NULL,
@@ -47,29 +49,12 @@ CREATE TABLE webhook (
 CREATE INDEX webhook_workspace_status_idx
     ON webhook (workspace_id, status, is_valid);
 
-CREATE TABLE webhook_rule (
-    id TEXT PRIMARY KEY,
-    webhook_id TEXT NOT NULL UNIQUE REFERENCES webhook(id),
-    workspace_id TEXT NOT NULL,
-    name TEXT NULL,
-    enabled BOOLEAN NOT NULL DEFAULT true,
-    rule JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at TIMESTAMPTZ NULL
-);
-
-CREATE INDEX webhook_rule_workspace_idx
-    ON webhook_rule (workspace_id);
-
-CREATE INDEX webhook_rule_events_gin_idx
-    ON webhook_rule USING GIN ((rule -> 'events'));
+CREATE INDEX webhook_events_gin_idx
+    ON webhook USING GIN ((rule -> 'events'));
 
 CREATE TABLE webhook_delivery (
     id TEXT PRIMARY KEY,
     webhook_id TEXT NOT NULL REFERENCES webhook(id),
-    webhook_rule_id TEXT NULL REFERENCES webhook_rule(id),
-    workspace_id TEXT NOT NULL,
     event_id TEXT NOT NULL,
     event TEXT NOT NULL,
     event_schema_version INTEGER NOT NULL,
@@ -88,7 +73,13 @@ CREATE TABLE webhook_delivery (
     delivered_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (webhook_id, event_id)
+    UNIQUE (webhook_id, event_id),
+    CONSTRAINT webhook_delivery_attempt_count_non_negative CHECK (attempt_count >= 0),
+    CONSTRAINT webhook_delivery_attempt_window_valid CHECK (
+        first_attempt_at IS NULL
+        OR last_attempt_at IS NULL
+        OR last_attempt_at >= first_attempt_at
+    )
 );
 
 CREATE INDEX webhook_delivery_webhook_created_idx
@@ -112,5 +103,13 @@ CREATE TABLE webhook_delivery_attempt (
     response_headers_redacted JSONB NULL,
     response_body_preview TEXT NULL,
     error_kind TEXT NULL,
-    error_message TEXT NULL
+    error_message TEXT NULL,
+    UNIQUE (webhook_delivery_id, attempt_number),
+    CONSTRAINT webhook_delivery_attempt_number_non_negative CHECK (attempt_number >= 0),
+    CONSTRAINT webhook_delivery_attempt_duration_non_negative CHECK (
+        duration_ms IS NULL OR duration_ms >= 0
+    ),
+    CONSTRAINT webhook_delivery_attempt_completed_after_started CHECK (
+        completed_at IS NULL OR completed_at >= started_at
+    )
 );

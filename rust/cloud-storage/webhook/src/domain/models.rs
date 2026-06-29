@@ -8,9 +8,6 @@ use std::collections::BTreeMap;
 /// Webhook id. Webhook ids are stored with a `wh_` prefix.
 pub type WebhookId = String;
 
-/// Webhook rule id. Rule ids are stored with a `whr_` prefix.
-pub type WebhookRuleId = String;
-
 /// Custom headers supplied for webhook delivery.
 pub type WebhookHeaders = BTreeMap<String, String>;
 
@@ -112,30 +109,8 @@ pub struct Webhook {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Active event matching rule.
-    pub rule: WebhookRule,
-}
-
-/// Webhook event matching rule.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct WebhookRule {
-    /// Rule id.
-    pub id: WebhookRuleId,
-    /// Owning webhook id.
-    pub webhook_id: WebhookId,
-    /// Owning workspace id.
-    pub workspace_id: String,
-    /// Rule definition.
+    /// Event matching rule.
     pub rule: Value,
-    /// Rule lifecycle status.
-    pub status: WebhookStatus,
-    /// Creation timestamp.
-    pub created_at: DateTime<Utc>,
-    /// Update timestamp.
-    pub updated_at: DateTime<Utc>,
-    /// Soft-delete timestamp.
-    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// Sanitized result of validating a webhook endpoint.

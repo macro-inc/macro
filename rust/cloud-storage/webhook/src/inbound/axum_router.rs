@@ -134,7 +134,20 @@ where
         .with_state(state)
 }
 
-async fn create_webhook<S: WebhookService>(
+/// Create a webhook.
+#[utoipa::path(
+    post,
+    path = "/webhook/webhooks",
+    request_body = CreateWebhookRequest,
+    responses(
+        (status = 201, description = "Webhook created", body = Webhook),
+        (status = 400, description = "Bad request", body = ErrorResponse),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    tag = "webhook"
+)]
+pub async fn create_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
     user: MacroUserExtractor,
     Json(request): Json<CreateWebhookRequest>,
@@ -143,7 +156,22 @@ async fn create_webhook<S: WebhookService>(
     Ok((StatusCode::CREATED, Json(webhook)))
 }
 
-async fn patch_webhook<S: WebhookService>(
+/// Patch a webhook.
+#[utoipa::path(
+    patch,
+    path = "/webhook/webhooks/{webhook_id}",
+    params(("webhook_id" = String, Path, description = "Webhook id")),
+    request_body = PatchWebhookRequest,
+    responses(
+        (status = 200, description = "Webhook updated", body = Webhook),
+        (status = 400, description = "Bad request", body = ErrorResponse),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "Webhook not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    tag = "webhook"
+)]
+pub async fn patch_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
     user: MacroUserExtractor,
     Path(path): Path<WebhookPath>,
@@ -157,6 +185,19 @@ async fn patch_webhook<S: WebhookService>(
 }
 
 /// Validate a webhook endpoint.
+#[utoipa::path(
+    post,
+    path = "/webhook/webhooks/{webhook_id}/validate",
+    params(("webhook_id" = String, Path, description = "Webhook id")),
+    responses(
+        (status = 200, description = "Webhook validation result", body = ValidateWebhookResponse),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "Webhook not found", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    tag = "webhook"
+)]
 pub async fn validate_webhook<S: WebhookService>(
     State(service): State<Arc<S>>,
     user: MacroUserExtractor,
@@ -186,13 +227,16 @@ impl IntoResponse for WebhookHandlerError {
             WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
             WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
+        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error=?self.0, "webhook handler error");
-        }
+            "internal server error".to_string()
+        } else {
+            self.0.to_string()
+        };
         (
             status,
             Json(ErrorResponse {
-                message: self.0.to_string().into(),
+                message: message.into(),
             }),
         )
             .into_response()

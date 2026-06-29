@@ -9,6 +9,7 @@ use super::{
 };
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::net::IpAddr;
 use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
@@ -51,28 +52,50 @@ fn validate_endpoint_url(endpoint_url: &str) -> Result<(), WebhookError> {
         ));
     }
 
-    match url.host_str() {
-        Some("localhost" | "127.0.0.1" | "::1") => Err(WebhookError::BadRequest(
-            "endpoint_url must not point to localhost".to_string(),
-        )),
-        Some(_) => Ok(()),
-        None => Err(WebhookError::BadRequest(
+    let Some(host) = url.host_str() else {
+        return Err(WebhookError::BadRequest(
             "endpoint_url must include a host".to_string(),
-        )),
+        ));
+    };
+
+    if is_blocked_endpoint_host(host) {
+        return Err(WebhookError::BadRequest(
+            "endpoint_url host is not allowed".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn is_blocked_endpoint_host(host: &str) -> bool {
+    let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+
+    host.parse::<IpAddr>().is_ok_and(is_blocked_endpoint_ip)
+}
+
+fn is_blocked_endpoint_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => {
+            ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || ip.is_broadcast()
+                || ip.is_unspecified()
+                || ip.octets() == [169, 254, 169, 254]
+        }
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_unique_local()
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+        }
     }
 }
 
 fn validate_rule(rule: &serde_json::Value) -> Result<(), WebhookError> {
-    if let Some(version) = rule.get("version")
-        && version != "v1"
-        && version != "V1"
-        && version != 1
-    {
-        return Err(WebhookError::BadRequest(
-            "rule.version must be v1".to_string(),
-        ));
-    }
-
     let events = rule
         .get("events")
         .and_then(serde_json::Value::as_array)
@@ -107,7 +130,7 @@ fn validate_patch_request(request: &PatchWebhookRequest) -> Result<(), WebhookEr
 }
 
 fn webhook_is_missing(webhook: &Webhook) -> bool {
-    webhook.deleted_at.is_some() || webhook.rule.deleted_at.is_some()
+    webhook.deleted_at.is_some()
 }
 
 fn generate_signing_secret(caller: &MacroUserIdStr<'_>) -> String {

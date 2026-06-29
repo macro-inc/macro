@@ -124,6 +124,7 @@ properties = { path = "../properties" }
 properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
+rate_limit = { path = "../rate_limit", default-features = false, features = ["axum"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
@@ -160,6 +161,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+webhook = { path = "../webhook", features = ["inbound", "outbound"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_config = { path = "../macro_config" }
 doppler-config = { workspace = true }

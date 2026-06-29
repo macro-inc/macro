@@ -5,7 +5,7 @@ mod pg_repository_test;
 
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookHeaders, WebhookId, WebhookRule,
+        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookHeaders, WebhookId,
         WebhookStatus,
     },
     ports::WebhookRepo,
@@ -42,21 +42,12 @@ struct WebhookRow {
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-    rule_id: String,
     rule: Value,
-    rule_created_at: chrono::DateTime<chrono::Utc>,
-    rule_updated_at: chrono::DateTime<chrono::Utc>,
-    rule_deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn new_webhook_id() -> String {
     // Temporary prefixed UUIDv7 ids. This can be swapped for true ULIDs later.
     format!("wh_{}", macro_uuid::generate_uuid_v7())
-}
-
-fn new_rule_id() -> String {
-    // Temporary prefixed UUIDv7 ids. This can be swapped for true ULIDs later.
-    format!("whr_{}", macro_uuid::generate_uuid_v7())
 }
 
 fn parse_headers(value: Value) -> WebhookHeaders {
@@ -83,16 +74,7 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted_at: row.deleted_at,
-        rule: WebhookRule {
-            id: row.rule_id,
-            webhook_id: row.id,
-            workspace_id: row.workspace_id,
-            rule: row.rule,
-            status,
-            created_at: row.rule_created_at,
-            updated_at: row.rule_updated_at,
-            deleted_at: row.rule_deleted_at,
-        },
+        rule: row.rule,
     })
 }
 
@@ -113,16 +95,10 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
             w.created_at,
             w.updated_at,
             w.deleted_at,
-            wr.id AS rule_id,
-            wr.rule,
-            wr.created_at AS rule_created_at,
-            wr.updated_at AS rule_updated_at,
-            wr.deleted_at AS rule_deleted_at
+            w.rule
         FROM webhook w
-        JOIN webhook_rule wr ON wr.webhook_id = w.id
         WHERE w.id = $1
           AND w.deleted_at IS NULL
-          AND wr.deleted_at IS NULL
         "#,
         webhook_id
     )
@@ -144,18 +120,15 @@ impl WebhookRepo for PgRepository {
         headers_encrypted: Value,
     ) -> Result<Webhook, Self::Err> {
         let webhook_id = new_webhook_id();
-        let rule_id = new_rule_id();
-        let mut transaction = self.pool.begin().await?;
-
         let status = WebhookStatus::Active.as_str();
         let created_by_user_id = created_by_user_id.as_ref();
         sqlx::query!(
             r#"
             INSERT INTO webhook (
                 id, workspace_id, name, endpoint_url, signing_secret, headers_encrypted,
-                status, is_valid, created_by_user_id
+                rule, status, is_valid, created_by_user_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
             "#,
             webhook_id,
             request.workspace_id,
@@ -163,26 +136,12 @@ impl WebhookRepo for PgRepository {
             request.endpoint_url,
             signing_secret,
             headers_encrypted,
+            request.rule,
             status,
             created_by_user_id
         )
-        .execute(transaction.as_mut())
+        .execute(&self.pool)
         .await?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO webhook_rule (id, webhook_id, workspace_id, rule)
-            VALUES ($1, $2, $3, $4)
-            "#,
-            rule_id,
-            webhook_id,
-            request.workspace_id,
-            request.rule
-        )
-        .execute(transaction.as_mut())
-        .await?;
-
-        transaction.commit().await?;
         fetch_webhook(&self.pool, &webhook_id)
             .await?
             .ok_or(sqlx::Error::RowNotFound)
@@ -203,8 +162,6 @@ impl WebhookRepo for PgRepository {
             serde_json::to_value(headers).unwrap_or_else(|_| Value::Object(Default::default()))
         });
         let status = request.status.map(WebhookStatus::as_str);
-        let mut transaction = self.pool.begin().await?;
-
         let updated = sqlx::query!(
             r#"
             UPDATE webhook
@@ -212,7 +169,8 @@ impl WebhookRepo for PgRepository {
                 name = COALESCE($2, name),
                 endpoint_url = COALESCE($3, endpoint_url),
                 headers_encrypted = COALESCE($4, headers_encrypted),
-                status = COALESCE($5, status),
+                rule = COALESCE($5, rule),
+                status = COALESCE($6, status),
                 is_valid = CASE WHEN $3::TEXT IS NOT NULL OR $4::JSONB IS NOT NULL THEN false ELSE is_valid END,
                 updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
@@ -221,31 +179,15 @@ impl WebhookRepo for PgRepository {
             request.name,
             request.endpoint_url,
             headers_encrypted,
+            request.rule,
             status
         )
-        .execute(transaction.as_mut())
+        .execute(&self.pool)
         .await?;
 
         if updated.rows_affected() == 0 {
-            transaction.commit().await?;
             return Ok(None);
         }
-
-        if let Some(rule) = request.rule {
-            sqlx::query!(
-                r#"
-                UPDATE webhook_rule
-                SET rule = $2, updated_at = now()
-                WHERE webhook_id = $1 AND deleted_at IS NULL
-                "#,
-                webhook_id,
-                rule
-            )
-            .execute(transaction.as_mut())
-            .await?;
-        }
-
-        transaction.commit().await?;
         fetch_webhook(&self.pool, &webhook_id).await
     }
 

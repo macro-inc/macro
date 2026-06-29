@@ -109,6 +109,10 @@ fn api_router(state: ApiContext) -> Router {
             call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
         )
         .nest(
+            "/webhook",
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
+        )
+        .nest(
             "/cal",
             cal::inbound::cal_webhook_router::cal_webhook_router(state.cal_webhook_state.clone()),
         );

@@ -24,6 +24,7 @@ outbound = [
   "dep:sha2",
   "dep:macro_uuid",
   "dep:sqlx",
+  "dep:tokio",
   "dep:url",
   "ports",
 ]
@@ -47,6 +48,7 @@ serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
@@ -59,5 +61,4 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
   "testing",
 ] }
 rootcause = { workspace = true }
-tokio = { workspace = true }
 tower = { workspace = true }

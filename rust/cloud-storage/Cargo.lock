@@ -3903,6 +3903,7 @@ dependencies = [
  "properties",
  "properties_db_client",
  "properties_service",
+ "rate_limit",
  "rayon",
  "readonly_pool",
  "redis",
@@ -3933,6 +3934,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "webhook",
  "workspace-hack",
  "zip 2.4.2",
 ]

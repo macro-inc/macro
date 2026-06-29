@@ -18,7 +18,7 @@ fn create_request() -> CreateWebhookRequest {
         name: "Build events".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: None,
-        rule: json!({ "version": "v1", "events": ["build.created"] }),
+        rule: json!({ "events": ["build.created"] }),
     }
 }
 
@@ -67,23 +67,15 @@ async fn create_webhook(repo: &PgRepository) -> Webhook {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_inserts_webhook_and_rule(pool: PgPool) -> anyhow::Result<()> {
+async fn create_inserts_webhook_with_rule(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
     let repo = PgRepository::new(pool.clone());
 
     let webhook = create_webhook(&repo).await;
-    let rule_count = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM webhook_rule WHERE webhook_id = $1",
-        webhook.id
-    )
-    .fetch_one(&pool)
-    .await?
-    .unwrap_or_default();
 
     assert!(webhook.id.starts_with("wh_"));
-    assert!(webhook.rule.id.starts_with("whr_"));
+    assert_eq!(webhook.rule, json!({ "events": ["build.created"] }));
     assert!(!webhook.is_valid);
-    assert_eq!(rule_count, 1);
     Ok(())
 }
 
@@ -143,8 +135,9 @@ async fn get_webhook_excludes_deleted_rows(pool: PgPool) -> anyhow::Result<()> {
     sqlx::query!(
         "UPDATE webhook SET deleted_at = now() WHERE id = $1",
         webhook.id
-    )        .execute(&pool)
-        .await?;
+    )
+    .execute(&pool)
+    .await?;
 
     assert!(repo.get_webhook(webhook.id).await?.is_none());
     Ok(())

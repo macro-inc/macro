@@ -1,7 +1,7 @@
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookRule,
-        WebhookStatus, WebhookValidationResult,
+        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookStatus,
+        WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -82,7 +82,7 @@ impl WebhookRepo for FakeRepo {
             webhook.headers = headers;
         }
         if let Some(rule) = request.rule {
-            webhook.rule.rule = rule;
+            webhook.rule = rule;
         }
         if let Some(status) = request.status {
             webhook.status = status;
@@ -175,7 +175,7 @@ fn caller() -> MacroUserIdStr<'static> {
 }
 
 fn valid_rule() -> serde_json::Value {
-    serde_json::json!({ "version": "v1", "events": ["file.created"] })
+    serde_json::json!({ "events": ["file.created"] })
 }
 
 fn create_request() -> CreateWebhookRequest {
@@ -219,16 +219,7 @@ fn webhook_from_create(
         created_at: now,
         updated_at: now,
         deleted_at: None,
-        rule: WebhookRule {
-            id: "whr_test".to_string(),
-            webhook_id: "wh_test".to_string(),
-            workspace_id: request.workspace_id,
-            rule: request.rule,
-            status: WebhookStatus::Active,
-            created_at: now,
-            updated_at: now,
-            deleted_at: None,
-        },
+        rule: request.rule,
     }
 }
 
@@ -301,12 +292,33 @@ async fn invalid_http_endpoint_is_rejected() {
 }
 
 #[tokio::test]
+async fn private_and_link_local_endpoints_are_rejected() {
+    let repo = FakeRepo::default();
+    repo.state.lock().await.can_edit = true;
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+
+    for endpoint_url in [
+        "https://localhost/webhook",
+        "https://10.1.2.3/webhook",
+        "https://172.16.0.1/webhook",
+        "https://192.168.1.1/webhook",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[fe80::1]/webhook",
+    ] {
+        let mut request = create_request();
+        request.endpoint_url = endpoint_url.to_string();
+
+        assert_bad_request(service.create_webhook(caller(), request).await);
+    }
+}
+
+#[tokio::test]
 async fn empty_events_array_is_rejected() {
     let repo = FakeRepo::default();
     repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
     let mut request = create_request();
-    request.rule = serde_json::json!({ "version": "v1", "events": [] });
+    request.rule = serde_json::json!({ "events": [] });
 
     assert_bad_request(service.create_webhook(caller(), request).await);
 }

@@ -80,6 +80,14 @@ use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
     SystemPropertiesServiceImpl,
 };
+use webhook::{
+    domain::service::WebhookServiceImpl,
+    inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
+    outbound::{
+        http_validator::ReqwestWebhookValidationClient,
+        pg_repository::PgRepository as PgWebhookRepo,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -294,6 +302,17 @@ pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSin
 /// Type alias for the cal.com webhook router state.
 pub(crate) type DssCalWebhookState = CalWebhookRouterState<CalWebhookServiceType>;
 
+/// Type alias for the product webhook service.
+pub(crate) type DssWebhookService =
+    WebhookServiceImpl<PgWebhookRepo, ReqwestWebhookValidationClient>;
+
+/// Type alias for the product webhook rate limiter.
+pub(crate) type DssWebhookRateLimiter =
+    rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
+
+/// Type alias for the product webhook router state.
+pub(crate) type DssWebhookState = MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -331,6 +350,7 @@ pub(crate) struct ApiContext {
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub webhook_state: DssWebhookState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,

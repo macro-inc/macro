@@ -13,11 +13,10 @@ use reqwest::{Client, StatusCode, Url, redirect::Policy};
 use serde_json::json;
 use sha2::Sha256;
 use std::{net::IpAddr, time::Duration};
+use tokio::net::lookup_host;
 
 const EVENT_NAME: &str = "webhook.validation.test";
-const EVENT_ID: &str = "evt_validation_test";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-const MAX_REDIRECTS: usize = 1;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -32,7 +31,7 @@ impl ReqwestWebhookValidationClient {
     pub fn new() -> Result<Self, reqwest::Error> {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
-            .redirect(Policy::limited(MAX_REDIRECTS))
+            .redirect(Policy::none())
             .build()?;
 
         Ok(Self { client })
@@ -46,13 +45,14 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
         &self,
         webhook: Webhook,
     ) -> Result<WebhookValidationResult, Self::Err> {
-        let url = match validate_endpoint_url(&webhook.endpoint_url) {
+        let url = match validate_resolved_endpoint_url(&webhook.endpoint_url).await {
             Ok(url) => url,
             Err(message) => return Ok(failure(None, message)),
         };
 
+        let event_id = new_validation_event_id();
         let timestamp = chrono::Utc::now().timestamp().to_string();
-        let body = validation_body(&webhook.id)?;
+        let body = validation_body(&webhook.id, &event_id)?;
         let signature = signature_header(&webhook.signing_secret, &timestamp, &body)?;
 
         let mut request = self
@@ -60,7 +60,7 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
             .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .header("X-Macro-Event", EVENT_NAME)
-            .header("X-Macro-Event-Id", EVENT_ID)
+            .header("X-Macro-Event-Id", event_id)
             .header("X-Macro-Timestamp", &timestamp)
             .header("X-Macro-Signature", signature);
 
@@ -95,9 +95,13 @@ impl WebhookValidationClient for ReqwestWebhookValidationClient {
     }
 }
 
-fn validation_body(webhook_id: &str) -> Result<Vec<u8>, serde_json::Error> {
+fn new_validation_event_id() -> String {
+    format!("evt_{}", macro_uuid::generate_uuid_v7())
+}
+
+fn validation_body(webhook_id: &str, event_id: &str) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(&json!({
-        "id": EVENT_ID,
+        "id": event_id,
         "event": EVENT_NAME,
         "webhook_id": webhook_id,
     }))
@@ -113,6 +117,33 @@ fn signature_header(
     mac.update(b".");
     mac.update(raw_body);
     Ok(format!("v1={}", hex::encode(mac.finalize().into_bytes())))
+}
+
+async fn validate_resolved_endpoint_url(value: &str) -> Result<Url, &'static str> {
+    let url = validate_endpoint_url(value)?;
+    let Some(host) = url.host_str().map(str::to_owned) else {
+        return Err("webhook endpoint URL host is invalid");
+    };
+    let Some(port) = url.port_or_known_default() else {
+        return Err("webhook endpoint URL port is invalid");
+    };
+
+    let mut resolved = lookup_host((host.as_str(), port))
+        .await
+        .map_err(|_| "webhook endpoint host could not be resolved")?;
+    let mut saw_address = false;
+    for address in resolved.by_ref() {
+        saw_address = true;
+        if is_blocked_ip(address.ip()) {
+            return Err("webhook endpoint host resolves to a disallowed address");
+        }
+    }
+
+    if !saw_address {
+        return Err("webhook endpoint host could not be resolved");
+    }
+
+    Ok(url)
 }
 
 fn validate_endpoint_url(value: &str) -> Result<Url, &'static str> {
@@ -151,7 +182,12 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || ip.is_unspecified()
                 || ip.octets() == [169, 254, 169, 254]
         }
-        IpAddr::V6(ip) => ip.is_loopback() || ip.is_unspecified() || ip.is_unique_local(),
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_unique_local()
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+        }
     }
 }
 
