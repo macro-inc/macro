@@ -340,13 +340,13 @@ async fn enqueue_sent_contact_seeds(
                 link_id: scope.link_id,
                 job_id: scope.job_id,
                 payload: SeedSentContactPayload {
-                    message_provider_id,
+                    message_provider_id: message_provider_id.clone(),
                 },
             }),
         };
 
         if let Err(e) = ctx.sqs_client.enqueue_email_backfill_message(msg).await {
-            tracing::error!(error = ?e, link_id = %link.id, "Failed to enqueue sent-contact seed; skipping remaining");
+            tracing::error!(error = ?e, link_id = %link.id, message_id = %message_provider_id, "Failed to enqueue sent-contact seed; skipping remaining");
             return;
         }
     }

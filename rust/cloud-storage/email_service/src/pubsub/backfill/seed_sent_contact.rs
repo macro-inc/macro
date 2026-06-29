@@ -10,7 +10,7 @@ use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
 
-/// Consumer for [`BackfillOperation::SeedSentContact`]. Fetches one recent sent
+/// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
 /// message and enqueues a sender<->recipient contact connection for every
 /// non-generic To/Cc/Bcc address on it. Fanned out one-per-message by the
 /// priority pass of `list_threads` so a new user has contacts before full
