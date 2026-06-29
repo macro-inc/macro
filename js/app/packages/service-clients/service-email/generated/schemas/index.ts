@@ -263,6 +263,7 @@ export * from './threadPreviewCursorViewedAt';
 export * from './threadProviderId';
 export * from './threadSummary';
 export * from './unblockSenderRequest';
+export * from './unresolvedSignatureImagesError';
 export * from './updateLabelBatchRequest';
 export * from './updateLabelBatchResponse';
 export * from './updateThreadLabelRequest';

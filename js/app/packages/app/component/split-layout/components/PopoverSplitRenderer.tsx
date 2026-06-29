@@ -70,7 +70,6 @@ function PopoverSplitModal(props: {
     isPopover: () => true,
     replace: () => {},
     removeFromHistory: () => {},
-    goToEntry: () => false,
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
@@ -88,6 +87,7 @@ function PopoverSplitModal(props: {
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
+    captureEntryState: () => {},
     currentEntryState: () => undefined,
   };
 

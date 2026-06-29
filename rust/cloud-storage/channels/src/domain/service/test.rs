@@ -826,6 +826,7 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
                     height: None,
                 }],
                 nonce: Some("nonce-1".to_string()),
+                notification_policy: Default::default(),
             },
         )
         .await
@@ -895,6 +896,7 @@ async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
                 height: None,
             }],
             nonce: None,
+            notification_policy: Default::default(),
         },
     )
     .await
@@ -939,6 +941,7 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
             attachment_ids_to_delete: None,
             attachments_to_add: None,
             nonce: Some("edit-nonce".to_string()),
+            notification_policy: Default::default(),
         },
     )
     .await
@@ -962,6 +965,60 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     assert_eq!(nonce.as_deref(), Some("edit-nonce"));
     assert_eq!(recipients.len(), 1);
     assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
+}
+
+#[tokio::test]
+async fn patch_message_notify_as_posted_adds_notification_context() {
+    let channel_id = Uuid::new_v4();
+    let thread_id = Uuid::new_v4();
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_sender = bot_id.to_storage_string();
+    let repo = FakeMutationRepo::new(channel_id, &bot_sender);
+    repo.state.lock().unwrap().message.thread_id = Some(thread_id);
+    repo.state.lock().unwrap().message.sender_id = Sender::Bot(bot_id);
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_message(
+        Sender::Bot(bot_id),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        PatchMessageRequest {
+            content: Some("final answer".to_string()),
+            mentions: None,
+            attachment_ids_to_delete: None,
+            attachments_to_add: None,
+            nonce: None,
+            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+        },
+    )
+    .await
+    .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    let ChannelEvent::MessageChanged {
+        message,
+        posted_notification,
+        ..
+    } = &emitted[0]
+    else {
+        panic!("expected MessageChanged event, got {:?}", emitted[0]);
+    };
+    assert_eq!(message.content, "final answer");
+    let posted_notification = posted_notification
+        .as_ref()
+        .expect("expected posted notification context");
+    assert_eq!(posted_notification.metadata.channel_name, "Project");
+    assert_eq!(posted_notification.participants.len(), 2);
+    assert!(posted_notification.mentions.is_empty());
+    assert!(!posted_notification.has_attachments);
 }
 
 #[tokio::test]
@@ -990,6 +1047,7 @@ async fn patch_of_deleted_message_is_not_found() {
                 attachment_ids_to_delete: None,
                 attachments_to_add: None,
                 nonce: None,
+                notification_policy: Default::default(),
             },
         )
         .await

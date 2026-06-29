@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
-    let notification_queue = macro_queues::NotificationQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)

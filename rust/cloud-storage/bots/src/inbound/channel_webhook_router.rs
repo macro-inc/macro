@@ -251,6 +251,7 @@ where
                 thread_id: None,
                 attachments: Vec::new(),
                 nonce: None,
+                notification_policy: Default::default(),
             },
         )
         .await?;

@@ -1,13 +1,16 @@
 //! Service trait for properties.
 
-use models_properties::EntityType;
+use std::collections::HashMap;
+
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
-use super::model::EntityPropertyInfo;
+use super::model::{EntityPropertiesKey, EntityPropertyInfo};
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
@@ -52,6 +55,17 @@ pub trait PropertiesService: Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, PropertiesErr>> + Send;
+
+    /// Get all properties attached to multiple entities, keyed by entity id and type.
+    fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>,
+            PropertiesErr,
+        >,
+    > + Send;
 
     /// Get a property value for an entity by property definition ID.
     /// Returns `None` if the property is not attached to the entity.

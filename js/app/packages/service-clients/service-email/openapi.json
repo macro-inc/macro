@@ -2124,6 +2124,16 @@
               }
             }
           },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnresolvedSignatureImagesError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -5041,6 +5051,18 @@
           "email_address": {
             "type": "string",
             "description": "The email address of the sender to unblock."
+          }
+        }
+      },
+      "UnresolvedSignatureImagesError": {
+        "type": "object",
+        "description": "Body returned with a 422 when signature images can't be loaded.",
+        "required": ["unresolved_image_count"],
+        "properties": {
+          "unresolved_image_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },

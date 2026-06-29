@@ -5,12 +5,25 @@ import type { ThreadState } from '../Thread';
 import { createFocusRequest } from '../Thread/focus-request';
 
 type ThreadStore = Record<string, ThreadState>;
-export function createThreadManager() {
+
+export type ThreadStateSnapshot = {
+  isExpanded?: boolean;
+  isReplying?: boolean;
+};
+
+export type ThreadManagerSnapshot = Record<string, ThreadStateSnapshot>;
+
+export function createThreadManager(initialSnapshot?: ThreadManagerSnapshot) {
   const [threadStore, setThreadStore] = createStore<ThreadStore>({});
 
   function initThreadState(threadId: string): ThreadState {
-    const [isExpanded, setIsExpanded] = createSignal<boolean>(false);
-    const [isReplying, setIsReplyingRaw] = createSignal<boolean>(false);
+    const snapshot = initialSnapshot?.[threadId];
+    const initialIsReplying = snapshot?.isReplying ?? false;
+    const [isExpanded, setIsExpanded] = createSignal<boolean>(
+      snapshot?.isExpanded || initialIsReplying
+    );
+    const [isReplying, setIsReplyingRaw] =
+      createSignal<boolean>(initialIsReplying);
     const [replyInputState, setReplyInputState] = createSignal<
       InputSnapshot | undefined
     >();
@@ -64,7 +77,29 @@ export function createThreadManager() {
     return initThreadState(threadId);
   }
 
+  // Passed up via messagesHandle to get called by split history captor on navigation, so that we can restore thread state on history navigation
+  function getSnapshot(): ThreadManagerSnapshot | undefined {
+    const snapshot: ThreadManagerSnapshot = { ...(initialSnapshot ?? {}) };
+
+    for (const [threadId, state] of Object.entries(threadStore)) {
+      const isExpanded = state.isExpanded();
+      const isReplying = state.isReplying();
+      if (!isExpanded && !isReplying) {
+        delete snapshot[threadId];
+        continue;
+      }
+
+      snapshot[threadId] = {
+        ...(isExpanded ? { isExpanded } : {}),
+        ...(isReplying ? { isReplying } : {}),
+      };
+    }
+
+    return Object.keys(snapshot).length > 0 ? snapshot : undefined;
+  }
+
   return {
     getOrCreateThreadState,
+    getSnapshot,
   };
 }

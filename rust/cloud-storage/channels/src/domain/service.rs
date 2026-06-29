@@ -7,10 +7,11 @@ use crate::domain::{
         ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
         EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
         GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
-        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
-        RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo,
-        ThreadReply, ThreadReplyRow, TopLevelMessageRow, WithChannelId,
+        PatchChannelRequest, PatchMessageNotificationPolicy, PatchMessageRequest,
+        PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
+        ReactionAction, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
+        Sender, SimpleMention, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+        WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -594,6 +595,7 @@ where
             has_attachments,
             attachments,
             nonce: req.nonce.clone(),
+            notification_policy: req.notification_policy,
         });
 
         Ok(PostMessageResponse {
@@ -609,8 +611,17 @@ where
         actor_role: ParticipantRole,
         channel_id: Uuid,
         message_id: Uuid,
-        mut req: PatchMessageRequest,
+        req: PatchMessageRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let PatchMessageRequest {
+            content,
+            mentions: replacement_mentions,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+            notification_policy,
+        } = req;
+
         let actor_storage_id = actor.to_storage_string();
         let owner = self
             .repo
@@ -624,8 +635,8 @@ where
             ));
         }
 
-        let attachments_to_delete = req.attachment_ids_to_delete.clone().unwrap_or_default();
-        let attachments_to_add = req.attachments_to_add.clone().unwrap_or_default();
+        let attachments_to_delete = attachment_ids_to_delete.clone().unwrap_or_default();
+        let attachments_to_add = attachments_to_add.clone().unwrap_or_default();
         let attachments_changed =
             !attachments_to_delete.is_empty() || !attachments_to_add.is_empty();
 
@@ -636,19 +647,19 @@ where
                 message_id,
                 attachments_to_delete,
                 attachments_to_add,
-                req.nonce.clone(),
+                nonce.clone(),
             )
             .await?;
         }
 
-        if let Some(content) = req.content.clone() {
+        if let Some(content) = content.as_ref() {
             let message = self
                 .repo
-                .patch_message(channel_id, message_id, content)
+                .patch_message(channel_id, message_id, content.clone())
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
-            if let Some(mentions) = req.mentions.take() {
+            if let Some(mentions) = replacement_mentions.clone() {
                 self.repo
                     .sync_message_mentions(message_id, mentions.clone())
                     .await
@@ -686,12 +697,53 @@ where
                 )
             };
 
+            let posted_notification =
+                if notification_policy == PatchMessageNotificationPolicy::NotifyAsPostedMessage {
+                    let metadata = if let Some(user_actor) = actor.as_user() {
+                        self.repo
+                            .get_channel_metadata(channel_id, user_actor.clone())
+                            .await
+                            .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                    } else {
+                        let info = self
+                            .repo
+                            .get_channel_info(channel_id)
+                            .await
+                            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+                        ChannelMetadata {
+                            channel_type: info.channel_type,
+                            channel_name: info.name.unwrap_or_default(),
+                        }
+                    };
+                    let notification_participants = self
+                        .repo
+                        .get_participants(channel_id)
+                        .await
+                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+                    let has_attachments = !self
+                        .repo
+                        .get_message_attachments(message_id)
+                        .await
+                        .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+                        .is_empty();
+
+                    Some(crate::domain::events::MessageChangedNotificationContext {
+                        metadata,
+                        participants: notification_participants,
+                        mentions: replacement_mentions.clone().unwrap_or_default(),
+                        has_attachments,
+                    })
+                } else {
+                    None
+                };
+
             self.events.dispatch(ChannelEvent::MessageChanged {
                 channel_id,
                 actor: actor.clone(),
                 message: message.clone(),
                 recipients: participants,
-                nonce: req.nonce.clone(),
+                nonce,
+                posted_notification,
             });
 
             if actor.as_user().is_some()
@@ -706,7 +758,7 @@ where
         }
 
         if attachments_changed
-            && req.content.is_none()
+            && content.is_none()
             && actor.as_user().is_some()
             && let Err(err) = self
                 .repo

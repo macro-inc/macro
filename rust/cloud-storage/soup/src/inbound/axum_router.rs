@@ -390,11 +390,26 @@ where
 {
     /// Creates router state from the soup service, email service, and entity access service.
     pub fn new(service: T, email: U, entity_access_service: Arc<EAS>) -> Self {
+        Self::from_arc(Arc::new(service), email, entity_access_service)
+    }
+
+    /// Creates router state from a shared soup service, email service, and entity access service.
+    pub fn from_arc(service: Arc<T>, email: U, entity_access_service: Arc<EAS>) -> Self {
         SoupRouterState {
-            service: Arc::new(service),
+            service,
             email: EmailRouterState::new(email),
             entity_access_service,
         }
+    }
+
+    /// Returns an `Arc` to the inner soup service.
+    pub fn service(&self) -> Arc<T> {
+        Arc::clone(&self.service)
+    }
+
+    /// Returns an `Arc` to the inner email service.
+    pub fn email_service(&self) -> Arc<U> {
+        self.email.service()
     }
 
     async fn handle<R>(

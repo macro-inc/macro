@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use channels::domain::models::{
     AttachmentEntityReference, ChannelAttachmentType, ChannelContextMessage, ChannelMessageFilters,
-    ChannelParticipant, MessagePageDirection, MutatedMessage, PostMessageResponse,
+    ChannelParticipant, MessagePageDirection, MutatedMessage, PatchMessageNotificationPolicy,
+    PatchMessageRequest, PostMessageNotificationPolicy, PostMessageRequest, PostMessageResponse,
     ResolvedChannelMessage, Sender, ThreadReply,
 };
 use channels::domain::ports::{
@@ -123,14 +124,18 @@ impl AgentResponder for TestResponder {
 /// missing (deleted while the agent ran).
 struct MutationChannelService {
     thinking_deleted: bool,
+    posted_policies: Mutex<Vec<PostMessageNotificationPolicy>>,
     patched: Mutex<Vec<String>>,
+    patched_policies: Mutex<Vec<PatchMessageNotificationPolicy>>,
 }
 
 impl MutationChannelService {
     fn new(thinking_deleted: bool) -> Self {
         Self {
             thinking_deleted,
+            posted_policies: Mutex::new(Vec::new()),
             patched: Mutex::new(Vec::new()),
+            patched_policies: Mutex::new(Vec::new()),
         }
     }
 }
@@ -214,8 +219,12 @@ impl ChannelService for MutationChannelService {
         &self,
         _actor: Sender,
         _channel_id: Uuid,
-        _req: PostMessageRequest,
+        req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
+        self.posted_policies
+            .lock()
+            .unwrap()
+            .push(req.notification_policy);
         async move {
             Ok(PostMessageResponse {
                 id: Uuid::new_v4().to_string(),
@@ -232,6 +241,10 @@ impl ChannelService for MutationChannelService {
         _message_id: Uuid,
         req: PatchMessageRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        self.patched_policies
+            .lock()
+            .unwrap()
+            .push(req.notification_policy);
         if !self.thinking_deleted {
             self.patched
                 .lock()
@@ -343,8 +356,16 @@ async fn handle_patches_thinking_message_with_reply() {
         .unwrap();
 
     assert_eq!(
+        channels.posted_policies.lock().unwrap().clone(),
+        vec![PostMessageNotificationPolicy::Silent]
+    );
+    assert_eq!(
         channels.patched.lock().unwrap().clone(),
         vec!["the answer".to_string()]
+    );
+    assert_eq!(
+        channels.patched_policies.lock().unwrap().clone(),
+        vec![PatchMessageNotificationPolicy::NotifyAsPostedMessage]
     );
 }
 

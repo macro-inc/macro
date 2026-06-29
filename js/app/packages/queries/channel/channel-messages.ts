@@ -84,11 +84,6 @@ export function channelMessagesQueryOptions(
       );
       return normalizeChannelMessagesPageSenders(page);
     },
-    placeholderData: (
-      prev: ChannelMessagesData | undefined,
-      prevQuery: { queryKey: ChannelMessagesQueryKey } | undefined
-    ): ChannelMessagesData | undefined =>
-      prevQuery?.queryKey.includes(channelId) ? prev : undefined,
     initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
       lastPage.next_cursor

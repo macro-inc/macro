@@ -181,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get multiplexed redis connection")?;
 
-    let notification_queue = macro_queues::NotificationQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
     let search_event_queue = macro_queues::SearchEventQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
     let email_backfill_queue = macro_queues::EmailBackfillQueue::new();
