@@ -280,6 +280,34 @@ pub type SoupSchema<S> = Schema<SoupQueryRoot<S>, EmptyMutation, EmptySubscripti
 /// GraphQL Soup schema type backed by a shared soup service.
 pub type SharedSoupSchema<S> = SoupSchema<SharedSoupService<S>>;
 
+/// GraphQL Soup schema type backed by the schema-only service.
+pub type SchemaOnlySoupSchema = SoupSchema<SchemaOnlySoupService>;
+
+/// Soup service used only to construct the GraphQL schema for SDL export.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SchemaOnlySoupService;
+
+impl SoupService for SchemaOnlySoupService {
+    async fn get_user_soup<T>(
+        &self,
+        _req: SoupRequest<T>,
+        _team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
+    where
+        SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        Err(soup::domain::models::SoupErr::CommsErr)
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        _req: soup::domain::models::GroupedSortRequest<'_>,
+    ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
+        Err(soup::domain::models::SoupErr::CommsErr)
+    }
+}
+
 /// Object-safe-ish wrapper for sharing a concrete Soup service with GraphQL.
 #[derive(Clone)]
 pub struct SharedSoupService<S>(Arc<S>);
@@ -327,8 +355,13 @@ impl<S> SoupQueryRoot<S> {
     }
 }
 
+/// Build a GraphQL schema for Soup suitable for SDL export or introspection.
+pub fn build_schema() -> SchemaOnlySoupSchema {
+    build_schema_with_service(SchemaOnlySoupService)
+}
+
 /// Build a GraphQL schema for Soup backed by the provided service.
-pub fn build_schema<S>(service: S) -> SoupSchema<S>
+pub fn build_schema_with_service<S>(service: S) -> SoupSchema<S>
 where
     S: SoupService,
 {
@@ -345,7 +378,7 @@ pub fn build_schema_from_arc<S>(service: Arc<S>) -> SharedSoupSchema<S>
 where
     S: SoupService,
 {
-    build_schema(SharedSoupService::new(service))
+    build_schema_with_service(SharedSoupService::new(service))
 }
 
 #[Object]
