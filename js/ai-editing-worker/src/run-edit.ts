@@ -12,7 +12,6 @@ import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
-import type { ReplayTrace } from './replay-trace';
 import { createWorkerSyncSource } from './sources';
 import { buildTraceLog } from './trace-log';
 
@@ -54,8 +53,6 @@ export type RunEditResult = {
   usage: UsageEntry[];
   ops: DocumentOp[];
   trace?: string;
-  /** Full, peer-tagged, time-stamped op log + initial doc state, for replay. */
-  replay?: ReplayTrace;
   clarification?: string;
 };
 
@@ -95,9 +92,7 @@ export async function runEditSession(
 
   // The workspace owns the editing surface + its two-way sync with Loro, and
   // hands out per-coder writers. Under debug it also records a replay trace.
-  const workspace = new EditingWorkspace(manager, source, wal, {
-    record: args.debug,
-  });
+  const workspace = new EditingWorkspace(manager, source, wal);
 
   const allOps: DocumentOp[] = [];
   // code, per coder, per batch
@@ -142,17 +137,10 @@ export async function runEditSession(
 
     console.log(JSON.stringify({ documentId: args.documentId, debug: trace }));
 
-    // Replay trace: full op log + initial doc state, captured only under debug.
-    const replay = args.debug ? workspace.replay() : undefined;
-    if (replay) {
-      console.log(JSON.stringify({ documentId: args.documentId, replay }));
-    }
-
     return {
       usage,
       ops: allOps,
       trace: args.debug ? trace : undefined,
-      replay,
       clarification,
     };
   } finally {

@@ -25,15 +25,11 @@ import {
   sharedPeerPool,
 } from './ai-editing/awareness';
 import { Doc } from './ai-editing/doc';
-import type { Awareness } from './ai-editing/queue';
 import type { Writer } from './ai-editing/tools';
-import type { ReplayEvent, ReplayTrace } from './replay-trace';
 import { createWorkerAwareness } from './sources';
 
 export type EditingWorkspaceOptions = {
   pool?: PeerPool;
-  /** Record every applied op + cursor move into a replayable trace (debug only). */
-  record?: boolean;
 };
 
 export class EditingWorkspace {
@@ -42,11 +38,6 @@ export class EditingWorkspace {
   private chain: Promise<void> = Promise.resolve();
   private readonly outstanding = new Map<Peer, AwarenessSource>();
   private readonly pool: PeerPool;
-  private readonly record: boolean;
-  /** The document before any AI edits — replay applies the log against this. */
-  private readonly initialState: SerializedEditorState;
-  private readonly recording: ReplayEvent[] = [];
-  private readonly startedAt = Date.now();
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
@@ -55,14 +46,12 @@ export class EditingWorkspace {
     opts: EditingWorkspaceOptions = {}
   ) {
     this.pool = opts.pool ?? sharedPeerPool;
-    this.record = opts.record ?? false;
     // Seed the editing surface from the merged state.
     this.session = createEditingSession();
     loadSnapshot(
       this.session,
       manager.mirror!.getState() as unknown as SerializedEditorState
     );
-    this.initialState = toSnapshot(this.session);
 
     this.engine = new SyncEngine({
       loroManager: manager,
@@ -94,18 +83,14 @@ export class EditingWorkspace {
    *  `release` (on the returned writer) clears the cursor and returns the peer. */
   async borrowWriter(): Promise<Writer> {
     const peer = await this.pool.borrow();
-    const realDoc = new Doc(this.session, () => this.propagate(peer.peerId));
-    const realAwareness = realAwarenessSource({
+    const doc = new Doc(this.session, () => this.propagate(peer.peerId));
+    const awarenessSource = realAwarenessSource({
       mirror: this.manager.mirror!,
       doc: this.manager.doc,
       send: (bytes) => this.source.pushAwareness(bytes),
       name: peer.name,
       color: peer.color,
     });
-    const doc = this.record ? this.recordDoc(realDoc, peer) : realDoc;
-    const awarenessSource = this.record
-      ? this.recordAwareness(realAwareness, peer)
-      : realAwareness;
     this.outstanding.set(peer, awarenessSource);
     const release = () => {
       if (!this.outstanding.delete(peer)) return;
@@ -113,54 +98,6 @@ export class EditingWorkspace {
       this.pool.release(peer);
     };
     return { doc, awarenessSource, release };
-  }
-
-  /** The captured replay trace (empty unless constructed with `record: true`). */
-  replay(): ReplayTrace {
-    return { initial: this.initialState, events: this.recording };
-  }
-
-  /** Wrap a writer's `Doc` so every applied op is logged, tagged with its peer.
-   *  A Proxy keeps all the `DocReader` methods (textLength/locate/…) intact for
-   *  the animator, intercepting only `apply`. */
-  private recordDoc(doc: Doc, peer: Peer): Doc {
-    const log = (op: Parameters<Doc['apply']>[0]) =>
-      this.recording.push({
-        t: Date.now() - this.startedAt,
-        peer: { name: peer.name, color: peer.color },
-        kind: 'edit',
-        op,
-      });
-    return new Proxy(doc, {
-      get(target, prop, recv) {
-        if (prop === 'apply') {
-          return (op: Parameters<Doc['apply']>[0]) => {
-            log(op);
-            return target.apply(op);
-          };
-        }
-        const v = Reflect.get(target, prop, recv);
-        return typeof v === 'function' ? v.bind(target) : v;
-      },
-    });
-  }
-
-  /** Wrap a writer's awareness source so each cursor move + clear is logged. */
-  private recordAwareness(
-    source: AwarenessSource,
-    peer: Peer
-  ): AwarenessSource {
-    const p = { name: peer.name, color: peer.color };
-    return {
-      apply: (x: Awareness) => {
-        this.recording.push({ t: Date.now() - this.startedAt, peer: p, kind: 'awareness', x });
-        source.apply(x);
-      },
-      clear: () => {
-        this.recording.push({ t: Date.now() - this.startedAt, peer: p, kind: 'clear' });
-        source.clear();
-      },
-    };
   }
 
   /** Perform one final catch-all sync and wait for all queued propagation to finish. */
