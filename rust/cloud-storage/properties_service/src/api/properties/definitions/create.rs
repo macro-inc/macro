@@ -15,7 +15,8 @@ use models_properties::api::{
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use properties_db_client::{
-    error::PropertiesDatabaseError, property_definitions::insert as property_definitions_insert,
+    error::PropertiesDatabaseError,
+    property_definitions::insert::{self as property_definitions_insert, DefinitionOwner},
 };
 
 #[derive(Debug, Error)]
@@ -80,17 +81,17 @@ pub async fn create_property_definition(
     }
 
     // Derive the owner from the authenticated caller - clients never supply owner ids.
-    let (team_id, user_id): (Option<Uuid>, Option<&str>) = match request.scope {
-        CreatePropertyScope::User => (None, Some(user_context.user_id.as_str())),
+    let owner = match request.scope {
+        CreatePropertyScope::User => DefinitionOwner::User(user_context.user_id.as_str()),
         CreatePropertyScope::Team => {
             let team_id =
                 caller_team_id(&team).ok_or(CreatePropertyDefinitionErr::TeamMembershipRequired)?;
-            (Some(team_id), None)
+            DefinitionOwner::Team(team_id)
         }
     };
 
     tracing::info!(
-        team_id = ?team_id,
+        owner = ?owner,
         scope = ?request.scope,
         "creating property definition"
     );
@@ -132,8 +133,7 @@ pub async fn create_property_definition(
 
         property_definitions_insert::create_property_definition(
             &state.db,
-            team_id,
-            user_id,
+            owner,
             &request.display_name,
             base_data_type,
             request.data_type.is_multi_select(),
@@ -155,8 +155,7 @@ pub async fn create_property_definition(
 
         property_definitions_insert::create_property_definition_with_options(
             &state.db,
-            team_id,
-            user_id,
+            owner,
             &request.display_name,
             base_data_type,
             request.data_type.is_multi_select(),
