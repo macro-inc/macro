@@ -62,39 +62,66 @@
         src = jsSrc;
 
         nativeBuildInputs = [
-          bun2nix.hook
+          pkgs.bun
+          pkgs.darkhttpd
           pkgs.git
-          pkgs.python3
+          pkgs.jq
+          pkgs.yq-go
         ];
 
-        inherit bunDeps;
         dontConfigure = true;
-        dontRunLifecycleScripts = true;
-        dontUseBunBuild = true;
-        dontUseBunInstall = true;
 
-        preBunNodeModulesInstallPhase = ''
-          python3 ${./prepare-tauri-frontend.py} .
+        buildPhase = ''
+          runHook preBuild
 
-          ln -sfn @GH@macro-inc-pdf.js-f9b2ce6@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-pdf.js-v2.16.52-web@@@1"
-          ln -sfn @GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@GH@macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
-          mkdir -p "$BUN_INSTALL_CACHE_DIR/pdfjs-dist" "$BUN_INSTALL_CACHE_DIR/@inkibra/tauri-plugins"
-          ln -sfn ../@GH@macro-inc-pdf.js-f9b2ce6@@@1 "$BUN_INSTALL_CACHE_DIR/pdfjs-dist/macro-inc-pdf.js-v2.16.52-web@@@1"
-          ln -sfn ../../@GH@macro-inc-tauri-plugins-26537c8@@@1 "$BUN_INSTALL_CACHE_DIR/@inkibra/tauri-plugins/macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef@@@1"
+          export HOME="$TMPDIR/home"
+          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
+          mkdir -p "$HOME" "$BUN_INSTALL_CACHE_DIR"
+          cp -r ${bunDeps}/share/bun-cache/. "$BUN_INSTALL_CACHE_DIR"
           chmod -R u+w "$BUN_INSTALL_CACHE_DIR"
+          yq -o=json 'del(.patchedDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
+          yq -o=json 'del(.patchedDependencies)' bun.lock > bun.lock.tmp && mv bun.lock.tmp bun.lock
+          jq 'del(.dependencies["@inkibra/tauri-plugins"])' app/package.json > app/package.json.tmp && mv app/package.json.tmp app/package.json
+          jq 'del(.dependencies["pdfjs-dist"])' app/packages/block-pdf/package.json > app/packages/block-pdf/package.json.tmp && mv app/packages/block-pdf/package.json.tmp app/packages/block-pdf/package.json
 
-          python3 ${./local-bun-registry.py} ${bunDeps}/share/bun-packages > "$TMPDIR/npm-registry-port" &
+          registry_root="$TMPDIR/npm-registry"
+          registry_lists="$TMPDIR/npm-registry-lists"
+          mkdir -p "$registry_root" "$registry_lists"
+          while IFS= read -r package_json; do
+            name=$(jq -r '.name // empty' "$package_json")
+            version=$(jq -r '.version // empty' "$package_json")
+            [ -n "$name" ] && [ -n "$version" ] || continue
+            key="''${name//\//%2f}"
+            printf '%s\n' "$name" > "$registry_lists/$key.name"
+            printf '%s\n' "$package_json" >> "$registry_lists/$key.paths"
+          done < <(find -L ${bunDeps}/share/bun-packages -name package.json -type f)
+          for list in "$registry_lists"/*.paths; do
+            key="''${list%.paths}"
+            key="''${key##*/}"
+            name=$(cat "$registry_lists/$key.name")
+            metadata=$(jq -s -c --arg name "$name" '
+              {
+                _id: $name,
+                name: $name,
+                "dist-tags": { latest: (sort_by(.version) | last | .version) },
+                versions: (reduce .[] as $pkg ({};
+                  .[$pkg.version] = ($pkg + {
+                    dist: (($pkg.dist // {}) + {
+                      tarball: "https://registry.npmjs.org/\($name)/-/\(($name | split("/") | last))-\($pkg.version).tgz"
+                    })
+                  })
+                ))
+              }
+            ' $(cat "$list"))
+            mkdir -p "$registry_root/$(dirname "$name")"
+            printf '%s\n' "$metadata" > "$registry_root/$name"
+            printf '%s\n' "$metadata" > "$registry_root/$key"
+          done
+          darkhttpd "$registry_root" --addr 127.0.0.1 --port 54321 --no-listing --default-mimetype application/json > "$TMPDIR/npm-registry.log" 2>&1 &
           registry_pid=$!
           trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
-          while [ ! -s "$TMPDIR/npm-registry-port" ]; do
-            kill -0 "$registry_pid" 2>/dev/null
-            sleep 0.1
-          done
-          registry_port=$(cat "$TMPDIR/npm-registry-port")
-          bunInstallFlags="--linker=hoisted --registry http://127.0.0.1:$registry_port"
-        '';
+          bun install --linker=hoisted --ignore-scripts --no-progress --registry http://127.0.0.1:54321
 
-        postBunNodeModulesInstallPhase = ''
           rm -rf node_modules/pdfjs-dist
           cp -aL ${bunDeps}/share/bun-packages/github:macro-inc-pdf.js-f9b2ce6 node_modules/pdfjs-dist
           chmod -R u+w node_modules/pdfjs-dist
@@ -111,15 +138,17 @@
               cp -aL "$target"/. "$package"/
             fi
           done
-
           rm -rf node_modules/@tauri-apps/api
           ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@tauri-apps/api
           mkdir -p node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps
           ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps/api
-        '';
 
-        buildPhase = ''
-          runHook preBuild
+          vite_resolve_replacement='      resolve: {
+        alias: [
+          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
+        ],'
+          substituteInPlace app/packages/app/vite.base.ts \
+            --replace-fail "      resolve: {" "$vite_resolve_replacement"
 
           printf production > app/tauri/src-tauri/.macro-tauri-env
           (
