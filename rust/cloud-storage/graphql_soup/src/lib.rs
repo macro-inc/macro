@@ -438,7 +438,8 @@ struct GraphqlEntityFilters {
     email_filters: Option<GraphqlEmailFilters>,
     crm_company_filters: Option<GraphqlCrmCompanyFilters>,
     foreign_entity_filters: Option<GraphqlForeignEntityFilters>,
-    property_filters: Option<Vec<GraphqlPropertyFilter>>,
+    #[graphql(default)]
+    property_filters: Vec<GraphqlPropertyFilter>,
 }
 
 impl GraphqlEntityFilters {
@@ -461,12 +462,7 @@ impl From<GraphqlEntityFilters> for EntityFilters {
             email_filters: optional_input(value.email_filters),
             crm_company_filters: optional_input(value.crm_company_filters),
             foreign_entity_filters: optional_input(value.foreign_entity_filters),
-            property_filters: value
-                .property_filters
-                .unwrap_or_default()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            property_filters: value.property_filters.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -501,30 +497,34 @@ impl From<GraphqlTaskFilters> for TaskFilters {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlDocumentFilters {
-    file_types: Option<Vec<String>>,
-    document_ids: Option<Vec<ID>>,
-    project_ids: Option<Vec<ID>>,
-    owners: Option<Vec<String>>,
+    #[graphql(default)]
+    file_types: Vec<String>,
+    #[graphql(default)]
+    document_ids: Vec<ID>,
+    #[graphql(default)]
+    project_ids: Vec<ID>,
+    #[graphql(default)]
+    owners: Vec<String>,
     importance: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
     task_filters: Option<GraphqlTaskFilters>,
-    sub_types: Option<Vec<GraphqlDocumentSubTypeFilter>>,
+    #[graphql(default)]
+    sub_types: Vec<GraphqlDocumentSubTypeFilter>,
     is_email_attachment: Option<bool>,
 }
 
 impl From<GraphqlDocumentFilters> for DocumentFilters {
     fn from(value: GraphqlDocumentFilters) -> Self {
         Self {
-            file_types: value.file_types.unwrap_or_default(),
+            file_types: value.file_types,
             document_ids: ids_to_strings(value.document_ids),
             project_ids: ids_to_strings(value.project_ids),
-            owners: value.owners.unwrap_or_default(),
+            owners: value.owners,
             importance: value.importance,
             notification_filters: optional_input(value.notification_filters),
             task_filters: optional_input(value.task_filters),
             sub_types: value
                 .sub_types
-                .unwrap_or_default()
                 .into_iter()
                 .map(GraphqlDocumentSubTypeFilter::as_filter_value)
                 .collect(),
@@ -551,10 +551,14 @@ impl GraphqlDocumentSubTypeFilter {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlChatFilters {
-    role: Option<Vec<GraphqlChatRoleFilter>>,
-    chat_ids: Option<Vec<ID>>,
-    project_ids: Option<Vec<ID>>,
-    owners: Option<Vec<String>>,
+    #[graphql(default)]
+    role: Vec<GraphqlChatRoleFilter>,
+    #[graphql(default)]
+    chat_ids: Vec<ID>,
+    #[graphql(default)]
+    project_ids: Vec<ID>,
+    #[graphql(default)]
+    owners: Vec<String>,
     importance: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
 }
@@ -564,13 +568,12 @@ impl From<GraphqlChatFilters> for ChatFilters {
         Self {
             role: value
                 .role
-                .unwrap_or_default()
                 .into_iter()
                 .map(GraphqlChatRoleFilter::as_filter_value)
                 .collect(),
             chat_ids: ids_to_strings(value.chat_ids),
             project_ids: ids_to_strings(value.project_ids),
-            owners: value.owners.unwrap_or_default(),
+            owners: value.owners,
             importance: value.importance,
             notification_filters: optional_input(value.notification_filters),
         }
@@ -597,13 +600,18 @@ impl GraphqlChatRoleFilter {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlChannelFilters {
-    thread_ids: Option<Vec<ID>>,
-    mentions: Option<Vec<String>>,
+    #[graphql(default)]
+    thread_ids: Vec<ID>,
+    #[graphql(default)]
+    mentions: Vec<String>,
     org_id: Option<i64>,
     team_id: Option<ID>,
-    channel_ids: Option<Vec<ID>>,
-    sender_ids: Option<Vec<String>>,
-    channel_types: Option<Vec<GraphqlChannelTypeFilter>>,
+    #[graphql(default)]
+    channel_ids: Vec<ID>,
+    #[graphql(default)]
+    sender_ids: Vec<String>,
+    #[graphql(default)]
+    channel_types: Vec<GraphqlChannelTypeFilter>,
     importance: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
 }
@@ -612,14 +620,13 @@ impl From<GraphqlChannelFilters> for ChannelFilters {
     fn from(value: GraphqlChannelFilters) -> Self {
         Self {
             thread_ids: ids_to_strings(value.thread_ids),
-            mentions: value.mentions.unwrap_or_default(),
+            mentions: value.mentions,
             org_id: value.org_id,
             team_id: value.team_id.map(|id| id.to_string()),
             channel_ids: ids_to_strings(value.channel_ids),
-            sender_ids: value.sender_ids.unwrap_or_default(),
+            sender_ids: value.sender_ids,
             channel_types: value
                 .channel_types
-                .unwrap_or_default()
                 .into_iter()
                 .map(GraphqlChannelTypeFilter::as_filter_value)
                 .collect(),
@@ -651,9 +658,12 @@ impl GraphqlChannelTypeFilter {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlChannelThreadFilters {
-    thread_ids: Option<Vec<ID>>,
-    channel_ids: Option<Vec<ID>>,
-    root_sender_ids: Option<Vec<String>>,
+    #[graphql(default)]
+    thread_ids: Vec<ID>,
+    #[graphql(default)]
+    channel_ids: Vec<ID>,
+    #[graphql(default)]
+    root_sender_ids: Vec<String>,
 }
 
 impl From<GraphqlChannelThreadFilters> for ChannelThreadFilters {
@@ -661,16 +671,19 @@ impl From<GraphqlChannelThreadFilters> for ChannelThreadFilters {
         Self {
             thread_ids: ids_to_strings(value.thread_ids),
             channel_ids: ids_to_strings(value.channel_ids),
-            root_sender_ids: value.root_sender_ids.unwrap_or_default(),
+            root_sender_ids: value.root_sender_ids,
         }
     }
 }
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlCallFilters {
-    call_ids: Option<Vec<ID>>,
-    channel_ids: Option<Vec<ID>>,
-    speaker_ids: Option<Vec<String>>,
+    #[graphql(default)]
+    call_ids: Vec<ID>,
+    #[graphql(default)]
+    channel_ids: Vec<ID>,
+    #[graphql(default)]
+    speaker_ids: Vec<String>,
     status: Option<GraphqlCallStatus>,
     attended: Option<bool>,
 }
@@ -680,7 +693,7 @@ impl From<GraphqlCallFilters> for CallFilters {
         Self {
             call_ids: ids_to_strings(value.call_ids),
             channel_ids: ids_to_strings(value.channel_ids),
-            speaker_ids: value.speaker_ids.unwrap_or_default(),
+            speaker_ids: value.speaker_ids,
             status: value.status.map(Into::into),
             attended: value.attended,
         }
@@ -706,40 +719,51 @@ impl From<GraphqlCallStatus> for CallStatus {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlEmailFilters {
-    senders: Option<Vec<String>>,
-    cc: Option<Vec<String>>,
-    bcc: Option<Vec<String>>,
-    recipients: Option<Vec<String>>,
-    email_thread_ids: Option<Vec<ID>>,
-    link_ids: Option<Vec<ID>>,
-    project_ids: Option<Vec<String>>,
+    #[graphql(default)]
+    senders: Vec<String>,
+    #[graphql(default)]
+    cc: Vec<String>,
+    #[graphql(default)]
+    bcc: Vec<String>,
+    #[graphql(default)]
+    recipients: Vec<String>,
+    #[graphql(default)]
+    email_thread_ids: Vec<ID>,
+    #[graphql(default)]
+    link_ids: Vec<ID>,
+    #[graphql(default)]
+    project_ids: Vec<String>,
     importance: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
-    include_labels: Option<Vec<String>>,
-    exclude_labels: Option<Vec<String>>,
+    #[graphql(default)]
+    include_labels: Vec<String>,
+    #[graphql(default)]
+    exclude_labels: Vec<String>,
     shared: Option<GraphqlSharedEmailFilter>,
-    crm_domains: Option<Vec<String>>,
-    crm_addresses: Option<Vec<String>>,
+    #[graphql(default)]
+    crm_domains: Vec<String>,
+    #[graphql(default)]
+    crm_addresses: Vec<String>,
     calendar_only: Option<bool>,
 }
 
 impl From<GraphqlEmailFilters> for EmailFilters {
     fn from(value: GraphqlEmailFilters) -> Self {
         Self {
-            senders: value.senders.unwrap_or_default(),
-            cc: value.cc.unwrap_or_default(),
-            bcc: value.bcc.unwrap_or_default(),
-            recipients: value.recipients.unwrap_or_default(),
+            senders: value.senders,
+            cc: value.cc,
+            bcc: value.bcc,
+            recipients: value.recipients,
             email_thread_ids: ids_to_strings(value.email_thread_ids),
             link_ids: ids_to_strings(value.link_ids),
-            project_ids: value.project_ids.unwrap_or_default(),
+            project_ids: value.project_ids,
             importance: value.importance,
             notification_filters: optional_input(value.notification_filters),
-            include_labels: value.include_labels.unwrap_or_default(),
-            exclude_labels: value.exclude_labels.unwrap_or_default(),
+            include_labels: value.include_labels,
+            exclude_labels: value.exclude_labels,
             shared: value.shared.map(Into::into).unwrap_or_default(),
-            crm_domains: value.crm_domains.unwrap_or_default(),
-            crm_addresses: value.crm_addresses.unwrap_or_default(),
+            crm_domains: value.crm_domains,
+            crm_addresses: value.crm_addresses,
             calendar_only: value.calendar_only,
         }
     }
@@ -764,7 +788,8 @@ impl From<GraphqlSharedEmailFilter> for SharedEmailFilter {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlCrmCompanyFilters {
-    company_ids: Option<Vec<ID>>,
+    #[graphql(default)]
+    company_ids: Vec<ID>,
     hidden: Option<bool>,
 }
 
@@ -779,9 +804,12 @@ impl From<GraphqlCrmCompanyFilters> for CrmCompanyFilters {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlForeignEntityFilters {
-    ids: Option<Vec<ID>>,
-    foreign_entity_ids: Option<Vec<String>>,
-    foreign_entity_sources: Option<Vec<String>>,
+    #[graphql(default)]
+    ids: Vec<ID>,
+    #[graphql(default)]
+    foreign_entity_ids: Vec<String>,
+    #[graphql(default)]
+    foreign_entity_sources: Vec<String>,
     includes_me: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
 }
@@ -790,8 +818,8 @@ impl From<GraphqlForeignEntityFilters> for ForeignEntityFilters {
     fn from(value: GraphqlForeignEntityFilters) -> Self {
         Self {
             ids: ids_to_strings(value.ids),
-            foreign_entity_ids: value.foreign_entity_ids.unwrap_or_default(),
-            foreign_entity_sources: value.foreign_entity_sources.unwrap_or_default(),
+            foreign_entity_ids: value.foreign_entity_ids,
+            foreign_entity_sources: value.foreign_entity_sources,
             includes_me: value.includes_me.unwrap_or_default(),
             notification_filters: optional_input(value.notification_filters),
         }
@@ -800,9 +828,11 @@ impl From<GraphqlForeignEntityFilters> for ForeignEntityFilters {
 
 #[derive(async_graphql::InputObject)]
 struct GraphqlProjectFilters {
-    project_ids: Option<Vec<ID>>,
+    #[graphql(default)]
+    project_ids: Vec<ID>,
     include_root: Option<bool>,
-    owners: Option<Vec<String>>,
+    #[graphql(default)]
+    owners: Vec<String>,
     importance: Option<bool>,
     notification_filters: Option<GraphqlNotificationFilters>,
 }
@@ -812,7 +842,7 @@ impl From<GraphqlProjectFilters> for ProjectFilters {
         Self {
             project_ids: ids_to_strings(value.project_ids),
             include_root: value.include_root.unwrap_or_default(),
-            owners: value.owners.unwrap_or_default(),
+            owners: value.owners,
             importance: value.importance,
             notification_filters: optional_input(value.notification_filters),
         }
@@ -823,8 +853,10 @@ impl From<GraphqlProjectFilters> for ProjectFilters {
 struct GraphqlPropertyFilter {
     property_definition_id: ID,
     entity_type: Option<GraphqlPropertyEntityType>,
-    option_ids: Option<Vec<ID>>,
-    entity_ids: Option<Vec<String>>,
+    #[graphql(default)]
+    option_ids: Vec<ID>,
+    #[graphql(default)]
+    entity_ids: Vec<String>,
 }
 
 impl From<GraphqlPropertyFilter> for PropertyFilter {
@@ -835,7 +867,7 @@ impl From<GraphqlPropertyFilter> for PropertyFilter {
                 .entity_type
                 .map(GraphqlPropertyEntityType::as_filter_value),
             option_ids: ids_to_strings(value.option_ids),
-            entity_ids: value.entity_ids.unwrap_or_default(),
+            entity_ids: value.entity_ids,
         }
     }
 }
@@ -876,11 +908,8 @@ where
     value.map(Into::into).unwrap_or_default()
 }
 
-fn ids_to_strings(ids: Option<Vec<ID>>) -> Vec<String> {
-    ids.unwrap_or_default()
-        .into_iter()
-        .map(|id| id.to_string())
-        .collect()
+fn ids_to_strings(ids: Vec<ID>) -> Vec<String> {
+    ids.into_iter().map(|id| id.to_string()).collect()
 }
 
 /// GraphQL representation of supported simple Soup sorts.
