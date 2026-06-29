@@ -15,6 +15,12 @@ export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
     depth?: 0 | 1 | 2 | 3 | 4 | 5;
     tooltipPlacement?: Placement;
+    /**
+     * Stretch the button (and, when a tooltip wraps it, the tooltip's trigger
+     * wrapper) to fill the available width. Without this the tooltip wrapper is
+     * `inline-flex` and collapses a `w-full` button to its content width.
+     */
+    fullWidth?: boolean;
     noTouchResize?: boolean;
     variant?: ButtonVariant;
     children?: JSX.Element;
@@ -75,6 +81,7 @@ export const Button = (props: ButtonProps) => {
     'depth',
     'label',
     'size',
+    'fullWidth',
     'tooltipDisabled',
   ]);
 
@@ -83,6 +90,7 @@ export const Button = (props: ButtonProps) => {
   const cls = () =>
     cn(
       'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
+      local.fullWidth && 'w-full',
       {
         'touch:min-h-9 touch:min-w-9 touch:[&_svg]:size-6':
           !props.noTouchResize,
@@ -129,6 +137,7 @@ export const Button = (props: ButtonProps) => {
     >
       {(label) => (
         <Tooltip
+          class={local.fullWidth ? 'w-full' : undefined}
           hotkey={local.hotkey}
           shortcut={local.shortcut}
           placement={placement()}

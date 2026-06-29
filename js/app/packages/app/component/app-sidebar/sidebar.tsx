@@ -519,6 +519,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   return (
     <NavRow
       draggable={false}
+      class="h-8"
+      fullWidth
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -557,7 +559,8 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 
   return (
     <NavRow
-      class="w-full center h-8"
+      class="center h-8"
+      fullWidth
       tooltipPlacement="right"
       label={props.label}
       hotkey={props.hotkeyToken}
@@ -633,11 +636,12 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       <Dropdown.Trigger
         variant="ghost"
         class={cn(
-          'flex items-center w-full rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          'justify-start gap-2 px-1.5 py-1',
-          'group-data-[slim=true]/sidebar:justify-center group-data-[slim=true]/sidebar:gap-0'
+          'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
+          'justify-start gap-2 px-1.5 py-1'
         )}
-        label={props.isSlim() ? 'Settings' : undefined}
+        label="Settings"
+        fullWidth
+        tooltipDisabled={!props.isSlim()}
         tooltipPlacement="right"
         onMouseDown={(e: MouseEvent) => {
           if (e.button !== 0) return;
@@ -649,13 +653,12 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           fallback={<div class="size-5 shrink-0 rounded-full bg-ink/10" />}
         >
           {(id) => (
-            <div class="size-5">
+            <div class="size-5 shrink-0">
               <UserIcon
                 id={id()}
                 size="fill"
                 suppressClick
                 showTooltip={false}
-                // class="-m-1"
               />
             </div>
           )}
@@ -1031,7 +1034,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </div>
       </Show>
 
-      <div class="w-full px-2 flex flex-col gap-1 mb-1">
+      <div class="w-full flex flex-col gap-0.5 mb-1">
         <For each={PROMOTED_SETTINGS_TABS}>
           {(tab) => (
             <Show
@@ -1050,7 +1053,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </For>
       </div>
 
-      <div class="w-full px-2">
+      <div class="w-full">
         <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
       </div>
       <InviteModal />
@@ -1105,7 +1108,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
       id: props.id,
       params: props.params,
     }) as const;
-
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? true;
 
@@ -1143,19 +1145,17 @@ const SidebarLink = (props: SidebarLinkProps) => {
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
           active={isActive() && !props.suppressActiveStyle}
-          class="group-data-[slim=true]/sidebar:justify-center bg-[gold]/30 h-8 w-full"
+          class="h-8"
+          fullWidth
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
-          label={
-            props.sidebarState === 'slim' ? `Go to ${props.label}` : undefined
-          }
+          label={`Go to ${props.label}`}
           hotkey={
-            props.sidebarState === 'slim'
-              ? props.standaloneHotkey
-                ? props.hotkeyToken
-                : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
-              : undefined
+            props.standaloneHotkey
+              ? props.hotkeyToken
+              : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
           }
+          tooltipDisabled={props.sidebarState !== 'slim'}
           onMouseLeave={() => setIsHovering(false)}
           onMouseDown={(e) => {
             if (e.button !== 0) return;
