@@ -1720,6 +1720,12 @@ export const getChannelResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -1798,6 +1804,12 @@ export const getChannelResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2163,6 +2175,12 @@ export const getChannelMessagesResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2241,6 +2259,12 @@ export const getChannelMessagesResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2423,6 +2447,12 @@ export const postChannelMessagesResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2501,6 +2531,12 @@ export const postChannelMessagesResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2589,6 +2625,12 @@ export const getMessageWithContextResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2666,6 +2708,12 @@ export const getThreadRepliesResponseItem = zod
           .string()
           .describe('Sender id without the storage namespace prefix.'),
         name: zod.string().nullish().describe('Display name for bot senders.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe(
+            'For an agent (bot) message, the id of the user who triggered it.'
+          ),
         type: zod.enum(['user', 'bot']).describe('Public sender type.'),
       })
       .describe('Public sender identity for channel messages.'),

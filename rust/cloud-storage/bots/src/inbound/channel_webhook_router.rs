@@ -252,6 +252,8 @@ where
                 attachments: Vec::new(),
                 nonce: None,
                 notification_policy: Default::default(),
+                // External webhook bot posting on its own; no triggering user.
+                triggered_by: None,
             },
         )
         .await?;

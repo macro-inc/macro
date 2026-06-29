@@ -272,6 +272,7 @@ where
                     attachments: Vec::new(),
                     nonce: None,
                     notification_policy: PostMessageNotificationPolicy::Silent,
+                    triggered_by: Some(event.requesting_user.as_ref().to_string()),
                 },
             )
             .await?;

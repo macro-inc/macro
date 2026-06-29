@@ -141,6 +141,7 @@ where
                                 id: r.id,
                                 bot_profile: bot_profile_for(&bot_profiles, &r.sender_id),
                                 sender_id: r.sender_id.clone(),
+                                triggered_by: r.triggered_by.clone(),
                                 content: r.content.clone(),
                                 created_at: r.created_at,
                                 updated_at: r.updated_at,
@@ -157,6 +158,7 @@ where
                     channel_id: row.channel_id,
                     bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
                     sender_id: row.sender_id,
+                    triggered_by: row.triggered_by,
                     content: row.content,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
@@ -202,6 +204,7 @@ where
                 id: row.id,
                 bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
                 sender_id: row.sender_id,
+                triggered_by: row.triggered_by,
                 content: row.content,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
@@ -513,6 +516,7 @@ where
             .create_message(
                 channel_id,
                 actor_storage_id.clone(),
+                req.triggered_by.clone(),
                 req.content.clone(),
                 req.thread_id,
             )

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE comms_messages\n            SET content = $1, updated_at = NOW(), edited_at = NOW()\n            WHERE id = $2 AND channel_id = $3\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
+  "query": "\n            UPDATE comms_messages\n            SET content = '', updated_at = NOW(), deleted_at = NOW()\n            WHERE id = $1 AND channel_id = $2\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -20,38 +20,42 @@
       },
       {
         "ordinal": 3,
-        "name": "content",
+        "name": "triggered_by_user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "thread_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "edited_at?",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at?",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Uuid",
         "Uuid"
       ]
@@ -60,6 +64,7 @@
       false,
       false,
       false,
+      true,
       false,
       false,
       false,
@@ -68,5 +73,5 @@
       null
     ]
   },
-  "hash": "1df49f5d478dcee269a9bded7fdcc34060d1c9dd6f964f3d6444b55830af299a"
+  "hash": "811160740482a042237f6ffc433290e0e89ba9521fbba575634fd92a39433271"
 }

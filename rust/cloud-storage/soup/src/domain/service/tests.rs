@@ -506,6 +506,7 @@ fn channel_thread_message(
         updated_at,
         edited_at: None,
         deleted_at: None,
+        triggered_by: None,
         thread: ThreadInfo {
             reply_count: 1,
             latest_reply_at: Some(DateTime::default() + Days::new(1)),
@@ -517,6 +518,7 @@ fn channel_thread_message(
                 created_at: DateTime::default() + Days::new(1),
                 updated_at: DateTime::default() + Days::new(1),
                 edited_at: None,
+                triggered_by: None,
                 reactions: Vec::new(),
                 attachments: Vec::new(),
             }],

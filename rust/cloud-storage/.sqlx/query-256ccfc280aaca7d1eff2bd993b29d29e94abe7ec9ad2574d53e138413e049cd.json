@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE comms_messages\n            SET\n                updated_at = NOW(),\n                edited_at = NOW(),\n                deleted_at = CASE\n                    WHEN $2 = false AND (content IS NULL OR content ~ '^[\\s]*$') THEN NOW()\n                    ELSE deleted_at\n                END\n            WHERE id = $1\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
+  "query": "\n            UPDATE comms_messages\n            SET\n                updated_at = NOW(),\n                edited_at = NOW(),\n                deleted_at = CASE\n                    WHEN $2 = false AND (content IS NULL OR content ~ '^[\\s]*$') THEN NOW()\n                    ELSE deleted_at\n                END\n            WHERE id = $1\n            RETURNING\n                id,\n                channel_id,\n                sender_id,\n                triggered_by_user_id,\n                content,\n                created_at,\n                updated_at,\n                thread_id,\n                edited_at::timestamptz AS \"edited_at?\",\n                deleted_at::timestamptz AS \"deleted_at?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -20,31 +20,36 @@
       },
       {
         "ordinal": 3,
-        "name": "content",
+        "name": "triggered_by_user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "thread_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "edited_at?",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "deleted_at?",
         "type_info": "Timestamptz"
       }
@@ -59,6 +64,7 @@
       false,
       false,
       false,
+      true,
       false,
       false,
       false,
@@ -67,5 +73,5 @@
       null
     ]
   },
-  "hash": "2b2674801d90fb7b89f286300e8a03ec10c34ab1f8a6ecc6a9ecac5b964669a2"
+  "hash": "256ccfc280aaca7d1eff2bd993b29d29e94abe7ec9ad2574d53e138413e049cd"
 }

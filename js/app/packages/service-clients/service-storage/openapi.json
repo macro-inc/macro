@@ -9950,6 +9950,10 @@
             "type": ["string", "null"],
             "description": "Display name for bot senders."
           },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "For an agent (bot) message, the id of the user who triggered it."
+          },
           "type": {
             "$ref": "#/components/schemas/ApiMessageSenderType",
             "description": "Sender type."
