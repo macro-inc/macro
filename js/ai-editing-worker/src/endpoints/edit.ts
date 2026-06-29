@@ -62,7 +62,11 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     return PROVIDERS[provider].create({ apiKey })(model);
   };
 
+  // FYI cancellation only works on live cloudflare not workerd. And it requires enable_request_signal.
   const signal = c.req.raw.signal;
+  signal.addEventListener('abort', () => {
+    console.log('edit session cancelled by client:', documentId);
+  });
 
   try {
     const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);

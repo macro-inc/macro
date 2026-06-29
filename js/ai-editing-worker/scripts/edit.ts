@@ -50,6 +50,10 @@ const resolvedToken = (userToken as string).includes("=")
 	: userToken as string;
 
 const controller = new AbortController();
+process.on("SIGINT", () => {
+	console.error("\naborting request…");
+	controller.abort();
+});
 const wantDebug = debug || Boolean(out);
 
 const res = await fetch(`${workerUrl}/edit`, {
@@ -68,7 +72,10 @@ const res = await fetch(`${workerUrl}/edit`, {
 		debug: wantDebug,
 	}),
 	timeout: false,
-} as RequestInit & { timeout: boolean });
+} as RequestInit & { timeout: boolean }).catch((err) => {
+	if (controller.signal.aborted) process.exit(130);
+	throw err;
+});
 
 const body = (await res.json()) as {
 	trace?: string;
