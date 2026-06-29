@@ -26,7 +26,7 @@ outbound = [
   "dep:url",
   "ports",
 ]
-ports = ["dep:serde_json"]
+ports = ["dep:serde_json", "dep:url"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -55,3 +55,4 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
   "axum",
   "testing",
 ] }
+tokio = { workspace = true }
