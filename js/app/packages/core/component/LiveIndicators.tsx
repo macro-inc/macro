@@ -40,7 +40,7 @@ export function LiveIndicators(props: {
 }
 
 export function BlockLiveIndicators() {
-  const indicators = useUserIndicators();
+  const _indicators = useUserIndicators();
   const userId = useUserId();
 
   return (

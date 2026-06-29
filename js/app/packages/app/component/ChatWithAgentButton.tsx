@@ -7,7 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createChat } from '@core/util/create';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import { Button, Layer } from '@ui';
+import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 
