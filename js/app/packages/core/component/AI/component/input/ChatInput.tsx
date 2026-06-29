@@ -4,11 +4,11 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import {
   defaultModelForPlan,
-  FREE_MODELS,
-  PAID_MODELS,
+  Model,
+  modelsForPlan,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import type { Model, ToolSet } from '@core/component/AI/types';
+import type { ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -56,15 +56,18 @@ export function ChatInput(props: ChatInputComponentProps) {
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
 
-  // Free and paid users see different selector lists. Free users get only the
-  // free models (Haiku); premium models aren't shown at all. The 403 -> paywall
-  // path is the backstop for anything that slips through to the backend.
-  const modelOptions = createMemo(() =>
-    (hasPaidAccess() ? PAID_MODELS : FREE_MODELS).map((id) => ({
+  // Every model is shown to every user; availability is per-plan. Free users
+  // see the premium models locked (dimmed + lock icon), and clicking one opens
+  // the paywall via `onLocked` rather than sending and being rejected by the
+  // backend. Listing only the free model would mean free users never see the
+  // upsell at all.
+  const modelOptions = createMemo(() => {
+    const allowed = modelsForPlan(hasPaidAccess());
+    return Object.values(Model).map((id) => ({
       id,
-      available: true,
-    }))
-  );
+      available: allowed.includes(id),
+    }));
+  });
 
   // Keep the selected model valid for the current plan: if it isn't a known id
   // (e.g. a stale persisted value) or isn't available to this user (e.g. a free
