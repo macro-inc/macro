@@ -121,3 +121,22 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
     </Button>
   );
 }
+
+export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
+  const [hovering, setHovering] = createSignal(false);
+
+  return (
+    <Button
+      onClick={() => openChatWithAgent(props.entity)}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      variant="ghost"
+      size="sm"
+      depth={2}
+      class="gap-1.5 rounded-sm bg-ink/[0.04] px-3 text-ink-extra-muted hover:bg-ink/[0.06]"
+    >
+      <AnimatedStarIcon triggerAnimation={hovering()} />
+      <span class="text-xs font-medium">Ask Macro</span>
+    </Button>
+  );
+}

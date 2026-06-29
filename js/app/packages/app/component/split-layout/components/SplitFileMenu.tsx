@@ -10,17 +10,19 @@ import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Copy from '@phosphor/copy.svg';
-import ThreeDots from '@phosphor/list.svg';
+import DotsThreeCircle from '@phosphor/dots-three-circle.svg';
 import Rename from '@phosphor/pencil-line.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { Button, Dropdown } from '@ui';
+import { cn, Dropdown } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
   useContext,
 } from 'solid-js';
@@ -93,11 +95,11 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
-        class={props.triggerClass}
+        class={cn('text-ink/50 rounded-md', props.triggerClass)}
         size="icon-sm"
         variant="ghost"
       >
-        <ThreeDots />
+        <DotsThreeCircle class="size-3.5!" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-fit">
         <Show when={primaryOps().length > 0}>
@@ -142,14 +144,6 @@ function MobileRender(props: SplitFileMenuRenderProps) {
       preventScroll={false}
       preventScrollbarShift={false}
     >
-      <MobileDrawer.Trigger
-        as={Button}
-        class={props.triggerClass}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <ThreeDots />
-      </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="File actions">
@@ -196,6 +190,12 @@ export function SplitFileMenu(props: {
   const itemOperations = useItemOperations();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
+
+  createEffect(() => {
+    const openMenu = () => setOpen(true);
+    ctx.setTitleFileMenuTrigger(() => openMenu);
+    onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
+  });
 
   const ops = createMemo<CustomFileOperation[]>(() => {
     return props.ops

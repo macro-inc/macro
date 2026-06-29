@@ -575,7 +575,7 @@ export const SoupView = (props: SoupViewProps) => {
             >
               <Show when={!isMobile() && !narrowSearchExpanded()}>
                 <div class="flex items-center gap-1">
-                  <span class="text-base font-bold">{props.viewName}</span>
+                  <span class="text-sm font-semibold">{props.viewName}</span>
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button

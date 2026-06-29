@@ -1,4 +1,6 @@
+import { AskMacroButton } from '@app/component/ChatWithAgentButton';
 import { SidePanel } from '@app/component/side-panel';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import {
@@ -17,9 +19,11 @@ import {
   blockElementSignal,
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
+import { AnimatedTaskIcon } from '@icon/wide-task';
+import { buildMentionMarkdownString } from '@lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -67,6 +71,7 @@ export function EmailView(props: EmailViewProps) {
 
 function EmailContent(props: EmailViewProps) {
   const scopeId = blockHotkeyScopeSignal.get;
+  const { popoverSplit } = useSplitLayout();
 
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const blockElement = blockElementSignal.get;
@@ -79,6 +84,26 @@ function EmailContent(props: EmailViewProps) {
 
   const handleScrollPositionChange = (scrollFromTop: number) => {
     setIsScrolled(scrollFromTop > 1);
+  };
+
+  const openTaskCompose = () => {
+    const threadId = context.thread()?.db_id;
+    if (!threadId) return;
+    const title =
+      props.title.length > 70 ? `${props.title.slice(0, 70)}...` : props.title;
+    popoverSplit({
+      type: 'component',
+      id: 'task-compose',
+      params: {
+        initialTitle: title,
+        initialContent: buildMentionMarkdownString({
+          type: 'document',
+          documentId: threadId,
+          documentName: props.title,
+          blockName: 'email',
+        }),
+      },
+    });
   };
 
   /**
@@ -568,7 +593,23 @@ function EmailContent(props: EmailViewProps) {
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pt-3 pb-1.5 tracking-tight text-balance">
+                        <div class="pt-12 pb-4 flex items-center gap-2">
+                          <Show when={context.thread()?.db_id}>
+                            {(threadId) => (
+                              <AskMacroButton
+                                entity={{
+                                  type: 'email',
+                                  id: threadId(),
+                                  name: props.title,
+                                }}
+                              />
+                            )}
+                          </Show>
+                          <Show when={context.thread()?.db_id}>
+                            <EmailTaskButton onClick={openTaskCompose} />
+                          </Show>
+                        </div>
+                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
                           {props.title}
                         </h1>
                         <div class="pb-2.5">
@@ -644,5 +685,25 @@ function EmailContent(props: EmailViewProps) {
         </Switch>
       </Show>
     </ModalsProvider>
+  );
+}
+
+function EmailTaskButton(props: { onClick: () => void }) {
+  const [hovering, setHovering] = createSignal(false);
+
+  return (
+    <Button
+      tooltip="Create Task"
+      variant="ghost"
+      size="sm"
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      onClick={props.onClick}
+      depth={2}
+      class="gap-1.5 rounded-sm bg-ink/[0.04] px-3 text-ink-extra-muted hover:bg-ink/[0.06]"
+    >
+      <AnimatedTaskIcon triggerAnimation={hovering()} />
+      <span class="text-xs font-semibold">Task</span>
+    </Button>
   );
 }

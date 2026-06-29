@@ -1,5 +1,4 @@
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
-import { useSidePanel } from '@app/component/side-panel/SidePanel';
 import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   EntityIcon,
@@ -17,13 +16,18 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type BuildEntityDataArgs, buildEntityData } from '@entity';
-import ArticleIcon from '@phosphor/article.svg';
-import InfoIcon from '@phosphor/info.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn, Tooltip } from '@ui';
-import { type Accessor, createEffect, type JSX, Show } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
-import { HeaderTitleMenu, type HeaderTitleMenuItem } from './HeaderTitleMenu';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -37,8 +41,19 @@ export function StaticSplitLabel(props: {
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+  const openTitleFileMenu = (e: MouseEvent) => {
+    if (!isMobile()) return;
+    const trigger = panel.titleFileMenuTrigger();
+    if (!trigger) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trigger();
+  };
   return (
-    <HeaderIsland class="shrink">
+    <HeaderIsland
+      class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
+      onClick={openTitleFileMenu}
+    >
       <div
         class={cn(
           'z-page-overlay relative flex items-center gap-2 max-w-full h-full shrink',
@@ -57,9 +72,20 @@ export function StaticSplitLabel(props: {
           <div class="shrink-0">{props.icon}</div>
         </Show>
         <Show when={props.badges}>{props.badges}</Show>
-        <span class="inline-block text-sm font-semibold truncate">
-          {props.label}
+        <span class="inline-flex min-w-0 items-center gap-1">
+          <span class="inline-block truncate text-sm font-semibold">
+            {props.label}
+          </span>
+          <Show when={panel.titleFileMenuTrigger()}>
+            <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted mobile:block" />
+          </Show>
         </span>
+        <div
+          class="shrink-0 flex items-center h-full"
+          ref={(ref) => {
+            panel.setTitleFileMenuRef(ref);
+          }}
+        />
       </div>
     </HeaderIsland>
   );
@@ -89,7 +115,10 @@ export function SplitLabel(props: {
 
   const startEditing = (e: MouseEvent) => {
     if (props.lockRename) return;
-    if (e.type === 'contextmenu') e.preventDefault();
+    if (e.type === 'contextmenu') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
     const entity = buildEntityData({
       id: blockId,
@@ -107,13 +136,27 @@ export function SplitLabel(props: {
     });
   };
 
+  const openTitleFileMenu = (e: MouseEvent) => {
+    if (!isMobile()) return;
+    const trigger = panel.titleFileMenuTrigger();
+    if (!trigger) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trigger();
+  };
+
   return (
-    <span
-      class="inline-block text-sm font-semibold truncate"
-      onContextMenu={startEditing}
-      onDblClick={startEditing}
-    >
-      {truncatedLabel()}
+    <span class="flex min-w-0 items-center gap-1" onClick={openTitleFileMenu}>
+      <span
+        class="inline-block truncate text-sm font-semibold"
+        onContextMenu={startEditing}
+        onDblClick={startEditing}
+      >
+        {truncatedLabel()}
+      </span>
+      <Show when={panel.titleFileMenuTrigger()}>
+        <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted mobile:block" />
+      </Show>
     </span>
   );
 }
@@ -183,43 +226,51 @@ export function BlockItemSplitLabel(props: {
     panel.handle.setDisplayName(displayName());
   });
 
-  const sidePanel = useSidePanel();
+  const openTitleFileMenu = (e: MouseEvent) => {
+    if (!isMobile()) return;
+    const trigger = panel.titleFileMenuTrigger();
+    if (!trigger) return;
+    e.preventDefault();
+    e.stopPropagation();
+    trigger();
+  };
 
   return (
-    <HeaderIsland class="shrink">
-      <Show
-        when={isMobile() && sidePanel?.hasSections()}
-        fallback={
-          <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
-            <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
-            <Show when={props.badges}>{props.badges}</Show>
-            <SplitLabel
-              label={displayName() ?? ''}
-              lockRename={!isOwner() || props.lockRename}
-            />
-          </div>
-        }
-      >
-        {/* Mobile: the side-panel tabs hide behind the title — tapping it
-            opens a menu switching between Content and Info. */}
-        <HeaderTitleMenu
-          items={SIDE_PANEL_VIEWS}
-          active={sidePanel?.isOpen() ? 'info' : 'content'}
-          onSelect={(value) => sidePanel?.setIsOpen(value === 'info')}
-        >
-          <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
-          <Show when={props.badges}>{props.badges}</Show>
-          <SplitLabel
-            label={displayName() ?? ''}
-            lockRename={!isOwner() || props.lockRename}
-          />
-        </HeaderTitleMenu>
-      </Show>
+    <HeaderIsland
+      class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
+      onClick={openTitleFileMenu}
+    >
+      <div class="ph-no-capture z-page-overlay relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
+        <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
+        <Show when={props.badges}>{props.badges}</Show>
+        <SplitLabel
+          label={displayName() ?? ''}
+          lockRename={!isOwner() || props.lockRename}
+        />
+        <div
+          class="shrink-0 flex items-center h-full"
+          ref={(ref) => {
+            panel.setTitleFileMenuRef(ref);
+          }}
+        />
+      </div>
     </HeaderIsland>
   );
 }
 
-const SIDE_PANEL_VIEWS: HeaderTitleMenuItem[] = [
-  { value: 'content', label: 'Content', icon: ArticleIcon },
-  { value: 'info', label: 'Info', icon: InfoIcon },
-];
+export function SplitTitleFileMenu(props: ParentProps) {
+  const panel = useSplitPanelOrThrow();
+
+  return (
+    <Show when={panel.titleFileMenuRef()}>
+      <Portal
+        mount={panel.titleFileMenuRef()}
+        ref={(div) => {
+          div.style.display = 'contents';
+        }}
+      >
+        {props.children}
+      </Portal>
+    </Show>
+  );
+}

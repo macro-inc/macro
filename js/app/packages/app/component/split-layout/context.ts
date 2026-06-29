@@ -63,6 +63,10 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
+  setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
+  titleFileMenuTrigger: Accessor<(() => void) | undefined>;
+  setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   headerCollapser: HeaderCollapser;
 };
 

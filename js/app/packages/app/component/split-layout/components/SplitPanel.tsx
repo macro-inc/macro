@@ -50,6 +50,10 @@ export function SplitPanel(props: SplitPanelProps) {
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [titleFileMenuRef, setTitleFileMenuRef] =
+    createSignal<HTMLDivElement>();
+  const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
+    createSignal<() => void>();
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
@@ -162,6 +166,10 @@ export function SplitPanel(props: SplitPanelProps) {
           },
           headerCollapser,
           layoutRefs,
+          titleFileMenuRef,
+          setTitleFileMenuRef,
+          titleFileMenuTrigger,
+          setTitleFileMenuTrigger,
           panelSize,
           panelRef,
         }}
@@ -213,7 +221,7 @@ export function SplitPanel(props: SplitPanelProps) {
             >
               <Panel.Header
                 class={cn(
-                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
+                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
                   // On mobile the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
                   'mobile:min-h-0 mobile:border-b-0',

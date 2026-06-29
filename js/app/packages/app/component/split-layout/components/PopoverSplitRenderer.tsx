@@ -49,6 +49,10 @@ function PopoverSplitModal(props: {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [titleFileMenuRef, setTitleFileMenuRef] =
+    createSignal<HTMLDivElement>();
+  const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
+    createSignal<() => void>();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -106,6 +110,10 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
+    titleFileMenuRef,
+    setTitleFileMenuRef,
+    titleFileMenuTrigger,
+    setTitleFileMenuTrigger,
     headerCollapser: { register: () => () => {} },
   };
 

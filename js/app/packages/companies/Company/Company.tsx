@@ -1,5 +1,4 @@
 import { SidePanel } from '@app/component/side-panel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useCompanyQuery } from '@queries/crm/companies';
 import { CompanyContactsSection } from './CompanyContactsSection';
 import { CompanyDiscussionSection } from './CompanyDiscussionSection';
@@ -19,13 +18,6 @@ export function Company(props: { companyId: string }) {
 
   return (
     <SidePanel.Layout>
-      {/* Narrow-mode Content/Info tabs. Portaled into the split's toolbar
-          slot so they sit above the content (and outside the scroll area)
-          without restructuring the block's layout. Self-hides in wide
-          mode. Mirrors how block-call / block-md mount it. */}
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
       <div class="flex h-full flex-col overflow-y-auto scrollbar-hidden">
         <div class="mx-auto flex w-full max-w-3xl min-w-0 grow flex-col gap-6 px-6 pt-12 pb-12">
           <CompanyHeader company={company()} />
