@@ -150,27 +150,12 @@ fn parse_macro_user_id(
         .map_err(|err| async_graphql::Error::new(format!("invalid {field} `{value}`: {err}")))
 }
 
-fn fold_exprs<T>(
-    type_name: &str,
-    op_name: &str,
-    exprs: Vec<impl IntoFilterExpr<T>>,
-    fold: fn(Expr<T>, Expr<T>) -> Expr<T>,
-) -> async_graphql::Result<Expr<T>> {
-    exprs
-        .into_iter()
-        .map(IntoFilterExpr::into_expr)
-        .collect::<async_graphql::Result<Vec<_>>>()?
-        .into_iter()
-        .reduce(fold)
-        .ok_or_else(|| async_graphql::Error::new(format!("{type_name}.{op_name} cannot be empty")))
-}
-
 macro_rules! filter_expr_input {
     ($name:ident, $literal:ty, $target:ty, $type_name:literal) => {
         #[derive(async_graphql::OneofObject)]
         enum $name {
-            And(Vec<$name>),
-            Or(Vec<$name>),
+            And(Box<[$name; 2]>),
+            Or(Box<[$name; 2]>),
             Not(Box<$name>),
             Literal($literal),
         }
@@ -178,8 +163,14 @@ macro_rules! filter_expr_input {
         impl IntoFilterExpr<$target> for $name {
             fn into_expr(self) -> async_graphql::Result<Expr<$target>> {
                 match self {
-                    Self::And(exprs) => fold_exprs($type_name, "and", exprs, Expr::and),
-                    Self::Or(exprs) => fold_exprs($type_name, "or", exprs, Expr::or),
+                    Self::And(exprs) => {
+                        let [left, right] = *exprs;
+                        Ok(Expr::and(left.into_expr()?, right.into_expr()?))
+                    }
+                    Self::Or(exprs) => {
+                        let [left, right] = *exprs;
+                        Ok(Expr::or(left.into_expr()?, right.into_expr()?))
+                    }
                     Self::Not(expr) => expr.into_expr().map(Expr::is_not),
                     Self::Literal(literal) => literal.into_expr(),
                 }
