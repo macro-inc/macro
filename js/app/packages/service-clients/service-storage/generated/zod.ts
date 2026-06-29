@@ -6491,6 +6491,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -6772,6 +6773,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -7016,6 +7018,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -7411,6 +7414,7 @@ export const getItemsSoupResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -8816,6 +8820,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -9097,6 +9102,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -9341,6 +9347,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -9736,6 +9743,7 @@ export const postItemsSoupResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -10683,6 +10691,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -10964,6 +10973,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -11208,6 +11218,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -11603,6 +11614,7 @@ export const postItemsSoupAstResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -12808,6 +12820,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -13093,6 +13106,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -13337,6 +13351,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -13753,6 +13768,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'STRING',
                                           'SELECT_NUMBER',
                                           'SELECT_STRING',
+                                          'TAG',
                                           'ENTITY',
                                           'LINK',
                                         ])
@@ -14679,6 +14695,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -14964,6 +14981,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -15208,6 +15226,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -15624,6 +15643,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'STRING',
                                           'SELECT_NUMBER',
                                           'SELECT_STRING',
+                                          'TAG',
                                           'ENTITY',
                                           'LINK',
                                         ])

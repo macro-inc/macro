@@ -181,6 +181,7 @@ pub async fn create_property_definition_with_options(
             db_property_def.id,
             option.display_order,
             option.value,
+            option.color,
         )
         .await
         {
@@ -207,6 +208,44 @@ pub async fn create_property_definition_with_options(
                 "failed to commit transaction for property definition with options"
             );
             Err(e.into())
+        }
+    }
+}
+
+/// Returns the owner's tag definition, creating it on first use.
+///
+/// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
+/// unique index). A lost create race re-fetches the definition the winner just created.
+#[tracing::instrument(skip(db))]
+pub async fn get_or_create_tag_definition(
+    db: &Pool<Postgres>,
+    owner: DefinitionOwner<'_>,
+) -> Result<PropertyDefinition> {
+    let (team_id, user_id) = owner.into_ids();
+
+    if let Some(existing) =
+        crate::property_definitions::get::get_tag_definition(db, team_id, user_id).await?
+    {
+        return Ok(existing);
+    }
+
+    match create_property_definition(
+        db,
+        owner,
+        crate::property_definitions::get::TAG_DEFINITION_DISPLAY_NAME,
+        DataType::Tag,
+        true,
+        None,
+    )
+    .await
+    {
+        Ok(def) => Ok(def),
+        Err(create_err) => {
+            match crate::property_definitions::get::get_tag_definition(db, team_id, user_id).await?
+            {
+                Some(existing) => Ok(existing),
+                None => Err(create_err),
+            }
         }
     }
 }
@@ -313,6 +352,7 @@ mod tests {
                 property_definition_id: uuid::Uuid::nil(), // Will be set by the function
                 display_order: 0,
                 value: PropertyOptionValue::String("Option 1".to_string()),
+                color: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             },
@@ -321,6 +361,7 @@ mod tests {
                 property_definition_id: uuid::Uuid::nil(),
                 display_order: 1,
                 value: PropertyOptionValue::String("Option 2".to_string()),
+                color: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             },
@@ -396,6 +437,49 @@ mod tests {
         assert_eq!(property.display_name, "Multi Select Documents");
         assert!(property.is_multi_select);
         assert_eq!(property.specific_entity_type, Some(EntityType::User));
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("properties"))
+    )]
+    async fn test_get_or_create_tag_definition_is_idempotent(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        let owner = DefinitionOwner::Team(team_1());
+        let first = get_or_create_tag_definition(&pool, owner).await?;
+        assert_eq!(first.data_type, DataType::Tag);
+        assert!(first.is_multi_select);
+
+        // A second call returns the same definition rather than creating a duplicate.
+        let second = get_or_create_tag_definition(&pool, owner).await?;
+        assert_eq!(first.id, second.id);
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("properties"))
+    )]
+    async fn test_get_tag_definition_none_then_some(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        let before =
+            crate::property_definitions::get::get_tag_definition(&pool, Some(team_1()), None)
+                .await?;
+        assert!(before.is_none());
+
+        let created = get_or_create_tag_definition(&pool, DefinitionOwner::Team(team_1())).await?;
+
+        let after =
+            crate::property_definitions::get::get_tag_definition(&pool, Some(team_1()), None)
+                .await?;
+        assert_eq!(after.map(|d| d.id), Some(created.id));
 
         Ok(())
     }

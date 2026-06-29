@@ -274,6 +274,71 @@
             "description": "Internal server error"
           }
         }
+      },
+      "patch": {
+        "tags": ["Properties"],
+        "summary": "Update a property option in place (rename / recolor / reorder).",
+        "description": "The option id is preserved, so the change is reflected on every entity that references it.",
+        "operationId": "update_property_option",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Property option ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePropertyOptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Property option updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyOption"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Cannot modify system properties"
+          },
+          "404": {
+            "description": "Property or option not found"
+          },
+          "409": {
+            "description": "An option with that value already exists"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/properties/entities/bulk": {
@@ -474,6 +539,31 @@
           }
         }
       }
+    },
+    "/properties/tags": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "Get the caller's tag sets: their personal set, plus their team's shared set when on a team.\nEach set is resolved and provisioned on first use.",
+        "operationId": "get_tags",
+        "responses": {
+          "200": {
+            "description": "Tag sets retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PropertyDefinitionWithOptionsResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -531,6 +621,9 @@
         "description": "Type-safe request to add a string option to a SelectString property.",
         "required": ["display_order", "value"],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "display_order": {
             "type": "integer",
             "format": "int32"
@@ -593,6 +686,7 @@
           "STRING",
           "SELECT_NUMBER",
           "SELECT_STRING",
+          "TAG",
           "ENTITY",
           "LINK"
         ]
@@ -713,7 +807,7 @@
         "required": ["property", "definition"],
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+            "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
           },
           "options": {
             "type": ["array", "null"],
@@ -990,6 +1084,66 @@
           }
         }
       },
+      "PropertyDefinitionDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PropertyOwner"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "displayName",
+              "dataType",
+              "isMultiSelect",
+              "isSystem",
+              "isMetadata"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "dataType": {
+                "$ref": "#/components/schemas/DataType"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "isMetadata": {
+                "type": "boolean",
+                "description": "Flag to indicate if this is a system-generated metadata property"
+              },
+              "isMultiSelect": {
+                "type": "boolean"
+              },
+              "isSystem": {
+                "type": "boolean",
+                "description": "Flag to indicate if this is a system property (managed by the system)"
+              },
+              "specificEntityType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityType"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            }
+          }
+        ],
+        "description": "Property definition response (API representation)."
+      },
       "PropertyDefinitionResponse": {
         "oneOf": [
           {
@@ -1023,7 +1177,7 @@
         "required": ["definition", "propertyOptions"],
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+            "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
           },
           "propertyOptions": {
             "type": "array",
@@ -1045,6 +1199,9 @@
           "updated_at"
         ],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1075,6 +1232,9 @@
         "description": "Property option response (API representation).",
         "required": ["id", "propertyDefinitionId", "displayOrder", "value"],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "displayOrder": {
             "type": "integer",
             "format": "int32"
@@ -1503,6 +1663,25 @@
           }
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
+      },
+      "UpdatePropertyOptionRequest": {
+        "type": "object",
+        "description": "Request to update a property option in place. Omitted fields keep their current value.\nThe option id is preserved, so the change propagates to every entity referencing it.",
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "New color as a hex string like `#RRGGBB`."
+          },
+          "display_order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "New display order."
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "New string value (label text). Only valid for SelectString and Tag properties."
+          }
+        }
       }
     }
   },

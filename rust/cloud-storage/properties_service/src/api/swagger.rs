@@ -21,7 +21,9 @@ use utoipa::OpenApi;
         // Property options
         crate::api::properties::options::get::get_property_options,
         crate::api::properties::options::create::add_property_option,
+        crate::api::properties::options::update::update_property_option,
         crate::api::properties::options::delete::delete_property_option,
+        crate::api::properties::tags::get_tags,
         // Entity properties
         crate::api::properties::entities::get::get_entity_properties,
         crate::api::properties::entities::get_bulk::get_bulk_entity_properties,
@@ -47,7 +49,8 @@ use utoipa::OpenApi;
             api::AddPropertyOptionRequest,
             api::AddStringOptionRequest,
             api::AddNumberOptionRequest,
-            api::PropertyDefinitionResponse,
+            api::UpdatePropertyOptionRequest,
+            api::PropertyDefinitionDetailResponse,
             api::PropertyOptionResponse,
             models_properties::EntityType,
             models_properties::DataType,

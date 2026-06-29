@@ -45,6 +45,7 @@ export const listPropertiesResponseItem = zod
             'STRING',
             'SELECT_NUMBER',
             'SELECT_STRING',
+            'TAG',
             'ENTITY',
             'LINK',
           ])
@@ -122,6 +123,7 @@ export const listPropertiesResponseItem = zod
                 'STRING',
                 'SELECT_NUMBER',
                 'SELECT_STRING',
+                'TAG',
                 'ENTITY',
                 'LINK',
               ])
@@ -189,6 +191,7 @@ export const listPropertiesResponseItem = zod
         property_options: zod.array(
           zod
             .object({
+              color: zod.string().nullish(),
               created_at: zod.iso.datetime({}),
               display_order: zod.number(),
               id: zod.uuid(),
@@ -344,6 +347,7 @@ export const getPropertyOptionsParams = zod.object({
 
 export const getPropertyOptionsResponseItem = zod
   .object({
+    color: zod.string().nullish(),
     created_at: zod.iso.datetime({}),
     display_order: zod.number(),
     id: zod.uuid(),
@@ -392,6 +396,7 @@ export const addPropertyOptionBody = zod
       .object({
         option: zod
           .object({
+            color: zod.string().nullish(),
             display_order: zod.number(),
             value: zod.string(),
           })
@@ -424,6 +429,68 @@ export const deletePropertyOptionParams = zod.object({
   definition_id: zod.uuid().describe('Property definition ID'),
   option_id: zod.uuid().describe('Property option ID'),
 });
+
+/**
+ * The option id is preserved, so the change is reflected on every entity that references it.
+ * @summary Update a property option in place (rename / recolor / reorder).
+ */
+export const updatePropertyOptionParams = zod.object({
+  definition_id: zod.uuid().describe('Property definition ID'),
+  option_id: zod.uuid().describe('Property option ID'),
+});
+
+export const updatePropertyOptionBody = zod
+  .object({
+    color: zod
+      .string()
+      .nullish()
+      .describe('New color as a hex string like `#RRGGBB`.'),
+    display_order: zod.number().nullish().describe('New display order.'),
+    value: zod
+      .string()
+      .nullish()
+      .describe(
+        'New string value (label text). Only valid for SelectString and Tag properties.'
+      ),
+  })
+  .describe(
+    'Request to update a property option in place. Omitted fields keep their current value.\nThe option id is preserved, so the change propagates to every entity referencing it.'
+  );
+
+export const updatePropertyOptionResponse = zod
+  .object({
+    color: zod.string().nullish(),
+    created_at: zod.iso.datetime({}),
+    display_order: zod.number(),
+    id: zod.uuid(),
+    property_definition_id: zod.uuid(),
+    updated_at: zod.iso.datetime({}),
+    value: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['string']),
+            value: zod
+              .string()
+              .describe('String value for SelectString properties'),
+          })
+          .describe('String value for SelectString properties'),
+        zod
+          .object({
+            type: zod.enum(['number']),
+            value: zod
+              .number()
+              .describe('Number value for SelectNumber properties'),
+          })
+          .describe('Number value for SelectNumber properties'),
+      ])
+      .describe(
+        'The value of a property option - either a string or a number.'
+      ),
+  })
+  .describe(
+    'A selectable option for select-type properties (service representation).'
+  );
 
 /**
  * Only returns properties for entities the user has view permission for.
@@ -489,6 +556,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                     'STRING',
                     'SELECT_NUMBER',
                     'SELECT_STRING',
+                    'TAG',
                     'ENTITY',
                     'LINK',
                   ])
@@ -559,6 +627,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
               .array(
                 zod
                   .object({
+                    color: zod.string().nullish(),
                     created_at: zod.iso.datetime({}),
                     display_order: zod.number(),
                     id: zod.uuid(),
@@ -796,6 +865,7 @@ export const getEntityPropertiesResponse = zod
                   'STRING',
                   'SELECT_NUMBER',
                   'SELECT_STRING',
+                  'TAG',
                   'ENTITY',
                   'LINK',
                 ])
@@ -864,6 +934,7 @@ export const getEntityPropertiesResponse = zod
             .array(
               zod
                 .object({
+                  color: zod.string().nullish(),
                   created_at: zod.iso.datetime({}),
                   display_order: zod.number(),
                   id: zod.uuid(),
@@ -1219,3 +1290,122 @@ export const setEntityPropertyBody = zod
 export const deleteEntityPropertyParams = zod.object({
   entity_property_id: zod.uuid().describe('Entity Property ID'),
 });
+
+/**
+ * @summary Get the caller's tag sets: their personal set, plus their team's shared set when on a team.
+Each set is resolved and provisioned on first use.
+ */
+export const getTagsResponseItem = zod
+  .object({
+    definition: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['user']),
+            user_id: zod.string(),
+          })
+          .describe('User-scoped property.'),
+        zod
+          .object({
+            scope: zod.enum(['team']),
+            team_id: zod.uuid(),
+          })
+          .describe('Team-scoped property.'),
+        zod
+          .object({
+            scope: zod.enum(['system']),
+          })
+          .describe('System-owned property (no user or team owner).'),
+      ])
+      .describe(
+        'Defines who owns a property - user-scoped, team-scoped, or system.'
+      )
+      .and(
+        zod.object({
+          createdAt: zod.iso.datetime({}).nullish(),
+          dataType: zod
+            .enum([
+              'BOOLEAN',
+              'DATE',
+              'NUMBER',
+              'STRING',
+              'SELECT_NUMBER',
+              'SELECT_STRING',
+              'TAG',
+              'ENTITY',
+              'LINK',
+            ])
+            .describe(
+              'Data type for property values, determining storage and validation.'
+            ),
+          displayName: zod.string(),
+          id: zod.uuid(),
+          isMetadata: zod
+            .boolean()
+            .describe(
+              'Flag to indicate if this is a system-generated metadata property'
+            ),
+          isMultiSelect: zod.boolean(),
+          isSystem: zod
+            .boolean()
+            .describe(
+              'Flag to indicate if this is a system property (managed by the system)'
+            ),
+          specificEntityType: zod
+            .union([
+              zod.null(),
+              zod
+                .enum([
+                  'CHANNEL',
+                  'CHAT',
+                  'COMPANY',
+                  'DOCUMENT',
+                  'PROJECT',
+                  'TASK',
+                  'THREAD',
+                  'USER',
+                ])
+                .describe(
+                  'Type of entity that can be referenced by entity properties.'
+                ),
+            ])
+            .optional(),
+          updatedAt: zod.iso.datetime({}).nullish(),
+        })
+      )
+      .describe('Property definition response (API representation).'),
+    propertyOptions: zod.array(
+      zod
+        .object({
+          color: zod.string().nullish(),
+          displayOrder: zod.number(),
+          id: zod.uuid(),
+          propertyDefinitionId: zod.uuid(),
+          value: zod
+            .union([
+              zod
+                .object({
+                  type: zod.enum(['string']),
+                  value: zod
+                    .string()
+                    .describe('String value for SelectString properties'),
+                })
+                .describe('String value for SelectString properties'),
+              zod
+                .object({
+                  type: zod.enum(['number']),
+                  value: zod
+                    .number()
+                    .describe('Number value for SelectNumber properties'),
+                })
+                .describe('Number value for SelectNumber properties'),
+            ])
+            .describe(
+              'The value of a property option - either a string or a number.'
+            ),
+        })
+        .describe('Property option response (API representation).')
+    ),
+  })
+  .describe('Property definition with options response.');
+export const getTagsResponse = zod.array(getTagsResponseItem);
