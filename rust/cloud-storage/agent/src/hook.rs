@@ -77,6 +77,15 @@ impl StreamBridge {
             rx,
         )
     }
+
+    /// Clone the sending half of the bridge's channel.
+    ///
+    /// Lets the stream driver push parts derived from rig stream items
+    /// (buffered thinking, usage, errors) into the same ordered channel the
+    /// lifecycle hooks send through, so all parts share one FIFO order.
+    pub(crate) fn sender(&self) -> mpsc::UnboundedSender<Result<StreamPart, AgentError>> {
+        self.tx.clone()
+    }
 }
 
 impl<M> PromptHook<M> for StreamBridge
