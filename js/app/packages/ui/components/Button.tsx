@@ -27,6 +27,7 @@ export type ButtonProps = ButtonRootProps<'button'> &
     shortcut?: string | string[];
     size?: ButtonSize;
     class?: string;
+    tooltipDisabled?: boolean;
   };
 
 export type ButtonSize = 'sm' | 'icon-sm' | 'md' | 'icon-md' | 'lg' | 'icon-lg';
@@ -74,6 +75,7 @@ export const Button = (props: ButtonProps) => {
     'depth',
     'label',
     'size',
+    'tooltipDisabled',
   ]);
 
   const group = useButtonGroupContext();
@@ -131,6 +133,7 @@ export const Button = (props: ButtonProps) => {
           shortcut={local.shortcut}
           placement={placement()}
           label={label()}
+          disabled={local.tooltipDisabled}
         >
           {button()}
         </Tooltip>

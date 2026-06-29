@@ -64,7 +64,6 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import LogoIcon from '@icon/macro-logo.svg';
-import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -72,18 +71,16 @@ import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
-import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
-import BellIcon from '@phosphor/bell.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
 import PlayIcon from '@phosphor/play.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
@@ -560,10 +557,10 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 
   return (
     <NavRow
-      class="group-data-[slim=true]/sidebar:justify-center"
+      class="w-full center h-8"
       tooltipPlacement="right"
-      label={props.isSlim() ? props.label : undefined}
-      hotkey={props.isSlim() ? props.hotkeyToken : undefined}
+      label={props.label}
+      hotkey={props.hotkeyToken}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -605,7 +602,7 @@ const SidebarHeaderIconButton = (props: {
   const [hovering, setHovering] = createSignal(false);
   return (
     <Button
-      class="rounded-md p-1 text-ink-extra-muted [&_svg]:size-4"
+      class="rounded-md p-1 text-ink-extra-muted size-8 [&_svg]:size-4"
       size="icon-sm"
       label={props.label}
       hotkey={props.hotkey}
@@ -893,51 +890,24 @@ export const AppSidebar = (props: AppSidebarProps) => {
         sidebarShell = el ?? undefined;
       }}
       class={cn(
-        'group/sidebar h-full py-2 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
+        'group/sidebar h-full p-3 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-49.75 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-48 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
-        isSlim() && 'max-w-12 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
+        isSlim() && 'max-w-14 w-full mobile:max-w-2/3 translate-x-0 opacity-100'
       )}
       data-expanded={isExpanded()}
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between p-2 relative group-data-[slim=true]/sidebar:pr-2.25">
+      <div class="flex items-center justify-between relative">
         <div class="flex items-center group/logo-area w-full group-data-[slim=true]/sidebar:justify-end">
-          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0">
+          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-opacity">
             <LogoIcon class="size-6" />
           </div>
           <div class="grow shrink-10 min-w-0 group-data-[slim=true]/sidebar:hidden" />
-          <Show when={isExpanded()}>
-            <div class="flex items-center gap-1 mr-1">
-              <Show when={showEnableNotifications()}>
-                <Button
-                  class="rounded-md p-1 text-ink-extra-muted"
-                  size="icon-sm"
-                  label="Enable Notifications"
-                  onClick={handleEnableNotifications}
-                >
-                  <BellIcon />
-                </Button>
-              </Show>
-              <SidebarHeaderIconButton
-                label="Command"
-                hotkey={TOKENS.global.commandMenu}
-                onClick={handleCommandPaletteClick}
-                icon={AnimatedSquareCommandKIcon}
-              />
-              <SidebarHeaderIconButton
-                label="New Split"
-                hotkey={TOKENS.global.createNewSplit}
-                disabled={!canCreateNewSplit()}
-                onClick={handleNewSplitClick}
-                icon={AnimatedNewSplitIcon}
-              />
-            </div>
-          </Show>
           <SidebarHeaderIconButton
             label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
             hotkey={TOKENS.global.toggleSidebar}
@@ -954,26 +924,18 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </div>
       </div>
 
-      <div class="px-2">
-        <hr class="border-transparent" />
-      </div>
-
-      <div class="w-full px-2 my-[4.5px]">
+      <div class="w-full mb-2">
         <SidebarActionButton
           label="Create"
           hotkeyToken={TOKENS.global.createCommand}
           isSlim={isSlim}
           onClick={handleCreateClick}
-          icon={() => <AnimatedPlusIcon class="size-4" />}
+          icon={() => <PlusIcon class="size-4" />}
         />
       </div>
 
-      <div class="px-2">
-        <hr class="border-transparent mb-2" />
-      </div>
-
       <nav>
-        <ul class="size-full px-2 flex flex-col gap-1">
+        <ul class="size-full flex flex-col gap-0.5">
           <For each={visibleLinks()}>
             {(link) => (
               <li class="flex flex-col items-center justify-center">
@@ -1175,13 +1137,13 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
   return (
     <ContextMenu>
-      <ContextMenu.Trigger class="w-full">
+      <ContextMenu.Trigger class="w-full h-8">
         <NavRow
           draggable={false}
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
           active={isActive() && !props.suppressActiveStyle}
-          class="group-data-[slim=true]/sidebar:justify-center"
+          class="group-data-[slim=true]/sidebar:justify-center bg-[gold]/30 h-8 w-full"
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
           label={
@@ -1230,7 +1192,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
           }}
         >
           <Show when={props.icon}>
-            <div class="shrink-0 [&_svg]:size-4">
+            <div class="shrink-0 [&_svg]:size-3.5">
               <Dynamic component={props.icon} triggerAnimation={isHovering()} />
             </div>
           </Show>
