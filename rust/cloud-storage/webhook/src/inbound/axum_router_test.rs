@@ -27,6 +27,7 @@ enum ServiceCall {
     Create(MacroUserIdStr<'static>, CreateWebhookRequest),
     Patch(MacroUserIdStr<'static>, WebhookId, PatchWebhookRequest),
     Validate(MacroUserIdStr<'static>, WebhookId),
+    Delete(MacroUserIdStr<'static>, WebhookId),
 }
 
 enum ServiceResponse {
@@ -52,6 +53,7 @@ impl Clone for ServiceCall {
                 Self::Patch(user.clone(), id.clone(), request.clone())
             }
             Self::Validate(user, id) => Self::Validate(user.clone(), id.clone()),
+            Self::Delete(user, id) => Self::Delete(user.clone(), id.clone()),
         }
     }
 }
@@ -118,6 +120,21 @@ impl WebhookService for FakeService {
         {
             ServiceResponse::Validate(response) => Ok(response),
             ServiceResponse::Webhook(_) => panic!("unexpected webhook response"),
+        }
+    }
+
+    async fn delete_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> Result<(), WebhookError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(ServiceCall::Delete(caller, webhook_id));
+        match self.response.lock().unwrap().take() {
+            Some(Err(error)) => Err(error),
+            _ => Ok(()),
         }
     }
 }
@@ -378,7 +395,7 @@ async fn response_json(response: axum::response::Response) -> serde_json::Value 
 
 fn create_body() -> serde_json::Value {
     json!({
-        "workspace_id": "workspace_1",
+        "scope": "user",
         "name": "Events",
         "endpoint_url": "https://example.com/webhook",
         "headers": {"x-custom": "value"},

@@ -48,12 +48,23 @@ impl std::str::FromStr for WebhookStatus {
     }
 }
 
+/// Scope that owns a newly-created webhook.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum WebhookScope {
+    /// The authenticated user's personal workspace.
+    User,
+    /// The authenticated user's team workspace.
+    Team,
+}
+
 /// Request to create a webhook.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateWebhookRequest {
-    /// Workspace that owns the webhook.
-    pub workspace_id: String,
+    /// Scope that owns the webhook.
+    pub scope: WebhookScope,
     /// Display name.
     pub name: String,
     /// HTTPS endpoint URL.

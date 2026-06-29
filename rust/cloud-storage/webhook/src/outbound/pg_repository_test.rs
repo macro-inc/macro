@@ -3,10 +3,10 @@ use crate::domain::ports::WebhookRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
-use sqlx::PgPool;
+use sqlx::{PgPool, types::Uuid};
 
 const USER_ID: &str = "macro|webhook-owner@example.com";
-const UNKNOWN_WORKSPACE: &str = "workspace_unknown";
+const TEAM_ID: &str = "11111111-1111-1111-1111-111111111111";
 
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(USER_ID.to_string()).expect("valid macro user id")
@@ -14,7 +14,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 
 fn create_request() -> CreateWebhookRequest {
     CreateWebhookRequest {
-        workspace_id: USER_ID.to_string(),
+        scope: crate::domain::models::WebhookScope::User,
         name: "Build events".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: None,
@@ -58,6 +58,7 @@ async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
 async fn create_webhook(repo: &PgRepository) -> Webhook {
     repo.create_webhook(
         user_id(),
+        USER_ID.to_string(),
         create_request(),
         "signing-secret".to_string(),
         json!({ "X-Test": "true" }),
@@ -144,20 +145,28 @@ async fn get_webhook_excludes_deleted_rows(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unauthorized_workspace_check_returns_false_for_unknown_workspace(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
+    let team_id = Uuid::parse_str(TEAM_ID)?;
+    sqlx::query!(
+        r#"INSERT INTO team (id, owner_id) VALUES ($1, $2)"#,
+        team_id,
+        USER_ID
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+        USER_ID,
+        team_id
+    )
+    .execute(&pool)
+    .await?;
     let repo = PgRepository::new(pool);
 
-    assert!(
-        repo.user_can_edit_workspace(user_id(), USER_ID.to_string())
-            .await?
-    );
-    assert!(
-        !repo
-            .user_can_edit_workspace(user_id(), UNKNOWN_WORKSPACE.to_string())
-            .await?
+    assert_eq!(
+        repo.get_user_team_workspace_id(user_id()).await?,
+        Some(TEAM_ID.to_string())
     );
     Ok(())
 }

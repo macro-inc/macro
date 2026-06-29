@@ -1,7 +1,7 @@
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookStatus,
-        WebhookValidationResult,
+        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookScope,
+        WebhookStatus, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
 struct RepoState {
-    can_edit: bool,
+    team_workspace_id: Option<String>,
     webhook: Option<Webhook>,
     validation_updates: Vec<bool>,
 }
@@ -24,11 +24,11 @@ struct FakeRepo {
 }
 
 impl FakeRepo {
-    async fn with_webhook(webhook: Webhook, can_edit: bool) -> Self {
+    async fn with_webhook(webhook: Webhook, team_workspace_id: Option<String>) -> Self {
         let repo = Self::default();
         let mut state = repo.state.lock().await;
         state.webhook = Some(webhook);
-        state.can_edit = can_edit;
+        state.team_workspace_id = team_workspace_id;
         drop(state);
         repo
     }
@@ -40,11 +40,12 @@ impl WebhookRepo for FakeRepo {
     async fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
+        workspace_id: String,
         request: CreateWebhookRequest,
         _signing_secret: String,
         _headers_encrypted: serde_json::Value,
     ) -> Result<Webhook, Self::Err> {
-        let webhook = webhook_from_create(created_by_user_id, request);
+        let webhook = webhook_from_create(created_by_user_id, workspace_id, request);
         self.state.lock().await.webhook = Some(webhook.clone());
         Ok(webhook)
     }
@@ -90,6 +91,19 @@ impl WebhookRepo for FakeRepo {
         Ok(Some(webhook.clone()))
     }
 
+    async fn delete_webhook(&self, webhook_id: String) -> Result<Option<Webhook>, Self::Err> {
+        let mut state = self.state.lock().await;
+        let webhook = state
+            .webhook
+            .as_mut()
+            .filter(|webhook| webhook.id == webhook_id)
+            .map(|webhook| {
+                webhook.deleted_at = Some(Utc::now());
+                webhook.clone()
+            });
+        Ok(webhook)
+    }
+
     async fn set_webhook_validity(
         &self,
         webhook_id: String,
@@ -108,12 +122,11 @@ impl WebhookRepo for FakeRepo {
         Ok(Some(webhook.clone()))
     }
 
-    async fn user_can_edit_workspace(
+    async fn get_user_team_workspace_id(
         &self,
         _user_id: MacroUserIdStr<'static>,
-        _workspace_id: String,
-    ) -> Result<bool, Self::Err> {
-        Ok(self.state.lock().await.can_edit)
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(self.state.lock().await.team_workspace_id.clone())
     }
 }
 
@@ -180,7 +193,7 @@ fn valid_rule() -> serde_json::Value {
 
 fn create_request() -> CreateWebhookRequest {
     CreateWebhookRequest {
-        workspace_id: "workspace_1".to_string(),
+        scope: WebhookScope::User,
         name: "Files".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: Some(BTreeMap::from([(
@@ -203,12 +216,13 @@ fn patch_request() -> PatchWebhookRequest {
 
 fn webhook_from_create(
     created_by_user_id: MacroUserIdStr<'static>,
+    workspace_id: String,
     request: CreateWebhookRequest,
 ) -> Webhook {
     let now = Utc::now();
     Webhook {
         id: "wh_test".to_string(),
-        workspace_id: request.workspace_id.clone(),
+        workspace_id,
         name: request.name,
         endpoint_url: request.endpoint_url,
         signing_secret: "secret".to_string(),
@@ -224,7 +238,7 @@ fn webhook_from_create(
 }
 
 fn existing_webhook() -> Webhook {
-    webhook_from_create(caller(), create_request())
+    webhook_from_create(caller(), caller().as_ref().to_string(), create_request())
 }
 
 fn assert_bad_request<T>(result: Result<T, WebhookError>) {
@@ -232,9 +246,8 @@ fn assert_bad_request<T>(result: Result<T, WebhookError>) {
 }
 
 #[tokio::test]
-async fn create_succeeds_when_caller_can_edit_workspace() {
+async fn create_succeeds_for_user_scope() {
     let repo = FakeRepo::default();
-    repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
 
     let webhook = service
@@ -247,18 +260,22 @@ async fn create_succeeds_when_caller_can_edit_workspace() {
 }
 
 #[tokio::test]
-async fn create_fails_unauthorized_when_caller_cannot_edit_workspace() {
+async fn create_fails_bad_request_when_team_scope_user_has_no_team() {
     let service = WebhookServiceImpl::new(FakeRepo::default(), FakeValidationClient::default());
+    let mut request = create_request();
+    request.scope = WebhookScope::Team;
 
-    let result = service.create_webhook(caller(), create_request()).await;
+    let result = service.create_webhook(caller(), request).await;
 
-    assert!(matches!(result, Err(WebhookError::Unauthorized)));
+    assert!(matches!(
+        result,
+        Err(WebhookError::BadRequest(message)) if message == "team scope requires the user to belong to a team"
+    ));
 }
 
 #[tokio::test]
 async fn patch_fails_not_found_for_missing_id() {
     let repo = FakeRepo::default();
-    repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
 
     let result = service
@@ -269,8 +286,10 @@ async fn patch_fails_not_found_for_missing_id() {
 }
 
 #[tokio::test]
-async fn patch_fails_unauthorized_when_caller_cannot_edit_workspace() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), false).await;
+async fn patch_fails_unauthorized_when_caller_does_not_own_workspace() {
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "other_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
 
     let result = service
@@ -283,7 +302,6 @@ async fn patch_fails_unauthorized_when_caller_cannot_edit_workspace() {
 #[tokio::test]
 async fn invalid_http_endpoint_is_rejected() {
     let repo = FakeRepo::default();
-    repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
     let mut request = create_request();
     request.endpoint_url = "http://example.com/webhook".to_string();
@@ -294,7 +312,6 @@ async fn invalid_http_endpoint_is_rejected() {
 #[tokio::test]
 async fn private_and_link_local_endpoints_are_rejected() {
     let repo = FakeRepo::default();
-    repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
 
     for endpoint_url in [
@@ -315,7 +332,6 @@ async fn private_and_link_local_endpoints_are_rejected() {
 #[tokio::test]
 async fn empty_events_array_is_rejected() {
     let repo = FakeRepo::default();
-    repo.state.lock().await.can_edit = true;
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
     let mut request = create_request();
     request.rule = serde_json::json!({ "events": [] });
@@ -325,7 +341,7 @@ async fn empty_events_array_is_rejected() {
 
 #[tokio::test]
 async fn validate_succeeds_and_sets_webhook_validity() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), true).await;
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
     let service = WebhookServiceImpl::new(repo.clone(), FakeValidationClient::succeeds());
 
     let response = service
@@ -340,7 +356,9 @@ async fn validate_succeeds_and_sets_webhook_validity() {
 
 #[tokio::test]
 async fn validate_fails_unauthorized_before_calling_validation_client() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), false).await;
+    let mut webhook = existing_webhook();
+    webhook.workspace_id = "other_workspace".to_string();
+    let repo = FakeRepo::with_webhook(webhook, None).await;
     let validation_client = FakeValidationClient::succeeds();
     let service = WebhookServiceImpl::new(repo, validation_client.clone());
 
@@ -354,7 +372,7 @@ async fn validate_fails_unauthorized_before_calling_validation_client() {
 
 #[tokio::test]
 async fn validate_records_invalid_and_returns_sanitized_failure() {
-    let repo = FakeRepo::with_webhook(existing_webhook(), true).await;
+    let repo = FakeRepo::with_webhook(existing_webhook(), None).await;
     let service = WebhookServiceImpl::new(repo.clone(), FakeValidationClient::fails());
 
     let ValidateWebhookResponse {

@@ -129,7 +129,10 @@ where
 
     Router::new()
         .route("/webhooks", post(create_webhook::<S>))
-        .route("/webhooks/{webhook_id}", patch(patch_webhook::<S>))
+        .route(
+            "/webhooks/{webhook_id}",
+            patch(patch_webhook::<S>).delete(delete_webhook::<S>),
+        )
         .merge(validate_route)
         .with_state(state)
 }
@@ -182,6 +185,30 @@ pub async fn patch_webhook<S: WebhookService>(
             .patch_webhook(user.macro_user_id, path.webhook_id, request)
             .await?,
     ))
+}
+
+/// Delete a webhook.
+#[utoipa::path(
+    delete,
+    path = "/webhook/webhooks/{webhook_id}",
+    params(("webhook_id" = String, Path, description = "Webhook id")),
+    responses(
+        (status = 204, description = "Webhook deleted"),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "Webhook not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse),
+    ),
+    tag = "webhook"
+)]
+pub async fn delete_webhook<S: WebhookService>(
+    State(service): State<Arc<S>>,
+    user: MacroUserExtractor,
+    Path(path): Path<WebhookPath>,
+) -> Result<StatusCode, WebhookHandlerError> {
+    service
+        .delete_webhook(user.macro_user_id, path.webhook_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Validate a webhook endpoint.

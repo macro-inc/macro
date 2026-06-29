@@ -255,6 +255,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
         webhook::inbound::axum_router::create_webhook,
+        webhook::inbound::axum_router::delete_webhook,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,

@@ -16,6 +16,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
     fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
+        workspace_id: String,
         request: CreateWebhookRequest,
         signing_secret: String,
         headers_encrypted: serde_json::Value,
@@ -34,6 +35,12 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         request: PatchWebhookRequest,
     ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
 
+    /// Soft-delete an active webhook.
+    fn delete_webhook(
+        &self,
+        webhook_id: WebhookId,
+    ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
+
     /// Set the validation state for an active webhook.
     fn set_webhook_validity(
         &self,
@@ -41,12 +48,11 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         is_valid: bool,
     ) -> impl Future<Output = Result<Option<Webhook>, Self::Err>> + Send;
 
-    /// Check whether a user can edit a workspace.
-    fn user_can_edit_workspace(
+    /// Look up the team workspace id for a user.
+    fn get_user_team_workspace_id(
         &self,
         user_id: MacroUserIdStr<'static>,
-        workspace_id: String,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Client used to send a signed webhook validation delivery.
@@ -84,6 +90,13 @@ pub trait WebhookService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         webhook_id: WebhookId,
     ) -> impl Future<Output = Result<ValidateWebhookResponse, WebhookError>> + Send;
+
+    /// Delete a webhook.
+    fn delete_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> impl Future<Output = Result<(), WebhookError>> + Send;
 }
 
 /// Webhook service error.

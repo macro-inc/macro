@@ -115,6 +115,7 @@ impl WebhookRepo for PgRepository {
     async fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
+        workspace_id: String,
         request: CreateWebhookRequest,
         signing_secret: String,
         headers_encrypted: Value,
@@ -131,7 +132,7 @@ impl WebhookRepo for PgRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
             "#,
             webhook_id,
-            request.workspace_id,
+            workspace_id,
             request.name,
             request.endpoint_url,
             signing_secret,
@@ -192,6 +193,27 @@ impl WebhookRepo for PgRepository {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn delete_webhook(&self, webhook_id: WebhookId) -> Result<Option<Webhook>, Self::Err> {
+        let webhook = fetch_webhook(&self.pool, &webhook_id).await?;
+        if webhook.is_none() {
+            return Ok(None);
+        }
+
+        sqlx::query!(
+            r#"
+            UPDATE webhook
+            SET deleted_at = now(), updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            webhook_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(webhook)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn set_webhook_validity(
         &self,
         webhook_id: WebhookId,
@@ -213,28 +235,24 @@ impl WebhookRepo for PgRepository {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn user_can_edit_workspace(
+    async fn get_user_team_workspace_id(
         &self,
         user_id: MacroUserIdStr<'static>,
-        workspace_id: String,
-    ) -> Result<bool, Self::Err> {
-        // Current schema has no general workspace ownership table. For this first adapter,
-        // only user-owned workspaces encoded as the caller's user id can be verified safely.
-        // Team/shared workspaces return false until their ownership model is wired here.
+    ) -> Result<Option<String>, Self::Err> {
         let user_id = user_id.as_ref();
-        let exists = sqlx::query_scalar!(
+        let team_id = sqlx::query_scalar!(
             r#"
-            SELECT EXISTS(
-                SELECT 1 FROM "User"
-                WHERE id = $1 AND id = $2
-            ) AS "exists!"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            ORDER BY team_role DESC
+            LIMIT 1
             "#,
-            user_id,
-            workspace_id
+            user_id
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(exists)
+        Ok(team_id.map(|id| id.to_string()))
     }
 }

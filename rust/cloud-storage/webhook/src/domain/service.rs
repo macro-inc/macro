@@ -3,7 +3,7 @@
 use super::{
     models::{
         CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookId,
-        WebhookValidationResult,
+        WebhookScope, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
@@ -158,6 +158,44 @@ where
     R: WebhookRepo,
     V: WebhookValidationClient,
 {
+    async fn workspace_id_for_scope(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        scope: WebhookScope,
+    ) -> Result<String, WebhookError> {
+        match scope {
+            WebhookScope::User => Ok(caller.as_ref().to_string()),
+            WebhookScope::Team => self
+                .repo
+                .get_user_team_workspace_id(caller)
+                .await
+                .map_err(|err| WebhookError::Repo(err.into()))?
+                .ok_or_else(|| {
+                    WebhookError::BadRequest(
+                        "team scope requires the user to belong to a team".to_string(),
+                    )
+                }),
+        }
+    }
+
+    async fn caller_owns_workspace(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        workspace_id: &str,
+    ) -> Result<bool, WebhookError> {
+        if workspace_id == caller.as_ref() {
+            return Ok(true);
+        }
+
+        let team_workspace_id = self
+            .repo
+            .get_user_team_workspace_id(caller)
+            .await
+            .map_err(|err| WebhookError::Repo(err.into()))?;
+
+        Ok(team_workspace_id.as_deref() == Some(workspace_id))
+    }
+
     async fn load_authorized_webhook(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -172,10 +210,8 @@ where
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
 
         if !self
-            .repo
-            .user_can_edit_workspace(caller, webhook.workspace_id.clone())
-            .await
-            .map_err(|err| WebhookError::Repo(err.into()))?
+            .caller_owns_workspace(caller, &webhook.workspace_id)
+            .await?
         {
             return Err(WebhookError::Unauthorized);
         }
@@ -196,21 +232,22 @@ where
     ) -> Result<Webhook, WebhookError> {
         validate_create_request(&request)?;
 
-        if !self
-            .repo
-            .user_can_edit_workspace(caller.clone(), request.workspace_id.clone())
-            .await
-            .map_err(|err| WebhookError::Repo(err.into()))?
-        {
-            return Err(WebhookError::Unauthorized);
-        }
+        let workspace_id = self
+            .workspace_id_for_scope(caller.clone(), request.scope)
+            .await?;
 
         let signing_secret = generate_signing_secret(&caller);
         let headers_encrypted = serde_json::to_value(request.headers.clone().unwrap_or_default())
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = self
             .repo
-            .create_webhook(caller, request, signing_secret, headers_encrypted)
+            .create_webhook(
+                caller,
+                workspace_id,
+                request,
+                signing_secret,
+                headers_encrypted,
+            )
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
         webhook.is_valid = false;
@@ -269,6 +306,24 @@ where
             .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
 
         Ok(validation_response(webhook_id, result))
+    }
+
+    async fn delete_webhook(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        webhook_id: WebhookId,
+    ) -> Result<(), WebhookError> {
+        let webhook = self
+            .load_authorized_webhook(caller, webhook_id.clone())
+            .await?;
+
+        self.repo
+            .delete_webhook(webhook.id)
+            .await
+            .map_err(|err| WebhookError::Repo(err.into()))?
+            .ok_or_else(|| WebhookError::NotFound("webhook not found".to_string()))?;
+
+        Ok(())
     }
 }
 
