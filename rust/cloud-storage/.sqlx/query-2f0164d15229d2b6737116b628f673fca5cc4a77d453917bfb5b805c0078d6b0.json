@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            w.id,\n            w.workspace_id,\n            w.name,\n            w.endpoint_url,\n            w.signing_secret,\n            w.headers_encrypted,\n            w.status,\n            w.is_valid,\n            w.created_by_user_id,\n            w.created_at,\n            w.updated_at,\n            w.deleted_at,\n            wr.id AS rule_id,\n            wr.rule,\n            wr.created_at AS rule_created_at,\n            wr.updated_at AS rule_updated_at,\n            wr.deleted_at AS rule_deleted_at\n        FROM webhook w\n        JOIN webhook_rule wr ON wr.webhook_id = w.id\n        WHERE w.id = $1\n          AND w.deleted_at IS NULL\n          AND wr.deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "workspace_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "endpoint_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "signing_secret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "headers_encrypted",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_valid",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "rule_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "rule",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "rule_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "rule_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "rule_deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2f0164d15229d2b6737116b628f673fca5cc4a77d453917bfb5b805c0078d6b0"
+}

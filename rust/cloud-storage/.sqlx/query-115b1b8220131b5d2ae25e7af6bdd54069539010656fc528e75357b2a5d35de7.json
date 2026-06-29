@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE webhook_rule\n                SET rule = $2, updated_at = now()\n                WHERE webhook_id = $1 AND deleted_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "115b1b8220131b5d2ae25e7af6bdd54069539010656fc528e75357b2a5d35de7"
+}

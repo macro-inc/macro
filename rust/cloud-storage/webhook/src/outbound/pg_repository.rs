@@ -1,6 +1,4 @@
 //! PostgreSQL webhook repository.
-#![allow(clippy::disallowed_methods)]
-
 #[cfg(test)]
 #[path = "pg_repository_test.rs"]
 mod pg_repository_test;
@@ -36,7 +34,7 @@ struct WebhookRow {
     workspace_id: String,
     name: String,
     endpoint_url: String,
-    secret_encrypted: String,
+    signing_secret: String,
     headers_encrypted: Value,
     status: String,
     is_valid: bool,
@@ -77,7 +75,7 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
         workspace_id: row.workspace_id.clone(),
         name: row.name,
         endpoint_url: row.endpoint_url,
-        signing_secret: row.secret_encrypted,
+        signing_secret: row.signing_secret,
         headers: parse_headers(row.headers_encrypted),
         status,
         is_valid: row.is_valid,
@@ -99,14 +97,15 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
 }
 
 async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook>, sqlx::Error> {
-    let row = sqlx::query_as::<_, WebhookRow>(
+    let row = sqlx::query_as!(
+        WebhookRow,
         r#"
         SELECT
             w.id,
             w.workspace_id,
             w.name,
             w.endpoint_url,
-            w.secret_encrypted,
+            w.signing_secret,
             w.headers_encrypted,
             w.status,
             w.is_valid,
@@ -125,8 +124,8 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
           AND w.deleted_at IS NULL
           AND wr.deleted_at IS NULL
         "#,
+        webhook_id
     )
-    .bind(webhook_id)
     .fetch_optional(pool)
     .await?;
 
@@ -136,48 +135,50 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
 impl WebhookRepo for PgRepository {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(skip(self, request, secret_encrypted, headers_encrypted), err)]
+    #[tracing::instrument(skip(self, request, signing_secret, headers_encrypted), err)]
     async fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
-        secret_encrypted: String,
+        signing_secret: String,
         headers_encrypted: Value,
     ) -> Result<Webhook, Self::Err> {
         let webhook_id = new_webhook_id();
         let rule_id = new_rule_id();
         let mut transaction = self.pool.begin().await?;
 
-        sqlx::query(
+        let status = WebhookStatus::Active.as_str();
+        let created_by_user_id = created_by_user_id.as_ref();
+        sqlx::query!(
             r#"
             INSERT INTO webhook (
-                id, workspace_id, name, endpoint_url, secret_encrypted, headers_encrypted,
+                id, workspace_id, name, endpoint_url, signing_secret, headers_encrypted,
                 status, is_valid, created_by_user_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
             "#,
+            webhook_id,
+            request.workspace_id,
+            request.name,
+            request.endpoint_url,
+            signing_secret,
+            headers_encrypted,
+            status,
+            created_by_user_id
         )
-        .bind(&webhook_id)
-        .bind(&request.workspace_id)
-        .bind(&request.name)
-        .bind(&request.endpoint_url)
-        .bind(secret_encrypted)
-        .bind(headers_encrypted)
-        .bind(WebhookStatus::Active.as_str())
-        .bind(created_by_user_id.as_ref())
         .execute(transaction.as_mut())
         .await?;
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO webhook_rule (id, webhook_id, workspace_id, rule)
             VALUES ($1, $2, $3, $4)
             "#,
+            rule_id,
+            webhook_id,
+            request.workspace_id,
+            request.rule
         )
-        .bind(rule_id)
-        .bind(&webhook_id)
-        .bind(&request.workspace_id)
-        .bind(request.rule)
         .execute(transaction.as_mut())
         .await?;
 
@@ -204,7 +205,7 @@ impl WebhookRepo for PgRepository {
         let status = request.status.map(WebhookStatus::as_str);
         let mut transaction = self.pool.begin().await?;
 
-        let updated = sqlx::query(
+        let updated = sqlx::query!(
             r#"
             UPDATE webhook
             SET
@@ -216,12 +217,12 @@ impl WebhookRepo for PgRepository {
                 updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
             "#,
+            webhook_id,
+            request.name,
+            request.endpoint_url,
+            headers_encrypted,
+            status
         )
-        .bind(&webhook_id)
-        .bind(request.name)
-        .bind(request.endpoint_url)
-        .bind(headers_encrypted)
-        .bind(status)
         .execute(transaction.as_mut())
         .await?;
 
@@ -231,15 +232,15 @@ impl WebhookRepo for PgRepository {
         }
 
         if let Some(rule) = request.rule {
-            sqlx::query(
+            sqlx::query!(
                 r#"
                 UPDATE webhook_rule
                 SET rule = $2, updated_at = now()
                 WHERE webhook_id = $1 AND deleted_at IS NULL
                 "#,
+                webhook_id,
+                rule
             )
-            .bind(&webhook_id)
-            .bind(rule)
             .execute(transaction.as_mut())
             .await?;
         }
@@ -254,15 +255,15 @@ impl WebhookRepo for PgRepository {
         webhook_id: WebhookId,
         is_valid: bool,
     ) -> Result<Option<Webhook>, Self::Err> {
-        sqlx::query(
+        sqlx::query!(
             r#"
             UPDATE webhook
             SET is_valid = $2, updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
             "#,
+            webhook_id,
+            is_valid
         )
-        .bind(&webhook_id)
-        .bind(is_valid)
         .execute(&self.pool)
         .await?;
 
@@ -278,16 +279,17 @@ impl WebhookRepo for PgRepository {
         // Current schema has no general workspace ownership table. For this first adapter,
         // only user-owned workspaces encoded as the caller's user id can be verified safely.
         // Team/shared workspaces return false until their ownership model is wired here.
-        let exists = sqlx::query_scalar::<_, bool>(
+        let user_id = user_id.as_ref();
+        let exists = sqlx::query_scalar!(
             r#"
             SELECT EXISTS(
                 SELECT 1 FROM "User"
                 WHERE id = $1 AND id = $2
             ) AS "exists!"
             "#,
+            user_id,
+            workspace_id
         )
-        .bind(user_id.as_ref())
-        .bind(workspace_id)
         .fetch_one(&self.pool)
         .await?;
 

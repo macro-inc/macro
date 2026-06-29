@@ -24,30 +24,31 @@ fn create_request() -> CreateWebhookRequest {
 
 async fn insert_user(pool: &PgPool) -> anyhow::Result<()> {
     let macro_user_id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    let stripe_customer_id = format!("stripe_{macro_user_id}");
+    sqlx::query!(
         r#"
         INSERT INTO macro_user (id, username, email, stripe_customer_id)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (id) DO NOTHING
         "#,
+        macro_user_id,
+        "webhook-owner@example.com",
+        "webhook-owner@example.com",
+        stripe_customer_id
     )
-    .bind(macro_user_id)
-    .bind("webhook-owner@example.com")
-    .bind("webhook-owner@example.com")
-    .bind(format!("stripe_{macro_user_id}"))
     .execute(pool)
     .await?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO "User" (id, email, macro_user_id)
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO NOTHING
         "#,
+        USER_ID,
+        "webhook-owner@example.com",
+        macro_user_id
     )
-    .bind(USER_ID)
-    .bind("webhook-owner@example.com")
-    .bind(macro_user_id)
     .execute(pool)
     .await?;
 
@@ -58,7 +59,7 @@ async fn create_webhook(repo: &PgRepository) -> Webhook {
     repo.create_webhook(
         user_id(),
         create_request(),
-        "encrypted-secret".to_string(),
+        "signing-secret".to_string(),
         json!({ "X-Test": "true" }),
     )
     .await
@@ -71,11 +72,13 @@ async fn create_inserts_webhook_and_rule(pool: PgPool) -> anyhow::Result<()> {
     let repo = PgRepository::new(pool.clone());
 
     let webhook = create_webhook(&repo).await;
-    let rule_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM webhook_rule WHERE webhook_id = $1")
-            .bind(&webhook.id)
-            .fetch_one(&pool)
-            .await?;
+    let rule_count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM webhook_rule WHERE webhook_id = $1",
+        webhook.id
+    )
+    .fetch_one(&pool)
+    .await?
+    .unwrap_or_default();
 
     assert!(webhook.id.starts_with("wh_"));
     assert!(webhook.rule.id.starts_with("whr_"));
@@ -137,9 +140,10 @@ async fn get_webhook_excludes_deleted_rows(pool: PgPool) -> anyhow::Result<()> {
     let repo = PgRepository::new(pool.clone());
     let webhook = create_webhook(&repo).await;
 
-    sqlx::query("UPDATE webhook SET deleted_at = now() WHERE id = $1")
-        .bind(&webhook.id)
-        .execute(&pool)
+    sqlx::query!(
+        "UPDATE webhook SET deleted_at = now() WHERE id = $1",
+        webhook.id
+    )        .execute(&pool)
         .await?;
 
     assert!(repo.get_webhook(webhook.id).await?.is_none());

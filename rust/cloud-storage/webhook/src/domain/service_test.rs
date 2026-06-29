@@ -41,7 +41,7 @@ impl WebhookRepo for FakeRepo {
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
-        _secret_encrypted: String,
+        _signing_secret: String,
         _headers_encrypted: serde_json::Value,
     ) -> Result<Webhook, Self::Err> {
         let webhook = webhook_from_create(created_by_user_id, request);

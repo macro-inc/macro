@@ -17,7 +17,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         request: CreateWebhookRequest,
-        secret_encrypted: String,
+        signing_secret: String,
         headers_encrypted: serde_json::Value,
     ) -> impl Future<Output = Result<Webhook, Self::Err>> + Send;
 

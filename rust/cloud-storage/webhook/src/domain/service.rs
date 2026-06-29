@@ -110,10 +110,9 @@ fn webhook_is_missing(webhook: &Webhook) -> bool {
     webhook.deleted_at.is_some() || webhook.rule.deleted_at.is_some()
 }
 
-// Temporary placeholder until repository-level secret encryption is wired.
-fn generate_placeholder_encrypted_secret(caller: &MacroUserIdStr<'_>) -> String {
+fn generate_signing_secret(caller: &MacroUserIdStr<'_>) -> String {
     format!(
-        "temporary-unencrypted-secret:{}:{}",
+        "whsec_{}_{}",
         caller.as_ref(),
         Utc::now().timestamp_nanos_opt().unwrap_or_default()
     )
@@ -183,12 +182,12 @@ where
             return Err(WebhookError::Unauthorized);
         }
 
-        let secret_encrypted = generate_placeholder_encrypted_secret(&caller);
+        let signing_secret = generate_signing_secret(&caller);
         let headers_encrypted = serde_json::to_value(request.headers.clone().unwrap_or_default())
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = self
             .repo
-            .create_webhook(caller, request, secret_encrypted, headers_encrypted)
+            .create_webhook(caller, request, signing_secret, headers_encrypted)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
         webhook.is_valid = false;

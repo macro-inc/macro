@@ -30,7 +30,7 @@ CREATE TABLE webhook (
     owner_bot_id TEXT NULL,
     name TEXT NOT NULL,
     endpoint_url TEXT NOT NULL,
-    secret_encrypted TEXT NOT NULL,
+    signing_secret TEXT NOT NULL,
     headers_encrypted JSONB NOT NULL DEFAULT '{}'::jsonb,
     status TEXT NOT NULL DEFAULT 'enabled',
     is_valid BOOLEAN NOT NULL DEFAULT false,
