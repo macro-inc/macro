@@ -58,4 +58,6 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
   "axum",
   "testing",
 ] }
+rootcause = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }
