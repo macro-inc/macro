@@ -1,7 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Count email links connected for a user.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, macro_user_id), err)]
 pub async fn count_user_email_links(
     db: &sqlx::Pool<sqlx::Postgres>,
     macro_user_id: &MacroUserIdStr<'static>,
