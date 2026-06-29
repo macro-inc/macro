@@ -1,6 +1,9 @@
+import { LoadErrors, loadResult } from '@core/block';
+import type { ResultError } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { type Result, err, ok } from 'neverthrow';
 import { queryClient } from '../../client';
 import { documentLoadKeys } from './keys';
 
@@ -10,37 +13,48 @@ export type DocumentLoadBundle = {
   token: string;
 };
 
+type LoadBundleResult = Result<
+  DocumentLoadBundle,
+  ResultError<keyof typeof LoadErrors>[]
+>;
+
 const STALE_TIME = 60 * 1000;
 const GC_TIME = 60 * 1000;
 
-async function fetchDocumentLoadBundle(
+async function resolveDocumentLoadBundle(
   documentId: string
-): Promise<DocumentLoadBundle> {
+): Promise<LoadBundleResult> {
   const [maybeDocument, maybeToken] = await Promise.all([
-    storageServiceClient.getDocumentMetadata({ documentId }),
+    loadResult(storageServiceClient.getDocumentMetadata({ documentId })),
     storageServiceClient.permissionsTokens.createPermissionToken({
       document_id: documentId,
     }),
   ]);
 
-  if (maybeToken.isErr()) throw new Error('UNAUTHORIZED');
-  if (maybeDocument.isErr())
-    throw new Error('Failed to fetch document metadata');
+  if (maybeToken.isErr()) return LoadErrors.UNAUTHORIZED;
+  if (maybeDocument.isErr()) return err(maybeDocument.error);
 
-  return {
+  return ok({
     documentMetadata: maybeDocument.value.documentMetadata,
     userAccessLevel: maybeDocument.value.userAccessLevel,
     token: maybeToken.value.token,
-  };
+  });
 }
 
 export function documentLoadQueryOptions(documentId: string) {
   return {
     queryKey: documentLoadKeys.bundle(documentId).queryKey,
-    queryFn: () => fetchDocumentLoadBundle(documentId),
+    queryFn: () => resolveDocumentLoadBundle(documentId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
+    retry: false,
   };
+}
+
+export function fetchDocumentLoadBundle(
+  documentId: string
+): Promise<LoadBundleResult> {
+  return queryClient.fetchQuery(documentLoadQueryOptions(documentId));
 }
 
 export function seedDocumentLoadBundle(
@@ -49,6 +63,6 @@ export function seedDocumentLoadBundle(
 ) {
   queryClient.setQueryData(
     documentLoadKeys.bundle(documentId).queryKey,
-    bundle
+    ok(bundle)
   );
 }
