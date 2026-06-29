@@ -901,6 +901,7 @@ dependencies = [
  "document_storage_service_client",
  "doppleganger",
  "doppler-config",
+ "email_db_client",
  "email_validator",
  "entity_access",
  "foreign_entity",

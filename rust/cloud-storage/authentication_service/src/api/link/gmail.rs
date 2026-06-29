@@ -7,6 +7,7 @@ use axum::{
 };
 use macro_middleware::tracking::ClientIp;
 use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use roles_and_permissions::domain::model::PermissionId;
@@ -107,7 +108,7 @@ pub async fn init_gmail_link_handler(
 
     enforce_inbox_paywall(
         permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
-        || macro_db_client::email::count_user_email_links(&ctx.db, &user_context.macro_user_id),
+        || count_accessible_email_inboxes(&ctx.db, &user_context.macro_user_id),
     )
     .await?;
 
@@ -160,6 +161,17 @@ pub async fn init_gmail_link_handler(
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+#[tracing::instrument(skip(db, macro_user_id), err)]
+async fn count_accessible_email_inboxes(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    macro_user_id: &MacroUserIdStr<'static>,
+) -> anyhow::Result<i64> {
+    let inboxes =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(db, macro_user_id.as_ref()).await?;
+
+    Ok(inboxes.len() as i64)
 }
 
 /// Enforces the inbox paywall. Free users can connect inboxes until they reach

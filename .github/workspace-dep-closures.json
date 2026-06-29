@@ -311,6 +311,7 @@
       "document_sub_type",
       "documents",
       "email",
+      "email_db_client",
       "email_utils",
       "email_validator",
       "embedding",
