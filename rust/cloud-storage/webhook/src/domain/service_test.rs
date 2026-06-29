@@ -211,6 +211,7 @@ fn webhook_from_create(
         workspace_id: request.workspace_id.clone(),
         name: request.name,
         endpoint_url: request.endpoint_url,
+        signing_secret: "secret".to_string(),
         headers: request.headers.unwrap_or_default(),
         status: WebhookStatus::Active,
         is_valid: true,

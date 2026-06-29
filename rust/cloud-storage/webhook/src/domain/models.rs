@@ -95,6 +95,9 @@ pub struct Webhook {
     pub name: String,
     /// HTTPS endpoint URL.
     pub endpoint_url: String,
+    /// Signing secret used by outbound adapters. This is never serialized by APIs.
+    #[serde(default, skip_serializing)]
+    pub signing_secret: String,
     /// Custom delivery headers, after decryption by the repository.
     pub headers: WebhookHeaders,
     /// Webhook lifecycle status.
