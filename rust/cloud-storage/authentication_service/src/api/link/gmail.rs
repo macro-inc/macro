@@ -23,6 +23,7 @@ mod test;
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
+const FREE_INBOX_LIMIT: i64 = 2;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGmailLinkResponse {
@@ -106,7 +107,7 @@ pub async fn init_gmail_link_handler(
 
     enforce_inbox_paywall(
         permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
-        || macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id),
+        || macro_db_client::email::count_user_email_links(&ctx.db, &user_context.macro_user_id),
     )
     .await?;
 
@@ -161,20 +162,19 @@ pub async fn init_gmail_link_handler(
     }))
 }
 
-/// Enforces the inbox paywall. The first inbox is free, so the existing-inbox
-/// check only runs for users without professional features, and only such a user
-/// who already has an inbox needs a professional subscription.
+/// Enforces the inbox paywall. Free users can connect inboxes until they reach
+/// `FREE_INBOX_LIMIT`; professional users skip the count entirely.
 async fn enforce_inbox_paywall<F, Fut>(
     has_professional_features: bool,
-    check_existing_inbox: F,
+    count_connected_inboxes: F,
 ) -> Result<(), InitGmailLinkError>
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<bool>>,
+    Fut: std::future::Future<Output = anyhow::Result<i64>>,
 {
     if !has_professional_features {
-        let has_own_inbox = check_existing_inbox().await?;
-        if has_own_inbox {
+        let connected_inbox_count = count_connected_inboxes().await?;
+        if connected_inbox_count >= FREE_INBOX_LIMIT {
             return Err(InitGmailLinkError::PaymentRequired);
         }
     }

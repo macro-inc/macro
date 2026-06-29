@@ -1,5 +1,26 @@
 use macro_user_id::user_id::MacroUserIdStr;
 
+/// Count email links connected for a user.
+#[tracing::instrument(skip(db))]
+pub async fn count_user_email_links(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    macro_user_id: &MacroUserIdStr<'static>,
+) -> anyhow::Result<i64> {
+    let count = sqlx::query!(
+        r#"
+    SELECT COUNT(*) as "count!"
+    FROM email_links
+    WHERE macro_id = $1
+    "#,
+        macro_user_id.as_ref()
+    )
+    .fetch_one(db)
+    .await?
+    .count;
+
+    Ok(count)
+}
+
 /// Check if email link exists for user
 #[tracing::instrument(skip(db))]
 pub async fn check_user_email_link(
