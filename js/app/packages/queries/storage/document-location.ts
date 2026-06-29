@@ -1,11 +1,12 @@
 import {
   type ResultError,
   type ResultType,
+  ThrownResultError,
   throwOnErr,
 } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
-import { ok, type Result } from 'neverthrow';
+import { type Result, err, ok } from 'neverthrow';
 import { queryClient } from '../client';
 import { documentLocationKeys } from './keys';
 
@@ -47,23 +48,37 @@ function retryDelay(
   return Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
 }
 
-function _documentLocationQueryOptions(args: DocumentLocationArgs) {
+function documentLocationQueryOptions(args: DocumentLocationArgs) {
   return {
     queryKey: documentLocationKeys.location(args.documentId, args.versionId)
       .queryKey,
-    queryFn: () => fetchDocumentLocation(args),
+    queryFn: () => requestDocumentLocation(args),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    enabled: !!args.documentId,
   };
 }
 
-async function fetchDocumentLocation(
+async function requestDocumentLocation(
   args: DocumentLocationArgs
 ): Promise<DocumentLocation> {
   return throwOnErr(async () =>
     storageServiceClient.getDocumentLocation(args)
   ).then((result) => result.data);
+}
+
+/**
+ * Fetches the current document location through TanStack Query, deduping with
+ * the readiness-wait helpers that share the same cache key.
+ */
+export async function fetchDocumentLocation(
+  args: DocumentLocationArgs
+): Promise<Result<DocumentLocation, ResultError<string>[]>> {
+  try {
+    return ok(await queryClient.fetchQuery(documentLocationQueryOptions(args)));
+  } catch (error) {
+    if (error instanceof ThrownResultError) return err(error.errors);
+    throw error;
+  }
 }
 
 function invalidateDocumentLocation(args: DocumentLocationArgs) {
@@ -100,7 +115,7 @@ async function waitForDocumentLocation(
       ).queryKey,
       queryFn: async () => {
         await invalidateDocumentLocation(args);
-        const location = await fetchDocumentLocation(args);
+        const location = await requestDocumentLocation(args);
         lastLocation = location;
 
         if (!options.isReady(location)) {

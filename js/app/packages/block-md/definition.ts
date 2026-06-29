@@ -5,9 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
+import {
+  fetchDocumentLocation,
+  waitForDocumentSyncServiceReady,
+} from '@queries/storage/document-location';
 import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
-import { storageServiceClient } from '@service-storage/client';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
@@ -41,11 +43,11 @@ export const definition = defineBlock({
       const { token, documentMetadata, userAccessLevel } = maybeBundle.value;
 
       const maybeLocation = await loadResult(
-        storageServiceClient.getDocumentLocation({ documentId })
+        fetchDocumentLocation({ documentId })
       );
       if (maybeLocation.isErr()) return err(maybeLocation.error);
 
-      let { data: location } = maybeLocation.value;
+      let location = maybeLocation.value;
       if (
         location.type === 'presignedUrl' &&
         location.content.state === 'pending'
