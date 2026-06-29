@@ -14,6 +14,11 @@ use std::cmp::min;
 // the max size allowed by the gmail api
 const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 
+// How many of the user's most recent sent messages we seed the contacts
+// service from during the priority pass. Capped at 500 by the gmail api.
+#[cfg(feature = "contacts_sync")]
+const SENT_CONTACT_SEED_LIMIT: u32 = 500;
+
 /// This step is invoked by Init.
 /// Each ListThreads operation gets a batch of 500 thread_ids from the gmail api
 /// and sends a BackfillThread message for each thread_id in the batch. If there
@@ -248,6 +253,13 @@ async fn list_priority_threads(
         }
     }
 
+    // Seed the contacts service from the user's recent sent mail so a new user
+    // has contacts before full backfill completes. Best-effort: this runs after
+    // the priority-pass total_threads bump, so it must never return a retryable
+    // error (that would re-run the pass and double-bump the counter).
+    #[cfg(feature = "contacts_sync")]
+    enqueue_sent_contact_seeds(ctx, access_token, scope, link).await;
+
     // Hand off to the normal most-recent-to-least sweep from the beginning. This
     // runs regardless of how many priority threads were found.
     let list_thread_msg = BackfillPubsubMessage {
@@ -274,4 +286,68 @@ async fn list_priority_threads(
         })?;
 
     Ok(())
+}
+
+/// Lists the user's most recent sent messages and fans out one
+/// [`BackfillOperation::SeedSentContact`] per message so the contacts service
+/// gets seeded early in the backfill (see [`list_priority_threads`]).
+///
+/// Best-effort by design: it runs after the priority pass has already bumped
+/// `total_threads`, so it must not propagate a retryable error (that would
+/// re-run the whole pass and double-bump). On any failure it logs and returns —
+/// `handle_contacts_sync` re-seeds the full contact set at job completion.
+#[cfg(feature = "contacts_sync")]
+async fn enqueue_sent_contact_seeds(
+    ctx: &PubSubContext,
+    access_token: &str,
+    scope: &JobScopedPayload<ListThreadsPayload>,
+    link: &link::Link,
+) {
+    use models_email::email::service::backfill::SeedSentContactPayload;
+
+    if let Err(e) = check_gmail_rate_limit(CheckGmailRateLimitArgs {
+        redis_client: &ctx.redis_client,
+        link_id: link.id,
+        gmail_operation: GmailApiOperation::MessagesList,
+        retryable: true,
+        is_backfill: true,
+    })
+    .await
+    {
+        tracing::warn!(error = ?e, link_id = %link.id, "Skipping sent-contact seed: gmail rate limited");
+        return;
+    }
+
+    let message_ids = match ctx
+        .gmail_client
+        .list_messages(
+            access_token,
+            SENT_CONTACT_SEED_LIMIT,
+            &[SystemLabelID::Sent.as_str()],
+        )
+        .await
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::error!(error = ?e, link_id = %link.id, "Skipping sent-contact seed: failed to list sent messages");
+            return;
+        }
+    };
+
+    for message_provider_id in message_ids {
+        let msg = BackfillPubsubMessage {
+            backfill_operation: BackfillOperation::SeedSentContact(JobScopedPayload {
+                link_id: scope.link_id,
+                job_id: scope.job_id,
+                payload: SeedSentContactPayload {
+                    message_provider_id,
+                },
+            }),
+        };
+
+        if let Err(e) = ctx.sqs_client.enqueue_email_backfill_message(msg).await {
+            tracing::error!(error = ?e, link_id = %link.id, "Failed to enqueue sent-contact seed; skipping remaining");
+            return;
+        }
+    }
 }
