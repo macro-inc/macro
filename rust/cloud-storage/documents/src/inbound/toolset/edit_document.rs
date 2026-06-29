@@ -56,14 +56,23 @@ where
                 internal_error: e,
             }
         })?;
-        let result = ctx
-            .editing
-            .edit(&self.document_id, user_token, &self.instructions)
-            .await
-            .map_err(|e| ToolCallError {
-                description: e.to_string(),
-                internal_error: e,
-            })?;
+        // Honor user cancellation: if the request is cancelled mid-edit, drop the
+        // in-flight worker call (closing the HTTP connection so the worker aborts
+        // its own LLM work) and surface a `cancelled` tool error -- matching how
+        // the chat stream renders cancellation for tool calls that never returned.
+        let result = tokio::select! {
+            _ = request_context.cancel.cancelled() => {
+                return Err(ToolCallError {
+                    description: "cancelled".to_string(),
+                    internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
+                });
+            }
+            r = ctx.editing.edit(&self.document_id, user_token, &self.instructions) => r,
+        }
+        .map_err(|e| ToolCallError {
+            description: e.to_string(),
+            internal_error: e,
+        })?;
 
         // The worker runs several models on the caller's behalf; record each so
         // their tokens land on the usage ledger (attributed to this user).

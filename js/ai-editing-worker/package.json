@@ -5,10 +5,6 @@
 	"type": "module",
 	"scripts": {
 		"prebuild": "bun scripts/generate-sandbox.ts",
-		"dev": "bun scripts/generate-sandbox.ts && wrangler dev --env local",
-		"deploy": "bun scripts/generate-sandbox.ts && wrangler deploy",
-		"deploy:dev": "bun scripts/generate-sandbox.ts && wrangler deploy --env dev",
-		"deploy:prod": "bun scripts/generate-sandbox.ts && wrangler deploy --env prod",
 		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {
