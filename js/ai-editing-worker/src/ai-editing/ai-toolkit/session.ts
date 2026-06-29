@@ -4,6 +4,7 @@ import {
   $createParagraphNode,
   $getRoot,
   createEditor,
+  type ElementNode,
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
@@ -91,4 +92,31 @@ export function loadSnapshot(
 /** Export the current document as a serialized editor-state snapshot. */
 export function toSnapshot(session: LexicalSession): SerializedEditorState {
   return session.editor.getEditorState().toJSON();
+}
+
+/**
+ * Retype a container node by swapping in a freshly-built replacement. The
+ * replacement gets a FRESH durable id (Loro can't reshape a container in place —
+ * reusing the id makes the change vanish on sync, a fresh id reads as a clean
+ * delete + insert), and every id that pointed at the old node is forwarded to
+ * the replacement. Children carry over via `replace(…, true)` with their own ids
+ * intact. Backs `$setBlockType` and `$setListType`.
+ *
+ * This is specifically for retyping containers — NOT a generic node replace.
+ * Inline wraps (`$wrapInBlock`) re-parent a node without minting a fresh id.
+ */
+export function $retypeContainer<T extends ElementNode>(
+  session: LexicalSession,
+  node: ElementNode,
+  replacement: T
+): T {
+  const oldKey = node.getKey();
+  node.replace(replacement, true);
+  $updateAllNodeIds(session.ids, replacement);
+  const { idToNodeKeyMap } = session.ids;
+  const newKey = replacement.getKey();
+  for (const [id, key] of idToNodeKeyMap) {
+    if (key === oldKey) idToNodeKeyMap.set(id, newKey);
+  }
+  return replacement;
 }

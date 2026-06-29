@@ -50,7 +50,7 @@ export function $textById(session: LexicalSession, id: string): TextNode {
 export type TextMatch = { node: string; start: number; end: number };
 export type LocateScope = { kind: 'nth'; n: number } | { kind: 'all' };
 
-/** Find occurrences of `match` within `block`'session text nodes, filtered by scope. */
+/** Find occurrences of `match` within `block`'s text nodes, filtered by scope. */
 export function $locate(
   block: ElementNode,
   match: string,

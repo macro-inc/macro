@@ -1,5 +1,5 @@
-import { $isLinkNode } from '@lexical/link';
-import { $isMarkNode } from '@lexical/mark';
+import { $createLinkNode, $isLinkNode } from '@lexical/link';
+import { $createMarkNode, $isMarkNode } from '@lexical/mark';
 import { $getRoot, $isTextNode, type ElementNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
@@ -9,10 +9,9 @@ import {
   $appendText,
   $clearFormat,
   $formatTextInBlock,
-  $highlightInBlock,
   $prependText,
   $replaceString,
-  $wrapInLink,
+  $wrapInBlock,
 } from './inline';
 import { $blockById } from './locate';
 import { collectTextNodes } from './tree';
@@ -239,14 +238,12 @@ describe('inline ops: scope + counts', () => {
 // Links and marks do NOT round-trip through serializeWithXml, so inspect the
 // node tree with $isLinkNode / $isMarkNode.
 describe('deferred: links / highlight (node-tree assertions)', () => {
-  it('$wrapInLink wraps a substring in a LinkNode; count returned', () => {
+  it('$wrapInBlock wraps a substring in a LinkNode; count returned', () => {
     const { session, ids } = setup('see the docs');
     const id = ids[0];
     const count = edit(session, () =>
-      $wrapInLink(
-        $blockById(session, id),
-        'the docs',
-        'https://docs.example.com'
+      $wrapInBlock($blockById(session, id), 'the docs', () =>
+        $createLinkNode('https://docs.example.com')
       )
     );
     expect(count).toBe(1);
@@ -273,11 +270,13 @@ describe('deferred: links / highlight (node-tree assertions)', () => {
     expect(leading).toBe('see ');
   });
 
-  it('$highlightInBlock wraps matches in MarkNodes; all:true returns count', () => {
+  it('$wrapInBlock wraps matches in MarkNodes; all:true returns count', () => {
     const { session, ids } = setup('important here important');
     const id = ids[0];
     const count = edit(session, () =>
-      $highlightInBlock($blockById(session, id), 'important', { kind: 'all' })
+      $wrapInBlock($blockById(session, id), 'important', $createMarkNode, {
+        kind: 'all',
+      })
     );
     expect(count).toBe(2);
     const marks = read(session, () => {

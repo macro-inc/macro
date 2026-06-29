@@ -1,5 +1,3 @@
-import { $createLinkNode, $isLinkNode } from '@lexical/link';
-import { $createMarkNode, $isMarkNode } from '@lexical/mark';
 import {
   $createTextNode,
   $isElementNode,
@@ -223,30 +221,17 @@ function mutateMatches(
   return count;
 }
 
-/** Wrap a matched substring in a link. Returns the count changed. */
-export function $wrapInLink(
+/** Wrap a matched substring in a new element node (link, mark, …). Returns the count changed. */
+export function $wrapInBlock(
   block: ElementNode,
   needle: string,
-  url: string,
+  createWrapper: () => ElementNode,
   scope?: Scope
 ): number {
   return mutateMatches(block, needle, scope, (matchNode) => {
-    const link = $createLinkNode(url);
-    matchNode.replace(link);
-    link.append(matchNode);
-  });
-}
-
-/** Wrap a matched substring in a highlight (mark). Returns the count changed. */
-export function $highlightInBlock(
-  block: ElementNode,
-  needle: string,
-  scope?: Scope
-): number {
-  return mutateMatches(block, needle, scope, (matchNode) => {
-    const mark = $createMarkNode();
-    matchNode.replace(mark);
-    mark.append(matchNode);
+    const wrapper = createWrapper();
+    matchNode.replace(wrapper);
+    wrapper.append(matchNode);
   });
 }
 
@@ -261,24 +246,14 @@ function $unwrapWrapper(
   parent.remove();
 }
 
-/** Remove the link wrapper from a matched substring. Returns the count changed. */
-export function $unwrapFromLink(
+/** Remove the nearest wrapper matching `pred` from a matched substring. Returns the count changed. */
+export function $unwrapFromBlock(
   block: ElementNode,
   needle: string,
+  pred: (n: LexicalNode) => boolean,
   scope?: Scope
 ): number {
   return mutateMatches(block, needle, scope, (matchNode) =>
-    $unwrapWrapper(matchNode, $isLinkNode)
-  );
-}
-
-/** Remove the highlight (mark) wrapper from a matched substring. Returns the count changed. */
-export function $unhighlightInBlock(
-  block: ElementNode,
-  needle: string,
-  scope?: Scope
-): number {
-  return mutateMatches(block, needle, scope, (matchNode) =>
-    $unwrapWrapper(matchNode, $isMarkNode)
+    $unwrapWrapper(matchNode, pred)
   );
 }

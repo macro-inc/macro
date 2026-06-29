@@ -8,6 +8,8 @@
  */
 
 import { $createCodeNode } from '@lexical/code';
+import { $createLinkNode, $isLinkNode } from '@lexical/link';
+import { $createMarkNode, $isMarkNode } from '@lexical/mark';
 import {
   $createListItemNode,
   $createListNode,
@@ -350,8 +352,9 @@ export class Doc implements DocReader, DocWriter {
     scope: Scope
   ): void {
     this.tx(() => {
-      if (on) inline.$highlightInBlock(this.block(node), match, scope);
-      else inline.$unhighlightInBlock(this.block(node), match, scope);
+      if (on)
+        inline.$wrapInBlock(this.block(node), match, $createMarkNode, scope);
+      else inline.$unwrapFromBlock(this.block(node), match, $isMarkNode, scope);
     });
   }
 
@@ -362,8 +365,14 @@ export class Doc implements DocReader, DocWriter {
     scope: Scope
   ): void {
     this.tx(() => {
-      if (url !== null) inline.$wrapInLink(this.block(node), match, url, scope);
-      else inline.$unwrapFromLink(this.block(node), match, scope);
+      if (url !== null)
+        inline.$wrapInBlock(
+          this.block(node),
+          match,
+          () => $createLinkNode(url),
+          scope
+        );
+      else inline.$unwrapFromBlock(this.block(node), match, $isLinkNode, scope);
     });
   }
 
@@ -442,8 +451,7 @@ export class Doc implements DocReader, DocWriter {
   ): void {
     this.tx(() => {
       const list = locate.$byId(this.session, node);
-      if (!$isListNode(list))
-        throw new EditError(`{${node}} is not a list`);
+      if (!$isListNode(list)) throw new EditError(`{${node}} is not a list`);
       const li = $createListItemNode(checked ?? listItemChecked(list));
       if (text) li.append($createTextNode(text));
       list.append(li);
@@ -459,8 +467,7 @@ export class Doc implements DocReader, DocWriter {
   ): void {
     this.tx(() => {
       const list = locate.$byId(this.session, node);
-      if (!$isListNode(list))
-        throw new EditError(`{${node}} is not a list`);
+      if (!$isListNode(list)) throw new EditError(`{${node}} is not a list`);
       const li = $createListItemNode(checked ?? listItemChecked(list));
       if (text) li.append($createTextNode(text));
       const first = list.getFirstChild();
@@ -733,7 +740,9 @@ export class Doc implements DocReader, DocWriter {
 
 /** A check-list item carries an (unchecked) checkbox; other list kinds don't. */
 function listItemChecked(list: LexicalNode): boolean | undefined {
-  return $isListNode(list) && list.getListType() === 'check' ? false : undefined;
+  return $isListNode(list) && list.getListType() === 'check'
+    ? false
+    : undefined;
 }
 
 function resolveTable(node: LexicalNode): TableNode {

@@ -16,11 +16,8 @@ import {
 } from 'lexical';
 import { match } from 'ts-pattern';
 import { $isCustomCodeNode } from '../../../../lexical-core/nodes/CustomCodeNode';
-import {
-  $getId,
-  $updateAllNodeIds,
-} from '../../../../lexical-core/plugins/nodeIdPlugin';
-import type { LexicalSession } from './session';
+import { $getId } from '../../../../lexical-core/plugins/nodeIdPlugin';
+import { $retypeContainer, type LexicalSession } from './session';
 
 export type BlockData =
   | { type: 'paragraph' }
@@ -41,33 +38,19 @@ export function $blockNode(data: BlockData): ElementNode {
     .exhaustive();
 }
 
-/**
- * Change a block's type, transplanting its text content onto a new node.
- * The replacement gets a FRESH durable id rather than inheriting the old one: a
- * block-type change is a node *replacement*, and the downstream CRDT sync (Loro)
- * can't reshape a container in place.
- */
+/** Change a block's type, transplanting its content onto a fresh-id node. */
 export function $setBlockType(
   session: LexicalSession,
   block: ElementNode,
   make: () => ElementNode
 ): ElementNode {
-  const oldKey = block.getKey();
-  const replacement = make();
-  block.replace(replacement, true);
-  $updateAllNodeIds(session.ids, replacement);
-  const { idToNodeKeyMap } = session.ids;
-  const newKey = replacement.getKey();
-  for (const [id, key] of idToNodeKeyMap) {
-    if (key === oldKey) idToNodeKeyMap.set(id, newKey);
-  }
-  return replacement;
+  return $retypeContainer(session, block, make());
 }
 
-/** Rewrite a block'session inline content to plain text, keeping its type and id. Always strips any inline formatting (bold, italic, underline, etc.) on the kept node. */
+/** Rewrite a block's inline content to plain text, keeping its type and id. Always strips any inline formatting (bold, italic, underline, etc.) on the kept node. */
 export function $setText(block: ElementNode, text: string): void {
-  // A code block'session children are code-highlight nodes (re-tokenized from the
-  // block'session text by Prism), so we use `setCode`, which splices the whole
+  // A code block's children are code-highlight nodes (re-tokenized from the
+  // block's text by Prism), so we use `setCode`, which splices the whole
   // content in one shot, keeping the language.
   if ($isCustomCodeNode(block)) {
     block.setCode(block.getLanguage(), text);
@@ -87,7 +70,7 @@ export function $setText(block: ElementNode, text: string): void {
   }
 }
 
-/** Append pre-built block node(session) at the end of the document. */
+/** Append pre-built block node(s) at the end of the document. */
 export function $appendBlock(...nodes: ElementNode[]): ElementNode[] {
   const root = $getRoot();
   for (const node of nodes) {
@@ -96,7 +79,7 @@ export function $appendBlock(...nodes: ElementNode[]): ElementNode[] {
   return nodes;
 }
 
-/** Prepend pre-built block node(session) at the top of the document. */
+/** Prepend pre-built block node(s) at the top of the document. */
 export function $prependBlock(...nodes: ElementNode[]): ElementNode[] {
   const root = $getRoot();
   const first = root.getFirstChild();
@@ -132,7 +115,10 @@ export function $moveBlock(
   }
 }
 
-function findTopLevelById(id: string, session?: LexicalSession): ElementNode | null {
+function findTopLevelById(
+  id: string,
+  session?: LexicalSession
+): ElementNode | null {
   if (session) {
     const key = session.ids.idToNodeKeyMap.get(id);
     if (key) {

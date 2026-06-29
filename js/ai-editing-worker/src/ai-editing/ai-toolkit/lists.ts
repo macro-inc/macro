@@ -7,8 +7,7 @@ import {
   type ListType,
 } from '@lexical/list';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
-import { $updateAllNodeIds } from '../../../../lexical-core/plugins/nodeIdPlugin';
-import type { LexicalSession } from './session';
+import { $retypeContainer, type LexicalSession } from './session';
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
@@ -53,14 +52,6 @@ export function $toggleList(blocks: LexicalNode[], type: ListKind): ListNode {
  * Change the type of the list enclosing `node` (a list, or any item in it) —
  * bullet ↔ number ↔ check — retyping the list node itself, preserving its
  * position, nesting, indentation, and the items' ids. Returns the retyped list.
- *
- * The retyped list gets a FRESH durable id (not the old one): a list-type change
- * replaces the `<ul>`/`<ol>` node, and the Loro sync can't reshape a container in
- * place — reusing the id makes the change vanish on sync, whereas a fresh id
- * reads as a clean delete + insert. Every id that referred to the old list (e.g.
- * the model's pre-change list id) is forwarded to the replacement, and the items
- * carry over via `replace(…, true)` with their own ids intact. Mirrors
- * `$setBlockType`.
  */
 export function $setListType(
   node: LexicalNode,
@@ -74,14 +65,5 @@ export function $setListType(
   if (!$isListNode(list)) {
     throw new Error('$setListType: no enclosing list');
   }
-  const oldKey = list.getKey();
-  const retyped = $createListNode(type as ListType);
-  list.replace(retyped, true);
-  $updateAllNodeIds(session.ids, retyped);
-  const { idToNodeKeyMap } = session.ids;
-  const newKey = retyped.getKey();
-  for (const [id, key] of idToNodeKeyMap) {
-    if (key === oldKey) idToNodeKeyMap.set(id, newKey);
-  }
-  return retyped;
+  return $retypeContainer(session, list, $createListNode(type as ListType));
 }
