@@ -53,11 +53,7 @@ import {
 } from 'solid-js';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
-import {
-  HistorySessionList,
-  MIN_HISTORY_EDITS,
-  NO_HISTORY_MESSAGE,
-} from '../../history/HistorySessionList';
+import { HistorySessionList } from '../../history/HistorySessionList';
 import { mdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -132,32 +128,27 @@ function HistorySectionContent() {
       ? null
       : Math.max(120, window.innerHeight - activityBounds.top - 36);
 
+  const totalEdits = createMemo(() => {
+    const sessions = history.sessions();
+    if (!sessions) return 0;
+    return sessions.reduce((sum, s) => sum + s.count, 0);
+  });
+
   return (
     <Show
-      when={!history.isLoadingSessions() && history.sessions()}
-      fallback={<p class="text-xs text-ink-muted">No history found</p>}
+      when={!history.isLoadingSessions() && totalEdits() > 1 && history.sessions()}
+      fallback={<p class="text-xs text-ink-muted">No history yet</p>}
     >
-      {(sessions) => {
-        const totalEdits = createMemo(() =>
-          sessions().reduce((sum, s) => sum + s.count, 0)
-        );
-        return (
-        <Show
-          when={totalEdits() >= MIN_HISTORY_EDITS}
-          fallback={<p class="text-xs text-ink-muted">{NO_HISTORY_MESSAGE}</p>}
-        >
+      {(sessions) => (
         <div class="min-w-0 overflow-hidden">
           <HistoryScrubber
             sessions={sessions()}
-            pins={history.pins()}
             selectedAt={history.selectedAt}
             isViewingHistory={history.isViewingHistory}
             setViewingHistory={history.setViewingHistory}
             isScrubbedRightmost={history.isScrubbedRightmost}
             onSelectRightmost={history.enterRightmost}
             onSelect={history.enterAt}
-            onCreatePin={history.createPin}
-            onDeletePin={history.deletePin}
             compact
           />
           <Show when={sessions().length > 0}>
@@ -194,9 +185,7 @@ function HistorySectionContent() {
             </div>
           </Show>
         </div>
-        </Show>
-        );
-      }}
+      )}
     </Show>
   );
 }

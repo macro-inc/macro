@@ -5,8 +5,6 @@ import { type Accessor, createMemo, For, Show } from 'solid-js';
 import { buildActivityRows } from './activityRows';
 import { userColor, userLabel } from './utils';
 
-export const MIN_HISTORY_EDITS = 3;
-export const NO_HISTORY_MESSAGE = 'No history yet';
 
 type HistorySessionListProps = {
   sessions: readonly HistorySession[];
@@ -42,17 +40,11 @@ function UserList(props: { userIds: readonly string[] }) {
 
 export function HistorySessionList(props: HistorySessionListProps) {
   const rows = createMemo(() => buildActivityRows(props.sessions));
-  const totalEdits = createMemo(() => rows().reduce((sum, r) => sum + r.count, 0));
 
   const selectedMs = () => props.selectedAt()?.getTime() ?? null;
 
   return (
-    <Show
-      when={totalEdits() >= MIN_HISTORY_EDITS}
-      fallback={
-        <p class="mt-2 text-ink-muted text-xs">{NO_HISTORY_MESSAGE}</p>
-      }
-    >
+    <Show when={rows().length > 0}>
       <div class="mt-2 min-w-0">
         <div
           class="min-h-0 space-y-1 overflow-y-auto pr-1"
@@ -87,10 +79,10 @@ export function HistorySessionList(props: HistorySessionListProps) {
                     </For>
                   </span>
                   <span class="min-w-0 flex-1">
-                    <span class="block truncate text-ink text-xs">
+                    <span class="block text-ink text-xs">
                       <UserList userIds={row.userIds} /> edited {row.label}
                     </span>
-                    <span class="block truncate text-ink-muted text-[11px]">
+                    <span class="block text-ink-muted text-[11px]">
                       {edits()}
                     </span>
                   </span>

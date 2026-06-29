@@ -124,6 +124,8 @@ export function createTimelineScales(
     visibleWindow,
     /** Gap labels between activity blocks, pre-filtered to those wide enough to display. */
     gapMarkers,
+    /** Real timestamp (ms) → warped position. */
+    timestampToWarpedPosition,
     /** Warped position → real timestamp (ms). Inverse of the warp compression. */
     warpedPositionToTimestamp,
     /** Warped position → screen pixel within the container. */

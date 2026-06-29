@@ -2,14 +2,15 @@ import { blur, max } from 'd3-array';
 import { area, curveBasis } from 'd3-shape';
 
 export const SESSION_GAP_MS = 10 * 60 * 1000;
-const GAP_COMPRESSION_MULTIPLIER = 0.5;
+const GAP_COMPRESSION_MULTIPLIER = 0.25;
+const ACTIVE_TIME_MULTIPLIER = 8;
 
 export type Interval = { startMs: number; endMs: number; warpStart: number };
 
 // where it's supposed to look like it's starting, plus the real duration
 // we only fake the start position
 export const warpedIntervalEnd = (iv: Interval) =>
-  iv.warpStart + (iv.endMs - iv.startMs);
+  iv.warpStart + (iv.endMs - iv.startMs) * ACTIVE_TIME_MULTIPLIER;
 
 export type CompressedTimeline = { intervals: Interval[]; total: number };
 
@@ -47,7 +48,7 @@ export function buildCompressedTimeline(
     const span = merged[i];
     const endMs = Math.max(span.endMs, span.startMs + 1);
     intervals.push({ startMs: span.startMs, endMs, warpStart: offset });
-    offset += endMs - span.startMs;
+    offset += (endMs - span.startMs) * ACTIVE_TIME_MULTIPLIER;
   }
 
   return { intervals, total: offset };

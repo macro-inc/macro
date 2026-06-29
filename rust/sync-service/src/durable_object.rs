@@ -64,8 +64,6 @@ mod path {
     pub const DEBUG_DO_KV_GET: &str = "debug_do_kv_get";
     pub const DEBUG_DO_KV_LIST: &str = "debug_do_kv_list";
     pub const WAKEUP: &str = "wakeup";
-    pub const PINS: &str = "pins";
-    pub const PINS_BY_ID: &str = "pins_by_id";
 
     #[cfg(feature = "dev-endpoints")]
     pub const SET_MEMORY_STATE: &str = "set_memory_state";
@@ -340,16 +338,6 @@ impl DocumentSyncSession {
                         }
                         path::STATE_AT => {
                             return self.state_at_handler(req, document_id).await;
-                        }
-                        path::PINS => {
-                            return self.pins_handler(req, document_id, &claims).await;
-                        }
-                        path::PINS_BY_ID => {
-                            let pin_id = matched
-                                .params
-                                .get("pin_id")
-                                .context("missing pin_id param")?;
-                            return self.delete_pin_handler(req, document_id, pin_id).await;
                         }
                         path::RAW => return self.raw_handler(document_id).await,
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
@@ -754,123 +742,6 @@ impl DocumentSyncSession {
         Ok(builder.body(ResponseBody::Body(out)))
     }
 
-    /// GET -> list all pins for this document.
-    /// POST -> create a pin at the given time (body: `{ label, pinnedAtMs? }`).
-    async fn pins_handler(
-        &self,
-        mut req: Request,
-        document_id: &str,
-        claims: &crate::auth::AuthToken,
-    ) -> Result<Response> {
-        if !self.exists(document_id).await? {
-            return Ok(response(status_codes::NOT_FOUND));
-        }
-
-        match req.method() {
-            Method::Get => {
-                let db = self.env.d1(USER_PEER_D1_BINDING)?;
-                let pins = crate::d1::get_pins(db).await?;
-
-                #[derive(serde::Serialize)]
-                struct PinJson {
-                    id: String,
-                    label: String,
-                    #[serde(rename = "createdBy")]
-                    created_by: String,
-                    #[serde(rename = "pinnedAtMs")]
-                    pinned_at_ms: i64,
-                }
-
-                let out: Vec<PinJson> = pins
-                    .into_iter()
-                    .map(|p| PinJson {
-                        id: p.id,
-                        label: p.label,
-                        created_by: p.created_by,
-                        pinned_at_ms: p.pinned_at_ms,
-                    })
-                    .collect();
-                ResponseBuilder::new().from_json(&out)
-            }
-            Method::Post => {
-                #[derive(serde::Deserialize)]
-                struct CreatePinBody {
-                    label: String,
-                    // was having issues with bigint not being supported, but we
-                    // plan to move to typegen utopa soon anyway
-                    #[serde(rename = "pinnedAtMs")]
-                    pinned_at_ms: Option<f64>,
-                }
-
-                let body: CreatePinBody = serde_json::from_slice(&req.bytes().await?)
-                    .context("invalid create-pin JSON body")?;
-
-                // kept in sync with js/app/packages/queries/pins.ts PIN_LABEL_RE
-                if !lazy_regex::regex_is_match!(r"^[a-zA-Z0-9_-]+$", &body.label) {
-                    return ResponseBuilder::new()
-                        .with_status(400)
-                        .from_json(&serde_json::json!({
-                            "error": "Label can only be letters, dashes, and numbers"
-                        }));
-                }
-
-                let created_by = claims
-                    .user_id
-                    .clone()
-                    .unwrap_or_else(|| "unknown".to_string());
-
-                let pinned_at_ms = body
-                    .pinned_at_ms
-                    .map(|f| f.round() as i64)
-                    .unwrap_or_else(|| Date::now().as_millis() as i64);
-
-                let pin = crate::d1::VersionPin {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    label: body.label,
-                    created_by,
-                    pinned_at_ms,
-                };
-
-                let db = self.env.d1(USER_PEER_D1_BINDING)?;
-                crate::d1::insert_pin(db, &pin).await?;
-
-                #[derive(serde::Serialize)]
-                struct CreatePinResponse {
-                    id: String,
-                    #[serde(rename = "pinnedAtMs")]
-                    pinned_at_ms: i64,
-                }
-                ResponseBuilder::new().from_json(&CreatePinResponse {
-                    id: pin.id,
-                    pinned_at_ms: pin.pinned_at_ms,
-                })
-            }
-            _ => Ok(response(status_codes::NOT_FOUND)),
-        }
-    }
-
-    /// DELETE `/document/:id/pins/:pin_id` removes a pin (scoped to this document).
-    async fn delete_pin_handler(
-        &self,
-        req: Request,
-        document_id: &str,
-        pin_id: &str,
-    ) -> Result<Response> {
-        if req.method() != Method::Delete {
-            return Ok(response(status_codes::NOT_FOUND));
-        }
-        if !self.exists(document_id).await? {
-            return Ok(response(status_codes::NOT_FOUND));
-        }
-        let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        let deleted = crate::d1::delete_pin(db, pin_id).await?;
-        Ok(response(if deleted {
-            status_codes::OK
-        } else {
-            status_codes::NOT_FOUND
-        }))
-    }
-
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
@@ -1120,12 +991,6 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .unwrap();
     router
         .insert("/document/{document_id}/wakeup", path::WAKEUP)
-        .unwrap();
-    router
-        .insert("/document/{document_id}/pins", path::PINS)
-        .unwrap();
-    router
-        .insert("/document/{document_id}/pins/{pin_id}", path::PINS_BY_ID)
         .unwrap();
     router
 });

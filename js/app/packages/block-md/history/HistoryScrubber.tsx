@@ -1,16 +1,17 @@
-import type { HistorySession, VersionPin } from '@service-sync/client';
+import type { HistorySession } from '@service-sync/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { group } from 'd3-array';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   For,
+  on,
   type Setter,
   Show,
 } from 'solid-js';
-import { CreatePin } from './CreatePin';
 import { createTimelineScales, type WindowRange } from './createTimelineScales';
 import { buildVolumeShape, VOLUME_BAND_H, type VolumeShape } from './timeline';
 import { formatTimestamp, userColor, userLabel } from './utils';
@@ -20,20 +21,15 @@ type ScrubberLane = { user: ScrubberUser; sessions: HistorySession[] };
 const MIN_VIEW = 1000;
 const DRAG_THRESHOLD = 4;
 const THUMB_HIT_PX = 12;
-const RAIL_HEIGHT_PX = 32;
-const DOUBLE_CLICK_MS = 300;
 
 export type HistoryScrubberProps = {
   sessions: readonly HistorySession[];
-  pins: readonly VersionPin[];
   selectedAt: Accessor<Date | null>;
   isViewingHistory: Accessor<boolean>;
   setViewingHistory: Setter<boolean>;
   isScrubbedRightmost: Accessor<boolean>;
   onSelectRightmost: () => void;
   onSelect: (at: Date | null) => void;
-  onCreatePin: (atMs: number, label: string) => void;
-  onDeletePin: (pinId: string) => void;
   compact?: boolean;
 };
 
@@ -45,10 +41,8 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const [view, setView] = createSignal<WindowRange | null>(null);
 
   type Drag =
-    // this is if we are paning
     | { mode: 'scrub'; startPx: number }
-    // and this is if we are selecting a range to zoom in on
-    | { mode: 'marquee'; startPx: number; curPx: number; inLanes: boolean };
+    | { mode: 'marquee'; startPx: number; curPx: number };
   const [drag, setDrag] = createSignal<Drag | null>(null);
 
   const [hoverPx, setHoverPx] = createSignal<number | null>(null);
@@ -57,11 +51,6 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     x: number;
     y: number;
   } | null>(null);
-  const [createPinAt, setCreatePinAt] = createSignal<{
-    leftPx: number;
-    atMs: number;
-  } | null>(null);
-
   // users (with metadata for displaying them in their tracks)
   const users = createMemo<ScrubberUser[]>(() => {
     const ids = [...new Set(props.sessions.map((session) => session.userId))];
@@ -83,6 +72,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     compressedTimeline,
     visibleWindow,
     gapMarkers,
+    timestampToWarpedPosition,
     warpedPositionToTimestamp,
     containerPositionToWarpedPosition,
     timestampToContainerPosition,
@@ -97,6 +87,15 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     if (clampedStart < 0) clampedStart = 0;
     return { start: clampedStart, end: clampedStart + span };
   };
+
+  createEffect(on(props.selectedAt, (selectedDate) => {
+    if (!selectedDate || props.isScrubbedRightmost()) return;
+    const warped = timestampToWarpedPosition(selectedDate.getTime());
+    const { start, end } = visibleWindow();
+    if (warped >= start && warped <= end) return;
+    const span = Math.max(end - start, compressedTimeline().total * 0.5);
+    setView(clampView(warped - span / 2, warped + span / 2));
+  }));
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -115,11 +114,8 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     return Math.min(Math.max(0, clientX - rect.left), rect.width);
   };
 
-  // Converts page clientY to a pixel offset from the container top (unclamped).
-  // Only used to distinguish clicks in the rail vs the user lanes below it.
-  const localY = (clientY: number) => {
-    return clientY - containerRef.getBoundingClientRect().top;
-  };
+  const localY = (clientY: number) =>
+    clientY - containerRef.getBoundingClientRect().top;
 
   // Converts a pixel offset to a real timestamp: pixel → warped coord → ms.
   const placeAt = (pointerPx: number) => {
@@ -149,33 +145,15 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
       : candidatePx;
   });
 
-  let lastClickMs = 0;
-
   const onPointerDown = (e: PointerEvent) => {
-    if (createPinAt()) {
-      setCreatePinAt(null);
-      return;
-    }
     setHoverPx(null);
-    const wasViewingHistory = props.isViewingHistory();
     props.setViewingHistory(true);
     const pointerPx = localPx(e.clientX);
     const thumbPosition = thumbPx();
-    if (!wasViewingHistory) {
-      return;
-    } else if (
-      thumbPosition !== null &&
-      Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX
-    ) {
+    if (thumbPosition !== null && Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX) {
       setDrag({ mode: 'scrub', startPx: pointerPx });
     } else {
-      const inLanes = localY(e.clientY) > RAIL_HEIGHT_PX;
-      setDrag({
-        mode: 'marquee',
-        startPx: pointerPx,
-        curPx: pointerPx,
-        inLanes,
-      });
+      setDrag({ mode: 'marquee', startPx: pointerPx, curPx: pointerPx });
     }
     containerRef.setPointerCapture(e.pointerId);
   };
@@ -206,26 +184,16 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
       return;
     }
     if (Math.abs(activeDrag.curPx - activeDrag.startPx) > DRAG_THRESHOLD) {
-      // User drew a marquee selection — zoom the view to the selected pixel range.
       const warpLeft = containerPositionToWarpedPosition(
         Math.min(activeDrag.startPx, activeDrag.curPx)
       );
       const warpRight = containerPositionToWarpedPosition(
         Math.max(activeDrag.startPx, activeDrag.curPx)
       );
-      setView(clampView(warpLeft, warpRight));
-    } else if (!activeDrag.inLanes) {
-      // Short click on the rail (not the user lanes) — open the create-pin popover.
-      // We detect double-clicks manually here because the native dblclick event fires
-      // after both pointerups, so the popover would flash open before the zoom reset.
-      const now = Date.now();
-      const isDouble = now - lastClickMs < DOUBLE_CLICK_MS;
-      lastClickMs = now;
-      if (!isDouble)
-        setCreatePinAt({
-          leftPx: pointerPx,
-          atMs: containerPositionToTimestamp(pointerPx),
-        });
+      const padding = (warpRight - warpLeft) * 0.2;
+      setView(clampView(warpLeft - padding, warpRight + padding));
+    } else {
+      placeAt(pointerPx);
     }
   };
 
@@ -303,60 +271,12 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
 
         {/* Hover preview line */}
         <Show
-          when={hoverPx() !== null && drag() === null && createPinAt() === null}
+          when={hoverPx() !== null && drag() === null}
         >
           <div
             class="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/30"
             style={{ left: `${hoverPx() ?? 0}px` }}
           />
-        </Show>
-
-        {/* Pin markers */}
-        <For each={props.pins}>
-          {(pin) => {
-            const px = () => timestampToContainerPosition(pin.pinnedAtMs);
-            // 2px margin so pins at the very edge aren't clipped.
-            return (
-              <Show when={px() >= -2 && px() <= width() + 2}>
-                <div
-                  class="absolute top-0 z-20 h-8"
-                  style={{ left: `${px()}px` }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // you can hold cmd when you click a pin to delete it
-                    if (e.ctrlKey || e.metaKey) {
-                      props.onDeletePin(pin.id);
-                    } else {
-                      props.setViewingHistory(true);
-                      setCursorMs(pin.pinnedAtMs);
-                      props.onSelect(new Date(pin.pinnedAtMs));
-                    }
-                  }}
-                >
-                  <div class="absolute inset-y-0 w-px bg-red-500/70" />
-                  <div class="absolute top-0 left-1 cursor-pointer whitespace-nowrap rounded-sm bg-surface/80 px-1.5 py-0.5 text-[10px] text-red-500 ring-1 ring-red-500/20 hover:ring-red-500/60">
-                    {pin.label}
-                  </div>
-                </div>
-              </Show>
-            );
-          }}
-        </For>
-
-        {/* CreatePin popover */}
-        <Show when={createPinAt()}>
-          {(target) => (
-            <CreatePin
-              leftPx={target().leftPx}
-              containerWidth={width()}
-              onConfirm={(label) => {
-                props.onCreatePin(target().atMs, label);
-                setCreatePinAt(null);
-              }}
-              onCancel={() => setCreatePinAt(null)}
-            />
-          )}
         </Show>
 
         {/* Rail */}

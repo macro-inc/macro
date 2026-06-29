@@ -1,10 +1,5 @@
 import { useHistoryMetaQuery } from '@queries/history';
-import {
-  useCreatePinMutation,
-  useDeletePinMutation,
-  usePinsQuery,
-} from '@queries/pins';
-import type { HistorySession, VersionPin } from '@service-sync/client';
+import type { HistorySession } from '@service-sync/client';
 import {
   type Accessor,
   createContext,
@@ -37,12 +32,6 @@ type HistoryContextValue = {
   sessions: Accessor<readonly HistorySession[]>;
   /** Whether sessions are loading. */
   isLoadingSessions: Accessor<boolean>;
-  /** Saved version pins for this document. */
-  pins: Accessor<readonly VersionPin[]>;
-  /** Creates a version pin. */
-  createPin: (atMs: number, label: string) => void;
-  /** Deletes a version pin. */
-  deletePin: (pinId: string) => void;
 };
 
 const HistoryContext = createContext<HistoryContextValue>();
@@ -55,9 +44,6 @@ export function HistoryProvider(props: {
   const [selectedAt, setSelectedAt] = createSignal<Date | null>(null);
   const [isScrubbedRightmost, setIsScrubbedRightmost] = createSignal(true);
   const history = useHistoryMetaQuery(props.documentId);
-  const pins = usePinsQuery(props.documentId);
-  const createPin = useCreatePinMutation(props.documentId);
-  const deletePin = useDeletePinMutation(props.documentId);
 
   const enterAt = (at: Date | null) => {
     setSelectedAt(at);
@@ -89,9 +75,6 @@ export function HistoryProvider(props: {
     exit,
     sessions: () => history.data?.sessions ?? [],
     isLoadingSessions: () => history.isLoading,
-    pins: () => pins.data ?? [],
-    createPin: (atMs, label) => createPin.mutate({ atMs, label }),
-    deletePin: (pinId) => deletePin.mutate(pinId),
   };
 
   return (

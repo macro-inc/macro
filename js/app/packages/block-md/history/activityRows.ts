@@ -57,10 +57,7 @@ function activityLabel(endMs: number, nowMs: number) {
   return date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
-    year:
-      date.getFullYear() === new Date(nowMs).getFullYear()
-        ? undefined
-        : '2-digit',
+    year: 'numeric',
   });
 }
 
