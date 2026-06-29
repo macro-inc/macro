@@ -19,7 +19,7 @@ pub trait WebhookRepo: Clone + Send + Sync + 'static {
         workspace_id: String,
         request: CreateWebhookRequest,
         signing_secret: String,
-        headers_encrypted: serde_json::Value,
+        headers: serde_json::Value,
     ) -> impl Future<Output = Result<Webhook, Self::Err>> + Send;
 
     /// Get an active webhook by id.

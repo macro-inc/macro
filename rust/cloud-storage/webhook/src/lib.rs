@@ -20,10 +20,9 @@
 //! infrastructure, event ingestion, redelivery, and auto-pause behavior.
 //!
 //! Temporary limitations: IDs use prefixed UUIDv7 strings (`wh_<uuid_v7>`)
-//! rather than true ULIDs, and custom headers are stored as JSON in
-//! `headers_encrypted` until header encryption is wired. Webhook signing
-//! secrets are intentionally stored as plaintext in `signing_secret`, matching
-//! the existing bot secret storage approach.
+//! rather than true ULIDs. Custom headers are stored as JSON in `headers`.
+//! Webhook signing secrets are intentionally stored as plaintext in
+//! `signing_secret`, matching the existing bot secret storage approach.
 
 /// Domain models, ports, and service.
 pub mod domain;

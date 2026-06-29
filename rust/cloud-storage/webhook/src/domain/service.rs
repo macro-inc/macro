@@ -237,17 +237,11 @@ where
             .await?;
 
         let signing_secret = generate_signing_secret(&caller);
-        let headers_encrypted = serde_json::to_value(request.headers.clone().unwrap_or_default())
+        let headers = serde_json::to_value(request.headers.clone().unwrap_or_default())
             .map_err(|err| WebhookError::Repo(err.into()))?;
         let mut webhook = self
             .repo
-            .create_webhook(
-                caller,
-                workspace_id,
-                request,
-                signing_secret,
-                headers_encrypted,
-            )
+            .create_webhook(caller, workspace_id, request, signing_secret, headers)
             .await
             .map_err(|err| WebhookError::Repo(err.into()))?;
         webhook.is_valid = false;

@@ -43,7 +43,7 @@ impl WebhookRepo for FakeRepo {
         workspace_id: String,
         request: CreateWebhookRequest,
         _signing_secret: String,
-        _headers_encrypted: serde_json::Value,
+        _headers: serde_json::Value,
     ) -> Result<Webhook, Self::Err> {
         let webhook = webhook_from_create(created_by_user_id, workspace_id, request);
         self.state.lock().await.webhook = Some(webhook.clone());

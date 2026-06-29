@@ -35,7 +35,7 @@ struct WebhookRow {
     name: String,
     endpoint_url: String,
     signing_secret: String,
-    headers_encrypted: Value,
+    headers: Value,
     status: String,
     is_valid: bool,
     created_by_user_id: String,
@@ -67,7 +67,7 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
         name: row.name,
         endpoint_url: row.endpoint_url,
         signing_secret: row.signing_secret,
-        headers: parse_headers(row.headers_encrypted),
+        headers: parse_headers(row.headers),
         status,
         is_valid: row.is_valid,
         created_by_user_id: row.created_by_user_id,
@@ -88,7 +88,7 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
             w.name,
             w.endpoint_url,
             w.signing_secret,
-            w.headers_encrypted,
+            w.headers,
             w.status,
             w.is_valid,
             w.created_by_user_id,
@@ -111,14 +111,14 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
 impl WebhookRepo for PgRepository {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(skip(self, request, signing_secret, headers_encrypted), err)]
+    #[tracing::instrument(skip(self, request, signing_secret, headers), err)]
     async fn create_webhook(
         &self,
         created_by_user_id: MacroUserIdStr<'static>,
         workspace_id: String,
         request: CreateWebhookRequest,
         signing_secret: String,
-        headers_encrypted: Value,
+        headers: Value,
     ) -> Result<Webhook, Self::Err> {
         let webhook_id = new_webhook_id();
         let status = WebhookStatus::Active.as_str();
@@ -126,7 +126,7 @@ impl WebhookRepo for PgRepository {
         sqlx::query!(
             r#"
             INSERT INTO webhook (
-                id, workspace_id, name, endpoint_url, signing_secret, headers_encrypted,
+                id, workspace_id, name, endpoint_url, signing_secret, headers,
                 rule, status, is_valid, created_by_user_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
@@ -136,7 +136,7 @@ impl WebhookRepo for PgRepository {
             request.name,
             request.endpoint_url,
             signing_secret,
-            headers_encrypted,
+            headers,
             request.rule,
             status,
             created_by_user_id
@@ -159,7 +159,7 @@ impl WebhookRepo for PgRepository {
         webhook_id: WebhookId,
         request: PatchWebhookRequest,
     ) -> Result<Option<Webhook>, Self::Err> {
-        let headers_encrypted = request.headers.map(|headers| {
+        let headers = request.headers.map(|headers| {
             serde_json::to_value(headers).unwrap_or_else(|_| Value::Object(Default::default()))
         });
         let status = request.status.map(WebhookStatus::as_str);
@@ -169,7 +169,7 @@ impl WebhookRepo for PgRepository {
             SET
                 name = COALESCE($2, name),
                 endpoint_url = COALESCE($3, endpoint_url),
-                headers_encrypted = COALESCE($4, headers_encrypted),
+                headers = COALESCE($4, headers),
                 rule = COALESCE($5, rule),
                 status = COALESCE($6, status),
                 is_valid = CASE WHEN $3::TEXT IS NOT NULL OR $4::JSONB IS NOT NULL THEN false ELSE is_valid END,
@@ -179,7 +179,7 @@ impl WebhookRepo for PgRepository {
             webhook_id,
             request.name,
             request.endpoint_url,
-            headers_encrypted,
+            headers,
             request.rule,
             status
         )
