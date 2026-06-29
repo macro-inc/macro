@@ -20,9 +20,9 @@ export const I_WATERMARK: ElementTransformer = {
 
     return `<m-watermark>${data}</m-watermark>`;
   },
-  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data = JSON.parse(match[1]);
+      const data = JSON.parse(match[1] ?? '');
       for (const field of ['content']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }

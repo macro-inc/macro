@@ -556,7 +556,11 @@ export class DocumentEditor {
   }
 
   public insertTextAfterInline(inlineRef: NodeRef, text: string): this {
-    return this.push({ kind: 'insertTextAfterInline', inline: inlineRef, text });
+    return this.push({
+      kind: 'insertTextAfterInline',
+      inline: inlineRef,
+      text,
+    });
   }
 
   public insertLineBreak(blockId: NodeId, at: number): Ref {

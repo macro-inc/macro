@@ -1,4 +1,5 @@
 import { platformWebSocketFactory } from '@websocket/platform/factory';
+import type { MinimalWebSocket } from '../platform/minimal-websocket';
 import { match, P } from 'ts-pattern';
 import type { Backoff } from './backoff/backoff';
 import type { WebsocketBuffer } from './websocket-buffer';
@@ -41,7 +42,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
 
   private _closedByUser: boolean = false; // whether the websocket was closed by the user
   private _lastConnection?: Date; // timestamp of the last connection
-  private _underlyingWebsocket: WebSocket; // the underlying websocket, e.g. native browser websocket
+  private _underlyingWebsocket: MinimalWebSocket; // the underlying websocket, e.g. native browser websocket
   private connectPending: boolean = false; // whether tryConnect is resolving its url / creating a socket
   private retryTimeout?: ReturnType<typeof globalThis.setTimeout>; // timeout for the next retry, if any
 
@@ -192,7 +193,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * @see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
    * @return the underlying websocket.
    */
-  get underlyingWebsocket(): WebSocket {
+  get underlyingWebsocket(): MinimalWebSocket {
     return this._underlyingWebsocket;
   }
 
@@ -288,7 +289,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     // The underlying websocket is unassigned while the first connect attempt
     // is still resolving its url; tryConnect observes _closedByUser and
     // won't open a socket after this point.
-    (this._underlyingWebsocket as WebSocket | undefined)?.close(code, reason);
+    (this._underlyingWebsocket as MinimalWebSocket | undefined)?.close(
+      code,
+      reason
+    );
     this.stopHeartbeat();
   }
 

@@ -324,7 +324,12 @@ describe('insertTextAfterInline animator', () => {
     const edits = onlyEdits(action.steps);
     // first chunk creates + stamps the run after the inline; later chunks append
     expect(edits).toEqual([
-      { kind: 'insertTextAfterInline', ref: 'br1~after-text', inline: 'br1', text: 'Rip' },
+      {
+        kind: 'insertTextAfterInline',
+        ref: 'br1~after-text',
+        inline: 'br1',
+        text: 'Rip',
+      },
       { kind: 'insertText', node: 'br1~after-text', at: 3, text: 'ple' },
     ]);
   });

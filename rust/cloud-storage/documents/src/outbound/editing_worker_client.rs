@@ -36,8 +36,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "documentId": document_id,
             "prompt": instructions,
             "models": {
-                "supervisor": { "provider": "anthropic", "model": "claude-haiku-4-5-20251001" },
-                "interpret": { "provider": "anthropic", "model": "claude-sonnet-4-6" },
+                "supervisor": { "provider": "cerebras", "model": "glm-4.7" },
+                "interpret": { "provider": "cerebras", "model": "glm-4.7" },
                 "coding": { "provider": "cerebras", "model": "gpt-oss-120b" },
             },
             "interpret": true,

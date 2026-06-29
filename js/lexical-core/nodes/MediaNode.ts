@@ -236,7 +236,7 @@ export abstract class MediaNode<
   }
 }
 
-export function createMediaTypeGuard<T extends MediaNode>(
+export function createMediaTypeGuard<T extends MediaNode<any>>(
   nodeClass: new (...args: any[]) => T
 ) {
   return (node: LexicalNode): node is T => node instanceof nodeClass;

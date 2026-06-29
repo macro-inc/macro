@@ -21,7 +21,7 @@ export type SerializedVideoNode = Spread<
 >;
 
 export type VideoDecoratorProps = MediaInfo & {
-  key: NodeKey;
+  key?: NodeKey;
   controls: boolean;
 };
 

@@ -556,7 +556,7 @@ export class Mirror<S extends SchemaType> {
           this.applyContainerChanges(container, containerChanges);
         } else {
           throw new Error(
-            `Container not found for ID: ${containerId}. 
+            `Container not found for ID: ${containerId}.
                         This is likely due to a stale reference or a synchronization issue.`
           );
         }
@@ -727,7 +727,7 @@ export class Mirror<S extends SchemaType> {
         break;
       default:
         throw new Error(
-          `Unknown container kind for top-level update: ${kind}. 
+          `Unknown container kind for top-level update: ${kind}.
                     This is likely a programming error or unsupported container type.`
         );
     }

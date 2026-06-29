@@ -99,6 +99,115 @@ export type LinkNode = EleBase & {
   title?: string | null;
 };
 
+export type MarkNode = EleBase & {
+  type: 'mark';
+  children: SerNode[];
+  ids: string[];
+};
+
+export type TabNode = Id & {
+  type: 'tab';
+  version: number;
+};
+
+export type ClassedBlockNode = EleBase & {
+  type: 'classed-block';
+  children: SerNode[];
+  tag: string;
+  classes: string[];
+  attributes?: Record<string, string>;
+};
+
+/** A code block whose children are per-token `code-highlight` leaves (flattened
+ *  back into raw source on serialize). `language` comes from the `CodeNode` base. */
+export type CustomCodeNode = EleBase & {
+  type: 'custom-code';
+  children: SerNode[];
+  language: string | null;
+};
+
+export type EquationNode = Id & {
+  type: 'equation';
+  version: number;
+  equation: string;
+  inline: boolean;
+};
+
+export type ImageNode = Id & {
+  type: 'image';
+  version: number;
+  alt: string;
+  url: string;
+};
+
+export type VideoNode = Id & {
+  type: 'video';
+  version: number;
+  url: string;
+  controls: boolean;
+};
+
+export type HtmlRenderNode = Id & {
+  type: 'html-render';
+  version: number;
+  html: string;
+};
+
+export type DocumentCardNode = Id & {
+  type: 'document-card';
+  version: number;
+  documentId: string;
+  documentName: string;
+};
+
+export type UserMentionNode = Id & {
+  type: 'user-mention';
+  version: number;
+  userId: string;
+  email: string;
+};
+
+export type DocumentMentionNode = Id & {
+  type: 'document-mention';
+  version: number;
+  documentId: string;
+  documentName: string;
+};
+
+export type ContactMentionNode = Id & {
+  type: 'contact-mention';
+  version: number;
+  contactId: string;
+  name: string;
+  emailOrDomain: string;
+  isCompany: boolean;
+};
+
+export type GroupMentionNode = Id & {
+  type: 'group-mention';
+  version: number;
+  groupAlias: string;
+};
+
+export type PullRequestMentionNode = Id & {
+  type: 'pr-mention';
+  version: number;
+  id: string;
+  label: string;
+};
+
+export type ThemeMentionNode = Id & {
+  type: 'theme-mention';
+  version: number;
+  name: string;
+};
+
+export type UnknownMentionNode = Id & {
+  type: 'unknown-mention';
+  version: number;
+  name: string;
+};
+
 export type KnownNode =
   | TextNode
   | LineBreakNode
@@ -112,7 +221,23 @@ export type KnownNode =
   | TableCellNode
   | HrNode
   | DateMentionNode
-  | LinkNode;
+  | LinkNode
+  | MarkNode
+  | TabNode
+  | ClassedBlockNode
+  | CustomCodeNode
+  | EquationNode
+  | ImageNode
+  | VideoNode
+  | HtmlRenderNode
+  | DocumentCardNode
+  | UserMentionNode
+  | DocumentMentionNode
+  | ContactMentionNode
+  | GroupMentionNode
+  | PullRequestMentionNode
+  | ThemeMentionNode
+  | UnknownMentionNode;
 
 export type UnknownNode = Id & {
   type: Exclude<string, KnownNode['type']>;

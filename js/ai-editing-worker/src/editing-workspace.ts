@@ -5,22 +5,22 @@ import type { LoroManager } from '../../app/packages/core/collab/manager';
 import type { RawUpdate } from '../../app/packages/core/collab/shared';
 import type { WALSyncer } from '../../app/packages/core/collab/wal';
 import type { SyncServiceSource } from '../../app/packages/service-clients/service-sync/source/source';
-import {
+import type {
   MARKDOWN_LORO_SCHEMA,
-  type MarkdownLoroSchemaType,
+  MarkdownLoroSchemaType,
 } from '../../lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '../../lexical-core/plugins/nodeIdPlugin';
 import {
   createEditingSession,
-  loadSnapshot,
   type LexicalSession,
+  loadSnapshot,
   toSnapshot,
 } from './ai-editing/ai-toolkit';
 import {
-  nextAiPeerId,
   type AwarenessSource,
+  nextAiPeerId,
   type Peer,
-  PeerPool,
+  type PeerPool,
   realAwarenessSource,
   sharedPeerPool,
 } from './ai-editing/awareness';
@@ -61,10 +61,7 @@ export class EditingWorkspace {
         // Inbound: a remote (human) edit landed — fold it into the AI's session
         // so its next diff is a clean delta and the user's text is preserved.
         onRemoteState: (state) =>
-          loadSnapshot(
-            this.session,
-            state as unknown as SerializedEditorState
-          ),
+          loadSnapshot(this.session, state as unknown as SerializedEditorState),
       },
     });
 

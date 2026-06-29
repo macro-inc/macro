@@ -560,7 +560,9 @@ export function animate(op: DocumentOp, ctx: AnimatorCtx): DocumentOpStep[] {
         ];
         for (let k = TYPE_CHUNK; k < o.text.length; k += TYPE_CHUNK) {
           const chunk = o.text.slice(k, k + TYPE_CHUNK);
-          steps.push(edit({ kind: 'insertText', node: ref, at: k, text: chunk }));
+          steps.push(
+            edit({ kind: 'insertText', node: ref, at: k, text: chunk })
+          );
           steps.push(cursor(ref, k + chunk.length));
           steps.push(typePause(chunk.length));
         }

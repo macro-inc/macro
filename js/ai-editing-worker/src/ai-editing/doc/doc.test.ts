@@ -171,7 +171,12 @@ describe('Doc — structure & refs', () => {
       spec: { block: 'list', list: 'bullet', items: [] },
       at: { after: ids[0]! },
     });
-    doc.apply({ kind: 'appendListItem', ref: 'L~li-0', node: 'L', text: 'middle' });
+    doc.apply({
+      kind: 'appendListItem',
+      ref: 'L~li-0',
+      node: 'L',
+      text: 'middle',
+    });
     doc.apply({
       kind: 'insertListItemAfter',
       ref: 'after',

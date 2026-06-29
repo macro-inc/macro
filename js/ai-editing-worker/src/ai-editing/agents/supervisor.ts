@@ -23,7 +23,8 @@ export async function supervisor(
   models: ResolvedModels,
   opts: RunAgentOptions
 ) {
-  const serialize = (sess: LexicalSession) => numberLines(serializeWithXml(sess));
+  const serialize = (sess: LexicalSession) =>
+    numberLines(serializeWithXml(sess));
   const tracker = new TokenTracker();
 
   const initialText = serialize(session);
