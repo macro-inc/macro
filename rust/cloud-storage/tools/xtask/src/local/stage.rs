@@ -50,8 +50,22 @@ impl Stage {
         }
     }
 
+    /// Like [`Stage::from_env`], plus an explicit `--verbose` flag OR-ed with the
+    /// `MACRO_LOCAL_VERBOSE` env var.
+    pub fn from_env_cli(verbose: bool) -> Self {
+        let mut s = Self::from_env();
+        s.verbose = s.verbose || verbose;
+        s
+    }
+
     pub fn is_dry_run(&self) -> bool {
         self.dry_run
+    }
+
+    /// Whether verbose mode is on: stream subprocess output, and show every
+    /// sub-step's own timing instead of folding it under a parent spinner.
+    pub fn is_verbose(&self) -> bool {
+        self.verbose
     }
 
     /// Whether stdout is an interactive terminal (drives the hotkey loop).

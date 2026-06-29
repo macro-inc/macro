@@ -83,6 +83,10 @@ pub struct RunArgs {
     /// Do not start the frontend dev server.
     #[arg(long)]
     pub no_frontend: bool,
+    /// Stream subprocess output and show per-step timings (e.g. on `r`, the
+    /// build vs reload split instead of one folded line).
+    #[arg(long, short)]
+    pub verbose: bool,
 }
 
 #[derive(Args, Clone, Default)]

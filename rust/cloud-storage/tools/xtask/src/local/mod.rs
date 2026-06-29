@@ -158,46 +158,9 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
-/// Raise this process's open-file limit toward the hard cap so everything we
-/// spawn (bun/Vite, cargo, docker) inherits it. macOS ships a tiny default soft
-/// limit (often 256) that Vite's file watching over the JS monorepo + a cargo
-/// build blow straight through (`EMFILE: too many open files`) — which is what
-/// makes a reload flaky/crashy. macOS also rejects a soft limit above
-/// `kern.maxfilesperproc` even when the hard limit is "infinity", so we back off
-/// from a high target until one sticks. Returns the new soft limit if raised.
-fn raise_open_file_limit() -> Option<u64> {
-    // SAFETY: get/setrlimit on a local rlimit; failures are ignored.
-    unsafe {
-        let mut lim: libc::rlimit = std::mem::zeroed();
-        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 {
-            return None;
-        }
-        for target in [262_144u64, 65_536, 16_384, 10_240] {
-            let want = if lim.rlim_max == libc::RLIM_INFINITY {
-                target
-            } else {
-                target.min(lim.rlim_max)
-            };
-            if want <= lim.rlim_cur {
-                return None; // already high enough
-            }
-            let mut next = lim;
-            next.rlim_cur = want;
-            if libc::setrlimit(libc::RLIMIT_NOFILE, &next) == 0 {
-                return Some(want);
-            }
-        }
-        None
-    }
-}
-
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
-    let stage = Stage::from_env();
-    // Do this before spawning anything: children inherit the raised limit.
-    if let Some(limit) = raise_open_file_limit() {
-        stage.note(&format!("raised open-file limit to {limit}"));
-    }
+    let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     stage.section(&format!(
         "macro {} stack — instance {}",
@@ -302,29 +265,42 @@ fn rebuild_and_reload(
     instance: &Instance,
     target: arch::Target,
 ) -> Result<()> {
-    stage.run_step("Rebuilding & reloading services", || {
-        let quiet = stage.quiet();
-        let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
-            .map(|svc| binary_mtime(target, svc))
-            .collect();
-        build::resolve(
-            &quiet,
-            target,
-            &build::BuildOptions {
-                no_build: false,
-                binaries_dir: None,
-            },
-        )?;
-        let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
-            .zip(before)
-            .filter(|(svc, was)| binary_mtime(target, svc) != *was)
-            .map(|(svc, _)| svc)
-            .collect();
-        if changed.is_empty() {
-            return Ok(()); // nothing rebuilt → nothing to reload
-        }
-        reload_services(&quiet, instance, &changed)
-    })
+    if stage.is_verbose() {
+        // Run each step on the parent stage so the build (per group) and the
+        // reload each show their own `Done <elapsed>` — the build-vs-reload
+        // split — rather than folding into one line.
+        run_rebuild(stage, mode, instance, target)
+    } else {
+        stage.run_step("Rebuilding & reloading services", || {
+            run_rebuild(&stage.quiet(), mode, instance, target)
+        })
+    }
+}
+
+/// Snapshot binary mtimes, rebuild, and restart only the services whose binary
+/// the build rewrote. Runs on a quiet sub-stage when folded, or the parent stage
+/// under `--verbose` so each step times itself.
+fn run_rebuild(stage: &Stage, mode: Mode, instance: &Instance, target: arch::Target) -> Result<()> {
+    let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
+        .map(|svc| binary_mtime(target, svc))
+        .collect();
+    build::resolve(
+        stage,
+        target,
+        &build::BuildOptions {
+            no_build: false,
+            binaries_dir: None,
+        },
+    )?;
+    let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
+        .zip(before)
+        .filter(|(svc, was)| binary_mtime(target, svc) != *was)
+        .map(|(svc, _)| svc)
+        .collect();
+    if changed.is_empty() {
+        return Ok(()); // nothing rebuilt → nothing to reload
+    }
+    reload_services(stage, instance, &changed)
 }
 
 /// Modification time of a service's built binary (`None` if absent). Used to tell
