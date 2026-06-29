@@ -8982,6 +8982,215 @@
           }
         }
       }
+    },
+    "/webhook/webhooks": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Create a webhook.",
+        "operationId": "create_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}": {
+      "patch": {
+        "tags": ["webhook"],
+        "summary": "Patch a webhook.",
+        "operationId": "patch_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}/validate": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Validate a webhook endpoint.",
+        "operationId": "validate_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateWebhookResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10101,6 +10310,15 @@
             "format": "date-time",
             "description": "When the reply was last updated."
           }
+        }
+      },
+      "BTreeMap": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "propertyNames": {
+          "type": "string"
         }
       },
       "BasicDocument": {
@@ -12040,6 +12258,39 @@
           "config": {},
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "description": "Request to create a webhook.",
+        "required": ["workspace_id", "name", "endpoint_url", "rule"],
+        "properties": {
+          "endpoint_url": {
+            "type": "string",
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers."
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Rule definition used to match events."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace that owns the webhook."
           }
         }
       },
@@ -15591,6 +15842,45 @@
           }
         }
       },
+      "PatchWebhookRequest": {
+        "type": "object",
+        "description": "Request to patch a webhook.",
+        "properties": {
+          "endpoint_url": {
+            "type": ["string", "null"],
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers. When present, replaces existing headers."
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Rule definition used to match events."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookStatus",
+                "description": "Webhook lifecycle status."
+              }
+            ]
+          }
+        }
+      },
       "PdfAnchor": {
         "oneOf": [
           {
@@ -18476,6 +18766,9 @@
           }
         }
       },
+      "String": {
+        "type": "string"
+      },
       "SuccessResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -18880,6 +19173,31 @@
           }
         }
       },
+      "ValidateWebhookResponse": {
+        "type": "object",
+        "description": "Sanitized result of validating a webhook endpoint.",
+        "required": ["webhook_id", "is_valid"],
+        "properties": {
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the endpoint accepted the signed validation delivery."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "Sanitized message explaining validation failure."
+          },
+          "response_status": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "HTTP response status returned by the webhook endpoint, when available.",
+            "minimum": 0
+          },
+          "webhook_id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id that was validated."
+          }
+        }
+      },
       "View": {
         "type": "object",
         "required": [
@@ -18940,6 +19258,80 @@
             }
           }
         }
+      },
+      "Webhook": {
+        "type": "object",
+        "description": "Webhook row returned by application APIs.",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "endpoint_url",
+          "headers",
+          "status",
+          "is_valid",
+          "created_by_user_id",
+          "created_at",
+          "updated_at",
+          "rule"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "description": "User that created the webhook."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "endpoint_url": {
+            "type": "string",
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "$ref": "#/components/schemas/BTreeMap",
+            "description": "Custom delivery headers, after decryption by the repository."
+          },
+          "id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id."
+          },
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the current endpoint configuration has passed validation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Event matching rule."
+          },
+          "status": {
+            "$ref": "#/components/schemas/WebhookStatus",
+            "description": "Webhook lifecycle status."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Owning workspace id."
+          }
+        }
+      },
+      "WebhookStatus": {
+        "type": "string",
+        "description": "Webhook lifecycle status.",
+        "enum": ["active", "paused", "disabled"]
       },
       "WithCallId": {
         "type": "object",
