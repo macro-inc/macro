@@ -748,9 +748,22 @@ where
                 return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
             }
 
-            self.backfill_legacy_team_subscription(&accepted_invite.member.team_id)
+            if let Err(e) = self
+                .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
                 .await
-                .map_err(GetTeamSubscriptionError::into_join_team_error)?;
+            {
+                self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after backfilling team subscription failed"
+                        );
+                    })
+                    .ok();
+                return Err(e.into_join_team_error());
+            }
         }
 
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {
