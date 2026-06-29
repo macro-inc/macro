@@ -9,7 +9,6 @@ import {
   SidebarPromoCard,
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
-import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
@@ -27,11 +26,7 @@ import type {
   SplitHandle,
 } from '@app/component/split-layout/layoutManager';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import {
-  LIST_VIEW_ID,
-  LIST_VIEW_PATHS,
-  type ListView,
-} from '@app/constants/list-views';
+import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -75,7 +70,6 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { useNotificationSettings } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
@@ -752,7 +746,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
-  const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
   const homeViewEnabled = useFeatureFlag('enable-home-view', {
@@ -770,18 +763,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const newPricingFF = useFeatureFlag('enable-new-pricing', {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
-
-  const showEnableNotifications = () =>
-    notificationSettings.isSupported && notificationSettings.canPrompt();
-
-  const handleEnableNotifications = async () => {
-    if (!notificationSettings.isSupported) return;
-    try {
-      await notificationSettings.toggle(true);
-    } catch (error) {
-      console.error('Failed to enable notifications:', error);
-    }
-  };
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
@@ -824,38 +805,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
     activateClosestDOMScope();
   };
 
-  const handleCommandPaletteClick = () => {
-    if (!CommandState.isOpen()) {
-      analytics.track('command_menu_open', { from: 'sidebar' });
-    }
-    CommandState.toggle();
-  };
-
   const handleCreateClick = () => {
     const willOpen = !createMenuOpen();
     if (willOpen) {
       analytics.track('create_menu_open', { from: 'sidebar' });
     }
     setCreateMenuOpen((p) => !p);
-  };
-
-  const canCreateNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? true;
-
-  const handleNewSplitClick = () => {
-    const manager = globalSplitManager();
-    if (!manager || !manager.canAppendSplit()) return;
-
-    analytics.track('split_created', { from: 'sidebar' });
-    manager.createNewSplit({
-      content: {
-        type: 'component',
-        id: LIST_VIEW_ID.inbox,
-      },
-      activate: true,
-      allowDuplicate: true,
-      referredFrom: 'sidebar',
-    });
   };
 
   const openSettingsTab = (tab: SettingsTab) => {

@@ -10,7 +10,7 @@ export type AnimationController = {
   pause(): AnimationController;
   loop(): AnimationController;
   play(): AnimationController;
-  readonly isPlaying: b oolean;
+  readonly isPlaying: boolean;
   readonly progress: number;
   readonly speed: number;
   destroy(): void;
