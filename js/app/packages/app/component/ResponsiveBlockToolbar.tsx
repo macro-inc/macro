@@ -81,6 +81,7 @@ export function ResponsivePermissionsBadge() {
 
 interface BlockToolbarProps {
   tools: BlockTool[];
+  menuTools?: BlockTool[];
   ops: FileOperation[];
   id: string;
   itemType: ItemType;
@@ -107,6 +108,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
     visibleTools().filter((tool) => !isShareTool(tool));
   const activeToolbarTools = () =>
     toolbarTools().filter((tool) => !tool.condition || tool.condition());
+  const fileMenuTools = () => props.menuTools ?? visibleTools();
 
   return (
     <Show
@@ -136,6 +138,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
                 name={props.name}
                 formattedName={props.formattedName}
                 ops={props.ops}
+                tools={fileMenuTools()}
                 buttonClass="order-first"
               />
             </SplitTitleFileMenu>
@@ -166,7 +169,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
             name={props.name}
             formattedName={props.formattedName}
             ops={props.ops}
-            tools={visibleTools()}
+            tools={fileMenuTools()}
             buttonClass="order-last"
           />
         </Show>

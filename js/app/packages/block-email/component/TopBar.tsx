@@ -31,6 +31,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import IconShared from '@icon/wide-share.svg';
+import { AnimatedTaskIcon } from '@icon/wide-task';
 import CheckIcon from '@phosphor/check.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -43,6 +44,7 @@ export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
+  onCreateTask?: () => void;
 }) {
   const splitPanel = useSplitPanel();
   const shareCtx = useShareDialogContext();
@@ -139,7 +141,13 @@ export function TopBar(props: {
         if (!threadId) return;
         openChatWithAgent({ type: 'email', id: threadId, name: props.title });
       },
-      condition: () => isMobile() && !!emailCtx.thread()?.db_id,
+      condition: () => !!emailCtx.thread()?.db_id,
+    },
+    {
+      label: 'Task',
+      icon: AnimatedTaskIcon,
+      action: () => props.onCreateTask?.(),
+      condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
     },
     {
       label: 'Mark done',

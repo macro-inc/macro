@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/component/ChatWithAgentButton';
+import { SidePanel } from '@app/component/side-panel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -11,7 +12,6 @@ import { useBlockAliasedName, useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
@@ -292,8 +292,13 @@ export function Notebook(props: { loroManager: LoroManager }) {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <ScopedPortal scope="block">
-          <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+        <SidePanel.Section
+          id="document-ai-actions"
+          title="Actions"
+          defaultOpen
+          order={0}
+        >
+          <div class="m-px flex items-center justify-start gap-2">
             <AskMacroButton
               entity={{
                 type: 'document',
@@ -306,7 +311,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
               <DispatchAgentButton />
             </Show>
           </div>
-        </ScopedPortal>
+        </SidePanel.Section>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">

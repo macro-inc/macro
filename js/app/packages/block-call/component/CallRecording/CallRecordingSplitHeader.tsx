@@ -98,6 +98,20 @@ export function CallRecordingSplitHeader(props: {
     },
   ];
 
+  const menuTools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -139,6 +153,7 @@ export function CallRecordingSplitHeader(props: {
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={menuTools}
         ops={[{ op: 'copy' }]}
         id={blockId}
         itemType="call"
