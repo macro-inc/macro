@@ -134,27 +134,6 @@ type MobileDockMenuItem = {
   onSelect: () => void;
 };
 
-// Dock menu triggers open on pointer-down (see fireOnPress), which also arms
-// the hold-and-drag-to-select gesture. The opening touch lifts after the
-// overlay is up, and its trailing synthesized click would land on whatever is
-// now under the finger: a freshly-mounted menu item (accidental selection) or
-// another dock button after a drag-release dismisses the menu. Swallow that one
-// click (capture phase, one-shot) so the opening touch can't leak through. The
-// timeout clears the listener if no ghost click arrives.
-function suppressNextClick() {
-  const onClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    cleanup();
-  };
-  const cleanup = () => {
-    document.removeEventListener('click', onClick, true);
-    clearTimeout(timer);
-  };
-  const timer = setTimeout(cleanup, 400);
-  document.addEventListener('click', onClick, true);
-}
-
 function MobileDockMenu(props: {
   triggerIcon: IconComponent;
   triggerAriaLabel: string;
@@ -177,7 +156,6 @@ function MobileDockMenu(props: {
     setMounted(true);
     setOpen(true);
     // Block the opening touch's trailing click (see suppressNextClick).
-    suppressNextClick();
   };
 
   const closeMenu = () => {
@@ -324,7 +302,7 @@ function MobileDockMenu(props: {
                   <button
                     type="button"
                     class="flex h-9 shrink-0 items-center justify-between px-3 text-sm font-medium text-ink-muted"
-                    onClick={() => {
+                    onPointerDown={() => {
                       hapticImpact('light');
                       closeMenu();
                     }}
