@@ -4549,6 +4549,16 @@
       "user_quota",
       "workspace-hack"
     ],
+    "webhook": [
+      "cowlike",
+      "macro_user_id",
+      "macro_uuid",
+      "model-error-response",
+      "model_user",
+      "rate_limit",
+      "webhook",
+      "workspace-hack"
+    ],
     "worker_trigger": [
       "macro_aws_config",
       "macro_entrypoint",
