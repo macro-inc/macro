@@ -134,6 +134,16 @@ where
         if input.include_signature == Some(false) {
             return;
         }
+        // Idempotent: if the body already carries a signature — a client still
+        // baking it in during the FE cutover, or a re-sent message — don't add
+        // another (and leave body_text alone too).
+        if input
+            .body_html
+            .as_deref()
+            .is_some_and(super::signature::has_signature)
+        {
+            return;
+        }
         let settings = match self.email_repo.fetch_email_settings(link.id).await {
             Ok(settings) => settings,
             Err(e) => {
