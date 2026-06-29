@@ -10,7 +10,12 @@ use async_graphql::{
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
-use item_filters::ast::{EntityFilterAst, crm_company::CrmCompanyLiteral};
+use item_filters::{
+    CallFilters, CallStatus, ChannelFilters, ChannelThreadFilters, ChatFilters, CrmCompanyFilters,
+    DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters, NotificationFilters,
+    ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
+    ast::{EntityFilterAst, crm_company::CrmCompanyLiteral},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{
@@ -369,16 +374,16 @@ where
 #[derive(async_graphql::InputObject)]
 pub struct SoupInput {
     /// Maximum number of items to return. Defaults to 20, max 500.
-    pub limit: Option<u16>,
+    limit: Option<u16>,
     /// Whether to return expanded Soup items. Defaults to true.
-    pub expand: Option<bool>,
+    expand: Option<bool>,
     /// Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
     /// not supported by this initial GraphQL adapter.
-    pub sort_method: Option<GraphqlSimpleSortMethod>,
+    sort_method: Option<GraphqlSimpleSortMethod>,
     /// Opaque cursor returned by a previous GraphQL Soup response.
-    pub cursor: Option<String>,
-    /// Existing Soup AST filter payload, represented as GraphQL JSON.
-    pub filters: Option<Json<EntityFilterAst>>,
+    cursor: Option<String>,
+    /// Typed filters applied to each Soup entity type.
+    filters: Option<GraphqlEntityFilters>,
 }
 
 impl SoupInput {
@@ -386,7 +391,11 @@ impl SoupInput {
         self,
         request_context: &GraphqlSoupRequestContext,
     ) -> async_graphql::Result<SoupRequest<EntityFilterAst>> {
-        let filter = self.filters.map(|Json(filter)| filter).unwrap_or_default();
+        let filter = self
+            .filters
+            .map(GraphqlEntityFilters::into_ast)
+            .transpose()?
+            .unwrap_or_default();
         let sort = self
             .sort_method
             .map(SimpleSortMethod::from)
@@ -416,6 +425,460 @@ impl SoupInput {
             link_ids: request_context.link_ids.clone(),
         })
     }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlEntityFilters {
+    project_filters: Option<GraphqlProjectFilters>,
+    document_filters: Option<GraphqlDocumentFilters>,
+    chat_filters: Option<GraphqlChatFilters>,
+    channel_filters: Option<GraphqlChannelFilters>,
+    channel_thread_filters: Option<GraphqlChannelThreadFilters>,
+    call_filters: Option<GraphqlCallFilters>,
+    email_filters: Option<GraphqlEmailFilters>,
+    crm_company_filters: Option<GraphqlCrmCompanyFilters>,
+    foreign_entity_filters: Option<GraphqlForeignEntityFilters>,
+    property_filters: Option<Vec<GraphqlPropertyFilter>>,
+}
+
+impl GraphqlEntityFilters {
+    fn into_ast(self) -> async_graphql::Result<EntityFilterAst> {
+        EntityFilterAst::new_from_filters(self.into())
+            .map(|filter| filter.unwrap_or_default())
+            .map_err(|err| async_graphql::Error::new(format!("invalid filters: {err}")))
+    }
+}
+
+impl From<GraphqlEntityFilters> for EntityFilters {
+    fn from(value: GraphqlEntityFilters) -> Self {
+        Self {
+            project_filters: optional_input(value.project_filters),
+            document_filters: optional_input(value.document_filters),
+            chat_filters: optional_input(value.chat_filters),
+            channel_filters: optional_input(value.channel_filters),
+            channel_thread_filters: optional_input(value.channel_thread_filters),
+            call_filters: optional_input(value.call_filters),
+            email_filters: optional_input(value.email_filters),
+            crm_company_filters: optional_input(value.crm_company_filters),
+            foreign_entity_filters: optional_input(value.foreign_entity_filters),
+            property_filters: value
+                .property_filters
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlNotificationFilters {
+    done: Option<bool>,
+    seen: Option<bool>,
+}
+
+impl From<GraphqlNotificationFilters> for NotificationFilters {
+    fn from(value: GraphqlNotificationFilters) -> Self {
+        Self {
+            done: value.done,
+            seen: value.seen,
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlTaskFilters {
+    include_cbm_atm_nc: Option<bool>,
+}
+
+impl From<GraphqlTaskFilters> for TaskFilters {
+    fn from(value: GraphqlTaskFilters) -> Self {
+        Self {
+            include_cbm_atm_nc: value.include_cbm_atm_nc,
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlDocumentFilters {
+    file_types: Option<Vec<String>>,
+    document_ids: Option<Vec<ID>>,
+    project_ids: Option<Vec<ID>>,
+    owners: Option<Vec<String>>,
+    importance: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+    task_filters: Option<GraphqlTaskFilters>,
+    sub_types: Option<Vec<GraphqlDocumentSubTypeFilter>>,
+    is_email_attachment: Option<bool>,
+}
+
+impl From<GraphqlDocumentFilters> for DocumentFilters {
+    fn from(value: GraphqlDocumentFilters) -> Self {
+        Self {
+            file_types: value.file_types.unwrap_or_default(),
+            document_ids: ids_to_strings(value.document_ids),
+            project_ids: ids_to_strings(value.project_ids),
+            owners: value.owners.unwrap_or_default(),
+            importance: value.importance,
+            notification_filters: optional_input(value.notification_filters),
+            task_filters: optional_input(value.task_filters),
+            sub_types: value
+                .sub_types
+                .unwrap_or_default()
+                .into_iter()
+                .map(GraphqlDocumentSubTypeFilter::as_filter_value)
+                .collect(),
+            is_email_attachment: value.is_email_attachment,
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlDocumentSubTypeFilter {
+    Task,
+    Snippet,
+}
+
+impl GraphqlDocumentSubTypeFilter {
+    fn as_filter_value(self) -> String {
+        match self {
+            Self::Task => "task",
+            Self::Snippet => "snippet",
+        }
+        .to_owned()
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlChatFilters {
+    role: Option<Vec<GraphqlChatRoleFilter>>,
+    chat_ids: Option<Vec<ID>>,
+    project_ids: Option<Vec<ID>>,
+    owners: Option<Vec<String>>,
+    importance: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+}
+
+impl From<GraphqlChatFilters> for ChatFilters {
+    fn from(value: GraphqlChatFilters) -> Self {
+        Self {
+            role: value
+                .role
+                .unwrap_or_default()
+                .into_iter()
+                .map(GraphqlChatRoleFilter::as_filter_value)
+                .collect(),
+            chat_ids: ids_to_strings(value.chat_ids),
+            project_ids: ids_to_strings(value.project_ids),
+            owners: value.owners.unwrap_or_default(),
+            importance: value.importance,
+            notification_filters: optional_input(value.notification_filters),
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlChatRoleFilter {
+    User,
+    System,
+    Assistant,
+}
+
+impl GraphqlChatRoleFilter {
+    fn as_filter_value(self) -> String {
+        match self {
+            Self::User => "user",
+            Self::System => "system",
+            Self::Assistant => "assistant",
+        }
+        .to_owned()
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlChannelFilters {
+    thread_ids: Option<Vec<ID>>,
+    mentions: Option<Vec<String>>,
+    org_id: Option<i64>,
+    team_id: Option<ID>,
+    channel_ids: Option<Vec<ID>>,
+    sender_ids: Option<Vec<String>>,
+    channel_types: Option<Vec<GraphqlChannelTypeFilter>>,
+    importance: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+}
+
+impl From<GraphqlChannelFilters> for ChannelFilters {
+    fn from(value: GraphqlChannelFilters) -> Self {
+        Self {
+            thread_ids: ids_to_strings(value.thread_ids),
+            mentions: value.mentions.unwrap_or_default(),
+            org_id: value.org_id,
+            team_id: value.team_id.map(|id| id.to_string()),
+            channel_ids: ids_to_strings(value.channel_ids),
+            sender_ids: value.sender_ids.unwrap_or_default(),
+            channel_types: value
+                .channel_types
+                .unwrap_or_default()
+                .into_iter()
+                .map(GraphqlChannelTypeFilter::as_filter_value)
+                .collect(),
+            importance: value.importance,
+            notification_filters: optional_input(value.notification_filters),
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlChannelTypeFilter {
+    Public,
+    Private,
+    DirectMessage,
+    Team,
+}
+
+impl GraphqlChannelTypeFilter {
+    fn as_filter_value(self) -> String {
+        match self {
+            Self::Public => "public",
+            Self::Private => "private",
+            Self::DirectMessage => "direct_message",
+            Self::Team => "team",
+        }
+        .to_owned()
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlChannelThreadFilters {
+    thread_ids: Option<Vec<ID>>,
+    channel_ids: Option<Vec<ID>>,
+    root_sender_ids: Option<Vec<String>>,
+}
+
+impl From<GraphqlChannelThreadFilters> for ChannelThreadFilters {
+    fn from(value: GraphqlChannelThreadFilters) -> Self {
+        Self {
+            thread_ids: ids_to_strings(value.thread_ids),
+            channel_ids: ids_to_strings(value.channel_ids),
+            root_sender_ids: value.root_sender_ids.unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlCallFilters {
+    call_ids: Option<Vec<ID>>,
+    channel_ids: Option<Vec<ID>>,
+    speaker_ids: Option<Vec<String>>,
+    status: Option<GraphqlCallStatus>,
+    attended: Option<bool>,
+}
+
+impl From<GraphqlCallFilters> for CallFilters {
+    fn from(value: GraphqlCallFilters) -> Self {
+        Self {
+            call_ids: ids_to_strings(value.call_ids),
+            channel_ids: ids_to_strings(value.channel_ids),
+            speaker_ids: value.speaker_ids.unwrap_or_default(),
+            status: value.status.map(Into::into),
+            attended: value.attended,
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlCallStatus {
+    Attended,
+    Missed,
+    Unattended,
+}
+
+impl From<GraphqlCallStatus> for CallStatus {
+    fn from(value: GraphqlCallStatus) -> Self {
+        match value {
+            GraphqlCallStatus::Attended => Self::Attended,
+            GraphqlCallStatus::Missed => Self::Missed,
+            GraphqlCallStatus::Unattended => Self::Unattended,
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlEmailFilters {
+    senders: Option<Vec<String>>,
+    cc: Option<Vec<String>>,
+    bcc: Option<Vec<String>>,
+    recipients: Option<Vec<String>>,
+    email_thread_ids: Option<Vec<ID>>,
+    link_ids: Option<Vec<ID>>,
+    project_ids: Option<Vec<String>>,
+    importance: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+    shared: Option<GraphqlSharedEmailFilter>,
+    crm_domains: Option<Vec<String>>,
+    crm_addresses: Option<Vec<String>>,
+    calendar_only: Option<bool>,
+}
+
+impl From<GraphqlEmailFilters> for EmailFilters {
+    fn from(value: GraphqlEmailFilters) -> Self {
+        Self {
+            senders: value.senders.unwrap_or_default(),
+            cc: value.cc.unwrap_or_default(),
+            bcc: value.bcc.unwrap_or_default(),
+            recipients: value.recipients.unwrap_or_default(),
+            email_thread_ids: ids_to_strings(value.email_thread_ids),
+            link_ids: ids_to_strings(value.link_ids),
+            project_ids: value.project_ids.unwrap_or_default(),
+            importance: value.importance,
+            notification_filters: optional_input(value.notification_filters),
+            include_labels: Vec::new(),
+            exclude_labels: Vec::new(),
+            shared: value.shared.map(Into::into).unwrap_or_default(),
+            crm_domains: value.crm_domains.unwrap_or_default(),
+            crm_addresses: value.crm_addresses.unwrap_or_default(),
+            calendar_only: value.calendar_only,
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlSharedEmailFilter {
+    Exclude,
+    Include,
+    Only,
+}
+
+impl From<GraphqlSharedEmailFilter> for SharedEmailFilter {
+    fn from(value: GraphqlSharedEmailFilter) -> Self {
+        match value {
+            GraphqlSharedEmailFilter::Exclude => Self::Exclude,
+            GraphqlSharedEmailFilter::Include => Self::Include,
+            GraphqlSharedEmailFilter::Only => Self::Only,
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlCrmCompanyFilters {
+    company_ids: Option<Vec<ID>>,
+    hidden: Option<bool>,
+}
+
+impl From<GraphqlCrmCompanyFilters> for CrmCompanyFilters {
+    fn from(value: GraphqlCrmCompanyFilters) -> Self {
+        Self {
+            company_ids: ids_to_strings(value.company_ids),
+            hidden: value.hidden,
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlForeignEntityFilters {
+    ids: Option<Vec<ID>>,
+    foreign_entity_ids: Option<Vec<String>>,
+    foreign_entity_sources: Option<Vec<String>>,
+    includes_me: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+}
+
+impl From<GraphqlForeignEntityFilters> for ForeignEntityFilters {
+    fn from(value: GraphqlForeignEntityFilters) -> Self {
+        Self {
+            ids: ids_to_strings(value.ids),
+            foreign_entity_ids: value.foreign_entity_ids.unwrap_or_default(),
+            foreign_entity_sources: value.foreign_entity_sources.unwrap_or_default(),
+            includes_me: value.includes_me.unwrap_or_default(),
+            notification_filters: optional_input(value.notification_filters),
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlProjectFilters {
+    project_ids: Option<Vec<ID>>,
+    include_root: Option<bool>,
+    owners: Option<Vec<String>>,
+    importance: Option<bool>,
+    notification_filters: Option<GraphqlNotificationFilters>,
+}
+
+impl From<GraphqlProjectFilters> for ProjectFilters {
+    fn from(value: GraphqlProjectFilters) -> Self {
+        Self {
+            project_ids: ids_to_strings(value.project_ids),
+            include_root: value.include_root.unwrap_or_default(),
+            owners: value.owners.unwrap_or_default(),
+            importance: value.importance,
+            notification_filters: optional_input(value.notification_filters),
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject)]
+struct GraphqlPropertyFilter {
+    property_definition_id: ID,
+    entity_type: Option<GraphqlPropertyEntityType>,
+    option_ids: Option<Vec<ID>>,
+    entity_ids: Option<Vec<String>>,
+}
+
+impl From<GraphqlPropertyFilter> for PropertyFilter {
+    fn from(value: GraphqlPropertyFilter) -> Self {
+        Self {
+            property_definition_id: value.property_definition_id.to_string(),
+            entity_type: value
+                .entity_type
+                .map(GraphqlPropertyEntityType::as_filter_value),
+            option_ids: ids_to_strings(value.option_ids),
+            entity_ids: value.entity_ids.unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum GraphqlPropertyEntityType {
+    Channel,
+    Chat,
+    Company,
+    Document,
+    Project,
+    Task,
+    Thread,
+    User,
+}
+
+impl GraphqlPropertyEntityType {
+    fn as_filter_value(self) -> String {
+        match self {
+            Self::Channel => "CHANNEL",
+            Self::Chat => "CHAT",
+            Self::Company => "COMPANY",
+            Self::Document => "DOCUMENT",
+            Self::Project => "PROJECT",
+            Self::Task => "TASK",
+            Self::Thread => "THREAD",
+            Self::User => "USER",
+        }
+        .to_owned()
+    }
+}
+
+fn optional_input<T, U>(value: Option<T>) -> U
+where
+    T: Into<U>,
+    U: Default,
+{
+    value.map(Into::into).unwrap_or_default()
+}
+
+fn ids_to_strings(ids: Option<Vec<ID>>) -> Vec<String> {
+    ids.unwrap_or_default()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect()
 }
 
 /// GraphQL representation of supported simple Soup sorts.
