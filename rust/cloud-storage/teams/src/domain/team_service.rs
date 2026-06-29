@@ -285,13 +285,21 @@ where
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> Result<Team, CreateTeamError> {
         // New teams start with `team_crm_settings.crm_enabled = false`
         // (seeded by `team_repository.create_team`), so there's nothing
         // for the email-backfill fan-out to populate yet. The fan-out
         // happens later, on the disabled → enabled transition in
         // `set_team_crm_enabled`.
-        let team = self.team_repository.create_team(user_id, team_name).await?;
+        let team = self
+            .team_repository
+            .create_team(user_id, team_name, subscription_id)
+            .await?;
+        self.customer_repository
+            .convert_subscription_to_team(subscription_id, team.id(), user_id)
+            .await
+            .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?;
         self.team_repository
             .move_github_app_installation_to_team_if_exists(user_id, team.id())
             .await?;
@@ -299,9 +307,12 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn is_user_premium(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+    async fn is_user_premium(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
         let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
-            return Ok(false);
+            return Ok(None);
         };
 
         match self
@@ -309,10 +320,8 @@ where
             .get_subscription_id_for_customer(&customer_id)
             .await
         {
-            Ok(_) => Ok(true),
-            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
-                Ok(false)
-            }
+            Ok(subscription_id) => Ok(Some(subscription_id)),
+            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => Ok(None),
             Err(e) => Err(TeamError::StorageLayerError(e.into())),
         }
     }

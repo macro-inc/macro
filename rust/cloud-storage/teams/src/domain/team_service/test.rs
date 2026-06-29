@@ -147,6 +147,7 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &MacroUserIdStr<'_>,
         _: &str,
+        _: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send {
         let team = self.created_team.clone();
         async move { Ok(team) }
@@ -469,7 +470,7 @@ impl CustomerRepository for MockCustomerRepository {
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
-        async { unimplemented!() }
+        async { Ok(()) }
     }
 
     fn get_subscription_id_for_customer(
@@ -801,7 +802,7 @@ async fn test_create_team_moves_github_installation_to_created_team() {
         NoOpTeamCrmSettingsRepository,
     );
 
-    let created_team = service.create_team(&user_id, "New Team").await.unwrap();
+    let created_team = service.create_team(&user_id, "New Team", &"sub_test".parse().unwrap()).await.unwrap();
 
     assert_eq!(created_team.id(), team.id());
     assert_eq!(
@@ -836,7 +837,7 @@ async fn test_create_team_propagates_github_installation_move_failure() {
     );
 
     let err = service
-        .create_team(&user_id, "New Team")
+        .create_team(&user_id, "New Team", &"sub_test".parse().unwrap())
         .await
         .err()
         .unwrap();
@@ -874,7 +875,7 @@ async fn test_is_user_premium_with_active_subscription() {
     let user_id = MacroUserIdStr::parse_from_str("macro|premium@example.com").unwrap();
     let service = build_service_for_premium_check(Some("cus_test".parse().unwrap()), false);
 
-    assert!(service.is_user_premium(&user_id).await.unwrap());
+    assert!(service.is_user_premium(&user_id).await.unwrap().is_some());
 }
 
 #[tokio::test]
@@ -882,7 +883,7 @@ async fn test_is_user_premium_without_stripe_customer() {
     let user_id = MacroUserIdStr::parse_from_str("macro|free@example.com").unwrap();
     let service = build_service_for_premium_check(None, false);
 
-    assert!(!service.is_user_premium(&user_id).await.unwrap());
+    assert!(service.is_user_premium(&user_id).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -890,7 +891,7 @@ async fn test_is_user_premium_without_active_subscription() {
     let user_id = MacroUserIdStr::parse_from_str("macro|lapsed@example.com").unwrap();
     let service = build_service_for_premium_check(Some("cus_test".parse().unwrap()), true);
 
-    assert!(!service.is_user_premium(&user_id).await.unwrap());
+    assert!(service.is_user_premium(&user_id).await.unwrap().is_none());
 }
 
 /// When one notification fails, only the successful invite IDs are passed to
