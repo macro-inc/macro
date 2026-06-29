@@ -149,9 +149,10 @@ async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> any
     insert_user(&pool).await?;
     let team_id = Uuid::parse_str(TEAM_ID)?;
     sqlx::query!(
-        r#"INSERT INTO team (id, owner_id) VALUES ($1, $2)"#,
+        r#"INSERT INTO team (id, owner_id, name) VALUES ($1, $2, $3)"#,
         team_id,
-        USER_ID
+        USER_ID,
+        team_id.to_string(),
     )
     .execute(&pool)
     .await?;
