@@ -298,8 +298,8 @@ impl GraphqlSoupNotification {
         &self.0.notification_event_type
     }
 
-    async fn entity_type(&self) -> String {
-        self.0.entity.entity_type.to_string()
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::from(self.0.entity.entity_type)
     }
 
     async fn entity_id(&self) -> &str {
