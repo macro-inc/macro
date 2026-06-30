@@ -230,6 +230,8 @@ export function NotificationInbox2() {
   const displayItems = createMemo(() =>
     entities().map((entity) => toInboxCardDisplayItem(entity))
   );
+  const [selectedEntity, setSelectedEntity] =
+    createSignal<WithNotification<EntityData>>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
   const onScroll = () => {
@@ -241,8 +243,6 @@ export function NotificationInbox2() {
     if (!soupQuery.hasNextPage || soupQuery.isFetchingNextPage) return;
     void soupQuery.fetchNextPage();
   };
-
-  const selectedEntity = (): EntityData | undefined => undefined;
 
   createEffect(() => {
     const [getPreview, setPreview] = panel.previewState;
@@ -328,7 +328,13 @@ export function NotificationInbox2() {
                     style={{ height: '100%', width: '100%' }}
                     onScroll={onScroll}
                   >
-                    {(item) => <InboxCardLayout item={item} />}
+                    {(item) => (
+                      <InboxCardLayout
+                        item={item}
+                        selected={selectedEntity()?.id === item.entity.id}
+                        onClick={() => setSelectedEntity(item.entity)}
+                      />
+                    )}
                   </VList>
                 </StaticMarkdownContext>
               </div>

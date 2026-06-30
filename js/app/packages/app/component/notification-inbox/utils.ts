@@ -119,8 +119,19 @@ export function senderIdOf(
   if (entity.type === 'channel') {
     return entity.latestRootMessage?.senderId;
   }
-  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+  if (entity.type === 'channel_message') {
     return entity.senderId;
+  }
+
+  if (entity.type === 'channel_thread') {
+    const notificationMetadata = notification?.notification_metadata;
+
+    const isLatestNotificationReply =
+      notificationMetadata?.tag === 'channel_message_reply';
+
+    return isLatestNotificationReply
+      ? (notification?.sender_id ?? entity.sender.id)
+      : entity.senderId;
   }
 
   return notification?.sender_id ?? undefined;

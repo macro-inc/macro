@@ -531,20 +531,26 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     return text;
   });
 
-  const senderId = () => {
-    const value = props.item.entity;
-    return value.type === 'channel_thread' ? value.senderId : undefined;
-  };
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
-
-  const isLatestNotificationReply = () => {
+  const isLatestNotificationReply = createMemo(() => {
     const notification = props.item.notification;
     const notificationMetadata = notification?.notification_metadata;
 
     return notificationMetadata?.tag === 'channel_message_reply';
-  };
+  });
+
+  const senderId = createMemo(() => {
+    const value = props.item.entity;
+
+    if (isLatestNotificationReply()) {
+      return props.item.notification?.sender_id ?? undefined;
+    }
+
+    return value.type === 'channel_thread' ? value.senderId : undefined;
+  });
+
+  const senderFallbackName = () =>
+    senderNameRaw(props.item.entity, props.item.notification) ??
+    senderDisplayName(props.item.entity, props.item.notification);
 
   const attachments = createMemo(() => {
     if (
