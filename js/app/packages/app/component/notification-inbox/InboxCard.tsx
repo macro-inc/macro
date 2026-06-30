@@ -1,24 +1,3 @@
-/**
- * Composable inbox-row primitives. None of these know what an inbox item is —
- * they're presentational layout boxes the caller assembles and fills:
- *
- *   <InboxCard.Root selected onClick={…}>
- *     <InboxCard.Icon src={avatarUrl} fallback={initials}>{bubble}</InboxCard.Icon>
- *     <InboxCard.Body>
- *       <InboxCard.Header>
- *         <InboxCard.Title>{titleText}</InboxCard.Title>
- *         {badge}
- *       </InboxCard.Header>
- *       <InboxCard.Content>{preview}</InboxCard.Content>
- *       <InboxCard.Attachments items={attachments} />
- *       <InboxCard.Meta timestamp={when}>{actions}</InboxCard.Meta>
- *     </InboxCard.Body>
- *   </InboxCard.Root>
- *
- * `Root` owns the only stateful concern (selected / highlighted / dimmed +
- * click/keyboard); everything else is a styled wrapper with a `class` escape
- * hatch.
- */
 import { cn } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
@@ -27,7 +6,6 @@ interface SlotProps {
   children?: JSX.Element;
 }
 
-/** A renderable attachment — a media tile (`src`) or a custom `fallback` tile. */
 export interface InboxCardAttachment {
   id: string;
   /** Media url; when absent, `fallback` fills the tile instead. */
@@ -87,7 +65,6 @@ interface IconProps extends SlotProps {
   fallback?: JSX.Element;
 }
 
-/** Leading avatar/icon. `children` overlay it (e.g. a status badge). */
 function Icon(props: IconProps): JSX.Element {
   return (
     <span
@@ -106,7 +83,6 @@ function Icon(props: IconProps): JSX.Element {
   );
 }
 
-/** Content column — stacks the header, content, attachments and meta. */
 function Body(props: SlotProps): JSX.Element {
   return (
     <div class={cn('flex min-w-0 flex-col gap-1', props.class)}>
@@ -115,7 +91,6 @@ function Body(props: SlotProps): JSX.Element {
   );
 }
 
-/** The title line. */
 function Header(props: SlotProps): JSX.Element {
   return (
     <div class={cn('flex min-w-0 items-center gap-1 text-sm', props.class)}>
@@ -124,7 +99,6 @@ function Header(props: SlotProps): JSX.Element {
   );
 }
 
-/** Primary text, truncated, takes the remaining width. */
 function Title(props: SlotProps): JSX.Element {
   return (
     <div class={cn('min-w-0 flex-1 truncate', props.class)}>
@@ -133,12 +107,10 @@ function Title(props: SlotProps): JSX.Element {
   );
 }
 
-/** Body / preview line. */
 function Content(props: SlotProps): JSX.Element {
   return <div class={cn('min-w-0', props.class)}>{props.children}</div>;
 }
 
-/** Attachment thumbnails — shows up to `max` (default 4), then a "+N" tile. */
 function Attachments(props: {
   items: InboxCardAttachment[];
   max?: number;
@@ -190,11 +162,9 @@ function Attachments(props: {
 }
 
 interface MetaProps extends SlotProps {
-  /** Display string for the row's time. */
   timestamp?: string;
 }
 
-/** Bottom line — timestamp plus any actions passed as children. */
 function Meta(props: MetaProps): JSX.Element {
   return (
     <div
