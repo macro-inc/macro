@@ -2009,6 +2009,8 @@ dependencies = [
 name = "bot_id"
 version = "0.1.0"
 dependencies = [
+ "cowlike",
+ "nom 8.0.0",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
