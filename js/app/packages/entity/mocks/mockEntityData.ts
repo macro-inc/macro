@@ -282,6 +282,7 @@ const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
     content: "Hey everyone! Don't forget about the team meeting at 2pm",
     senderId: MOCK_USER_IDS.teamMember1,
     createdAt: MOCK_TIMESTAMPS.today,
+    mentions: [],
   },
   frecencyScore: 0.91,
 };
@@ -300,6 +301,7 @@ const MOCK_CHANNEL_PRIVATE: ChannelEntity = {
     content: 'Updated the mockups in Figma',
     senderId: MOCK_USER_IDS.teamMember2,
     createdAt: MOCK_TIMESTAMPS.yesterday,
+    mentions: [],
   },
   frecencyScore: 0.83,
 };
@@ -319,6 +321,7 @@ const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
     content: 'Can you review the PR?',
     senderId: MOCK_USER_IDS.teamMember1,
     createdAt: MOCK_TIMESTAMPS.today,
+    mentions: [],
   },
   frecencyScore: 0.87,
 };
@@ -337,6 +340,7 @@ const MOCK_CHANNEL_ANNOUNCEMENTS: ChannelEntity = {
     content: 'Q4 results are in!',
     senderId: MOCK_USER_IDS.owner,
     createdAt: MOCK_TIMESTAMPS.lastWeek,
+    mentions: [],
   },
   frecencyScore: 0.72,
 };
@@ -355,6 +359,7 @@ const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
     content: '',
     senderId: MOCK_USER_IDS.teamMember2,
     createdAt: MOCK_TIMESTAMPS.today,
+    mentions: [],
   },
   frecencyScore: 0.68,
 };
