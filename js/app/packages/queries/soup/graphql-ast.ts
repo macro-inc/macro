@@ -1,20 +1,36 @@
 import type {
-  GraphqlCallLiteralInput,
-  GraphqlChannelLiteralInput,
-  GraphqlChannelThreadLiteralInput,
-  GraphqlChatLiteralInput,
-  GraphqlCrmCompanyLiteralInput,
-  GraphqlDateLiteralInput,
-  GraphqlDocumentLiteralInput,
-  GraphqlEmailLiteralInput,
-  GraphqlEmailValueInput,
-  GraphqlEntityFilterAstInput,
-  GraphqlExprInput,
-  GraphqlForeignEntityLiteralInput,
-  GraphqlProjectLiteralInput,
-  GraphqlPropertiesLiteralInput,
-  GraphqlSoupInput,
-} from '@service-storage/graphql-soup';
+  GraphqlCallLiteral as GraphqlCallLiteralInput,
+  GraphqlChannelLiteral as GraphqlChannelLiteralInput,
+  GraphqlChannelThreadLiteral as GraphqlChannelThreadLiteralInput,
+  GraphqlChatLiteral as GraphqlChatLiteralInput,
+  GraphqlCrmCompanyLiteral as GraphqlCrmCompanyLiteralInput,
+  GraphqlDateLiteral as GraphqlDateLiteralInput,
+  GraphqlDocumentLiteral as GraphqlDocumentLiteralInput,
+  GraphqlEmailLiteral as GraphqlEmailLiteralInput,
+  GraphqlEmailValue as GraphqlEmailValueInput,
+  GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
+  GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
+  GraphqlProjectLiteral as GraphqlProjectLiteralInput,
+  GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  SoupInput as GraphqlSoupInput,
+} from '@service-storage/generated/graphql';
+
+type GraphqlExprInput<TLiteral> =
+  | {
+      and: {
+        left: GraphqlExprInput<TLiteral>;
+        right: GraphqlExprInput<TLiteral>;
+      };
+    }
+  | {
+      or: {
+        left: GraphqlExprInput<TLiteral>;
+        right: GraphqlExprInput<TLiteral>;
+      };
+    }
+  | { not: GraphqlExprInput<TLiteral> }
+  | { literal: TLiteral };
+
 import type { SoupAstBody, SoupParams } from './items';
 
 type RestAst =

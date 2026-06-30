@@ -4,6 +4,12 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { platformFetch } from '@core/util/platformFetch';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createClient, fetchExchange } from '@urql/core';
+import {
+  type SoupInput,
+  type SoupQuery,
+  SoupDocument as SoupQueryDocument,
+  type SoupQueryVariables,
+} from './generated/graphql';
 import type { SoupApiItem, SoupPage } from './generated/schemas';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
@@ -50,462 +56,25 @@ const graphqlSoupClient = createClient({
   fetch: dssGraphqlFetch,
 });
 
-export type GraphqlDateLiteralInput =
-  | { gt: string }
-  | { gte: string }
-  | { lt: string }
-  | { lte: string };
+export type GraphqlSoupInput = SoupInput;
 
-export type GraphqlExprInput<TLiteral> =
-  | {
-      and: {
-        left: GraphqlExprInput<TLiteral>;
-        right: GraphqlExprInput<TLiteral>;
-      };
-    }
-  | {
-      or: {
-        left: GraphqlExprInput<TLiteral>;
-        right: GraphqlExprInput<TLiteral>;
-      };
-    }
-  | { not: GraphqlExprInput<TLiteral> }
-  | { literal: TLiteral };
-
-export type GraphqlDocumentLiteralInput =
-  | { fileType: string }
-  | { id: string }
-  | { projectId: string }
-  | { owner: string }
-  | { importance: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean }
-  | { includeCbmAtmNc: boolean }
-  | { subType: 'TASK' | 'SNIPPET' }
-  | { isEmailAttachment: boolean }
-  | { createdAt: GraphqlDateLiteralInput }
-  | { updatedAt: GraphqlDateLiteralInput };
-
-export type GraphqlProjectLiteralInput =
-  | { projectId: string }
-  | { projectIdSelf: string }
-  | { owner: string }
-  | { importance: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean }
-  | { createdAt: GraphqlDateLiteralInput }
-  | { updatedAt: GraphqlDateLiteralInput };
-
-export type GraphqlChatLiteralInput =
-  | { projectId: string }
-  | { role: 'USER' | 'SYSTEM' | 'ASSISTANT' }
-  | { chatId: string }
-  | { owner: string }
-  | { importance: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean }
-  | { createdAt: GraphqlDateLiteralInput }
-  | { updatedAt: GraphqlDateLiteralInput };
-
-export type GraphqlEmailValueInput =
-  | { partial: string }
-  | { complete: string }
-  | { domain: string };
-
-export type GraphqlEmailLiteralInput =
-  | { sender: GraphqlEmailValueInput }
-  | { cc: GraphqlEmailValueInput }
-  | { bcc: GraphqlEmailValueInput }
-  | { recipient: GraphqlEmailValueInput }
-  | { threadId: string }
-  | { owner: string }
-  | { projectId: string }
-  | { importance: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean }
-  | { shared: 'EXCLUDE' | 'INCLUDE' | 'ONLY' }
-  | { calendarOnly: boolean }
-  | { createdAt: GraphqlDateLiteralInput }
-  | { updatedAt: GraphqlDateLiteralInput };
-
-export type GraphqlChannelLiteralInput =
-  | { threadId: string }
-  | { mention: string }
-  | { organizationId: number }
-  | { teamId: string }
-  | { channelId: string }
-  | { sender: string }
-  | { channelType: 'PUBLIC' | 'PRIVATE' | 'DIRECT_MESSAGE' | 'TEAM' }
-  | { importance: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean };
-
-export type GraphqlChannelThreadLiteralInput =
-  | { threadId: string }
-  | { channelId: string }
-  | { rootSender: string }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean };
-
-export type GraphqlCallLiteralInput =
-  | { callId: string }
-  | { channelId: string }
-  | { speaker: string }
-  | { status: 'ATTENDED' | 'MISSED' | 'UNATTENDED' }
-  | { attended: boolean };
-
-export type GraphqlCrmCompanyLiteralInput =
-  | { id: string }
-  | { hidden: boolean };
-
-export type GraphqlForeignEntityLiteralInput =
-  | { id: string }
-  | { foreignEntityId: string }
-  | { foreignEntitySource: string }
-  | { includesMe: boolean }
-  | { notificationDone: boolean }
-  | { notificationSeen: boolean };
-
-export type GraphqlPropertiesLiteralInput = {
-  propertyDefinitionId: string;
-  entityType?:
-    | 'CHANNEL'
-    | 'CHAT'
-    | 'COMPANY'
-    | 'DOCUMENT'
-    | 'PROJECT'
-    | 'TASK'
-    | 'THREAD'
-    | 'USER';
-  value: { selectOption: string } | { entityRef: string };
-};
-
-export type GraphqlEntityFilterAstInput = {
-  documentFilter?: GraphqlExprInput<GraphqlDocumentLiteralInput>;
-  projectFilter?: GraphqlExprInput<GraphqlProjectLiteralInput>;
-  chatFilter?: GraphqlExprInput<GraphqlChatLiteralInput>;
-  emailFilter?: {
-    tree?: GraphqlExprInput<GraphqlEmailLiteralInput>;
-    crmScope?: { domains: string[] } | { addresses: string[] };
-  };
-  channelFilter?: GraphqlExprInput<GraphqlChannelLiteralInput>;
-  channelThreadFilter?: GraphqlExprInput<GraphqlChannelThreadLiteralInput>;
-  callFilter?: GraphqlExprInput<GraphqlCallLiteralInput>;
-  crmCompanyFilter?: GraphqlExprInput<GraphqlCrmCompanyLiteralInput>;
-  foreignEntityFilter?: GraphqlExprInput<GraphqlForeignEntityLiteralInput>;
-  propertiesFilter?: GraphqlExprInput<GraphqlPropertiesLiteralInput>;
-};
-
-export type GraphqlSoupInput = {
-  limit?: number;
-  expand?: boolean;
-  sortMethod?: 'VIEWED_AT' | 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_UPDATED';
-  cursor?: string | null;
-  emailView?:
-    | 'INBOX'
-    | 'DRAFTS'
-    | 'SENT'
-    | 'ALL'
-    | 'STARRED'
-    | 'IMPORTANT'
-    | 'OTHER';
-  filters?: GraphqlEntityFilterAstInput;
-};
-
-type GraphqlSoupPropertyValue = {
-  kind: string;
-  boolValue?: boolean | null;
-  numberValue?: number | null;
-  stringValue?: string | null;
-  dateValue?: string | null;
-  selectOptionIds: string[];
-  entityReferences: Array<{
-    entityId: string;
-    entityType: string;
-    specificMessageId?: string | null;
-  }>;
-  links: string[];
-};
-
-type GraphqlSoupProperty = {
-  id: string;
-  displayName: string;
-  dataType: string;
-  isMultiSelect: boolean;
-  specificEntityType?: string | null;
-  isSystem: boolean;
-  isMetadata: boolean;
-  value?: GraphqlSoupPropertyValue | null;
-};
-
-type GraphqlSoupEntityBase = { __typename: string };
-
-type GraphqlSoupDocument = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupDocument';
-  id: string;
-  name: string;
-  ownerId: string;
-  fileType?: string | null;
-  projectId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  deletedAt?: string | null;
-  subType?: { kind: string; isCompleted?: boolean | null } | null;
-  properties: GraphqlSoupProperty[];
-};
-
-type GraphqlSoupChat = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupChat';
-  id: string;
-  name: string;
-  ownerId: string;
-  projectId?: string | null;
-  isPersistent: boolean;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  deletedAt?: string | null;
-  properties: GraphqlSoupProperty[];
-};
-
-type GraphqlSoupProject = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupProject';
-  id: string;
-  name: string;
-  ownerId: string;
-  parentId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  deletedAt?: string | null;
-  properties: GraphqlSoupProperty[];
-};
-
-type GraphqlSoupEmailThread = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupEmailThread';
-  id: string;
-  providerId?: string | null;
-  ownerId: string;
-  inboxVisible: boolean;
-  linkId?: string | null;
-  name?: string | null;
-  snippet?: string | null;
-  senderEmail?: string | null;
-  senderName?: string | null;
-  senderPhotoUrl?: string | null;
-  isRead: boolean;
-  isDraft: boolean;
-  isImportant: boolean;
-  projectId?: string | null;
-  sortTs: string;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  participants: Array<{
-    id: string;
-    linkId: string;
-    name?: string | null;
-    email?: string | null;
-    sfsPhotoUrl?: string | null;
-  }>;
-  attachments: Array<{
-    id: string;
-    messageId: string;
-    providerAttachmentId?: string | null;
-    filename?: string | null;
-    mimeType?: string | null;
-    sizeBytes?: number | null;
-    contentId?: string | null;
-    createdAt: string;
-  }>;
-  labels: Array<{
-    id: string;
-    linkId: string;
-    providerLabelId: string;
-    name: string;
-    createdAt: string;
-    messageListVisibility: string;
-    labelListVisibility: string;
-    type: string;
-  }>;
-  properties: GraphqlSoupProperty[];
-};
-
-type GraphqlSoupChannelMessage = {
-  messageId: string;
-  threadId?: string | null;
-  senderId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
-  mentions: string[];
-};
-
-type GraphqlSoupChannel = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupChannel';
-  id: string;
-  name?: string | null;
-  channelType: string;
-  ownerId: string;
-  organizationId?: number | null;
-  teamId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  interactedAt?: string | null;
-  participants: Array<{
-    channelId: string;
-    userId: string;
-    role: string;
-    joinedAt: string;
-    leftAt?: string | null;
-  }>;
-  latestMessage?: GraphqlSoupChannelMessage | null;
-  latestNonThreadMessage?: GraphqlSoupChannelMessage | null;
-};
-
-type GraphqlSoupChannelThread = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupChannelThread';
-  id: string;
-  channelId: string;
-  senderId: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  effectiveUpdatedAt: string;
-  replyCount: number;
-};
-
-type GraphqlSoupCall = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupCall';
-  id: string;
-  channelId: string;
-  channelName?: string | null;
-  createdBy: string;
-  customName?: string | null;
-  summary?: string | null;
-  startedAt: string;
-  endedAt?: string | null;
-  durationMs?: number | null;
-  isActive: boolean;
-  status: string;
-  attended: boolean;
-  participants: Array<{
-    userId: string;
-    joinedAt: string;
-    leftAt?: string | null;
-  }>;
-};
-
-type GraphqlSoupCrmCompany = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupCrmCompany';
-  id: string;
-  teamId: string;
-  name?: string | null;
-  description?: string | null;
-  emailSync: boolean;
-  hidden: boolean;
-  createdAt: string;
-  updatedAt: string;
-  viewedAt?: string | null;
-  domains: string[];
-};
-
-type GraphqlSoupForeignEntity = GraphqlSoupEntityBase & {
-  __typename: 'GraphqlSoupForeignEntity';
-  id: string;
-  foreignEntityId: string;
-  foreignEntitySource: string;
-  storedForId: string;
-  storedForAuthEntity: string;
-  metadata: unknown;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type GraphqlSoupEntity =
-  | GraphqlSoupDocument
-  | GraphqlSoupChat
-  | GraphqlSoupProject
-  | GraphqlSoupEmailThread
-  | GraphqlSoupChannel
-  | GraphqlSoupChannelThread
-  | GraphqlSoupCall
-  | GraphqlSoupCrmCompany
-  | GraphqlSoupForeignEntity;
-
-type GraphqlSoupItem = {
-  id: string;
-  entityType: string;
-  frecencyScore: number;
-  entity: GraphqlSoupEntity;
-};
-
-type GraphqlSoupResponse = {
-  soup: {
-    items: GraphqlSoupItem[];
-    nextCursor?: string | null;
-    hasMore: boolean;
-  };
-};
-
-const SOUP_QUERY = `
-  query Soup($input: SoupInput!) {
-    soup(input: $input) {
-      items {
-        id
-        entityType
-        frecencyScore
-        entity {
-          __typename
-          ... on GraphqlSoupDocument {
-            id name ownerId fileType projectId createdAt updatedAt viewedAt deletedAt
-            subType { kind isCompleted }
-            properties { id displayName dataType isMultiSelect specificEntityType isSystem isMetadata value { kind boolValue numberValue stringValue dateValue selectOptionIds entityReferences { entityId entityType specificMessageId } links } }
-          }
-          ... on GraphqlSoupChat {
-            id name ownerId projectId isPersistent createdAt updatedAt viewedAt deletedAt
-            properties { id displayName dataType isMultiSelect specificEntityType isSystem isMetadata value { kind boolValue numberValue stringValue dateValue selectOptionIds entityReferences { entityId entityType specificMessageId } links } }
-          }
-          ... on GraphqlSoupProject {
-            id name ownerId parentId createdAt updatedAt viewedAt deletedAt
-            properties { id displayName dataType isMultiSelect specificEntityType isSystem isMetadata value { kind boolValue numberValue stringValue dateValue selectOptionIds entityReferences { entityId entityType specificMessageId } links } }
-          }
-          ... on GraphqlSoupEmailThread {
-            id providerId ownerId inboxVisible linkId name snippet senderEmail senderName senderPhotoUrl isRead isDraft isImportant projectId sortTs createdAt updatedAt viewedAt
-            participants { id linkId name email sfsPhotoUrl }
-            attachments { id messageId providerAttachmentId filename mimeType sizeBytes contentId createdAt }
-            labels { id linkId providerLabelId name createdAt messageListVisibility labelListVisibility type }
-            properties { id displayName dataType isMultiSelect specificEntityType isSystem isMetadata value { kind boolValue numberValue stringValue dateValue selectOptionIds entityReferences { entityId entityType specificMessageId } links } }
-          }
-          ... on GraphqlSoupChannel {
-            id name channelType ownerId organizationId teamId createdAt updatedAt viewedAt interactedAt
-            participants { channelId userId role joinedAt leftAt }
-            latestMessage { messageId threadId senderId content createdAt updatedAt deletedAt mentions }
-            latestNonThreadMessage { messageId threadId senderId content createdAt updatedAt deletedAt mentions }
-          }
-          ... on GraphqlSoupChannelThread {
-            id channelId senderId content createdAt updatedAt effectiveUpdatedAt replyCount
-          }
-          ... on GraphqlSoupCall {
-            id channelId channelName createdBy customName summary startedAt endedAt durationMs isActive status attended
-            participants { userId joinedAt leftAt }
-          }
-          ... on GraphqlSoupCrmCompany {
-            id teamId name description emailSync hidden createdAt updatedAt viewedAt domains
-          }
-          ... on GraphqlSoupForeignEntity {
-            id foreignEntityId foreignEntitySource storedForId storedForAuthEntity metadata createdAt updatedAt
-          }
-        }
-      }
-      nextCursor
-      hasMore
-    }
-  }
-`;
+type GraphqlSoupItem = SoupQuery['soup']['items'][number];
+type GraphqlSoupEntity = GraphqlSoupItem['entity'];
+type GraphqlSoupProperty = Extract<
+  GraphqlSoupEntity,
+  { __typename: 'GraphqlSoupDocument' }
+>['properties'][number];
+type GraphqlSoupPropertyValue = NonNullable<GraphqlSoupProperty['value']>;
+type GraphqlSoupDocument = Extract<
+  GraphqlSoupEntity,
+  { __typename: 'GraphqlSoupDocument' }
+>;
+type GraphqlSoupChannelMessage = NonNullable<
+  Extract<
+    GraphqlSoupEntity,
+    { __typename: 'GraphqlSoupChannel' }
+  >['latestMessage']
+>;
 
 function mapGraphqlPropertyValue(
   value: GraphqlSoupPropertyValue | null | undefined
@@ -599,7 +168,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         frecency_score: frecency,
         data: {
           id: entity.id,
-          name: entity.name,
+          name: entity.documentName,
           ownerId: entity.ownerId,
           fileType: entity.fileType ?? undefined,
           projectId: entity.projectId ?? undefined,
@@ -618,7 +187,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         frecency_score: frecency,
         data: {
           id: entity.id,
-          name: entity.name,
+          name: entity.chatName,
           ownerId: entity.ownerId,
           projectId: entity.projectId ?? undefined,
           isPersistent: entity.isPersistent,
@@ -635,7 +204,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         frecency_score: frecency,
         data: {
           id: entity.id,
-          name: entity.name,
+          name: entity.projectName,
           ownerId: entity.ownerId,
           parentId: entity.parentId ?? undefined,
           createdAt: entity.createdAt,
@@ -654,7 +223,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
           providerId: entity.providerId ?? undefined,
           ownerId: entity.ownerId,
           inboxVisible: entity.inboxVisible,
-          name: entity.name ?? undefined,
+          name: entity.emailName ?? undefined,
           snippet: entity.snippet ?? undefined,
           senderEmail: entity.senderEmail ?? undefined,
           senderName: entity.senderName ?? undefined,
@@ -704,11 +273,11 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         data: {
           channel: {
             id: entity.id,
-            name: entity.name ?? undefined,
+            name: entity.channelName ?? undefined,
             channel_type: normalizeChannelType(entity.channelType),
             owner_id: entity.ownerId,
             org_id: entity.organizationId ?? undefined,
-            team_id: entity.teamId ?? undefined,
+            team_id: entity.channelTeamId ?? undefined,
             created_at: entity.createdAt,
             updated_at: entity.updatedAt,
           },
@@ -772,20 +341,19 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         frecency_score: frecency,
         data: {
           id: entity.id,
-          teamId: entity.teamId,
-          name: entity.name ?? undefined,
+          teamId: entity.crmTeamId,
+          name: entity.crmCompanyName ?? undefined,
           description: entity.description ?? undefined,
           emailSync: entity.emailSync,
           hidden: entity.hidden,
           createdAt: entity.createdAt,
           updatedAt: entity.updatedAt,
           viewedAt: entity.viewedAt ?? undefined,
-          domains: entity.domains.map((domain, index) => ({
+          domains: entity.domains.map((domain) => ({
             id: `${entity.id}:${domain}`,
             companyId: entity.id,
             domain,
             createdAt: entity.createdAt,
-            primary: index === 0,
           })),
         },
       } as SoupApiItem;
@@ -811,9 +379,7 @@ export async function fetchGraphqlSoup(
   input: GraphqlSoupInput
 ): Promise<SoupPage> {
   const result = await graphqlSoupClient
-    .query<GraphqlSoupResponse, { input: GraphqlSoupInput }>(SOUP_QUERY, {
-      input,
-    })
+    .query<SoupQuery, SoupQueryVariables>(SoupQueryDocument, { input })
     .toPromise();
 
   if (result.error) {
