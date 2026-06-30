@@ -410,7 +410,7 @@ export function formatCompactRelativeTimestamp(value: string) {
   if (weeks < 5) return `${Math.max(1, weeks)}w`;
 
   const months = differenceInMonths(now, date);
-  if (months < 12) return `${Math.max(1, months)}m`;
+  if (months < 12) return `${Math.max(1, months)}mo`;
 
   return `${Math.max(1, differenceInYears(now, date))}y`;
 }
