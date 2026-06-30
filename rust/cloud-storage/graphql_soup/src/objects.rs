@@ -66,8 +66,8 @@ pub enum GraphqlSoupEntityType {
     EmailThread,
     /// Channel entity.
     Channel,
-    /// Channel message entity.
-    ChannelMessage,
+    /// Channel thread entity.
+    ChannelThread,
     /// Call entity.
     Call,
     /// CRM company entity.
@@ -86,7 +86,7 @@ impl From<EntityType> for GraphqlSoupEntityType {
             EntityType::Project => Self::Project,
             EntityType::EmailThread => Self::EmailThread,
             EntityType::Channel => Self::Channel,
-            EntityType::ChannelMessage => Self::ChannelMessage,
+            EntityType::ChannelMessage => Self::ChannelThread,
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
@@ -1043,13 +1043,13 @@ impl GraphqlSoupChannel {
         self.0.channel.channel.owner_id.as_ref().to_owned()
     }
 
-    async fn organization_id(&self) -> Option<i32> {
+    async fn organization_id(&self) -> Option<ID> {
         self.0
             .channel
             .channel
             .org_id
             .as_ref()
-            .and_then(|id| i32::try_from(id.0).ok())
+            .map(|id| ID(id.0.to_string()))
     }
 
     async fn team_id(&self) -> Option<ID> {

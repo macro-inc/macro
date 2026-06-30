@@ -4,6 +4,7 @@ fn soup_response_schema_exposes_frontend_fields() {
 
     for expected in [
         "type GraphqlSoupChannel {",
+        "organizationId: ID",
         "interactedAt: String",
         "participantIds: [String!]!",
         "participants: [GraphqlSoupChannelParticipant!]!",
@@ -28,6 +29,13 @@ fn soup_response_schema_exposes_frontend_fields() {
         "deletedAt: String",
         "type GraphqlSoupProject {",
     ] {
-        assert!(sdl.contains(expected), "schema missing `{expected}`");
+        assert_sdl_line(&sdl, expected);
     }
+}
+
+fn assert_sdl_line(sdl: &str, expected: &str) {
+    assert!(
+        sdl.lines().any(|line| line.trim() == expected),
+        "schema missing exact line `{expected}`"
+    );
 }

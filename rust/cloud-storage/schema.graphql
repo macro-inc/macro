@@ -371,7 +371,7 @@ type GraphqlSoupChannel {
 	name: String
 	channelType: String!
 	ownerId: String!
-	organizationId: Int
+	organizationId: ID
 	teamId: ID
 	createdAt: String!
 	updatedAt: String!
@@ -552,9 +552,9 @@ enum GraphqlSoupEntityType {
 	"""
 	CHANNEL
 	"""
-	Channel message entity.
+	Channel thread entity.
 	"""
-	CHANNEL_MESSAGE
+	CHANNEL_THREAD
 	"""
 	Call entity.
 	"""
