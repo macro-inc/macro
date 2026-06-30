@@ -51,7 +51,7 @@ async function dssGraphqlFetch(
 }
 
 const graphqlSoupClient = createClient({
-  url: `${dssHost}/soup/graphql`,
+  url: `${dssHost}/items/soup/graphql`,
   exchanges: [fetchExchange],
   fetch: dssGraphqlFetch,
 });
