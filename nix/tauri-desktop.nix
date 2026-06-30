@@ -51,9 +51,8 @@
           && rel != "app/tauri/target";
       };
 
-      bun2nix = inputs.bun2nix.packages.${system}.default;
-      bunDeps = bun2nix.fetchBunDeps {
-        bunNix = ../js/bun.nix;
+      nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
+        src = jsRoot;
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
@@ -63,36 +62,32 @@
 
         nativeBuildInputs = [
           pkgs.bun
-          pkgs.darkhttpd
           pkgs.git
-          pkgs.jq
-          pkgs.yq-go
         ];
 
         dontConfigure = true;
 
         buildPhase = ''
-          runHook preBuild
+            runHook preBuild
 
-          export BUN_DEPS=${bunDeps}
-          source ${./install-bun-deps-from-bun2nix-cache.sh}
+            cp -a ${nodeModules}/. .
 
-          vite_resolve_replacement='      resolve: {
-        alias: [
-          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
-        ],'
-          substituteInPlace app/packages/app/vite.base.ts \
-            --replace-fail "      resolve: {" "$vite_resolve_replacement"
+            vite_resolve_replacement='      resolve: {
+          alias: [
+            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
+          ],'
+            substituteInPlace app/packages/app/vite.base.ts \
+              --replace-fail "      resolve: {" "$vite_resolve_replacement"
 
-          printf production > app/tauri/src-tauri/.macro-tauri-env
-          (
-            cd app/packages/app
-            MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
-            printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
-          )
+            printf production > app/tauri/src-tauri/.macro-tauri-env
+            (
+              cd app/packages/app
+              MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              printf '${appVersion}+${gitRev}\n' > dist/semver.txt
+              BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            )
 
-          runHook postBuild
+            runHook postBuild
         '';
 
         installPhase = ''
@@ -671,20 +666,22 @@
         };
       };
 
-      packages =
-        lib.optionalAttrs isLinux {
-          tauri-frontend = frontend;
-          tauri-desktop = wrappedTauriDesktop;
-          tauri-desktop-unwrapped = tauri.app;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        }
-        // lib.optionalAttrs isX86_64Linux {
-          tauri-desktop-appimage = tauriDesktopAppImage;
-        }
-        // lib.optionalAttrs isAarch64Darwin {
-          tauri-frontend = frontend;
-          tauri-desktop-dmg = tauriDesktopDmg;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        };
+      packages = {
+        js-node-modules = nodeModules;
+      }
+      // lib.optionalAttrs isLinux {
+        tauri-frontend = frontend;
+        tauri-desktop = wrappedTauriDesktop;
+        tauri-desktop-unwrapped = tauri.app;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      }
+      // lib.optionalAttrs isX86_64Linux {
+        tauri-desktop-appimage = tauriDesktopAppImage;
+      }
+      // lib.optionalAttrs isAarch64Darwin {
+        tauri-frontend = frontend;
+        tauri-desktop-dmg = tauriDesktopDmg;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      };
     };
 }

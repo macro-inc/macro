@@ -60,13 +60,13 @@ local-e2e-seed:
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
 
-# Regenerate js/bun.nix after js/bun.lock changes.
-update-bun-nix:
-  scripts/update-bun-nix.sh
+# Update the fixed-output js node_modules hash after js/bun.lock changes.
+update-node-modules-hash:
+  scripts/update-node-modules-hash.sh
 
-# Verify js/bun.nix matches js/bun.lock.
-check-bun-nix:
-  scripts/update-bun-nix.sh --check
+# Verify the fixed-output js node_modules derivation matches js/bun.lock.
+check-node-modules-nix:
+  nix build .#js-node-modules --no-link
 
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:
