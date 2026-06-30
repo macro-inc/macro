@@ -142,6 +142,11 @@ pub async fn add_property_option(
         ),
     };
 
+    if color.is_some() && property_definition.data_type != models_properties::DataType::Tag {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "color is only supported on tag options".to_string(),
+        ));
+    }
     if let Some(color) = &color
         && !models_properties::api::is_valid_hex_color(color)
     {

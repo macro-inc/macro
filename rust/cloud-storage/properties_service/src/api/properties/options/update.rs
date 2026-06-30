@@ -134,11 +134,9 @@ pub async fn update_property_option(
         None => option.value.clone(),
     };
 
-    if request.color.is_some()
-        && !matches!(definition.data_type, DataType::SelectString | DataType::Tag)
-    {
+    if request.color.is_some() && definition.data_type != DataType::Tag {
         return Err(UpdatePropertyOptionErr::InvalidRequest(
-            "color updates are only supported for string and tag options".to_string(),
+            "color is only supported on tag options".to_string(),
         ));
     }
 
