@@ -13,6 +13,7 @@ pub async fn create_property_option(
     property_definition_id: uuid::Uuid,
     display_order: i32,
     value: PropertyOptionValue,
+    color: Option<String>,
 ) -> Result<PropertyOption> {
     let id = macro_uuid::generate_uuid_v7();
     let (number_value, string_value) = value.to_db_values();
@@ -24,16 +25,18 @@ pub async fn create_property_option(
             property_definition_id,
             display_order,
             number_value,
-            string_value
+            string_value,
+            color
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, created_at, updated_at
         "#,
         id,
         property_definition_id,
         display_order,
         number_value,
-        string_value
+        string_value,
+        color.clone()
     )
     .fetch_one(db)
     .await?;
@@ -43,6 +46,7 @@ pub async fn create_property_option(
         property_definition_id,
         display_order,
         value,
+        color,
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
@@ -55,6 +59,7 @@ pub async fn create_property_option_tx(
     property_definition_id: uuid::Uuid,
     display_order: i32,
     value: PropertyOptionValue,
+    color: Option<String>,
 ) -> Result<()> {
     let id = macro_uuid::generate_uuid_v7();
     let (number_value, string_value) = value.to_db_values();
@@ -66,15 +71,17 @@ pub async fn create_property_option_tx(
             property_definition_id,
             display_order,
             number_value,
-            string_value
+            string_value,
+            color
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         id,
         property_definition_id,
         display_order,
         number_value,
-        string_value
+        string_value,
+        color
     )
     .execute(&mut **tx)
     .await?;
@@ -104,7 +111,7 @@ mod tests {
         let options_before = get_property_options(&pool, property_id).await?;
         assert_eq!(options_before.len(), 4);
 
-        let option = create_property_option(&pool, property_id, 4, value).await?;
+        let option = create_property_option(&pool, property_id, 4, value, None).await?;
 
         let options_after = get_property_options(&pool, property_id).await?;
         assert_eq!(options_after.len(), 5);
@@ -133,7 +140,7 @@ mod tests {
             .unwrap();
         let value = PropertyOptionValue::Number(10.5);
 
-        let option = create_property_option(&pool, property_id, 99, value).await?;
+        let option = create_property_option(&pool, property_id, 99, value, None).await?;
 
         assert_eq!(option.display_order, 99);
 
@@ -158,7 +165,7 @@ mod tests {
             .unwrap();
         let value = PropertyOptionValue::Number(3.5);
 
-        let option = create_property_option(&pool, property_id, 0, value).await?;
+        let option = create_property_option(&pool, property_id, 0, value, None).await?;
 
         assert_eq!(option.display_order, 0);
 
@@ -194,7 +201,7 @@ mod tests {
             .unwrap();
         let value = PropertyOptionValue::String("Low".to_string()); // Already exists
 
-        let result = create_property_option(&pool, property_id, 4, value).await;
+        let result = create_property_option(&pool, property_id, 4, value, None).await;
 
         assert!(result.is_err());
 
@@ -215,7 +222,7 @@ mod tests {
             .unwrap();
         let value = PropertyOptionValue::Number(1.0); // Already exists
 
-        let result = create_property_option(&pool, property_id, 5, value).await;
+        let result = create_property_option(&pool, property_id, 5, value, None).await;
 
         assert!(result.is_err());
 
@@ -236,7 +243,7 @@ mod tests {
             .unwrap();
         let value = PropertyOptionValue::String("Test".to_string());
 
-        let result = create_property_option(&pool, property_id, 0, value).await;
+        let result = create_property_option(&pool, property_id, 0, value, None).await;
 
         assert!(result.is_err()); // Foreign key constraint violation
 
@@ -256,7 +263,7 @@ mod tests {
         let value = PropertyOptionValue::String("Test Option".to_string());
 
         let mut tx = pool.begin().await?;
-        create_property_option_tx(&mut tx, property_id, 10, value).await?;
+        create_property_option_tx(&mut tx, property_id, 10, value, None).await?;
         tx.commit().await?;
 
         // Verify it was created

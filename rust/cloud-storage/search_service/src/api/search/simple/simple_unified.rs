@@ -59,7 +59,41 @@ fn cursor_from_tagged(tagged: &TaggedSearchHit) -> Option<SearchMethodCursor> {
         })
 }
 
+/// Trim the merged, sorted hit list to the first `page_size` distinct entities,
+/// keeping every hit of an included entity. The page budget is entities, not
+/// hits: a content document expands to one hit per matching chunk and an email
+/// thread to one per matching message, so counting hits here lets a single
+/// chunk-heavy entity exhaust the budget and short the page.
+fn take_first_n_entities(combined: Vec<TaggedSearchHit>, page_size: usize) -> Vec<TaggedSearchHit> {
+    let mut page_entities = std::collections::HashSet::new();
+    combined
+        .into_iter()
+        .filter(|tagged| {
+            if page_entities.contains(&tagged.hit.entity_id) {
+                true
+            } else if page_entities.len() < page_size {
+                page_entities.insert(tagged.hit.entity_id);
+                true
+            } else {
+                false
+            }
+        })
+        .collect()
+}
+
+/// Count distinct entities among `hits` (multiple hits can share one entity_id —
+/// content chunks of a document, messages of an email thread).
+fn distinct_entity_count<'a>(hits: impl IntoIterator<Item = &'a SearchHit>) -> usize {
+    hits.into_iter()
+        .map(|h| h.entity_id)
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+}
+
 /// Computes the next cursor for a search source based on pagination state.
+///
+/// `included_count`/`original_count` are measured in distinct entities, not hits,
+/// so a chunk-heavy source is not falsely judged truncated.
 fn compute_next_cursor(
     next_cursor_from_search: &SearchCursorOption,
     included_count: usize,
@@ -67,9 +101,15 @@ fn compute_next_cursor(
     last_included_hit: Option<&TaggedSearchHit>,
     original_cursor: &SearchCursorOption,
 ) -> SearchCursorOption {
-    if next_cursor_from_search.is_done() {
+    // `included_count < original_count` means the cross-source merge dropped some
+    // of this source's entities to stay within the page budget — they must be
+    // re-surfaced next page even when the sub-search itself reported Done, so the
+    // sub-search reporting Done is not on its own enough to end this source.
+    let truncated_in_merge = included_count < original_count;
+
+    if !truncated_in_merge && next_cursor_from_search.is_done() {
         SearchCursorOption::Done
-    } else if included_count < original_count || next_cursor_from_search.has_more() {
+    } else if truncated_in_merge || next_cursor_from_search.has_more() {
         if included_count > 0 {
             SearchCursorOption::NotDone(last_included_hit.and_then(cursor_from_tagged))
         } else {
@@ -473,7 +513,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Track original counts before combining
     let chat_name_count = chat_hits.len();
     let project_name_count = project_hits.len();
-    let content_count = content_hits.len();
+    // Content hits are chunk-level (many per document), so the page budget counts
+    // distinct documents. Name/crm sub-searches return one row per entity, so
+    // their hit count already equals their entity count.
+    let content_count = distinct_entity_count(&content_hits);
     let crm_count = crm_hits.len();
 
     let final_tagged = {
@@ -516,10 +559,10 @@ pub(in crate::api::search) async fn perform_unified_search(
             (None, None) => b.hit.entity_id.cmp(&a.hit.entity_id),
         });
 
-        // Take only page_size results
+        // Take the first page_size distinct entities (keeping all of each
+        // entity's hits), not the first page_size hits.
         let page_size_usize = page_size as usize;
-        let final_tagged: Vec<TaggedSearchHit> =
-            combined.into_iter().take(page_size_usize).collect();
+        let final_tagged: Vec<TaggedSearchHit> = take_first_n_entities(combined, page_size_usize);
 
         tracing::debug!(
             final_count = final_tagged.len(),
@@ -541,10 +584,12 @@ pub(in crate::api::search) async fn perform_unified_search(
             .iter()
             .filter(|h| h.source == SearchSource::ProjectName)
             .count();
-        let included_content = final_tagged
-            .iter()
-            .filter(|h| h.source == SearchSource::Content)
-            .count();
+        let included_content = distinct_entity_count(
+            final_tagged
+                .iter()
+                .filter(|h| h.source == SearchSource::Content)
+                .map(|h| &h.hit),
+        );
         let included_crm = final_tagged
             .iter()
             .filter(|h| h.source == SearchSource::CrmCompany)

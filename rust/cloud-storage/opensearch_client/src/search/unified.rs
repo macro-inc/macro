@@ -645,6 +645,48 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     Ok(search_request_builder.build())
 }
 
+/// Trim a page of top-level OpenSearch hits and derive the next cursor.
+///
+/// The query fetches `page_size + 1` *top-level* hits — one per parent entity
+/// for the join-shape indices (documents, chats, call records), one per message
+/// for the flat indices. Pagination is measured in those top-level hits, never
+/// in the child inner-hits a single parent expands into: a document matched on
+/// many content chunks is still one entity against the page budget. Counting the
+/// expanded children instead lets a couple of chunk-heavy documents exhaust the
+/// budget and short the page while minting a spurious "more results" cursor.
+///
+/// The extra (`page_size + 1`th) hit only signals "more exist"; it is dropped
+/// before expansion. The cursor anchors on the last *included* entity — every
+/// child a parent expands into carries that parent's `entity_id`/`updated_at`,
+/// so the last expanded hit yields the correct `search_after` for the next page.
+fn paginate_unified_hits(
+    hits: Vec<Hit<UnifiedSearchIndex>>,
+    page_size: usize,
+) -> (Vec<SearchHit>, SearchCursorOption) {
+    let has_more = hits.len() > page_size;
+
+    let results: Vec<SearchHit> = hits
+        .into_iter()
+        .take(page_size)
+        .flat_map(expand_hit_into_search_hits)
+        .collect();
+
+    // Continue only with a real anchor to resume from. A page_size of 0 yields
+    // an empty page (nothing to anchor on), so emitting NotDone there would loop
+    // the caller on identical empty pages. Return a terminal cursor instead.
+    let cursor = match results.last() {
+        Some(last) if has_more && page_size > 0 => {
+            SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+                entity_id: last.entity_id,
+                updated_at: last.updated_at.unwrap_or_else(Utc::now),
+            }))
+        }
+        _ => SearchCursorOption::Done,
+    };
+
+    (results, cursor)
+}
+
 #[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
@@ -699,27 +741,7 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let mut results: Vec<SearchHit> = result
-        .hits
-        .hits
-        .into_iter()
-        .flat_map(expand_hit_into_search_hits)
-        .collect();
-
-    let has_more = results.len() > args.page_size as usize;
-
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    let cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor::UpdatedAt {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at.unwrap_or_else(Utc::now),
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
+    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
 
     Ok((results, cursor))
 }

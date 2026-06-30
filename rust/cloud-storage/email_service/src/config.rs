@@ -8,19 +8,7 @@ env_vars! {
     pub struct EmailServiceCloudfrontSignerPrivateKey;
     pub struct MacroDbUrl;
     pub struct RedisUri;
-    pub struct LinkManagerQueue;
-    pub struct EmailScheduledQueue;
-    pub struct GmailInboxSyncQueue;
-    pub struct GmailInboxSyncRetryQueue;
-    pub struct GmailOpsQueue;
-    pub struct GmailOpsRetryQueue;
-    pub struct SearchEventQueue;
     pub struct GmailGcpQueue;
-    pub struct NotificationQueue;
-    pub struct BackfillQueue;
-    pub struct ContactsQueue;
-    pub struct SfsUploaderQueue;
-    pub struct SfsDeleteQueue;
     #[derive(Debug)]
     pub struct AttachmentBucket;
     pub struct NotificationsEnabled;
@@ -44,47 +32,8 @@ pub struct Config {
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: RedisUri,
 
-    /// The SQS queue name that email_refresh_handler publishes messages to for refreshing
-    /// inbox sync subscriptions, and we will publish delete link messages to.
-    pub link_manager_queue: LinkManagerQueue,
-
-    /// The SQS queue name that email_scheduled_handler publishes messages to for sending
-    /// scheduled messages.
-    pub email_scheduled_queue: EmailScheduledQueue,
-
-    /// The SQS queue name we process inbox updates from.
-    pub gmail_inbox_sync_queue: GmailInboxSyncQueue,
-
-    /// The SQS queue name we process inbox update retries from. Separate from the main queue
-    /// to avoid backups for large inbox update operations
-    pub gmail_inbox_sync_retry_queue: GmailInboxSyncRetryQueue,
-
-    /// The SQS queue name for async Gmail operations (label changes, block/unblock, etc.)
-    pub gmail_ops_queue: GmailOpsQueue,
-
-    /// The SQS queue name for retrying rate-limited Gmail operations
-    pub gmail_ops_retry_queue: GmailOpsRetryQueue,
-
-    /// The SQS queue name for search event
-    pub search_event_queue: SearchEventQueue,
-
     /// The GCP queue name that has the subscription that hits our webhook endpoint
     pub gmail_gcp_queue: GmailGcpQueue,
-
-    /// The SQS queue name for notification-service
-    pub notification_queue: NotificationQueue,
-
-    /// The SQS queue name for the backfill process
-    pub backfill_queue: BackfillQueue,
-
-    /// The SQS queue name for the sfs_uploader process
-    pub sfs_uploader_queue: SfsUploaderQueue,
-
-    /// The SQS queue name for the sfs_delete process
-    pub sfs_delete_queue: SfsDeleteQueue,
-
-    /// The SQS queue name for contacts service
-    pub contacts_queue: ContactsQueue,
 
     /// The amount of time to delay processing of a sent message (undo send window) - default 10s
     #[macro_config_default(10)]

@@ -32,7 +32,10 @@ macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 prompt = { path = "../prompt" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+tokio-util.workspace = true
 
 [dev-dependencies]
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty" }
+# Enable rig's scripted MockCompletionModel for tests (fake AI streams).
+rig-core = { git = "https://github.com/macro-inc/rig", branch = "feat/responses-api-non-strict-tools", features = ["test-utils"] }

@@ -24,6 +24,7 @@ local_auth = ["macro_middleware/local_auth"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 macro_config = { path = "../macro_config" }
 database_env_vars = { path = "../macro_env_vars/database_env_vars" }
 doppler-config = { workspace = true }

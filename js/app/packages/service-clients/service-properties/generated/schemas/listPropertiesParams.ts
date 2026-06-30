@@ -10,7 +10,7 @@ import type { PropertyScope } from './propertyScope';
 
 export type ListPropertiesParams = {
   /**
-   * Filter by scope: 'user', 'org', 'system', or 'all'
+   * Filter by scope: 'user', 'team', 'system', or 'all'
    */
   scope: PropertyScope;
   /**

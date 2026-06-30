@@ -66,6 +66,11 @@ pub struct ApiDraftInput {
     pub body_macro: Option<String>,
     /// Headers JSON.
     pub headers_json: Option<JsonValue>,
+    /// Per-message override for whether to include the signature on send:
+    /// `Some(false)` to exclude (user dismissed it). Omit to use the inbox's
+    /// default policy. Ignored for drafts.
+    #[serde(default)]
+    pub include_signature: Option<bool>,
 }
 
 /// Request body for creating a draft.
@@ -154,6 +159,7 @@ impl CreateDraftRequest {
             body_macro: draft.body_macro,
             headers_json: draft.headers_json,
             send_time: self.send_time,
+            include_signature: draft.include_signature,
         }
     }
 }

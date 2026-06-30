@@ -13,7 +13,7 @@ use crate::shared::{DataType, EntityType, PropertyOwner};
 /// Property definition response (API representation).
 #[derive(ToSchema, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PropertyDefinitionResponse {
+pub struct PropertyDefinitionDetailResponse {
     pub id: Uuid,
     #[serde(flatten)]
     pub owner: PropertyOwner,
@@ -35,7 +35,7 @@ pub struct PropertyDefinitionResponse {
 #[derive(ToSchema, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PropertyDefinitionWithOptionsResponse {
-    pub definition: PropertyDefinitionResponse,
+    pub definition: PropertyDefinitionDetailResponse,
     pub property_options: Vec<PropertyOptionResponse>,
 }
 
@@ -59,6 +59,7 @@ pub struct PropertyOptionResponse {
     pub property_definition_id: Uuid,
     pub display_order: i32,
     pub value: PropertyOptionValue,
+    pub color: Option<String>,
 }
 
 // ===== Entity Property Responses =====
@@ -121,7 +122,7 @@ pub enum PropertyValue {
 #[serde(rename_all = "camelCase")]
 pub struct EntityPropertyWithDefinitionResponse {
     pub property: EntityPropertyResponse,
-    pub definition: PropertyDefinitionResponse,
+    pub definition: PropertyDefinitionDetailResponse,
     pub value: Option<PropertyValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<Vec<PropertyOptionResponse>>,

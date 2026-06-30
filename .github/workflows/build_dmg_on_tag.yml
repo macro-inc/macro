@@ -170,7 +170,7 @@ jobs:
           exit 1
         fi
 
-        (cd artifacts && shasum -a 256 -- *.dmg > SHA256SUMS)
+        (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
     - name: Upload macro-dmg-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -179,3 +179,37 @@ jobs:
         path: artifacts/*
         if-no-files-found: error
         retention-days: '30'
+  publish-dmg:
+    needs:
+    - build-dmg
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ inputs.ref }}
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: release-artifacts
+        merge-multiple: 'true'
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+      with:
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: release-artifacts/*
+        fail_on_unmatched_files: 'true'

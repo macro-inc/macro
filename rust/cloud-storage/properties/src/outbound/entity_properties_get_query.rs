@@ -65,7 +65,12 @@ pub async fn get_entity_properties(
     // Collect all property definition IDs that are select types to fetch options
     let select_prop_ids: Vec<Uuid> = rows
         .iter()
-        .filter(|r| matches!(r.data_type, DataType::SelectString | DataType::SelectNumber))
+        .filter(|r| {
+            matches!(
+                r.data_type,
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
+            )
+        })
         .map(|r| r.property_definition_id)
         .collect();
 

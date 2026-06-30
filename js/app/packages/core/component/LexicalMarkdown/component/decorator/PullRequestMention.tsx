@@ -345,7 +345,7 @@ function PullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none overflow-hidden w-80 text-ink">
-      <Surface active depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
+      <Surface depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">

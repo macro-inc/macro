@@ -47,7 +47,7 @@ export function ThemeEditorAdvanced(){
       >
         <div
           style="
-            background-color: var(--b3);
+            background-color: oklch(from var(--c0) l c h / 0.06);
             box-sizing: border-box;
             overflow-x: hidden;
             display: grid;
@@ -82,7 +82,7 @@ export function ThemeEditorAdvanced(){
                     <div
                       style="
                         grid-template-columns: 104px calc(7ch + 40px) 1fr calc(4ch + 40px);
-                        background-color: var(--b3);
+                        background-color: oklch(from var(--c0) l c h / 0.06);
                         align-items: center;
                         display: grid;
                         height: 61px;
@@ -100,7 +100,17 @@ export function ThemeEditorAdvanced(){
                           width: 100%;
                         "
                       >
-                        <ColorPickerPopover colorKey={colorKey} colorValue={colorValue} />
+                        <ColorPickerPopover
+                          l={() => colorValue.l[0]()}
+                          c={() => colorValue.c[0]()}
+                          h={() => colorValue.h[0]()}
+                          onL={(n) => colorValue.l[1](n)}
+                          onC={(n) => colorValue.c[1](n)}
+                          onH={(n) => colorValue.h[1](n)}
+                          title={colorValue.description}
+                          subtitle={`--${colorKey}`}
+                          ariaLabel={`Edit ${colorValue.description} (--${colorKey})`}
+                        />
                       </div>
 
                       <div

@@ -7,6 +7,7 @@ description = "Repo automation: regenerates workspace-hack and the deploy dep-cl
 
 [dependencies]
 anyhow = { workspace = true }
+graphql_soup = { path = "../../graphql_soup" }
 serde_json = { workspace = true }
 # Pinned engine for the generated dependency artifacts. These versions live in
 # Cargo.lock, so dev machines and CI always run the identical generator —

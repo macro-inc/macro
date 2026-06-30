@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use axum::{Router, http::Request};
 use hmac::{Hmac, Mac};
@@ -17,7 +17,10 @@ use crate::domain::{
     models::{
         DisabledNotificationType, UserNotificationRow,
         device::DeviceType,
-        request::{GetNotificationsByEventItemIdsRequest, UpdateNotificationsRequest},
+        request::{
+            GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
+            UpdateNotificationsRequest,
+        },
         signing::SignedUrl,
     },
     service::NotificationReader,
@@ -53,6 +56,19 @@ impl NotificationReader for UnreachableService {
         _req: GetNotificationsByEventItemIdsRequest<'_>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send
     {
+        async { unreachable!("should not be called") }
+    }
+
+    fn get_entity_notifications_batch(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _entity_refs: Vec<NotificationEntityRef>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
+    > + Send {
         async { unreachable!("should not be called") }
     }
 
@@ -447,6 +463,19 @@ impl NotificationReader for PresignedTestService {
         _req: GetNotificationsByEventItemIdsRequest<'_>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send
     {
+        async { unreachable!() }
+    }
+
+    fn get_entity_notifications_batch(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _entity_refs: Vec<NotificationEntityRef>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
+    > + Send {
         async { unreachable!() }
     }
 

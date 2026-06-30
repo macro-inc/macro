@@ -54,14 +54,17 @@ members = [
   "tools/native_app_server",
   "unfurl",
   "unfurl_service",
+  "webhook",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config",
+  "macro_queues",
   "prompt",
   "workspace-hack",
   "tools/xtask",
+  "graphql_soup",
 ]
 
 [workspace.dependencies]
@@ -73,6 +76,7 @@ async-openai = { version = "0.36.1", features = [
   "completions",
   "embedding",
 ] }
+async-graphql = "7.2.1"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
@@ -120,6 +124,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 ] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
+lol_html = "2.4.0"
 mockall = "0.13"
 nom = "8"
 opentelemetry = "0.31.0"

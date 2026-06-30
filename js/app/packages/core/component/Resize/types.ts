@@ -45,4 +45,5 @@ export type ResizeZoneCtx = {
   hide: (id: PanelId) => void;
   show: (id: PanelId) => void;
   isHidden: (id: PanelId) => boolean;
+  reset: () => void;
 };

@@ -112,7 +112,7 @@ pub async fn main() -> anyhow::Result<()> {
         let event_queue =
             ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
                 aws_sdk_sqs::Client::new(&aws_config),
-                config.push_notification_event_handler_queue.as_ref().to_string(),
+                macro_queues::PushNotificationEventHandlerQueue::new().to_string(),
                 config.notification_queue_max_messages,
                 config.notification_queue_wait_time_seconds,
             );
@@ -135,7 +135,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let notification_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.as_ref().to_string(),
+        macro_queues::NotificationQueue::new().to_string(),
     );
     let sns_endpoint_manager =
         ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
@@ -290,7 +290,7 @@ pub async fn main() -> anyhow::Result<()> {
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
     let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.as_ref().to_string(),
+        macro_queues::NotificationQueue::new().to_string(),
     );
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         ingress_repository,
@@ -300,7 +300,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_ingress_queue.as_ref().to_string(),
+        macro_queues::NotificationIngressQueue::new().to_string(),
     );
     let ingress_worker =
         ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);

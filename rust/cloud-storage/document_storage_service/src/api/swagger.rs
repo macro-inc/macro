@@ -254,6 +254,10 @@ use utoipa::OpenApi;
         call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
+        webhook::inbound::axum_router::create_webhook,
+        webhook::inbound::axum_router::delete_webhook,
+        webhook::inbound::axum_router::patch_webhook,
+        webhook::inbound::axum_router::validate_webhook,
         call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -502,6 +506,13 @@ use utoipa::OpenApi;
             call::domain::models::RingStatusResponse,
             SoupCallRecord,
             SoupCallRecordParticipant,
+
+            // Webhooks
+            webhook::domain::models::CreateWebhookRequest,
+            webhook::domain::models::PatchWebhookRequest,
+            webhook::domain::models::ValidateWebhookResponse,
+            webhook::domain::models::Webhook,
+            webhook::domain::models::WebhookStatus,
 
             DocumentSubType,
 

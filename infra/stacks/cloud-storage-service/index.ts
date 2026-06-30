@@ -302,10 +302,6 @@ const convertServiceRoleArn: pulumi.Output<string> = convertServiceStack
   .getOutput('convertServiceRoleArn')
   .apply((arn) => arn as string);
 
-const convertQueueName: pulumi.Output<string> = convertServiceStack
-  .getOutput('convertQueueName')
-  .apply((name) => name as string);
-
 const convertQueueArn: pulumi.Output<string> = convertServiceStack
   .getOutput('convertQueueArn')
   .apply((arn) => arn as string);
@@ -319,7 +315,6 @@ const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
   DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.interpolate`${docxUploadBucketName}`,
   WEB_SOCKET_RESPONSE_LAMBDA: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
-  CONVERT_QUEUE: pulumi.interpolate`${convertQueueName}`,
 };
 
 const docxUnzipHandler = new DocxUnzipHandlerLambda(

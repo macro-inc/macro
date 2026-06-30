@@ -88,7 +88,6 @@ async fn handler(
 
 env_vars! {
     pub struct DynamodbTable;
-    pub struct UploadExtractorQueue;
 }
 
 #[tokio::main]
@@ -97,8 +96,7 @@ async fn main() -> Result<(), Error> {
     tracing::info!("initiating lambda");
 
     let dynamo_table_name = DynamodbTable::new().context("DYNAMODB_TABLE must be set")?;
-    let upload_extract_queue =
-        UploadExtractorQueue::new().context("UPLOAD_EXTRACTOR_QUEUE must be set")?;
+    let upload_extract_queue = macro_queues::UploadExtractorQueue::new();
 
     tracing::trace!("initialized env vars");
 

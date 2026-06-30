@@ -41,6 +41,7 @@ lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

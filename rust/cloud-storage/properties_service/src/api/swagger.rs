@@ -4,6 +4,7 @@ use crate::api::properties::{
         EntityPropertiesResponse, EntityQueryParams, SetEntityPropertyRequest,
         types::BulkEntityPropertiesRequest,
     },
+    tags::{EnsureTagSetRequest, TagScope, TagSetResponse},
 };
 use models_properties::api;
 use utoipa::OpenApi;
@@ -21,7 +22,10 @@ use utoipa::OpenApi;
         // Property options
         crate::api::properties::options::get::get_property_options,
         crate::api::properties::options::create::add_property_option,
+        crate::api::properties::options::update::update_property_option,
         crate::api::properties::options::delete::delete_property_option,
+        crate::api::properties::tags::list_tags,
+        crate::api::properties::tags::ensure_tag_set,
         // Entity properties
         crate::api::properties::entities::get::get_entity_properties,
         crate::api::properties::entities::get_bulk::get_bulk_entity_properties,
@@ -31,6 +35,7 @@ use utoipa::OpenApi;
     components(
         schemas(
             api::CreatePropertyDefinitionRequest,
+            api::CreatePropertyScope,
             api::PropertyDataType,
             api::SelectStringOption,
             api::SelectNumberOption,
@@ -46,12 +51,16 @@ use utoipa::OpenApi;
             api::AddPropertyOptionRequest,
             api::AddStringOptionRequest,
             api::AddNumberOptionRequest,
-            api::PropertyDefinitionResponse,
+            api::UpdatePropertyOptionRequest,
+            api::PropertyDefinitionDetailResponse,
             api::PropertyOptionResponse,
             models_properties::EntityType,
             models_properties::DataType,
             api::EntityPropertyWithDefinitionResponse,
             api::PropertyValue,
+            TagScope,
+            TagSetResponse,
+            EnsureTagSetRequest,
         )
     ),
     tags(

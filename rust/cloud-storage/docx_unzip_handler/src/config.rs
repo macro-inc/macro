@@ -6,7 +6,6 @@ env_vars! {
     pub struct RedisUri;
     pub struct DocumentStorageBucket;
     pub struct WebSocketResponseLambda;
-    pub struct ConvertQueue;
 }
 
 /// The configuration parameters for the application.
@@ -29,9 +28,6 @@ pub struct Config {
 
     /// The name of the lambda function that will be used to send the response to the websocket
     pub web_socket_response_lambda: String,
-
-    /// The name of the convert queue
-    pub convert_queue: String,
 }
 
 impl Config {
@@ -48,16 +44,11 @@ impl Config {
         let web_socket_response_lambda = WebSocketResponseLambda::new()
             .context("WEB_SOCKET_RESPONSE_LAMBDA must be provided")?
             .to_string();
-        let convert_queue = ConvertQueue::new()
-            .context("CONVERT_QUEUE must be provided")?
-            .to_string();
-
         Ok(Config {
             database_url,
             redis_uri,
             document_storage_bucket,
             web_socket_response_lambda,
-            convert_queue,
         })
     }
 }

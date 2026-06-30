@@ -127,7 +127,7 @@ type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1.5 text-base' : 'py-1 pl-2.5 pr-2 text-sm'} font-medium justify-between items-center rounded-md outline-none focus:bg-ink/3 data-[highlighted]:bg-ink/3`;
+export const MENU_ITEM_CLASS = `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`;
 
 /**
  * A context-menu item with consistent styling.
@@ -144,7 +144,7 @@ export function MenuItem(props: MenuItemProps) {
         MENU_ITEM_CLASS,
         props.disabled
           ? 'opacity-50 cursor-not-allowed'
-          : 'hover:bg-ink/3 hover-transition-bg',
+          : 'hover:bg-ink/5 hover-transition-bg',
         props.class
       )}
       onClick={props.onClick}
@@ -232,8 +232,8 @@ export function SubTrigger(props: {
       class={cn(
         MENU_ITEM_CLASS,
         props.disabled
-          ? 'opacity-50 cursor-not-allowed text-ink'
-          : 'hover:bg-hover hover-transition-bg text-ink'
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:bg-ink/5 hover-transition-bg'
       )}
       disabled={props.disabled}
     >
@@ -302,7 +302,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-menu ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-menu ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -407,6 +407,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
             <ContextMenu.Content
               class={cn(
                 !props.overrideStyling && MENU_CONTENT_CLASS,
+                'menu-open-animation',
                 props.class,
                 props.width && menuWidths[props.width],
                 props.mobileFullScreen &&

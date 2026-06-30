@@ -12,11 +12,6 @@ use macro_env_var::env_vars;
 pub use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
-    /// SQS URL for the email scheduled queue, consumed by the AI tools.
-    pub struct EmailScheduledQueue;
-    /// SQS URL for the Gmail ops queue, consumed by the AI tools to enqueue
-    /// Gmail label/sync operations.
-    pub struct GmailOpsQueue;
     /// Auth key used by the document storage / search / lexical clients.
     pub struct DocumentStorageServiceAuthKey;
     /// Secrets Manager secret name for the sync service auth key.
@@ -67,8 +62,6 @@ pub struct Config {
     pub port: usize,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
-    pub email_scheduled_queue: EmailScheduledQueue,
-    pub gmail_ops_queue: GmailOpsQueue,
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: SyncServiceAuthKey,
     pub document_storage_bucket: DocumentStorageBucket,

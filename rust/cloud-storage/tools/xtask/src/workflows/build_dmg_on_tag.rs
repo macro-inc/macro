@@ -3,7 +3,7 @@
 
 use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{steps, vars};
+use crate::workflows::{build_appimage_on_tag, steps, vars};
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
@@ -19,19 +19,24 @@ pub fn build_dmg() -> Workflow {
                 },
             )),
         )
-        .add_job("build-dmg", build_dmg_job())
+        .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
+        .add_job(
+            "publish-dmg",
+            publish_dmg_job("${{ inputs.ref }}").add_needs("build-dmg"),
+        )
 }
 
-fn build_dmg_job() -> Job {
+/// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
+pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
         .runs_on("macos-15")
-        .add_step(steps::checkout_ref("${{ inputs.ref }}"))
+        .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
         .add_step(install_nix_macos())
         .add_step(steps::setup_cachix())
         .add_step(configure_signing_identity())
-        .add_step(steps::derive_artifact_metadata("${{ inputs.ref }}"))
+        .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_dmg())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
@@ -39,6 +44,10 @@ fn build_dmg_job() -> Job {
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             "artifacts/*",
         ))
+}
+
+fn publish_dmg_job(ref_expr: &str) -> Job {
+    build_appimage_on_tag::publish_job(ref_expr, "release-artifacts/*")
 }
 
 fn assert_arm64() -> Step<Run> {

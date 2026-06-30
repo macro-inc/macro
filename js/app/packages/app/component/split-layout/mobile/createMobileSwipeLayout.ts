@@ -102,6 +102,8 @@ export function createMobileSwipeLayout(
       ? splitManager.getSplit(currentBgId)
       : undefined;
 
+    fgHandle?.captureEntryState();
+
     // If the target is already mounted in BG, promote it instead of recreating it.
     if (bgHandle && sameContent(bgHandle.content(), content)) {
       if (forwardNavigationTrigger) {

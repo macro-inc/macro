@@ -7,7 +7,7 @@ use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::PropertiesHandlerState;
+use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use properties_db_client::{
     error::PropertiesDatabaseError,
@@ -65,11 +65,12 @@ impl IntoResponse for DeletePropertyDefinitionError {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context), err)]
+#[tracing::instrument(skip(state, user_context, team), err)]
 pub async fn delete_property_definition(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor,
 ) -> Result<Response, DeletePropertyDefinitionError> {
     tracing::info!("deleting property definition");
 
@@ -87,7 +88,7 @@ pub async fn delete_property_definition(
         &state.db,
         property_uuid,
         &user_context.user_id,
-        user_context.organization_id,
+        caller_team_id(&team),
     )
     .await?
     .ok_or(DeletePropertyDefinitionError::NotFound)?;

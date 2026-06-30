@@ -9,4 +9,4 @@ if [ "${#appimages[@]}" -eq 0 ]; then
 fi
 cp -v "${appimages[@]}" artifacts/
 chmod 0755 artifacts/*.AppImage
-(cd artifacts && sha256sum -- *.AppImage > SHA256SUMS)
+(cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)

@@ -63,12 +63,14 @@ export function useSplitLayout() {
 
   function insertSplit(
     content: SplitContent,
-    referredFrom: ReferredFrom = null
+    referredFrom: ReferredFrom = null,
+    options: Pick<OpenWithSplitOptions, 'insertIndex'> = {}
   ) {
     return openWithSplit(content, {
       activate: true,
       referredFrom,
       preferNewSplit: true,
+      ...options,
     });
   }
 

@@ -13,6 +13,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 /// Resolves a tool name to its routing [`ToolInfo`] via the session's toolset.
 ///
@@ -30,6 +31,8 @@ pub type ToolRouter = Arc<dyn Fn(&str) -> Option<ToolInfo> + Send + Sync>;
 pub type RegisterFn =
     Arc<dyn Fn(Vec<SearchableTool>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
+static CANCELLED_REASON: &str = "user cancelled";
+
 /// Sends [`StreamPart`] items through an unbounded channel as the RIG agentic
 /// loop produces events.
 #[derive(Clone)]
@@ -41,6 +44,8 @@ pub struct StreamBridge {
     loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
     /// Registers drained tools with the live tool server.
     register_loaded: RegisterFn,
+    /// the user has requested the stream stop
+    cancel: CancellationToken,
 }
 
 impl StreamBridge {
@@ -55,6 +60,7 @@ impl StreamBridge {
         routing: ToolRouter,
         loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
         register_loaded: RegisterFn,
+        cancel: CancellationToken,
     ) -> (
         Self,
         mpsc::UnboundedReceiver<Result<StreamPart, AgentError>>,
@@ -66,9 +72,19 @@ impl StreamBridge {
                 routing,
                 loaded_buffer,
                 register_loaded,
+                cancel,
             },
             rx,
         )
+    }
+
+    /// Clone the sending half of the bridge's channel.
+    ///
+    /// Lets the stream driver push parts derived from rig stream items
+    /// (buffered thinking, usage, errors) into the same ordered channel the
+    /// lifecycle hooks send through, so all parts share one FIFO order.
+    pub(crate) fn sender(&self) -> mpsc::UnboundedSender<Result<StreamPart, AgentError>> {
+        self.tx.clone()
     }
 }
 
@@ -79,7 +95,13 @@ where
 {
     async fn on_text_delta(&self, text_delta: &str, _aggregated_text: &str) -> HookAction {
         let _ = self.tx.send(Ok(StreamPart::Content(text_delta.to_owned())));
-        HookAction::Continue
+        if self.cancel.is_cancelled() {
+            HookAction::Terminate {
+                reason: CANCELLED_REASON.into(),
+            }
+        } else {
+            HookAction::Continue
+        }
     }
 
     async fn on_tool_call(
@@ -89,6 +111,11 @@ where
         internal_call_id: &str,
         args: &str,
     ) -> ToolCallHookAction {
+        if self.cancel.is_cancelled() {
+            return ToolCallHookAction::Terminate {
+                reason: CANCELLED_REASON.into(),
+            };
+        }
         let json = serde_json::from_str(args).unwrap_or(serde_json::Value::Null);
         let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
         let mcp = (self.routing)(tool_name).map(|i| match i {

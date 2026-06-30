@@ -48,8 +48,9 @@ async fn main() -> Result<(), Error> {
     let lambda_client = lambda_client::Lambda::new(aws_sdk_lambda::Client::new(&aws_config));
     tracing::trace!("initialized lambda client");
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .convert_queue(&config.convert_queue);
+    let convert_queue = macro_queues::ConvertQueue::new();
+    let sqs_client =
+        sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config)).convert_queue(&convert_queue);
     tracing::trace!("initialized sqs client");
 
     let redis_client = redis::Client::open(config.redis_uri.clone())

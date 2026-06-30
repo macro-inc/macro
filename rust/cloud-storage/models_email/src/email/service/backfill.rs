@@ -74,6 +74,13 @@ pub enum BackfillOperation {
     UpdateThreadMetadata(JobScopedPayload<UpdateMetadataPayload>),
     // Uploads the message attachment as a Macro document.
     BackfillAttachment(JobScopedPayload<BackfillAttachmentPayload>),
+    // Seeds the contacts service from one recent sent message. Fanned out
+    // one-per-message by the priority pass of ListThreads (which lists the
+    // user's last 200 sent messages). The consumer fetches the message and
+    // enqueues a sender<->recipient connection for each non-generic To/Cc/Bcc
+    // address, so a brand-new user has contacts before full backfill completes.
+    // handle_contacts_sync re-seeds the full contact set at job completion.
+    SeedSentContact(JobScopedPayload<SeedSentContactPayload>),
     // Idempotently records a contact the requesting user has emailed into the
     // CRM tables (crm_companies, crm_domains, crm_contacts, crm_contact_sources).
     // Fanned out one-per-recipient from BackfillMessage when the message was
@@ -111,6 +118,7 @@ impl BackfillOperation {
             BackfillOperation::BackfillMessage(s) => Some(s.link_id),
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.link_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.link_id),
+            BackfillOperation::SeedSentContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmForUser(_) => None,
@@ -128,6 +136,7 @@ impl BackfillOperation {
             BackfillOperation::BackfillMessage(s) => Some(s.job_id),
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.job_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.job_id),
+            BackfillOperation::SeedSentContact(s) => Some(s.job_id),
             BackfillOperation::PopulateCrmContact(_)
             | BackfillOperation::DepopulateCrmContact(_)
             | BackfillOperation::PopulateCrmForUser(_)
@@ -267,6 +276,12 @@ pub struct UpdateMetadataPayload {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct BackfillAttachmentPayload {
     pub metadata: AttachmentUploadArgs,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct SeedSentContactPayload {
+    /// Gmail provider id of the sent message to seed contacts from.
+    pub message_provider_id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]

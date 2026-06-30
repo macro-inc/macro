@@ -1609,6 +1609,9 @@ pub struct ApiMessageSender {
     /// Avatar URL for bot senders.
     #[serde(skip_serializing_if = "Option::is_none")]
     avatar_url: Option<String>,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    triggered_by: Option<String>,
 }
 
 /// Public sender type.
@@ -1629,30 +1632,39 @@ impl ApiMessageSender {
                 id: bot_id.as_uuid().to_string(),
                 name: None,
                 avatar_url: None,
+                triggered_by: None,
             },
             Ok(Sender::User(user_id)) => Self {
                 sender_type: ApiMessageSenderType::User,
                 id: user_id.to_string(),
                 name: None,
                 avatar_url: None,
+                triggered_by: None,
             },
             Err(_) => Self {
                 sender_type: ApiMessageSenderType::User,
                 id: sender_id.to_string(),
                 name: None,
                 avatar_url: None,
+                triggered_by: None,
             },
         }
     }
 
-    /// Build a sender identity, attaching the bot profile for bot senders.
-    fn from_message_sender(sender_id: &str, bot_profile: Option<BotSenderProfile>) -> Self {
+    /// Build a sender identity, attaching the bot profile and the triggering
+    /// user (for agent messages) to bot senders.
+    fn from_message_sender(
+        sender_id: &str,
+        triggered_by: Option<String>,
+        bot_profile: Option<BotSenderProfile>,
+    ) -> Self {
         let mut sender = Self::from_storage_string(sender_id);
-        if matches!(sender.sender_type, ApiMessageSenderType::Bot)
-            && let Some(profile) = bot_profile
-        {
-            sender.name = Some(profile.name);
-            sender.avatar_url = profile.avatar_url;
+        if matches!(sender.sender_type, ApiMessageSenderType::Bot) {
+            if let Some(profile) = bot_profile {
+                sender.name = Some(profile.name);
+                sender.avatar_url = profile.avatar_url;
+            }
+            sender.triggered_by = triggered_by;
         }
         sender
     }
@@ -1692,7 +1704,11 @@ impl From<ChannelMessage> for ApiChannelMessage {
         Self {
             id: m.id,
             channel_id: m.channel_id,
-            sender: ApiMessageSender::from_message_sender(&m.sender_id, m.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &m.sender_id,
+                m.triggered_by,
+                m.bot_profile,
+            ),
             sender_id: m.sender_id,
             content: m.content,
             created_at: m.created_at,
@@ -1752,7 +1768,11 @@ impl From<ChannelContextMessage> for ApiChannelContextMessage {
             id: message.id,
             channel_id: message.channel_id,
             thread_id: message.thread_id,
-            sender: ApiMessageSender::from_message_sender(&message.sender_id, message.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &message.sender_id,
+                message.triggered_by,
+                message.bot_profile,
+            ),
             sender_id: message.sender_id,
             content: message.content,
             created_at: message.created_at,
@@ -1907,7 +1927,11 @@ impl From<ThreadReply> for ApiThreadReply {
     fn from(r: ThreadReply) -> Self {
         Self {
             id: r.id,
-            sender: ApiMessageSender::from_message_sender(&r.sender_id, r.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &r.sender_id,
+                r.triggered_by,
+                r.bot_profile,
+            ),
             sender_id: r.sender_id,
             content: r.content,
             created_at: r.created_at,

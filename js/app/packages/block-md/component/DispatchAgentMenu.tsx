@@ -162,11 +162,10 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
   { name: LAST_USED_KEY }
 );
 
-export function DispatchAgentButton() {
+export function useDispatchAgentAction() {
   const blockId = useBlockId();
   const name = useBlockDocumentName();
   const [store] = mdStore;
-  const [open, setOpen] = createSignal(false);
 
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
@@ -189,30 +188,55 @@ export function DispatchAgentButton() {
       console.error('Failed to generate task prompt', e);
       toast.failure('Failed to generate task prompt');
     }
-    setOpen(false);
   };
 
-  const handlePrimaryClick = () => {
-    executeAction(lastUsed());
+  return {
+    blockId,
+    lastUsed,
+    executeAction,
+    executeLastUsed: () => executeAction(lastUsed()),
   };
+}
+
+export function DispatchAgentButton() {
+  const [open, setOpen] = createSignal(false);
+  const { blockId, lastUsed, executeAction, executeLastUsed } =
+    useDispatchAgentAction();
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
-      <ButtonGroup variant="base" size="icon-sm" depth={2} class="bg-surface">
-        <Button onClick={handlePrimaryClick} tooltip={lastUsed().name}>
+      <ButtonGroup
+        variant="ghost"
+        size="icon-sm"
+        depth={2}
+        class="rounded-full text-ink-extra-muted ring ring-edge-muted"
+      >
+        <Button
+          onClick={executeLastUsed}
+          tooltip={lastUsed().name}
+          class="bg-transparent hover:bg-ink/[0.04]"
+        >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
             class="size-3!"
           />
         </Button>
         <ButtonGroup.Divider />
-        <Dropdown.Trigger class="p-1">
+        <Dropdown.Trigger
+          class="bg-transparent p-1 hover:bg-ink/[0.04]"
+          label="Agent options"
+        >
           <CaretDown class="size-3.5!" />
         </Dropdown.Trigger>
       </ButtonGroup>
       <Dropdown.Content>
         <Dropdown.Group>
-          <Dropdown.Item onSelect={() => executeAction(COPY_ACTION)}>
+          <Dropdown.Item
+            onSelect={() => {
+              executeAction(COPY_ACTION);
+              setOpen(false);
+            }}
+          >
             <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
             <span class="flex-1 truncate">{COPY_ACTION.name}</span>
           </Dropdown.Item>
@@ -239,7 +263,12 @@ export function DispatchAgentButton() {
           <Dropdown.GroupLabel>Open in</Dropdown.GroupLabel>
           <For each={PLATFORM_ACTIONS}>
             {(action) => (
-              <Dropdown.Item onSelect={() => executeAction(action)}>
+              <Dropdown.Item
+                onSelect={() => {
+                  executeAction(action);
+                  setOpen(false);
+                }}
+              >
                 <Dynamic component={action.icon} class="size-4 shrink-0" />
                 <span class="flex-1 truncate">{action.name}</span>
               </Dropdown.Item>

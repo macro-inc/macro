@@ -31,7 +31,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
-use crate::messages::{get_message, get_message_label_ids, get_message_thread_id};
+use crate::messages::{get_message, get_message_label_ids, get_message_thread_id, list_messages};
 use crate::threads::get_thread;
 #[allow(unused_imports)]
 use mockall::automock;
@@ -88,6 +88,19 @@ impl GmailClient {
         label_ids: &[&str],
     ) -> anyhow::Result<ServiceThreadList> {
         threads::list_threads(self, access_token, num_threads, next_page_token, label_ids).await
+    }
+
+    /// Lists the `num_messages` most recent message provider ids for the user,
+    /// optionally filtered to messages carrying all of the given Gmail label
+    /// ids (an empty slice applies no filter). Capped at 500 by the Gmail API.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_messages(
+        &self,
+        access_token: &str,
+        num_messages: u32,
+        label_ids: &[&str],
+    ) -> anyhow::Result<Vec<String>> {
+        list_messages(self, access_token, num_messages, label_ids).await
     }
 
     // Returns a list containing the message ids belonging to the thread.
