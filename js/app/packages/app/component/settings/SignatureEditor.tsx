@@ -86,9 +86,17 @@ export default function SignatureEditor(props: {
 
   const currentHtml = (): string => {
     if (!quill) return '';
-    // A blank editor still serializes to "<p></p>"; treat no text as empty so
-    // the caller can clear the signature (the backend reads '' as "clear").
-    if (quill.getText().trim().length === 0) return '';
+    // A blank editor still serializes to "<p></p>"; treat it as empty so the
+    // caller can clear the signature (the backend reads '' as "clear"). Inspect
+    // the delta rather than getText(), which omits embeds — an image-only
+    // signature has no text but must still be saved.
+    const ops = quill.getContents().ops ?? [];
+    const hasContent = ops.some((op) =>
+      typeof op.insert === 'string'
+        ? op.insert.trim().length > 0
+        : op.insert != null
+    );
+    if (!hasContent) return '';
     return quill.getSemanticHTML();
   };
 

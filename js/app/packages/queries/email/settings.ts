@@ -38,18 +38,30 @@ export function useUpdateEmailSettingsMutation(
 
     ...withCallbacks<PatchSettingsResponse, Error, UpdateSettingsVars>(
       {
-        onSuccess: (result, { linkId }) => {
+        onSuccess: (result, { linkId, settings }) => {
           queryClient.setQueryData<ListLinksResponse>(
             emailKeys.links.queryKey,
             (old) =>
               old
                 ? {
                     ...old,
-                    links: old.links.map((link) =>
-                      link.id === linkId
-                        ? { ...link, settings: result.settings }
-                        : link
-                    ),
+                    links: old.links.map((link) => {
+                      if (link.id !== linkId) return link;
+                      // Apply only the keys this PATCH changed, with the
+                      // canonical (sanitized) response values — so a concurrent
+                      // partial PATCH to another field isn't clobbered by a
+                      // stale full-settings snapshot.
+                      const changed = Object.fromEntries(
+                        Object.keys(settings).map((key) => [
+                          key,
+                          result.settings[key as keyof Settings],
+                        ])
+                      ) as Partial<Settings>;
+                      return {
+                        ...link,
+                        settings: { ...link.settings, ...changed },
+                      };
+                    }),
                   }
                 : old
           );
