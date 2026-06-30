@@ -1,8 +1,13 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import {
+  ENABLE_TAGS_FE_FLAG,
+  ENABLE_TAGS_FE_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@phosphor/plus.svg';
 import DeleteIcon from '@phosphor/x.svg';
@@ -58,6 +63,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
+
+  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
+    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
+  });
 
   const tagsQuery = useTagsQuery();
   const tagDefinitionIds = createMemo(
@@ -187,7 +196,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
           <Show
             when={
-              props.entityType === 'DOCUMENT' || props.entityType === 'TASK'
+              tagsFlag().enabled &&
+              (props.entityType === 'DOCUMENT' || props.entityType === 'TASK')
             }
           >
             <div class="mb-2 flex items-center gap-3">
