@@ -7,6 +7,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { createDeleteMessageConfirmation } from '../create-delete-message-confirmation';
 
+vi.mock('@phosphor-icons/core/regular/x.svg?component-solid', () => ({
+  default: () => <span data-testid="close-icon" />,
+}));
+
 const deleteInput = {
   channelID: 'channel-1',
   messageID: 'message-1',

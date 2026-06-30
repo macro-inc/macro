@@ -1,4 +1,5 @@
-import { Button, Dialog, Panel } from '@ui';
+import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import { Button, Dialog, Surface } from '@ui';
 import { createSignal, type JSX } from 'solid-js';
 import type { DeleteMessageInput } from './create-channel-message-actions';
 
@@ -37,38 +38,43 @@ export function createDeleteMessageConfirmation(
         if (!open) close();
       }}
       position="center"
-      class="w-120"
+      class="w-[90%] max-w-120"
     >
-      <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
-          <Dialog.Title class="text-ink text-sm font-semibold">
+      <Surface depth={2} class="rounded-xl">
+        <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
+          <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
+            <CloseIcon />
+          </Dialog.CloseButton>
+          <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Delete message
           </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-          <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+        </div>
+
+        <div class="p-3 flex flex-col gap-3">
+          <Dialog.Description class="text-sm text-ink-muted">
             This message will be permanently deleted. This action cannot be
             undone.
           </Dialog.Description>
-          <div class="pt-3 justify-end items-center gap-3 inline-flex">
-            <Button variant="base" depth={3} onClick={close}>
+
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
             <Button
-              variant="danger"
-              depth={3}
               ref={(el: HTMLButtonElement) => {
                 requestAnimationFrame(() =>
                   requestAnimationFrame(() => el.focus())
                 );
               }}
+              type="button"
+              variant="danger"
               onClick={confirm}
             >
               Delete
             </Button>
           </div>
-        </Panel.Body>
-      </Panel>
+        </div>
+      </Surface>
     </Dialog>
   );
 
