@@ -50,7 +50,14 @@ export function useEntityPropertiesQuery(
                 query: { include_metadata: includeMetadata },
               })
           );
-          return data.properties.map(entityPropertyFromApi);
+          return data.properties.flatMap((property) => {
+            try {
+              return [entityPropertyFromApi(property)];
+            } catch (error) {
+              console.warn('Skipping property with unsupported type', error);
+              return [];
+            }
+          });
         },
         staleTime: 0,
       };
