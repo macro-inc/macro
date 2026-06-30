@@ -21,14 +21,7 @@ pub fn provision(instance: &Instance) -> Result<()> {
 }
 
 async fn provision_async(url: &str) -> Result<()> {
-    let cfg = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_sqs::config::Region::new("us-east-1"))
-        .endpoint_url(url)
-        .credentials_provider(aws_sdk_sqs::config::Credentials::new(
-            "test", "test", None, None, "local",
-        ))
-        .load()
-        .await;
+    let cfg = macro_aws_config::local_aws_config(url).await;
 
     let sqs = aws_sdk_sqs::Client::new(&cfg);
     let ddb = aws_sdk_dynamodb::Client::new(&cfg);

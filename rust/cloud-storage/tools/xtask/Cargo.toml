@@ -25,10 +25,10 @@ indoc = "2"
 clap = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
+macro_aws_config = { path = "../../macro_aws_config" }
 macro_buckets = { path = "../../macro_buckets" }
 macro_dynamodbtables = { path = "../../macro_dynamodbtables" }
 macro_queues = { path = "../../macro_queues" }
@@ -38,7 +38,7 @@ docker-compose-types = { version = "0.24", features = ["indexmap"] }
 bollard = "0.21"
 indexmap = { workspace = true }
 serde_yaml = "0.9"
-indicatif = "0.17"
+indicatif = "0.18"
 console = "0.15"
 # Parse user-provided `--env-file` overlays (reading only; no crate emits the
 # docker-compose `env_file` format we generate). EnumIter derives the port list.
