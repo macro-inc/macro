@@ -180,7 +180,7 @@ pub const TAG_DEFINITION_DISPLAY_NAME: &str = "Tags";
 
 /// Gets the single tag definition owned by the given team or user, if it exists.
 /// Exactly one of `team_id` / `user_id` is expected to be set.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_tag_definition(
     db: &Pool<Postgres>,
     team_id: Option<Uuid>,

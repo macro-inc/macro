@@ -134,6 +134,14 @@ pub async fn update_property_option(
         None => option.value.clone(),
     };
 
+    if request.color.is_some()
+        && !matches!(definition.data_type, DataType::SelectString | DataType::Tag)
+    {
+        return Err(UpdatePropertyOptionErr::InvalidRequest(
+            "color updates are only supported for string and tag options".to_string(),
+        ));
+    }
+
     if let Some(color) = &request.color
         && !is_valid_hex_color(color)
     {

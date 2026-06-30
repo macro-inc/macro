@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 /// The option id is preserved, so every entity referencing this option by id in its
 /// `entity_properties.values` reflects the new value and color with no per-entity rewrite.
 /// Returns `None` if no option with the given id exists.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 #[allow(
     clippy::disallowed_methods,
     reason = "runtime query mirrors property_options::get"

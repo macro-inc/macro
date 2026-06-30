@@ -216,7 +216,7 @@ pub async fn create_property_definition_with_options(
 ///
 /// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
 /// unique index). A lost create race re-fetches the definition the winner just created.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_or_create_tag_definition(
     db: &Pool<Postgres>,
     owner: DefinitionOwner<'_>,
@@ -480,6 +480,37 @@ mod tests {
             crate::property_definitions::get::get_tag_definition(&pool, Some(team_1()), None)
                 .await?;
         assert_eq!(after.map(|d| d.id), Some(created.id));
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("properties"))
+    )]
+    async fn test_get_or_create_tag_definition_coexists_with_same_named_property(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Owner already has a non-tag property literally named "Tags".
+        create_property_definition(
+            &pool,
+            DefinitionOwner::Team(team_1()),
+            "Tags",
+            DataType::String,
+            false,
+            None,
+        )
+        .await?;
+
+        // Provisioning the tag set still succeeds: tag definitions are exempt from the
+        // display-name uniqueness that applies to user-created properties.
+        let tag_def = get_or_create_tag_definition(&pool, DefinitionOwner::Team(team_1())).await?;
+        assert_eq!(tag_def.data_type, DataType::Tag);
+
+        let again = get_or_create_tag_definition(&pool, DefinitionOwner::Team(team_1())).await?;
+        assert_eq!(tag_def.id, again.id);
 
         Ok(())
     }
