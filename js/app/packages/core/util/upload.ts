@@ -31,6 +31,7 @@ import {
   filenameWithoutExtension,
 } from '@service-storage/util/filename';
 import {
+  DocumentNameTooLongError,
   type UploadFileOptions as DssUploadFileOptions,
   type UploadSuccess as DssUploadSuccessResult,
   upload as dssUpload,
@@ -521,32 +522,28 @@ export async function uploadFiles(
   return uploadResults;
 }
 
-// Returns the backend's "name too long" message (which carries the authoritative
-// character limit so the copy never drifts from the API), or null if this isn't
-// that error. The message can be wrapped by UploadError, whose own message is the
-// generic "Upload failed: <file>", so the preserved original is inspected too.
-function nameTooLongMessage(error: Error): string | null {
-  const candidates = [error.message];
-  if (error instanceof UploadError && error.originalError != null) {
-    candidates.push(
-      error.originalError instanceof Error
-        ? error.originalError.message
-        : error.originalError
-    );
+function asNameTooLongError(error: Error): DocumentNameTooLongError | null {
+  if (error instanceof DocumentNameTooLongError) return error;
+  // The typed error can be wrapped by UploadError, which preserves the original.
+  if (
+    error instanceof UploadError &&
+    error.originalError instanceof DocumentNameTooLongError
+  ) {
+    return error.originalError;
   }
-  const match = candidates.find((message) =>
-    message.toLowerCase().includes('name too long')
-  );
-  if (match == null) return null;
-  const cleaned = match.replace(/^bad request:\s*/i, '').trim();
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return null;
 }
 
 function handleUploadError(error: Error): void {
   console.error('Upload error:', error);
-  const nameTooLong = nameTooLongMessage(error);
+  const nameTooLong = asNameTooLongError(error);
   if (nameTooLong != null) {
-    toast.failure(nameTooLong);
+    const { maxLength } = nameTooLong;
+    toast.failure(
+      maxLength != null
+        ? `Name too long (max ${maxLength} characters)`
+        : 'Name too long'
+    );
     return;
   }
   if (
