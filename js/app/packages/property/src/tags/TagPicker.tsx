@@ -1,7 +1,6 @@
 import { Popover } from '@kobalte/core/popover';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import Trash from '@phosphor/trash.svg';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
@@ -188,6 +187,7 @@ export function TagPicker(props: {
                   onScope={setCreateScope}
                   onColor={setCreateColor}
                   onCreate={handleCreate}
+                  onCancel={() => setSearch('')}
                 />
               </Show>
 
@@ -350,23 +350,14 @@ function CreateRow(props: {
   onScope: (scope: TagScope) => void;
   onColor: (color: string) => void;
   onCreate: () => void;
+  onCancel: () => void;
 }) {
   return (
     <div class="mt-1 flex flex-col gap-2 rounded-lg border border-edge-muted p-2">
-      <button
-        type="button"
-        class="flex items-center gap-2 text-left"
-        disabled={props.pending}
-        onClick={props.onCreate}
-      >
-        <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
-        <span class="min-w-0 flex-1 truncate">
-          Create{' '}
-          <span class="inline-flex items-center gap-1">
-            <TagDot color={props.color} class="size-2" />"{props.label}"
-          </span>
-        </span>
-      </button>
+      <div class="flex items-center gap-2">
+        <TagDot color={props.color} />
+        <span class="min-w-0 flex-1 truncate">New label "{props.label}"</span>
+      </div>
       <ColorSwatchRow selected={props.color} onSelect={props.onColor} />
       <Show when={props.hasTeamSet}>
         <div class="flex items-center gap-1">
@@ -388,6 +379,19 @@ function CreateRow(props: {
           </For>
         </div>
       </Show>
+      <div class="flex items-center justify-end gap-1.5">
+        <Button variant="ghost" size="sm" onClick={props.onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="base"
+          size="sm"
+          onClick={props.onCreate}
+          disabled={props.pending}
+        >
+          Create
+        </Button>
+      </div>
     </div>
   );
 }
