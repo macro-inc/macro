@@ -263,11 +263,32 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
             }
         };
 
-        // Delete link from Auth
-        self.auth
-            .delete_user_link(&link, &self.config.idp_id)
+        // Count how many Macro users share this GitHub account. The FusionAuth
+        // IdP link + token live on the owner's row and are reused by every
+        // sharer, so we must only tear the grant down when this is the last row.
+        let link_count = self
+            .repo
+            .count_github_links_by_github_user_id(&link.github_user_id)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
+
+        if link_count > 1 {
+            // Other Macro users still share this GitHub account: leave the
+            // FusionAuth grant in place so the remaining sharers keep working.
+            //
+            // Note: if the row being deleted is the OWNER's, the FusionAuth link
+            // becomes orphaned (no row carries the IdP link anymore), but this is
+            // benign — sharers still resolve the grant via the owner's
+            // `fusionauth_user_id` stored on their own rows, and the final row
+            // deletion below (when the last sharer leaves) cleans it up.
+        } else {
+            // This is the last/only row for this GitHub account: unlink
+            // FusionAuth (and clear the Redis cache) before removing the row.
+            self.auth
+                .delete_user_link(&link, &self.config.idp_id)
+                .await
+                .map_err(|e| GithubError::Internal(e.into()))?;
+        }
 
         // Delete from repo
         self.repo
