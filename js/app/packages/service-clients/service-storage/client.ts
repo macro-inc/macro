@@ -1008,10 +1008,34 @@ export const storageServiceClient = {
   },
 
   async createDocument(request: CreateDocumentRequest) {
-    const result = await dssFetch<CreateDocumentResponse>(`/documents`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    const result = await fetchWithToken<CreateDocumentResponse>(
+      `${dssHost}/documents`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        // A custom handler replaces safeFetch's default status mapping, so the 400
+        // body message (e.g. "name too long") reaches callers. 403 is preserved
+        // explicitly and other statuses keep the HTTP_ERROR shape callers branch on.
+        errorResponseHandler: async (response) => {
+          if (response.status === 400) {
+            const body = (await response.json().catch(() => null)) as {
+              message?: string;
+            } | null;
+            return {
+              code: 'HTTP_ERROR',
+              message: body?.message ?? 'Bad request',
+            };
+          }
+          if (response.status === 403) {
+            return { code: 'FORBIDDEN', message: 'Forbidden' };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
+      }
+    );
 
     if (!result.isOk()) {
       const errors = result.error;

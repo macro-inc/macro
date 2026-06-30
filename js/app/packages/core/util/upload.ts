@@ -517,8 +517,16 @@ export async function uploadFiles(
   return uploadResults;
 }
 
+function isNameTooLongError(error: Error): boolean {
+  return error.message.toLowerCase().includes('name too long');
+}
+
 function handleUploadError(error: Error): void {
   console.error('Upload error:', error);
+  if (isNameTooLongError(error)) {
+    toast.failure('Name is too long. Please shorten it and try again.');
+    return;
+  }
   if (
     error instanceof UploadError ||
     error instanceof FileSizeExceededError ||
