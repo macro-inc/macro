@@ -9,7 +9,12 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
-import type { EntityData, Notification, WithNotification } from '@entity';
+import {
+  type EntityData,
+  isGithubPrEntity,
+  type Notification,
+  type WithNotification,
+} from '@entity';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import FilesIcon from '@phosphor/files.svg';
@@ -34,11 +39,10 @@ import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
 import {
   formatCompactRelativeTimestamp,
+  getGithubTitle,
   getInboxTaskProperties,
-  getInboxText,
   getNotificationTag,
-  senderDisplayName,
-  senderNameRaw,
+  itemContent,
 } from './utils';
 
 export interface InboxCardLayoutProps {
@@ -69,15 +73,41 @@ const getGithubSender = (entity: EntityData, notification?: Notification) => {
       ? entity.metadata
       : undefined;
   const login = content?.senderGithubLogin ?? pr?.authorLogin ?? undefined;
-  const imageUrl = content?.senderGithubLogin
-    ? `https://github.com/${encodeURIComponent(content.senderGithubLogin)}.png?size=80`
-    : pr?.authorId
-      ? `https://avatars.githubusercontent.com/u/${pr.authorId}?s=80&v=4`
-      : login
-        ? `https://github.com/${encodeURIComponent(login)}.png?size=80`
-        : undefined;
+  let imageUrl: string | undefined;
+  if (content?.senderGithubLogin) {
+    imageUrl = `https://github.com/${encodeURIComponent(content.senderGithubLogin)}.png?size=80`;
+  } else if (pr?.authorId) {
+    imageUrl = `https://avatars.githubusercontent.com/u/${pr.authorId}?s=80&v=4`;
+  } else if (login) {
+    imageUrl = `https://github.com/${encodeURIComponent(login)}.png?size=80`;
+  }
 
   return { id: login, fallbackName: login, imageUrl };
+};
+
+const getNotificationSenderFallbackName = (
+  notification: Notification
+): string | undefined => {
+  const content = notification.notification_metadata.content as
+    | { sender?: string; senderGithubLogin?: string }
+    | undefined;
+
+  switch (notification.notification_metadata.tag) {
+    case 'new_email':
+      return content?.sender ?? undefined;
+    case 'ai_response':
+      return 'Macro agent';
+    case 'channel_message_send':
+      return content?.sender ?? notification.sender_id ?? undefined;
+    case 'github_pr_status_changed':
+    case 'github_review_requested':
+    case 'github_pr_comment':
+    case 'github_pr_mention':
+    case 'github_pr_review':
+      return content?.senderGithubLogin ?? notification.sender_id ?? undefined;
+    default:
+      return undefined;
+  }
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
@@ -326,6 +356,91 @@ function SenderName(props: { senderId?: string; fallbackName?: string }) {
 const relativeTime = (timestamp: string | undefined): string | undefined =>
   timestamp ? formatCompactRelativeTimestamp(timestamp) : undefined;
 
+const createSenderDisplayName = (
+  senderId: () => string | undefined,
+  fallbackName: () => string | undefined
+) => {
+  const macroId = () => {
+    const id = senderId();
+    return id ? tryMacroId(id) : undefined;
+  };
+
+  const [displayName] = useDisplayName(macroId());
+
+  const botName = () => {
+    const id = senderId();
+    if (!id) return undefined;
+
+    const parsed = senderFromStorageId(id);
+    if (parsed.type !== 'bot') return undefined;
+
+    if (parsed.name) return parsed.name;
+    return parsed.id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
+  };
+
+  return () => botName() || displayName() || fallbackName() || senderId();
+};
+
+const buildActionLabel = (args: {
+  sender?: string;
+  action: string;
+  location?: string;
+}): string =>
+  [args.sender, args.action, args.location].filter(Boolean).join(' ');
+
+const channelLocation = (entity: EntityData): string | undefined => {
+  if (
+    entity.type !== 'channel' &&
+    entity.type !== 'channel_message' &&
+    entity.type !== 'channel_thread'
+  ) {
+    return undefined;
+  }
+  if (entity.channelType === 'direct_message') return undefined;
+  return entity.name.startsWith('#') ? entity.name : `#${entity.name}`;
+};
+
+const entityLocation = (entity: EntityData): string | undefined => {
+  if (
+    (entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread') &&
+    entity.channelType === 'direct_message'
+  ) {
+    return undefined;
+  }
+  return entity.name;
+};
+
+const githubLocation = (entity: EntityData): string | undefined => {
+  if (
+    entity.type !== 'foreign' ||
+    entity.foreignSource !== 'github_pull_request'
+  ) {
+    return entity.name;
+  }
+  return `${entity.metadata.owner}/${entity.metadata.repo}#${entity.metadata.number}`;
+};
+
+const githubAction = (notification?: Notification): string => {
+  const metadata = notification?.notification_metadata;
+
+  return match(metadata)
+    .with(
+      { tag: 'github_pr_status_changed', content: { status: 'merged' } },
+      () => 'merged'
+    )
+    .with(
+      { tag: 'github_pr_status_changed', content: { status: 'closed' } },
+      () => 'closed'
+    )
+    .with({ tag: 'github_review_requested' }, () => 'requested your review on')
+    .with({ tag: 'github_pr_comment' }, () => 'commented on')
+    .with({ tag: 'github_pr_mention' }, () => 'mentioned you in')
+    .with({ tag: 'github_pr_review' }, () => 'reviewed')
+    .otherwise(() => 'updated');
+};
+
 function BaseCard(props: {
   selected?: boolean;
   highlighted?: boolean;
@@ -383,20 +498,43 @@ function BaseCard(props: {
 }
 
 export function ChannelCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
+  const entity = createMemo(() => props.item.entity);
 
-  const entity = () => props.item.entity;
   const senderId = () => {
     const value = props.item.entity;
     return value.type === 'channel'
       ? value.latestRootMessage?.senderId
       : undefined;
   };
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+
+  const senderFallbackName = () => undefined;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const location = channelLocation(entity());
+    const tag = getNotificationTag(props.item.notification);
+    let action = 'sent a message';
+    if (tag === 'channel_mention') {
+      action = location ? 'mentioned you in' : 'mentioned you';
+    } else if (location) {
+      action = 'sent a message in';
+    }
+
+    let content = itemContent(entity(), props.item.notification);
+    if (props.item.entity.type === 'channel') {
+      content = props.item.entity.latestRootMessage?.content;
+    }
+
+    return {
+      title: buildActionLabel({
+        sender: senderName(),
+        action,
+        location,
+      }),
+      content,
+    };
+  });
 
   const isDM = createMemo(() => {
     const value = entity();
@@ -484,17 +622,30 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
-
   const senderId = () => {
     const value = props.item.entity;
     return value.type === 'channel_message' ? value.senderId : undefined;
   };
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+
+  const senderFallbackName = () => undefined;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const location = channelLocation(props.item.entity);
+    const tag = getNotificationTag(props.item.notification);
+    let action = 'sent a message';
+    if (tag === 'channel_mention') {
+      action = location ? 'mentioned you in' : 'mentioned you';
+    } else if (location) {
+      action = 'sent a message in';
+    }
+
+    return {
+      title: buildActionLabel({ sender: senderName(), action, location }),
+      content: itemContent(props.item.entity, props.item.notification),
+    };
+  });
 
   return (
     <BaseCard
@@ -520,17 +671,6 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() => {
-    const text = getInboxText(props.item.entity, props.item.notification);
-    const metadata = props.item.notification?.notification_metadata;
-
-    if (metadata?.tag === 'channel_message_reply') {
-      return { ...text, content: metadata.content.messageContent };
-    }
-
-    return text;
-  });
-
   const isLatestNotificationReply = createMemo(() => {
     const notification = props.item.notification;
     const notificationMetadata = notification?.notification_metadata;
@@ -548,9 +688,32 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     return value.type === 'channel_thread' ? value.senderId : undefined;
   });
 
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+  const senderFallbackName = () => undefined;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const metadata = props.item.notification?.notification_metadata;
+    const location = channelLocation(props.item.entity);
+    let action = 'started a thread';
+    if (metadata?.tag === 'channel_mention') {
+      action = location ? 'mentioned you in' : 'mentioned you';
+    } else if (metadata?.tag === 'channel_message_reply') {
+      action = location ? 'replied in' : 'replied';
+    } else if (location) {
+      action = 'started a thread in';
+    }
+
+    let content = itemContent(props.item.entity, props.item.notification);
+    if (metadata?.tag === 'channel_message_reply') {
+      content = metadata.content.messageContent;
+    }
+
+    return {
+      title: buildActionLabel({ sender: senderName(), action, location }),
+      content,
+    };
+  });
 
   const attachments = createMemo(() => {
     if (
@@ -618,14 +781,61 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function DocumentCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
-
   const senderId = () => props.item.notification?.sender_id ?? undefined;
+
   const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+    props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : undefined;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const metadata = props.item.notification?.notification_metadata;
+    const location = entityLocation(props.item.entity);
+    const content = itemContent(props.item.entity, props.item.notification);
+
+    if (metadata?.tag === 'document_mention') {
+      return {
+        title: buildActionLabel({
+          sender: senderName(),
+          action: 'shared',
+          location,
+        }),
+        content: metadata.content.messageContent,
+      };
+    }
+
+    if (metadata?.tag === 'mentioned_in_document_comment') {
+      let action = 'mentioned you';
+      if (location) action = 'mentioned you in';
+
+      return {
+        title: buildActionLabel({
+          sender: senderName(),
+          action,
+          location,
+        }),
+        content,
+      };
+    }
+
+    if (metadata?.tag === 'replied_to_document_comment_thread') {
+      let action = 'replied';
+      if (location) action = 'replied in';
+
+      return {
+        title: buildActionLabel({
+          sender: senderName(),
+          action,
+          location,
+        }),
+        content,
+      };
+    }
+
+    return { title: props.item.entity.name, content };
+  });
 
   return (
     <BaseCard
@@ -661,15 +871,31 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function TaskCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
-
   const senderId = () =>
     props.item.notification?.sender_id ?? props.item.entity.ownerId;
+
   const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+    props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : undefined;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const content = itemContent(props.item.entity, props.item.notification);
+
+    if (getNotificationTag(props.item.notification) === 'task_assigned') {
+      return {
+        title: buildActionLabel({
+          sender: senderName(),
+          action: 'assigned you a task',
+        }),
+        content: content || props.item.entity.name,
+      };
+    }
+
+    return { title: props.item.entity.name, content };
+  });
 
   return (
     <BaseCard
@@ -706,14 +932,36 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function AiCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
-
   const senderId = () => props.item.notification?.sender_id ?? undefined;
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+
+  const senderFallbackName = () => {
+    return props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : 'Ai';
+  };
+
+  const senderName = createSenderDisplayName(senderId, () => 'Macro');
+
+  const text = createMemo(() => {
+    const content = itemContent(props.item.entity, props.item.notification);
+    const location = entityLocation(props.item.entity);
+
+    if (getNotificationTag(props.item.notification) !== 'ai_response') {
+      return { title: props.item.entity.name, content };
+    }
+
+    let action = 'responded';
+    if (location) action = 'responded in';
+
+    return {
+      title: buildActionLabel({
+        sender: senderName(),
+        action,
+        location,
+      }),
+      content,
+    };
+  });
 
   return (
     <BaseCard
@@ -749,14 +997,43 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function EmailCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
-
   const senderId = () => props.item.notification?.sender_id ?? undefined;
-  const senderFallbackName = () =>
-    senderNameRaw(props.item.entity, props.item.notification) ??
-    senderDisplayName(props.item.entity, props.item.notification);
+
+  const senderFallbackName = () => {
+    const entity = props.item.entity;
+    if (entity.type !== 'email') return undefined;
+
+    if (entity.senderName) return entity.senderName;
+
+    return props.item.notification
+      ? (getNotificationSenderFallbackName(props.item.notification) ??
+          entity.senderEmail)
+      : entity.senderEmail;
+  };
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const metadata = props.item.notification?.notification_metadata;
+    const content = itemContent(props.item.entity, props.item.notification);
+    let subject: string | undefined;
+    if (metadata?.tag === 'new_email') {
+      subject = metadata.content.subject;
+    }
+
+    let entitySnippet: string | undefined;
+    if (props.item.entity.type === 'email') {
+      entitySnippet = props.item.entity.snippet;
+    }
+
+    return {
+      title: buildActionLabel({
+        sender: senderName(),
+        action: 'sent an email',
+      }),
+      content: subject || entitySnippet || props.item.entity.name || content,
+    };
+  });
 
   return (
     <BaseCard
@@ -782,15 +1059,53 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function GithubCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
+  const sender = createMemo(() =>
+    getGithubSender(props.item.entity, props.item.notification)
   );
 
-  const sender = () =>
-    getGithubSender(props.item.entity, props.item.notification);
   const senderId = () => sender().id;
   const senderFallbackName = () => sender().fallbackName;
+
   const avatarUrl = () => sender().imageUrl;
+
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const text = createMemo(() => {
+    const entity = props.item.entity;
+
+    if (isGithubPrEntity(entity)) {
+      const hasGithubNotification = getNotificationTag(
+        props.item.notification
+      )?.startsWith('github_');
+
+      let sender = entity.metadata.authorLogin;
+      let action = 'opened';
+      if (hasGithubNotification) {
+        sender = senderName() ?? entity.metadata.authorLogin;
+        action = githubAction(props.item.notification);
+      }
+
+      return {
+        title: buildActionLabel({
+          sender,
+          action,
+          location: githubLocation(entity),
+        }),
+        content:
+          getGithubTitle(entity, props.item.notification) ||
+          entity.metadata.name,
+      };
+    }
+
+    return {
+      title: buildActionLabel({
+        sender: senderName(),
+        action: githubAction(props.item.notification),
+        location: githubLocation(entity),
+      }),
+      content: getGithubTitle(entity, props.item.notification) || entity.name,
+    };
+  });
 
   return (
     <BaseCard
@@ -841,9 +1156,48 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function CallCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
+  const senderId = () => props.item.notification?.sender_id ?? undefined;
+
+  const senderName = createSenderDisplayName(senderId, () =>
+    props.item.notification
+      ? getNotificationSenderFallbackName(props.item.notification)
+      : undefined
   );
+
+  const text = createMemo(() => {
+    const entity = props.item.entity;
+    const content = itemContent(entity, props.item.notification);
+    const location = entityLocation(entity);
+
+    if (getNotificationTag(props.item.notification) === 'call_started') {
+      return {
+        title: buildActionLabel({
+          sender: senderName(),
+          action: location ? 'started a call in' : 'started a call',
+          location,
+        }),
+        content,
+      };
+    }
+
+    if (entity.type === 'call' && entity.status === 'MISSED') {
+      return {
+        title: entity.name ? `Missed call in #${entity.name}` : 'Missed call',
+        content,
+      };
+    }
+
+    if (entity.type === 'call' && entity.status === 'UNATTENDED') {
+      return {
+        title: entity.name
+          ? `Call unattended in #${entity.name}`
+          : 'Call unattended',
+        content,
+      };
+    }
+
+    return { title: entity.name ? `Call in #${entity.name}` : 'Call', content };
+  });
 
   return (
     <BaseCard
@@ -871,9 +1225,12 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function GenericCardLayout(props: InboxCardLayoutProps) {
-  const text = createMemo(() =>
-    getInboxText(props.item.entity, props.item.notification)
-  );
+  const text = createMemo(() => ({
+    title: props.item.entity.name
+      ? `${props.item.entity.name} updated`
+      : 'Updated',
+    content: itemContent(props.item.entity, props.item.notification),
+  }));
 
   return (
     <BaseCard
