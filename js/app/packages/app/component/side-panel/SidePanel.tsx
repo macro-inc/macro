@@ -49,7 +49,7 @@ const MAIN_MIN_PX = 320;
  *   - Wide (>= NARROW_THRESHOLD_PX, non-mobile): side panel renders as a
  *     resizable split next to the main content. Defaults to open.
  *   - Narrow (mobile or narrower than threshold): side panel renders as a
- *     full-screen overlay covering the main content. Defaults to closed;
+ *     full-screen overlay covering the main content. Defaults to open;
  *     the main content stays mounted underneath.
  *
  * The side panel is suppressed entirely when no sections are registered.
@@ -63,7 +63,7 @@ function Layout(props: ParentProps) {
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
   const [isWideOpen, setIsWideOpen] = createSignal(true);
-  const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
+  const [isNarrowOpen, setIsNarrowOpen] = createSignal(true);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());
 
   const isOpen = () => (isNarrow() ? isNarrowOpen() : isWideOpen());
