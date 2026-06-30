@@ -143,6 +143,10 @@
       "name": "image-proxy-service-stack",
       "version": "0.0.0",
     },
+    "stacks/kafka-cluster": {
+      "name": "kafka-cluster-stack",
+      "version": "0.0.0",
+    },
     "stacks/link-sharing": {
       "name": "link-sharing-stack",
       "version": "0.0.0",
@@ -754,6 +758,8 @@
     "just-diff": ["just-diff@6.0.2", "", {}, "sha512-S59eriX5u3/QhMNq3v/gm8Kd0w8OS6Tz2FS1NG4blv+z0MuQcBRJyFWjdovM0Rad4/P4aUPFtnkNjMjyMlMSYA=="],
 
     "just-diff-apply": ["just-diff-apply@5.5.0", "", {}, "sha512-OYTthRfSh55WOItVqwpefPtNt2VdKsq5AnAK6apdtR6yCH8pr0CmSr710J0Mf+WdQy7K/OzMy7K2MgAfdQURDw=="],
+
+    "kafka-cluster-stack": ["kafka-cluster-stack@workspace:stacks/kafka-cluster"],
 
     "keyv": ["keyv@4.5.4", "", { "dependencies": { "json-buffer": "3.0.1" } }, "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw=="],
 

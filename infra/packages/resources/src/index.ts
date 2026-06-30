@@ -31,3 +31,4 @@ export {
   createServiceRole,
   createShaCleanupWorkerRole,
 } from './resources/role';
+export { KafkaCluster } from './resources/kafka-cluster';
