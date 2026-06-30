@@ -76,7 +76,7 @@ pub enum BackfillOperation {
     BackfillAttachment(JobScopedPayload<BackfillAttachmentPayload>),
     // Seeds the contacts service from one recent sent message. Fanned out
     // one-per-message by the priority pass of ListThreads (which lists the
-    // user's last 500 sent messages). The consumer fetches the message and
+    // user's last 200 sent messages). The consumer fetches the message and
     // enqueues a sender<->recipient connection for each non-generic To/Cc/Bcc
     // address, so a brand-new user has contacts before full backfill completes.
     // handle_contacts_sync re-seeds the full contact set at job completion.

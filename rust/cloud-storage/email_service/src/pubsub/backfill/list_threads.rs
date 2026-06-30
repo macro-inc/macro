@@ -14,10 +14,14 @@ use std::cmp::min;
 // the max size allowed by the gmail api
 const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 
+// How many of the user's most important (CATEGORY_PERSONAL) threads the
+// priority pass seeds first, before handing off to the normal sweep.
+const PRIORITY_PASS_THREAD_LIMIT: u32 = 200;
+
 // How many of the user's most recent sent messages we seed the contacts
-// service from during the priority pass. Capped at 500 by the gmail api.
+// service from during the priority pass (the gmail api caps this at 500).
 #[cfg(feature = "contacts_sync")]
-const SENT_CONTACT_SEED_LIMIT: u32 = 500;
+const SENT_CONTACT_SEED_LIMIT: u32 = 200;
 
 /// This step is invoked by Init.
 /// Each ListThreads operation gets a batch of 500 thread_ids from the gmail api
@@ -158,7 +162,7 @@ pub async fn list_threads(
 }
 
 /// The priority first pass (see [`ListThreadsPayload::priority_pass`]). Does a
-/// single CATEGORY_PERSONAL-filtered listing of up to `BACKFILL_THREAD_BATCH_SIZE`
+/// single CATEGORY_PERSONAL-filtered listing of up to `PRIORITY_PASS_THREAD_LIMIT`
 /// threads, enqueues a BackfillThread for each, bumps the job's redis total to
 /// account for the normal sweep re-covering these same threads, then hands off
 /// to the normal sweep. Unlike the normal pass it does not paginate and does
@@ -173,7 +177,7 @@ async fn list_priority_threads(
 ) -> Result<(), ProcessingError> {
     // Never request more than the job's overall thread budget (which already
     // accounts for any requested limit set at job creation).
-    let num_threads_to_list = min(BACKFILL_THREAD_BATCH_SIZE as i32, job.total_threads);
+    let num_threads_to_list = min(PRIORITY_PASS_THREAD_LIMIT as i32, job.total_threads);
 
     if num_threads_to_list > 0 {
         check_gmail_rate_limit(CheckGmailRateLimitArgs {
