@@ -91,6 +91,42 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self))]
+    async fn add_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        entity_property_queries::add_entity_property_option(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            option_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn remove_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        entity_property_queries::remove_entity_property_option(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            option_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self))]
     async fn link_parent_task(
         &self,
         task_id: Uuid,

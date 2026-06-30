@@ -507,6 +507,125 @@
         }
       }
     },
+    "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Add a single option to an entity's multi-select property value.",
+        "description": "Atomic delta: the option is appended to the current stored value (deduped,\nattaching the property if needed), so concurrent edits to the same value\nmerge rather than overwrite each other. Prefer this over the full-value PUT\nwhen adding one option.",
+        "operationId": "add_entity_property_option",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Property ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Option ID to add",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Option added successfully"
+          },
+          "400": {
+            "description": "Invalid request, property is not multi-select, or option does not belong to the property"
+          },
+          "403": {
+            "description": "No edit access to the entity"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Properties"],
+        "summary": "Remove a single option from an entity's multi-select property value.",
+        "description": "Atomic delta: the option is stripped from the current stored value (a no-op\nif absent), so concurrent edits to the same value merge rather than overwrite\neach other.",
+        "operationId": "remove_entity_property_option",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Property ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Option ID to remove",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Option removed successfully"
+          },
+          "403": {
+            "description": "No edit access to the entity"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/properties/entity_properties/{entity_property_id}": {
       "delete": {
         "tags": ["Properties"],

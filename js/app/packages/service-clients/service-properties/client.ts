@@ -46,6 +46,12 @@ type SetEntityPropertyArgs = {
 type DeleteEntityPropertyArgs = {
   entity_property_id: string;
 };
+type EntityPropertyOptionArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  property_id: string;
+  option_id: string;
+};
 type GetPropertyOptionsArgs = {
   definition_id: string;
 };
@@ -166,6 +172,22 @@ export const propertiesServiceClient = {
       }
     );
 
+    return result.map(() => ({ success: true }));
+  },
+
+  addEntityPropertyOption: async (args: EntityPropertyOptionArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}/options/${args.option_id}`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'POST',
+    });
+    return result.map(() => ({ success: true }));
+  },
+
+  removeEntityPropertyOption: async (args: EntityPropertyOptionArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}/options/${args.option_id}`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'DELETE',
+    });
     return result.map(() => ({ success: true }));
   },
 

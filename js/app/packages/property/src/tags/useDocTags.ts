@@ -1,4 +1,7 @@
-import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import {
+  useAddEntityPropertyOptionMutation,
+  useRemoveEntityPropertyOptionMutation,
+} from '@queries/properties/entity';
 import {
   useEnsureTagSetMutation,
   useTagsQuery,
@@ -42,7 +45,8 @@ function definitionDomain(
 export function useDocTags(entityId: string, entityType: EntityType) {
   const tagsQuery = useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
-  const saveMutation = useBulkSaveEntityPropertiesMutation();
+  const addOption = useAddEntityPropertyOptionMutation();
+  const removeOption = useRemoveEntityPropertyOptionMutation();
   const { properties } = useEntityProperties(entityId, entityType, false);
 
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
@@ -107,30 +111,17 @@ export function useDocTags(entityId: string, entityType: EntityType) {
     return provisioned.definition;
   };
 
-  const saveScope = async (
-    definition: PropertyDefinitionDetailResponse,
-    optionIds: string[]
-  ) => {
-    await saveMutation.mutateAsync({
-      properties: [
-        {
-          entityId,
-          entityType,
-          property: definitionDomain(definition),
-          apiValues: {
-            valueType: 'SELECT_STRING',
-            values: optionIds.length > 0 ? optionIds : null,
-          },
-        },
-      ],
-    });
-  };
-
   const applyTag = async (scope: TagScope, optionId: string) => {
     const definition = await resolveDefinition(scope);
     const current = appliedOptionIdsForDefinition(definition.id);
     if (current.includes(optionId)) return;
-    await saveScope(definition, [...current, optionId]);
+    await addOption.mutateAsync({
+      entityId,
+      entityType,
+      property: definitionDomain(definition),
+      optionId,
+      optimisticOptionIds: [...current, optionId],
+    });
   };
 
   const removeTag = async (scope: TagScope, optionId: string) => {
@@ -138,10 +129,13 @@ export function useDocTags(entityId: string, entityType: EntityType) {
     if (!definition) return;
     const current = appliedOptionIdsForDefinition(definition.id);
     if (!current.includes(optionId)) return;
-    await saveScope(
-      definition,
-      current.filter((id) => id !== optionId)
-    );
+    await removeOption.mutateAsync({
+      entityId,
+      entityType,
+      property: definitionDomain(definition),
+      optionId,
+      optimisticOptionIds: current.filter((id) => id !== optionId),
+    });
   };
 
   const toggleTag = async (scope: TagScope, optionId: string) => {
