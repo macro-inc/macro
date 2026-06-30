@@ -10,7 +10,7 @@ import {
   SidebarPromoCard,
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
-import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
+import { CommandState } from '@app/component/command';
 import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -50,9 +50,8 @@ import {
 import {
   getSettingsTabItem,
   useSettingsTabAvailable,
-  useSettingsTabs,
 } from '@core/constant/settingsTabsConfig';
-import { useUserId } from '@core/context/user';
+import { useAuthor, useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -72,8 +71,8 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
-import PlayIcon from '@phosphor/play.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
@@ -563,8 +562,8 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
-  const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-  const { groups: settingGroups } = useSettingsTabs();
+  const author = useAuthor();
+  const email = useEmail();
   const logout = useLogout();
 
   return (
@@ -604,56 +603,71 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content>
-        <Dropdown.Group>
+      <Dropdown.Content class="min-w-64">
+        <Dropdown.Group class="p-1.5 gap-0">
+          <div class="flex items-center gap-3 px-1 py-1">
+            <Show
+              when={userId()}
+              fallback={<div class="size-10 shrink-0 rounded-full bg-ink/10" />}
+            >
+              {(id) => (
+                <div class="size-10 shrink-0">
+                  <UserIcon
+                    id={id()}
+                    size="fill"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                </div>
+              )}
+            </Show>
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-ink">
+                {author()}
+              </div>
+              <div class="truncate text-sm text-ink-muted">{email()}</div>
+            </div>
+          </div>
+          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
           <Dropdown.Item
             class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => setOnboardingModalOpen(true)}
+            onSelect={() => CommandState.open()}
+          >
+            <span class="size-5 flex items-center justify-center text-ink-extra-muted">
+              ⌘
+            </span>
+            <span class="flex-1 text-ink">Command menu</span>
+            <Hotkey
+              token={TOKENS.global.commandMenu}
+              theme="subtle"
+              class="ml-6"
+            />
+          </Dropdown.Item>
+          <Dropdown.Item
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            onSelect={() => props.onSelect('Account')}
           >
             <span class="size-5 flex items-center justify-center">
-              <PlayIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <GearIcon class="size-4 shrink-0 text-ink-extra-muted" />
             </span>
-            <span class="text-ink">Play tutorial</span>
+            <span class="flex-1 text-ink">Settings</span>
+            <Hotkey
+              token={TOKENS.global.toggleSettings}
+              theme="subtle"
+              class="ml-6"
+            />
           </Dropdown.Item>
-        </Dropdown.Group>
-        <For each={settingGroups()}>
-          {(group) => (
-            <Dropdown.Group>
-              <For each={group.items}>
-                {(item) => (
-                  <Dropdown.Item
-                    class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                    onSelect={() => props.onSelect(item.tab)}
-                  >
-                    <span class="size-5 flex items-center justify-center">
-                      <Dynamic
-                        component={item.icon}
-                        class="size-4 shrink-0 text-ink-extra-muted"
-                      />
-                    </span>
-                    <span class="text-ink">{item.label}</span>
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-          )}
-        </For>
-        <Dropdown.Group>
           <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-red-500"
             onSelect={() => logout()}
           >
             <span class="size-5 flex items-center justify-center">
-              <SignOutIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <SignOutIcon class="size-4 shrink-0" />
             </span>
-            <span class="text-ink">Log out</span>
+            <span>Log out</span>
           </Dropdown.Item>
         </Dropdown.Group>
       </Dropdown.Content>
-      <InteractiveOnboardingModal
-        open={onboardingModalOpen()}
-        onOpenChange={setOnboardingModalOpen}
-      />
     </Dropdown>
   );
 };
