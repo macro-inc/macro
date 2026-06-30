@@ -1,5 +1,6 @@
 import type {
   GraphqlCallLiteral as GraphqlCallLiteralInput,
+  GraphqlCallStatus,
   GraphqlChannelLiteral as GraphqlChannelLiteralInput,
   GraphqlChannelThreadLiteral as GraphqlChannelThreadLiteralInput,
   GraphqlChatLiteral as GraphqlChatLiteralInput,
@@ -56,6 +57,16 @@ type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
 };
 
 type LiteralMapper<TLiteral> = (literal: unknown) => TLiteral;
+
+const GRAPHQL_CALL_STATUSES = [
+  'ATTENDED',
+  'MISSED',
+  'UNATTENDED',
+] as const satisfies readonly GraphqlCallStatus[];
+
+function isGraphqlCallStatus(value: string): value is GraphqlCallStatus {
+  return GRAPHQL_CALL_STATUSES.includes(value as GraphqlCallStatus);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -343,13 +354,11 @@ function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {
       return { channelId: mapString(value, 'channelId') };
     case 'Speaker':
       return { speaker: mapString(value, 'speaker') };
-    case 'Status':
-      return {
-        status: mapString(value, 'status') as
-          | 'ATTENDED'
-          | 'MISSED'
-          | 'UNATTENDED',
-      };
+    case 'Status': {
+      const status = mapString(value, 'status');
+      if (!isGraphqlCallStatus(status)) unsupported(`call status ${status}`);
+      return { status };
+    }
     case 'Attended':
       return { attended: mapBoolean(value, 'attended') };
     default:
@@ -420,6 +429,7 @@ function mapSortMethod(
     case 'viewed_updated':
       return 'VIEWED_UPDATED';
     case 'frecency':
+      return unsupported('sort_method frecency');
     case undefined:
       return undefined;
   }

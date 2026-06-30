@@ -4,6 +4,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { platformFetch } from '@core/util/platformFetch';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createClient, fetchExchange } from '@urql/core';
+import { match } from 'ts-pattern';
 import {
   type SoupInput,
   type SoupQuery,
@@ -76,35 +77,63 @@ type GraphqlSoupChannelMessage = NonNullable<
   >['latestMessage']
 >;
 
+const GRAPHQL_PROPERTY_VALUE_KINDS = [
+  'Boolean',
+  'Number',
+  'String',
+  'Date',
+  'SelectOption',
+  'EntityReference',
+  'Link',
+] as const;
+
+type GraphqlPropertyValueKind = (typeof GRAPHQL_PROPERTY_VALUE_KINDS)[number];
+
+function isGraphqlPropertyValueKind(
+  kind: string
+): kind is GraphqlPropertyValueKind {
+  return GRAPHQL_PROPERTY_VALUE_KINDS.includes(
+    kind as GraphqlPropertyValueKind
+  );
+}
+
 function mapGraphqlPropertyValue(
   value: GraphqlSoupPropertyValue | null | undefined
 ) {
   if (!value) return value;
-  switch (value.kind) {
-    case 'Boolean':
-      return { type: 'Boolean' as const, value: value.boolValue ?? false };
-    case 'Number':
-      return { type: 'Number' as const, value: value.numberValue ?? 0 };
-    case 'String':
-      return { type: 'String' as const, value: value.stringValue ?? '' };
-    case 'Date':
-      return { type: 'Date' as const, value: value.dateValue ?? '' };
-    case 'SelectOption':
-      return { type: 'SelectOption' as const, value: value.selectOptionIds };
-    case 'EntityReference':
-      return {
-        type: 'EntityReference' as const,
-        value: value.entityReferences.map((ref) => ({
-          entity_id: ref.entityId,
-          entity_type: ref.entityType,
-          specific_message_id: ref.specificMessageId ?? undefined,
-        })),
-      };
-    case 'Link':
-      return { type: 'Link' as const, value: value.links };
-    default:
-      return undefined;
-  }
+  if (!isGraphqlPropertyValueKind(value.kind)) return undefined;
+
+  return match(value.kind)
+    .with('Boolean', () => ({
+      type: 'Boolean' as const,
+      value: value.boolValue ?? false,
+    }))
+    .with('Number', () => ({
+      type: 'Number' as const,
+      value: value.numberValue ?? 0,
+    }))
+    .with('String', () => ({
+      type: 'String' as const,
+      value: value.stringValue ?? '',
+    }))
+    .with('Date', () => ({
+      type: 'Date' as const,
+      value: value.dateValue ?? '',
+    }))
+    .with('SelectOption', () => ({
+      type: 'SelectOption' as const,
+      value: value.selectOptionIds,
+    }))
+    .with('EntityReference', () => ({
+      type: 'EntityReference' as const,
+      value: value.entityReferences.map((ref) => ({
+        entity_id: ref.entityId,
+        entity_type: ref.entityType,
+        specific_message_id: ref.specificMessageId ?? undefined,
+      })),
+    }))
+    .with('Link', () => ({ type: 'Link' as const, value: value.links }))
+    .exhaustive();
 }
 
 function mapGraphqlProperties(properties: GraphqlSoupProperty[]) {
@@ -160,219 +189,256 @@ function normalizeChannelType(channelType: string) {
 
 function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
   const frecency = item.frecencyScore;
-  const entity = item.entity;
-  switch (entity.__typename) {
-    case 'GraphqlSoupDocument':
-      return {
-        tag: 'document',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          name: entity.documentName,
-          ownerId: entity.ownerId,
-          fileType: entity.fileType ?? undefined,
-          projectId: entity.projectId ?? undefined,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-          viewedAt: entity.viewedAt ?? undefined,
-          deletedAt: entity.deletedAt ?? undefined,
-          documentVersionId: 0,
-          properties: mapGraphqlProperties(entity.properties),
-          subType: mapDocumentSubType(entity.subType),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupChat':
-      return {
-        tag: 'chat',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          name: entity.chatName,
-          ownerId: entity.ownerId,
-          projectId: entity.projectId ?? undefined,
-          isPersistent: entity.isPersistent,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-          viewedAt: entity.viewedAt ?? undefined,
-          deletedAt: entity.deletedAt ?? undefined,
-          properties: mapGraphqlProperties(entity.properties),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupProject':
-      return {
-        tag: 'project',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          name: entity.projectName,
-          ownerId: entity.ownerId,
-          parentId: entity.parentId ?? undefined,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-          viewedAt: entity.viewedAt ?? undefined,
-          deletedAt: entity.deletedAt ?? undefined,
-          properties: mapGraphqlProperties(entity.properties),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupEmailThread':
-      return {
-        tag: 'emailThread',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          providerId: entity.providerId ?? undefined,
-          ownerId: entity.ownerId,
-          inboxVisible: entity.inboxVisible,
-          name: entity.emailName ?? undefined,
-          snippet: entity.snippet ?? undefined,
-          senderEmail: entity.senderEmail ?? undefined,
-          senderName: entity.senderName ?? undefined,
-          senderPhotoUrl: entity.senderPhotoUrl ?? undefined,
-          isRead: entity.isRead,
-          isDraft: entity.isDraft,
-          isImportant: entity.isImportant,
-          projectId: entity.projectId ?? undefined,
-          sortTs: entity.sortTs,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-          viewedAt: entity.viewedAt ?? undefined,
-          participants: entity.participants.map((participant) => ({
-            id: participant.id,
-            linkId: participant.linkId,
-            name: participant.name ?? undefined,
-            emailAddress: participant.email ?? undefined,
-            sfsPhotoUrl: participant.sfsPhotoUrl ?? undefined,
-          })),
-          attachments: entity.attachments.map((attachment) => ({
-            id: attachment.id,
-            messageId: attachment.messageId,
-            providerAttachmentId: attachment.providerAttachmentId ?? undefined,
-            filename: attachment.filename ?? undefined,
-            mimeType: attachment.mimeType ?? undefined,
-            sizeBytes: attachment.sizeBytes ?? undefined,
-            contentId: attachment.contentId ?? undefined,
-            createdAt: attachment.createdAt,
-          })),
-          labels: entity.labels.map((label) => ({
-            id: label.id,
-            linkId: label.linkId,
-            providerLabelId: label.providerLabelId,
-            name: label.name,
-            createdAt: label.createdAt,
-            messageListVisibility: label.messageListVisibility,
-            labelListVisibility: label.labelListVisibility,
-            type: label.type,
-          })),
-          properties: mapGraphqlProperties(entity.properties),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupChannel':
-      return {
-        tag: 'channel',
-        frecency_score: frecency,
-        data: {
-          channel: {
+
+  return match(item.entity)
+    .with(
+      { __typename: 'GraphqlSoupDocument' },
+      (entity) =>
+        ({
+          tag: 'document',
+          frecency_score: frecency,
+          data: {
             id: entity.id,
-            name: entity.channelName ?? undefined,
-            channel_type: normalizeChannelType(entity.channelType),
-            owner_id: entity.ownerId,
-            org_id: entity.organizationId ?? undefined,
-            team_id: entity.channelTeamId ?? undefined,
+            name: entity.documentName,
+            ownerId: entity.ownerId,
+            fileType: entity.fileType ?? undefined,
+            projectId: entity.projectId ?? undefined,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt ?? undefined,
+            deletedAt: entity.deletedAt ?? undefined,
+            documentVersionId: 0,
+            properties: mapGraphqlProperties(entity.properties),
+            subType: mapDocumentSubType(entity.subType),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupChat' },
+      (entity) =>
+        ({
+          tag: 'chat',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            name: entity.chatName,
+            ownerId: entity.ownerId,
+            projectId: entity.projectId ?? undefined,
+            isPersistent: entity.isPersistent,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt ?? undefined,
+            deletedAt: entity.deletedAt ?? undefined,
+            properties: mapGraphqlProperties(entity.properties),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupProject' },
+      (entity) =>
+        ({
+          tag: 'project',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            name: entity.projectName,
+            ownerId: entity.ownerId,
+            parentId: entity.parentId ?? undefined,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt ?? undefined,
+            deletedAt: entity.deletedAt ?? undefined,
+            properties: mapGraphqlProperties(entity.properties),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupEmailThread' },
+      (entity) =>
+        ({
+          tag: 'emailThread',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            providerId: entity.providerId ?? undefined,
+            ownerId: entity.ownerId,
+            inboxVisible: entity.inboxVisible,
+            name: entity.emailName ?? undefined,
+            snippet: entity.snippet ?? undefined,
+            senderEmail: entity.senderEmail ?? undefined,
+            senderName: entity.senderName ?? undefined,
+            senderPhotoUrl: entity.senderPhotoUrl ?? undefined,
+            isRead: entity.isRead,
+            isDraft: entity.isDraft,
+            isImportant: entity.isImportant,
+            projectId: entity.projectId ?? undefined,
+            sortTs: entity.sortTs,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt ?? undefined,
+            participants: entity.participants.map((participant) => ({
+              id: participant.id,
+              linkId: participant.linkId,
+              name: participant.name ?? undefined,
+              emailAddress: participant.email ?? undefined,
+              sfsPhotoUrl: participant.sfsPhotoUrl ?? undefined,
+            })),
+            attachments: entity.attachments.map((attachment) => ({
+              id: attachment.id,
+              messageId: attachment.messageId,
+              providerAttachmentId:
+                attachment.providerAttachmentId ?? undefined,
+              filename: attachment.filename ?? undefined,
+              mimeType: attachment.mimeType ?? undefined,
+              sizeBytes: attachment.sizeBytes ?? undefined,
+              contentId: attachment.contentId ?? undefined,
+              createdAt: attachment.createdAt,
+            })),
+            labels: entity.labels.map((label) => ({
+              id: label.id,
+              linkId: label.linkId,
+              providerLabelId: label.providerLabelId,
+              name: label.name,
+              createdAt: label.createdAt,
+              messageListVisibility: label.messageListVisibility,
+              labelListVisibility: label.labelListVisibility,
+              type: label.type,
+            })),
+            properties: mapGraphqlProperties(entity.properties),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupChannel' },
+      (entity) =>
+        ({
+          tag: 'channel',
+          frecency_score: frecency,
+          data: {
+            channel: {
+              id: entity.id,
+              name: entity.channelName ?? undefined,
+              channel_type: normalizeChannelType(entity.channelType),
+              owner_id: entity.ownerId,
+              org_id: entity.organizationId ?? undefined,
+              team_id: entity.channelTeamId ?? undefined,
+              created_at: entity.createdAt,
+              updated_at: entity.updatedAt,
+            },
+            participants: entity.participants.map((participant) => ({
+              channel_id: participant.channelId,
+              user_id: participant.userId,
+              role: participant.role,
+              joined_at: participant.joinedAt,
+              left_at: participant.leftAt ?? undefined,
+            })),
+            viewed_at: entity.viewedAt ?? undefined,
+            interacted_at: entity.interactedAt ?? undefined,
+            latest_message: mapChannelMessage(entity.latestMessage),
+            latest_non_thread_message: mapChannelMessage(
+              entity.latestNonThreadMessage
+            ),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupChannelThread' },
+      (entity) =>
+        ({
+          tag: 'channelThread',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            attachments: [],
+            channel_id: entity.channelId,
+            content: entity.content,
             created_at: entity.createdAt,
+            reactions: [],
+            sender: {
+              id: entity.senderId,
+              type: 'user',
+            },
+            sender_id: entity.senderId,
+            thread: {
+              latest_reply_at: entity.effectiveUpdatedAt,
+              preview: [],
+              reply_count: entity.replyCount,
+            },
             updated_at: entity.updatedAt,
           },
-          participants: entity.participants.map((participant) => ({
-            channel_id: participant.channelId,
-            user_id: participant.userId,
-            role: participant.role,
-            joined_at: participant.joinedAt,
-            left_at: participant.leftAt ?? undefined,
-          })),
-          viewed_at: entity.viewedAt ?? undefined,
-          interacted_at: entity.interactedAt ?? undefined,
-          latest_message: mapChannelMessage(entity.latestMessage),
-          latest_non_thread_message: mapChannelMessage(
-            entity.latestNonThreadMessage
-          ),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupChannelThread':
-      return {
-        tag: 'channelThread',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          channel_id: entity.channelId,
-          sender_id: entity.senderId,
-          content: entity.content,
-          created_at: entity.createdAt,
-          updated_at: entity.updatedAt,
-          effective_updated_at: entity.effectiveUpdatedAt,
-          reply_count: entity.replyCount,
-        },
-      } as unknown as SoupApiItem;
-    case 'GraphqlSoupCall':
-      return {
-        tag: 'call',
-        frecency_score: frecency,
-        data: {
-          callId: entity.id,
-          channelId: entity.channelId,
-          channelName: entity.channelName ?? undefined,
-          createdBy: entity.createdBy,
-          customName: entity.customName ?? undefined,
-          summary: entity.summary ?? undefined,
-          startedAt: entity.startedAt,
-          endedAt: entity.endedAt ?? undefined,
-          durationMs: entity.durationMs ?? undefined,
-          isActive: entity.isActive,
-          status: entity.status,
-          attended: entity.attended,
-          participants: entity.participants.map((participant) => ({
-            userId: participant.userId,
-            joinedAt: participant.joinedAt,
-            leftAt: participant.leftAt ?? undefined,
-          })),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupCrmCompany':
-      return {
-        tag: 'crmCompany',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          teamId: entity.crmTeamId,
-          name: entity.crmCompanyName ?? undefined,
-          description: entity.description ?? undefined,
-          emailSync: entity.emailSync,
-          hidden: entity.hidden,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-          viewedAt: entity.viewedAt ?? undefined,
-          domains: entity.domains.map((domain) => ({
-            id: `${entity.id}:${domain}`,
-            companyId: entity.id,
-            domain,
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupCall' },
+      (entity) =>
+        ({
+          tag: 'call',
+          frecency_score: frecency,
+          data: {
+            callId: entity.id,
+            channelId: entity.channelId,
+            channelName: entity.channelName ?? undefined,
+            createdBy: entity.createdBy,
+            customName: entity.customName ?? undefined,
+            summary: entity.summary ?? undefined,
+            startedAt: entity.startedAt,
+            endedAt: entity.endedAt ?? undefined,
+            durationMs: entity.durationMs ?? undefined,
+            isActive: entity.isActive,
+            status: entity.status,
+            attended: entity.attended,
+            participants: entity.participants.map((participant) => ({
+              userId: participant.userId,
+              joinedAt: participant.joinedAt,
+              leftAt: participant.leftAt ?? undefined,
+            })),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupCrmCompany' },
+      (entity) =>
+        ({
+          tag: 'crmCompany',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            teamId: entity.crmTeamId,
+            name: entity.crmCompanyName ?? undefined,
+            description: entity.description ?? undefined,
+            emailSync: entity.emailSync,
+            hidden: entity.hidden,
             createdAt: entity.createdAt,
-          })),
-        },
-      } as SoupApiItem;
-    case 'GraphqlSoupForeignEntity':
-      return {
-        tag: 'foreignEntity',
-        frecency_score: frecency,
-        data: {
-          id: entity.id,
-          foreignEntityId: entity.foreignEntityId,
-          foreignEntitySource: entity.foreignEntitySource,
-          storedForId: entity.storedForId,
-          storedForAuthEntity: entity.storedForAuthEntity,
-          metadata: entity.metadata,
-          createdAt: entity.createdAt,
-          updatedAt: entity.updatedAt,
-        },
-      } as SoupApiItem;
-  }
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt ?? undefined,
+            domains: entity.domains.map((domain) => ({
+              id: `${entity.id}:${domain}`,
+              companyId: entity.id,
+              domain,
+              createdAt: entity.createdAt,
+            })),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupForeignEntity' },
+      (entity) =>
+        ({
+          tag: 'foreignEntity',
+          frecency_score: frecency,
+          data: {
+            id: entity.id,
+            foreignEntityId: entity.foreignEntityId,
+            foreignEntitySource: entity.foreignEntitySource,
+            storedForId: entity.storedForId,
+            storedForAuthEntity: entity.storedForAuthEntity,
+            metadata: entity.metadata,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+          },
+        }) as SoupApiItem
+    )
+    .exhaustive();
 }
 
 export async function fetchGraphqlSoup(

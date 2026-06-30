@@ -72,4 +72,22 @@ describe('makeGraphqlSoupInput', () => {
       })
     ).toThrow('Unsupported GraphQL Soup AST');
   });
+
+  it('throws for frecency sort so callers can fall back', () => {
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'frecency' },
+        body: compileToAst(queryStateFrom({})),
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
+
+  it('throws for invalid call statuses so callers can fall back', () => {
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { callf: { l: { Status: 'BOGUS' } } } as never,
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
+  });
 });

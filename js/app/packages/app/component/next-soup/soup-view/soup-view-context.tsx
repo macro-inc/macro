@@ -220,10 +220,15 @@ export const SoupViewContextProvider: FlowComponent<
   onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
+    const groupBy = groupByField();
+
     queryClient.setQueryData(
       soupKeys.astItems({
         params: soupParams(),
         body: soupBody(),
+        groupBy,
+        transport:
+          useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined,
       }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
         if (!prev) return;

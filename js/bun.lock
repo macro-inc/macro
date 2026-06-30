@@ -127,7 +127,6 @@
         "@biomejs/biome": "2.4.12",
         "@graphql-codegen/cli": "^7.1.3",
         "@graphql-codegen/typed-document-node": "^7.0.3",
-        "@graphql-codegen/typescript": "^6.0.2",
         "@graphql-codegen/typescript-operations": "^6.0.5",
         "@playwright/test": "^1.55.1",
         "@solidjs/meta": "^0.29.4",
