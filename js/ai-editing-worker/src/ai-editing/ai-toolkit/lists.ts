@@ -6,7 +6,12 @@ import {
   type ListNode,
   type ListType,
 } from '@lexical/list';
-import { $findMatchingParent, $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import {
+  $findMatchingParent,
+  $isElementNode,
+  type ElementNode,
+  type LexicalNode,
+} from 'lexical';
 import { $retypeContainer, type LexicalSession } from './session';
 
 export type ListKind = 'bullet' | 'number' | 'check';

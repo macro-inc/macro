@@ -87,7 +87,9 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       signal,
     });
     const sleep = (ms: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, ms / presence.multiplier()));
+      new Promise<void>((resolve) =>
+        setTimeout(resolve, ms / presence.multiplier())
+      );
 
     const { usage, ops, trace, clarification } = await runEditSession({
       wsUrl,

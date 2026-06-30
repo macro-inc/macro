@@ -120,11 +120,15 @@ describe('inline ops: scope + counts', () => {
     const { session, ids } = setup('Full control over rendering');
     const id = ids[0];
     const before = read(session, () =>
-      $blockById(session, id).getAllTextNodes().map((n) => $getId(n))
+      $blockById(session, id)
+        .getAllTextNodes()
+        .map((n) => $getId(n))
     );
     edit(session, () => $replaceString($blockById(session, id), 'Full ', ''));
     const after = read(session, () =>
-      $blockById(session, id).getAllTextNodes().map((n) => $getId(n))
+      $blockById(session, id)
+        .getAllTextNodes()
+        .map((n) => $getId(n))
     );
     expect(after).toEqual(before); // same leaf ids — the diff sees a clean setText
     expect(read(session, () => $blockById(session, id).getTextContent())).toBe(
@@ -136,12 +140,16 @@ describe('inline ops: scope + counts', () => {
     const { session, ids } = setup('Meeting Notes');
     const id = ids[0];
     const before = read(session, () =>
-      $blockById(session, id).getAllTextNodes().map((n) => $getId(n))
+      $blockById(session, id)
+        .getAllTextNodes()
+        .map((n) => $getId(n))
     );
     edit(session, () => $appendText($blockById(session, id), ' (draft)'));
     edit(session, () => $prependText($blockById(session, id), 'DRAFT: '));
     const after = read(session, () =>
-      $blockById(session, id).getAllTextNodes().map((n) => $getId(n))
+      $blockById(session, id)
+        .getAllTextNodes()
+        .map((n) => $getId(n))
     );
     expect(after).toEqual(before); // no new text nodes minted
     expect(read(session, () => $blockById(session, id).getTextContent())).toBe(

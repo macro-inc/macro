@@ -1,5 +1,10 @@
 import { $isListItemNode } from '@lexical/list';
-import { $findMatchingParent, $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import {
+  $findMatchingParent,
+  $isElementNode,
+  type ElementNode,
+  type LexicalNode,
+} from 'lexical';
 import { match } from 'ts-pattern';
 import { $isEquationNode } from '../../../../lexical-core/nodes/EquationNode';
 import { $blockNode, $setBlockType, $setText, type BlockData } from './blocks';
@@ -27,7 +32,10 @@ export type NodeChange =
   | { op: 'indent'; indent: number | 'in' | 'out' };
 
 function $asBlock(node: LexicalNode, id: string): ElementNode {
-  const b = $findMatchingParent(node, (n) => $isElementNode(n) && !n.isInline());
+  const b = $findMatchingParent(
+    node,
+    (n) => $isElementNode(n) && !n.isInline()
+  );
   if (!$isElementNode(b)) {
     throw new Error(`$modifyNode: no block-level node for "${id}"`);
   }

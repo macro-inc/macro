@@ -26,7 +26,10 @@ export function $byId(session: LexicalSession, id: string): LexicalNode {
  * quote, …). Throws `Error` only if nothing block-level is found.
  */
 export function $blockById(session: LexicalSession, id: string): ElementNode {
-  const node = $findMatchingParent($byId(session, id), (n) => $isElementNode(n) && !n.isInline());
+  const node = $findMatchingParent(
+    $byId(session, id),
+    (n) => $isElementNode(n) && !n.isInline()
+  );
   if (!node || !$isElementNode(node)) {
     throw new Error(`No block-level node for id "${id}"`);
   }

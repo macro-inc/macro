@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  realAwarenessSource,
-  resolveTextOwner,
-} from './awareness-source';
+import { realAwarenessSource, resolveTextOwner } from './awareness-source';
 
 // Duck-typed fake loro containers (kind/get), matching what resolveTextOwner reads.
 function textC() {
@@ -73,7 +70,6 @@ describe('resolveTextOwner (cursor-walk fix)', () => {
     expect(resolveTextOwner(mirror, doc, 'b1')).toBeNull();
   });
 });
-
 
 describe('realAwarenessSource (no live mirror)', () => {
   beforeEach(() => {
