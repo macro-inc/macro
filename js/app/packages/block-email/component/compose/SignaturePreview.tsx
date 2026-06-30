@@ -66,7 +66,7 @@ export function SignaturePreview(props: {
             />
             Signature
           </button>
-          <Tooltip label="Edit your signature in Settings." as="span">
+          <Tooltip label="Edit your signature in Settings -> Connected accounts." as="span">
             <InfoIcon class="size-3.5 text-ink-muted" />
           </Tooltip>
         </div>
