@@ -254,8 +254,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     }
 
     default: {
-      // Fallback for unknown types - treat as string with null value
-      return { ...baseProperty, valueType: 'STRING', value: null };
+      const exhaustiveCheck: never = valueType;
+      throw new Error(`Unsupported value type: ${String(exhaustiveCheck)}`);
     }
   }
 }
