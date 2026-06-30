@@ -9,7 +9,7 @@ use uuid::Uuid;
 /// Implement this trait for each topic-specific event enum. The enum should use
 /// `#[serde(tag = "event_type", content = "metadata")]` so the wire payload is
 /// self-describing while each variant still carries strongly typed metadata.
-pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync + 'static {
+pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
     /// The concrete topic type that all variants of this event enum belong to.
     type Topic: Topic;
 
