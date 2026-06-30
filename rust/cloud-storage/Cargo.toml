@@ -112,6 +112,7 @@ http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
 inquire = "0.7"
+indexmap = "2"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",

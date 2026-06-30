@@ -36,14 +36,14 @@ macro_queues = { path = "../../macro_queues" }
 # Docker Engine API client for the discrete container/image ops.
 docker-compose-types = { version = "0.24", features = ["indexmap"] }
 bollard = "0.21"
-indexmap = "2"
+indexmap = { workspace = true }
 serde_yaml = "0.9"
 indicatif = "0.17"
 console = "0.15"
 # Parse user-provided `--env-file` overlays (reading only; no crate emits the
 # docker-compose `env_file` format we generate). EnumIter derives the port list.
-dotenvy = "0.15"
-strum = { version = "0.27", features = ["derive"] }
+dotenvy = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 # Signal the frontend dev server's whole process group on shutdown (kill bun +
 # the Vite child it spawns, not just bun).
 libc = "0.2"

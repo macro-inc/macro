@@ -28,7 +28,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 ] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
-indexmap = "2"
+indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
 macro_auth = { path = "../macro_auth" }
 macro_db_client = { path = "../macro_db_client" }
