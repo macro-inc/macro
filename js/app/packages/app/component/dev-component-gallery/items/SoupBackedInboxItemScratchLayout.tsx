@@ -19,13 +19,13 @@ import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.sv
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { Avatar, cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { PropertyPill } from '../../notification-inbox/InboxItem';
+import { Property } from '@property';
 import {
   notificationAction,
   notificationContent,
   notificationSenderName,
   notificationTitle,
-} from '../../notification-inbox/notification-extractors';
+} from '../../notification-inbox-deprecated/notification-extractors';
 
 type LiveNotification = Parameters<typeof notificationTitle>[0];
 
@@ -430,6 +430,14 @@ const propertyMocks: Record<string, unknown> = {
     value: ['00000001-0000-0000-0003-000000000003'],
   },
 } as const;
+
+function PropertyPill(props: { property: never; class?: string }) {
+  return (
+    <span class={cn('grid size-4 shrink-0 place-items-center', props.class)}>
+      <Property.Icon property={props.property} class="size-3 shrink-0" />
+    </span>
+  );
+}
 
 function TaskPropertyPills(props: {
   properties?: SoupBackedInboxItem['entity']['properties'];
