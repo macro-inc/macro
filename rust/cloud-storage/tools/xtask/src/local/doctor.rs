@@ -28,8 +28,14 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
                 "install cargo-zigbuild + zig (in the nix dev shell)",
             ),
         ),
-        ("sccache", check_bin("sccache", "install sccache (in the nix dev shell)")),
-        ("cmake", check_bin("cmake", "install cmake (in the nix dev shell)")),
+        (
+            "sccache",
+            check_bin("sccache", "install sccache (in the nix dev shell)"),
+        ),
+        (
+            "cmake",
+            check_bin("cmake", "install cmake (in the nix dev shell)"),
+        ),
         ("bun", check_bin("bun", "install bun")),
         (
             "sqlx-cli",
