@@ -64,9 +64,9 @@ local-e2e-services := "authentication-service connection_gateway contacts_servic
 update-node-modules-hash:
   scripts/update-node-modules-hash.sh
 
-# Verify the fixed-output js node_modules derivations match js/bun.lock.
+# Verify the fixed-output js node_modules derivation matches js/bun.lock.
 check-node-modules-nix:
-  nix build .#js-node-modules .#js-node-modules-aarch64-darwin --no-link
+  nix build .#js-node-modules --no-link
 
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:
