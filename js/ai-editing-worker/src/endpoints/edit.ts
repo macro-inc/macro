@@ -8,7 +8,7 @@ import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
-import { fetchDocToken, hasHumanEditors } from '../service-clients';
+import { fetchDocToken, watchPresenceSpeed } from '../service-clients';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -39,6 +39,8 @@ const EditBody = z.object({
     coding: ModelSchema,
   }),
   typingAnimations: z.boolean().optional(),
+  /** Animation speed multiplier applied while nobody is watching the doc. */
+  unwatchedSpeed: z.number().min(1).default(2.0),
   interpret: z.boolean().default(true),
   debug: z.boolean().default(false),
 });
@@ -53,6 +55,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     prompt,
     models,
     typingAnimations,
+    unwatchedSpeed,
     interpret,
     debug,
   } = c.req.valid('json');
@@ -72,15 +75,19 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
 
-    // Animations are only worth rendering when a human is watching; with nobody
-    // on the document, apply edits instantly.
-    const humansPresent = await hasHumanEditors(
-      env.SYNC_WS_BASE,
+    // Animations play at 1x while a human is watching and speed up to
+    // `unwatchedSpeed` when nobody is, so unseen edits finish faster without
+    // being skipped. Presence is re-polled throughout, so a viewer who joins
+    // mid-edit slows it back to 1x.
+    const presence = watchPresenceSpeed({
+      syncWsBase: env.SYNC_WS_BASE,
       documentId,
       docToken,
-      signal
-    );
-    const effectiveTypingAnimations = humansPresent ? typingAnimations : false;
+      unwatchedSpeed,
+      signal,
+    });
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms / presence.multiplier()));
 
     const { usage, ops, trace, clarification } = await runEditSession({
       wsUrl,
@@ -91,12 +98,13 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         interpret: resolveModel(models.interpret),
         coding: resolveModel(models.coding),
       },
-      typingAnimations: effectiveTypingAnimations,
+      typingAnimations,
+      sleep,
       interpret,
       debug,
       runner: runInSandbox,
       signal,
-    });
+    }).finally(presence.stop);
     return c.json({ ok: true, usage, ops, trace, clarification });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));

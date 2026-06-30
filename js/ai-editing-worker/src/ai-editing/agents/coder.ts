@@ -36,6 +36,7 @@ export async function coder(
         snippets: deps.snippets,
         params: deps.params,
         typingAnimations: deps.typingAnimations,
+        sleep: deps.sleep,
         runner: deps.runner,
         onOps: deps.onOps,
       }),

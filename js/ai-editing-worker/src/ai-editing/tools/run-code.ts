@@ -15,6 +15,7 @@ export type RunCodeToolOptions = {
   snippets?: Record<string, string>;
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
+  sleep?: (ms: number) => Promise<void>;
   onOps?: (ops: DocumentOp[]) => void;
 };
 
@@ -35,6 +36,7 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
         snippets: opts.snippets,
         params: opts.params,
         typingAnimations: opts.typingAnimations,
+        sleep: opts.sleep,
         runner: opts.runner,
         onOps: opts.onOps,
       });

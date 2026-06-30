@@ -198,6 +198,7 @@ export type DispatchToolOptions = {
   runner: RunCodeToolOptions['runner'];
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
+  sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   makeWriter: () => Promise<Writer>;
   runTask: typeof coder;
@@ -214,6 +215,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
     tracker,
     params,
     typingAnimations,
+    sleep,
     signal,
     makeWriter,
     runTask,
@@ -261,6 +263,7 @@ export function createDispatchTool(opts: DispatchToolOptions) {
               snippets,
               params,
               typingAnimations,
+              sleep,
               signal,
               runner,
               onOps,

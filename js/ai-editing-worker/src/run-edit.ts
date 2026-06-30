@@ -40,6 +40,8 @@ export type RunEditArgs = {
   /** Snippet runner — QuickJS sandbox in prod, `new Function` in local dev. */
   runner?: CodeRunner;
   typingAnimations?: boolean;
+  /** Scales every animation pause; injected so unwatched edits can play faster. */
+  sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   /** Run an intent-interpretation pass before dispatching edits. */
   interpret?: boolean;
@@ -107,6 +109,7 @@ export async function runEditSession(
       {
         borrowWriter: () => workspace.borrowWriter(),
         typingAnimations: args.typingAnimations,
+        sleep: args.sleep,
         signal: args.signal,
         interpret: args.interpret,
         runner: args.runner,

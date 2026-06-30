@@ -40,3 +40,37 @@ export async function hasHumanEditors(
     return true;
   }
 }
+
+/** How often presence is re-checked while an edit is animating. */
+const PRESENCE_POLL_MS = 2_500;
+
+/**
+ * Polls human presence and exposes a live animation speed multiplier: `1` while
+ * a human is watching, `unwatchedSpeed` when nobody is — so unseen edits play
+ * faster instead of being skipped, and a viewer who joins mid-edit slows it back
+ * to 1x. Fails open to watched (1x) on any check error. Caller must `stop()` when
+ * the edit finishes; aborting the signal also stops it.
+ */
+export function watchPresenceSpeed(opts: {
+  syncWsBase: string;
+  documentId: string;
+  docToken: string;
+  unwatchedSpeed: number;
+  signal?: AbortSignal;
+}): { multiplier: () => number; stop: () => void } {
+  let multiplier = 1;
+  const poll = async () => {
+    const watched = await hasHumanEditors(
+      opts.syncWsBase,
+      opts.documentId,
+      opts.docToken,
+      opts.signal
+    );
+    multiplier = watched ? 1 : opts.unwatchedSpeed;
+  };
+  void poll();
+  const timer = setInterval(() => void poll(), PRESENCE_POLL_MS);
+  const stop = () => clearInterval(timer);
+  opts.signal?.addEventListener('abort', stop);
+  return { multiplier: () => multiplier, stop };
+}

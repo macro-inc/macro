@@ -56,6 +56,7 @@ export async function supervisor(
       tracker,
       params: opts.params,
       typingAnimations: opts.typingAnimations,
+      sleep: opts.sleep,
       signal: opts.signal,
       makeWriter: opts.borrowWriter,
       runTask: coder,

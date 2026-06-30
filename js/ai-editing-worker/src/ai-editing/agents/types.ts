@@ -12,6 +12,7 @@ export type RunTaskDeps = {
   snippets?: Record<string, string>;
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
+  sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   onOps?: RunCodeToolOptions['onOps'];
 };
@@ -23,6 +24,7 @@ export type RunAgentOptions = {
   runner: RunCodeToolOptions['runner'];
   params?: DocumentOpQueueParams;
   typingAnimations?: boolean;
+  sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal;
   onOps?: (ops: DocumentOp[]) => void;
   onCoderResult?: (codes: string[][]) => void;
