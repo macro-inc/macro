@@ -67,6 +67,9 @@ pub struct BuildArgs {
     /// Skip building; reuse whatever is in the target dir.
     #[arg(long)]
     pub no_build: bool,
+    /// Rebuild Docker-built auxiliary services (sync, websocket, lexical).
+    #[arg(long)]
+    pub build_aux_services: bool,
     /// Use this dir as the `/app/out` source instead of building.
     #[arg(long)]
     pub binaries_dir: Option<PathBuf>,

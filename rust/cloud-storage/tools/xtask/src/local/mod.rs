@@ -158,6 +158,8 @@ use anyhow::Result;
 use instance::Instance;
 use stage::Stage;
 
+const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexical_service"];
+
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     let stage = Stage::from_env_cli(args.verbose);
@@ -229,7 +231,15 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
         Some(mut fe) if stage.is_tty() => {
-            interact(&stage, mode, &instance, target, &mut fe)?;
+            interact(
+                &stage,
+                mode,
+                &instance,
+                &env,
+                target,
+                args.build.build_aux_services,
+                &mut fe,
+            )?;
         }
         // Non-interactive (piped/CI): just hold the dev server until it exits.
         Some(mut fe) => {
@@ -263,16 +273,25 @@ fn rebuild_and_reload(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
+    env: &env_layer::ResolvedEnv,
     target: arch::Target,
+    build_aux_services: bool,
 ) -> Result<()> {
     if stage.is_verbose() {
         // Run each step on the parent stage so the build (per group) and the
         // reload each show their own `Done <elapsed>` — the build-vs-reload
         // split — rather than folding into one line.
-        run_rebuild(stage, mode, instance, target)
+        run_rebuild(stage, mode, instance, env, target, build_aux_services)
     } else {
         stage.run_step("Rebuilding & reloading services", || {
-            run_rebuild(&stage.quiet(), mode, instance, target)
+            run_rebuild(
+                &stage.quiet(),
+                mode,
+                instance,
+                env,
+                target,
+                build_aux_services,
+            )
         })
     }
 }
@@ -280,27 +299,61 @@ fn rebuild_and_reload(
 /// Snapshot binary mtimes, rebuild, and restart only the services whose binary
 /// the build rewrote. Runs on a quiet sub-stage when folded, or the parent stage
 /// under `--verbose` so each step times itself.
-fn run_rebuild(stage: &Stage, mode: Mode, instance: &Instance, target: arch::Target) -> Result<()> {
+fn run_rebuild(
+    stage: &Stage,
+    mode: Mode,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+    target: arch::Target,
+    build_aux_services: bool,
+) -> Result<()> {
     let before: Vec<Option<std::time::SystemTime>> = inventory::services_for_mode(mode)
         .map(|svc| binary_mtime(target, svc))
         .collect();
-    build::resolve(
-        stage,
-        target,
-        &build::BuildOptions {
-            no_build: false,
-            binaries_dir: None,
-        },
-    )?;
+    if build_aux_services {
+        std::thread::scope(|scope| {
+            let rust_build = scope.spawn(|| {
+                build::resolve(
+                    stage,
+                    target,
+                    &build::BuildOptions {
+                        no_build: false,
+                        binaries_dir: None,
+                    },
+                )
+            });
+            let aux_build = scope.spawn(|| build_aux_service_images(stage, instance, env));
+            let binaries = rust_build
+                .join()
+                .map_err(|_| anyhow::anyhow!("Rust service build panicked"))?;
+            let aux = aux_build
+                .join()
+                .map_err(|_| anyhow::anyhow!("auxiliary service build panicked"))?;
+            binaries?;
+            aux
+        })?;
+    } else {
+        build::resolve(
+            stage,
+            target,
+            &build::BuildOptions {
+                no_build: false,
+                binaries_dir: None,
+            },
+        )?;
+    }
     let changed: Vec<&inventory::RustService> = inventory::services_for_mode(mode)
         .zip(before)
         .filter(|(svc, was)| binary_mtime(target, svc) != *was)
         .map(|(svc, _)| svc)
         .collect();
-    if changed.is_empty() {
-        return Ok(()); // nothing rebuilt → nothing to reload
+    if build_aux_services {
+        recreate_aux_service_containers(stage, instance, env)?;
     }
-    reload_services(stage, instance, &changed)
+    if !changed.is_empty() {
+        reload_services(stage, instance, &changed)?;
+    }
+    Ok(())
 }
 
 /// Modification time of a service's built binary (`None` if absent). Used to tell
@@ -324,7 +377,9 @@ fn interact(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
+    env: &env_layer::ResolvedEnv,
     target: arch::Target,
+    build_aux_services: bool,
     fe: &mut frontend::Frontend,
 ) -> Result<()> {
     use console::Key;
@@ -352,7 +407,7 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(stage, mode, instance, target);
+                let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {
@@ -412,6 +467,9 @@ fn prepare(
     if mode.spec().runs_local_infra {
         fusionauth::write_kickstart(instance)?;
     }
+    if args.build.build_aux_services {
+        build_aux_service_images(stage, instance, &env)?;
+    }
     Ok((env, target))
 }
 
@@ -420,6 +478,27 @@ fn prepare(
 fn compose_cmd(instance: &Instance, env: &env_layer::ResolvedEnv) -> Command {
     let files = gen_compose::compose_files(instance);
     gen_compose::docker_compose(instance, &files, &env.generated_path)
+}
+
+fn build_aux_service_images(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut build = compose_cmd(instance, env);
+    build.arg("build").args(AUX_SERVICE_IMAGES);
+    stage.run("Building auxiliary service images", &mut build)
+}
+
+fn recreate_aux_service_containers(
+    stage: &Stage,
+    instance: &Instance,
+    env: &env_layer::ResolvedEnv,
+) -> Result<()> {
+    let mut up = compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps"])
+        .args(AUX_SERVICE_IMAGES);
+    stage.run("Recreating auxiliary service containers", &mut up)
 }
 
 /// Bring up the backend infra the app services connect to at startup, and get it

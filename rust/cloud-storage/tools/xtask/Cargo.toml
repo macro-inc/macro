@@ -7,7 +7,6 @@ description = "Repo automation: regenerates workspace-hack and the deploy dep-cl
 
 [dependencies]
 anyhow = { workspace = true }
-graphql_soup = { path = "../../graphql_soup" }
 serde_json = { workspace = true }
 # Pinned engine for the generated dependency artifacts. These versions live in
 # Cargo.lock, so dev machines and CI always run the identical generator —
@@ -30,6 +29,9 @@ aws-config = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
+macro_buckets = { path = "../../macro_buckets" }
+macro_dynamodbtables = { path = "../../macro_dynamodbtables" }
+macro_queues = { path = "../../macro_queues" }
 # Typed docker-compose model (build the override as structs, not strings) +
 # Docker Engine API client for the discrete container/image ops.
 docker-compose-types = { version = "0.24", features = ["indexmap"] }

@@ -6,6 +6,11 @@ use aws_sdk_sesv2 as ses;
 #[allow(unused_imports)]
 use mockall::automock;
 
+macro_env_var::maybe_env_vars! {
+    struct SmtpHost;
+    struct SmtpPort;
+}
+
 #[cfg(test)]
 pub use MockSesClient as Ses;
 #[cfg(not(test))]
@@ -31,13 +36,11 @@ impl SesClient {
     /// Construct from the environment: route to local SMTP (Mailpit) when
     /// `SMTP_HOST` is set, otherwise SES. The SES client is still passed in (and
     /// kept for the SES path) so callers don't branch.
-    #[allow(clippy::disallowed_methods)]
     pub fn from_env(inner: ses::Client, environment: &str) -> Self {
-        let transport = match std::env::var("SMTP_HOST") {
-            Ok(host) if !host.is_empty() => {
-                let port = std::env::var("SMTP_PORT")
-                    .ok()
-                    .and_then(|p| p.parse().ok())
+        let transport = match SmtpHost::new().and_then(|host| host.value().map(str::to_string)) {
+            Some(host) if !host.is_empty() => {
+                let port = SmtpPort::new()
+                    .and_then(|p| p.value().and_then(|p| p.parse().ok()))
                     .unwrap_or(1025);
                 Transport::Smtp { host, port }
             }

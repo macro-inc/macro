@@ -15,7 +15,7 @@ use super::super::{stage::Stage, workspace_root};
 /// instance-specific content.
 pub const RUNTIME_IMAGE_TAG: &str = "macro-local-runtime:dev";
 
-const DOCKERFILE_REL: &str = "Dockerfile.runtime";
+const DOCKERFILE_REL: &str = "docker/Dockerfile.runtime";
 
 /// Build the runtime image for the host arch if it is missing (or `force`).
 pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Result<()> {

@@ -7325,6 +7325,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_buckets"
+version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
+
+[[package]]
 name = "macro_cache_client"
 version = "0.1.0"
 dependencies = [
@@ -7413,6 +7420,13 @@ name = "macro_db_migrator"
 version = "0.1.0"
 dependencies = [
  "sqlx",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_dynamodbtables"
+version = "0.1.0"
+dependencies = [
  "workspace-hack",
 ]
 
@@ -11836,6 +11850,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sesv2",
  "lettre",
+ "macro_env_var",
  "mockall",
  "tracing",
  "workspace-hack",
@@ -14858,13 +14873,15 @@ dependencies = [
  "docker-compose-types",
  "dotenvy",
  "gh-workflow",
- "graphql_soup",
  "guppy",
  "hakari",
  "indexmap 2.14.0",
  "indicatif",
  "indoc",
  "libc",
+ "macro_buckets",
+ "macro_dynamodbtables",
+ "macro_queues",
  "serde",
  "serde_json",
  "serde_yaml",

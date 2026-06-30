@@ -4,9 +4,6 @@ set positional-arguments
 # single-instance by design; do not derive resource names from the directory.
 export COMPOSE_PROJECT_NAME := "macro"
 
-# xtask owns all local/dev orchestration; the recipes below are thin delegates.
-xtask := "cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml -p xtask --"
-
 # Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true -- db network
@@ -43,29 +40,6 @@ docker_up *ARGS:
   echo "startup docker compose"
   docker compose up {{ ARGS }}
 
-# Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
-#   just run_local                      # default instance
-#   just run_local --instance agent-a   # isolated, concurrent instance
-#   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build
-run_local *ARGS:
-  {{ xtask }} run-local "$@"
-
-# Run local binaries against shared dev resources (no local infra).
-run_dev *ARGS:
-  {{ xtask }} run-dev "$@"
-
-# Check tools/toolchain/ports/env for the local stack.
-doctor-local *ARGS:
-  {{ xtask }} doctor-local "$@"
-
-# Reset (drop, recreate, migrate) the instance database.
-reset_local *ARGS:
-  {{ xtask }} reset-local "$@"
-
-# Remove an instance's containers, networks, and volumes.
-destroy_local *ARGS:
-  {{ xtask }} destroy-local "$@"
-
 # Patches .env with local FusionAuth values if the Pulumi stack exists.
 # Requires FusionAuth to be running — starts it temporarily if needed.
 patch_local_fusionauth_env:
@@ -101,10 +75,6 @@ patch_local_fusionauth_env:
   fi
   just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
 
-# Stop an instance's containers, keeping volumes (xtask).
-stop_local *ARGS:
-  {{ xtask }} stop-local "$@"
-
 # Stop all local services (default project; legacy alias).
 stop-local:
   docker compose down
@@ -114,6 +84,7 @@ stop-databases:
 
 # Import LocalStack recipes
 import 'local_stack.just'
+import 'just/xtask.just'
 
 # Sets up local database
 setup_local_dbs:

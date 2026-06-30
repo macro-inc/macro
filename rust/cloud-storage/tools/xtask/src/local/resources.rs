@@ -18,20 +18,20 @@ const ACCOUNT_ID: &str = "000000000000";
 
 /// The doc-storage bucket — referenced by the upload-finalizer wiring and the
 /// seed env, so it is named rather than inlined.
-pub const DOC_STORAGE_BUCKET: &str = "doc-storage";
+pub const DOC_STORAGE_BUCKET: &str = macro_buckets::DocumentStorageBucket::LOCAL;
 
 /// The queue doc-storage ObjectCreated events publish to — referenced by the
 /// upload-finalizer wiring, so it is named.
-pub const UPLOAD_FINALIZER_QUEUE: &str = "document-upload-finalizer-queue";
+pub const UPLOAD_FINALIZER_QUEUE: &str = macro_queues::DocumentUploadFinalizerQueue::LOCAL;
 
 // DynamoDB table names: referenced both by their bespoke create-table schema in
 // `localstack` and by the env binding below, so they are named.
 /// The bulk-upload requests table.
-pub const BULK_UPLOAD_TABLE: &str = "bulk-upload";
+pub const BULK_UPLOAD_TABLE: &str = macro_dynamodbtables::BulkUploadRequestsTable::LOCAL;
 /// The connection-gateway (websocket) table.
-pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
+pub const CONNECTION_GATEWAY_TABLE: &str = macro_dynamodbtables::ConnectionGatewayTable::LOCAL;
 /// The static-file metadata table.
-pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
+pub const STATIC_FILE_TABLE: &str = macro_dynamodbtables::StaticFileMetadataTable::LOCAL;
 
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).
@@ -95,35 +95,35 @@ use QueueForm::{Name, Url};
 /// Every local SQS queue and the env var(s) that reference it.
 pub const QUEUES: &[Queue] = &[
     Queue {
-        name: "notification-queue",
+        name: macro_queues::NotificationQueue::LOCAL,
         bindings: &[("NOTIFICATION_QUEUE", Url)],
     },
     Queue {
-        name: "notification-ingress-queue",
+        name: macro_queues::NotificationIngressQueue::LOCAL,
         bindings: &[("NOTIFICATION_INGRESS_QUEUE", Url)],
     },
     Queue {
-        name: "push-delivery-queue",
+        name: macro_queues::PushNotificationEventHandlerQueue::LOCAL,
         bindings: &[("PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-backfill-queue",
+        name: macro_queues::EmailBackfillQueue::LOCAL,
         bindings: &[("BACKFILL_QUEUE", Name), ("EMAIL_BACKFILL_QUEUE", Url)],
     },
     Queue {
-        name: "delete-chat-handler-queue",
+        name: macro_queues::ChatDeleteQueue::LOCAL,
         bindings: &[("CHAT_DELETE_QUEUE", Name)],
     },
     Queue {
-        name: "contacts-queue",
+        name: macro_queues::ContactsQueue::LOCAL,
         bindings: &[("CONTACTS_QUEUE", Name)],
     },
     Queue {
-        name: "convert-service-queue",
+        name: macro_queues::ConvertQueue::LOCAL,
         bindings: &[("CONVERT_QUEUE", Name)],
     },
     Queue {
-        name: "delete-document-handler-queue",
+        name: macro_queues::DocumentDeleteQueue::LOCAL,
         bindings: &[("DOCUMENT_DELETE_QUEUE", Name)],
     },
     Queue {
@@ -131,51 +131,51 @@ pub const QUEUES: &[Queue] = &[
         bindings: &[("DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL", Url)],
     },
     Queue {
-        name: "document-text-extractor-lambda-queue",
+        name: macro_queues::DocumentTextExtractorQueue::LOCAL,
         bindings: &[("DOCUMENT_TEXT_EXTRACTOR_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-scheduled-queue",
+        name: macro_queues::EmailScheduledQueue::LOCAL,
         bindings: &[("EMAIL_SCHEDULED_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-gmail-inbox-sync-queue",
+        name: macro_queues::GmailInboxSyncQueue::LOCAL,
         bindings: &[("GMAIL_INBOX_SYNC_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-gmail-inbox-retry-queue",
+        name: macro_queues::GmailInboxSyncRetryQueue::LOCAL,
         bindings: &[("GMAIL_INBOX_SYNC_RETRY_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-gmail-ops-queue",
+        name: macro_queues::GmailOpsQueue::LOCAL,
         bindings: &[("GMAIL_OPS_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-gmail-ops-retry-queue",
+        name: macro_queues::GmailOpsRetryQueue::LOCAL,
         bindings: &[("GMAIL_OPS_RETRY_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-refresh-queue",
+        name: macro_queues::LinkManagerQueue::LOCAL,
         bindings: &[("LINK_MANAGER_QUEUE", Name)],
     },
     Queue {
-        name: "search-event-queue",
+        name: macro_queues::SearchEventQueue::LOCAL,
         bindings: &[("SEARCH_EVENT_QUEUE", Name)],
     },
     Queue {
-        name: "ai-projection-queue",
+        name: macro_queues::AiProjectionQueue::LOCAL,
         bindings: &[("AI_PROJECTION_QUEUE", Url)],
     },
     Queue {
-        name: "email-sfs-delete-queue",
+        name: macro_queues::SfsDeleteQueue::LOCAL,
         bindings: &[("SFS_DELETE_QUEUE", Name)],
     },
     Queue {
-        name: "email-service-sfs-mapper-queue",
+        name: macro_queues::SfsUploaderQueue::LOCAL,
         bindings: &[("SFS_UPLOADER_QUEUE", Name)],
     },
     Queue {
-        name: "static-file-s3-event-notification-queue",
+        name: macro_queues::StaticFileServiceS3EventQueueUrl::LOCAL,
         bindings: &[("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL", Url)],
     },
 ];
@@ -183,7 +183,7 @@ pub const QUEUES: &[Queue] = &[
 /// Every local S3 bucket and the env var that references it.
 pub const BUCKETS: &[Bucket] = &[
     Bucket {
-        name: "macro-email-attachments",
+        name: macro_buckets::EmailAttachmentBucket::LOCAL,
         env_key: "ATTACHMENT_BUCKET",
     },
     Bucket {
@@ -191,19 +191,19 @@ pub const BUCKETS: &[Bucket] = &[
         env_key: "DOCUMENT_STORAGE_BUCKET",
     },
     Bucket {
-        name: "docx-upload",
+        name: macro_buckets::DocxDocumentUploadBucket::LOCAL,
         env_key: "DOCX_DOCUMENT_UPLOAD_BUCKET",
     },
     Bucket {
-        name: "static-file-storage",
+        name: macro_buckets::StaticFileStorageBucket::LOCAL,
         env_key: "STATIC_STORAGE_BUCKET",
     },
     Bucket {
-        name: "bulk-upload-staging",
+        name: macro_buckets::BulkUploadStagingBucket::LOCAL,
         env_key: "UPLOAD_STAGING_BUCKET",
     },
     Bucket {
-        name: "macro-call-recording-local",
+        name: macro_buckets::CallRecordingBucket::LOCAL,
         env_key: "CALL_RECORDING_BUCKET_NAME",
     },
 ];
