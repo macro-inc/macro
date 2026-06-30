@@ -540,7 +540,7 @@ function isNameTooLongError(error: Error): boolean {
 function handleUploadError(error: Error): void {
   console.error('Upload error:', error);
   if (isNameTooLongError(error)) {
-    toast.failure('Name is too long. Please shorten it and try again.');
+    toast.failure('Name too long (max 200 characters)');
     return;
   }
   if (
