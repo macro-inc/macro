@@ -42,7 +42,6 @@ function Root(props: RootProps): JSX.Element {
         'group/inbox-item relative grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 rounded-lg bg-surface px-2 py-1.5',
 
         {
-          'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.selected,
           'bg-accent/16': props.selected && props.highlighted,
           'bg-hover/30':
