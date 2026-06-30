@@ -78,6 +78,7 @@
     "@tauri-apps/plugin-os": "~2",
     "@tauri-apps/plugin-websocket": "~2",
     "@thisbeyond/solid-dnd": "^0.7.5",
+    "@urql/core": "^6.0.3",
     "@vitest/ui": "^4.0.17",
     "@zoompinch/core": "^0.0.38",
     "async-mutex": "^0.5.0",
