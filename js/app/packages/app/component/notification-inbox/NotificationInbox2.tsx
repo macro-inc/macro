@@ -136,7 +136,7 @@ const inboxQueryFilters = (
   });
 };
 
-export function NotificationInbox3() {
+export function NotificationInbox2() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
