@@ -282,6 +282,8 @@ class UnsupportedFileTypeError extends Error {
 }
 
 class UploadError extends Error {
+  public readonly originalError?: Error | string;
+
   constructor(
     file: { name: string },
     destination?: UploadDestination,
@@ -290,6 +292,8 @@ class UploadError extends Error {
     const fileName = getFileName(file);
     const message = `Upload failed: ${fileName}`;
     super(message);
+
+    this.originalError = originalError;
 
     console.error(
       `upload${destination ? ` to ${destination}` : ''} failed:`,
@@ -518,7 +522,19 @@ export async function uploadFiles(
 }
 
 function isNameTooLongError(error: Error): boolean {
-  return error.message.toLowerCase().includes('name too long');
+  const messages = [error.message];
+  // The backend message can be wrapped by UploadError (whose own message is the
+  // generic "Upload failed: <file>"), so also inspect the preserved original.
+  if (error instanceof UploadError && error.originalError != null) {
+    messages.push(
+      error.originalError instanceof Error
+        ? error.originalError.message
+        : error.originalError
+    );
+  }
+  return messages.some((message) =>
+    message.toLowerCase().includes('name too long')
+  );
 }
 
 function handleUploadError(error: Error): void {
