@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait = { workspace = true }
 either = { workspace = true }

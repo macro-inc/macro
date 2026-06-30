@@ -5527,6 +5527,7 @@ dependencies = [
 name = "graphql_soup"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "async-trait",
  "either",
