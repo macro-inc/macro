@@ -43,7 +43,9 @@ pub fn router() -> Router<PropertiesHandlerState> {
         )
         .route(
             "/tags",
-            get(tags::get_tags).layer(ensure_user_exists.clone()),
+            get(tags::list_tags)
+                .post(tags::ensure_tag_set)
+                .layer(ensure_user_exists.clone()),
         )
         // Entity Property Operations
         // GET allows anonymous access for public entities

@@ -1292,89 +1292,94 @@ export const deleteEntityPropertyParams = zod.object({
 });
 
 /**
- * @summary Get the caller's tag sets: their personal set, plus their team's shared set when on a team.
-Each set is resolved and provisioned on first use.
+ * @summary List the caller's tag sets: their personal set, plus their team's set when on a team.
+Pure read - a scope with no provisioned definition yet returns an empty set.
  */
-export const getTagsResponseItem = zod
+export const listTagsResponseItem = zod
   .object({
     definition: zod
       .union([
+        zod.null(),
         zod
-          .object({
-            scope: zod.enum(['user']),
-            user_id: zod.string(),
-          })
-          .describe('User-scoped property.'),
-        zod
-          .object({
-            scope: zod.enum(['team']),
-            team_id: zod.uuid(),
-          })
-          .describe('Team-scoped property.'),
-        zod
-          .object({
-            scope: zod.enum(['system']),
-          })
-          .describe('System-owned property (no user or team owner).'),
-      ])
-      .describe(
-        'Defines who owns a property - user-scoped, team-scoped, or system.'
-      )
-      .and(
-        zod.object({
-          createdAt: zod.iso.datetime({}).nullish(),
-          dataType: zod
-            .enum([
-              'BOOLEAN',
-              'DATE',
-              'NUMBER',
-              'STRING',
-              'SELECT_NUMBER',
-              'SELECT_STRING',
-              'TAG',
-              'ENTITY',
-              'LINK',
-            ])
-            .describe(
-              'Data type for property values, determining storage and validation.'
-            ),
-          displayName: zod.string(),
-          id: zod.uuid(),
-          isMetadata: zod
-            .boolean()
-            .describe(
-              'Flag to indicate if this is a system-generated metadata property'
-            ),
-          isMultiSelect: zod.boolean(),
-          isSystem: zod
-            .boolean()
-            .describe(
-              'Flag to indicate if this is a system property (managed by the system)'
-            ),
-          specificEntityType: zod
-            .union([
-              zod.null(),
-              zod
+          .union([
+            zod
+              .object({
+                scope: zod.enum(['user']),
+                user_id: zod.string(),
+              })
+              .describe('User-scoped property.'),
+            zod
+              .object({
+                scope: zod.enum(['team']),
+                team_id: zod.uuid(),
+              })
+              .describe('Team-scoped property.'),
+            zod
+              .object({
+                scope: zod.enum(['system']),
+              })
+              .describe('System-owned property (no user or team owner).'),
+          ])
+          .describe(
+            'Defines who owns a property - user-scoped, team-scoped, or system.'
+          )
+          .and(
+            zod.object({
+              createdAt: zod.iso.datetime({}).nullish(),
+              dataType: zod
                 .enum([
-                  'CHANNEL',
-                  'CHAT',
-                  'COMPANY',
-                  'DOCUMENT',
-                  'PROJECT',
-                  'TASK',
-                  'THREAD',
-                  'USER',
+                  'BOOLEAN',
+                  'DATE',
+                  'NUMBER',
+                  'STRING',
+                  'SELECT_NUMBER',
+                  'SELECT_STRING',
+                  'TAG',
+                  'ENTITY',
+                  'LINK',
                 ])
                 .describe(
-                  'Type of entity that can be referenced by entity properties.'
+                  'Data type for property values, determining storage and validation.'
                 ),
-            ])
-            .optional(),
-          updatedAt: zod.iso.datetime({}).nullish(),
-        })
-      )
-      .describe('Property definition response (API representation).'),
-    propertyOptions: zod.array(
+              displayName: zod.string(),
+              id: zod.uuid(),
+              isMetadata: zod
+                .boolean()
+                .describe(
+                  'Flag to indicate if this is a system-generated metadata property'
+                ),
+              isMultiSelect: zod.boolean(),
+              isSystem: zod
+                .boolean()
+                .describe(
+                  'Flag to indicate if this is a system property (managed by the system)'
+                ),
+              specificEntityType: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'CHANNEL',
+                      'CHAT',
+                      'COMPANY',
+                      'DOCUMENT',
+                      'PROJECT',
+                      'TASK',
+                      'THREAD',
+                      'USER',
+                    ])
+                    .describe(
+                      'Type of entity that can be referenced by entity properties.'
+                    ),
+                ])
+                .optional(),
+              updatedAt: zod.iso.datetime({}).nullish(),
+            })
+          )
+          .describe('Property definition response (API representation).'),
+      ])
+      .optional(),
+    options: zod.array(
       zod
         .object({
           color: zod.string().nullish(),
@@ -1406,6 +1411,149 @@ export const getTagsResponseItem = zod
         })
         .describe('Property option response (API representation).')
     ),
+    scope: zod
+      .enum(['user', 'team'])
+      .describe('Which owner a tag set belongs to.'),
   })
-  .describe('Property definition with options response.');
-export const getTagsResponse = zod.array(getTagsResponseItem);
+  .describe(
+    'A tag set the caller can use. `definition` is absent until the set is provisioned\n(on first label create), in which case `options` is empty.'
+  );
+export const listTagsResponse = zod.array(listTagsResponseItem);
+
+/**
+ * @summary Provision (get-or-create) the caller's tag set for a scope and return it. Called when
+the caller creates their first label for that scope, so the read path stays side-effect free.
+ */
+export const ensureTagSetBody = zod
+  .object({
+    scope: zod
+      .enum(['user', 'team'])
+      .describe('Which owner a tag set belongs to.'),
+  })
+  .describe(
+    "Request to provision (get-or-create) the caller's tag set for a scope."
+  );
+
+export const ensureTagSetResponse = zod
+  .object({
+    definition: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                scope: zod.enum(['user']),
+                user_id: zod.string(),
+              })
+              .describe('User-scoped property.'),
+            zod
+              .object({
+                scope: zod.enum(['team']),
+                team_id: zod.uuid(),
+              })
+              .describe('Team-scoped property.'),
+            zod
+              .object({
+                scope: zod.enum(['system']),
+              })
+              .describe('System-owned property (no user or team owner).'),
+          ])
+          .describe(
+            'Defines who owns a property - user-scoped, team-scoped, or system.'
+          )
+          .and(
+            zod.object({
+              createdAt: zod.iso.datetime({}).nullish(),
+              dataType: zod
+                .enum([
+                  'BOOLEAN',
+                  'DATE',
+                  'NUMBER',
+                  'STRING',
+                  'SELECT_NUMBER',
+                  'SELECT_STRING',
+                  'TAG',
+                  'ENTITY',
+                  'LINK',
+                ])
+                .describe(
+                  'Data type for property values, determining storage and validation.'
+                ),
+              displayName: zod.string(),
+              id: zod.uuid(),
+              isMetadata: zod
+                .boolean()
+                .describe(
+                  'Flag to indicate if this is a system-generated metadata property'
+                ),
+              isMultiSelect: zod.boolean(),
+              isSystem: zod
+                .boolean()
+                .describe(
+                  'Flag to indicate if this is a system property (managed by the system)'
+                ),
+              specificEntityType: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'CHANNEL',
+                      'CHAT',
+                      'COMPANY',
+                      'DOCUMENT',
+                      'PROJECT',
+                      'TASK',
+                      'THREAD',
+                      'USER',
+                    ])
+                    .describe(
+                      'Type of entity that can be referenced by entity properties.'
+                    ),
+                ])
+                .optional(),
+              updatedAt: zod.iso.datetime({}).nullish(),
+            })
+          )
+          .describe('Property definition response (API representation).'),
+      ])
+      .optional(),
+    options: zod.array(
+      zod
+        .object({
+          color: zod.string().nullish(),
+          displayOrder: zod.number(),
+          id: zod.uuid(),
+          propertyDefinitionId: zod.uuid(),
+          value: zod
+            .union([
+              zod
+                .object({
+                  type: zod.enum(['string']),
+                  value: zod
+                    .string()
+                    .describe('String value for SelectString properties'),
+                })
+                .describe('String value for SelectString properties'),
+              zod
+                .object({
+                  type: zod.enum(['number']),
+                  value: zod
+                    .number()
+                    .describe('Number value for SelectNumber properties'),
+                })
+                .describe('Number value for SelectNumber properties'),
+            ])
+            .describe(
+              'The value of a property option - either a string or a number.'
+            ),
+        })
+        .describe('Property option response (API representation).')
+    ),
+    scope: zod
+      .enum(['user', 'team'])
+      .describe('Which owner a tag set belongs to.'),
+  })
+  .describe(
+    'A tag set the caller can use. `definition` is absent until the set is provisioned\n(on first label create), in which case `options` is empty.'
+  );

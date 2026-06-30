@@ -543,8 +543,8 @@
     "/properties/tags": {
       "get": {
         "tags": ["Properties"],
-        "summary": "Get the caller's tag sets: their personal set, plus their team's shared set when on a team.\nEach set is resolved and provisioned on first use.",
-        "operationId": "get_tags",
+        "summary": "List the caller's tag sets: their personal set, plus their team's set when on a team.\nPure read - a scope with no provisioned definition yet returns an empty set.",
+        "operationId": "list_tags",
         "responses": {
           "200": {
             "description": "Tag sets retrieved",
@@ -553,11 +553,44 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/PropertyDefinitionWithOptionsResponse"
+                    "$ref": "#/components/schemas/TagSetResponse"
                   }
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Provision (get-or-create) the caller's tag set for a scope and return it. Called when\nthe caller creates their first label for that scope, so the read path stays side-effect free.",
+        "operationId": "ensure_tag_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnsureTagSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tag set provisioned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagSetResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Team membership required for team scope"
           },
           "500": {
             "description": "Internal server error"
@@ -690,6 +723,16 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "EnsureTagSetRequest": {
+        "type": "object",
+        "description": "Request to provision (get-or-create) the caller's tag set for a scope.",
+        "required": ["scope"],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/TagScope"
+          }
+        }
       },
       "EntityPropertiesResponse": {
         "type": "object",
@@ -1663,6 +1706,37 @@
           }
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
+      },
+      "TagScope": {
+        "type": "string",
+        "description": "Which owner a tag set belongs to.",
+        "enum": ["user", "team"]
+      },
+      "TagSetResponse": {
+        "type": "object",
+        "description": "A tag set the caller can use. `definition` is absent until the set is provisioned\n(on first label create), in which case `options` is empty.",
+        "required": ["scope", "options"],
+        "properties": {
+          "definition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
+              }
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyOptionResponse"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/TagScope"
+          }
+        }
       },
       "UpdatePropertyOptionRequest": {
         "type": "object",
