@@ -37,46 +37,55 @@ impl<
 
         tracing::info!(installation_id, "processing installation created event");
 
-        let macro_id = self
+        let links = self
             .repo
-            .get_macro_id_by_github_user_id(&sender_github_user_id)
+            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&sender_github_user_id))
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        let macro_id = match macro_id {
-            Some(id) => id,
-            None => {
-                tracing::warn!(
+        let macro_ids = links.get(&sender_github_user_id).cloned().unwrap_or_default();
+        if macro_ids.is_empty() {
+            tracing::warn!(
+                installation_id,
+                "no github link found for sender, cannot associate installation with a source"
+            );
+            return Ok(());
+        }
+
+        // A GitHub account may be linked to several Macro users; associate the
+        // installation with the team/user source of every linked user.
+        let mut seen = std::collections::HashSet::new();
+        let mut sources = Vec::new();
+        for macro_id in macro_ids {
+            let team_ids = self
+                .repo
+                .get_user_team_ids(&macro_id)
+                .await
+                .map_err(|e| GithubError::Internal(e.into()))?;
+
+            if team_ids.is_empty() {
+                tracing::info!(
                     installation_id,
-                    "no github link found for sender, cannot associate installation with a source"
+                    "user has no teams, associating installation with user source"
                 );
-                return Ok(());
+                let source = GithubAppInstallationSource::User(macro_id);
+                if seen.insert(source.clone()) {
+                    sources.push(source);
+                }
+            } else {
+                tracing::info!(
+                    installation_id,
+                    team_count = team_ids.len(),
+                    "associating installation with user teams"
+                );
+                for team_id in team_ids {
+                    let source = GithubAppInstallationSource::Team(team_id);
+                    if seen.insert(source.clone()) {
+                        sources.push(source);
+                    }
+                }
             }
-        };
-
-        let team_ids = self
-            .repo
-            .get_user_team_ids(&macro_id)
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
-
-        let sources = if team_ids.is_empty() {
-            tracing::info!(
-                installation_id,
-                "user has no teams, associating installation with user source"
-            );
-            vec![GithubAppInstallationSource::User(macro_id)]
-        } else {
-            tracing::info!(
-                installation_id,
-                team_count = team_ids.len(),
-                "associating installation with user teams"
-            );
-            team_ids
-                .into_iter()
-                .map(GithubAppInstallationSource::Team)
-                .collect()
-        };
+        }
 
         self.repo
             .upsert_installation_sources(&installation_id_str, &sources)
