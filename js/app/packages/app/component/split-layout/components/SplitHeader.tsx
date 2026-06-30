@@ -22,8 +22,8 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import SplitIcon from '@phosphor/square-half.svg';
 import CloseIcon from '@phosphor/x.svg';
+import SplitIcon from '@icon/wide-newSplit.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn } from '@ui';
@@ -252,15 +252,15 @@ function SplitHeaderContextMenu(props: ParentProps) {
     const index = splitIndex();
     if (index < 0) return;
 
-    const nextContents = layout.manager
-      .splits()
-      .map((split) => ({ ...split.content }));
     const insertIndex = side === 'left' ? index : index + 1;
 
-    nextContents.splice(insertIndex, 0, content);
-    layout.manager.reconcile(nextContents);
-    layout.manager.splits()[insertIndex]?.id &&
-      layout.manager.activateSplit(layout.manager.splits()[insertIndex].id);
+    layout.manager.createNewSplit({
+      content,
+      activate: true,
+      allowDuplicate: true,
+      insertIndex,
+      referredFrom: null,
+    });
   };
 
   const copyDebugInfo = async () => {
@@ -301,6 +301,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
         <ContextMenuContent width="md">
           <MenuItem
             icon={SplitIcon}
+            iconClass="rotate-180"
             text="New split left"
             disabled={!layout.manager.canAppendSplit()}
             onClick={() => insertSplitBeside('left', newSplitContent())}
