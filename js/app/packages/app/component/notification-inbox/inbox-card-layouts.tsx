@@ -820,7 +820,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                   toggleExpanded();
                 }}
               >
-                {expanded() ? 'Hide sub items' : 'Show sub items'}
+                {expanded() ? 'Hide thread messages' : 'Show thread messages'}
               </button>
             </>
           ) : undefined

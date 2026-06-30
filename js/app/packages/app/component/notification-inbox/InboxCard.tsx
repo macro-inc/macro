@@ -49,7 +49,7 @@ function Root(props: RootProps): JSX.Element {
             props.highlighted && !props.selected && !isTouchDevice(),
           'hover:bg-hover/30':
             !props.highlighted && !props.selected && !isTouchDevice(),
-          'opacity-85': props.dimmed,
+          'opacity-65': props.dimmed,
         },
         props.class
       )}
