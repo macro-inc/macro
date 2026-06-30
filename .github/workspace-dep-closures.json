@@ -2598,6 +2598,15 @@
       "macro_env_var",
       "workspace-hack"
     ],
+    "macro_event_broker": [
+      "macro_event_broker",
+      "macro_event_topics",
+      "workspace-hack"
+    ],
+    "macro_event_topics": [
+      "macro_event_topics",
+      "workspace-hack"
+    ],
     "macro_middleware": [
       "agent",
       "ai_toolset",

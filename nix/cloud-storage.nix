@@ -28,6 +28,8 @@
         [
           openssl
           openssl.dev
+          rdkafka
+          rdkafka.dev
           glib
           glib.dev
           libclang
@@ -763,22 +765,33 @@
       // deployLambdaPackages;
 
       devShells = {
-        default = pkgs.mkShell (
-          {
-            buildInputs = shellTools ++ libraries;
-            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-            RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-            # Keep local cargo-lambda builds on the same aws-lc-sys path as
-            # the Nix lambda derivations. The default cc builder rejects
-            # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
-            AWS_LC_SYS_CMAKE_BUILDER = "1";
-          }
-          // pkgs.lib.optionalAttrs isLinux {
-            LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
-            BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-          }
-        );
+        default =
+          let
+            pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
+              pkgs.openssl.dev
+              pkgs.rdkafka.dev
+            ];
+          in
+          pkgs.mkShell (
+            {
+              buildInputs = shellTools ++ libraries;
+              PKG_CONFIG_PATH = pkgConfigPath;
+              # Cargo build scripts use the Nix pkg-config wrapper, which prefers
+              # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
+              # Keep librdkafka visible there so rdkafka-sys can find rdkafka.pc.
+              PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+              RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Keep local cargo-lambda builds on the same aws-lc-sys path as
+              # the Nix lambda derivations. The default cc builder rejects
+              # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
+              AWS_LC_SYS_CMAKE_BUILDER = "1";
+            }
+            // pkgs.lib.optionalAttrs isLinux {
+              LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
+              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
+            }
+          );
       };
     };
 }
