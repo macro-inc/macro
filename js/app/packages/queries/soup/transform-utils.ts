@@ -648,8 +648,8 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       return out;
     })
     .with({ tag: 'channel' }, (item) => {
-      const latestMessage =
-        item.data.latest_message ?? item.data.latest_non_thread_message;
+      const latestMessage = item.data.latest_message;
+      const latestRootMessage = item.data.latest_non_thread_message;
 
       const out: ChannelEntity = {
         type: 'channel',
@@ -668,15 +668,31 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
               messageId: latestMessage.message_id,
               threadId: latestMessage.thread_id ?? undefined,
               content: latestMessage.content,
+              mentions: latestMessage.mentions,
               senderId: latestMessage.sender_id,
               createdAt: latestMessage.created_at,
+            }
+          : undefined,
+        latestRootMessage: latestRootMessage
+          ? {
+              messageId: latestRootMessage.message_id,
+              threadId: latestRootMessage.thread_id ?? undefined,
+              content: latestRootMessage.content,
+              mentions: latestRootMessage.mentions,
+              senderId: latestRootMessage.sender_id,
+              createdAt: latestRootMessage.created_at,
             }
           : undefined,
       };
       return out;
     })
     .with({ tag: 'foreignEntity' }, (item) => {
-      const metadata = item.data.metadata as unknown as GithubPullRequest;
+      // `authorLogin`/`authorId` are enrichment-only fields the backend now
+      // returns but that aren't on the base generated schema yet.
+      const metadata = item.data.metadata as unknown as GithubPullRequest & {
+        authorLogin?: string | null;
+        authorId?: number | null;
+      };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
 
@@ -708,6 +724,8 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
           deletions: metadata.deletions ?? 0,
           comments: metadata.comments ?? [],
           checks: metadata.checks?.filter(Boolean) ?? [],
+          authorLogin: metadata.authorLogin ?? undefined,
+          authorId: metadata.authorId ?? undefined,
         },
       };
 

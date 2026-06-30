@@ -53,23 +53,29 @@ export type GithubPullRequestEntity = ForeignEntityBase & {
     deletions: number;
     comments: GithubPullRequestComment[];
     checks: GithubPullRequestCheckRun[];
+    authorLogin?: string;
+    authorId?: number;
   };
 };
 
 export type ForeignEntity = UnknownForeignEntity | GithubPullRequestEntity;
+
+type ChannelEntityLatestMessage = {
+  messageId: string;
+  threadId?: string | null;
+  content: string;
+  senderId: string;
+  createdAt: DateValue;
+  mentions: string[];
+};
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
-  latestMessage?: {
-    messageId: string;
-    threadId?: string | null;
-    content: string;
-    senderId: string;
-    createdAt: DateValue;
-  };
+  latestMessage?: ChannelEntityLatestMessage;
+  latestRootMessage?: ChannelEntityLatestMessage;
 };
 
 export type ChannelMessageEntity = EntityBase & {
