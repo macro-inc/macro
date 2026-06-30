@@ -2650,6 +2650,13 @@ export interface SendEmail {
    */
   cc?: EmailRecipient[];
   /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
+  /**
    * The ID of a message to reply to (optional). When set, the email is
    * sent as a reply within the same thread.
    */

@@ -2007,6 +2007,7 @@ export const SendEmail = z.object({
       })
     )
     .optional(),
+  includeSignature: z.union([z.boolean(), z.null()]).default(null),
   replyingToId: z.union([z.string().uuid(), z.null()]).default(null),
   subject: z.string(),
   to: z.array(
