@@ -8,6 +8,7 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
+import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
@@ -16,13 +17,13 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   REFERENCES_DRAWER_ID,
@@ -38,23 +39,26 @@ import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/wide-share.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
 import Printer from '@phosphor/printer.svg';
 import Quotes from '@phosphor/quotes.svg';
+import SidePanelIcon from '@phosphor/square-half.svg';
 import {
   blockNameToItemType,
   storageServiceClient,
 } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button, cn } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
-import { Show } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
@@ -69,8 +73,9 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
+  const sidePanel = useSidePanel();
+  const splitPanel = useSplitPanel();
 
   const createShareUrl = useCreateShareUrl();
 
@@ -162,12 +167,23 @@ export function TopBar() {
     }
   });
 
+  if (splitPanel?.splitHotkeyScope) {
+    const reg = registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!sidePanel) return false;
+        if (!sidePanel.hasSections()) return false;
+        sidePanel.toggle();
+        return true;
+      },
+    });
+    onCleanup(() => reg.dispose());
+  }
+
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -235,6 +251,37 @@ export function TopBar() {
       buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
       focusTarget: getShareDrawerRecipientInput,
     },
+    {
+      label: () =>
+        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
+      icon: SidePanelIcon,
+      action: () => sidePanel?.toggle(),
+      isActive: () => sidePanel?.isOpen() ?? false,
+      condition: () => !(sidePanel?.isNarrow() ?? isMobile()),
+      buttonComponent: () => (
+        <Show when={sidePanel}>
+          {(panel) => (
+            <Button
+              depth={2}
+              variant="base"
+              size="icon-sm"
+              class={cn('bg-surface order-20', {
+                'bg-active': sidePanel?.isOpen(),
+              })}
+              tooltip={
+                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
+              }
+              hotkey={TOKENS.block.toggleSidePanel}
+              onClick={() => {
+                panel().toggle();
+              }}
+            >
+              <SidePanelIcon />
+            </Button>
+          )}
+        </Show>
+      ),
+    },
   ];
 
   return (
@@ -260,6 +307,7 @@ export function TopBar() {
             {ENABLE_PDF_MARKUP && <MarkupToolbar />}
           </div>
         </Show>
+        <SidePanel.NarrowTabs />
       </SplitToolbarLeft>
       <ResponsiveBlockToolbar
         tools={tools}
