@@ -1,7 +1,12 @@
-use super::*;
+use crate::hook::*;
+use ai_toolset::SearchableTool;
+use rig_core::agent::{HookAction, PromptHook};
 use rig_core::providers::anthropic::completion::CompletionModel as AnthropicModel;
 use schemars::Schema;
+use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 fn searchable(name: &str) -> SearchableTool {
     SearchableTool {

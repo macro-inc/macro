@@ -1,25 +1,6 @@
 use rig_core::agent::StreamingError;
 use rig_core::completion::{CompletionError, PromptError};
 
-#[cfg(test)]
-mod test;
-
-/// How a failed agent turn should be surfaced to the user.
-///
-/// Lets callers (e.g. the chat stream endpoint) turn an opaque [`AgentError`]
-/// into a well-typed, user-facing error without re-implementing the rig error
-/// archaeology below.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FailureKind {
-    /// The model provider returned an error or was unreachable — most likely a
-    /// provider outage. The user should try a different model / provider.
-    ProviderOutage,
-    /// The request exceeded the model's context window.
-    ContextOverflow,
-    /// Anything else (serialization, our own bug, etc.).
-    Internal,
-}
-
 /// Errors produced by the agent crate.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
@@ -72,32 +53,14 @@ impl AgentError {
         }
     }
 
-    /// Classify this error for user-facing reporting.
-    ///
-    /// rig collapses provider HTTP failures into
-    /// [`CompletionError::ProviderError`] / [`CompletionError::ResponseError`]
-    /// (the HTTP status code is not preserved), so we inspect the innermost
-    /// completion error: a context-window message maps to
-    /// [`FailureKind::ContextOverflow`]; any other provider or transport
-    /// failure maps to [`FailureKind::ProviderOutage`]; everything else is
-    /// [`FailureKind::Internal`].
-    pub fn failure_kind(&self) -> FailureKind {
-        match self.completion_error() {
-            Some(CompletionError::ProviderError(msg) | CompletionError::ResponseError(msg)) => {
-                if is_context_overflow(msg) {
-                    FailureKind::ContextOverflow
-                } else {
-                    FailureKind::ProviderOutage
-                }
-            }
-            // Connection error / timeout — we couldn't reach the provider.
-            Some(CompletionError::HttpError(_)) => FailureKind::ProviderOutage,
-            _ => FailureKind::Internal,
-        }
-    }
-
     /// The innermost rig [`CompletionError`], if this error wraps one.
-    fn completion_error(&self) -> Option<&CompletionError> {
+    ///
+    /// rig nests the underlying completion error a few different ways depending
+    /// on where it surfaced (direct, prompt, or streamed); this unwraps all of
+    /// them so callers can inspect the provider failure without re-implementing
+    /// that archaeology. Returns `None` for errors that don't originate from a
+    /// completion call (unknown model, env var, our own serialization, etc.).
+    pub fn completion_error(&self) -> Option<&CompletionError> {
         match self {
             AgentError::Completion(e) => Some(e),
             AgentError::Prompt(e) => prompt_completion_error(e),
@@ -114,15 +77,4 @@ fn prompt_completion_error(e: &PromptError) -> Option<&CompletionError> {
         PromptError::CompletionError(e) => Some(e),
         _ => None,
     }
-}
-
-/// Whether a provider error message describes a context-window overflow rather
-/// than an outage. Anthropic returns "prompt is too long"; OpenAI returns
-/// "context_length_exceeded" / "maximum context length".
-fn is_context_overflow(msg: &str) -> bool {
-    let m = msg.to_ascii_lowercase();
-    m.contains("context length")
-        || m.contains("context_length")
-        || m.contains("maximum context")
-        || m.contains("prompt is too long")
 }

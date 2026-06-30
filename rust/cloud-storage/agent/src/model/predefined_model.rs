@@ -1,3 +1,6 @@
+//! Some predefined models backend convenience
+//! Models are _not_ strictly verified. This is intentional so that we
+//! can route to any <provider>/<model-id>
 use crate::model::types::Model;
 use rig_core::providers::anthropic::completion::{
     CLAUDE_HAIKU_4_5, CLAUDE_OPUS_4_7, CLAUDE_OPUS_4_8, CLAUDE_SONNET_4_6,
@@ -63,18 +66,6 @@ impl From<PredefinedModel> for super::types::Model<'static> {
 }
 
 impl PredefinedModel {
-    /// Returns the provider API model identifier.
-    pub fn api_id(&self) -> &'static str {
-        match self {
-            Self::Smart | Self::Retired => CLAUDE_OPUS_4_8,
-            Self::Opus4_7 => CLAUDE_OPUS_4_7,
-            Self::Sonnet4_6 => CLAUDE_SONNET_4_6,
-            Self::Fast | Self::Haiku4_5 => CLAUDE_HAIKU_4_5,
-            Self::Gpt5_5 => GPT_5_5,
-            Self::Gpt5Mini => GPT_5_MINI,
-        }
-    }
-
     /// Returns `additional_params` JSON to enable extended thinking / reasoning.
     ///
     /// - Opus 4.8 / 4.7: `adaptive` (model chooses when to think)

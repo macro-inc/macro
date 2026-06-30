@@ -1,9 +1,12 @@
-use super::*;
+use crate::convert::*;
+use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use model_entity::EntityType;
 use non_empty::NonEmpty;
-use rig_core::message::{AssistantContent, DocumentSourceKind, Message, UserContent};
+use rig_core::message::{
+    AssistantContent, DocumentSourceKind, ImageMediaType, Message, UserContent,
+};
 use serde_json::json;
 
 /// A minimal valid 1x1 PNG, used to exercise the image-normalization path.

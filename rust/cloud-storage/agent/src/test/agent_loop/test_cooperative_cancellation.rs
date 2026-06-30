@@ -1,41 +1,21 @@
-//! Agent loop behavior tests.
+//! Cooperative cancellation.
 //!
-//! These drive the public session surface used by DCS — [`AgentLoop`] →
-//! [`super::Session::cancellable`] → [`super::Session::send_message`] — with a
-//! fake completion model injected via [`AgentLoop::test_session`], so the real
-//! per-session wiring (tool adapters, cancellation token) is exercised.
+//! A long-running tool reads the cancellation token off its [`RequestContext`]
+//! and returns a normal value when the request is cancelled. Cancelling such a
+//! tool mid-flight must surface its cooperative result as a tool response and
+//! let the loop finish *cleanly* — no terminal error. This is distinct from the
+//! abrupt path in `test_cancellation_resolution`, where the loop itself tears
+//! down with a cancellation error.
 
-use crate::AgentLoop;
-use crate::stream::{StreamPart, ToolResponse};
-use ai_toolset::{
-    AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolResult,
-    ToolSet as AiToolSet,
-};
-use ai_usage::{AiFeature, UsageContext, UsageEvent, UsageRecorder};
-use futures::StreamExt;
-use macro_user_id::user_id::MacroUserIdStr;
-use rig_core::message::Message;
+use super::util;
+use crate::stream::ToolResponse;
+use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
+use async_trait::async_trait;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::Notify;
-
-/// Records nothing — token usage isn't under test here.
-struct NoOpRecorder;
-impl UsageRecorder for NoOpRecorder {
-    fn record(&self, _event: UsageEvent) {}
-}
-
-fn test_loop() -> AgentLoop {
-    AgentLoop::new(Arc::new(NoOpRecorder))
-        .with_max_turns(8)
-        .with_max_tokens(1024)
-}
-
-fn test_user() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("test@macro.com").expect("valid user id")
-}
 
 /// Shared service state handed to the tool. `started` lets the tool announce
 /// that it has begun executing so the test can cancel only *after* the
@@ -57,7 +37,7 @@ struct TestCtx {
 )]
 struct InfiniteTool {}
 
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncTool<TestCtx> for InfiniteTool {
     type Output = serde_json::Value;
 
@@ -79,10 +59,9 @@ impl AsyncTool<TestCtx> for InfiniteTool {
     }
 }
 
-/// A fake AI stream that calls an infinite tool exercises cooperative
-/// cancellation: cancelling the session while the tool is running makes the
-/// tool return (via `request_context.cancel`), and that return surfaces as a
-/// tool response in the message stream.
+/// Cancelling the session while an infinite tool is running makes the tool
+/// return (via `request_context.cancel`), and that return surfaces as a tool
+/// response in the message stream.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancelling_running_tool_yields_a_tool_response() {
     // Turn 1: the model calls the infinite tool. Turn 2 (reached once the
@@ -99,13 +78,9 @@ async fn cancelling_running_tool_yields_a_tool_response() {
     let context = Arc::new(TestCtx {
         started: started.clone(),
     });
-    let toolset: Arc<dyn AiToolSet<TestCtx> + Send + Sync> =
-        Arc::new(AsyncToolCollection::<TestCtx>::new().add_tool::<InfiniteTool, TestCtx>());
+    let toolset = util::single_tool_set::<InfiniteTool, TestCtx>();
 
-    let usage_ctx = UsageContext::new(AiFeature::Chat, test_user());
-    let session = test_loop()
-        .test_session(toolset, context, "test preamble", usage_ctx, model)
-        .await;
+    let session = util::session(toolset, context, model).await;
     let (mut session, cancel) = session.cancellable();
 
     // Cancel once the tool is actually executing.
@@ -114,40 +89,35 @@ async fn cancelling_running_tool_yields_a_tool_response() {
         cancel.cancel();
     });
 
-    let mut stream = session
-        .send_message(vec![Message::user("run the infinite tool")])
-        .await
-        .expect("send_message should start the stream");
-
-    let mut parts = Vec::new();
-    while let Some(item) = stream.next().await {
-        if let Ok(part) = item {
-            parts.push(part);
-        }
-    }
+    let result = util::drive(&mut session, "run the infinite tool").await;
 
     // The tool call appears in the stream...
-    let tool_call_id = parts
-        .iter()
-        .find_map(|part| match part {
-            StreamPart::ToolCall(call) if call.name == "infinite_tool" => Some(call.id.clone()),
-            _ => None,
-        })
+    let tool_call_id = result
+        .tool_calls()
+        .into_iter()
+        .find(|call| call.name == "infinite_tool")
+        .map(|call| call.id.clone())
         .expect("expected a tool call for infinite_tool");
 
     // ...and it has a response, produced by the tool returning cooperatively
     // when `request_context.cancel` fired.
-    let response = parts
-        .iter()
-        .find_map(|part| match part {
-            StreamPart::ToolResponse(ToolResponse::Json { id, json, .. })
-                if *id == tool_call_id =>
-            {
-                Some(json.clone())
-            }
-            _ => None,
-        })
+    let response = result
+        .tool_response(&tool_call_id)
         .expect("expected a tool response for the infinite tool call");
 
-    assert_eq!(response, serde_json::json!({ "status": "cancelled" }));
+    assert!(
+        matches!(
+            response,
+            ToolResponse::Json { json, .. } if *json == serde_json::json!({ "status": "cancelled" })
+        ),
+        "cooperative cancellation should surface the tool's own result, got {response:?}"
+    );
+
+    // A tool that cancels cooperatively is a *normal* return: the loop runs the
+    // next turn and finishes without a terminal error.
+    assert!(
+        result.error.is_none(),
+        "cooperative cancellation must not tear the stream down with an error, got {:?}",
+        result.error
+    );
 }

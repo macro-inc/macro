@@ -1,4 +1,4 @@
-use super::*;
+use crate::tool_adapter::*;
 
 #[test]
 fn empty_object_schema_gains_properties() {
