@@ -9,18 +9,21 @@ mod test;
 /// Marker class wrapping an injected signature.
 const SIGNATURE_CLASS: &str = "macro-email-signature";
 
-/// Whether the body already carries an injected signature, so the caller can
-/// stay idempotent across a client that still bakes it in and across re-sends.
+/// Whether the body already carries our signature in its own content (idempotency
+/// for re-sends / an old client that still bakes it in). A signature inside a
+/// quoted thread (`.macro_quote`) is the replied-to message's and is ignored.
 pub(crate) fn has_signature(body_html: &str) -> bool {
-    Selector::parse(&format!(".{SIGNATURE_CLASS}"))
-        .ok()
-        .map(|sel| {
-            Html::parse_fragment(body_html)
-                .select(&sel)
-                .next()
-                .is_some()
+    let Ok(sig_sel) = Selector::parse(&format!(".{SIGNATURE_CLASS}")) else {
+        return false;
+    };
+    Html::parse_fragment(body_html).select(&sig_sel).any(|el| {
+        !el.ancestors().any(|node| {
+            node.value()
+                .as_element()
+                .and_then(|e| e.attr("class"))
+                .is_some_and(|class| class.split_whitespace().any(|c| c == "macro_quote"))
         })
-        .unwrap_or(false)
+    })
 }
 
 /// Injects the (already-sanitized) signature into the outgoing HTML body,
