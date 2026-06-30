@@ -10,7 +10,7 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { Avatar, Button, cn, Tooltip } from '@ui';
+import { Avatar, cn, NavRow, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -69,7 +69,7 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
   return result;
 }
 
-function ChannelLetterIcon(props: { letters: string }) {
+function ChannelLetterIcon(props: { letters: string; slim?: boolean }) {
   return (
     <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
       <Avatar.Fallback>{props.letters}</Avatar.Fallback>
@@ -186,16 +186,11 @@ function ChannelGroupItem(props: {
   const isSlim = () => props.isSlim ?? false;
 
   const ButtonContent = () => (
-    <Button
+    <NavRow
       class={cn(
-        'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-        isSlim()
-          ? 'justify-center size-8'
-          : 'justify-start gap-2 w-full h-8 py-1'
+        'transition-[opacity,transform] justify-start gap-2 w-full h-8 p-1.25'
       )}
       draggable={false}
-      variant="ghost"
-      size="sm"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -206,14 +201,21 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="relative flex items-center justify-center shrink-0 size-5">
+      <div
+        class={cn('relative flex items-center justify-center shrink-0 size-5')}
+      >
         <Show
           when={isDM() && senderId()}
-          fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
+          fallback={
+            <ChannelLetterIcon
+              letters={props.channelLetters ?? '?'}
+              slim={isSlim()}
+            />
+          }
         >
           <UserIcon
             id={senderId()!}
-            size="md"
+            size={'md'}
             suppressClick
             showTooltip={false}
           />
@@ -232,12 +234,14 @@ function ChannelGroupItem(props: {
           </span>
         </Show>
       </Show>
-    </Button>
+    </NavRow>
   );
 
   return (
     <ContextMenu>
-      <ContextMenu.Trigger class="w-full">
+      <ContextMenu.Trigger
+        class={cn(isSlim() ? 'flex justify-center' : 'w-full')}
+      >
         <Show
           when={!isSlim()}
           fallback={
@@ -325,7 +329,7 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
       <Show
         when={!isSlim()}
         fallback={
-          <section class="w-full p-2 flex flex-col items-center">
+          <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
             <For each={slimVisible()}>
               {(group) => (
                 <ChannelGroupItem
@@ -344,12 +348,12 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
           </section>
         }
       >
-        <section class="size-full flex flex-col justify-center px-2 py-1.5">
-          <header class="text-xs font-medium text-ink-muted ml-2 mb-1">
+        <section class="size-full flex flex-col justify-center px-0 py-1.5">
+          <header class="text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
             <h1>Unread</h1>
           </header>
 
-          <div class="flex-1">
+          <div class="flex-1 flex flex-col gap-0.5">
             <For each={channelGroups()}>
               {(group) => (
                 <ChannelGroupItem

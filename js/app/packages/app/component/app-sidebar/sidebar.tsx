@@ -77,6 +77,7 @@ import PlayIcon from '@phosphor/play.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
+import type { Link } from '@service-email/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
@@ -106,6 +107,51 @@ interface SidebarItem {
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
 }
+
+const SIDEBAR_MAIL_MOCK_LINKS: Link[] = [
+  {
+    id: 'mock-primary-inbox',
+    email_address: 'seamus@macro.com',
+    fusionauth_user_id: 'mock-fusionauth-primary',
+    macro_id: 'macro|seamus@macro.com',
+    provider: 'GMAIL',
+    is_primary: true,
+    is_sync_active: true,
+    needs_reauth: false,
+    sync_status: 'UP_TO_DATE',
+    settings: {},
+    created_at: '2026-06-30T12:00:00.000Z',
+    updated_at: '2026-06-30T12:00:00.000Z',
+  },
+  {
+    id: 'mock-sales-inbox',
+    email_address: 'sales@macro.com',
+    fusionauth_user_id: 'mock-fusionauth-sales',
+    macro_id: 'macro|sales@macro.com',
+    provider: 'GMAIL',
+    is_primary: false,
+    is_sync_active: true,
+    needs_reauth: false,
+    sync_status: 'UP_TO_DATE',
+    settings: {},
+    created_at: '2026-06-30T12:00:00.000Z',
+    updated_at: '2026-06-30T12:00:00.000Z',
+  },
+  {
+    id: 'mock-support-inbox',
+    email_address: 'support@macro.com',
+    fusionauth_user_id: 'mock-fusionauth-support',
+    macro_id: 'macro|support@macro.com',
+    provider: 'GMAIL',
+    is_primary: false,
+    is_sync_active: true,
+    needs_reauth: false,
+    sync_status: 'UP_TO_DATE',
+    settings: {},
+    created_at: '2026-06-30T12:00:00.000Z',
+    updated_at: '2026-06-30T12:00:00.000Z',
+  },
+];
 
 const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
@@ -200,7 +246,7 @@ const SIDEBAR_LINKS = [
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
 
 /** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
-const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 100;
+const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 120;
 const SIDEBAR_MAX_WIDTH_TRANSITION_STYLE = `max-width ease-in-out ${SIDEBAR_MAX_WIDTH_TRANSITION_MS}ms`;
 
 /**
@@ -850,7 +896,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full p-3 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-48 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-52 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -860,26 +906,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between relative">
-        <div class="flex items-center group/logo-area w-full group-data-[slim=true]/sidebar:justify-end">
-          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-opacity">
-            <LogoIcon class="size-6" />
-          </div>
-          <div class="grow shrink-10 min-w-0 group-data-[slim=true]/sidebar:hidden" />
-          <SidebarHeaderIconButton
-            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkey={TOKENS.global.toggleSidebar}
-            onMouseDown={(e) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-            }}
-            onClick={() => {
-              handleSidebarOpenChange(!isExpanded());
-              globalSplitManager()?.returnFocus();
-            }}
-            icon={AnimatedSquareSidebarIcon}
-          />
+      <div class="flex items-center justify-between w-full relative group/logo-area">
+        <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-[opacity,padding]">
+          <LogoIcon class="size-6" />
         </div>
+        <SidebarHeaderIconButton
+          label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+          hotkey={TOKENS.global.toggleSidebar}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+          }}
+          onClick={() => {
+            handleSidebarOpenChange(!isExpanded());
+            globalSplitManager()?.returnFocus();
+          }}
+          icon={AnimatedSquareSidebarIcon}
+        />
       </div>
 
       <div class="w-full mb-2">
@@ -1247,9 +1290,11 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
   });
 
   const links = createMemo(() =>
-    [...(linksQuery.data?.links ?? [])].sort((a, b) =>
-      a.email_address.localeCompare(b.email_address)
-    )
+    [
+      ...(import.meta.env.DEV && (linksQuery.data?.links?.length ?? 0) < 2
+        ? SIDEBAR_MAIL_MOCK_LINKS
+        : (linksQuery.data?.links ?? [])),
+    ].sort((a, b) => a.email_address.localeCompare(b.email_address))
   );
 
   const isMailList = (content: SplitContent | undefined) =>
@@ -1353,17 +1398,13 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
                       : '0ms',
                   }}
                 >
-                  <Button
+                  <NavRow
                     draggable={false}
-                    variant="ghost"
                     disabled={!expanded()}
                     data-sidebar-mail-account={link.email_address}
                     data-active={onlySelectedId() === link.id ? '' : undefined}
-                    class={cn(
-                      'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 pl-6 text-ink-extra-muted not-disabled:hover:bg-ink/3',
-                      onlySelectedId() === link.id &&
-                        'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
-                    )}
+                    active={onlySelectedId() === link.id}
+                    class="h-8 pl-6 pr-2"
                     onMouseDown={(e) => {
                       if (e.button !== 0) return;
                       e.preventDefault();
@@ -1378,7 +1419,7 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
                       showTooltip={false}
                     />
                     <span class="truncate">{link.email_address}</span>
-                  </Button>
+                  </NavRow>
                 </li>
               )}
             </For>
