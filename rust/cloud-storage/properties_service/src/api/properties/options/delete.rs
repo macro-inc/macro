@@ -122,7 +122,7 @@ pub async fn delete_property_option(
         return Err(DeletePropertyOptionErr::OptionNotFound);
     }
 
-    let deleted = property_options_delete::delete_property_option(&state.db, option_uuid)
+    let deleted = property_options_delete::delete_property_option(&state.db, def_uuid, option_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
