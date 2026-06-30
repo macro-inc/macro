@@ -10,6 +10,7 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Avatar, cn, NavRow, Tooltip } from '@ui';
 import {
   createEffect,
@@ -17,6 +18,7 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -323,6 +325,78 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   const SLIM_MAX = 4;
   const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
   const slimOverflow = () => Math.max(0, channelGroups().length - SLIM_MAX);
+  const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
+  const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [scrollFrameRef, setScrollFrameRef] = createSignal<HTMLDivElement>();
+  const scrollSize = createElementSize(scrollRef);
+  const scrollFrameSize = createElementSize(scrollFrameRef);
+  let scrollShadowFrame: number | undefined;
+  let detachScrollShadowObservers: VoidFunction | undefined;
+
+  const updateScrollShadows = () => {
+    const el = scrollRef();
+    if (!el) return;
+    const maxScrollTop = el.scrollHeight - el.clientHeight;
+    setHasOverflowTop(el.scrollTop > 1);
+    setHasOverflowBottom(maxScrollTop - el.scrollTop > 1);
+  };
+
+  const scheduleScrollShadowUpdate = () => {
+    if (scrollShadowFrame !== undefined) {
+      cancelAnimationFrame(scrollShadowFrame);
+    }
+    scrollShadowFrame = requestAnimationFrame(() => {
+      scrollShadowFrame = undefined;
+      updateScrollShadows();
+    });
+  };
+
+  const detachScrollObservers = () => {
+    detachScrollShadowObservers?.();
+    detachScrollShadowObservers = undefined;
+  };
+
+  const attachScrollEl = (el: HTMLDivElement) => {
+    detachScrollObservers();
+    setScrollRef(el);
+
+    const mutationObserver = new MutationObserver(scheduleScrollShadowUpdate);
+    const sidebarRoot = el.closest('[data-expanded]');
+
+    mutationObserver.observe(sidebarRoot ?? el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    scheduleScrollShadowUpdate();
+
+    detachScrollShadowObservers = () => {
+      mutationObserver.disconnect();
+    };
+  };
+
+  onCleanup(() => {
+    detachScrollObservers();
+    if (scrollShadowFrame !== undefined) {
+      cancelAnimationFrame(scrollShadowFrame);
+    }
+  });
+
+  createEffect(
+    on(channelGroups, () => {
+      scheduleScrollShadowUpdate();
+    })
+  );
+
+  createEffect(() => {
+    scrollSize.width;
+    scrollSize.height;
+    scrollFrameSize.width;
+    scrollFrameSize.height;
+    scheduleScrollShadowUpdate();
+  });
 
   return (
     <Show when={channelGroups().length > 0}>
@@ -341,28 +415,46 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
               )}
             </For>
             <Show when={slimOverflow() > 0}>
-              <span class="text-xxs text-ink-muted mt-1">
+              <span class="w-full text-center text-xxs text-ink-muted mt-1">
                 +{slimOverflow()}
               </span>
             </Show>
           </section>
         }
       >
-        <section class="size-full flex flex-col justify-center px-0 py-1.5">
-          <header class="text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
+        <section class="size-full min-h-0 flex flex-col px-0 py-1.5">
+          <header class="shrink-0 text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
             <h1>Unread</h1>
           </header>
 
-          <div class="flex-1 flex flex-col gap-0.5">
-            <For each={channelGroups()}>
-              {(group) => (
-                <ChannelGroupItem
-                  group={group}
-                  animate={false}
-                  channelLetters={channelLettersMap().get(group.entityId)}
-                />
+          <div ref={setScrollFrameRef} class="relative min-h-0 flex-1">
+            <div
+              ref={attachScrollEl}
+              onScroll={updateScrollShadows}
+              class="size-full overflow-y-auto overscroll-contain flex flex-col gap-0.5 pr-1 -mr-1"
+            >
+              <For each={channelGroups()}>
+                {(group) => (
+                  <ChannelGroupItem
+                    group={group}
+                    animate={false}
+                    channelLetters={channelLettersMap().get(group.entityId)}
+                  />
+                )}
+              </For>
+            </div>
+            <div
+              class={cn(
+                'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
+                hasOverflowTop() ? 'opacity-100' : 'opacity-0'
               )}
-            </For>
+            />
+            <div
+              class={cn(
+                'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
+                hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
+              )}
+            />
           </div>
         </section>
       </Show>

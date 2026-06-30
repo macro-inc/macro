@@ -5,12 +5,12 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import { SidebarCreateMenu } from '@app/component/app-sidebar/sidebar-create-menu';
 import {
   SidebarPromoCard,
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -74,10 +74,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
 import PlayIcon from '@phosphor/play.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import type { Link } from '@service-email/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
@@ -107,51 +105,6 @@ interface SidebarItem {
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
 }
-
-const SIDEBAR_MAIL_MOCK_LINKS: Link[] = [
-  {
-    id: 'mock-primary-inbox',
-    email_address: 'seamus@macro.com',
-    fusionauth_user_id: 'mock-fusionauth-primary',
-    macro_id: 'macro|seamus@macro.com',
-    provider: 'GMAIL',
-    is_primary: true,
-    is_sync_active: true,
-    needs_reauth: false,
-    sync_status: 'UP_TO_DATE',
-    settings: {},
-    created_at: '2026-06-30T12:00:00.000Z',
-    updated_at: '2026-06-30T12:00:00.000Z',
-  },
-  {
-    id: 'mock-sales-inbox',
-    email_address: 'sales@macro.com',
-    fusionauth_user_id: 'mock-fusionauth-sales',
-    macro_id: 'macro|sales@macro.com',
-    provider: 'GMAIL',
-    is_primary: false,
-    is_sync_active: true,
-    needs_reauth: false,
-    sync_status: 'UP_TO_DATE',
-    settings: {},
-    created_at: '2026-06-30T12:00:00.000Z',
-    updated_at: '2026-06-30T12:00:00.000Z',
-  },
-  {
-    id: 'mock-support-inbox',
-    email_address: 'support@macro.com',
-    fusionauth_user_id: 'mock-fusionauth-support',
-    macro_id: 'macro|support@macro.com',
-    provider: 'GMAIL',
-    is_primary: false,
-    is_sync_active: true,
-    needs_reauth: false,
-    sync_status: 'UP_TO_DATE',
-    settings: {},
-    created_at: '2026-06-30T12:00:00.000Z',
-    updated_at: '2026-06-30T12:00:00.000Z',
-  },
-];
 
 const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
@@ -537,15 +490,6 @@ const registerSidebarHotkeys = ({
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
-type SidebarActionButtonProps = {
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
-  onClick: (event?: MouseEvent) => void;
-  disabled?: boolean | (() => boolean);
-  hotkeyToken?: HotkeyToken;
-  isSlim: () => boolean;
-  label: string;
-};
-
 type SidebarShortcutLinkProps = {
   label: string;
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
@@ -578,54 +522,6 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
-    </NavRow>
-  );
-};
-
-/**
- * A normalised action button for the sidebar footer area.
- *
- * Mirrors the tooltip behaviour of `SidebarLink`:
- * - slim  → show tooltip (label + hotkey)
- * - expanded → no tooltip (label and hotkey badge are visible inline)
- */
-const SidebarActionButton = (props: SidebarActionButtonProps) => {
-  const [hovering, setHovering] = createSignal(false);
-
-  const isDisabled = () =>
-    typeof props.disabled === 'function'
-      ? props.disabled()
-      : (props.disabled ?? false);
-
-  return (
-    <NavRow
-      class="center h-8"
-      fullWidth
-      tooltipPlacement="right"
-      label={props.label}
-      hotkey={props.hotkeyToken}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-      }}
-      onClick={(event: MouseEvent) => props.onClick(event)}
-      disabled={isDisabled()}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
-      <div class="size-4 shrink-0">
-        <Dynamic component={props.icon} triggerAnimation={hovering()} />
-      </div>
-      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-        {props.label}
-      </span>
-      <Show when={hovering() && props.hotkeyToken}>
-        {(token) => (
-          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
-            <Hotkey token={token()} class="flex gap-1" />
-          </div>
-        )}
-      </Show>
     </NavRow>
   );
 };
@@ -788,7 +684,6 @@ const DASHBOARD_LINK: SidebarItem = {
 const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
 
 export const AppSidebar = (props: AppSidebarProps) => {
-  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
@@ -851,14 +746,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     activateClosestDOMScope();
   };
 
-  const handleCreateClick = () => {
-    const willOpen = !createMenuOpen();
-    if (willOpen) {
-      analytics.track('create_menu_open', { from: 'sidebar' });
-    }
-    setCreateMenuOpen((p) => !p);
-  };
-
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
@@ -908,7 +795,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     >
       <div class="flex items-center justify-between w-full relative group/logo-area">
         <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-[opacity,padding]">
-          <LogoIcon class="size-6" />
+          <LogoIcon class="size-6 translate-x-1" />
         </div>
         <SidebarHeaderIconButton
           label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
@@ -925,14 +812,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
         />
       </div>
 
-      <div class="w-full mb-2">
-        <SidebarActionButton
-          label="Create"
-          hotkeyToken={TOKENS.global.createCommand}
-          isSlim={isSlim}
-          onClick={handleCreateClick}
-          icon={() => <PlusIcon class="size-4" />}
-        />
+      <div class="w-full my-2.5">
+        <SidebarCreateMenu isSlim={isSlim} />
       </div>
 
       <nav>
@@ -956,7 +837,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent my-2" />
       </div>
 
-      <div class="block max-h-[clamp(10%,60%,20rem)]">
+      <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
@@ -970,7 +851,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </Show>
 
         <Show when={callCtx?.isInCall()}>
-          <div class="px-2 mb-2" data-ui="in-call-panel">
+          <div class="my-3" data-ui="in-call-panel">
             <InCallPanel isSlim={panelIsSlim} />
           </div>
         </Show>
@@ -1290,11 +1171,9 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
   });
 
   const links = createMemo(() =>
-    [
-      ...(import.meta.env.DEV && (linksQuery.data?.links?.length ?? 0) < 2
-        ? SIDEBAR_MAIL_MOCK_LINKS
-        : (linksQuery.data?.links ?? [])),
-    ].sort((a, b) => a.email_address.localeCompare(b.email_address))
+    [...(linksQuery.data?.links ?? [])].sort((a, b) =>
+      a.email_address.localeCompare(b.email_address)
+    )
   );
 
   const isMailList = (content: SplitContent | undefined) =>
@@ -1382,12 +1261,12 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
           class="grid w-full transition-[grid-template-rows] duration-200 ease-out"
           style={{ 'grid-template-rows': expanded() ? '1fr' : '0fr' }}
         >
-          <ul class="min-h-0 overflow-hidden flex flex-col gap-1">
+          <ul class="min-h-0 overflow-hidden flex flex-col gap-0.5">
             <For each={links()}>
               {(link, index) => (
                 <li
                   class={cn(
-                    'flex items-center justify-center first:mt-1 transition-[opacity,transform] duration-200 ease-out',
+                    'flex items-center justify-center first:mt-0.5 transition-[opacity,transform] duration-200 ease-out',
                     expanded()
                       ? 'opacity-100 translate-y-0'
                       : 'opacity-0 -translate-y-2'
