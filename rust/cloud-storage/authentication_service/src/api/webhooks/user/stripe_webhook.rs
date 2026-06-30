@@ -451,7 +451,7 @@ async fn handle_team_subscription_event<'a>(
         .await?;
 
     match subscription_status {
-        "active" => {
+        "active" | "trialing" => {
             ctx.teams_service
                 .restore_permissions_for_team_members(team_id)
                 .await?;
@@ -467,7 +467,7 @@ async fn handle_team_subscription_event<'a>(
             );
             Ok(())
         }
-        "canceled" | "past_due" | "paused" | "unpaid" => {
+        "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused" | "unpaid" => {
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
