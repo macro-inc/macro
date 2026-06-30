@@ -2,11 +2,7 @@ import { ListPropertyValue } from '@app/component/next-soup/soup-view/views/task
 import { mapMediaItems } from '@channel/Media/media-items';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
-import {
-  EntityIcon,
-  type EntityIconSelector,
-  getEntityIconType,
-} from '@core/component/EntityIcon';
+import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -31,10 +27,7 @@ import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { stringToItemType } from '@service-storage/client';
-import {
-  EntityType,
-  type SoupMessageAttachment,
-} from '@service-storage/generated/schemas';
+import { EntityType } from '@service-storage/generated/schemas';
 import { cn } from '@ui';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match, P } from 'ts-pattern';
@@ -61,17 +54,13 @@ export interface InboxCardLayoutProps {
 type NotificationTag = ReturnType<typeof getNotificationTag>;
 
 /** The notification driving the row's action/sender (most recent first). */
-const getFirstNotification = (
-  item: WithNotification<EntityData>
-): Notification | undefined => item.notifications?.()?.[0];
+const getFirstNotification = (item: WithNotification<EntityData>) =>
+  item.notifications?.()?.[0];
 
-const isUnreadNotification = (notification?: Notification): boolean =>
+const isUnreadNotification = (notification?: Notification) =>
   notification ? !notification.viewed_at && !notification.done : false;
 
-const getGithubSender = (
-  entity: EntityData,
-  notification?: Notification
-): { id?: string; fallbackName?: string; imageUrl?: string } => {
+const getGithubSender = (entity: EntityData, notification?: Notification) => {
   const content = notification?.notification_metadata.content as
     | { senderGithubLogin?: string | null }
     | undefined;
@@ -91,10 +80,7 @@ const getGithubSender = (
   return { id: login, fallbackName: login, imageUrl };
 };
 
-const getTimestamp = (
-  entity: EntityData,
-  notification?: Notification
-): string | undefined => {
+const getTimestamp = (entity: EntityData, notification?: Notification) => {
   const messageTime =
     entity.type === 'channel'
       ? entity.latestRootMessage?.createdAt
@@ -110,7 +96,7 @@ const getTimestamp = (
   return raw != null ? String(raw) : undefined;
 };
 
-const entityIconFor = (entity: EntityData): EntityIconSelector => {
+const entityIconFor = (entity: EntityData) => {
   switch (entity.type) {
     case 'email':
       return 'email';
@@ -129,31 +115,7 @@ const entityIconFor = (entity: EntityData): EntityIconSelector => {
   }
 };
 
-const cardAttachments = (
-  attachments: SoupMessageAttachment[] | undefined
-): InboxCardAttachment[] =>
-  (attachments ?? []).map((attachment): InboxCardAttachment => {
-    const media = mapMediaItems([attachment])[0];
-    if (media) {
-      return {
-        id: media.id,
-        src: media.src,
-        kind: media.kind,
-        thumbSrc: media.thumbSrc,
-      };
-    }
-    return {
-      id: attachment.entity_id,
-      fallback: () => (
-        <ItemPreview
-          id={attachment.entity_id}
-          type={stringToItemType(attachment.entity_type)}
-        />
-      ),
-    };
-  });
-
-const initials = (name: string): string =>
+const initials = (name: string) =>
   name
     .split(/\s+/)
     .filter(Boolean)
@@ -194,7 +156,7 @@ function Avatar(props: {
   senderId?: string;
   fallbackName?: string;
   imageUrl?: string;
-}): JSX.Element {
+}) {
   const parsedSender = () =>
     props.senderId ? senderFromStorageId(props.senderId) : undefined;
   const isMacroAgent = () => {
@@ -223,11 +185,7 @@ function Avatar(props: {
   );
 }
 
-type TagBubbleIconRenderer = () => JSX.Element;
-
-const tagBubbleIcon = (
-  tag: NotificationTag
-): TagBubbleIconRenderer | undefined =>
+const tagBubbleIcon = (tag: NotificationTag) =>
   match(tag)
     .with('new_email', () => () => (
       <span class="grid size-3 place-items-center">
@@ -277,7 +235,7 @@ const tagBubbleIcon = (
     .otherwise(() => undefined);
 
 /** Avatar action bubble derived from the notification tag (mention, reply, …). */
-function ActionBubble(props: { tag: NotificationTag }): JSX.Element {
+function ActionBubble(props: { tag: NotificationTag }) {
   const renderIcon = () => tagBubbleIcon(props.tag);
 
   return (
@@ -291,7 +249,7 @@ function ActionBubble(props: { tag: NotificationTag }): JSX.Element {
   );
 }
 
-function Badge(props: { unread: boolean }): JSX.Element {
+function Badge(props: { unread: boolean }) {
   return (
     <Show when={props.unread}>
       <span class="ml-auto flex shrink-0 items-center">
@@ -301,10 +259,7 @@ function Badge(props: { unread: boolean }): JSX.Element {
   );
 }
 
-function PropertyPills(props: {
-  entityId: string;
-  properties?: PropertyT[];
-}): JSX.Element {
+function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
   const properties = createMemo(() => props.properties ?? []);
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
@@ -348,10 +303,7 @@ function PropertyPills(props: {
   );
 }
 
-function SenderName(props: {
-  senderId?: string;
-  fallbackName?: string;
-}): JSX.Element {
+function SenderName(props: { senderId?: string; fallbackName?: string }) {
   const macroId = () =>
     props.senderId ? tryMacroId(props.senderId) : undefined;
   const [displayName] = useDisplayName(macroId());
@@ -386,7 +338,7 @@ function BaseCard(props: {
   entityId: string;
   properties?: PropertyT[];
   timestamp?: string;
-}): JSX.Element {
+}) {
   return (
     <InboxCard.Root
       dimmed={!props.unread}
@@ -430,7 +382,7 @@ function BaseCard(props: {
   );
 }
 
-export function ChannelCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function ChannelCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -531,9 +483,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function ChannelMessageCardLayout(
-  props: InboxCardLayoutProps
-): JSX.Element {
+export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -569,9 +519,7 @@ export function ChannelMessageCardLayout(
   );
 }
 
-export function ChannelThreadCardLayout(
-  props: InboxCardLayoutProps
-): JSX.Element {
+export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => {
     const text = getInboxText(props.item.entity, props.item.notification);
     const metadata = props.item.notification?.notification_metadata;
@@ -597,6 +545,37 @@ export function ChannelThreadCardLayout(
 
     return notificationMetadata?.tag === 'channel_message_reply';
   };
+
+  const attachments = createMemo(() => {
+    if (
+      isLatestNotificationReply() ||
+      props.item.entity.type !== 'channel_thread'
+    )
+      return;
+
+    const itemAttachments = props.item.entity.attachments;
+
+    return itemAttachments.map((attachment): InboxCardAttachment => {
+      const media = mapMediaItems([attachment])[0];
+      if (media) {
+        return {
+          id: media.id,
+          src: media.src,
+          kind: media.kind,
+          thumbSrc: media.thumbSrc,
+        };
+      }
+      return {
+        id: attachment.entity_id,
+        fallback: () => (
+          <ItemPreview
+            id={attachment.entity_id}
+            type={stringToItemType(attachment.entity_type)}
+          />
+        ),
+      };
+    });
+  });
 
   return (
     <BaseCard
@@ -627,18 +606,12 @@ export function ChannelThreadCardLayout(
       }
       title={text().title}
       preview={text().content}
-      attachments={
-        isLatestNotificationReply()
-          ? undefined
-          : props.item.entity.type === 'channel_thread'
-            ? cardAttachments(props.item.entity.attachments)
-            : undefined
-      }
+      attachments={attachments()}
     />
   );
 }
 
-export function DocumentCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function DocumentCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -681,7 +654,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function TaskCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function TaskCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -726,7 +699,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function AiCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function AiCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -769,7 +742,7 @@ export function AiCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function EmailCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function EmailCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -802,7 +775,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function GithubCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function GithubCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -861,7 +834,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function CallCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function CallCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -891,7 +864,7 @@ export function CallCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function GenericCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function GenericCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() =>
     getInboxText(props.item.entity, props.item.notification)
   );
@@ -922,7 +895,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps): JSX.Element {
   );
 }
 
-export function InboxCardLayout(props: InboxCardLayoutProps): JSX.Element {
+export function InboxCardLayout(props: InboxCardLayoutProps) {
   const notificationTag = () => getNotificationTag(props.item.notification);
   const isGithub = () => {
     const entity = props.item.entity;
