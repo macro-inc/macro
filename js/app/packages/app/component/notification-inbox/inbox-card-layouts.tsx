@@ -34,7 +34,15 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { stringToItemType } from '@service-storage/client';
 import { EntityType } from '@service-storage/generated/schemas';
 import { cn } from '@ui';
-import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
 import {
@@ -124,25 +132,6 @@ const getTimestamp = (entity: EntityData, notification?: Notification) => {
     entity.updatedAt ??
     entity.createdAt;
   return raw != null ? String(raw) : undefined;
-};
-
-const entityIconFor = (entity: EntityData) => {
-  switch (entity.type) {
-    case 'email':
-      return 'email';
-    case 'call':
-      return 'call';
-    case 'channel':
-    case 'channel_message':
-    case 'channel_thread':
-      return 'channel';
-    case 'document':
-      return entity.subType?.type === 'task' ? 'task' : 'md';
-    case 'foreign':
-      return 'githubPullRequest';
-    default:
-      return 'default';
-  }
 };
 
 const initials = (name: string) =>
@@ -333,32 +322,12 @@ function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
   );
 }
 
-function SenderName(props: { senderId?: string; fallbackName?: string }) {
-  const macroId = () =>
-    props.senderId ? tryMacroId(props.senderId) : undefined;
-  const [displayName] = useDisplayName(macroId());
-
-  const botName = () => {
-    if (!props.senderId) return;
-
-    const parsed = senderFromStorageId(props.senderId);
-
-    if (parsed.type !== 'bot') return;
-
-    if (parsed.name) return parsed.name;
-
-    return parsed.id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
-  };
-
-  return <>{botName() || displayName() || props.fallbackName || ''}</>;
-}
-
 const relativeTime = (timestamp: string | undefined): string | undefined =>
   timestamp ? formatCompactRelativeTimestamp(timestamp) : undefined;
 
 const createSenderDisplayName = (
   senderId: () => string | undefined,
-  fallbackName: () => string | undefined
+  fallbackName?: () => string | undefined
 ) => {
   const macroId = () => {
     const id = senderId();
@@ -378,7 +347,7 @@ const createSenderDisplayName = (
     return parsed.id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
   };
 
-  return () => botName() || displayName() || fallbackName() || senderId();
+  return () => botName() || displayName() || fallbackName?.() || senderId();
 };
 
 const buildActionLabel = (args: {
@@ -453,6 +422,8 @@ function BaseCard(props: {
   entityId: string;
   properties?: PropertyT[];
   timestamp?: string;
+  /** Extra controls rendered in the meta line, after the timestamp. */
+  metaActions?: JSX.Element;
 }) {
   return (
     <InboxCard.Root
@@ -489,8 +460,10 @@ function BaseCard(props: {
           <InboxCard.Attachments items={props.attachments!} />
         </Show>
 
-        <Show when={props.timestamp}>
-          <InboxCard.Meta timestamp={relativeTime(props.timestamp)} />
+        <Show when={props.timestamp || props.metaActions}>
+          <InboxCard.Meta timestamp={relativeTime(props.timestamp)}>
+            {props.metaActions}
+          </InboxCard.Meta>
         </Show>
       </InboxCard.Body>
     </InboxCard.Root>
@@ -507,9 +480,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       : undefined;
   };
 
-  const senderFallbackName = () => undefined;
-
-  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+  const senderName = createSenderDisplayName(senderId);
 
   const text = createMemo(() => {
     const location = channelLocation(entity());
@@ -551,14 +522,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       <Show
         when={!isDM()}
         fallback={
-          <InboxCard.Icon
-            fallback={
-              <Avatar
-                senderId={senderId()}
-                fallbackName={senderFallbackName()}
-              />
-            }
-          >
+          <InboxCard.Icon fallback={<Avatar senderId={senderId()} />}>
             <ActionBubble tag={getNotificationTag(props.item.notification)} />
           </InboxCard.Icon>
         }
@@ -593,11 +557,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
                   />
                 )}
               </Show>
-              <SenderName
-                senderId={senderId()}
-                fallbackName={senderFallbackName()}
-              />
-              :
+              {senderName()}
             </span>
           </Show>
           <Show when={text().content?.trim()}>
@@ -627,9 +587,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
     return value.type === 'channel_message' ? value.senderId : undefined;
   };
 
-  const senderFallbackName = () => undefined;
-
-  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+  const senderName = createSenderDisplayName(senderId);
 
   const text = createMemo(() => {
     const location = channelLocation(props.item.entity);
@@ -656,16 +614,71 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
       unread={props.item.unread}
       timestamp={props.item.timestamp}
       leading={
-        <InboxCard.Icon
-          fallback={
-            <Avatar senderId={senderId()} fallbackName={senderFallbackName()} />
-          }
-        >
+        <InboxCard.Icon fallback={<Avatar senderId={senderId()} />}>
           <ActionBubble tag={getNotificationTag(props.item.notification)} />
         </InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
+    />
+  );
+}
+
+const notificationTime = (notification: Notification): number => {
+  const raw = notification.created_at ?? notification.updated_at;
+  const time = raw != null ? Date.parse(String(raw)) : 0;
+  return Number.isNaN(time) ? 0 : time;
+};
+
+function ThreadReplySubItem(props: {
+  notification: Notification;
+  threadEntityId: string;
+  selected?: boolean;
+  onClick?: (event: MouseEvent) => void;
+}) {
+  const senderId = () => props.notification.sender_id ?? undefined;
+  const senderFallbackName = () =>
+    getNotificationSenderFallbackName(props.notification);
+  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+
+  const messageContent = () => {
+    const notification = props.notification;
+    const meta = notification.notification_metadata;
+    if (meta.tag !== 'channel_message_reply') return;
+
+    return meta.content.messageContent;
+  };
+
+  const action = () => {
+    const tag = getNotificationTag(props.notification);
+    if (tag === 'channel_mention') return 'mentioned you';
+    if (tag === 'channel_message_reply') return 'replied';
+    return 'sent a message';
+  };
+
+  const timestamp = () => {
+    const raw = props.notification.created_at ?? props.notification.updated_at;
+    return raw != null ? String(raw) : undefined;
+  };
+
+  return (
+    <BaseCard
+      entityId={props.threadEntityId}
+      selected={props.selected}
+      onClick={props.onClick}
+      unread={isUnreadNotification(props.notification)}
+      timestamp={timestamp()}
+      leading={
+        <InboxCard.Icon
+          fallback={
+            <Avatar senderId={senderId()} fallbackName={senderFallbackName()} />
+          }
+        >
+          <ActionBubble tag={getNotificationTag(props.notification)} />
+        </InboxCard.Icon>
+      }
+      title={buildActionLabel({ sender: senderName(), action: action() })}
+      preview={messageContent()}
     />
   );
 }
@@ -678,6 +691,27 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     return notificationMetadata?.tag === 'channel_message_reply';
   });
 
+  // When the latest notification is a reply, the thread's notifications become
+  // expandable sub items (most recent first).
+  const subItems = createMemo(() => {
+    if (!isLatestNotificationReply()) return [];
+    const notifications = props.item.entity.notifications?.() ?? [];
+    return notifications.toSorted(
+      (a, b) => notificationTime(b) - notificationTime(a)
+    );
+  });
+  const hasSubItems = () => subItems().length > 0;
+
+  const [localExpanded, setLocalExpanded] = createSignal(false);
+  const expanded = () => props.expanded ?? localExpanded();
+  const toggleExpanded = () => {
+    if (props.onToggleExpanded) {
+      props.onToggleExpanded();
+      return;
+    }
+    setLocalExpanded((value) => !value);
+  };
+
   const senderId = createMemo(() => {
     const value = props.item.entity;
 
@@ -688,9 +722,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     return value.type === 'channel_thread' ? value.senderId : undefined;
   });
 
-  const senderFallbackName = () => undefined;
-
-  const senderName = createSenderDisplayName(senderId, senderFallbackName);
+  const senderName = createSenderDisplayName(senderId);
 
   const text = createMemo(() => {
     const metadata = props.item.notification?.notification_metadata;
@@ -747,36 +779,68 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   });
 
   return (
-    <BaseCard
-      entityId={props.item.entity.id}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
-        <Show
-          when={isLatestNotificationReply()}
-          fallback={
-            <InboxCard.Icon
-              fallback={
-                <Avatar
-                  senderId={senderId()}
-                  fallbackName={senderFallbackName()}
+    <div class="flex flex-col gap-1">
+      <BaseCard
+        entityId={props.item.entity.id}
+        selected={props.selected}
+        highlighted={props.highlighted}
+        onClick={props.onClick}
+        unread={props.item.unread}
+        timestamp={props.item.timestamp}
+        leading={
+          <Show
+            when={isLatestNotificationReply()}
+            fallback={
+              <InboxCard.Icon fallback={<Avatar senderId={senderId()} />}>
+                <ActionBubble
+                  tag={getNotificationTag(props.item.notification)}
                 />
-              }
-            >
-              <ActionBubble tag={getNotificationTag(props.item.notification)} />
-            </InboxCard.Icon>
-          }
-        >
-          <InboxCard.Icon fallback={<ChatTextIcon class="size-4 shrink-0" />} />
-        </Show>
-      }
-      title={text().title}
-      preview={text().content}
-      attachments={attachments()}
-    />
+              </InboxCard.Icon>
+            }
+          >
+            <InboxCard.Icon
+              fallback={<ChatTextIcon class="size-4 shrink-0" />}
+            />
+          </Show>
+        }
+        title={text().title}
+        preview={text().content}
+        attachments={attachments()}
+        metaActions={
+          hasSubItems() ? (
+            <>
+              <Show when={props.item.timestamp}>
+                <span aria-hidden="true">•</span>
+              </Show>
+              <button
+                type="button"
+                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  toggleExpanded();
+                }}
+              >
+                {expanded() ? 'Hide sub items' : 'Show sub items'}
+              </button>
+            </>
+          ) : undefined
+        }
+      />
+      <Show when={expanded() && hasSubItems()}>
+        <div class="ml-5 flex flex-col gap-1 border-l border-edge-muted pl-4">
+          <For each={subItems()}>
+            {(notification) => (
+              <ThreadReplySubItem
+                notification={notification}
+                threadEntityId={props.item.entity.id}
+                onClick={props.onClick}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
   );
 }
 
@@ -1245,7 +1309,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
           fallback={
             <EntityIcon
               class="size-3"
-              targetType={entityIconFor(props.item.entity)}
+              targetType={getEntityIconType(props.item.entity)}
               size="fill"
               theme="monochrome"
             />
