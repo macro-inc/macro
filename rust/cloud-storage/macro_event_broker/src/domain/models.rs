@@ -14,7 +14,7 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
     type Topic: Topic;
 
     /// Version of this concrete event variant's payload schema.
-    fn schema_version(&self) -> u16;
+    fn schema_version(&self) -> u8;
 }
 
 /// Serializable event envelope published through the broker.
@@ -27,7 +27,7 @@ pub struct Event<E> {
     /// Unique identifier for this event instance.
     pub event_id: Uuid,
     /// Version of the event payload schema.
-    pub schema_version: u16,
+    pub schema_version: u8,
     /// Topic-specific event variant and strongly typed metadata.
     #[serde(flatten)]
     pub event: E,
@@ -40,7 +40,7 @@ impl<E: TopicEvent> Event<E> {
     }
 
     /// Create a new event with a generated UUIDv7 event id and explicit schema version.
-    pub fn with_schema_version(event: E, schema_version: u16) -> Self {
+    pub fn with_schema_version(event: E, schema_version: u8) -> Self {
         Self::with_event_id_and_schema_version(Uuid::now_v7(), schema_version, event)
     }
 
@@ -51,7 +51,7 @@ impl<E: TopicEvent> Event<E> {
     }
 
     /// Create a new event with an explicit event id and schema version.
-    pub fn with_event_id_and_schema_version(event_id: Uuid, schema_version: u16, event: E) -> Self {
+    pub fn with_event_id_and_schema_version(event_id: Uuid, schema_version: u8, event: E) -> Self {
         Self {
             event_id,
             schema_version,
