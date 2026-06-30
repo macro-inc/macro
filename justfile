@@ -60,6 +60,14 @@ local-e2e-seed:
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
 
+# Regenerate js/bun.nix after js/bun.lock changes.
+update-bun-nix:
+  scripts/update-bun-nix.sh
+
+# Verify js/bun.nix matches js/bun.lock.
+check-bun-nix:
+  scripts/update-bun-nix.sh --check
+
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack

@@ -64,6 +64,7 @@
         nativeBuildInputs = [
           pkgs.bun
           pkgs.darkhttpd
+          pkgs.git
           pkgs.jq
           pkgs.yq-go
         ];
@@ -73,74 +74,8 @@
         buildPhase = ''
           runHook preBuild
 
-          export HOME="$TMPDIR/home"
-          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
-          mkdir -p "$HOME" "$BUN_INSTALL_CACHE_DIR"
-          cp -r ${bunDeps}/share/bun-cache/. "$BUN_INSTALL_CACHE_DIR"
-          chmod -R u+w "$BUN_INSTALL_CACHE_DIR"
-          yq -o=json 'del(.patchedDependencies)' package.json > package.json.tmp && mv package.json.tmp package.json
-          yq -o=json 'del(.patchedDependencies)' bun.lock > bun.lock.tmp && mv bun.lock.tmp bun.lock
-          jq 'del(.dependencies["@inkibra/tauri-plugins"])' app/package.json > app/package.json.tmp && mv app/package.json.tmp app/package.json
-          jq 'del(.dependencies["pdfjs-dist"])' app/packages/block-pdf/package.json > app/packages/block-pdf/package.json.tmp && mv app/packages/block-pdf/package.json.tmp app/packages/block-pdf/package.json
-
-          registry_root="$TMPDIR/npm-registry"
-          registry_lists="$TMPDIR/npm-registry-lists"
-          mkdir -p "$registry_root" "$registry_lists"
-          while IFS= read -r package_json; do
-            name=$(jq -r '.name // empty' "$package_json")
-            version=$(jq -r '.version // empty' "$package_json")
-            [ -n "$name" ] && [ -n "$version" ] || continue
-            key="''${name//\//%2f}"
-            printf '%s\n' "$name" > "$registry_lists/$key.name"
-            printf '%s\n' "$package_json" >> "$registry_lists/$key.paths"
-          done < <(find -L ${bunDeps}/share/bun-packages -name package.json -type f)
-          for list in "$registry_lists"/*.paths; do
-            key="''${list%.paths}"
-            key="''${key##*/}"
-            name=$(cat "$registry_lists/$key.name")
-            metadata=$(jq -s -c --arg name "$name" '
-              {
-                _id: $name,
-                name: $name,
-                "dist-tags": { latest: (sort_by(.version) | last | .version) },
-                versions: (reduce .[] as $pkg ({};
-                  .[$pkg.version] = ($pkg + {
-                    dist: (($pkg.dist // {}) + {
-                      tarball: "https://registry.npmjs.org/\($name)/-/\(($name | split("/") | last))-\($pkg.version).tgz"
-                    })
-                  })
-                ))
-              }
-            ' $(cat "$list"))
-            mkdir -p "$registry_root/$(dirname "$name")"
-            printf '%s\n' "$metadata" > "$registry_root/$name"
-            printf '%s\n' "$metadata" > "$registry_root/$key"
-          done
-          darkhttpd "$registry_root" --addr 127.0.0.1 --port 54321 --no-listing --default-mimetype application/json > "$TMPDIR/npm-registry.log" 2>&1 &
-          registry_pid=$!
-          trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
-          bun install --linker=hoisted --ignore-scripts --no-progress --registry http://127.0.0.1:54321
-
-          rm -rf node_modules/pdfjs-dist
-          cp -aL ${bunDeps}/share/bun-packages/github:macro-inc-pdf.js-v2.16.52-web node_modules/pdfjs-dist
-          chmod -R u+w node_modules/pdfjs-dist
-
-          rm -rf node_modules/@inkibra
-          mkdir -p node_modules/@inkibra node_modules/@tauri-apps
-          cp -a ${bunDeps}/share/bun-packages/github:macro-inc-tauri-plugins-26537c8a46bb8424f9cf4021d08aa76aa7cd66ef node_modules/@inkibra/tauri-plugins
-          chmod -R u+w node_modules/@inkibra/tauri-plugins
-          for package in node_modules/@inkibra/tauri-plugins/packages/*; do
-            if [ -L "$package" ]; then
-              target=$(readlink -f "$package")
-              rm "$package"
-              mkdir -p "$package"
-              cp -aL "$target"/. "$package"/
-            fi
-          done
-          rm -rf node_modules/@tauri-apps/api
-          ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@tauri-apps/api
-          mkdir -p node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps
-          ln -sfn ${bunDeps}/share/bun-packages/@tauri-apps/api@2.10.1 node_modules/@inkibra/tauri-plugins/node_modules/@tauri-apps/api
+          export BUN_DEPS=${bunDeps}
+          source ${./install-bun-deps-from-bun2nix-cache.sh}
 
           vite_resolve_replacement='      resolve: {
         alias: [
