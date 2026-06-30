@@ -1,9 +1,5 @@
 import type { Attachment, AttachmentPreview } from '@core/component/AI/types';
-import {
-  isDssImage,
-  isImageAttachment,
-} from '@core/component/AI/util/attachment';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
@@ -40,21 +36,31 @@ export function AttachmentList(props: AttachmentListProps) {
   );
 }
 
+function uploadingFilename(preview: AttachmentPreview): string {
+  const metadata = preview.metadata;
+  if (!metadata) return 'File';
+  if (metadata.type === 'document' && 'document_name' in metadata) {
+    return metadata.document_name;
+  }
+  if (metadata.type === 'image' && 'image_name' in metadata) {
+    return metadata.image_name;
+  }
+  return 'File';
+}
+
 function UploadingAttachment(props: AttachmentPreview) {
   return (
     <Switch>
       <Match when={isImageAttachment(props)}>
         <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-surface">
-          <Spinner class="size-4 animate-spin" />
+          <Spinner class="size-4 animate-spin text-ink-muted" />
         </div>
       </Match>
-      <Match when={isDssImage(props) && props.metadata}>
-        {(metadata) => (
-          <div class="flex gap-1 items-center text-sm cursor-default">
-            <EntityIcon targetType={metadata().document_type} />
-            <div>{metadata().document_name}</div>
-          </div>
-        )}
+      <Match when={!isImageAttachment(props)}>
+        <div class="flex items-center gap-1 px-1 py-0.5 text-sm cursor-default border border-edge-muted rounded-xs max-w-full min-w-0">
+          <Spinner class="size-4 shrink-0 animate-spin text-ink-muted" />
+          <span class="truncate">{uploadingFilename(props)}</span>
+        </div>
       </Match>
     </Switch>
   );
