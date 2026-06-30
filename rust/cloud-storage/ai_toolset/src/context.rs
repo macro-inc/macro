@@ -40,6 +40,9 @@ pub struct RequestContext {
     /// user has requested stream stop
     /// long-running tools should comsume this
     pub cancel: CancellationToken,
+    /// The caller's raw JWT bearer token. Tools that call downstream services on the user's behalf
+    /// (e.g. `EditDocument`) read this.
+    pub user_bearer: Option<String>,
 }
 
 impl RequestContext {
@@ -51,6 +54,7 @@ impl RequestContext {
             searchable_tools: Arc::new(Vec::new()),
             tool_loader: None,
             cancel: CancellationToken::new(),
+            user_bearer: None,
         }
     }
 

@@ -1,5 +1,6 @@
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_auth_proxy::inbound::middleware::JwtAccessToken;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
@@ -67,6 +68,12 @@ impl<Context> AuthenticatedToolService<Context> {
             })
     }
 
+    fn authenticated_user_bearer(extensions: &rmcp::model::Extensions) -> Option<JwtAccessToken> {
+        extensions
+            .get::<http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<JwtAccessToken>().cloned())
+    }
+
     async fn require_paid_subscription(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -118,6 +125,7 @@ where
              Use ContentSearch and NameSearch to find entities. \
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
+             Use EditDocument to edit existing documents. \
              Use ListEntities to browse recent items.\n\n{}",
             prompt::mcp_instructions(base_url),
         ));
@@ -152,6 +160,12 @@ where
             .arguments
             .map(serde_json::Value::Object)
             .ok_or(rmcp::ErrorData::invalid_params("No params provided", None))?;
+
+        let token = Self::authenticated_user_bearer(&context.extensions);
+        let request_context = RequestContext {
+            user_bearer: token.map(|t| t.0),
+            ..request_context
+        };
 
         let result = self
             .toolset

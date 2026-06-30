@@ -56,11 +56,6 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
-    /// The caller's Bearer token, set per-request. Used by EditDocument to
-    /// authenticate with the editing worker (which exchanges it for a
-    /// document-scoped JWT internally).
-    pub user_token: Option<String>,
-
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -80,7 +75,6 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
-            user_token: self.user_token.clone(),
             recorder: self.recorder.clone(),
         }
     }
@@ -119,7 +113,6 @@ impl<
             sync_service_client,
             creator,
             editing: Arc::new(editing),
-            user_token: None,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
         }
     }

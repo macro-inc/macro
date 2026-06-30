@@ -33,6 +33,7 @@ pub struct AgentLoop {
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
+    user_bearer: Option<String>,
 }
 
 impl AgentLoop {
@@ -49,6 +50,7 @@ impl AgentLoop {
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
+            user_bearer: None,
         }
     }
 
@@ -70,6 +72,13 @@ impl AgentLoop {
     /// Override the default max output tokens.
     pub fn with_max_tokens(mut self, n: u64) -> Self {
         self.max_tokens = n;
+        self
+    }
+
+    /// Set the caller's JWT bearer token, forwarded to tools that call
+    /// downstream services on the user's behalf (e.g. `EditDocument`).
+    pub fn with_user_bearer(mut self, token: String) -> Self {
+        self.user_bearer = Some(token);
         self
     }
 
@@ -142,6 +151,7 @@ impl AgentLoop {
         };
         let request_context =
             RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader);
+        let request_context = RequestContext { user_bearer: self.user_bearer.clone(), ..request_context };
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 

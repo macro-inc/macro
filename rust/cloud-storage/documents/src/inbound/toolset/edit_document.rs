@@ -49,8 +49,8 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let user_token = ctx.user_token.as_deref().ok_or_else(|| {
-            let e = anyhow::anyhow!("user_token not available on DocumentToolContext");
+        let user_token = request_context.user_bearer.as_deref().ok_or_else(|| {
+            let e = anyhow::anyhow!("user_bearer not set on RequestContext");
             ToolCallError {
                 description: "editing worker requires a user token".to_string(),
                 internal_error: e,
