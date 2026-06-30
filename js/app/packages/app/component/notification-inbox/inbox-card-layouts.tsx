@@ -485,21 +485,20 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
-    let action = 'sent a message';
-    if (tag === 'channel_mention') {
-      action = location ? 'mentioned you in' : 'mentioned you';
-    } else if (location) {
-      action = 'sent a message in';
+
+    let sender;
+    let action = '';
+
+    if (tag === 'document_mention') {
+      action = 'shared a document with you';
+      sender = senderName();
     }
 
-    let content = itemContent(entity(), props.item.notification);
-    if (props.item.entity.type === 'channel') {
-      content = props.item.entity.latestRootMessage?.content;
-    }
+    const content = itemContent(entity(), props.item.notification);
 
     return {
       title: buildActionLabel({
-        sender: senderName(),
+        sender,
         action,
         location,
       }),

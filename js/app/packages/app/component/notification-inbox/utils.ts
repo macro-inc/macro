@@ -66,6 +66,12 @@ export function itemContent(
   entity: EntityData,
   notification?: Notification
 ): string | undefined {
+  const meta = notification?.notification_metadata;
+
+  if (meta?.tag === 'document_mention') {
+    return meta.content.messageContent;
+  }
+
   const channel = channelMessageContent(entity);
   if (channel) return channel;
   return notification ? notificationContent(notification) : undefined;

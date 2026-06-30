@@ -1,3 +1,5 @@
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
@@ -38,14 +40,17 @@ function Root(props: RootProps): JSX.Element {
     <div
       class={cn(
         'group/inbox-item relative grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 rounded-lg bg-surface px-2 py-1.5',
-        props.dimmed && 'opacity-80',
-        !props.selected &&
-          !props.highlighted &&
-          'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
-        props.highlighted && 'bg-active/50 ring ring-edge-muted ring-inset',
-        props.selected && 'bg-active/50 opacity-100',
-        interactive() &&
-          'outline-none focus-visible:bg-accent/10 focus-visible:ring focus-visible:ring-accent/40 focus-visible:ring-inset',
+
+        {
+          'min-h-10 mx-1': !isMobile(),
+          'bg-accent/8': props.selected,
+          'bg-accent/16': props.selected && props.highlighted,
+          'bg-hover/30':
+            props.highlighted && !props.selected && !isTouchDevice(),
+          'hover:bg-hover/30':
+            !props.highlighted && !props.selected && !isTouchDevice(),
+          'opacity-85': props.dimmed,
+        },
         props.class
       )}
       role={interactive() ? 'button' : undefined}
