@@ -75,6 +75,7 @@ import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
 import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import { createMessageEditor } from './create-message-editor';
@@ -324,10 +325,14 @@ export function Channel(props: ChannelProps) {
     });
   };
 
+  const deleteConfirmation = createDeleteMessageConfirmation(
+    deleteMessageMutation.mutate
+  );
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    deleteMessage: deleteMessageMutation.mutate,
+    deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
@@ -492,6 +497,7 @@ export function Channel(props: ChannelProps) {
 
   return (
     <DebugSuspense name="Channel.root">
+      <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
           <MaybeMessageActionDrawerManager>

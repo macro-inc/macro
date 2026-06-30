@@ -3,7 +3,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { createBulkDeleteDssItemsMutation } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button, cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, onMount, Show } from 'solid-js';
 
 export const BulkDeleteView = (props: {
   entities: EntityData[];
@@ -11,6 +11,15 @@ export const BulkDeleteView = (props: {
   onCancel: () => void;
 }) => {
   const bulkDelete = createBulkDeleteDssItemsMutation();
+  let deleteButton: HTMLButtonElement | undefined;
+
+  const focusDeleteButton = () => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => deleteButton?.focus())
+    );
+  };
+
+  onMount(focusDeleteButton);
 
   const handleDelete = async () => {
     try {
@@ -76,9 +85,8 @@ export const BulkDeleteView = (props: {
           </Button>
           <Button
             ref={(el: HTMLButtonElement) => {
-              requestAnimationFrame(() =>
-                requestAnimationFrame(() => el.focus())
-              );
+              deleteButton = el;
+              focusDeleteButton();
             }}
             type="button"
             variant="danger"

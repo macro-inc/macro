@@ -13,6 +13,7 @@ mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod check_generated;
+mod check_node_modules_nix;
 mod code_check_cloud_storage;
 mod runners;
 mod steps;
@@ -63,6 +64,10 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "code_check_cloud_storage",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
+    },
+    WorkflowFile {
+        slug: "check_node_modules_nix",
+        render_yaml: || render_gh_workflow(check_node_modules_nix::check_node_modules_nix)(),
     },
     WorkflowFile {
         slug: "check_generated",

@@ -47,7 +47,7 @@ fn path_check() -> Job {
             "doppler_config_bins",
             "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
         )
-        .add_step(steps::checkout(true))
+        .add_step(steps::checkout(true, true))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(compute_changed_files())
@@ -64,7 +64,7 @@ fn check() -> Job {
             "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
         ))
         .add_env(("RUSTDOCFLAGS", "-Dwarnings"))
-        .add_step(steps::checkout(false))
+        .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -87,7 +87,7 @@ fn test() -> Job {
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
-        .add_step(steps::checkout(false))
+        .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
