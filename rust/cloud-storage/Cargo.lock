@@ -7438,13 +7438,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_dynamodbtables"
-version = "0.1.0"
-dependencies = [
- "workspace-hack",
-]
-
-[[package]]
 name = "macro_entrypoint"
 version = "0.1.0"
 dependencies = [
@@ -15038,7 +15031,6 @@ dependencies = [
  "indoc",
  "libc",
  "macro_aws_config",
- "macro_dynamodbtables",
  "macro_queues",
  "serde",
  "serde_json",

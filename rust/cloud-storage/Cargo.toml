@@ -59,7 +59,6 @@ members = [
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config",
-  "macro_dynamodbtables",
   "macro_event_broker",
   "macro_event_topics",
   "macro_queues",

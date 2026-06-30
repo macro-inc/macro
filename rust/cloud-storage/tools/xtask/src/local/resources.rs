@@ -27,11 +27,11 @@ pub const UPLOAD_FINALIZER_QUEUE: &str = macro_queues::DocumentUploadFinalizerQu
 // DynamoDB table names: referenced both by their bespoke create-table schema in
 // `localstack` and by the env binding below, so they are named.
 /// The bulk-upload requests table.
-pub const BULK_UPLOAD_TABLE: &str = macro_dynamodbtables::BulkUploadRequestsTable::LOCAL;
+pub const BULK_UPLOAD_TABLE: &str = "bulk-upload";
 /// The connection-gateway (websocket) table.
-pub const CONNECTION_GATEWAY_TABLE: &str = macro_dynamodbtables::ConnectionGatewayTable::LOCAL;
+pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
-pub const STATIC_FILE_TABLE: &str = macro_dynamodbtables::StaticFileMetadataTable::LOCAL;
+pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
 
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).

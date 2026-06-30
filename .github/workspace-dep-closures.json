@@ -2579,10 +2579,6 @@
       "macro_db_migrator",
       "workspace-hack"
     ],
-    "macro_dynamodbtables": [
-      "macro_dynamodbtables",
-      "workspace-hack"
-    ],
     "macro_entrypoint": [
       "macro_entrypoint",
       "macro_env",
@@ -4618,7 +4614,6 @@
     ],
     "xtask": [
       "macro_aws_config",
-      "macro_dynamodbtables",
       "macro_env",
       "macro_env_var",
       "macro_queues",
