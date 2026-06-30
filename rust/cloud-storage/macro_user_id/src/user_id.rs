@@ -5,6 +5,7 @@ use crate::{
     error::ParseErr,
     lowercased::Lowercase,
 };
+use bot_id::BotId;
 use nom::{Finish, IResult, Parser, bytes::complete::tag, character::complete::char};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -164,6 +165,51 @@ impl<'a> TryFrom<&'a str> for BorrowedUserIdStr<'a> {
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         MacroUserId::parse_from_str(value).map(BorrowedUserIdStr)
+    }
+}
+
+/// A mention principal parsed from a stored user-mention payload: either a
+/// first-party Macro user or a bot.
+///
+/// Bots are accepted in two forms: the canonical `bot|<uuid>` principal and the
+/// bare `<uuid>` carried by existing mention content. Users are `macro|<email>`.
+#[derive(Clone, Debug)]
+pub enum BorrowedPrincipal<'a> {
+    /// A first-party Macro user.
+    User(MacroUserId<ArcCowStr<'a>>),
+    /// A bot.
+    Bot(BotId),
+}
+
+impl<'a> BorrowedPrincipal<'a> {
+    /// Parse a principal from its stored string form, trying bot principals
+    /// before falling back to a `macro|<email>` user id.
+    pub fn parse_from_str(input: &'a str) -> Result<Self, ParseErr> {
+        if let Ok(bot) = BotId::parse_storage_str(input) {
+            return Ok(Self::Bot(bot));
+        }
+        if let Ok(bot) = BotId::parse_uuid_str(input) {
+            return Ok(Self::Bot(bot));
+        }
+        MacroUserId::parse_from_str(input).map(Self::User)
+    }
+}
+
+impl<'a> TryFrom<&'a str> for BorrowedPrincipal<'a> {
+    type Error = ParseErr;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::parse_from_str(value)
+    }
+}
+
+impl<'de: 'a, 'a> Deserialize<'de> for BorrowedPrincipal<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <&'a str>::deserialize(deserializer)?;
+        Self::parse_from_str(value).map_err(serde::de::Error::custom)
     }
 }
 

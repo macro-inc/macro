@@ -102,3 +102,36 @@ fn debug_output_is_simple_string() {
     let id_str = MacroUserIdStr::parse_from_str("macro|hutch@macro.com").unwrap();
     assert_eq!(format!("{:?}", id_str), "macro|hutch@macro.com");
 }
+
+#[test]
+fn principal_parses_macro_user() {
+    let principal = BorrowedPrincipal::parse_from_str("macro|sean@macro.com").unwrap();
+    let BorrowedPrincipal::User(id) = principal else {
+        panic!("expected user principal");
+    };
+    assert_eq!(id.as_ref(), "macro|sean@macro.com");
+}
+
+#[test]
+fn principal_parses_prefixed_bot() {
+    let id = "00000000-0000-0000-0000-00000000a1a1";
+    let storage = format!("bot|{id}");
+    let BorrowedPrincipal::Bot(bot) = BorrowedPrincipal::parse_from_str(&storage).unwrap() else {
+        panic!("expected bot principal");
+    };
+    assert_eq!(bot.as_uuid().to_string(), id);
+}
+
+#[test]
+fn principal_parses_bare_uuid_as_bot() {
+    let id = "00000000-0000-0000-0000-00000000a1a1";
+    let BorrowedPrincipal::Bot(bot) = BorrowedPrincipal::parse_from_str(id).unwrap() else {
+        panic!("expected bot principal");
+    };
+    assert_eq!(bot.as_uuid().to_string(), id);
+}
+
+#[test]
+fn principal_rejects_garbage() {
+    assert!(BorrowedPrincipal::parse_from_str("not-a-principal").is_err());
+}

@@ -7402,6 +7402,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "cowlike",
  "doppleganger",
  "nom 8.0.0",
