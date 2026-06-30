@@ -1,25 +1,25 @@
 use super::*;
 use std::cell::Cell;
 
-/// Stub for the existing-inbox check. Reports a fixed answer and records whether
+/// Stub for the connected-inbox count. Reports a fixed count and records whether
 /// the paywall actually invoked it, so tests can assert the db is only queried
 /// when it should be.
-struct InboxCheckSpy {
-    has_inbox: bool,
+struct InboxCountSpy {
+    connected_inbox_count: i64,
     called: Cell<bool>,
 }
 
-impl InboxCheckSpy {
-    fn returning(has_inbox: bool) -> Self {
+impl InboxCountSpy {
+    fn returning(connected_inbox_count: i64) -> Self {
         Self {
-            has_inbox,
+            connected_inbox_count,
             called: Cell::new(false),
         }
     }
 
-    async fn check(&self) -> anyhow::Result<bool> {
+    async fn count(&self) -> anyhow::Result<i64> {
         self.called.set(true);
-        Ok(self.has_inbox)
+        Ok(self.connected_inbox_count)
     }
 
     fn was_called(&self) -> bool {
@@ -28,40 +28,53 @@ impl InboxCheckSpy {
 }
 
 #[tokio::test]
-async fn paywalls_additional_inbox_without_professional_features() {
-    let inbox = InboxCheckSpy::returning(true);
+async fn paywalls_inbox_at_free_limit_without_professional_features() {
+    let inboxes = InboxCountSpy::returning(FREE_INBOX_LIMIT);
 
-    let result = enforce_inbox_paywall(false, || inbox.check()).await;
+    let result = enforce_inbox_paywall(false, || inboxes.count()).await;
 
     assert!(
-        inbox.was_called(),
-        "non-professional users should be checked for an existing inbox"
+        inboxes.was_called(),
+        "non-professional users should be checked for connected inbox count"
     );
     assert!(matches!(result, Err(InitGmailLinkError::PaymentRequired)));
 }
 
 #[tokio::test]
 async fn first_inbox_is_free_without_professional_features() {
-    let inbox = InboxCheckSpy::returning(false);
+    let inboxes = InboxCountSpy::returning(0);
 
-    let result = enforce_inbox_paywall(false, || inbox.check()).await;
+    let result = enforce_inbox_paywall(false, || inboxes.count()).await;
 
     assert!(
-        inbox.was_called(),
-        "non-professional users should be checked for an existing inbox"
+        inboxes.was_called(),
+        "non-professional users should be checked for connected inbox count"
+    );
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn second_inbox_is_free_without_professional_features() {
+    let inboxes = InboxCountSpy::returning(FREE_INBOX_LIMIT - 1);
+
+    let result = enforce_inbox_paywall(false, || inboxes.count()).await;
+
+    assert!(
+        inboxes.was_called(),
+        "non-professional users should be checked for connected inbox count"
     );
     assert!(result.is_ok());
 }
 
 #[tokio::test]
 async fn professional_features_skip_existing_inbox_check() {
-    let inbox = InboxCheckSpy::returning(true);
+    let inboxes = InboxCountSpy::returning(FREE_INBOX_LIMIT);
 
-    let result = enforce_inbox_paywall(true, || inbox.check()).await;
+    let result = enforce_inbox_paywall(true, || inboxes.count()).await;
 
     assert!(
-        !inbox.was_called(),
-        "professional users should never trigger the existing-inbox check"
+        !inboxes.was_called(),
+        "professional users should never trigger the connected-inbox count"
     );
     assert!(result.is_ok());
 }

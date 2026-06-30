@@ -233,7 +233,10 @@ function dismiss(toastId: number) {
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, options?: ToastOptions) {
+function failure(
+  message: string,
+  options?: ToastOptions & { actions?: ToastAction[] }
+) {
   dismissIfRecent(message, ToastType.FAILURE);
   createToast(message, ToastType.FAILURE, options);
 }

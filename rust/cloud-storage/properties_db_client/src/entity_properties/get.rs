@@ -191,7 +191,7 @@ async fn attach_property_options(
         .filter(|p| {
             matches!(
                 p.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             )
         })
         .map(|p| p.definition.id)
@@ -209,7 +209,7 @@ async fn attach_property_options(
     for property in properties {
         let is_select_type = matches!(
             property.definition.data_type,
-            DataType::SelectString | DataType::SelectNumber
+            DataType::SelectString | DataType::SelectNumber | DataType::Tag
         );
 
         if is_select_type {
@@ -241,7 +241,7 @@ async fn attach_property_options_bulk(
         .filter(|p| {
             matches!(
                 p.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             )
         })
         .map(|p| p.definition.id)
@@ -258,7 +258,7 @@ async fn attach_property_options_bulk(
         for property in properties.iter_mut() {
             let is_select_type = matches!(
                 property.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             );
             if is_select_type {
                 let options = options_map

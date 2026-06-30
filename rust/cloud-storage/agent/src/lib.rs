@@ -19,7 +19,7 @@ pub use accumulator::StreamAccumulator;
 pub use agent_loop::{AgentLoop, Session};
 pub use completion::{complete, complete_with_history};
 pub use convert::{merge_consecutive_parts, to_rig_messages};
-pub use error::AgentError;
+pub use error::{AgentError, FailureKind};
 pub use model::PredefinedModel;
 pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};

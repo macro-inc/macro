@@ -47,6 +47,18 @@ export type ChatController = {
 
 export type ChatControllerOptions = {
   onShowPaywall?: () => void;
+  /**
+   * Switch the chat to a model from a different provider. When provided, a
+   * provider-outage error toast offers a "Switch model" button that calls this.
+   */
+  onSwitchModel?: () => void;
+  /**
+   * Whether an accessible model on another (non-failed) provider exists to
+   * switch to. When this returns `false`, a provider-outage toast shows a plain
+   * "try again later" message instead of a dead "Switch model" button. Defaults
+   * to assuming an alternate exists when not provided.
+   */
+  hasAlternateModel?: () => boolean;
 };
 
 export function createChatController(
@@ -62,7 +74,28 @@ export function createChatController(
   function executeEffects(effects: SideEffect[]) {
     for (const effect of effects) {
       match(effect)
-        .with({ type: 'toast' }, (e) => toast.failure(e.message))
+        .with({ type: 'toast' }, (e) => {
+          const onSwitchModel = options?.onSwitchModel;
+          const canSwitch =
+            !!e.offerModelSwitch &&
+            !!onSwitchModel &&
+            (options?.hasAlternateModel?.() ?? true);
+          if (canSwitch) {
+            toast.failure(e.message, {
+              duration: 10000,
+              actions: [{ label: 'Switch model', onClick: onSwitchModel! }],
+            });
+          } else if (e.offerModelSwitch) {
+            // Provider outage but nowhere to fall back to (no accessible model
+            // on another provider, or every other provider has already failed
+            // this session). Don't offer a dead button — tell the user to wait.
+            toast.failure(
+              'The AI provider is currently unavailable. Please try again later.'
+            );
+          } else {
+            toast.failure(e.message);
+          }
+        })
         .with({ type: 'show_paywall' }, () => options?.onShowPaywall?.())
         .exhaustive();
     }

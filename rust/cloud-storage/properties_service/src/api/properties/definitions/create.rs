@@ -105,6 +105,7 @@ pub async fn create_property_definition(
                     property_definition_id: Uuid::nil(), // Temporary ID, will be replaced by DB
                     display_order: opt.display_order,
                     value: PropertyOptionValue::String(opt.value.clone()),
+                    color: None,
                     created_at: chrono::Utc::now(),
                     updated_at: chrono::Utc::now(),
                 })
@@ -119,6 +120,7 @@ pub async fn create_property_definition(
                     property_definition_id: Uuid::nil(), // Temporary ID, will be replaced by DB
                     display_order: opt.display_order,
                     value: PropertyOptionValue::Number(opt.value),
+                    color: None,
                     created_at: chrono::Utc::now(),
                     updated_at: chrono::Utc::now(),
                 })

@@ -38,6 +38,17 @@ fn is_idempotent_when_signature_already_present() {
 }
 
 #[test]
+fn ignores_signature_inside_quoted_thread() {
+    // Replying to a previously-signed message: the quote carries that message's
+    // signature, which must not count as "already signed" for this reply.
+    let reply = r#"<body><p>My reply</p><div class="macro_quote"><p>Old</p><div class="macro-email-signature">Ryan</div></div></body>"#;
+    assert!(!has_signature(reply));
+    // A signature in the reply's own content (above the quote) still counts.
+    let signed = r#"<body><div class="macro-email-signature">Me</div><div class="macro_quote"><p>Old</p></div></body>"#;
+    assert!(has_signature(signed));
+}
+
+#[test]
 fn plain_text_joins_block_nodes_with_newlines() {
     // Block boundaries become newlines (not run together as "ThanksAlice").
     assert_eq!(

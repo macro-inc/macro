@@ -16,11 +16,11 @@ pub use query_params::{BulkEntityQueryParams, EntityQueryParams};
 pub use requests::{
     AddNumberOptionRequest, AddPropertyOptionRequest, AddStringOptionRequest,
     CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
-    SelectStringOption, SetPropertyValue,
+    SelectStringOption, SetPropertyValue, UpdatePropertyOptionRequest, is_valid_hex_color,
 };
 pub use responses::{
     BulkEntityPropertiesResponse, EntityPropertiesResponse, EntityPropertyResponse,
-    EntityPropertyWithDefinitionResponse, PropertyDefinitionResponse,
+    EntityPropertyWithDefinitionResponse, PropertyDefinitionDetailResponse,
     PropertyDefinitionWithOptionsResponse, PropertyOptionResponse, PropertyOptionValue,
     PropertyValue,
 };

@@ -154,6 +154,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         DataType::String => "string",
         DataType::SelectNumber => "select_number",
         DataType::SelectString => "select_string",
+        DataType::Tag => "tag",
         DataType::Entity => "entity",
         DataType::Link => "link",
     }
