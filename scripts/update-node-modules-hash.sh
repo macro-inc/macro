@@ -1,6 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+update_hash_file() {
+  local path=$1
+  local system=$2
+  local hash=$3
+  local entries
+  local sorted
+  local tmp
+  local updated=false
+  local total=0
+  local index=0
+  local line key value comma
+
+  entries=$(mktemp)
+  sorted=$(mktemp)
+  tmp=$(mktemp)
+
+  while IFS= read -r line; do
+    if [[ $line =~ ^[[:space:]]*\"([^\"]+)\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+      key=${BASH_REMATCH[1]}
+      value=${BASH_REMATCH[2]}
+      if [ "$key" = "$system" ]; then
+        value=$hash
+        updated=true
+      fi
+      printf '%s\t%s\n' "$key" "$value" >> "$entries"
+    fi
+  done < "$path"
+
+  if [ "$updated" = false ]; then
+    printf '%s\t%s\n' "$system" "$hash" >> "$entries"
+  fi
+
+  LC_ALL=C sort "$entries" > "$sorted"
+  total=$(wc -l < "$sorted" | tr -d ' ')
+
+  {
+    echo "{"
+    echo "  \"nodeModules\": {"
+    while IFS=$'\t' read -r key value; do
+      index=$((index + 1))
+      comma=","
+      if [ "$index" -eq "$total" ]; then
+        comma=""
+      fi
+      printf '    "%s": "%s"%s\n' "$key" "$value" "$comma"
+    done < "$sorted"
+    echo "  }"
+    echo "}"
+  } > "$tmp"
+
+  mv "$tmp" "$path"
+  rm -f "$entries" "$sorted"
+}
+
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
@@ -24,17 +78,7 @@ if [ -z "$hash" ]; then
   exit "$status"
 fi
 
-python3 - "$system" "$hash" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-system, hash_value = sys.argv[1:]
-path = Path("nix-support/node_modules-hashes.json")
-data = json.loads(path.read_text())
-data.setdefault("nodeModules", {})[system] = hash_value
-path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-PY
+update_hash_file "nix-support/node_modules-hashes.json" "$system" "$hash"
 
 echo "updated nix-support/node_modules-hashes.json for $system to $hash"
 nix build .#js-node-modules --no-link
