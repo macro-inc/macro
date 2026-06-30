@@ -2,6 +2,8 @@
 
 //! Bot identity primitives.
 
+use std::borrow::Cow;
+
 use cowlike::{ArcCowStr, CowLike};
 use nom::{
     Finish, IResult, Parser,
@@ -78,16 +80,6 @@ impl BotId {
         Uuid::parse_str(value)
             .map(Self)
             .map_err(|_| BotIdParseError::invalid(value))
-    }
-
-    /// Parse the existing storage principal representation, `bot|<uuid>`.
-    pub fn parse_storage_str(value: &str) -> Result<Self, BotIdParseError> {
-        BotIdStr::parse_from_str(value).map(|id| id.bot_id())
-    }
-
-    /// Canonical storage representation for existing TEXT sender/participant columns.
-    pub fn to_storage_string(self) -> String {
-        BotIdStr::from(self).to_string()
     }
 
     /// Canonical storage representation as a parsed [`BotIdStr`].
@@ -243,14 +235,6 @@ impl<'a> std::fmt::Display for BotIdStr<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for BotIdStr<'a> {
-    type Target = BotIdStorage<ArcCowStr<'a>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl<'a> AsRef<str> for BotIdStr<'a> {
     fn as_ref(&self) -> &str {
         self.0.as_ref()
@@ -285,19 +269,12 @@ impl From<BotId> for BotIdStr<'static> {
     }
 }
 
-impl From<BotIdStr<'_>> for BotId {
-    fn from(value: BotIdStr<'_>) -> Self {
-        value.bot_id()
-    }
-}
-
 impl TryFrom<String> for BotIdStr<'static> {
     type Error = BotIdParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        BotIdStorage::parse_from_str(&value)
-            .map(CowLike::into_owned)
-            .map(BotIdStr)
+        let s = value.as_str();
+        BotIdStr::try_from(s).map(|x| x.into_owned())
     }
 }
 
@@ -356,20 +333,6 @@ impl utoipa::PartialSchema for BotId {
     }
 }
 
-#[cfg(feature = "schema")]
-impl utoipa::ToSchema for BotIdStr<'_> {
-    fn name() -> std::borrow::Cow<'static, str> {
-        std::borrow::Cow::Borrowed("BotIdStr")
-    }
-}
-
-#[cfg(feature = "schema")]
-impl utoipa::PartialSchema for BotIdStr<'_> {
-    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-        String::schema()
-    }
-}
-
 #[cfg(feature = "sqlx")]
 impl sqlx::Type<sqlx::Postgres> for BotId {
     fn type_info() -> sqlx::postgres::PgTypeInfo {
@@ -411,38 +374,6 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for BotId {
 }
 
 #[cfg(feature = "sqlx")]
-impl<'a> sqlx::Type<sqlx::Postgres> for BotIdStr<'a> {
-    fn type_info() -> sqlx::postgres::PgTypeInfo {
-        <String as sqlx::Type<sqlx::Postgres>>::type_info()
-    }
-
-    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
-        <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
-    }
-}
-
-#[cfg(feature = "sqlx")]
-impl sqlx::postgres::PgHasArrayType for BotIdStr<'_> {
-    fn array_type_info() -> sqlx::postgres::PgTypeInfo {
-        <String as sqlx::postgres::PgHasArrayType>::array_type_info()
-    }
-}
-
-#[cfg(feature = "sqlx")]
-impl<'q> sqlx::Encode<'q, sqlx::Postgres> for BotIdStr<'q> {
-    fn encode_by_ref(
-        &self,
-        buf: &mut sqlx::postgres::PgArgumentBuffer,
-    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&self.as_ref(), buf)
-    }
-
-    fn size_hint(&self) -> usize {
-        <&str as sqlx::Encode<sqlx::Postgres>>::size_hint(&self.as_ref())
-    }
-}
-
-#[cfg(feature = "sqlx")]
 impl<'r> sqlx::Decode<'r, sqlx::Postgres> for BotIdStr<'static> {
     fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let value = <String as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
@@ -460,7 +391,9 @@ mod tests {
         let bot_id = BotId::from_uuid(uuid);
 
         assert_eq!(
-            BotId::parse_storage_str(&bot_id.to_storage_string()).unwrap(),
+            BotIdStr::parse_from_str(bot_id.to_storage_id().as_ref())
+                .unwrap()
+                .bot_id(),
             bot_id
         );
     }
@@ -490,7 +423,7 @@ mod tests {
 
     #[test]
     fn rejects_non_bot_storage_string() {
-        assert!(BotId::parse_storage_str("macro|teo@macro.com").is_err());
+        assert!(BotIdStr::parse_from_str("macro|teo@macro.com").is_err());
     }
 
     #[test]

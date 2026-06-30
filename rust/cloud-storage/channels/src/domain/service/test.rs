@@ -191,14 +191,14 @@ async fn attaches_bot_profiles_to_bot_authored_messages() {
     let macro_ai_msg_id = Uuid::new_v4();
 
     let mut bot_row = make_row(parent_id, 10);
-    bot_row.sender_id = seeded_bot.to_storage_string();
+    bot_row.sender_id = seeded_bot.to_storage_id().to_string();
     let mut macro_ai_row = make_row(macro_ai_msg_id, 5);
-    macro_ai_row.sender_id = unseeded_bot.to_storage_string();
+    macro_ai_row.sender_id = unseeded_bot.to_storage_id().to_string();
 
     let reply_row = ThreadReplyRow {
         id: Uuid::new_v4(),
         thread_id: parent_id,
-        sender_id: seeded_bot.to_storage_string(),
+        sender_id: seeded_bot.to_storage_id().to_string(),
         triggered_by: None,
         content: "reply".into(),
         created_at: Utc::now(),

@@ -58,7 +58,9 @@ fn bot_profile_for_sender(
     profiles: &HashMap<BotId, BotSenderProfile>,
     sender_id: &str,
 ) -> Option<BotSenderProfile> {
-    let bot_id = BotId::parse_storage_str(sender_id).ok()?;
+    use bot_id::BotIdStr;
+
+    let bot_id = BotIdStr::parse_from_str(sender_id).ok()?.bot_id();
     profiles.get(&bot_id).cloned()
 }
 
@@ -1256,6 +1258,8 @@ impl ChannelListRepo for PgChannelsRepo {
         &self,
         params: GetThreadReplyRowsParams,
     ) -> Result<Vec<ChannelMessage>, rootcause::Report> {
+        use bot_id::BotIdStr;
+
         let parents: Vec<TopLevelMessageRow> = build_channel_thread_rows_query(&params)
             .build()
             .try_map(|row: PgRow| {
@@ -1298,7 +1302,8 @@ impl ChannelListRepo for PgChannelsRepo {
 
         let bot_ids: Vec<BotId> = sender_ids
             .into_iter()
-            .filter_map(|sender_id| BotId::parse_storage_str(sender_id).ok())
+            .filter_map(|sender_id| BotIdStr::parse_from_str(sender_id).ok())
+            .map(|x| x.bot_id())
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();

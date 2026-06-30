@@ -2386,6 +2386,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_sender"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "either",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -2395,6 +2407,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "channel_sender",
  "chrono",
  "connection_gateway_client",
  "contacts",
@@ -3007,6 +3020,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
+ "either",
  "workspace-hack",
 ]
 

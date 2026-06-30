@@ -19,6 +19,7 @@ use crate::domain::{
         ChannelRepo, ChannelService,
     },
 };
+use bot_id::BotIdStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
@@ -222,7 +223,8 @@ where
     ) -> Result<HashMap<BotId, BotSenderProfile>, ChannelMessagesErr> {
         let bot_ids: HashSet<BotId> = sender_ids
             .into_iter()
-            .filter_map(|id| BotId::parse_storage_str(id).ok())
+            .filter_map(|id| BotIdStr::parse_from_str(id).ok())
+            .map(|x| x.bot_id())
             .collect();
         if bot_ids.is_empty() {
             return Ok(HashMap::new());
