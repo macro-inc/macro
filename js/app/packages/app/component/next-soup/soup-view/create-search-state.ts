@@ -93,19 +93,25 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   if (
     include.channelId?.length ||
     include.channelType?.length ||
-    include.channelSenderId?.length
+    include.channelSenderId?.length ||
+    include.channelMessageThreadId?.length
   ) {
     filters.channel_filters = {
       channel_ids: include.channelId,
       channel_types: include.channelType,
       sender_ids: include.channelSenderId,
+      thread_ids: include.channelMessageThreadId,
     };
   }
 
   // Channel thread filters
-  if (include.channelThreadId?.length) {
+  if (
+    include.channelThreadId?.length ||
+    include.channelThreadRootSenderId?.length
+  ) {
     filters.channel_thread_filters = {
       thread_ids: include.channelThreadId,
+      root_sender_ids: include.channelThreadRootSenderId,
     };
   }
 
