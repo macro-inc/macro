@@ -5,8 +5,9 @@
 //! API key, HS256 signing key, the (unlicensed) populate-JWT lambda, and the
 //! tenant and Macro application with fixed ids + a fixed client secret. Every
 //! id/secret is fixed (see `identity`) so services and FusionAuth always agree
-//! without any API read-back or patch step. No users are provisioned —
-//! passwordless login auto-creates them on demand.
+//! without any API read-back or patch step. The admin user is provisioned last
+//! (after the app it registers against exists); passwordless login auto-creates
+//! all other users on demand.
 
 use serde_json::{json, Value};
 
@@ -29,6 +30,15 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
         "https://mcp-server-local.macro.com/oauth/callback",
     ]);
 
+    // Kickstart executes these in order, so each request must come after the
+    // entities it references. Dependency chain:
+    //   key + email template -> tenant
+    //   tenant + key + lambda -> application
+    //   application (incl. its `admin` role) + tenant -> user registration
+    // The user registration is also kept BEFORE the webhooks on purpose: the
+    // tenant marks `user.create` as AbsoluteMajority, so once the global
+    // user.create webhook exists, creating a user would roll back unless
+    // auth-service returns 2xx — which it isn't guaranteed to during kickstart.
     let requests = vec![
         // 1. HS256 signing key.
         json!({
@@ -110,7 +120,7 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
                 },
             }}
         }),
-        // 4. Macro application. `tenantId` sets the X-FusionAuth-TenantId header
+        // 5. Macro application. `tenantId` sets the X-FusionAuth-TenantId header
         // (required for tenant-scoped ops once a second tenant exists).
         json!({
             "method": "POST",
@@ -150,7 +160,22 @@ pub fn build(frontend_port: u16, auth_port: u16, lambda_body: &str) -> Value {
                 "passwordlessConfiguration": { "enabled": true },
             }}
         }),
-        // 6. Webhooks: on user.create FusionAuth calls auth-service, which
+        // 6. Admin user.
+        json!({
+            "method": "POST",
+            "url": "/api/user/registration",
+            "body": {
+                "user": {
+                    "email": "admin@macro.com",
+                    "password": "macroIsGreat!",
+                },
+                "registration": {
+                    "applicationId": "3c219e58-ed0e-4b18-ad48-f4f92793ae32", // FusionAuth's reserved client application id
+                    "roles": ["admin"],
+                }
+            }
+        }),
+        // 7. Webhooks: on user.create FusionAuth calls auth-service, which
         // registers the new user for the Macro app (so passwordless completes
         // with 200). `x-internal-auth-key` must equal the services'
         // INTERNAL_API_SECRET_KEY (set to "local" in local mode).
