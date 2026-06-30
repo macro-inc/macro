@@ -17,7 +17,6 @@ type CreateListNavigationOptions<T> = {
   isDisabled?: (item: T) => boolean;
   focusFallback?: 'selected' | 'first' | 'none';
   loop?: boolean;
-  scrollToKey?: (key: string) => void;
   enterBehavior?: KeyBehavior;
   spaceBehavior?: KeyBehavior;
 };
@@ -54,10 +53,9 @@ export function createListNavigation<T>(
     return key ? itemByKey().get(key) : undefined;
   });
 
-  const setFocus = (key: string | undefined, opts?: { scroll?: boolean }) => {
+  const setFocus = (key: string | undefined, _opts?: { scroll?: boolean }) => {
     if (key && !itemByKey().has(key)) return;
     setFocusedKey(key);
-    if (key && opts?.scroll !== false) options.scrollToKey?.(key);
   };
 
   const selectKey = (key: string | undefined) => {
@@ -71,6 +69,8 @@ export function createListNavigation<T>(
 
     if (!options.selectedKey) setInternalSelectedKey(key);
     options.onSelect?.(item, key);
+
+    return item;
   };
 
   const selectItem = (item: T) => selectKey(options.getKey(item));

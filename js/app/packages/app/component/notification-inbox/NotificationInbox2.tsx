@@ -228,9 +228,12 @@ export function NotificationInbox2() {
     return items.map(attachNotifications);
   });
 
-  const displayItems = createMemo(() =>
-    entities().map((entity) => toInboxCardDisplayItem(entity))
-  );
+  const displayItems = createMemo(() => ({
+    items: entities().map((entity, index) => ({
+      item: toInboxCardDisplayItem(entity),
+      index,
+    })),
+  }));
 
   const [selectedEntity, setSelectedEntity] =
     createSignal<WithNotification<EntityData>>();
@@ -238,40 +241,41 @@ export function NotificationInbox2() {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
   const listNavigation = createListNavigation({
-    items: displayItems,
-    getKey: (item) => item.entity.id,
+    items: () => displayItems().items,
+    getKey: (row) => row.item.entity.id,
     selectedKey: () => selectedEntity()?.id,
-    onSelect: (item) => {
-      setSelectedEntity(item.entity);
+    onSelect: (row) => {
+      setSelectedEntity(row.item.entity);
       if (!previewVisible()) {
-        void openEntityInSplitFromUnifiedList(item.entity, {
+        void openEntityInSplitFromUnifiedList(row.item.entity, {
           splitHandle: panel.handle,
           mergeHistory: true,
           referredFrom: 'inbox',
         });
       }
     },
-    onActivate: (item) => setSelectedEntity(item.entity),
+    onActivate: (row) => setSelectedEntity(row.item.entity),
     focusFallback: 'selected',
-    scrollToKey: (key) => {
-      const index = displayItems().findIndex((item) => item.entity.id === key);
-      if (index < 0) return;
-      virtualHandle()?.scrollToIndex(index, { align: 'nearest' });
-    },
   });
+
+  const focusAndScrollToSelected = () => {
+    const row = listNavigation.selectCurrent();
+    if (!row) return;
+    virtualHandle()?.scrollToIndex(row.index, { align: 'nearest' });
+  };
 
   useInboxListHotkeys({
     scopeId: panel.splitHotkeyScope,
     moveUp: () => {
       batch(() => {
         listNavigation.moveFocus(-1);
-        listNavigation.selectCurrent();
+        focusAndScrollToSelected();
       });
     },
     moveDown: () => {
       batch(() => {
         listNavigation.moveFocus(1);
-        listNavigation.selectCurrent();
+        focusAndScrollToSelected();
       });
     },
     selectCurrent: listNavigation.selectCurrent,
@@ -279,13 +283,13 @@ export function NotificationInbox2() {
     focusFirst: () => {
       batch(() => {
         listNavigation.focusFirst();
-        listNavigation.selectCurrent();
+        focusAndScrollToSelected();
       });
     },
     focusLast: () => {
       batch(() => {
         listNavigation.focusLast();
-        listNavigation.selectCurrent();
+        focusAndScrollToSelected();
       });
     },
   });
@@ -379,21 +383,21 @@ export function NotificationInbox2() {
                 <StaticMarkdownContext>
                   <VList
                     ref={setVirtualHandle}
-                    data={displayItems()}
+                    data={displayItems().items}
                     class="min-h-0 flex-1 scrollbar-hidden"
                     style={{ height: '100%', width: '100%' }}
                     onScroll={onScroll}
                   >
-                    {(item) => (
+                    {(row) => (
                       <InboxCardLayout
-                        item={item}
-                        selected={listNavigation.isSelected(item)}
-                        highlighted={listNavigation.isFocused(item)}
+                        item={row.item}
+                        selected={listNavigation.isSelected(row)}
+                        highlighted={listNavigation.isFocused(row)}
                         onClick={() => {
-                          listNavigation.setFocusedKey(item.entity.id, {
+                          listNavigation.setFocusedKey(row.item.entity.id, {
                             scroll: false,
                           });
-                          listNavigation.selectItem(item);
+                          listNavigation.selectItem(row);
                         }}
                       />
                     )}
