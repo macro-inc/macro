@@ -77,6 +77,10 @@ export interface ComposeContextValue {
 
   // Toolbar slot — allows orchestrators to provide a custom toolbar
   toolbar?: () => JSX.Element;
+
+  // Signature preview slot — rendered below the body. Only the new-email
+  // composer provides this; reply/forward composers omit it.
+  signaturePreview?: () => JSX.Element;
 }
 
 const ComposeContext = createContext<ComposeContextValue>();

@@ -122,6 +122,14 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
+// Email signatures: the settings editor, the compose / reply / AI-chat signature
+// previews, and the per-message include toggle. Dev/local only for now; override
+// with VITE_ENABLE_EMAIL_SIGNATURES.
+export const ENABLE_EMAIL_SIGNATURES = resolveFeatureFlag(
+  'ENABLE_EMAIL_SIGNATURES',
+  DEV_MODE_ENV
+);
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. override with VITE_ENABLE_CRM.

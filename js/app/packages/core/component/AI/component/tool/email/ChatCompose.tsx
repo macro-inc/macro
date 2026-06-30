@@ -7,6 +7,7 @@ import {
   ComposeProvider,
   type ComposeValidationError,
 } from '@block-email/component/compose/ComposeContext';
+import { SignaturePreview } from '@block-email/component/compose/SignaturePreview';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
@@ -15,15 +16,16 @@ import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientC
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_EMAIL_SIGNATURES } from '@core/constant/featureFlags';
 
 import { useChatQuery } from '@queries/chat';
-import { useEmailLinksQuery } from '@queries/email/link';
+import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 
 type ComposeToolProps = {
   chatId: string;
@@ -39,6 +41,7 @@ type ComposeToolProps = {
 type SendEmailSnapshot = {
   bcc: Array<{ email: string; name: string | null }>;
   cc: Array<{ email: string; name: string | null }>;
+  includeSignature: boolean | null;
   replyingToId: string | null;
   subject: string;
   to: Array<{ email: string; name: string | null }>;
@@ -77,6 +80,7 @@ function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
     })),
     subject: data.subject ?? '',
     replyingToId: data.replyingToId ?? null,
+    includeSignature: data.includeSignature ?? null,
   };
 }
 
@@ -162,9 +166,31 @@ export function ComposeTool(props: ComposeToolProps) {
     props.readOnly === true ||
     props.streamLocked === true;
   const emailLinksQuery = useEmailLinksQuery();
-  const fromAddress = () => {
-    const links = emailLinksQuery.data?.links;
-    return links && links.length > 0 ? links[0].email_address : undefined;
+  // The inbox this card sends from — always the first linked inbox (shown as
+  // "from"); the backend resolves the same default at send time.
+  const sendingLink = createMemo(() => emailLinksQuery.data?.links?.[0]);
+  const fromAddress = () => sendingLink()?.email_address;
+  const signature = useEmailSignature(() => sendingLink()?.id);
+  // Whether this email includes the signature. Defaults on; the preview's ✕
+  // drops it for this one message. Mirrors the normal composer.
+  const [includeSignature, setIncludeSignature] = createSignal(true);
+  const isReplyOrForward = () => Boolean(props.initialData.replyingToId);
+  // Signature to preview (and inject on send): a new compose always shows it; a
+  // reply/forward only when the inbox's "add to replies & forwards" setting is
+  // on. Hidden once dismissed and in the read-only (sent) state. Shown during
+  // streaming too — the composer's overlay blocks interaction until it ends.
+  const previewSignatureHtml = (): string | undefined => {
+    if (!ENABLE_EMAIL_SIGNATURES) return undefined;
+    if (props.readOnly) return undefined;
+    if (!includeSignature()) return undefined;
+    const sig = signature();
+    if (!sig) return undefined;
+    if (isReplyOrForward()) {
+      return sendingLink()?.settings.signature_on_replies_forwards
+        ? sig
+        : undefined;
+    }
+    return sig;
   };
 
   const [recipients, setRecipients] = createSignal({
@@ -198,6 +224,8 @@ export function ComposeTool(props: ComposeToolProps) {
       subject: subject(),
       body: prepareEmailBody(editor())?.bodyHtml ?? '',
       replyingToId: props.initialData.replyingToId,
+      // Omit to use the backend default policy; false only when dismissed.
+      includeSignature: includeSignature() ? undefined : false,
     };
   }
 
@@ -369,6 +397,21 @@ export function ComposeTool(props: ComposeToolProps) {
     validationError: (type) => validationErrors().find((e) => e.type === type),
     fromAddress,
     recipients,
+    // Read-only preview of the signature the backend appends on send, with a ✕
+    // to drop it for this one email (persisted via the userEdited update).
+    signaturePreview: () => (
+      <Show when={previewSignatureHtml()}>
+        {(html) => (
+          <SignaturePreview
+            html={html()}
+            onDismiss={() => {
+              setIncludeSignature(false);
+              scheduleUpdate();
+            }}
+          />
+        )}
+      </Show>
+    ),
   };
 
   return (
