@@ -31,7 +31,8 @@ export const PaywallMessages: Record<PaywallKey, string> = {
     'Saved prompts are a paid feature. Please upgrade to continue.',
   [PaywallKey.REMOVE_SIGNATURE]:
     'Upgrade your plan to remove the Macro signature.',
-  [PaywallKey.MULTI_INBOX]: 'Upgrade your plan to connect more than one inbox.',
+  [PaywallKey.MULTI_INBOX]:
+    'Upgrade your plan to connect more than two inboxes.',
 };
 
 const [paywallOpen, setPaywallOpen] = createSignal(false);

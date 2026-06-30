@@ -30,11 +30,7 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import {
-  AddInboxDialog,
-  openAddInboxDialog,
-  useAddInboxGate,
-} from '../AddInboxDialog';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   ConnectionHero,
@@ -48,7 +44,6 @@ export function Email() {
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
-  const guardAddInbox = useAddInboxGate();
 
   const {
     query: emailLinksQuery,
@@ -297,7 +292,7 @@ export function Email() {
                     variant="active"
                     size="sm"
                     depth={3}
-                    onClick={() => guardAddInbox(openAddInboxDialog)}
+                    onClick={openAddInboxDialog}
                   >
                     <PlusIcon class="size-4" />
                     Add inbox
