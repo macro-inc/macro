@@ -6,7 +6,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "macro_env_var",
       "macro_user_id",
@@ -122,7 +121,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -257,14 +255,12 @@
     ],
     "ai_toolset": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "workspace-hack"
     ],
     "ai_usage": [
       "ai_usage",
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "macro_uuid",
@@ -278,7 +274,6 @@
     "anthropic": [
       "ai_toolset",
       "anthropic",
-      "bot_id",
       "cowlike",
       "macro_env_var",
       "macro_user_id",
@@ -286,7 +281,6 @@
     ],
     "attachment": [
       "attachment",
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "model-entity",
@@ -404,7 +398,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "macro_env_var",
@@ -746,7 +739,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "chat",
       "cowlike",
       "document_sub_type",
@@ -840,7 +832,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "connection",
       "connection_gateway_client",
       "connection_gateway_models",
@@ -867,7 +858,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "connection_gateway",
       "connection_gateway_client",
       "connection_gateway_models",
@@ -932,7 +922,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "contacts",
       "cowlike",
       "decode_jwt",
@@ -973,7 +962,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "contacts",
       "contacts_service",
       "cowlike",
@@ -1025,7 +1013,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "convert_service",
       "cowlike",
       "crm",
@@ -1091,7 +1078,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1128,7 +1114,6 @@
       "workspace-hack"
     ],
     "decode_jwt": [
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "macro_auth",
@@ -1154,7 +1139,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "deleted_item_poller",
@@ -1430,7 +1414,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_storage_service_client",
       "document_sub_type",
@@ -1458,7 +1441,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "document_text_extractor",
@@ -1652,7 +1634,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1713,7 +1694,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1740,7 +1720,6 @@
       "workspace-hack"
     ],
     "email_db_client": [
-      "bot_id",
       "cowlike",
       "email_db_client",
       "email_utils",
@@ -1753,7 +1732,6 @@
     ],
     "email_formatting": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "email_formatting",
@@ -1782,7 +1760,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1823,7 +1800,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1864,7 +1840,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "connection_gateway_client",
       "connection_gateway_models",
       "contacts",
@@ -1940,7 +1915,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -1974,7 +1948,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -2014,7 +1987,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "email_suppression_handler",
@@ -2065,7 +2037,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "entity_access",
@@ -2085,7 +2056,6 @@
       "workspace-hack"
     ],
     "entity_access_db_utils": [
-      "bot_id",
       "cowlike",
       "entity_access_db_utils",
       "macro_user_id",
@@ -2097,7 +2067,6 @@
       "workspace-hack"
     ],
     "entity_access_management": [
-      "bot_id",
       "cowlike",
       "entity_access_db_utils",
       "entity_access_management",
@@ -2118,7 +2087,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "entity_access",
@@ -2141,7 +2109,6 @@
       "workspace-hack"
     ],
     "frecency": [
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "filter_ast",
@@ -2244,7 +2211,6 @@
       "workspace-hack"
     ],
     "gmail_client": [
-      "bot_id",
       "cowlike",
       "email_utils",
       "gmail_client",
@@ -2343,7 +2309,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -2385,7 +2350,6 @@
     ],
     "invite_email": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "invite_email",
@@ -2410,7 +2374,6 @@
       "workspace-hack"
     ],
     "item_filters": [
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "filter_ast",
@@ -2425,7 +2388,6 @@
       "workspace-hack"
     ],
     "last_online_tracker": [
-      "bot_id",
       "cowlike",
       "last_online_tracker",
       "macro_user_id",
@@ -2514,7 +2476,6 @@
       "workspace-hack"
     ],
     "local_e2e_test_support": [
-      "bot_id",
       "cowlike",
       "local_e2e_test_support",
       "macro_auth",
@@ -2525,7 +2486,6 @@
       "workspace-hack"
     ],
     "macro_auth": [
-      "bot_id",
       "cowlike",
       "macro_auth",
       "macro_env",
@@ -2570,7 +2530,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "entity_access_db_utils",
@@ -2621,7 +2580,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -2679,7 +2637,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "macro_env_var",
@@ -2703,7 +2660,6 @@
       "workspace-hack"
     ],
     "macro_user_id": [
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "workspace-hack"
@@ -2713,7 +2669,6 @@
       "workspace-hack"
     ],
     "mcp_auth_proxy": [
-      "bot_id",
       "cowlike",
       "fusionauth",
       "macro_auth",
@@ -2729,7 +2684,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "macro_env_var",
       "macro_user_id",
@@ -2943,9 +2897,6 @@
       "workspace-hack"
     ],
     "mention_utils": [
-      "bot_id",
-      "cowlike",
-      "macro_user_id",
       "mention_utils",
       "workspace-hack"
     ],
@@ -2958,7 +2909,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "macro_env_var",
@@ -2991,7 +2941,6 @@
     ],
     "model_notifications": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "invite_email",
@@ -3014,7 +2963,6 @@
       "workspace-hack"
     ],
     "model_user": [
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "model_user",
@@ -3033,7 +2981,6 @@
       "workspace-hack"
     ],
     "models_email": [
-      "bot_id",
       "cowlike",
       "email_utils",
       "macro_user_id",
@@ -3222,7 +3169,6 @@
       "workspace-hack"
     ],
     "name_search": [
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "models_opensearch",
@@ -3247,7 +3193,6 @@
     ],
     "notification": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "last_online_tracker",
@@ -3268,7 +3213,6 @@
     ],
     "notification_db_client": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "invite_email",
@@ -3293,7 +3237,6 @@
     ],
     "notification_sandbox": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "email_formatting",
@@ -3323,7 +3266,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -3393,7 +3335,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -3434,7 +3375,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -3478,7 +3418,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -3534,7 +3473,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -3591,7 +3529,6 @@
     ],
     "referral": [
       "ai_toolset",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "invite_email",
@@ -3620,7 +3557,6 @@
       "workspace-hack"
     ],
     "roles_and_permissions": [
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "non_empty",
@@ -3985,7 +3921,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_storage_service_client",
@@ -4116,7 +4051,6 @@
       "workspace-hack"
     ],
     "share_permission_db_utils": [
-      "bot_id",
       "cowlike",
       "entity_access_db_utils",
       "macro_user_id",
@@ -4211,7 +4145,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -4247,7 +4180,6 @@
     ],
     "static_file": [
       "attachment",
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "model-entity",
@@ -4261,7 +4193,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "decode_jwt",
       "document_sub_type",
@@ -4325,7 +4256,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "macro_env_var",
@@ -4346,7 +4276,6 @@
       "workspace-hack"
     ],
     "system_properties": [
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "macro_user_id",
@@ -4438,7 +4367,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "decode_jwt",
@@ -4503,7 +4431,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "connection_gateway_client",
       "connection_gateway_models",
       "cowlike",
@@ -4548,7 +4475,6 @@
       "ai_usage",
       "attachment",
       "authentication_service_client",
-      "bot_id",
       "cowlike",
       "crm",
       "document_sub_type",
@@ -4589,7 +4515,6 @@
       "ai_toolset",
       "ai_usage",
       "attachment",
-      "bot_id",
       "cowlike",
       "document_sub_type",
       "entity_access_db_utils",
@@ -4624,7 +4549,6 @@
       "workspace-hack"
     ],
     "webhook": [
-      "bot_id",
       "cowlike",
       "macro_user_id",
       "macro_uuid",

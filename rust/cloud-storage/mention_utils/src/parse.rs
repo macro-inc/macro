@@ -1,5 +1,3 @@
-use macro_user_id::email::ReadEmailParts;
-use macro_user_id::user_id::BorrowedPrincipal;
 use nom::{
     Finish, IResult, Parser,
     branch::alt,
@@ -58,7 +56,7 @@ pub trait XmlTaggedParsed<'de>: Deserialize<'de> {
 #[non_exhaustive]
 pub struct ParsedUserMention<'a> {
     #[serde(borrow)]
-    pub user_id: BorrowedPrincipal<'a>,
+    pub user_id: Cow<'a, str>,
     #[serde(borrow)]
     pub email: Cow<'a, str>,
 }
@@ -321,10 +319,7 @@ impl XmlFormatter for PlainTextFormatter {
     }
 
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &user.user_id {
-            BorrowedPrincipal::User(id) => write!(f, "{}", id.email_part().email_str()),
-            BorrowedPrincipal::Bot(_) => write!(f, "{}", user.email),
-        }
+        write!(f, "{}", user.email)
     }
 
     fn format_contact(

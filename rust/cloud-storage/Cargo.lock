@@ -7402,7 +7402,6 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
- "bot_id",
  "cowlike",
  "doppleganger",
  "nom 8.0.0",
@@ -7729,7 +7728,6 @@ name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "cool_asserts",
- "macro_user_id",
  "nom 8.0.0",
  "serde",
  "serde_json",

@@ -9,7 +9,6 @@ schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]
 
 [dependencies]
-bot_id = { path = "../bot_id" }
 cowlike = { path = "../cowlike" }
 doppleganger = { workspace = true }
 nom = { workspace = true }
