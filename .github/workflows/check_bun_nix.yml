@@ -1,30 +1,32 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/check_bun_nix.rs
 name: check bun.nix
 'on':
   pull_request:
     branches:
-      - main
+    - main
     paths:
-      - js/bun.lock
-      - js/bun.nix
-      - 'js/**/package.json'
-      - scripts/update-bun-nix.sh
-      - justfile
-      - flake.nix
-      - flake.lock
-      - .github/workflows/check_bun_nix.yml
+    - js/bun.lock
+    - js/bun.nix
+    - js/**/package.json
+    - scripts/update-bun-nix.sh
+    - justfile
+    - flake.nix
+    - flake.lock
+    - '.github/workflows/check_bun_nix.yml'
 jobs:
   check-bun-nix:
     runs-on: namespace-profile-linux-small
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          clean: 'false'
-      - name: Setup Nix
-        uses: './.github/actions/setup-nix'
-      - name: Configure Cachix fallback
-        uses: './.github/actions/setup-cachix'
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: verify js/bun.nix is up to date
-        run: scripts/update-bun-nix.sh --check
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Configure Cachix fallback
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: verify js/bun.nix is up to date
+      run: scripts/update-bun-nix.sh --check
