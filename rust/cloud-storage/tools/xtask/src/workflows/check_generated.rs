@@ -23,7 +23,7 @@ pub fn check_generated_workflows() -> Workflow {
 fn check_workflows() -> Job {
     Job::default()
         .runs_on(runners::Runner::LinuxSmall.to_string())
-        .add_step(steps::checkout(false))
+        .add_step(steps::checkout(false, true))
         .add_step(steps::setup_rust_light())
         .add_step(
             Step::new("verify workflows are up to date").run(
