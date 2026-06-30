@@ -35,7 +35,6 @@ import {
 } from '@notifications';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
-import { useUserId } from '@queries/auth';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { Button, cn, Dropdown, Tooltip } from '@ui';
 import { startOfDay, subWeeks } from 'date-fns';
@@ -54,7 +53,6 @@ const readFilterSeen = (readFilter: ReadFilter) => {
 const inboxQueryFilters = (
   mode: InboxMode,
   readFilter: ReadFilter,
-  userId: string | undefined,
   channelNotifications: UnifiedNotification[]
 ): Query => {
   const seen = readFilterSeen(readFilter);
@@ -146,8 +144,6 @@ export function NotificationInbox2() {
   const [inboxMode, setInboxMode] = createSignal<InboxMode>('signal');
   const [previewVisible, setPreviewVisible] = createSignal(true);
 
-  const userId = useUserId();
-
   const notificationSource = useGlobalNotificationSource();
 
   const channelNotifications = useEntityTypeNotifications(
@@ -205,12 +201,7 @@ export function NotificationInbox2() {
   };
 
   const activeSoupQuery = createMemo(() =>
-    inboxQueryFilters(
-      inboxMode(),
-      readFilter(),
-      userId(),
-      channelNotifications()
-    )
+    inboxQueryFilters(inboxMode(), readFilter(), channelNotifications())
   );
 
   const soupQuery = useSoupAstItemsQuery(
@@ -264,12 +255,24 @@ export function NotificationInbox2() {
 
   useInboxListHotkeys({
     scopeId: panel.splitHotkeyScope,
-    moveUp: () => listNavigation.moveFocus(-1),
-    moveDown: () => listNavigation.moveFocus(1),
+    moveUp: () => {
+      listNavigation.moveFocus(-1);
+      listNavigation.selectCurrent();
+    },
+    moveDown: () => {
+      listNavigation.moveFocus(1);
+      listNavigation.selectCurrent();
+    },
     selectCurrent: listNavigation.selectCurrent,
     activateCurrent: listNavigation.activateCurrent,
-    focusFirst: listNavigation.focusFirst,
-    focusLast: listNavigation.focusLast,
+    focusFirst: () => {
+      listNavigation.focusFirst();
+      listNavigation.selectCurrent();
+    },
+    focusLast: () => {
+      listNavigation.focusLast();
+      listNavigation.selectCurrent();
+    },
   });
 
   const onScroll = () => {

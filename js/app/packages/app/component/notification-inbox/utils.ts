@@ -1,4 +1,4 @@
-import { type EntityData, type Notification } from '@entity';
+import type { EntityData, Notification } from '@entity';
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
