@@ -79,7 +79,7 @@ export const SidebarCreateMenu = (props: { isSlim: () => boolean }) => {
     >
       <Dropdown.Trigger
         as={NavRow}
-        class="center h-8 bg-ink/2 ring ring-edge-muted/40"
+        class="center h-8 bg-ink/4"
         fullWidth
         tooltipPlacement="right"
         tooltipDisabled={!props.isSlim()}
