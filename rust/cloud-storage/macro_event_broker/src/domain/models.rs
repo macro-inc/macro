@@ -13,9 +13,6 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
     /// The concrete topic type that all variants of this event enum belong to.
     type Topic: Topic;
 
-    /// Event topic that all variants of this event enum belong to.
-    const TOPIC: Self::Topic;
-
     /// Version of this concrete event variant's payload schema.
     fn schema_version(&self) -> u16;
 }
@@ -69,7 +66,7 @@ impl<E: TopicEvent> Event<E> {
 
     /// Kafka topic this event belongs to.
     pub fn topic(&self) -> E::Topic {
-        E::TOPIC
+        E::Topic::default()
     }
 }
 
@@ -84,7 +81,7 @@ pub trait MacroEvent: Send + Sync {
 
     /// Kafka topic this event should be published to.
     fn topic(&self) -> <Self::EventPayload as TopicEvent>::Topic {
-        Self::EventPayload::TOPIC
+        <<Self as MacroEvent>::EventPayload as TopicEvent>::Topic::default()
     }
 
     /// Kafka message key used for partitioning and compaction.

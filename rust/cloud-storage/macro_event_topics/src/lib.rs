@@ -14,13 +14,13 @@ pub enum TopicError {
 
 /// A Topic is mapped to a Kafka topic that events can be published to.
 #[sealed]
-pub trait Topic: Copy + Send + Sync + 'static {
+pub trait Topic: Default + Copy + Send + Sync + 'static {
     /// The kafka topic name as a string.
     fn as_str(&self) -> &'static str;
 }
 
 /// Example kafka topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MacroExampleTopic;
 
 #[sealed]
