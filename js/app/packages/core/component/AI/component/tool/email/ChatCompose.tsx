@@ -173,7 +173,11 @@ export function ComposeTool(props: ComposeToolProps) {
   const signature = useEmailSignature(() => sendingLink()?.id);
   // Whether this email includes the signature. Defaults on; the preview's ✕
   // drops it for this one message. Mirrors the normal composer.
-  const [includeSignature, setIncludeSignature] = createSignal(true);
+  // Initialize from the persisted tool args so a dismiss survives re-render /
+  // reload; only an explicit false counts as dismissed.
+  const [includeSignature, setIncludeSignature] = createSignal(
+    props.initialData.includeSignature !== false
+  );
   const isReplyOrForward = () => Boolean(props.initialData.replyingToId);
   // Signature to preview (and inject on send): a new compose always shows it; a
   // reply/forward only when the inbox's "add to replies & forwards" setting is

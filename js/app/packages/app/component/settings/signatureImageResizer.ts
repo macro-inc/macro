@@ -87,11 +87,18 @@ export function setupImageResizer(quill: Quill): () => void {
     positionOverlay();
   };
 
-  const onPointerUp = (e: PointerEvent) => {
+  // Ends a drag from pointerup, or from pointercancel / lostpointercapture so an
+  // interrupted gesture can't leave the overlay stuck in `dragging`. The current
+  // width is already on the <img>, so commit it to the model either way.
+  const endDrag = (e: PointerEvent) => {
     if (!dragging) return;
     dragging = false;
     overlay.classList.remove('dragging');
-    handle.releasePointerCapture(e.pointerId);
+    try {
+      handle.releasePointerCapture(e.pointerId);
+    } catch {
+      // Capture may already be gone (e.g. pointercancel) — nothing to release.
+    }
     if (!activeImg) return;
     const width = activeImg.getAttribute('width');
     const blot = Quill.find(activeImg) as Parchment.Blot | null;
@@ -109,7 +116,9 @@ export function setupImageResizer(quill: Quill): () => void {
   quill.on('text-change', syncOrHide);
   handle.addEventListener('pointerdown', onPointerDown);
   handle.addEventListener('pointermove', onPointerMove);
-  handle.addEventListener('pointerup', onPointerUp);
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+  handle.addEventListener('lostpointercapture', endDrag);
 
   return () => {
     root.removeEventListener('click', onClick);

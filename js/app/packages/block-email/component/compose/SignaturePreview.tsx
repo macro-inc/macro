@@ -23,6 +23,12 @@ const SHADOW_STYLE = `
  * this one message (the parent owns the include/exclude state).
  */
 export function SignaturePreview(props: {
+  /**
+   * Server-sanitized signature HTML. Inserted via innerHTML (the shadow root
+   * scopes CSS/DOM but does NOT block scripts), so callers MUST pass sanitized
+   * HTML — never raw user input. Today the only source is the saved inbox
+   * setting, sanitized server-side.
+   */
   html: string;
   onDismiss: () => void;
 }) {
