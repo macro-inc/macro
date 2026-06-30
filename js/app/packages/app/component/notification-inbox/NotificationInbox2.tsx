@@ -8,6 +8,7 @@ import {
   type Query,
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { createListNavigation } from '@app/component/notification-inbox/create-list-navigation';
 import {
   InboxCardLayout,
@@ -242,7 +243,16 @@ export function NotificationInbox2() {
     items: displayItems,
     getKey: (item) => item.entity.id,
     selectedKey: () => selectedEntity()?.id,
-    onSelect: (item) => setSelectedEntity(item.entity),
+    onSelect: (item) => {
+      setSelectedEntity(item.entity);
+      if (!previewVisible()) {
+        void openEntityInSplitFromUnifiedList(item.entity, {
+          splitHandle: panel.handle,
+          mergeHistory: true,
+          referredFrom: 'inbox',
+        });
+      }
+    },
     onActivate: (item) => setSelectedEntity(item.entity),
     focusFallback: 'selected',
     scrollToKey: (key) => {
