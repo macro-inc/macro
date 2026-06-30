@@ -54,6 +54,21 @@
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
         src = jsRoot;
       };
+      nodeModuleTargets = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "x86_64-linux"
+      ];
+      nodeModuleTargetPackages =
+        lib.genAttrs (map (targetSystem: "js-node-modules-${targetSystem}") nodeModuleTargets)
+          (
+            name:
+            pkgs.callPackage ../nix-support/node_modules.nix {
+              src = jsRoot;
+              targetSystem = lib.removePrefix "js-node-modules-" name;
+            }
+          );
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
         pname = "macro-tauri-frontend";
@@ -669,6 +684,7 @@
       packages = {
         js-node-modules = nodeModules;
       }
+      // nodeModuleTargetPackages
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;
         tauri-desktop = wrappedTauriDesktop;
