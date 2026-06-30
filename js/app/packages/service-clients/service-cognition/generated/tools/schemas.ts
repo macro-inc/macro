@@ -1978,6 +1978,10 @@ export const SearchToolsResponse = z.object({
   results: z.array(z.object({ description: z.string(), name: z.string() })),
 });
 
+export const SelfKnowledge = z.record(z.any());
+
+export const SelfKnowledgeResponse = z.object({ about: z.string() });
+
 export const SendChannelMessage = z.object({
   channel_id: z.string().uuid(),
   content: z.string(),

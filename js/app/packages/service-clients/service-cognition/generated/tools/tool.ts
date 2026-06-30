@@ -85,6 +85,10 @@ type ToolParserMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
   SendChannelMessage: {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
@@ -200,6 +204,10 @@ const toolParserMap = {
     call: schemas.SearchTools,
     response: schemas.SearchToolsResponse,
   },
+  SelfKnowledge: {
+    call: schemas.SelfKnowledge,
+    response: schemas.SelfKnowledgeResponse,
+  },
   SendChannelMessage: {
     call: schemas.SendChannelMessage,
     response: schemas.SendChannelMessageResponse,
@@ -308,6 +316,10 @@ type ToolDataMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
   SendChannelMessage: {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
