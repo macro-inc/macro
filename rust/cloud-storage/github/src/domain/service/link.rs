@@ -306,47 +306,89 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
 
         tracing::trace!(user_info=?user_info, "got user info");
 
-        // Check if Github account is already linked to a different user
-        match self
-            .repo
-            .get_github_link_by_github_user_id(&user_info.id.to_string())
-            .await
-        {
-            Ok(link) => {
-                if !link.macro_id.0.eq(user_id) {
-                    return Err(GithubError::AccountAlreadyLinked);
-                }
-            }
+        let gh_id = user_info.id.to_string();
+
+        // 1. Does THIS user already have a link, and to which account?
+        let this_user_link = match self.repo.get_github_link_by_user_id(user_id).await {
+            Ok(l) => Some(l),
             Err(e) => {
-                let err: anyhow::Error = e.into();
-                // We should only error if the error is something other
-                // than the link not existing
-                if !err.to_string().contains("no rows returned") {
-                    return Err(GithubError::Internal(err));
+                let e: anyhow::Error = e.into();
+                if e.to_string().contains("no rows returned") {
+                    None
+                } else {
+                    return Err(GithubError::Internal(e));
                 }
             }
+        };
+
+        if let Some(existing) = &this_user_link {
+            if existing.github_user_id == gh_id {
+                // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
+                // insert (avoids violating the new (macro_id, github_user_id) unique). Still
+                // clean up the in-progress link, then return the existing link.
+                let _ = self
+                    .repo
+                    .delete_in_progress_user_link(in_progess_link_id)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "unable to delete in progress link id")
+                    });
+                return Ok(existing.clone());
+            }
+            // else: user previously linked a DIFFERENT github account; fall through and link
+            // the new one (frontend is single-valued; not enforced here — matches prior
+            // behavior).
         }
 
-        self.auth
-            .link_user(
-                fusionauth_user_id,
-                &self.config.idp_id,
-                &user_info.id.to_string(),
-                &user_info.login,
-                &tokens.access_token,
-            )
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+        // 2. Does anyone already OWN this github account? (owner row = earliest row)
+        let account_owner = match self.repo.get_github_link_by_github_user_id(&gh_id).await {
+            Ok(l) => Some(l),
+            Err(e) => {
+                let e: anyhow::Error = e.into();
+                if e.to_string().contains("no rows returned") {
+                    None
+                } else {
+                    return Err(GithubError::Internal(e));
+                }
+            }
+        };
 
-        tracing::trace!("linked auth user");
+        let row_fusionauth_user_id = match &account_owner {
+            Some(owner) => {
+                // SHARER: reuse the owner's shared FusionAuth grant. Do NOT call auth.link_user.
+                tracing::debug!(
+                    owner_fa_id=%owner.fusionauth_user_id,
+                    github_user_id=%gh_id,
+                    "linking additional macro user as github account sharer"
+                );
+                owner.fusionauth_user_id
+            }
+            None => {
+                // OWNER (first linker): create the FusionAuth IdP link/token as before.
+                self.auth
+                    .link_user(
+                        fusionauth_user_id,
+                        &self.config.idp_id,
+                        &gh_id,
+                        &user_info.login,
+                        &tokens.access_token,
+                    )
+                    .await
+                    .map_err(|e| GithubError::Internal(e.into()))?;
+
+                tracing::trace!("linked auth user");
+
+                *fusionauth_user_id
+            }
+        };
 
         // create github link
         let link = GithubLink {
             id: macro_uuid::generate_uuid_v7(),
             macro_id: MacroUserIdStr(user_id.clone()),
-            fusionauth_user_id: *fusionauth_user_id,
+            fusionauth_user_id: row_fusionauth_user_id,
             github_username: user_info.login.clone(),
-            github_user_id: user_info.id.to_string(),
+            github_user_id: gh_id,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };

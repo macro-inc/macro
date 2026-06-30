@@ -65,7 +65,8 @@ impl Auth for GithubAuthImpl {
         username: &str,
         access_token: &str,
     ) -> Result<(), Self::Err> {
-        self.fusionauth_client
+        match self
+            .fusionauth_client
             .link_user(LinkUserRequest {
                 identity_provider_link: IdentityProviderLink {
                     display_name: username.into(),
@@ -75,7 +76,17 @@ impl Auth for GithubAuthImpl {
                     token: access_token.into(),
                 },
             })
-            .await?;
+            .await
+        {
+            Ok(()) => {}
+            Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
+                tracing::info!(
+                    fusionauth_user_id=%fusionauth_user_id,
+                    "github idp link already exists, proceeding with existing grant"
+                );
+            }
+            Err(e) => return Err(e.into()),
+        }
 
         self.clear_access_token_cache(fusionauth_user_id).await?;
 
