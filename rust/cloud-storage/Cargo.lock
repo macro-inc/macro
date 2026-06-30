@@ -7337,13 +7337,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_buckets"
-version = "0.1.0"
-dependencies = [
- "workspace-hack",
-]
-
-[[package]]
 name = "macro_cache_client"
 version = "0.1.0"
 dependencies = [
@@ -14891,7 +14884,6 @@ dependencies = [
  "indoc",
  "libc",
  "macro_aws_config",
- "macro_buckets",
  "macro_dynamodbtables",
  "macro_queues",
  "serde",

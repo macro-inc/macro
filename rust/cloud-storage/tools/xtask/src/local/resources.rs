@@ -18,7 +18,7 @@ const ACCOUNT_ID: &str = "000000000000";
 
 /// The doc-storage bucket — referenced by the upload-finalizer wiring and the
 /// seed env, so it is named rather than inlined.
-pub const DOC_STORAGE_BUCKET: &str = macro_buckets::DocumentStorageBucket::LOCAL;
+pub const DOC_STORAGE_BUCKET: &str = "doc-storage";
 
 /// The queue doc-storage ObjectCreated events publish to — referenced by the
 /// upload-finalizer wiring, so it is named.
@@ -183,7 +183,7 @@ pub const QUEUES: &[Queue] = &[
 /// Every local S3 bucket and the env var that references it.
 pub const BUCKETS: &[Bucket] = &[
     Bucket {
-        name: macro_buckets::EmailAttachmentBucket::LOCAL,
+        name: "macro-email-attachments",
         env_key: "ATTACHMENT_BUCKET",
     },
     Bucket {
@@ -191,19 +191,19 @@ pub const BUCKETS: &[Bucket] = &[
         env_key: "DOCUMENT_STORAGE_BUCKET",
     },
     Bucket {
-        name: macro_buckets::DocxDocumentUploadBucket::LOCAL,
+        name: "docx-upload",
         env_key: "DOCX_DOCUMENT_UPLOAD_BUCKET",
     },
     Bucket {
-        name: macro_buckets::StaticFileStorageBucket::LOCAL,
+        name: "static-file-storage",
         env_key: "STATIC_STORAGE_BUCKET",
     },
     Bucket {
-        name: macro_buckets::BulkUploadStagingBucket::LOCAL,
+        name: "bulk-upload-staging",
         env_key: "UPLOAD_STAGING_BUCKET",
     },
     Bucket {
-        name: macro_buckets::CallRecordingBucket::LOCAL,
+        name: "macro-call-recording-local",
         env_key: "CALL_RECORDING_BUCKET_NAME",
     },
 ];
