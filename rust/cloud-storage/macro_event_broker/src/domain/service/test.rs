@@ -55,12 +55,9 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const TOPIC: Self::Topic = MacroExampleTopic;
-    const EVENT_TYPES: &'static [&'static str] = &["example.created"];
 
-    fn event_type(&self) -> &'static str {
-        match self {
-            ExampleTopicEvent::Created(_) => "example.created",
-        }
+    fn schema_version(&self) -> u16 {
+        1
     }
 }
 

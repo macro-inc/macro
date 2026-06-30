@@ -22,12 +22,9 @@ impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const TOPIC: Self::Topic = MacroExampleTopic;
-    const EVENT_TYPES: &'static [&'static str] = &["example.created"];
 
-    fn event_type(&self) -> &'static str {
-        match self {
-            ExampleTopicEvent::Created(_) => "example.created",
-        }
+    fn schema_version(&self) -> u16 {
+        1
     }
 }
 
@@ -126,10 +123,4 @@ fn consumer_specific_enum_decodes_by_topic() {
 
     let ExampleConsumerEvent::Example(decoded) = decoded;
     assert_eq!(decoded.key(), "msg-123");
-    assert_eq!(decoded.event().event_type(), "example.created");
-}
-
-#[test]
-fn topic_event_lists_known_event_types() {
-    assert_eq!(ExampleTopicEvent::EVENT_TYPES, &["example.created"]);
 }

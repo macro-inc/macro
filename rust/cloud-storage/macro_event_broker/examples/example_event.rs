@@ -53,26 +53,13 @@ pub enum ExampleTopicEvent {
     Updated(ExampleUpdatedMetadata),
 }
 
-impl ExampleTopicEvent {
-    /// Wire `event_type` for [`ExampleTopicEvent::Created`].
-    pub const CREATED_EVENT_TYPE: &'static str = "example.created";
-
-    /// Wire `event_type` for [`ExampleTopicEvent::Updated`].
-    pub const UPDATED_EVENT_TYPE: &'static str = "example.updated";
-}
-
 impl TopicEvent for ExampleTopicEvent {
     type Topic = MacroExampleTopic;
 
     const TOPIC: Self::Topic = MacroExampleTopic;
-    const EVENT_TYPES: &'static [&'static str] =
-        &[Self::CREATED_EVENT_TYPE, Self::UPDATED_EVENT_TYPE];
 
-    fn event_type(&self) -> &'static str {
-        match self {
-            ExampleTopicEvent::Created(_) => Self::CREATED_EVENT_TYPE,
-            ExampleTopicEvent::Updated(_) => Self::UPDATED_EVENT_TYPE,
-        }
+    fn schema_version(&self) -> u16 {
+        1
     }
 }
 

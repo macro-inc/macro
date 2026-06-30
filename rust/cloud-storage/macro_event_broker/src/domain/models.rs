@@ -16,16 +16,8 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// Event topic that all variants of this event enum belong to.
     const TOPIC: Self::Topic;
 
-    /// All stable wire `event_type` values this enum can deserialize.
-    const EVENT_TYPES: &'static [&'static str];
-
-    /// Stable wire `event_type` for this concrete event variant.
-    fn event_type(&self) -> &'static str;
-
     /// Version of this concrete event variant's payload schema.
-    fn schema_version(&self) -> u16 {
-        1
-    }
+    fn schema_version(&self) -> u16;
 }
 
 /// Serializable event envelope published through the broker.
@@ -78,11 +70,6 @@ impl<E: TopicEvent> Event<E> {
     /// Kafka topic this event belongs to.
     pub fn topic(&self) -> E::Topic {
         E::TOPIC
-    }
-
-    /// Stable wire `event_type` for this event.
-    pub fn event_type(&self) -> &'static str {
-        self.event.event_type()
     }
 }
 
