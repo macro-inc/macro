@@ -207,6 +207,10 @@ export function realAwarenessSource(
   return { apply, clear };
 }
 
+// the following functions smell; their role is just to help us find a loro node
+// given a stable id and then get the actual lorotext that we can use for
+// awareness. there's probably a better way to do this
+
 function isLoroMap(c: Container | undefined): c is LoroMap {
   return c?.kind() === 'Map';
 }
