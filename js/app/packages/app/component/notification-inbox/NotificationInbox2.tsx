@@ -38,7 +38,14 @@ import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-s
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { Button, cn, Dropdown, Tooltip } from '@ui';
 import { startOfDay, subWeeks } from 'date-fns';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 
@@ -256,22 +263,30 @@ export function NotificationInbox2() {
   useInboxListHotkeys({
     scopeId: panel.splitHotkeyScope,
     moveUp: () => {
-      listNavigation.moveFocus(-1);
-      listNavigation.selectCurrent();
+      batch(() => {
+        listNavigation.moveFocus(-1);
+        listNavigation.selectCurrent();
+      });
     },
     moveDown: () => {
-      listNavigation.moveFocus(1);
-      listNavigation.selectCurrent();
+      batch(() => {
+        listNavigation.moveFocus(1);
+        listNavigation.selectCurrent();
+      });
     },
     selectCurrent: listNavigation.selectCurrent,
     activateCurrent: listNavigation.activateCurrent,
     focusFirst: () => {
-      listNavigation.focusFirst();
-      listNavigation.selectCurrent();
+      batch(() => {
+        listNavigation.focusFirst();
+        listNavigation.selectCurrent();
+      });
     },
     focusLast: () => {
-      listNavigation.focusLast();
-      listNavigation.selectCurrent();
+      batch(() => {
+        listNavigation.focusLast();
+        listNavigation.selectCurrent();
+      });
     },
   });
 
