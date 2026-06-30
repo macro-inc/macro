@@ -10,6 +10,7 @@ import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
+import type { EnsureTagSetRequest } from './generated/schemas/ensureTagSetRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
 import type { EntityType } from './generated/schemas/entityType';
 import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
@@ -19,6 +20,8 @@ import type { PropertyDefinition } from './generated/schemas/propertyDefinition'
 import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
 import type { PropertyOption } from './generated/schemas/propertyOption';
 import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
+import type { TagSetResponse } from './generated/schemas/tagSetResponse';
+import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
 
 type PropertiesEntityType = EntityType;
 
@@ -60,6 +63,14 @@ type SetPropertyStatusCompleteArgs = {
 };
 type GetBulkEntityPropertiesArgs = {
   body: BulkEntityPropertiesRequest;
+};
+type EnsureTagSetArgs = {
+  body: EnsureTagSetRequest;
+};
+type UpdatePropertyOptionArgs = {
+  definition_id: string;
+  option_id: string;
+  body: UpdatePropertyOptionRequest;
 };
 
 const propertiesHost: string = SERVER_HOSTS['document-storage-service'];
@@ -201,6 +212,29 @@ export const propertiesServiceClient = {
       `/properties/entities/bulk`,
       {
         method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
+  },
+
+  listTags: async () => {
+    return await propertiesFetch<TagSetResponse[]>(`/properties/tags`, {
+      method: 'GET',
+    });
+  },
+
+  ensureTagSet: async (args: EnsureTagSetArgs) => {
+    return await propertiesFetch<TagSetResponse>(`/properties/tags`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
+  updatePropertyOption: async (args: UpdatePropertyOptionArgs) => {
+    return await propertiesFetch<PropertyOption>(
+      `/properties/definitions/${args.definition_id}/options/${args.option_id}`,
+      {
+        method: 'PATCH',
         body: JSON.stringify(args.body),
       }
     );

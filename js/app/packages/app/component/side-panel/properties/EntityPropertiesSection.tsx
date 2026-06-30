@@ -15,10 +15,12 @@ import {
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
+import { TagsRow } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -57,6 +59,16 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.includeMetadata ?? false
   );
 
+  const tagsQuery = useTagsQuery();
+  const tagDefinitionIds = createMemo(
+    () =>
+      new Set(
+        (tagsQuery.data ?? [])
+          .map((set) => set.definition?.id)
+          .filter((id): id is string => !!id)
+      )
+  );
+
   const filteredPinnedProperties = createMemo(() => {
     const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
     const pinnedIds = props.pinnedPropertyIds?.() ?? [];
@@ -64,6 +76,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       props.defaultPinnedPropertyIds !== undefined ||
       props.pinnedPropertyIds !== undefined;
     const pinned = properties().filter((property) => {
+      if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
       if (props.propertyFilter && !props.propertyFilter(property)) {
         return false;
       }
@@ -168,6 +183,21 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         >
           <Show when={isLoading()}>
             <SidePanel.Loading />
+          </Show>
+
+          <Show
+            when={
+              props.entityType === 'DOCUMENT' || props.entityType === 'TASK'
+            }
+          >
+            <div class="mb-2 flex items-center gap-3">
+              <span class="text-ink-muted">Tags</span>
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+              />
+            </div>
           </Show>
 
           <Show when={gridPinnedProperties().length > 0}>

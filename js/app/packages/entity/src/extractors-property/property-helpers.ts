@@ -153,7 +153,9 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     updatedAt: definition.updated_at,
   };
 
-  const valueType = definition.data_type as ValueType;
+  const valueType = (
+    definition.data_type === 'TAG' ? 'SELECT_STRING' : definition.data_type
+  ) as ValueType;
 
   // Handle each value type with proper type checking
   switch (valueType) {
