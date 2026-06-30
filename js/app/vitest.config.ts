@@ -78,6 +78,13 @@ export default defineConfig({
       {
         extends: './packages/core/vitest.config.ts',
         test: {
+          include: ['packages/block-md/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-md',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
           include: ['packages/channel/**/*.{test,spec}.{ts,tsx}'],
           name: 'channel',
         },

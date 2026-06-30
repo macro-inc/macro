@@ -5,12 +5,12 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { toast } from '@core/component/Toast/Toast';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { useHistoryStateQuery } from '@queries/history';
 import { storageServiceClient } from '@service-storage/client';
 import { Button } from '@ui';
 import type { SerializedEditorState } from 'lexical';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useHistory } from './HistoryContext';
 
 const nameForkedDocument = (name: string) => `${name} (forked)`;
 
@@ -26,6 +26,7 @@ export function HistoryOverlay(props: {
   const { insertSplit } = useSplitLayout();
   const splitPanel = useSplitPanel();
   const controlMount = () => splitPanel?.layoutRefs.overlay;
+  const history = useHistory();
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
@@ -42,38 +43,35 @@ export function HistoryOverlay(props: {
     return props.currentState();
   });
 
-  // The current document is the latest state; only fetch historical state once
-  // the user explicitly selects a timestamp from the scrubber.
-  const targetAtMs = createMemo<number | undefined>(() => {
+  const targetMs = createMemo<number | undefined>(() => {
     if (props.isScrubbedRightmost) return undefined;
-    const scrubbed = props.selectedAt;
-    if (scrubbed) return scrubbed.getTime();
-    return undefined;
+    return props.selectedAt?.getTime();
   });
-
-  const stateAtCursor = useHistoryStateQuery(
-    () => props.documentId,
-    targetAtMs
-  );
 
   const previewState = createMemo(() => {
     if (props.isScrubbedRightmost) return currentEditorState();
-    if (props.selectedAt)
-      return stateAtCursor.data?.state ?? currentEditorState();
-    return currentEditorState();
+    const ms = targetMs();
+    if (ms === undefined) return currentEditorState();
+    return history.checkoutAt(ms) ?? currentEditorState();
+  });
+
+  const versionId = createMemo(() => {
+    const ms = targetMs();
+    if (ms === undefined) return null;
+    return history.versionIdAt(ms);
   });
 
   const [forking, setForking] = createSignal(false);
   const handleFork = async (keepOpen = false) => {
-    const versionId = props.isScrubbedRightmost
+    const vid = props.isScrubbedRightmost
       ? undefined
-      : (stateAtCursor.data?.versionId ?? undefined);
-    if ((!props.isScrubbedRightmost && !versionId) || forking()) return;
+      : (versionId() ?? undefined);
+    if ((!props.isScrubbedRightmost && !vid) || forking()) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
       documentId: props.documentId,
       documentName: nameForkedDocument(props.documentName),
-      syncServiceVersion: versionId,
+      syncServiceVersion: vid,
     });
     setForking(false);
     if (res.isErr()) {
@@ -81,7 +79,7 @@ export function HistoryOverlay(props: {
       return;
     }
     insertSplit({ type: 'md', id: res.value.documentId }, 'fork');
-    if (!keepOpen) props.onExit(); // hold ctrl/meta to keep history open
+    if (!keepOpen) props.onExit();
   };
 
   return (
@@ -105,7 +103,9 @@ export function HistoryOverlay(props: {
               size="md"
               onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
               disabled={
-                forking() || (!props.isScrubbedRightmost && !stateAtCursor.data)
+                forking() ||
+                (!props.isScrubbedRightmost &&
+                  (history.isLoadingHistoryDoc() || !versionId()))
               }
             >
               <GitFork class="size-4 shrink-0" />
@@ -114,7 +114,6 @@ export function HistoryOverlay(props: {
           </div>
         </Portal>
       </Show>
-      {/* placeholderData keeps the last rendered state visible while the next loads. */}
       <Show keyed when={previewState()}>
         {(state) => {
           const config = buildConfig('markdown')

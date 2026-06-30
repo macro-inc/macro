@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE_TIME_MULTIPLIER,
   buildCompressedTimeline,
   SESSION_GAP_MS,
   warpedIntervalEnd,
@@ -22,13 +23,14 @@ describe('buildCompressedTimeline', () => {
       endMs: 5000,
       warpStart: 0,
     });
-    expect(result.total).toBe(4000);
+    // Active editing time is stretched by ACTIVE_TIME_MULTIPLIER in warped space.
+    expect(result.total).toBe(4000 * ACTIVE_TIME_MULTIPLIER);
   });
 
   it('floors zero-duration sessions to 1ms so intervals are non-empty', () => {
     const result = buildCompressedTimeline([{ startMs: 1000, endMs: 1000 }]);
     expect(result.intervals[0].endMs).toBe(1001);
-    expect(result.total).toBe(1);
+    expect(result.total).toBe(1 * ACTIVE_TIME_MULTIPLIER);
   });
 
   it('merges sessions within the gap threshold into one interval', () => {
@@ -92,14 +94,14 @@ describe('buildCompressedTimeline', () => {
     expect(result.intervals[0].endMs).toBe(8000);
   });
 
-  it('warpedIntervalEnd equals warpStart + duration', () => {
+  it('warpedIntervalEnd equals warpStart + stretched duration', () => {
     const result = buildCompressedTimeline([
       { startMs: 0, endMs: 1000 },
       { startMs: 1000 + GAP * 10, endMs: 2000 + GAP * 10 },
     ]);
     for (const iv of result.intervals) {
       expect(warpedIntervalEnd(iv)).toBe(
-        iv.warpStart + (iv.endMs - iv.startMs)
+        iv.warpStart + (iv.endMs - iv.startMs) * ACTIVE_TIME_MULTIPLIER
       );
     }
   });

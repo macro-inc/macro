@@ -83,7 +83,6 @@ export type HistoryVersionId = {
   counter: number;
 };
 
-
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
@@ -213,52 +212,6 @@ export const syncServiceClient = {
     const array = new Uint8Array(data);
 
     return ok(array);
-  },
-  async getHistoryMeta(args: { documentId: string }) {
-    const token = await getPermissionToken('document', args.documentId);
-    const response = await platformFetch(
-      `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/history-meta`,
-      {
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          Authorization: `Bearer ${token}`,
-          ...(isTauri() && { Origin: SYNC_ORIGIN }),
-        },
-        method: 'GET',
-      }
-    );
-    if (!response.ok) {
-      return err(`Failed to fetch history meta: ${response.status}`);
-    }
-
-    const data = (await response.json()) as { sessions: HistorySession[] };
-    return ok({ sessions: data.sessions });
-  },
-  async getStateAt(args: { documentId: string; tMs: number }) {
-    const token = await getPermissionToken('document', args.documentId);
-    const url = `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/state-at?t=${Math.round(args.tMs)}`;
-    const headers = {
-      'Content-Type': 'application/octet-stream',
-      Authorization: `Bearer ${token}`,
-      ...(isTauri() && { Origin: SYNC_ORIGIN }),
-    };
-    const response = await platformFetch(url, { headers, method: 'GET' });
-    if (!response.ok) {
-      return err(`Failed to fetch state at t: ${response.status}`);
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    // The resolved version of this moment, for forking. Absent for an empty
-    // oplog. Exposed cross-origin via the sync-service CORS config.
-    let versionId: HistoryVersionId | null = null;
-    const raw = response.headers.get('x-version-id');
-    if (raw) {
-      try {
-        versionId = JSON.parse(raw) as HistoryVersionId;
-      } catch {
-        versionId = null;
-      }
-    }
-    return ok({ bytes, versionId });
   },
   async getRaw(args: { documentId: string }): Promise<SerializedEditorState> {
     const token = await getPermissionToken('document', args.documentId);

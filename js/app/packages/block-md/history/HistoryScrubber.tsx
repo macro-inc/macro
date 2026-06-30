@@ -9,6 +9,7 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
   type Setter,
   Show,
 } from 'solid-js';
@@ -88,14 +89,30 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     return { start: clampedStart, end: clampedStart + span };
   };
 
-  createEffect(on(props.selectedAt, (selectedDate) => {
-    if (!selectedDate || props.isScrubbedRightmost()) return;
-    const warped = timestampToWarpedPosition(selectedDate.getTime());
-    const { start, end } = visibleWindow();
-    if (warped >= start && warped <= end) return;
-    const span = Math.max(end - start, compressedTimeline().total * 0.5);
-    setView(clampView(warped - span / 2, warped + span / 2));
-  }));
+  // This logic is basically so that we don't update lexical state as they scrub
+  // more often than the screen itself refreshes.
+  let rafId: number | null = null;
+  onCleanup(() => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+  });
+  const scheduleSelect = (ms: number) => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      props.onSelect(new Date(ms));
+    });
+  };
+
+  createEffect(
+    on(props.selectedAt, (selectedDate) => {
+      if (!selectedDate || props.isScrubbedRightmost()) return;
+      const warped = timestampToWarpedPosition(selectedDate.getTime());
+      const { start, end } = visibleWindow();
+      if (warped >= start && warped <= end) return;
+      const span = Math.max(end - start, compressedTimeline().total * 0.5);
+      setView(clampView(warped - span / 2, warped + span / 2));
+    })
+  );
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -146,16 +163,19 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   });
 
   const onPointerDown = (e: PointerEvent) => {
+    containerRef.setPointerCapture(e.pointerId);
     setHoverPx(null);
     props.setViewingHistory(true);
     const pointerPx = localPx(e.clientX);
     const thumbPosition = thumbPx();
-    if (thumbPosition !== null && Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX) {
+    if (
+      thumbPosition !== null &&
+      Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX
+    ) {
       setDrag({ mode: 'scrub', startPx: pointerPx });
     } else {
       setDrag({ mode: 'marquee', startPx: pointerPx, curPx: pointerPx });
     }
-    containerRef.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: PointerEvent) => {
@@ -166,7 +186,9 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
       return;
     }
     if (activeDrag.mode === 'scrub') {
-      setCursorMs(containerPositionToTimestamp(pointerPx));
+      const ms = containerPositionToTimestamp(pointerPx);
+      setCursorMs(ms);
+      scheduleSelect(ms);
     } else {
       setDrag({ ...activeDrag, curPx: pointerPx });
     }
@@ -270,9 +292,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
         </Show>
 
         {/* Hover preview line */}
-        <Show
-          when={hoverPx() !== null && drag() === null}
-        >
+        <Show when={hoverPx() !== null && drag() === null}>
           <div
             class="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/30"
             style={{ left: `${hoverPx() ?? 0}px` }}

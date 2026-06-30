@@ -3,7 +3,7 @@ import { area, curveBasis } from 'd3-shape';
 
 export const SESSION_GAP_MS = 10 * 60 * 1000;
 const GAP_COMPRESSION_MULTIPLIER = 0.25;
-const ACTIVE_TIME_MULTIPLIER = 8;
+export const ACTIVE_TIME_MULTIPLIER = 8;
 
 export type Interval = { startMs: number; endMs: number; warpStart: number };
 
