@@ -521,26 +521,32 @@ export async function uploadFiles(
   return uploadResults;
 }
 
-function isNameTooLongError(error: Error): boolean {
-  const messages = [error.message];
-  // The backend message can be wrapped by UploadError (whose own message is the
-  // generic "Upload failed: <file>"), so also inspect the preserved original.
+// Returns the backend's "name too long" message (which carries the authoritative
+// character limit so the copy never drifts from the API), or null if this isn't
+// that error. The message can be wrapped by UploadError, whose own message is the
+// generic "Upload failed: <file>", so the preserved original is inspected too.
+function nameTooLongMessage(error: Error): string | null {
+  const candidates = [error.message];
   if (error instanceof UploadError && error.originalError != null) {
-    messages.push(
+    candidates.push(
       error.originalError instanceof Error
         ? error.originalError.message
         : error.originalError
     );
   }
-  return messages.some((message) =>
+  const match = candidates.find((message) =>
     message.toLowerCase().includes('name too long')
   );
+  if (match == null) return null;
+  const cleaned = match.replace(/^bad request:\s*/i, '').trim();
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
 function handleUploadError(error: Error): void {
   console.error('Upload error:', error);
-  if (isNameTooLongError(error)) {
-    toast.failure('Name too long (max 200 characters)');
+  const nameTooLong = nameTooLongMessage(error);
+  if (nameTooLong != null) {
+    toast.failure(nameTooLong);
     return;
   }
   if (

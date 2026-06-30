@@ -880,7 +880,9 @@ impl<
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         if args.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+            return Err(DocumentError::BadRequest(format!(
+                "name too long (max {MAX_DOCUMENT_NAME_GRAPHEMES} characters)"
+            )));
         }
 
         let file_type = args.file_type;
@@ -1017,7 +1019,9 @@ impl<
         if let Some(name) = args.document_name.as_ref()
             && name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES
         {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+            return Err(DocumentError::BadRequest(format!(
+                "name too long (max {MAX_DOCUMENT_NAME_GRAPHEMES} characters)"
+            )));
         }
 
         // Check owner-only restrictions for authenticated users
@@ -1145,7 +1149,9 @@ impl<
         use model::document::response::DocumentResponseMetadata;
 
         if document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+            return Err(DocumentError::BadRequest(format!(
+                "name too long (max {MAX_DOCUMENT_NAME_GRAPHEMES} characters)"
+            )));
         }
 
         if document_context.deleted_at.is_some() {
