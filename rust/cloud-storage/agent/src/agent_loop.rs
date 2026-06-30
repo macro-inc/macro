@@ -151,7 +151,10 @@ impl AgentLoop {
         };
         let request_context =
             RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader);
-        let request_context = RequestContext { user_bearer: self.user_bearer.clone(), ..request_context };
+        let request_context = RequestContext {
+            user_bearer: self.user_bearer.clone(),
+            ..request_context
+        };
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 
