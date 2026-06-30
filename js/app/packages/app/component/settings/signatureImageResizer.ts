@@ -125,6 +125,11 @@ export function setupImageResizer(quill: Quill): () => void {
     root.removeEventListener('scroll', syncOrHide);
     window.removeEventListener('resize', syncOrHide);
     quill.off('text-change', syncOrHide);
+    handle.removeEventListener('pointerdown', onPointerDown);
+    handle.removeEventListener('pointermove', onPointerMove);
+    handle.removeEventListener('pointerup', endDrag);
+    handle.removeEventListener('pointercancel', endDrag);
+    handle.removeEventListener('lostpointercapture', endDrag);
     overlay.remove();
   };
 }
