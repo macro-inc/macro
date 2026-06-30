@@ -8,10 +8,12 @@ import {
   type Query,
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
+import { createListNavigation } from '@app/component/notification-inbox/create-list-navigation';
 import {
   InboxCardLayout,
   toInboxCardDisplayItem,
 } from '@app/component/notification-inbox/inbox-card-layouts';
+import { useInboxListHotkeys } from '@app/component/notification-inbox/use-inbox-list-hotkeys';
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -230,9 +232,35 @@ export function NotificationInbox2() {
   const displayItems = createMemo(() =>
     entities().map((entity) => toInboxCardDisplayItem(entity))
   );
+
   const [selectedEntity, setSelectedEntity] =
     createSignal<WithNotification<EntityData>>();
+
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+
+  const listNavigation = createListNavigation({
+    items: displayItems,
+    getKey: (item) => item.entity.id,
+    selectedKey: () => selectedEntity()?.id,
+    onSelect: (item) => setSelectedEntity(item.entity),
+    onActivate: (item) => setSelectedEntity(item.entity),
+    focusFallback: 'selected',
+    scrollToKey: (key) => {
+      const index = displayItems().findIndex((item) => item.entity.id === key);
+      if (index < 0) return;
+      virtualHandle()?.scrollToIndex(index, { align: 'nearest' });
+    },
+  });
+
+  useInboxListHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    moveUp: () => listNavigation.moveFocus(-1),
+    moveDown: () => listNavigation.moveFocus(1),
+    selectCurrent: listNavigation.selectCurrent,
+    activateCurrent: listNavigation.activateCurrent,
+    focusFirst: listNavigation.focusFirst,
+    focusLast: listNavigation.focusLast,
+  });
 
   const onScroll = () => {
     const handle = virtualHandle();
@@ -331,8 +359,14 @@ export function NotificationInbox2() {
                     {(item) => (
                       <InboxCardLayout
                         item={item}
-                        selected={selectedEntity()?.id === item.entity.id}
-                        onClick={() => setSelectedEntity(item.entity)}
+                        selected={listNavigation.isSelected(item)}
+                        highlighted={listNavigation.isFocused(item)}
+                        onClick={() => {
+                          listNavigation.setFocusedKey(item.entity.id, {
+                            scroll: false,
+                          });
+                          listNavigation.selectItem(item);
+                        }}
                       />
                     )}
                   </VList>

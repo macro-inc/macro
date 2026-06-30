@@ -84,7 +84,13 @@ export function createListNavigation<T>(
     options.onActivate?.(item, key, event);
   };
 
-  const activateFocused = (event?: Event) => activateKey(focusedKey(), event);
+  const currentKey = () => focusedKey() ?? selectedKey();
+
+  const selectCurrent = () => selectKey(currentKey());
+
+  const activateFocused = (event?: Event) => activateKey(currentKey(), event);
+
+  const activateCurrent = activateFocused;
 
   const focusIndex = (index: number) => {
     const allKeys = keys();
@@ -191,8 +197,10 @@ export function createListNavigation<T>(
     setFocusedKey: setFocus,
     selectKey,
     selectItem,
+    selectCurrent,
     activateKey,
     activateFocused,
+    activateCurrent,
     moveFocus,
     focusFirst,
     focusLast,
