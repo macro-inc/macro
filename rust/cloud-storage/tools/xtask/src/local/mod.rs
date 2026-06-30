@@ -198,9 +198,11 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
             Ok(())
         })?;
     }
-    if mode.spec().runs_local_infra {
-        ensure_external_resources(&stage, &instance)?;
-    }
+    // Both modes run at least Redis + LocalStack locally, and those reference the
+    // instance's `external` volumes/networks — which must exist before compose
+    // `up`. Unconditional + idempotent, mirroring the unconditional teardown (dev
+    // was tearing `macro_redis_data` down each run but never recreating it).
+    ensure_external_resources(&stage, &instance)?;
 
     // Bring the backend infra up and fully ready — DB created + migrated,
     // LocalStack provisioned, FusionAuth kickstarted — BEFORE the app services
