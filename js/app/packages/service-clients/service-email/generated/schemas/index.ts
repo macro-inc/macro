@@ -43,6 +43,7 @@ export * from './apiDraftInputBodyText';
 export * from './apiDraftInputCc';
 export * from './apiDraftInputDbId';
 export * from './apiDraftInputHeadersJson';
+export * from './apiDraftInputIncludeSignature';
 export * from './apiDraftInputProviderId';
 export * from './apiDraftInputProviderThreadId';
 export * from './apiDraftInputReplyingToId';

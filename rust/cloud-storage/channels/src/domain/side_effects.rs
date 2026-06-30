@@ -71,7 +71,7 @@ pub enum ChannelRealtimeEffect {
         /// Recipients that should receive the update.
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Persisted message payload.
-        message: MutatedMessage,
+        message: Box<MutatedMessage>,
         /// Public bot profile when the sender is a bot.
         bot_profile: Option<BotSenderProfile>,
         /// Client mutation nonce echoed to listeners.
@@ -455,7 +455,7 @@ where
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
-                    message: message.clone(),
+                    message: Box::new(message.clone()),
                     bot_profile: bot_profile.clone(),
                     nonce,
                 })
@@ -486,7 +486,7 @@ where
                 let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
-                    message,
+                    message: Box::new(message),
                     bot_profile,
                     nonce,
                 })
@@ -585,7 +585,7 @@ where
         let bot_profile = self.bot_profile_for_message(&message).await;
         self.publish_realtime(ChannelRealtimeEffect::Message {
             recipients: recipients.clone(),
-            message: message.clone(),
+            message: Box::new(message.clone()),
             bot_profile: bot_profile.clone(),
             nonce: nonce.clone(),
         })

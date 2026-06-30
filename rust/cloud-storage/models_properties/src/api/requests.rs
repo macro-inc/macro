@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::api::error::{
     PropertyDefinitionValidationError, PropertyOptionValidationError, PropertyValueValidationError,
 };
-use crate::shared::{DataType, EntityReference, EntityType, PropertyOwner};
+use crate::shared::{DataType, EntityReference, EntityType};
 
 // ===== Property Definition Requests =====
 
@@ -96,11 +96,22 @@ impl PropertyDataType {
     }
 }
 
+/// Ownership scope a client may request when creating a property definition.
+/// The owning user or team is derived server-side from the authenticated caller -
+/// clients never supply owner ids. System properties are not creatable via the API.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum CreatePropertyScope {
+    /// Owned by the requesting user.
+    User,
+    /// Owned by the requesting user's team. Requires team membership.
+    Team,
+}
+
 /// Request to create a new property definition.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreatePropertyDefinitionRequest {
-    #[serde(flatten)]
-    pub owner: PropertyOwner,
+    pub scope: CreatePropertyScope,
     pub display_name: String,
     pub data_type: PropertyDataType,
 }
@@ -144,6 +155,7 @@ impl CreatePropertyDefinitionRequest {
 pub struct AddStringOptionRequest {
     pub display_order: i32,
     pub value: String,
+    pub color: Option<String>,
 }
 
 /// Type-safe request to add a number option to a SelectNumber property.
@@ -174,6 +186,7 @@ impl AddPropertyOptionRequest {
         match (self, data_type) {
             (AddPropertyOptionRequest::SelectString { .. }, DataType::SelectString) => Ok(()),
             (AddPropertyOptionRequest::SelectNumber { .. }, DataType::SelectNumber) => Ok(()),
+            (AddPropertyOptionRequest::SelectString { .. }, DataType::Tag) => Ok(()),
             (AddPropertyOptionRequest::SelectString { .. }, _) => {
                 Err(PropertyOptionValidationError::StringOptionWrongType)
             }
@@ -200,6 +213,27 @@ impl AddPropertyOptionRequest {
             }
         }
     }
+}
+
+/// Request to update a property option in place. Omitted fields keep their current value.
+/// The option id is preserved, so the change propagates to every entity referencing it.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct UpdatePropertyOptionRequest {
+    /// New string value (label text). Only valid for SelectString and Tag properties.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// New color as a hex string like `#RRGGBB`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// New display order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_order: Option<i32>,
+}
+
+/// Returns true if `color` is a 6-digit hex string like `#RRGGBB`.
+pub fn is_valid_hex_color(color: &str) -> bool {
+    let bytes = color.as_bytes();
+    bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(u8::is_ascii_hexdigit)
 }
 
 // ===== Entity Property Value Requests =====
@@ -279,7 +313,10 @@ impl SetPropertyValue {
             }
 
             SetPropertyValue::SelectOption { .. } => {
-                if !matches!(data_type, DataType::SelectString | DataType::SelectNumber) {
+                if !matches!(
+                    data_type,
+                    DataType::SelectString | DataType::SelectNumber | DataType::Tag
+                ) {
                     return Err(PropertyValueValidationError::SelectOptionWrongType);
                 }
                 if is_multi_select {
@@ -289,7 +326,10 @@ impl SetPropertyValue {
             }
 
             SetPropertyValue::MultiSelectOption { .. } => {
-                if !matches!(data_type, DataType::SelectString | DataType::SelectNumber) {
+                if !matches!(
+                    data_type,
+                    DataType::SelectString | DataType::SelectNumber | DataType::Tag
+                ) {
                     return Err(PropertyValueValidationError::MultiSelectOptionWrongType);
                 }
                 if !is_multi_select {

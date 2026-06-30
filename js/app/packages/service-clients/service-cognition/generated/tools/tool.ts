@@ -89,6 +89,10 @@ type ToolParserMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -204,6 +208,10 @@ const toolParserMap = {
     call: schemas.SearchTools,
     response: schemas.SearchToolsResponse,
   },
+  SendChannelMessage: {
+    call: schemas.SendChannelMessage,
+    response: schemas.SendChannelMessageResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -312,6 +320,10 @@ type ToolDataMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

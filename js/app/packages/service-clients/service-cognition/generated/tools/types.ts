@@ -2634,6 +2634,27 @@ export interface SearchToolsResponse {
   results: ToolMatch[];
 }
 /**
+ * Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message
+ */
+export interface SendChannelMessage {
+  /**
+   * The channel id to send the message to
+   */
+  channel_id: string;
+  /**
+   * Message content in macro markdown format. This uses the same syntax as markdown documents
+   */
+  content: string;
+  /**
+   * An optional thread id to reply too
+   */
+  thread_id?: string | null;
+}
+export interface SendChannelMessageResponse {
+  channel_id: string;
+  message_id: string;
+}
+/**
  * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {

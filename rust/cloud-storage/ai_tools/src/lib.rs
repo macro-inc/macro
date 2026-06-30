@@ -42,15 +42,16 @@ pub use tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
     TaskPropertiesAdapter, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
-    ToolChannelMessagesService, ToolChannelToolContext, ToolChatService, ToolChatToolContext,
-    ToolCommsService, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolForeignEntityService, ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
+    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
+    ToolChatService, ToolChatToolContext, ToolCommsService, ToolDocumentService,
+    ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolForeignEntityService,
+    ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
     ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
-    build_properties_service, build_properties_tool_context, build_task_properties_adapter,
-    build_team_tool_context,
+    build_channel_tool_context_with_dispatcher, build_properties_service,
+    build_properties_tool_context, build_task_properties_adapter, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 

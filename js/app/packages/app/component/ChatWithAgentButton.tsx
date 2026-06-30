@@ -133,7 +133,7 @@ export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
       variant="ghost"
       size="sm"
       depth={2}
-      class="gap-1.5 rounded-full bg-hover/20 px-2 text-ink-extra-muted ring ring-edge-muted"
+      class="gap-1.5 rounded-full px-2 text-ink-extra-muted ring ring-edge-muted"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
       <span class="text-xs font-medium">Ask Macro</span>

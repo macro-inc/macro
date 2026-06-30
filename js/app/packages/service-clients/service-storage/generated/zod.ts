@@ -1720,6 +1720,12 @@ export const getChannelResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -1798,6 +1804,12 @@ export const getChannelResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2163,6 +2175,12 @@ export const getChannelMessagesResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2241,6 +2259,12 @@ export const getChannelMessagesResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2423,6 +2447,12 @@ export const postChannelMessagesResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2501,6 +2531,12 @@ export const postChannelMessagesResponse = zod
                               .string()
                               .nullish()
                               .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2589,6 +2625,12 @@ export const getMessageWithContextResponse = zod
                   .string()
                   .nullish()
                   .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2666,6 +2708,12 @@ export const getThreadRepliesResponseItem = zod
           .string()
           .describe('Sender id without the storage namespace prefix.'),
         name: zod.string().nullish().describe('Display name for bot senders.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe(
+            'For an agent (bot) message, the id of the user who triggered it.'
+          ),
         type: zod.enum(['user', 'bot']).describe('Public sender type.'),
       })
       .describe('Public sender identity for channel messages.'),
@@ -6491,6 +6539,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -6517,36 +6566,23 @@ export const getItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -6785,6 +6821,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -6811,36 +6848,23 @@ export const getItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -7042,6 +7066,7 @@ export const getItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -7068,36 +7093,23 @@ export const getItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -7450,6 +7462,7 @@ export const getItemsSoupResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -7476,36 +7489,23 @@ export const getItemsSoupResponse = zod
                                         scope: zod.enum(['user']),
                                         user_id: zod.string(),
                                       })
-                                      .describe('User-scoped property only'),
+                                      .describe('User-scoped property.'),
                                     zod
                                       .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum(['organization']),
+                                        scope: zod.enum(['team']),
+                                        team_id: zod.uuid(),
                                       })
-                                      .describe(
-                                        'Organization-scoped property only'
-                                      ),
-                                    zod
-                                      .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum([
-                                          'user_and_organization',
-                                        ]),
-                                        user_id: zod.string(),
-                                      })
-                                      .describe(
-                                        'Both user and organization-scoped'
-                                      ),
+                                      .describe('Team-scoped property.'),
                                     zod
                                       .object({
                                         scope: zod.enum(['system']),
                                       })
                                       .describe(
-                                        'System-owned property (no user or org owner)'
+                                        'System-owned property (no user or team owner).'
                                       ),
                                   ])
                                   .describe(
-                                    'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                    'Defines who owns a property - user-scoped, team-scoped, or system.'
                                   ),
                                 specific_entity_type: zod
                                   .union([
@@ -8868,6 +8868,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -8894,36 +8895,23 @@ export const postItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -9162,6 +9150,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -9188,36 +9177,23 @@ export const postItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -9419,6 +9395,7 @@ export const postItemsSoupResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -9445,36 +9422,23 @@ export const postItemsSoupResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -9827,6 +9791,7 @@ export const postItemsSoupResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -9853,36 +9818,23 @@ export const postItemsSoupResponse = zod
                                         scope: zod.enum(['user']),
                                         user_id: zod.string(),
                                       })
-                                      .describe('User-scoped property only'),
+                                      .describe('User-scoped property.'),
                                     zod
                                       .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum(['organization']),
+                                        scope: zod.enum(['team']),
+                                        team_id: zod.uuid(),
                                       })
-                                      .describe(
-                                        'Organization-scoped property only'
-                                      ),
-                                    zod
-                                      .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum([
-                                          'user_and_organization',
-                                        ]),
-                                        user_id: zod.string(),
-                                      })
-                                      .describe(
-                                        'Both user and organization-scoped'
-                                      ),
+                                      .describe('Team-scoped property.'),
                                     zod
                                       .object({
                                         scope: zod.enum(['system']),
                                       })
                                       .describe(
-                                        'System-owned property (no user or org owner)'
+                                        'System-owned property (no user or team owner).'
                                       ),
                                   ])
                                   .describe(
-                                    'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                    'Defines who owns a property - user-scoped, team-scoped, or system.'
                                   ),
                                 specific_entity_type: zod
                                   .union([
@@ -10787,6 +10739,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -10813,36 +10766,23 @@ export const postItemsSoupAstResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -11081,6 +11021,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -11107,36 +11048,23 @@ export const postItemsSoupAstResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -11338,6 +11266,7 @@ export const postItemsSoupAstResponse = zod
                                   'STRING',
                                   'SELECT_NUMBER',
                                   'SELECT_STRING',
+                                  'TAG',
                                   'ENTITY',
                                   'LINK',
                                 ])
@@ -11364,36 +11293,23 @@ export const postItemsSoupAstResponse = zod
                                       scope: zod.enum(['user']),
                                       user_id: zod.string(),
                                     })
-                                    .describe('User-scoped property only'),
+                                    .describe('User-scoped property.'),
                                   zod
                                     .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum(['organization']),
+                                      scope: zod.enum(['team']),
+                                      team_id: zod.uuid(),
                                     })
-                                    .describe(
-                                      'Organization-scoped property only'
-                                    ),
-                                  zod
-                                    .object({
-                                      organization_id: zod.number(),
-                                      scope: zod.enum([
-                                        'user_and_organization',
-                                      ]),
-                                      user_id: zod.string(),
-                                    })
-                                    .describe(
-                                      'Both user and organization-scoped'
-                                    ),
+                                    .describe('Team-scoped property.'),
                                   zod
                                     .object({
                                       scope: zod.enum(['system']),
                                     })
                                     .describe(
-                                      'System-owned property (no user or org owner)'
+                                      'System-owned property (no user or team owner).'
                                     ),
                                 ])
                                 .describe(
-                                  'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                  'Defines who owns a property - user-scoped, team-scoped, or system.'
                                 ),
                               specific_entity_type: zod
                                 .union([
@@ -11746,6 +11662,7 @@ export const postItemsSoupAstResponse = zod
                                     'STRING',
                                     'SELECT_NUMBER',
                                     'SELECT_STRING',
+                                    'TAG',
                                     'ENTITY',
                                     'LINK',
                                   ])
@@ -11772,36 +11689,23 @@ export const postItemsSoupAstResponse = zod
                                         scope: zod.enum(['user']),
                                         user_id: zod.string(),
                                       })
-                                      .describe('User-scoped property only'),
+                                      .describe('User-scoped property.'),
                                     zod
                                       .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum(['organization']),
+                                        scope: zod.enum(['team']),
+                                        team_id: zod.uuid(),
                                       })
-                                      .describe(
-                                        'Organization-scoped property only'
-                                      ),
-                                    zod
-                                      .object({
-                                        organization_id: zod.number(),
-                                        scope: zod.enum([
-                                          'user_and_organization',
-                                        ]),
-                                        user_id: zod.string(),
-                                      })
-                                      .describe(
-                                        'Both user and organization-scoped'
-                                      ),
+                                      .describe('Team-scoped property.'),
                                     zod
                                       .object({
                                         scope: zod.enum(['system']),
                                       })
                                       .describe(
-                                        'System-owned property (no user or org owner)'
+                                        'System-owned property (no user or team owner).'
                                       ),
                                   ])
                                   .describe(
-                                    'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                    'Defines who owns a property - user-scoped, team-scoped, or system.'
                                   ),
                                 specific_entity_type: zod
                                   .union([
@@ -12964,6 +12868,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -12990,38 +12895,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -13264,6 +13154,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -13290,38 +13181,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -13523,6 +13399,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -13549,38 +13426,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -13954,6 +13816,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'STRING',
                                           'SELECT_NUMBER',
                                           'SELECT_STRING',
+                                          'TAG',
                                           'ENTITY',
                                           'LINK',
                                         ])
@@ -13980,38 +13843,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                               scope: zod.enum(['user']),
                                               user_id: zod.string(),
                                             })
-                                            .describe(
-                                              'User-scoped property only'
-                                            ),
+                                            .describe('User-scoped property.'),
                                           zod
                                             .object({
-                                              organization_id: zod.number(),
-                                              scope: zod.enum(['organization']),
+                                              scope: zod.enum(['team']),
+                                              team_id: zod.uuid(),
                                             })
-                                            .describe(
-                                              'Organization-scoped property only'
-                                            ),
-                                          zod
-                                            .object({
-                                              organization_id: zod.number(),
-                                              scope: zod.enum([
-                                                'user_and_organization',
-                                              ]),
-                                              user_id: zod.string(),
-                                            })
-                                            .describe(
-                                              'Both user and organization-scoped'
-                                            ),
+                                            .describe('Team-scoped property.'),
                                           zod
                                             .object({
                                               scope: zod.enum(['system']),
                                             })
                                             .describe(
-                                              'System-owned property (no user or org owner)'
+                                              'System-owned property (no user or team owner).'
                                             ),
                                         ])
                                         .describe(
-                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                          'Defines who owns a property - user-scoped, team-scoped, or system.'
                                         ),
                                       specific_entity_type: zod
                                         .union([
@@ -14895,6 +14743,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -14921,38 +14770,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -15195,6 +15029,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -15221,38 +15056,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -15454,6 +15274,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                         'STRING',
                                         'SELECT_NUMBER',
                                         'SELECT_STRING',
+                                        'TAG',
                                         'ENTITY',
                                         'LINK',
                                       ])
@@ -15480,38 +15301,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                             scope: zod.enum(['user']),
                                             user_id: zod.string(),
                                           })
-                                          .describe(
-                                            'User-scoped property only'
-                                          ),
+                                          .describe('User-scoped property.'),
                                         zod
                                           .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum(['organization']),
+                                            scope: zod.enum(['team']),
+                                            team_id: zod.uuid(),
                                           })
-                                          .describe(
-                                            'Organization-scoped property only'
-                                          ),
-                                        zod
-                                          .object({
-                                            organization_id: zod.number(),
-                                            scope: zod.enum([
-                                              'user_and_organization',
-                                            ]),
-                                            user_id: zod.string(),
-                                          })
-                                          .describe(
-                                            'Both user and organization-scoped'
-                                          ),
+                                          .describe('Team-scoped property.'),
                                         zod
                                           .object({
                                             scope: zod.enum(['system']),
                                           })
                                           .describe(
-                                            'System-owned property (no user or org owner)'
+                                            'System-owned property (no user or team owner).'
                                           ),
                                       ])
                                       .describe(
-                                        'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                        'Defines who owns a property - user-scoped, team-scoped, or system.'
                                       ),
                                     specific_entity_type: zod
                                       .union([
@@ -15885,6 +15691,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                           'STRING',
                                           'SELECT_NUMBER',
                                           'SELECT_STRING',
+                                          'TAG',
                                           'ENTITY',
                                           'LINK',
                                         ])
@@ -15911,38 +15718,23 @@ export const postItemsSoupAstGroupedResponse = zod
                                               scope: zod.enum(['user']),
                                               user_id: zod.string(),
                                             })
-                                            .describe(
-                                              'User-scoped property only'
-                                            ),
+                                            .describe('User-scoped property.'),
                                           zod
                                             .object({
-                                              organization_id: zod.number(),
-                                              scope: zod.enum(['organization']),
+                                              scope: zod.enum(['team']),
+                                              team_id: zod.uuid(),
                                             })
-                                            .describe(
-                                              'Organization-scoped property only'
-                                            ),
-                                          zod
-                                            .object({
-                                              organization_id: zod.number(),
-                                              scope: zod.enum([
-                                                'user_and_organization',
-                                              ]),
-                                              user_id: zod.string(),
-                                            })
-                                            .describe(
-                                              'Both user and organization-scoped'
-                                            ),
+                                            .describe('Team-scoped property.'),
                                           zod
                                             .object({
                                               scope: zod.enum(['system']),
                                             })
                                             .describe(
-                                              'System-owned property (no user or org owner)'
+                                              'System-owned property (no user or team owner).'
                                             ),
                                         ])
                                         .describe(
-                                          'Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'
+                                          'Defines who owns a property - user-scoped, team-scoped, or system.'
                                         ),
                                       specific_entity_type: zod
                                         .union([

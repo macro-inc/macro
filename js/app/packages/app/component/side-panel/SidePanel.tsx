@@ -215,7 +215,7 @@ function SidePanelHeaderToggle() {
       class={cn(
         !isMobile() && 'bg-surface',
         isMobile() &&
-          'hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+          'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
         isMobile() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}

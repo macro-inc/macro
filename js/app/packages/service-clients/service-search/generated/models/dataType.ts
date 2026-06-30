@@ -18,6 +18,7 @@ export const DataType = {
   STRING: 'STRING',
   SELECT_NUMBER: 'SELECT_NUMBER',
   SELECT_STRING: 'SELECT_STRING',
+  TAG: 'TAG',
   ENTITY: 'ENTITY',
   LINK: 'LINK',
 } as const;

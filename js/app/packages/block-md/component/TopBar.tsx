@@ -225,6 +225,20 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
     },
   ];
 
+  const menuTools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: name(),
+          fileType: 'md',
+        }),
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -242,6 +256,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={menuTools}
         ops={ops}
         id={blockId}
         itemType={itemType}

@@ -4,11 +4,13 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AddStringOptionRequestColor } from './addStringOptionRequestColor';
 
 /**
  * Type-safe request to add a string option to a SelectString property.
  */
 export interface AddStringOptionRequest {
+  color?: AddStringOptionRequestColor;
   display_order: number;
   value: string;
 }

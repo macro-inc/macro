@@ -78,6 +78,9 @@ export function Layout(props: RouteSectionProps) {
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname)
   );
+  createEffect(() => {
+    console.log('VIZ', sidebarVisible());
+  });
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>

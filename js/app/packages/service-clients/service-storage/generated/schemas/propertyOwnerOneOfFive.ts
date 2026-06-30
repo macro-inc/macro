@@ -7,10 +7,8 @@
 import type { PropertyOwnerOneOfFiveScope } from './propertyOwnerOneOfFiveScope';
 
 /**
- * Both user and organization-scoped
+ * System-owned property (no user or team owner).
  */
 export type PropertyOwnerOneOfFive = {
-  organization_id: number;
   scope: PropertyOwnerOneOfFiveScope;
-  user_id: string;
 };

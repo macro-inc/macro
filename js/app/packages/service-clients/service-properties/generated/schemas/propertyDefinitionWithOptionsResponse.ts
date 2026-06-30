@@ -4,13 +4,13 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PropertyDefinitionResponse } from './propertyDefinitionResponse';
+import type { PropertyDefinitionDetailResponse } from './propertyDefinitionDetailResponse';
 import type { PropertyOptionResponse } from './propertyOptionResponse';
 
 /**
  * Property definition with options response.
  */
 export interface PropertyDefinitionWithOptionsResponse {
-  definition: PropertyDefinitionResponse;
+  definition: PropertyDefinitionDetailResponse;
   propertyOptions: PropertyOptionResponse[];
 }

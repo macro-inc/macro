@@ -55,6 +55,14 @@ export function CallRecordingSplitHeader(props: {
   const callName = () => record().customName ?? record().channelName ?? 'Call';
   const call = useCall(() => record().channelId);
 
+  const shareTool: BlockTool = {
+    label: 'Share',
+    icon: IconShared,
+    action: () => shareCtx.open(),
+    buttonComponent: () => <ShareTrigger />,
+    focusTarget: getShareDrawerRecipientInput,
+  };
+
   const tools: BlockTool[] = [
     {
       label: 'Ask Macro',
@@ -89,13 +97,22 @@ export function CallRecordingSplitHeader(props: {
         />
       ),
     },
+    shareTool,
+  ];
+
+  const menuTools: BlockTool[] = [
     {
-      label: 'Share',
-      icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
-      focusTarget: getShareDrawerRecipientInput,
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: callName(),
+          fileType: 'call',
+        }),
     },
+    shareTool,
   ];
 
   return (
@@ -139,6 +156,7 @@ export function CallRecordingSplitHeader(props: {
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={menuTools}
         ops={[{ op: 'copy' }]}
         id={blockId}
         itemType="call"

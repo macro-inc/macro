@@ -623,16 +623,24 @@ async fn main() -> anyhow::Result<()> {
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
-        SpawnedChannelEventDispatcher::new(channel_side_effects),
+        SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     ));
 
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
+    // Wire the agent's SendChannelMessage tool to the same side-effect pipeline
+    // as the HTTP API, so messages it posts fire notifications and realtime
+    // updates (the generic env builder uses a no-op dispatcher otherwise).
+    macro_agent_tool_context.channel_tool_context =
+        ai_tools::build_channel_tool_context_with_dispatcher(
+            db.clone(),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+        );
     let macro_agent_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),

@@ -10,7 +10,6 @@ import {
 import { EmailInput } from '@block-email/component/EmailInput';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -576,13 +575,19 @@ function EmailContent(props: EmailViewProps) {
                 <TopBar
                   id={props.threadId()}
                   title={props.title}
+                  onCreateTask={openTaskCompose}
                   isDraft={
                     emailReplyInfo()?.replyingTo == null &&
                     emailReplyInfo()?.draft !== null
                   }
                 />
-                <ScopedPortal scope="block">
-                  <div class="flex items-center gap-2 mobile:hidden p-2 absolute top-0 left-0">
+                <SidePanel.Section
+                  id="email-ai-actions"
+                  title="Actions"
+                  defaultOpen
+                  order={0}
+                >
+                  <div class="m-px flex items-center justify-start gap-2">
                     <Show when={context.thread()?.db_id}>
                       {(threadId) => (
                         <AskMacroButton
@@ -598,7 +603,7 @@ function EmailContent(props: EmailViewProps) {
                       <EmailTaskButton onClick={openTaskCompose} />
                     </Show>
                   </div>
-                </ScopedPortal>
+                </SidePanel.Section>
                 <div
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
@@ -706,7 +711,7 @@ function EmailTaskButton(props: { onClick: () => void }) {
       onMouseLeave={() => setHovering(false)}
       onClick={props.onClick}
       depth={2}
-      class="gap-1.5 rounded-full bg-hover/20 px-2 text-ink-extra-muted ring ring-edge-muted"
+      class="gap-1.5 rounded-full px-2 text-ink-extra-muted ring ring-edge-muted"
     >
       <AnimatedTaskIcon triggerAnimation={hovering()} />
       <span class="text-xs font-semibold">Task</span>

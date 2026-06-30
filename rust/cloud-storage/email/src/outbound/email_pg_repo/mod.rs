@@ -1,11 +1,11 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailFilter,
-        EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
-        ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo,
-        ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
+        EmailFilter, EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel,
+        MessageRow, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput, SimpleMessage,
+        SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
-    ports::{EmailRepo, RecipientsByMessageId},
+    ports::{EmailRepo, LinkEmailSettings, RecipientsByMessageId},
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -56,6 +56,16 @@ impl EmailPgRepo {
 
 impl EmailRepo for EmailPgRepo {
     type Err = sqlx::Error;
+
+    async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
+        let settings = email_db_client::settings::fetch_settings(&self.pool, link_id)
+            .await
+            .map_err(EmailErr::RepoErr)?;
+        Ok(LinkEmailSettings {
+            signature: settings.signature,
+            signature_on_replies_forwards: settings.signature_on_replies_forwards,
+        })
+    }
 
     async fn previews_for_view_cursor(
         &self,

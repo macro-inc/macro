@@ -63,11 +63,18 @@ impl ChannelRealtimePublisher for ConnectionGatewayChannelRealtimePublisher {
                 bot_profile,
                 nonce,
             } => {
-                let sender = MessageRealtimeSender::new(&message.sender_id, bot_profile);
+                let sender = MessageRealtimeSender::new(
+                    &message.sender_id,
+                    message.triggered_by.clone(),
+                    bot_profile,
+                );
                 self.send_update(
                     "comms_message",
                     WithNonce {
-                        data: MessageRealtimeData { message, sender },
+                        data: MessageRealtimeData {
+                            message: *message,
+                            sender,
+                        },
                         nonce,
                     },
                     recipients,
@@ -168,22 +175,30 @@ struct MessageRealtimeSender {
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     avatar_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    triggered_by: Option<String>,
 }
 
 impl MessageRealtimeSender {
-    fn new(sender: &Sender, bot_profile: Option<BotSenderProfile>) -> Self {
+    fn new(
+        sender: &Sender,
+        triggered_by: Option<String>,
+        bot_profile: Option<BotSenderProfile>,
+    ) -> Self {
         match sender {
             Sender::Bot(bot_id) => Self {
                 sender_type: "bot",
                 id: bot_id.as_uuid().to_string(),
                 name: bot_profile.as_ref().map(|profile| profile.name.clone()),
                 avatar_url: bot_profile.and_then(|profile| profile.avatar_url),
+                triggered_by,
             },
             Sender::User(user_id) => Self {
                 sender_type: "user",
                 id: user_id.as_ref().to_string(),
                 name: None,
                 avatar_url: None,
+                triggered_by: None,
             },
         }
     }

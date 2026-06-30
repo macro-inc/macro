@@ -97,14 +97,14 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         <DotsThree />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-fit">
-        <Show when={primaryOps().length > 0}>
-          <Dropdown.Group>
-            <For each={primaryOps()}>{item}</For>
-          </Dropdown.Group>
-        </Show>
         <Show when={props.tools.length > 0}>
           <Dropdown.Group>
             <For each={props.tools}>{item}</For>
+          </Dropdown.Group>
+        </Show>
+        <Show when={primaryOps().length > 0}>
+          <Dropdown.Group>
+            <For each={primaryOps()}>{item}</For>
           </Dropdown.Group>
         </Show>
         <Show when={deleteOps().length > 0}>
@@ -143,17 +143,17 @@ function MobileRender(props: SplitFileMenuRenderProps) {
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="File actions">
           <MobileDrawer.Handle />
-          <Show when={props.ops.length > 0}>
+          <Show when={props.tools.length > 0}>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.ops}>{item}</For>
+              <For each={props.tools}>{item}</For>
             </MobileDrawer.Section>
           </Show>
-          <Show when={props.tools.length > 0}>
-            <Show when={props.ops.length > 0}>
+          <Show when={props.ops.length > 0}>
+            <Show when={props.tools.length > 0}>
               <div class="mt-3" />
             </Show>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.tools}>{item}</For>
+              <For each={props.ops}>{item}</For>
             </MobileDrawer.Section>
           </Show>
         </MobileDrawer.Content>
