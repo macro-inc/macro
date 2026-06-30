@@ -1,4 +1,4 @@
-import PlusIcon from '@phosphor/plus.svg';
+import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn, Layer } from '@ui';
 import { For, Show } from 'solid-js';
@@ -44,9 +44,9 @@ export function TagsRow(props: {
             'inline-flex size-5 items-center justify-center rounded-full',
             'text-ink-muted transition-colors hover:bg-hover hover:text-ink'
           )}
-          triggerLabel="Add tag"
+          triggerLabel="Edit tags"
         >
-          <PlusIcon class="size-3" />
+          <PencilSimpleIcon class="size-3" />
         </TagPicker>
       </Show>
     </div>
