@@ -27,51 +27,76 @@ esac
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root/js"
 
-# Bun records GitHub dependencies in bun.lock using the resolved tag object SHA
-# plus an integrity hash. bun2nix expects a lock tuple that still contains the
-# github: specifier from package.json. Normalize only the temporary lockfile used
-# for bun2nix so the committed bun.lock can stay Bun-owned.
-normalized_lock=$(mktemp)
-python - "$normalized_lock" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-out = Path(sys.argv[1])
-root = Path.cwd()
-lock = (root / "bun.lock").read_text()
-
-replacements = {
-    "@inkibra/tauri-plugins": json.loads((root / "app/package.json").read_text())["dependencies"]["@inkibra/tauri-plugins"],
-    "pdfjs-dist": json.loads((root / "app/packages/block-pdf/package.json").read_text())["dependencies"]["pdfjs-dist"],
+extract_json_string_field() {
+  local file=$1
+  local field=$2
+  grep -F "\"$field\"" "$file" | head -n1 | sed -E 's/^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
 }
 
-def github_spec(spec: str) -> str:
-    if spec.startswith("github:"):
-        return spec
-    match = re.fullmatch(r"git\+https://github\.com/([^/]+)/(.+?)\.git#(.+)", spec)
-    if not match:
-        raise SystemExit(f"unsupported GitHub dependency spec for bun2nix normalization: {spec}")
-    owner, repo, rev = match.groups()
-    return f"github:{owner}/{repo}#{rev}"
+github_spec() {
+  local spec=$1
+  if [[ "$spec" == github:* ]]; then
+    printf '%s\n' "$spec"
+    return
+  fi
 
-for package_name, spec in replacements.items():
-    spec = github_spec(spec)
-    owner_repo, rev = spec.removeprefix("github:").split("#", 1)
-    owner, repo = owner_repo.split("/", 1)
-    cache_key = f"{owner}-{repo}-{rev}"
-    identifier = f"{package_name}@{spec}"
-    pattern = re.compile(
-        rf'^(\s*"{re.escape(package_name)}": \[")[^"]+(", \{{.*\}}, ")[^"]+"(?:, "sha512-[^"]+")?(\],)$',
-        re.MULTILINE,
-    )
-    lock, count = pattern.subn(rf'\g<1>{identifier}\g<2>{cache_key}"\g<3>', lock, count=1)
-    if count != 1:
-        raise SystemExit(f"failed to normalize bun.lock entry for {package_name}")
+  if [[ "$spec" =~ ^git\+https://github\.com/([^/]+)/([^/]+)\.git#(.+)$ ]]; then
+    printf 'github:%s/%s#%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    return
+  fi
 
-out.write_text(lock)
-PY
+  echo "unsupported GitHub dependency spec for bun2nix normalization: $spec" >&2
+  exit 1
+}
+
+sed_replacement_escape() {
+  printf '%s\n' "$1" | sed -e 's/[|&\\]/\\&/g'
+}
+
+normalize_github_dep() {
+  local normalized_lock=$1
+  local package_name=$2
+  local package_json=$3
+
+  local spec
+  spec=$(extract_json_string_field "$package_json" "$package_name")
+  if [ -z "$spec" ]; then
+    echo "failed to find $package_name in $package_json" >&2
+    exit 1
+  fi
+  spec=$(github_spec "$spec")
+
+  local owner_repo=${spec#github:}
+  owner_repo=${owner_repo%%#*}
+  local rev=${spec##*#}
+  local owner=${owner_repo%%/*}
+  local repo=${owner_repo#*/}
+  local cache_key="${owner}-${repo}-${rev}"
+  local identifier="${package_name}@${spec}"
+
+  local identifier_replacement cache_key_replacement
+  identifier_replacement=$(sed_replacement_escape "$identifier")
+  cache_key_replacement=$(sed_replacement_escape "$cache_key")
+
+  # Bun records GitHub dependencies in bun.lock using the resolved tag object
+  # SHA plus an integrity hash. bun2nix expects a lock tuple that still contains
+  # the github: specifier from package.json. Normalize only the temporary
+  # lockfile used for bun2nix so the committed bun.lock can stay Bun-owned.
+  sed -E -i.bak \
+    "s|^([[:space:]]*\"${package_name}\": \[\")[^\"]+(\", \\{.*\\}, \")[^\"]+\"(, \"sha512-[^\"]+\")?(\],)$|\\1${identifier_replacement}\\2${cache_key_replacement}\"\\4|" \
+    "$normalized_lock"
+  rm -f "$normalized_lock.bak"
+
+  if ! grep -Fq "\"$package_name\": [\"$identifier\"" "$normalized_lock"; then
+    echo "failed to normalize bun.lock entry for $package_name" >&2
+    exit 1
+  fi
+}
+
+normalized_lock=$(mktemp)
+cp bun.lock "$normalized_lock"
+normalize_github_dep "$normalized_lock" "@inkibra/tauri-plugins" "app/package.json"
+normalize_github_dep "$normalized_lock" "pdfjs-dist" "app/packages/block-pdf/package.json"
 
 if [ "$check" = true ]; then
   generated=$(mktemp)
