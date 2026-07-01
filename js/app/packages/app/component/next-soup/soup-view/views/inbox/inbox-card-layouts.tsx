@@ -240,22 +240,22 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       </span>
     ))
     .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class="size-3" />
+      <AtIcon class="size-4" />
     ))
-    .with('document_mention', () => () => <FilesIcon class="size-3" />)
+    .with('document_mention', () => () => <FilesIcon class="size-4" />)
     .with(
       'channel_message_reply',
       'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class="size-3" />
+      () => () => <ArrowBendUpLeftIcon class="size-4" />
     )
     .with('commented_on_document', () => () => (
-      <ChatCircleIcon class="size-3" />
+      <ChatCircleIcon class="size-4" />
     ))
-    .with('channel_message_send', () => () => <ChatTextIcon class="size-3" />)
+    .with('channel_message_send', () => () => <ChatTextIcon class="size-4" />)
     .with('channel_invite', 'invite_to_team', () => () => (
-      <UserPlusIcon class="size-3" />
+      <UserPlusIcon class="size-4" />
     ))
-    .with('call_started', () => () => <PhoneIcon class="size-3" />)
+    .with('call_started', () => () => <PhoneIcon class="size-4" />)
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',
@@ -263,11 +263,11 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'github_pr_comment',
       'github_pr_mention',
       'github_pr_review',
-      () => () => <GithubIcon class="size-3" />
+      () => () => <GithubIcon class="size-4" />
     )
     .with(
       P.when((value) => value?.startsWith('github_') ?? false),
-      () => () => <GithubIcon class="size-3" />
+      () => () => <GithubIcon class="size-4" />
     )
     .otherwise(() => undefined);
 
@@ -609,7 +609,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
         <InboxCard.Icon
           fallback={
             <EntityIcon
-              class="size-3"
+              class="size-5"
               targetType={getEntityIconType(entity())}
               size="fill"
               theme="monochrome"
@@ -1114,7 +1114,11 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
             <Show
               when={props.item.notification}
               fallback={
-                <EntityIcon targetType={getEntityIconType(props.item.entity)} />
+                <EntityIcon
+                  class="size-5"
+                  size="fill"
+                  targetType={getEntityIconType(props.item.entity)}
+                />
               }
             >
               <Avatar
@@ -1180,7 +1184,11 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
             <Show
               when={props.item.notification}
               fallback={
-                <EntityIcon targetType={getEntityIconType(props.item.entity)} />
+                <EntityIcon
+                  class="size-5"
+                  targetType={getEntityIconType(props.item.entity)}
+                  size="fill"
+                />
               }
             >
               <Avatar
@@ -1261,10 +1269,10 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
     getGithubSender(props.item.entity, props.item.notification)
   );
 
-  const senderId = () => sender().id;
-  const senderFallbackName = () => sender().fallbackName;
+  const senderId = () => sender()?.id;
+  const senderFallbackName = () => sender()?.fallbackName;
 
-  const avatarUrl = () => sender().imageUrl;
+  const avatarUrl = () => sender()?.imageUrl;
 
   const senderName = createSenderDisplayName(senderId, senderFallbackName);
 
@@ -1320,7 +1328,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
             <InboxCard.Icon
               fallback={
                 <EntityIcon
-                  class="size-3"
+                  class="size-5"
                   targetType="githubPullRequest"
                   size="fill"
                   theme="monochrome"
@@ -1409,7 +1417,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
         <InboxCard.Icon
           fallback={
             <EntityIcon
-              class="size-3"
+              class="size-5"
               targetType="call"
               size="fill"
               theme="monochrome"
@@ -1442,7 +1450,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
         <InboxCard.Icon
           fallback={
             <EntityIcon
-              class="size-3"
+              class="size-5"
               targetType={getEntityIconType(props.item.entity)}
               size="fill"
               theme="monochrome"
