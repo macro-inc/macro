@@ -49,6 +49,7 @@ import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
+import { PdfSplitToolbar } from './PdfSplitToolbar';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
@@ -246,6 +247,7 @@ export function TopBar() {
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>
+      <PdfSplitToolbar />
       <ResponsivePermissionsBadge />
       <ResponsiveBlockToolbar
         tools={tools}

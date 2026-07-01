@@ -2,7 +2,6 @@ import { useOwnedCommentPlaceableSelector } from '@block-pdf/signal/permissions'
 import {
   activePlaceableIdSignal,
   placeableModeSignal,
-  showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import {
@@ -12,7 +11,6 @@ import {
 } from '@core/signal/permissions';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Signature from '@phosphor/signature.svg';
-import Tabs from '@phosphor/tabs.svg';
 import Textbox from '@phosphor/textbox.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import Cancel from '@phosphor/x.svg';
@@ -27,7 +25,6 @@ export function MarkupToolbar() {
   const isDocumentOwner = useIsDocumentOwner();
 
   const [mode, setMode] = placeableModeSignal;
-  const [showTabBar, setShowTabBar] = showTabBarSignal;
 
   const activePlaceableId = activePlaceableIdSignal.get;
   const deletePlaceable = useDeletePlaceable();
@@ -47,17 +44,6 @@ export function MarkupToolbar() {
     <Show when={canComment()}>
       <div class="flex flex-row items-center">
         <Show when={canEdit()}>
-          <Button
-            size="icon-sm"
-            label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
-            variant="ghost"
-            onClick={() => {
-              setShowTabBar(!showTabBar());
-            }}
-          >
-            <Tabs />
-          </Button>
-          <div class="w-px h-5 bg-edge mx-2" />
           <Button
             size="icon-sm"
             label="Text Box"

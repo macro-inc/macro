@@ -46,7 +46,6 @@ import {
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
 import { ModalsProvider } from './ModalsProvider';
-import { PdfFloatingToolbar } from './PdfFloatingToolbar';
 import { PdfSidePanelSections } from './sidepanel/PdfSidePanelSections';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
@@ -215,11 +214,10 @@ export default function BlockPdf() {
                   </div>
                 </Show>
                 <div
-                  class="portal-scope flex size-full relative justify-end overflow-visible z-main-view-layout"
+                  class="flex size-full relative justify-end overflow-visible z-main-view-layout"
                   id="main-view"
                 >
                   {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}
-                  <PdfFloatingToolbar />
                   <Document />
                   {/* <CustomCursor /> */}
                 </div>

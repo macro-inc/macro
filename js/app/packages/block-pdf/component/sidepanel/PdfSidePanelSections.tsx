@@ -1,7 +1,4 @@
-import {
-  ChatWithAgentIcon,
-  openChatWithAgent,
-} from '@app/component/ChatWithAgentButton';
+import { AskMacroButton } from '@app/component/ChatWithAgentButton';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -14,7 +11,6 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 export function PdfSidePanelSections() {
@@ -36,23 +32,16 @@ function ActionsSectionContent() {
   const fileType = () => blockMetadataSignal()?.fileType;
 
   return (
-    <Button
-      variant="base"
-      size="sm"
-      depth={2}
-      class="bg-surface"
-      onClick={() =>
-        openChatWithAgent({
+    <div class="m-px flex items-center justify-start gap-2">
+      <AskMacroButton
+        entity={{
           type: 'document',
           id: documentId,
           name: name(),
           fileType: fileType(),
-        })
-      }
-    >
-      <ChatWithAgentIcon class="size-4" />
-      <span class="text-xs">Ask Macro</span>
-    </Button>
+        }}
+      />
+    </div>
   );
 }
 
