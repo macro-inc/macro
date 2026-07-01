@@ -73,8 +73,12 @@ function createLayoutUrlSync(
   createEffect(
     on([() => splitManager.getUrlSegments().join('/')], () => {
       if (urlLayoutDrift()) {
+        const event = splitManager.events();
+        const replace =
+          event.type === SplitEvent.ContentChange && event.cause === 'replace';
+
         // Flush the state to the url
-        navigate(`/${splitManager.getUrlSegments().join('/')}`);
+        navigate(`/${splitManager.getUrlSegments().join('/')}`, { replace });
       }
     })
   );
