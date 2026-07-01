@@ -4,7 +4,11 @@ export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
-export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
+export {
+  ListEntity,
+  ListLayoutProvider,
+  MaybeEntityRow,
+} from './composed/ListEntity';
 
 export { Entity } from './entity';
 export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
