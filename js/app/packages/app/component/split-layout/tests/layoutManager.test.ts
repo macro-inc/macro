@@ -3,8 +3,8 @@ import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createSplitLayout,
-  SplitEvent,
   type SplitContent,
+  SplitEvent,
 } from '../layoutManager';
 
 vi.mock('../componentRegistry', () => ({
