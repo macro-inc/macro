@@ -13,6 +13,7 @@ import {
   type EntityData,
   isGithubPrEntity,
   type Notification,
+  unreadFilterFn,
   type WithNotification,
 } from '@entity';
 import MacroLogo from '@icon/macro-logo.svg';
@@ -70,7 +71,7 @@ const getFirstNotification = (item: WithNotification<EntityData>) =>
   item.notifications?.()?.[0];
 
 const isUnreadNotification = (notification?: Notification) =>
-  notification ? !notification.viewed_at && !notification.done : false;
+  notification ? !notification.viewed_at : false;
 
 const getGithubSender = (entity: EntityData, notification?: Notification) => {
   const content = notification?.notification_metadata.content as
@@ -509,7 +510,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     return next.toSorted((a, b) => notificationTime(b) - notificationTime(a));
   });
 
-  const hasSubItems = () => subItems().length > 0;
+  const hasSubItems = createMemo(() => subItems().length > 0);
 
   const [localExpanded, setLocalExpanded] = createSignal(false);
   const expanded = () => props.expanded ?? localExpanded();
@@ -622,9 +623,12 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </Show>
         </div>
 
-        <Show when={props.item.timestamp}>
+        <Show when={props.item.timestamp || hasSubItems()}>
           <InboxCard.Meta timestamp={relativeTime(props.item.timestamp)}>
-            <Show when={(props.item.entity.notifications?.().length ?? 0) > 1}>
+            <Show when={hasSubItems()}>
+              <Show when={props.item.timestamp}>
+                <span aria-hidden="true">•</span>
+              </Show>
               <button
                 type="button"
                 class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
@@ -1507,7 +1511,7 @@ export function toInboxCardDisplayItem(
   return {
     entity: item,
     notification,
-    unread: isUnreadNotification(notification),
+    unread: unreadFilterFn(item),
     timestamp: getTimestamp(item, notification),
   };
 }
