@@ -2610,6 +2610,19 @@ export interface SearchToolsResponse {
   results: ToolMatch[];
 }
 /**
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
+ */
+export type SelfKnowledge = {};
+/**
+ * The response for the [`SelfKnowledge`] tool: a single Markdown about-page.
+ */
+export interface SelfKnowledgeResponse {
+  /**
+   * An overview of Macro and a routing map into the docs at docs.macro.com.
+   */
+  about: string;
+}
+/**
  * Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message
  */
 export interface SendChannelMessage {
@@ -2649,6 +2662,13 @@ export interface SendEmail {
    * Carbon copy recipients (optional).
    */
   cc?: EmailRecipient[];
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
   /**
    * The ID of a message to reply to (optional). When set, the email is
    * sent as a reply within the same thread.

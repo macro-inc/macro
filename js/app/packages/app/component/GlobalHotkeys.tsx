@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import {
   COMMAND_MENU_CATEGORY_LEADER_KEY,
   COMMAND_MENU_CATEGORY_SCOPE,
+  CREATE_MENU_COMMAND_SCOPE,
 } from '@app/constants/hotkeys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
@@ -143,7 +144,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -159,7 +160,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-    activateCommandScope: true,
+    activateCommandScopeId: CREATE_MENU_COMMAND_SCOPE,
     surfaceNestedCommands: true,
     keywords: ['new', 'make', 'add'],
     icon: Plus,
@@ -169,7 +170,7 @@ export default function GlobalShortcuts() {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
-      scopeId: createScope.commandScopeId,
+      scopeId: CREATE_MENU_COMMAND_SCOPE,
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
@@ -180,8 +181,19 @@ export default function GlobalShortcuts() {
       keywords: item.keywords,
       hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
       runWithInputFocused: true,
-      proxiedHotkey: true,
     });
+  });
+
+  registerHotkey({
+    hotkey: ['c', 'escape'],
+    scopeId: CREATE_MENU_COMMAND_SCOPE,
+    description: 'Close Create',
+    condition: createMenuOpen,
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({

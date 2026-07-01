@@ -20,6 +20,8 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  PatchSettingsRequest,
+  PatchSettingsResponse,
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
@@ -69,6 +71,15 @@ function emailFetch<T extends ObjectLike = never>(
  * macro user. The caller confirms with the user, then retries with `forceShare`.
  */
 export const SHARED_INBOX_CONFLICT_CODE = 'SHARED_INBOX_CONFLICT' as const;
+
+/**
+ * Error code `patchSettings` returns (HTTP 422) when a signature has images that
+ * couldn't be fetched/rehosted and would render broken for recipients. The whole
+ * patch is rejected; the error message carries the count so the UI can prompt a
+ * re-add.
+ */
+export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
+  'SIGNATURE_IMAGES_UNRESOLVED' as const;
 
 export const emailClient = {
   async init(args?: { linkId?: string; forceShare?: boolean }) {
@@ -268,6 +279,38 @@ export const emailClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  // Patches the settings for one inbox. Scoped to `linkId` via the
+  // X-Email-Link-Id header (the backend resolves the link from it); omit for
+  // the primary inbox. Partial: fields omitted from `settings` are left as-is.
+  async patchSettings(args: PatchSettingsRequest, linkId?: string) {
+    return fetchWithToken<
+      PatchSettingsResponse,
+      typeof SIGNATURE_IMAGES_UNRESOLVED_CODE
+    >(`${emailHost}/email/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(args),
+      headers: emailLinkHeaders(linkId),
+      // The 422 body carries how many signature images couldn't be loaded;
+      // surface it as the error message so the caller can prompt a re-add.
+      // Other statuses fall back to the default HTTP_ERROR shape.
+      errorResponseHandler: async (response) => {
+        if (response.status === 422) {
+          const body = (await response.json().catch(() => null)) as {
+            unresolved_image_count?: number;
+          } | null;
+          return {
+            code: SIGNATURE_IMAGES_UNRESOLVED_CODE,
+            message: String(body?.unresolved_image_count ?? 0),
+          };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
   },
 
   async deleteLink(args: { linkId: string }) {

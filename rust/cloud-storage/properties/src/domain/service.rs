@@ -97,6 +97,31 @@ pub trait PropertiesService: Send + Sync + 'static {
         value: Option<SetPropertyValue>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
+    /// Add one option to a multi-select entity property value atomically.
+    /// Attaches the property if needed and dedupes. Validates the option belongs
+    /// to the (multi-select) property. Requires edit access. Prefer this over
+    /// `set_entity_property` for add/remove of a single option: it composes with
+    /// concurrent changes instead of clobbering them.
+    fn add_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Remove one option from a multi-select entity property value atomically.
+    /// A no-op if absent. Requires edit access.
+    fn remove_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
     /// Gets the owner of the entity and whether it's deleted
     fn get_owner_and_deleted(
         &self,

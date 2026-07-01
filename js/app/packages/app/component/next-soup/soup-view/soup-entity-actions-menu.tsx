@@ -1,5 +1,5 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { MenuItem } from '@core/component/ContextMenu';
+import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
@@ -33,7 +33,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       {(group, groupIndex) => (
         <>
           <Show when={groupIndex() > 0}>
-            <Divider />
+            <MenuSeparator />
           </Show>
           <For each={group.items}>
             {(action) => (
@@ -49,5 +49,3 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     </For>
   );
 };
-
-const Divider = () => <div class="border-b border-edge-muted w-full my-1" />;

@@ -34,6 +34,16 @@ function isValueFilteredOut(
   return !values.includes(value);
 }
 
+function isAnyValueFilteredOut(
+  values: string[] | undefined,
+  candidates: (string | null | undefined)[]
+): boolean {
+  if (!values || values.length === 0) return false;
+  return !candidates.some(
+    (candidate) => candidate && values.includes(candidate)
+  );
+}
+
 function isAttendedFilteredOut(
   attendedFilter: boolean | null | undefined,
   itemAttended: boolean
@@ -80,7 +90,11 @@ export function filterSoupItemByRequestBody(
     .with(
       { tag: 'channel' },
       ({ data }) =>
-        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id)
+        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id) &&
+        !isAnyValueFilteredOut(body.channel_filters?.thread_ids, [
+          data.latest_message?.thread_id,
+          data.latest_non_thread_message?.thread_id,
+        ])
     )
     .with(
       { tag: 'channelThread' },

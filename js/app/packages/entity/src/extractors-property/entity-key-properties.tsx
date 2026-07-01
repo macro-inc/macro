@@ -41,6 +41,7 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
+    .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {
@@ -78,7 +79,16 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
-    return getSortedKeyProperties(soupProperties.map(soupPropertyToProperty));
+    return getSortedKeyProperties(
+      soupProperties.flatMap((soupProperty) => {
+        try {
+          return [soupPropertyToProperty(soupProperty)];
+        } catch (error) {
+          console.warn('Skipping property with unsupported type', error);
+          return [];
+        }
+      })
+    );
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();

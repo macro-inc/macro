@@ -30,6 +30,8 @@ use utoipa::OpenApi;
         crate::api::properties::entities::get::get_entity_properties,
         crate::api::properties::entities::get_bulk::get_bulk_entity_properties,
         crate::api::properties::entities::set::set_entity_property,
+        crate::api::properties::entities::option::add_entity_property_option,
+        crate::api::properties::entities::option::remove_entity_property_option,
         crate::api::properties::entities::delete_property::delete_entity_property,
     ),
     components(

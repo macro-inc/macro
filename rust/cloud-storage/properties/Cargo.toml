@@ -42,6 +42,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 ai_toolset = { path = "../ai_toolset" }
+chrono = { workspace = true }
 mockall = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }

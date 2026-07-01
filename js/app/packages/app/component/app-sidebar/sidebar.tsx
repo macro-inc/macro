@@ -5,12 +5,12 @@ import {
   InviteModal,
   setInviteModalOpen,
 } from '@app/component/app-sidebar/invite-modal';
+import { SidebarCreateMenu } from '@app/component/app-sidebar/sidebar-create-menu';
 import {
   SidebarPromoCard,
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
-import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
-import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { CommandState } from '@app/component/command';
 import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
@@ -50,9 +50,8 @@ import {
 import {
   getSettingsTabItem,
   useSettingsTabAvailable,
-  useSettingsTabs,
 } from '@core/constant/settingsTabsConfig';
-import { useUserId } from '@core/context/user';
+import { useAuthor, useEmail, useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -72,9 +71,8 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
+import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
-import PlayIcon from '@phosphor/play.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
@@ -200,7 +198,7 @@ const SIDEBAR_LINKS = [
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
 
 /** Root sidebar `max-width` transition (see `SIDEBAR_MAX_WIDTH_TRANSITION_STYLE`). */
-const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 100;
+const SIDEBAR_MAX_WIDTH_TRANSITION_MS = 120;
 const SIDEBAR_MAX_WIDTH_TRANSITION_STYLE = `max-width ease-in-out ${SIDEBAR_MAX_WIDTH_TRANSITION_MS}ms`;
 
 /**
@@ -491,15 +489,6 @@ const registerSidebarHotkeys = ({
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
 const [premiumHintVisible, setPremiumHintVisible] = createSignal(false);
 
-type SidebarActionButtonProps = {
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
-  onClick: (event?: MouseEvent) => void;
-  disabled?: boolean | (() => boolean);
-  hotkeyToken?: HotkeyToken;
-  isSlim: () => boolean;
-  label: string;
-};
-
 type SidebarShortcutLinkProps = {
   label: string;
   icon: Component<{ triggerAnimation?: boolean; class?: string }>;
@@ -532,54 +521,6 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
-    </NavRow>
-  );
-};
-
-/**
- * A normalised action button for the sidebar footer area.
- *
- * Mirrors the tooltip behaviour of `SidebarLink`:
- * - slim  → show tooltip (label + hotkey)
- * - expanded → no tooltip (label and hotkey badge are visible inline)
- */
-const SidebarActionButton = (props: SidebarActionButtonProps) => {
-  const [hovering, setHovering] = createSignal(false);
-
-  const isDisabled = () =>
-    typeof props.disabled === 'function'
-      ? props.disabled()
-      : (props.disabled ?? false);
-
-  return (
-    <NavRow
-      class="center h-8"
-      fullWidth
-      tooltipPlacement="right"
-      label={props.label}
-      hotkey={props.hotkeyToken}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-      }}
-      onClick={(event: MouseEvent) => props.onClick(event)}
-      disabled={isDisabled()}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
-      <div class="size-4 shrink-0">
-        <Dynamic component={props.icon} triggerAnimation={hovering()} />
-      </div>
-      <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-        {props.label}
-      </span>
-      <Show when={hovering() && props.hotkeyToken}>
-        {(token) => (
-          <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
-            <Hotkey token={token()} class="flex gap-1" />
-          </div>
-        )}
-      </Show>
     </NavRow>
   );
 };
@@ -621,8 +562,8 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
-  const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-  const { groups: settingGroups } = useSettingsTabs();
+  const author = useAuthor();
+  const email = useEmail();
   const logout = useLogout();
 
   return (
@@ -662,56 +603,71 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         </span>
         <CaretUpIcon class="size-3 text-ink-extra-muted shrink-0 group-data-[slim=true]/sidebar:hidden" />
       </Dropdown.Trigger>
-      <Dropdown.Content>
-        <Dropdown.Group>
+      <Dropdown.Content class="min-w-64 shadow-menu">
+        <Dropdown.Group class="p-1.5 gap-0">
+          <div class="flex items-center gap-3 px-1 py-1">
+            <Show
+              when={userId()}
+              fallback={<div class="size-10 shrink-0 rounded-full bg-ink/10" />}
+            >
+              {(id) => (
+                <div class="size-10 shrink-0">
+                  <UserIcon
+                    id={id()}
+                    size="fill"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                </div>
+              )}
+            </Show>
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-ink">
+                {author()}
+              </div>
+              <div class="truncate text-sm text-ink-muted">{email()}</div>
+            </div>
+          </div>
+          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
           <Dropdown.Item
             class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-            onSelect={() => setOnboardingModalOpen(true)}
+            onSelect={() => CommandState.open()}
+          >
+            <span class="size-5 flex items-center justify-center text-ink-extra-muted">
+              ⌘
+            </span>
+            <span class="flex-1 text-ink">Command menu</span>
+            <Hotkey
+              token={TOKENS.global.commandMenu}
+              theme="subtle"
+              class="ml-6"
+            />
+          </Dropdown.Item>
+          <Dropdown.Item
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            onSelect={() => props.onSelect('Account')}
           >
             <span class="size-5 flex items-center justify-center">
-              <PlayIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <GearIcon class="size-4 shrink-0 text-ink-extra-muted" />
             </span>
-            <span class="text-ink">Play tutorial</span>
+            <span class="flex-1 text-ink">Settings</span>
+            <Hotkey
+              token={TOKENS.global.toggleSettings}
+              theme="subtle"
+              class="ml-6"
+            />
           </Dropdown.Item>
-        </Dropdown.Group>
-        <For each={settingGroups()}>
-          {(group) => (
-            <Dropdown.Group>
-              <For each={group.items}>
-                {(item) => (
-                  <Dropdown.Item
-                    class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                    onSelect={() => props.onSelect(item.tab)}
-                  >
-                    <span class="size-5 flex items-center justify-center">
-                      <Dynamic
-                        component={item.icon}
-                        class="size-4 shrink-0 text-ink-extra-muted"
-                      />
-                    </span>
-                    <span class="text-ink">{item.label}</span>
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-          )}
-        </For>
-        <Dropdown.Group>
           <Dropdown.Item
-            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-red-500"
             onSelect={() => logout()}
           >
             <span class="size-5 flex items-center justify-center">
-              <SignOutIcon class="size-4 shrink-0 text-ink-extra-muted" />
+              <SignOutIcon class="size-4 shrink-0" />
             </span>
-            <span class="text-ink">Log out</span>
+            <span>Log out</span>
           </Dropdown.Item>
         </Dropdown.Group>
       </Dropdown.Content>
-      <InteractiveOnboardingModal
-        open={onboardingModalOpen()}
-        onOpenChange={setOnboardingModalOpen}
-      />
     </Dropdown>
   );
 };
@@ -742,7 +698,6 @@ const DASHBOARD_LINK: SidebarItem = {
 const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
 
 export const AppSidebar = (props: AppSidebarProps) => {
-  const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
@@ -805,14 +760,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     activateClosestDOMScope();
   };
 
-  const handleCreateClick = () => {
-    const willOpen = !createMenuOpen();
-    if (willOpen) {
-      analytics.track('create_menu_open', { from: 'sidebar' });
-    }
-    setCreateMenuOpen((p) => !p);
-  };
-
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
@@ -850,7 +797,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar h-full p-3 flex flex-col gap-0 mobile:absolute mobile:z-modal-content overflow-hidden',
         isExpanded() &&
-          'max-w-48 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
+          'max-w-52 w-full mobile:max-w-2/3 translate-x-0 opacity-100',
         props.sidebarState === 'hidden' &&
           '-translate-x-full overflow-hidden opacity-0',
 
@@ -860,36 +807,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
       data-slim={isSlim()}
       style={{ transition: SIDEBAR_MAX_WIDTH_TRANSITION_STYLE }}
     >
-      <div class="flex items-center justify-between relative">
-        <div class="flex items-center group/logo-area w-full group-data-[slim=true]/sidebar:justify-end">
-          <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-opacity">
-            <LogoIcon class="size-6" />
-          </div>
-          <div class="grow shrink-10 min-w-0 group-data-[slim=true]/sidebar:hidden" />
-          <SidebarHeaderIconButton
-            label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
-            hotkey={TOKENS.global.toggleSidebar}
-            onMouseDown={(e) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-            }}
-            onClick={() => {
-              handleSidebarOpenChange(!isExpanded());
-              globalSplitManager()?.returnFocus();
-            }}
-            icon={AnimatedSquareSidebarIcon}
-          />
+      <div class="flex items-center justify-between w-full relative group/logo-area">
+        <div class="text-accent group-data-[slim=true]/sidebar:opacity-0 group-data-[slim=true]/sidebar:max-w-0 min-w-0 pl-1 group-data-[slim=true]/sidebar:pl-0 transition-[opacity,padding]">
+          <LogoIcon class="size-6 translate-x-1" />
         </div>
+        <SidebarHeaderIconButton
+          label={isExpanded() ? 'Shrink Sidebar' : 'Expand Sidebar'}
+          hotkey={TOKENS.global.toggleSidebar}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+          }}
+          onClick={() => {
+            handleSidebarOpenChange(!isExpanded());
+            globalSplitManager()?.returnFocus();
+          }}
+          icon={AnimatedSquareSidebarIcon}
+        />
       </div>
 
-      <div class="w-full mb-2">
-        <SidebarActionButton
-          label="Create"
-          hotkeyToken={TOKENS.global.createCommand}
-          isSlim={isSlim}
-          onClick={handleCreateClick}
-          icon={() => <PlusIcon class="size-4" />}
-        />
+      <div class="w-full my-2.5">
+        <SidebarCreateMenu isSlim={isSlim} />
       </div>
 
       <nav>
@@ -913,7 +851,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent my-2" />
       </div>
 
-      <div class="block max-h-[clamp(10%,60%,20rem)]">
+      <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
@@ -927,7 +865,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </Show>
 
         <Show when={callCtx?.isInCall()}>
-          <div class="px-2 mb-2" data-ui="in-call-panel">
+          <div class="my-3" data-ui="in-call-panel">
             <InCallPanel isSlim={panelIsSlim} />
           </div>
         </Show>
@@ -1337,12 +1275,12 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
           class="grid w-full transition-[grid-template-rows] duration-200 ease-out"
           style={{ 'grid-template-rows': expanded() ? '1fr' : '0fr' }}
         >
-          <ul class="min-h-0 overflow-hidden flex flex-col gap-1">
+          <ul class="min-h-0 overflow-hidden flex flex-col gap-0.5">
             <For each={links()}>
               {(link, index) => (
                 <li
                   class={cn(
-                    'flex items-center justify-center first:mt-1 transition-[opacity,transform] duration-200 ease-out',
+                    'flex items-center justify-center first:mt-0.5 transition-[opacity,transform] duration-200 ease-out',
                     expanded()
                       ? 'opacity-100 translate-y-0'
                       : 'opacity-0 -translate-y-2'
@@ -1353,17 +1291,13 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
                       : '0ms',
                   }}
                 >
-                  <Button
+                  <NavRow
                     draggable={false}
-                    variant="ghost"
                     disabled={!expanded()}
                     data-sidebar-mail-account={link.email_address}
                     data-active={onlySelectedId() === link.id ? '' : undefined}
-                    class={cn(
-                      'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 pl-6 text-ink-extra-muted not-disabled:hover:bg-ink/3',
-                      onlySelectedId() === link.id &&
-                        'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
-                    )}
+                    active={onlySelectedId() === link.id}
+                    class="h-8 pl-6 pr-2"
                     onMouseDown={(e) => {
                       if (e.button !== 0) return;
                       e.preventDefault();
@@ -1378,7 +1312,7 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
                       showTooltip={false}
                     />
                     <span class="truncate">{link.email_address}</span>
-                  </Button>
+                  </NavRow>
                 </li>
               )}
             </For>

@@ -54,12 +54,13 @@ members = [
   "tools/native_app_server",
   "unfurl",
   "unfurl_service",
-  "webhook",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config",
+  "macro_event_broker",
+  "macro_event_topics",
   "macro_queues",
   "prompt",
   "workspace-hack",
@@ -110,6 +111,7 @@ http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
 inquire = "0.7"
+indexmap = "2"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",
@@ -142,6 +144,10 @@ pdfium-render = { version = "0.8.37", default-features = false, features = ["pdf
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 quote = "1"
 rand = "0.9.0"
+rdkafka = { version = "0.37", default-features = false, features = [
+  "dynamic-linking",
+  "tokio",
+] }
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"

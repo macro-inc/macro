@@ -101,9 +101,15 @@ export function trimTrailingBrs(element: Element) {
   return element;
 }
 
+// Splits a trailing signature out of the body so the renderer can collapse it
+// behind the "…" expander. Recognizes Gmail's `.gmail_signature` as well as the
+// `.macro-email-signature` wrapper the backend injects into outgoing mail
+// (our own signatures aren't otherwise tagged as Gmail's).
 function parseGmailSignature(htmlElement: Element) {
   const signaturePrefix = htmlElement.querySelector('.gmail_signature_prefix');
-  const signatureElement = htmlElement.querySelector('.gmail_signature');
+  const signatureElement = htmlElement.querySelector(
+    '.gmail_signature, .macro-email-signature'
+  );
 
   if (signatureElement) {
     const signature = signatureElement?.outerHTML;

@@ -56,7 +56,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
     };
   }
 
-  if (data.type === 'channel_message') {
+  if (data.type === 'channel_message' || data.type === 'channel_thread') {
     return { type: 'channel', id: data.channelId };
   }
 

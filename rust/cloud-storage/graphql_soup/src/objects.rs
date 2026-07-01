@@ -4,12 +4,15 @@ use models_pagination::PaginatedOpaqueCursor;
 use models_properties::service::property_value::PropertyValue;
 use models_soup::{
     SoupProperty,
-    call_record::SoupCallRecord,
+    call_record::{SoupCallRecord, SoupCallRecordParticipant},
     chat::SoupChat,
-    comms::{ChannelType, SoupChannel, SoupChannelThread},
+    comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
     document::{SoupDocument, SoupDocumentSubType},
-    email_thread::SoupEnrichedEmailThreadPreview,
+    email_thread::{
+        SoupAttachment, SoupContact, SoupEnrichedEmailThreadPreview, SoupLabel,
+        SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
+    },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     project::SoupProject,
@@ -18,9 +21,7 @@ use notification::domain::models::UserNotificationRow;
 use serde_json::Value;
 use soup::domain::models::FrecencySoupItem;
 
-use crate::loaders::{
-    EntityNotificationsKey, EntityNotificationsLoader, EntityPropertiesKey, EntityPropertiesLoader,
-};
+use crate::loaders::{EntityNotificationsKey, EntityNotificationsLoader};
 
 /// Page returned by `Query.soup`.
 #[derive(SimpleObject)]
@@ -65,8 +66,8 @@ pub enum GraphqlSoupEntityType {
     EmailThread,
     /// Channel entity.
     Channel,
-    /// Channel message entity.
-    ChannelMessage,
+    /// Channel thread entity.
+    ChannelThread,
     /// Call entity.
     Call,
     /// CRM company entity.
@@ -85,7 +86,7 @@ impl From<EntityType> for GraphqlSoupEntityType {
             EntityType::Project => Self::Project,
             EntityType::EmailThread => Self::EmailThread,
             EntityType::Channel => Self::Channel,
-            EntityType::ChannelMessage => Self::ChannelMessage,
+            EntityType::ChannelMessage => Self::ChannelThread,
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
@@ -220,22 +221,13 @@ impl GraphqlSoupDocument {
             .map(GraphqlSoupDocumentSubType::from)
     }
 
-    async fn properties(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlSoupProperty>> {
-        let loader = ctx.data::<DataLoader<EntityPropertiesLoader>>()?;
-        let key = EntityPropertiesKey {
-            entity_id: self.0.id.to_string(),
-            entity_type: self.0.entity_type().to_string(),
-        };
-
-        let properties = loader
-            .load_one(key)
-            .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?
-            .unwrap_or_default();
-        Ok(properties.into_iter().map(GraphqlSoupProperty).collect())
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
     }
 
     async fn notifications(
@@ -546,6 +538,19 @@ impl GraphqlSoupChat {
         self.0.viewed_at.map(|ts| ts.to_rfc3339())
     }
 
+    async fn deleted_at(&self) -> Option<String> {
+        self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
+    }
+
     async fn notifications(
         &self,
         ctx: &Context<'_>,
@@ -594,6 +599,19 @@ impl GraphqlSoupProject {
         self.0.viewed_at.map(|ts| ts.to_rfc3339())
     }
 
+    async fn deleted_at(&self) -> Option<String> {
+        self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
+    }
+
     async fn notifications(
         &self,
         ctx: &Context<'_>,
@@ -609,6 +627,184 @@ impl GraphqlSoupProject {
     }
 }
 
+/// GraphQL email participant/contact.
+pub struct GraphqlSoupEmailParticipant {
+    id: ID,
+    link_id: ID,
+    name: Option<String>,
+    email: Option<String>,
+    sfs_photo_url: Option<String>,
+}
+
+impl From<&SoupContact> for GraphqlSoupEmailParticipant {
+    fn from(value: &SoupContact) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            link_id: ID(value.link_id.to_string()),
+            name: value.name.clone(),
+            email: value.email_address.clone(),
+            sfs_photo_url: value.sfs_photo_url.clone(),
+        }
+    }
+}
+
+#[Object]
+impl GraphqlSoupEmailParticipant {
+    async fn id(&self) -> &ID {
+        &self.id
+    }
+
+    async fn link_id(&self) -> &ID {
+        &self.link_id
+    }
+
+    async fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    async fn email(&self) -> Option<&str> {
+        self.email.as_deref()
+    }
+
+    async fn sfs_photo_url(&self) -> Option<&str> {
+        self.sfs_photo_url.as_deref()
+    }
+}
+
+/// GraphQL email label.
+pub struct GraphqlSoupEmailLabel {
+    id: ID,
+    link_id: ID,
+    provider_label_id: String,
+    name: String,
+    created_at: String,
+    message_list_visibility: &'static str,
+    label_list_visibility: &'static str,
+    type_: &'static str,
+}
+
+impl From<&SoupLabel> for GraphqlSoupEmailLabel {
+    fn from(value: &SoupLabel) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            link_id: ID(value.link_id.to_string()),
+            provider_label_id: value.provider_label_id.clone(),
+            name: value.name.clone(),
+            created_at: value.created_at.to_rfc3339(),
+            message_list_visibility: match value.message_list_visibility {
+                SoupMessageListVisibility::Show => "show",
+                SoupMessageListVisibility::Hide => "hide",
+            },
+            label_list_visibility: match value.label_list_visibility {
+                SoupLabelListVisibility::LabelShow => "label_show",
+                SoupLabelListVisibility::LabelShowIfUnread => "label_show_if_unread",
+                SoupLabelListVisibility::LabelHide => "label_hide",
+            },
+            type_: match value.type_ {
+                SoupLabelType::System => "system",
+                SoupLabelType::User => "user",
+            },
+        }
+    }
+}
+
+#[Object]
+impl GraphqlSoupEmailLabel {
+    async fn id(&self) -> &ID {
+        &self.id
+    }
+
+    async fn link_id(&self) -> &ID {
+        &self.link_id
+    }
+
+    async fn provider_label_id(&self) -> &str {
+        &self.provider_label_id
+    }
+
+    async fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn created_at(&self) -> &str {
+        &self.created_at
+    }
+
+    async fn message_list_visibility(&self) -> &'static str {
+        self.message_list_visibility
+    }
+
+    async fn label_list_visibility(&self) -> &'static str {
+        self.label_list_visibility
+    }
+
+    async fn type_(&self) -> &'static str {
+        self.type_
+    }
+}
+
+/// GraphQL email attachment.
+pub struct GraphqlSoupEmailAttachment {
+    id: ID,
+    message_id: ID,
+    provider_attachment_id: Option<String>,
+    filename: Option<String>,
+    mime_type: Option<String>,
+    size_bytes: Option<i64>,
+    content_id: Option<String>,
+    created_at: String,
+}
+
+impl From<&SoupAttachment> for GraphqlSoupEmailAttachment {
+    fn from(value: &SoupAttachment) -> Self {
+        Self {
+            id: ID(value.id.to_string()),
+            message_id: ID(value.message_id.to_string()),
+            provider_attachment_id: value.provider_attachment_id.clone(),
+            filename: value.filename.clone(),
+            mime_type: value.mime_type.clone(),
+            size_bytes: value.size_bytes,
+            content_id: value.content_id.clone(),
+            created_at: value.created_at.to_rfc3339(),
+        }
+    }
+}
+
+#[Object]
+impl GraphqlSoupEmailAttachment {
+    async fn id(&self) -> &ID {
+        &self.id
+    }
+
+    async fn message_id(&self) -> &ID {
+        &self.message_id
+    }
+
+    async fn provider_attachment_id(&self) -> Option<&str> {
+        self.provider_attachment_id.as_deref()
+    }
+
+    async fn filename(&self) -> Option<&str> {
+        self.filename.as_deref()
+    }
+
+    async fn mime_type(&self) -> Option<&str> {
+        self.mime_type.as_deref()
+    }
+
+    async fn size_bytes(&self) -> Option<i64> {
+        self.size_bytes
+    }
+
+    async fn content_id(&self) -> Option<&str> {
+        self.content_id.as_deref()
+    }
+
+    async fn created_at(&self) -> &str {
+        &self.created_at
+    }
+}
+
 /// GraphQL email thread entity.
 pub struct GraphqlSoupEmailThread(SoupEnrichedEmailThreadPreview);
 
@@ -618,8 +814,25 @@ impl GraphqlSoupEmailThread {
         ID(self.0.thread.id.to_string())
     }
 
+    async fn provider_id(&self) -> Option<&str> {
+        self.0.thread.provider_id.as_deref()
+    }
+
     async fn owner_id(&self) -> String {
         self.0.thread.owner_id.as_ref().to_owned()
+    }
+
+    async fn inbox_visible(&self) -> bool {
+        self.0.thread.inbox_visible
+    }
+
+    async fn link_id(&self) -> Option<ID> {
+        self.0
+            .participants
+            .first()
+            .map(|participant| participant.link_id)
+            .or_else(|| self.0.labels.first().map(|label| label.link_id))
+            .map(|id| ID(id.to_string()))
     }
 
     async fn name(&self) -> Option<&str> {
@@ -636,6 +849,10 @@ impl GraphqlSoupEmailThread {
 
     async fn sender_name(&self) -> Option<&str> {
         self.0.thread.sender_name.as_deref()
+    }
+
+    async fn sender_photo_url(&self) -> Option<&str> {
+        self.0.thread.sender_photo_url.as_deref()
     }
 
     async fn is_read(&self) -> bool {
@@ -678,6 +895,39 @@ impl GraphqlSoupEmailThread {
         self.0.participants.len()
     }
 
+    async fn participants(&self) -> Vec<GraphqlSoupEmailParticipant> {
+        self.0
+            .participants
+            .iter()
+            .map(GraphqlSoupEmailParticipant::from)
+            .collect()
+    }
+
+    async fn attachments(&self) -> Vec<GraphqlSoupEmailAttachment> {
+        self.0
+            .attachments
+            .iter()
+            .map(GraphqlSoupEmailAttachment::from)
+            .collect()
+    }
+
+    async fn labels(&self) -> Vec<GraphqlSoupEmailLabel> {
+        self.0
+            .labels
+            .iter()
+            .map(GraphqlSoupEmailLabel::from)
+            .collect()
+    }
+
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
+    }
+
     async fn notifications(
         &self,
         ctx: &Context<'_>,
@@ -690,6 +940,74 @@ impl GraphqlSoupEmailThread {
             },
         )
         .await
+    }
+}
+
+/// GraphQL channel participant.
+pub struct GraphqlSoupChannelParticipant(ChannelParticipant);
+
+#[Object]
+impl GraphqlSoupChannelParticipant {
+    async fn channel_id(&self) -> ID {
+        ID(self.0.channel_id.0.to_string())
+    }
+
+    async fn user_id(&self) -> String {
+        self.0.user_id.as_ref().to_owned()
+    }
+
+    async fn role(&self) -> &'static str {
+        match self.0.role {
+            models_soup::comms::ParticipantRole::Owner => "owner",
+            models_soup::comms::ParticipantRole::Admin => "admin",
+            models_soup::comms::ParticipantRole::Member => "member",
+        }
+    }
+
+    async fn joined_at(&self) -> String {
+        self.0.joined_at.to_rfc3339()
+    }
+
+    async fn left_at(&self) -> Option<String> {
+        self.0.left_at.map(|ts| ts.to_rfc3339())
+    }
+}
+
+/// GraphQL channel message summary.
+pub struct GraphqlSoupChannelMessage(ChannelMessage);
+
+#[Object]
+impl GraphqlSoupChannelMessage {
+    async fn message_id(&self) -> ID {
+        ID(self.0.message_id.to_string())
+    }
+
+    async fn thread_id(&self) -> Option<ID> {
+        self.0.thread_id.map(|id| ID(id.to_string()))
+    }
+
+    async fn sender_id(&self) -> &str {
+        &self.0.sender_id
+    }
+
+    async fn content(&self) -> &str {
+        &self.0.content
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn deleted_at(&self) -> Option<String> {
+        self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn mentions(&self) -> &[String] {
+        &self.0.mentions
     }
 }
 
@@ -725,6 +1043,15 @@ impl GraphqlSoupChannel {
         self.0.channel.channel.owner_id.as_ref().to_owned()
     }
 
+    async fn organization_id(&self) -> Option<ID> {
+        self.0
+            .channel
+            .channel
+            .org_id
+            .as_ref()
+            .map(|id| ID(id.0.to_string()))
+    }
+
     async fn team_id(&self) -> Option<ID> {
         self.0.channel.channel.team_id.map(|id| ID(id.to_string()))
     }
@@ -741,8 +1068,47 @@ impl GraphqlSoupChannel {
         self.0.viewed_at.map(|ts| ts.to_rfc3339())
     }
 
+    async fn interacted_at(&self) -> Option<String> {
+        self.0.interacted_at.map(|ts| ts.to_rfc3339())
+    }
+
     async fn participant_count(&self) -> usize {
         self.0.channel.participants.len()
+    }
+
+    async fn participant_ids(&self) -> Vec<String> {
+        self.0
+            .channel
+            .participants
+            .iter()
+            .map(|participant| participant.user_id.as_ref().to_owned())
+            .collect()
+    }
+
+    async fn participants(&self) -> Vec<GraphqlSoupChannelParticipant> {
+        self.0
+            .channel
+            .participants
+            .iter()
+            .cloned()
+            .map(GraphqlSoupChannelParticipant)
+            .collect()
+    }
+
+    async fn latest_message(&self) -> Option<GraphqlSoupChannelMessage> {
+        self.0
+            .latest_message
+            .latest_message
+            .clone()
+            .map(GraphqlSoupChannelMessage)
+    }
+
+    async fn latest_non_thread_message(&self) -> Option<GraphqlSoupChannelMessage> {
+        self.0
+            .latest_message
+            .latest_non_thread_message
+            .clone()
+            .map(GraphqlSoupChannelMessage)
     }
 
     async fn notifications(
@@ -812,6 +1178,38 @@ impl GraphqlSoupChannelThread {
     }
 }
 
+/// GraphQL call participant.
+pub struct GraphqlSoupCallParticipant {
+    user_id: String,
+    joined_at: String,
+    left_at: Option<String>,
+}
+
+impl From<&SoupCallRecordParticipant> for GraphqlSoupCallParticipant {
+    fn from(value: &SoupCallRecordParticipant) -> Self {
+        Self {
+            user_id: value.user_id.clone(),
+            joined_at: value.joined_at.to_rfc3339(),
+            left_at: value.left_at.map(|ts| ts.to_rfc3339()),
+        }
+    }
+}
+
+#[Object]
+impl GraphqlSoupCallParticipant {
+    async fn user_id(&self) -> &str {
+        &self.user_id
+    }
+
+    async fn joined_at(&self) -> &str {
+        &self.joined_at
+    }
+
+    async fn left_at(&self) -> Option<&str> {
+        self.left_at.as_deref()
+    }
+}
+
 /// GraphQL call entity.
 pub struct GraphqlSoupCall(SoupCallRecord);
 
@@ -825,8 +1223,16 @@ impl GraphqlSoupCall {
         ID(self.0.channel_id.to_string())
     }
 
+    async fn channel_name(&self) -> Option<&str> {
+        self.0.channel_name.as_deref()
+    }
+
     async fn created_by(&self) -> &str {
         &self.0.created_by
+    }
+
+    async fn custom_name(&self) -> Option<&str> {
+        self.0.custom_name.as_deref()
     }
 
     async fn name(&self) -> Option<&str> {
@@ -856,12 +1262,36 @@ impl GraphqlSoupCall {
         self.0.is_active
     }
 
+    async fn status(&self) -> &'static str {
+        match self.0.status {
+            item_filters::CallStatus::Attended => "ATTENDED",
+            item_filters::CallStatus::Missed => "MISSED",
+            item_filters::CallStatus::Unattended => "UNATTENDED",
+        }
+    }
+
     async fn attended(&self) -> bool {
         self.0.attended
     }
 
     async fn participant_count(&self) -> usize {
         self.0.participants.len()
+    }
+
+    async fn participant_ids(&self) -> Vec<String> {
+        self.0
+            .participants
+            .iter()
+            .map(|participant| participant.user_id.clone())
+            .collect()
+    }
+
+    async fn participants(&self) -> Vec<GraphqlSoupCallParticipant> {
+        self.0
+            .participants
+            .iter()
+            .map(GraphqlSoupCallParticipant::from)
+            .collect()
     }
 
     async fn notifications(
@@ -984,3 +1414,6 @@ impl GraphqlSoupForeignEntity {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests;

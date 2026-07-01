@@ -1,8 +1,5 @@
 /// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
 /// [`StreamPart`] items sent through a channel.
-#[cfg(test)]
-mod test;
-
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};

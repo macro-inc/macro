@@ -37,7 +37,7 @@ export function getMentionItemName(item: MentionItem): string {
     case 'user': {
       const { email, name } = item.data;
       if (name === email) return email;
-      return `${name} | ${email}`;
+      return `${name} ${email}`;
     }
     case 'group':
       return `@${item.data.groupAlias}`;

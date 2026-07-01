@@ -11,6 +11,7 @@ mod display_results;
 mod schemas;
 pub mod search;
 mod search_tools;
+mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
@@ -27,6 +28,7 @@ use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
+use self_knowledge::SelfKnowledge;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
@@ -74,6 +76,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub(crate) fn subagent_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
+        .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())

@@ -63,6 +63,13 @@ pub fn router() -> Router<PropertiesHandlerState> {
             "/entities/{entity_type}/{entity_id}/{property_id}",
             put(entities::set::set_entity_property).layer(ensure_user_exists.clone()),
         )
+        // Atomic single-option delta on a multi-select value (merges concurrent edits)
+        .route(
+            "/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+            post(entities::option::add_entity_property_option)
+                .delete(entities::option::remove_entity_property_option)
+                .layer(ensure_user_exists.clone()),
+        )
         .route(
             "/entity_properties/{entity_property_id}",
             delete(entities::delete_property::delete_entity_property)

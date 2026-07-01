@@ -862,7 +862,9 @@ export function CanvasController(props: ParentProps) {
 
     const entityType = event.draggable.data.type;
     // TODO: add channel message support
-    if (entityType === 'channel_message') return;
+    if (entityType === 'channel_message' || entityType === 'channel_thread') {
+      return;
+    }
     // Automation and foreign entities aren't yet renderable as canvas mentions.
     if (entityType === 'automation' || entityType === 'foreign') return;
     // CRM companies/contacts aren't renderable as canvas mentions.

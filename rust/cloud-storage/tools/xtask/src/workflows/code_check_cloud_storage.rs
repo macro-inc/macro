@@ -37,7 +37,7 @@ pub fn code_check_cloud_storage() -> Workflow {
 /// Decide whether the rest of the workflow runs, and compute the nextest filter.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::LinuxSmall.to_string())
+        .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "nextest_filter",
@@ -47,7 +47,7 @@ fn path_check() -> Job {
             "doppler_config_bins",
             "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
         )
-        .add_step(steps::checkout(true))
+        .add_step(steps::checkout(true, false))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
         .add_step(compute_changed_files())
@@ -58,13 +58,13 @@ fn path_check() -> Job {
 /// fmt + clippy (and Doppler-config validation).
 fn check() -> Job {
     steps::gated_job()
-        .runs_on(runners::Runner::LinuxRustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
             "RUSTFLAGS",
             "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
         ))
         .add_env(("RUSTDOCFLAGS", "-Dwarnings"))
-        .add_step(steps::checkout(false))
+        .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -78,7 +78,7 @@ fn check() -> Job {
 /// cargo nextest against postgres + redis service containers.
 fn test() -> Job {
     steps::gated_job()
-        .runs_on(runners::Runner::LinuxRustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
             "NEXTEST_FILTER",
             "${{ needs.path-check.outputs.nextest_filter }}",
@@ -87,7 +87,7 @@ fn test() -> Job {
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
-        .add_step(steps::checkout(false))
+        .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
@@ -103,7 +103,7 @@ fn test() -> Job {
 fn status_check() -> Job {
     Job::default()
         .name("Cloud Storage Status Check")
-        .runs_on(runners::Runner::LinuxSmall.to_string())
+        .runs_on(runners::Runner::Small.to_string())
         .cond(Expression::new("always()"))
         .needs(vec![
             "path-check".to_string(),

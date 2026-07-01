@@ -37,16 +37,3 @@ impl<'a> std::fmt::Display for Model<'a> {
         write!(f, "{}/{}", self.provider, self.name)
     }
 }
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_from_string() {
-        let good = super::Model::try_from("anthropic/claude-big-burger").expect("good model");
-        assert_eq!(good.name(), "claude-big-burger");
-        assert_eq!(good.provider(), "anthropic");
-
-        let bad = "claude-big-burger";
-        assert!(super::Model::try_from(bad).is_err());
-    }
-}

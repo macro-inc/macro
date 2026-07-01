@@ -343,6 +343,110 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            entity_id = %entity_id,
+            entity_type = ?entity_type,
+            property_definition_id = %property_definition_id,
+            option_id = %option_id
+        )
+    )]
+    async fn add_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), PropertiesErr> {
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionDenied)?;
+        permission_service
+            .check_entity_edit_permission(user_id, entity_id, entity_type)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+
+        let property_definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or_else(|| {
+                PropertiesErr::Validation(format!(
+                    "Property definition not found: {}",
+                    property_definition_id
+                ))
+            })?;
+
+        if !property_definition.is_multi_select {
+            return Err(PropertiesErr::Validation(
+                "Option add/remove is only supported for multi-select properties".to_string(),
+            ));
+        }
+
+        if !is_property_applicable_to(property_definition_id, entity_type) {
+            return Err(PropertiesErr::Validation(
+                "This property cannot be attached to this entity type".to_string(),
+            ));
+        }
+
+        self.validate_property_options(property_definition_id, &[option_id])
+            .await?;
+
+        self.repository
+            .add_entity_property_option(entity_id, entity_type, property_definition_id, option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        self.enqueue_property_upsert(entity_id, entity_type).await;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            entity_id = %entity_id,
+            entity_type = ?entity_type,
+            property_definition_id = %property_definition_id,
+            option_id = %option_id
+        )
+    )]
+    async fn remove_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), PropertiesErr> {
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionDenied)?;
+        permission_service
+            .check_entity_edit_permission(user_id, entity_id, entity_type)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+
+        self.repository
+            .remove_entity_property_option(
+                entity_id,
+                entity_type,
+                property_definition_id,
+                option_id,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        self.enqueue_property_upsert(entity_id, entity_type).await;
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn get_owner_and_deleted(
         &self,

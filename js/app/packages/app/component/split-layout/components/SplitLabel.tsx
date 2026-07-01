@@ -33,6 +33,10 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import {
+  getSplitFileMenuActionSections,
+  type SplitFileMenuAction,
+} from '../context';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
 
@@ -243,19 +247,13 @@ export function BlockItemSplitLabel(props: {
 function SplitLabelContextMenu(props: ParentProps) {
   const panel = useSplitPanelOrThrow();
   const actions = () => panel.titleFileMenuActions();
-  const hasActions = createMemo(() => {
+  const sections = createMemo(() => {
     const groups = actions();
-    if (!groups) return false;
-    return (
-      groups.primaryOps.length > 0 ||
-      groups.tools.length > 0 ||
-      groups.deleteOps.length > 0
-    );
+    return groups ? getSplitFileMenuActionSections(groups) : [];
   });
+  const hasActions = createMemo(() => sections().length > 0);
 
-  const item = (
-    action: NonNullable<ReturnType<typeof actions>>['tools'][0]
-  ) => (
+  const item = (action: SplitFileMenuAction) => (
     <MenuItem
       icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
       text={action.label}
@@ -288,38 +286,16 @@ function SplitLabelContextMenu(props: ParentProps) {
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenuContent width="w-fit">
-            <Show when={actions()}>
-              {(groups) => (
+            <For each={sections()}>
+              {(section, index) => (
                 <>
-                  <Show when={groups().primaryOps.length > 0}>
-                    <For each={groups().primaryOps}>{item}</For>
-                  </Show>
-                  <Show
-                    when={
-                      groups().tools.length > 0 &&
-                      groups().primaryOps.length > 0
-                    }
-                  >
+                  <Show when={index() > 0}>
                     <MenuSeparator />
                   </Show>
-                  <Show when={groups().tools.length > 0}>
-                    <For each={groups().tools}>{item}</For>
-                  </Show>
-                  <Show
-                    when={
-                      groups().deleteOps.length > 0 &&
-                      (groups().primaryOps.length > 0 ||
-                        groups().tools.length > 0)
-                    }
-                  >
-                    <MenuSeparator />
-                  </Show>
-                  <Show when={groups().deleteOps.length > 0}>
-                    <For each={groups().deleteOps}>{item}</For>
-                  </Show>
+                  <For each={section.actions}>{item}</For>
                 </>
               )}
-            </Show>
+            </For>
           </ContextMenuContent>
         </ContextMenu.Portal>
       </ContextMenu>
