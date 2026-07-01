@@ -143,11 +143,13 @@ services:
       # VITE_SYNC_SERVICE_HOST=sync-service-playground.macroverse.workers.dev VITE_LOCAL_SERVERS=ALL bun run dev
       # if you do so
       - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
     depends_on:
       - redis
       - connection_gateway
       - authentication-service
       - sync_service
+      - lexical_service
     networks:
       databases:
       services:
