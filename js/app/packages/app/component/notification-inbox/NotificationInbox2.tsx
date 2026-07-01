@@ -13,7 +13,7 @@ import { createListNavigation } from '@app/component/notification-inbox/create-l
 import {
   InboxCardLayout,
   toInboxCardDisplayItem,
-} from '@app/component/notification-inbox/inbox-card-layouts';
+} from '@app/component/next-soup/soup-view/views/inbox/inbox-card-layouts';
 import { useInboxListHotkeys } from '@app/component/notification-inbox/use-inbox-list-hotkeys';
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';

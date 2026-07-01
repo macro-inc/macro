@@ -1,4 +1,4 @@
-import type { EntityData, Notification } from '@entity';
+import type { EntityData, Notification, WithNotification } from '@entity';
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
@@ -13,6 +13,44 @@ import {
   differenceInYears,
   format,
 } from 'date-fns';
+import { match } from 'ts-pattern';
+
+/**
+ * Soup attaches notifications per `toNotificationEntity`, which maps a
+ * `channel_thread` to its whole channel — so its notifications come back
+ * channel-wide. Scope them to this thread's own message: the sends/mentions for
+ * the message, and replies whose `threadId` is the message.
+ */
+export function scopeThreadNotifications(
+  entity: WithNotification<EntityData>
+): WithNotification<EntityData> {
+  if (entity.type !== 'channel_thread') return entity;
+
+  const notifications = entity.notifications;
+  if (!notifications) return entity;
+
+  const messageId = entity.messageId;
+  return {
+    ...entity,
+    notifications: () =>
+      notifications().filter((notification) =>
+        match(notification.notification_metadata)
+          .with(
+            { tag: 'channel_message_send' },
+            (m) => m.content.messageId === messageId
+          )
+          .with(
+            { tag: 'channel_mention' },
+            (m) => m.content.messageId === messageId
+          )
+          .with(
+            { tag: 'channel_message_reply' },
+            (m) => m.content.threadId === messageId
+          )
+          .otherwise(() => false)
+      ),
+  };
+}
 
 function notificationContent(notification: Notification): string | undefined {
   const content = notification.notification_metadata.content as
