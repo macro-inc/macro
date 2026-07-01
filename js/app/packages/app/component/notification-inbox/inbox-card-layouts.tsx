@@ -471,6 +471,56 @@ function BaseCard(props: {
 }
 
 export function ChannelCardLayout(props: InboxCardLayoutProps) {
+  const subItems = createMemo(() => {
+    const entity = props.item.entity;
+    let notifications = entity.notifications?.() ?? [];
+
+    const next = [];
+
+    for (const notification of notifications) {
+      const meta = notification.notification_metadata;
+
+      const isValid = (
+        [
+          'document_mention',
+          'call_started',
+          'channel_invite',
+        ] as NotificationTag[]
+      ).includes(meta.tag);
+
+      if (!isValid) continue;
+
+      let isCurrentMessage = false;
+
+      if (entity.type === 'channel') {
+        if (
+          meta.tag === 'document_mention' &&
+          meta.content.messageId === entity.latestRootMessage?.messageId
+        ) {
+          isCurrentMessage = true;
+        }
+      }
+
+      if (isCurrentMessage) continue;
+
+      next.push(notification);
+    }
+
+    return next.toSorted((a, b) => notificationTime(b) - notificationTime(a));
+  });
+
+  const hasSubItems = () => subItems().length > 0;
+
+  const [localExpanded, setLocalExpanded] = createSignal(false);
+  const expanded = () => props.expanded ?? localExpanded();
+  const toggleExpanded = () => {
+    if (props.onToggleExpanded) {
+      props.onToggleExpanded();
+      return;
+    }
+    setLocalExpanded((value) => !value);
+  };
+
   const entity = createMemo(() => props.item.entity);
 
   const senderId = () => {
@@ -482,6 +532,11 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
 
+  const isDM = createMemo(() => {
+    const value = entity();
+    return value.type === 'channel' && value.channelType === 'direct_message';
+  });
+
   const text = createMemo(() => {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
@@ -489,7 +544,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     let sender;
     let action = '';
 
-    if (tag === 'document_mention') {
+    if (tag === 'document_mention' && isDM()) {
       action = 'shared a document with you';
       sender = senderName();
     }
@@ -504,11 +559,6 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       }),
       content,
     };
-  });
-
-  const isDM = createMemo(() => {
-    const value = entity();
-    return value.type === 'channel' && value.channelType === 'direct_message';
   });
 
   return (
@@ -573,9 +623,39 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
         </div>
 
         <Show when={props.item.timestamp}>
-          <InboxCard.Meta timestamp={relativeTime(props.item.timestamp)} />
+          <InboxCard.Meta timestamp={relativeTime(props.item.timestamp)}>
+            <Show when={(props.item.entity.notifications?.().length ?? 0) > 1}>
+              <button
+                type="button"
+                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  toggleExpanded();
+                }}
+              >
+                {expanded()
+                  ? 'Hide missed notifications'
+                  : 'Show missed notifications'}
+              </button>
+            </Show>
+          </InboxCard.Meta>
         </Show>
       </InboxCard.Body>
+      <Show when={expanded() && hasSubItems()}>
+        <div class="w-full col-start-2 flex flex-col gap-1 border-l border-edge-muted">
+          <For each={subItems()}>
+            {(notification) => (
+              <ThreadReplySubItem
+                notification={notification}
+                threadEntityId={props.item.entity.id}
+                onClick={props.onClick}
+                isDM={isDM()}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
     </InboxCard.Root>
   );
 }
@@ -630,6 +710,7 @@ const notificationTime = (notification: Notification): number => {
 };
 
 function ThreadReplySubItem(props: {
+  isDM?: boolean;
   notification: Notification;
   threadEntityId: string;
   selected?: boolean;
@@ -643,15 +724,26 @@ function ThreadReplySubItem(props: {
   const messageContent = () => {
     const notification = props.notification;
     const meta = notification.notification_metadata;
-    if (meta.tag !== 'channel_message_reply') return;
-
-    return meta.content.messageContent;
+    return match(meta)
+      .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
+      .with({ tag: 'document_mention' }, (m) => m.content.messageContent)
+      .with({ tag: 'call_started' }, (m) => m.content.channel_name?.toString())
+      .with({ tag: 'channel_invite' }, (m) =>
+        m.content.messageContent?.toString()
+      )
+      .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
+      .otherwise(() => undefined);
   };
 
   const action = () => {
     const tag = getNotificationTag(props.notification);
+
     if (tag === 'channel_mention') return 'mentioned you';
     if (tag === 'channel_message_reply') return 'replied';
+    if (tag === 'document_mention') return 'shared a document with you';
+    if (tag === 'call_started') return 'started a call';
+    if (tag === 'channel_invite') return 'started a conversation';
+
     return 'sent a message';
   };
 
@@ -676,7 +768,10 @@ function ThreadReplySubItem(props: {
           <ActionBubble tag={getNotificationTag(props.notification)} />
         </InboxCard.Icon>
       }
-      title={buildActionLabel({ sender: senderName(), action: action() })}
+      title={buildActionLabel({
+        sender: props.isDM ? undefined : senderName(),
+        action: action(),
+      })}
       preview={messageContent()}
     />
   );
@@ -699,6 +794,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       (a, b) => notificationTime(b) - notificationTime(a)
     );
   });
+
   const hasSubItems = () => subItems().length > 0;
 
   const [localExpanded, setLocalExpanded] = createSignal(false);
@@ -719,6 +815,12 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     }
 
     return value.type === 'channel_thread' ? value.senderId : undefined;
+  });
+
+  const isDM = createMemo(() => {
+    const value = props.item.entity;
+
+    return value.type === 'channel' && value.channelType === 'direct_message';
   });
 
   const senderName = createSenderDisplayName(senderId);
@@ -834,6 +936,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                 notification={notification}
                 threadEntityId={props.item.entity.id}
                 onClick={props.onClick}
+                isDM={isDM()}
               />
             )}
           </For>
