@@ -928,7 +928,9 @@ export function MarkdownEditor(props: {
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
   if (ENABLE_GIT_BLAME()) {
-    plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
+    plugins.use(
+      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
+    );
   }
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
