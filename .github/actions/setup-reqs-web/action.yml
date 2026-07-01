@@ -13,6 +13,10 @@ inputs:
     description: Optional S3 bucket for shared sccache storage.
     required: false
     default: ''
+  enable-cachix:
+    description: Configure the Cachix binary cache.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -21,6 +25,7 @@ runs:
       uses: ./.github/actions/setup-cachix
       with:
         cachix-auth-token: ${{ inputs.cachix-auth-token }}
+        enable-cachix: ${{ inputs.enable-cachix }}
         dev-shell: 'true'
         sccache-bucket: ${{ inputs.sccache-bucket }}
 

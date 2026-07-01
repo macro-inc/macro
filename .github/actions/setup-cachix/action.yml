@@ -10,6 +10,10 @@ inputs:
     description: Cachix cache name.
     required: false
     default: macro-inc
+  enable-cachix:
+    description: Configure the Cachix binary cache.
+    required: false
+    default: 'true'
   dev-shell:
     description: Enter the repository Nix dev shell after configuring Cachix.
     required: false
@@ -31,6 +35,7 @@ runs:
   using: composite
   steps:
     - name: Configure Cachix
+      if: ${{ inputs.enable-cachix == 'true' }}
       shell: bash
       env:
         CACHIX_AUTH_TOKEN: ${{ inputs.cachix-auth-token }}
