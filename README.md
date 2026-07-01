@@ -49,7 +49,7 @@ Full documentation lives at [docs.macro.com](https://docs.macro.com):
 - **[Channel-based permissions](https://docs.macro.com/permissions):** anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it. No permission-request dance.
 - **[Unified memory](https://docs.macro.com/product/unified-memory):** agents remember what your whole team is doing across email, messages, tasks, docs, and calls, not just your own chat history. Refreshed nightly.
 - **[One inbox](https://docs.macro.com/product/inbox):** emails, channel messages, task assignments, @mentions, and agent responses all land in one place, split into Signal and Noise.
-- **Built for speed:** Rust backend, SolidJS frontend, [keyboard-first](https://docs.macro.com/keyboard-shortcuts) everywhere.
+- **Built for speed:** [keyboard-first](https://docs.macro.com/keyboard-shortcuts) everywhere.
 
 ### Additional Resources:
 
