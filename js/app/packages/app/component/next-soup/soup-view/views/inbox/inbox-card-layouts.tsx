@@ -526,9 +526,20 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   const senderId = () => {
     const value = props.item.entity;
-    return value.type === 'channel'
-      ? value.latestRootMessage?.senderId
-      : undefined;
+
+    if (value.type !== 'channel') return;
+
+    const latestSender = value.latestRootMessage?.senderId;
+
+    if (value.channelType === 'direct_message') {
+      const otherParticipant = value.participantIds?.filter(
+        (i) => i !== value.ownerId
+      )?.[0];
+
+      return latestSender ?? otherParticipant ?? 'Unknown';
+    }
+
+    return latestSender;
   };
 
   const senderName = createSenderDisplayName(senderId);
@@ -542,15 +553,13 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
 
-    let sender;
+    let sender = isDM() ? entity().name || senderName() : '';
     let action = '';
 
     if (tag === 'document_mention' && isDM()) {
       action = 'shared a document with you';
-      sender = senderName();
-    } else if (tag === 'channel_message_send') {
+    } else if (tag === 'channel_message_send' && isDM()) {
       action = 'sent you a message';
-      sender = senderName();
     }
 
     const content = itemContent(entity(), props.item.notification);
@@ -599,7 +608,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
         <div class="flex items-center gap-1">
           <Show when={!isDM()}>
-            <span class="flex gap-1 items-center text-xs">
+            <span class="flex gap-1 items-center text-sm whitespace-nowrap">
               <Show when={senderId()}>
                 {(id) => (
                   <UserIcon
@@ -911,20 +920,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         unread={props.item.unread}
         timestamp={props.item.timestamp}
         leading={
-          <Show
-            when={isLatestNotificationReply()}
-            fallback={
-              <InboxCard.Icon fallback={<Avatar senderId={senderId()} />}>
-                <ActionBubble
-                  tag={getNotificationTag(props.item.notification)}
-                />
-              </InboxCard.Icon>
-            }
-          >
-            <InboxCard.Icon
-              fallback={<ChatTextIcon class="size-4 shrink-0" />}
-            />
-          </Show>
+          <InboxCard.Icon fallback={<Avatar senderId={senderId()} />}>
+            <ActionBubble tag={getNotificationTag(props.item.notification)} />
+          </InboxCard.Icon>
         }
         title={text().title}
         preview={text().content}
@@ -1202,12 +1200,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
   const senderName = createSenderDisplayName(senderId, senderFallbackName);
 
   const text = createMemo(() => {
-    const metadata = props.item.notification?.notification_metadata;
-    const content = itemContent(props.item.entity, props.item.notification);
-    let subject: string | undefined;
-    if (metadata?.tag === 'new_email') {
-      subject = metadata.content.subject;
-    }
+    const subject = props.item.entity.name;
 
     let entitySnippet: string | undefined;
     if (props.item.entity.type === 'email') {
@@ -1217,9 +1210,9 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
     return {
       title: buildActionLabel({
         sender: senderName(),
-        action: 'sent an email',
+        action: `—  ${subject || 'sent an email'}`,
       }),
-      content: subject || entitySnippet || props.item.entity.name || content,
+      content: entitySnippet,
     };
   });
 
