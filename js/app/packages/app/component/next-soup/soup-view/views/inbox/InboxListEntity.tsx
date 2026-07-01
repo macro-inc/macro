@@ -24,7 +24,7 @@ export function InboxListEntity(props: BaseListEntityProps) {
   const selected = () => soup.previewEntity() === props.entity.id;
 
   return (
-    <div ref={props.ref} onMouseMove={props.onMouseMove}>
+    <div class="mx-1" ref={props.ref} onMouseMove={props.onMouseMove}>
       <InboxCardLayout
         item={item()}
         selected={selected()}

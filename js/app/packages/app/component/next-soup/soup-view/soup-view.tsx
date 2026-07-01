@@ -1505,7 +1505,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
             <Resize.Panel
               id="soup-preview"
               minSize={300}
-              target={{ kind: 'percent', percent: 70 }}
+              target={{
+                kind: 'percent',
+                percent: isNewInboxEnabled() ? 50 : 70,
+              }}
             >
               <PreviewPanel
                 selectedEntity={soup.focus.item()}
