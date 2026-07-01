@@ -62,7 +62,6 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          enable-cachix: 'false'
           sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Build
         working-directory: js/app
