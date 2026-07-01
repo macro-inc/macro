@@ -1048,6 +1048,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(previewCaptorTeardown);
 
+  // The new inbox opens with the preview pane active by default. Wait for the
+  // flag to resolve and a row to focus, then open the preview once — after that
+  // the user controls it (including closing it) freely.
+  if (persistedPreview === undefined) {
+    let previewDefaulted = false;
+    createEffect(() => {
+      if (previewDefaulted || !isNewInboxEnabled()) return;
+      const focused = soup.focus.id();
+      if (!focused) return;
+      previewDefaulted = true;
+      soup.setPreviewEntity(focused);
+    });
+  }
+
   // Which groups are collapsed is also per-entry state: captured on nav-away
   // and restored on back/forward.
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
