@@ -42,6 +42,7 @@ import {
   onMount,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 
@@ -412,7 +413,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       timeWeight: 1.5,
       boostFn: (item) => {
         const sameDomainBoost = baseRecipientSearchConfig.boostFn?.(item) ?? 0;
-        if (!inputValue().trim()) return sameDomainBoost;
+        const isSearching = untrack(() => inputValue().trim().length > 0);
+        if (!isSearching) return sameDomainBoost;
 
         const personBoost =
           item.kind === 'user' || item.kind === 'contact' ? 0.25 : 0;

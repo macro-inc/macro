@@ -6,7 +6,6 @@ import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { contactsKeys } from './keys';
-import { mockRecipientContactIds } from './mock-recipient-contacts';
 
 function contactsQueryOptions() {
   return {
@@ -27,7 +26,7 @@ export function useContacts(): Accessor<IUser[]> {
   const query = useContactsQuery();
   return () => {
     if (!query.isSuccess) return [];
-    const contacts = [...query.data.contacts, ...mockRecipientContactIds];
+    const contacts = query.data.contacts;
     return contacts.map((c) => ({
       id: c,
       email: idToEmail(c),
