@@ -88,7 +88,7 @@ function SimilarTasksInner(props: {
             )}
           />
           <CopyIcon class="size-3.5 shrink-0" />
-          <span>Possible duplicates</span>
+          <span>Similar Tasks</span>
         </button>
         <Show when={expanded()}>
           <ListLayoutProvider ref={listRef}>

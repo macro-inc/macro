@@ -7,6 +7,7 @@
 //! crate's traits and injected as generic parameters into [`TaskDedupService`].
 
 pub mod domain;
+pub mod eval;
 pub mod outbound;
 
 use embedding::embedding_provider::openai::{DIMS, TextEmbedding3Small};
@@ -15,6 +16,11 @@ pub use domain::models::{
     JudgeResult, NewTask, TaskDedupError, TaskDuplicate, TaskSearchParameters, TaskSimilarityResult,
 };
 pub use domain::service::{TaskDedupConfig, TaskDedupService};
+/// The embedding-format markdown newtype required by [`NewTask`] and
+/// [`TaskDedupService::similarity_search`], re-exported so consumers get it from
+/// this crate. Its only constructors are the lexical fetch and an explicit
+/// client-trusted wrapper, so wrong-format bodies cannot reach the embedder.
+pub use lexical_client::parse_markdown::EmbeddingMarkdown;
 use outbound::postgres::PgTaskVectorDb;
 use outbound::reranker::NoOpReranker;
 

@@ -1,0 +1,268 @@
+{
+  "tasks": [
+    {
+      "id": "syn-darkmode-toggle",
+      "title": "Add dark mode toggle to settings",
+      "body": "Let users switch the app between light and dark themes from the settings page. Persist the choice across sessions.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-darkmode-theme-switcher",
+      "title": "Implement light/dark theme switcher in preferences",
+      "body": "Users should be able to choose a dark or light appearance in preferences and have it remembered when they come back.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-darkmode-respect-os",
+      "title": "Respect the OS dark/light setting by default",
+      "body": "On first load, follow the operating system appearance setting until the user explicitly picks a theme.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-billing-proration",
+      "title": "Fix incorrect proration on plan upgrade",
+      "body": "When a user upgrades their subscription mid-cycle the prorated charge is computed wrong. Correct the calculation.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-billing-proration-reword",
+      "title": "Proration amount is wrong when upgrading a subscription",
+      "body": "Upgrading a plan partway through the billing period charges the wrong prorated amount; make the proration correct.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-onboarding-tour",
+      "title": "Add welcome tour for new users",
+      "body": "Introduce new users to the core features with a short guided tour the first time they sign in.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-onboarding-walkthrough",
+      "title": "Build a first-run product walkthrough for new signups",
+      "body": "New signups should get a step-by-step walkthrough of the main features on their first session.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-export-data",
+      "title": "Export data",
+      "body": "Allow exporting all workspace tasks to a CSV file from the tasks page.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-export-csv-download",
+      "title": "CSV download for tasks",
+      "body": "Users need a button to download every task in the workspace as a CSV file.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-attach-dragdrop",
+      "title": "Allow drag-and-drop file upload to chat",
+      "body": "Let users drag a file onto the chat window to attach and upload it to the conversation.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-attach-drag-files",
+      "title": "Support dragging files into the chat to attach them",
+      "body": "Dropping a file into the chat should attach it and upload it to the current thread.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-avatar-broken",
+      "title": "Fix broken avatar images on profile",
+      "body": "Profile avatars intermittently fail to load and show a broken-image icon. Fix the loading.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-avatar-not-loading",
+      "title": "Profile avatars not loading",
+      "body": "Avatar images on the profile page frequently do not render. Investigate and fix.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-email-group-by-date",
+      "title": "Group inbox emails by date like Superhuman",
+      "body": "Split the inbox into Today, Yesterday, Past 7 days, and older sections, similar to Superhuman.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-email-jk-nav",
+      "title": "Restore j/k keyboard navigation for emails",
+      "body": "Bring back j/k shortcuts to move the selection up and down the email list.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-doppler-dss",
+      "title": "Use new doppler config: dss",
+      "body": "Switch document_storage_service to read configuration from the new doppler project.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-doppler-dcs",
+      "title": "Use new doppler config: dcs",
+      "body": "Switch document_cognition_service to read configuration from the new doppler project.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-search-debounce",
+      "title": "Debounce task search input",
+      "body": "Debounce the task search box so we don't fire a request on every keystroke.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-search-ranking",
+      "title": "Improve task search result ranking",
+      "body": "Tune the relevance ranking so the most relevant tasks show up first in search.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-retry-sqs",
+      "title": "Add retry with backoff to the SQS consumer in notification_service",
+      "body": "Wrap the notification_service SQS consumer with retry and exponential backoff on transient failures.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-retry-email",
+      "title": "Add retry with backoff to email sending in email_service",
+      "body": "Add exponential backoff retries around the outbound email send path in email_service.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-notif-mute",
+      "title": "Add mute setting for channel notifications",
+      "body": "Let a user mute notifications for a specific channel so they stop getting pinged.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-notif-badge",
+      "title": "Show unread badge count on channel notifications",
+      "body": "Display a numeric unread badge on each channel in the sidebar.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-oauth-google",
+      "title": "Add Google OAuth login",
+      "body": "Let users sign in with their Google account via OAuth.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-oauth-microsoft",
+      "title": "Add Microsoft OAuth login",
+      "body": "Let users sign in with their Microsoft account via OAuth.",
+      "source": "synthetic"
+    }
+  ],
+  "pairs": [
+    {
+      "a": "syn-darkmode-toggle",
+      "b": "syn-darkmode-theme-switcher",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Same work (a persisted light/dark theme control), different wording."
+    },
+    {
+      "a": "syn-billing-proration",
+      "b": "syn-billing-proration-reword",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Identical bug (wrong proration on upgrade), reworded."
+    },
+    {
+      "a": "syn-onboarding-tour",
+      "b": "syn-onboarding-walkthrough",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Same deliverable: a guided first-run tour for new users."
+    },
+    {
+      "a": "syn-export-data",
+      "b": "syn-export-csv-download",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Same work stated with terse, different titles; the body carries the signal (CSV export of all tasks)."
+    },
+    {
+      "a": "syn-attach-dragdrop",
+      "b": "syn-attach-drag-files",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Same feature: drag-and-drop file attach in chat."
+    },
+    {
+      "a": "syn-avatar-broken",
+      "b": "syn-avatar-not-loading",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "Same bug: profile avatars fail to load."
+    },
+    {
+      "a": "syn-email-group-by-date",
+      "b": "syn-email-jk-nav",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "Both touch the email list and reference Superhuman, but one is date grouping and the other is keyboard navigation."
+    },
+    {
+      "a": "syn-search-debounce",
+      "b": "syn-search-ranking",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "Both about task search, but debouncing input vs. ranking relevance are different actions."
+    },
+    {
+      "a": "syn-notif-mute",
+      "b": "syn-notif-badge",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "Both about channel notifications, but muting vs. showing an unread badge are different deliverables."
+    },
+    {
+      "a": "syn-doppler-dss",
+      "b": "syn-doppler-dcs",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "Same action (adopt new doppler config) but in two different services; distinct work assigned to different areas."
+    },
+    {
+      "a": "syn-retry-sqs",
+      "b": "syn-retry-email",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "Same pattern (retry with backoff) applied to different subsystems (SQS consumer vs. email send)."
+    },
+    {
+      "a": "syn-oauth-google",
+      "b": "syn-oauth-microsoft",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "Same action (OAuth login) against different identity providers; separate integrations."
+    },
+    {
+      "a": "syn-darkmode-toggle",
+      "b": "syn-doppler-dss",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Completely different areas."
+    },
+    {
+      "a": "syn-billing-proration",
+      "b": "syn-email-jk-nav",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Completely different areas."
+    },
+    {
+      "a": "syn-onboarding-tour",
+      "b": "syn-retry-sqs",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Completely different areas."
+    },
+    {
+      "a": "syn-export-data",
+      "b": "syn-notif-badge",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Completely different areas."
+    }
+  ]
+}

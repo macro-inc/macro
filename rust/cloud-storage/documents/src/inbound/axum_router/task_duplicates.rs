@@ -11,14 +11,15 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, OptionalMacroUserTeamExtractor,
 };
-use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
+use lexical_client::LexicalClient;
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::{Deserialize, Serialize};
 use task_dedup::{
-    NewTask, PgTaskDedupService, TaskDedupError, TaskDuplicate, TaskSimilarityResult,
+    EmbeddingMarkdown, NewTask, PgTaskDedupService, TaskDedupError, TaskDuplicate,
+    TaskSimilarityResult,
 };
 use uuid::Uuid;
 
@@ -117,7 +118,10 @@ pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAcces
     } else {
         None
     };
-    let markdown = request.markdown.unwrap_or_default();
+    // The composer renders the draft body with lexical-core's
+    // `markdownToEmbeddingText`, so we trust it as embedding-format here rather
+    // than round-tripping through lexical-service on this latency-sensitive path.
+    let markdown = EmbeddingMarkdown::from_client_trusted(request.markdown.unwrap_or_default());
 
     let results = state
         .task_dedup_service
@@ -185,8 +189,9 @@ pub async fn delete_this_duplicate_task_handler<T: DocumentService, Svc: EntityA
 ///
 /// The created document's body is fetched from lexical-service rendered as
 /// embedding-format markdown so the stored embedding matches the format the
-/// composer's similarity search sends. When that fetch fails, the markdown the
-/// task was created with (internal format) is used as a fallback.
+/// composer's similarity search sends. `task` arrives with a title-only body
+/// ([`EmbeddingMarkdown::empty`]); when the fetch fails we keep that and embed
+/// the title alone rather than embed wrong-format text.
 pub fn spawn_task_duplicate_detection(
     task_dedup_service: Arc<PgTaskDedupService>,
     lexical_client: Arc<LexicalClient>,
@@ -194,14 +199,14 @@ pub fn spawn_task_duplicate_detection(
 ) {
     tokio::spawn(async move {
         match lexical_client
-            .get_markdown(&task.document_id, MarkdownTarget::Embedding)
+            .get_embedding_markdown(&task.document_id)
             .await
         {
             Ok(markdown) => task.markdown = markdown,
             Err(error) => tracing::warn!(
                 error=?error,
                 document_id=%task.document_id,
-                "failed to fetch embedding markdown for task dedup; using creation markdown"
+                "failed to fetch embedding markdown for task dedup; embedding title only"
             ),
         }
         let _ = task_dedup_service

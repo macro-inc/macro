@@ -1,0 +1,47 @@
+{
+  "tasks": [],
+  "pairs": [
+    {
+      "a": "019f1a25-f81b-7fb5-8c87-1f3ef90ae6a1",
+      "b": "019f1a21-cf61-70ee-84e5-79be5facf783",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both in the tags feature area, but 'fix tag deletion' and 'tag filters in soup and search' are different actions."
+    },
+    {
+      "a": "019f00ce-fb4f-7c6b-bfa6-ccab4444b81d",
+      "b": "019f0095-4e95-7baf-9f37-c6dc41d961ef",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both in search, but one is a quoted-single-token exact-match bug and the other is a highlight-cost perf fix."
+    },
+    {
+      "a": "019efab2-174d-7540-8667-c13f10239b64",
+      "b": "019efab0-61fe-7059-a7d2-22f15035fde8",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both about thread-label AI tools, but one adds labels to GetThread's response and the other fixes a broken update-labels tool."
+    },
+    {
+      "a": "019effa8-4e3a-77f8-9db4-41c087f3924a",
+      "b": "019effa8-4e36-7b07-a420-8188fa09b947",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both adjust sidebar sizing, but different elements (text 13px vs icons 14px) — separate tweaks."
+    },
+    {
+      "a": "019eefd3-d24e-77b2-8f5c-d15385f9e01e",
+      "b": "019eefd3-b141-777b-9d66-a51550b32f8d",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both about the onboarding tutorial, but 'too big' (sizing) vs 'out of date' (content) are different fixes."
+    },
+    {
+      "a": "019f13ad-9047-7d01-ac95-a1a34b6219d4",
+      "b": "019f13ad-8fab-75be-a7ca-463c977d597a",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Identical title and template but different content (each shares a different fun fact) — a real same-template-different-content hard negative."
+    }
+  ]
+}

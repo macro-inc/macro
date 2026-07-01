@@ -8,7 +8,7 @@ use embedding::{
 };
 use task_dedup::domain::ports::{TaskDedupNotifier, TaskDuplicateJudge, TaskMatchRepo};
 use task_dedup::{
-    JudgeResult, NewTask, TaskDedupConfig, TaskDedupError, TaskDedupService, TaskDuplicate,
+    EmbeddingMarkdown, JudgeResult, NewTask, TaskDedupError, TaskDedupService, TaskDuplicate,
     TaskSearchParameters,
 };
 use uuid::Uuid;
@@ -178,7 +178,6 @@ impl TaskMatchRepo for MockMatchRepo {
 
 fn service(vector_db: MockVectorDb, reranker: MockReranker) -> Service {
     TaskDedupService::new(
-        TaskDedupConfig::default(),
         MockEmbedder,
         vector_db,
         reranker,
@@ -194,7 +193,7 @@ fn new_task() -> NewTask {
         owner: "owner".to_string(),
         team_id: None,
         title: "Query title".to_string(),
-        markdown: "query body".to_string(),
+        markdown: EmbeddingMarkdown::from_client_trusted("query body".to_string()),
     }
 }
 
@@ -203,7 +202,7 @@ async fn detect_embeds_title_when_task_has_no_body() {
     let vector_db = MockVectorDb::default();
     let svc = service(vector_db.clone(), MockReranker::default());
     let mut task = new_task();
-    task.markdown.clear();
+    task.markdown = EmbeddingMarkdown::empty();
 
     let active = svc.detect_new_task(task).await.unwrap();
 
@@ -239,7 +238,7 @@ async fn detect_embeds_nothing_when_task_has_no_title_or_body() {
     let svc = service(vector_db.clone(), reranker.clone());
     let mut task = new_task();
     task.title = "   ".to_string();
-    task.markdown = "\n\t".to_string();
+    task.markdown = EmbeddingMarkdown::from_client_trusted("\n\t".to_string());
 
     let active = svc.detect_new_task(task).await.unwrap();
 

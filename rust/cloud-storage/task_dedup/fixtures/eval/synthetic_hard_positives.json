@@ -1,0 +1,234 @@
+{
+  "tasks": [
+    {
+      "id": "syn-tvd-login-terse",
+      "title": "Fix login bug",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-login-detailed",
+      "title": "Sign-in is broken for some users",
+      "body": "Several users report they can't log in — the sign-in request fails and they never reach the app. Track down and fix the login bug so affected accounts can authenticate again.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-darkmode-terse",
+      "title": "Dark mode",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-darkmode-detailed",
+      "title": "Add a dark appearance option",
+      "body": "Give users a way to switch the interface to a dark color scheme from settings, and remember their preference between visits.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-csv-terse",
+      "title": "CSV export",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-csv-detailed",
+      "title": "Let users export their tasks to a spreadsheet",
+      "body": "Add a button that downloads every task in the workspace as a CSV file that opens cleanly in a spreadsheet application.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-2fa-terse",
+      "title": "Add 2FA",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-2fa-detailed",
+      "title": "Support two-factor authentication at sign-in",
+      "body": "Let users enable a second verification step with an authenticator app when logging in, for extra account security.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-search-terse",
+      "title": "Search is slow",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-search-detailed",
+      "title": "Improve the speed of task search",
+      "body": "Searching across tasks currently takes several seconds. Profile the query path and speed it up so results come back quickly.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-avatar-terse",
+      "title": "Profile pictures",
+      "body": "",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-tvd-avatar-detailed",
+      "title": "Allow uploading a profile photo",
+      "body": "Users should be able to upload an avatar image that shows on their profile and next to their messages.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-login-a",
+      "title": "Members are locked out at the sign-in screen",
+      "body": "People cannot get past the sign-in screen to reach their account.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-login-b",
+      "title": "Repair the broken credential check blocking access",
+      "body": "The verification step rejects valid users, so nobody can enter the product.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-crash-a",
+      "title": "The application quits immediately on launch",
+      "body": "It shuts down the moment it opens, before anything is shown.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-crash-b",
+      "title": "Resolve the fatal error during boot",
+      "body": "A hard failure while starting up stops the program from ever running.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-perf-a",
+      "title": "The dashboard takes forever to appear",
+      "body": "Opening the main view is painfully slow for everyone.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-perf-b",
+      "title": "Reduce home page load latency",
+      "body": "Speed up how quickly the landing screen becomes usable after navigation.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-undo-a",
+      "title": "Let people take back a message they already sent",
+      "body": "Give users a way to retract a chat message after it has gone out.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-undo-b",
+      "title": "Add recall for outgoing conversations",
+      "body": "Support unsending a note once it has left the composer.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-notify-a",
+      "title": "Tell me when a document I follow changes",
+      "body": "Alert people after edits happen to a file they care about.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-notify-b",
+      "title": "Push updates on modifications to tracked files",
+      "body": "Send a heads-up whenever a watched piece of content is revised.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-i18n-a",
+      "title": "Show the product in the user's own language",
+      "body": "Adapt the interface wording to each person's locale.",
+      "source": "synthetic"
+    },
+    {
+      "id": "syn-llo-i18n-b",
+      "title": "Add translation support across the app",
+      "body": "Let the software render its text in multiple languages.",
+      "source": "synthetic"
+    }
+  ],
+  "pairs": [
+    {
+      "a": "syn-tvd-login-terse",
+      "b": "syn-tvd-login-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Title-only stub vs a full writeup of the same login fix."
+    },
+    {
+      "a": "syn-tvd-darkmode-terse",
+      "b": "syn-tvd-darkmode-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Two-word stub vs a detailed description of the same dark-theme work."
+    },
+    {
+      "a": "syn-tvd-csv-terse",
+      "b": "syn-tvd-csv-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Terse label vs a detailed description of the same CSV export."
+    },
+    {
+      "a": "syn-tvd-2fa-terse",
+      "b": "syn-tvd-2fa-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Abbreviated stub vs a full writeup of the same two-factor work."
+    },
+    {
+      "a": "syn-tvd-search-terse",
+      "b": "syn-tvd-search-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Symptom one-liner vs a detailed description of the same search-perf fix."
+    },
+    {
+      "a": "syn-tvd-avatar-terse",
+      "b": "syn-tvd-avatar-detailed",
+      "expected_duplicate": true,
+      "case": "terse_vs_detailed",
+      "note": "Two-word stub vs a detailed description of the same avatar-upload work."
+    },
+    {
+      "a": "syn-llo-login-a",
+      "b": "syn-llo-login-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both describe sign-in/auth being broken with nearly no shared words."
+    },
+    {
+      "a": "syn-llo-crash-a",
+      "b": "syn-llo-crash-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both describe a startup crash using disjoint vocabulary (launch/quit vs boot/fatal error)."
+    },
+    {
+      "a": "syn-llo-perf-a",
+      "b": "syn-llo-perf-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both are the same dashboard/home slowness with almost no shared terms."
+    },
+    {
+      "a": "syn-llo-undo-a",
+      "b": "syn-llo-undo-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both ask to unsend a message; 'take back' vs 'recall' share no keywords."
+    },
+    {
+      "a": "syn-llo-notify-a",
+      "b": "syn-llo-notify-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both request change notifications for followed files using different wording."
+    },
+    {
+      "a": "syn-llo-i18n-a",
+      "b": "syn-llo-i18n-b",
+      "expected_duplicate": true,
+      "case": "low_lexical_overlap",
+      "note": "Both request localization/translation with disjoint phrasing."
+    }
+  ]
+}
