@@ -1,17 +1,17 @@
+import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { toast } from '@core/component/Toast/Toast';
 import { getNativeMobilePlatform } from '@core/util/platform';
-import GithubIcon from '@icon/mcp-github.svg';
 import IconGoogle from '@icon/macro-google.svg';
+import GithubIcon from '@icon/mcp-github.svg';
 import {
   invalidateGithubLinkStatus,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
 } from '@queries/auth';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { Button } from '@ui';
 import { invoke } from '@tauri-apps/api/core';
+import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 /**
