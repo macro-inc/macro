@@ -147,8 +147,12 @@ export function ChannelThread(props: ThreadProps) {
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   const shouldShowCollapsedIndicator = () =>
     !props.isReplying() && !props.isExpanded() && collapsedRepliesCount() > 0;
+  const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
-    hasReplies() && !props.isReplying() && !shouldShowCollapsedIndicator();
+    hasReplies() &&
+    !!replyAction() &&
+    !props.isReplying() &&
+    !shouldShowCollapsedIndicator();
   const [replyListHandle, setReplyListHandle] =
     createSignal<ThreadReplyListHandle>();
 
@@ -292,6 +296,7 @@ export function ChannelThread(props: ThreadProps) {
                         setIsReplying={props.setIsReplying}
                         setReplyInputEl={props.setReplyInputEl}
                         setReplyInputHandle={props.setReplyInputHandle}
+                        focusRequest={props.replyInputFocusRequest}
                       />
                     </div>
                   </Show>
@@ -318,7 +323,9 @@ export function ChannelThread(props: ThreadProps) {
                               '[contenteditable]'
                             ) ?? null
                           }
-                          onClick={() => props.setIsReplying(true)}
+                          onClick={(event) =>
+                            replyAction()?.({ message: props.data(), event })
+                          }
                           aria-label="Reply"
                         />
                       </Show>

@@ -9,9 +9,6 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bo
 
 export type EnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  DOCUMENT_DELETE_QUEUE: pulumi.Output<string> | string;
-  CHAT_DELETE_QUEUE: pulumi.Output<string> | string;
-  SEARCH_EVENT_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };

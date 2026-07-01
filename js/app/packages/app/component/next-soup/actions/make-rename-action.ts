@@ -14,7 +14,9 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'email') return false;
-    if (entity.type === 'channel_message') return false;
+    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+      return false;
+    }
     if (entity.type === 'foreign') return false;
 
     if (entity.type === 'channel') {

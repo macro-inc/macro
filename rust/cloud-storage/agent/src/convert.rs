@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod test;
-
 /// Conversions between agent message types and `rig` message types.
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use attachment::image::ImageData;
@@ -153,14 +150,14 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                         replay_item_id(id),
                         ToolFunction::new(name.clone(), json.clone()),
                     )
-                    .with_call_id(id.clone()),
+                    .with_call_id(replay_call_id(id)),
                 ));
             }
             AssistantMessagePart::ToolCallResponseJson { id, json, .. } => {
                 let text = serde_json::to_string(json).unwrap_or_default();
                 tool_results.push(UserContent::tool_result_with_call_id(
                     replay_item_id(id),
-                    id.clone(),
+                    replay_call_id(id),
                     OneOrMany::one(ToolResultContent::text(text)),
                 ));
             }
@@ -169,7 +166,7 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
             } => {
                 tool_results.push(UserContent::tool_result_with_call_id(
                     replay_item_id(id),
-                    id.clone(),
+                    replay_call_id(id),
                     OneOrMany::one(ToolResultContent::text(description.clone())),
                 ));
             }
@@ -181,16 +178,27 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
     out
 }
 
-/// Item id replayed to the provider for a persisted tool call or result.
+/// `call_id` replayed to the provider for a persisted tool call or result.
 ///
 /// The persisted id is the provider call id when one exists (OpenAI's
-/// `call_…`) or an internal nanoid otherwise. OpenAI's Responses API rejects
-/// replayed `function_call` item ids that don't begin with `fc`, and pairs
-/// calls to results through `call_id` — which is why the persisted id is also
-/// set as `call_id` above. Anthropic ignores `call_id` and only requires a
-/// result's id to match its call's id, which this uniform prefix preserves.
+/// `call_…`) or an internal nanoid otherwise. OpenAI's Responses API pairs a
+/// call to its result through `call_id` and rejects ids ending in a separator,
+/// and a nanoid can end in `_` or `-` — so trim the trailing separator(s). A
+/// call and its result both run through this with the same `id`, so trimming
+/// keeps them paired. Anthropic ignores `call_id`.
+fn replay_call_id(id: &str) -> String {
+    id.trim_end_matches(['_', '-']).to_owned()
+}
+
+/// `function_call` item id replayed to the provider for a persisted tool call
+/// or result.
+///
+/// OpenAI's Responses API rejects replayed item ids that don't begin with `fc`
+/// (and, like `call_id`, ones ending in a separator — hence [`replay_call_id`]).
+/// Anthropic ignores `call_id` and only requires a result's item id to match
+/// its call's, which this uniform prefix-over-trimmed-id preserves.
 fn replay_item_id(id: &str) -> String {
-    format!("fc_{id}")
+    format!("fc_{}", replay_call_id(id))
 }
 
 /// Merges consecutive `Text` and `Thinking` parts into single entries.

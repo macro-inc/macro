@@ -13,6 +13,7 @@ import type {
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
+  ChannelThreadEntity,
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
@@ -54,12 +55,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Channel thread soup items are currently only exposed to AI tooling; the app
-// entity list does not have enough channel metadata to render them directly.
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'channelThread' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 
 type SoupEntity =
   | DocumentEntity
@@ -67,6 +63,7 @@ type SoupEntity =
   | ProjectEntity
   | EmailEntity
   | ChannelEntity
+  | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
   | ForeignEntity;
@@ -515,7 +512,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => item.tag !== 'channelThread';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -621,9 +618,38 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         summary: item.data.summary ?? undefined,
       } satisfies CallEntity;
     })
+    .with({ tag: 'channelThread' }, (item) => {
+      const out: ChannelThreadEntity = {
+        type: 'channel_thread',
+        id: item.data.id,
+        name: 'Channel thread',
+        channelId: item.data.channel_id,
+        messageId: item.data.id,
+        threadId: item.data.id,
+        senderId: item.data.sender_id,
+        sender: item.data.sender,
+        content: item.data.content,
+        attachments: item.data.attachments,
+        reactions: item.data.reactions,
+        ownerId: item.data.sender_id,
+        createdAt: item.data.created_at,
+        updatedAt: item.data.thread.latest_reply_at ?? item.data.updated_at,
+        sortTs: item.data.thread.latest_reply_at ?? item.data.updated_at,
+        editedAt: item.data.edited_at,
+        deletedAt: item.data.deleted_at,
+        thread: {
+          replyCount: item.data.thread.reply_count,
+          latestReplyAt: item.data.thread.latest_reply_at,
+          preview: item.data.thread.preview,
+        },
+        replyCount: item.data.thread.reply_count,
+        latestReplyAt: item.data.thread.latest_reply_at,
+      };
+      return out;
+    })
     .with({ tag: 'channel' }, (item) => {
-      const latestMessage =
-        item.data.latest_message ?? item.data.latest_non_thread_message;
+      const latestMessage = item.data.latest_message;
+      const latestRootMessage = item.data.latest_non_thread_message;
 
       const out: ChannelEntity = {
         type: 'channel',
@@ -642,15 +668,31 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
               messageId: latestMessage.message_id,
               threadId: latestMessage.thread_id ?? undefined,
               content: latestMessage.content,
+              mentions: latestMessage.mentions,
               senderId: latestMessage.sender_id,
               createdAt: latestMessage.created_at,
+            }
+          : undefined,
+        latestRootMessage: latestRootMessage
+          ? {
+              messageId: latestRootMessage.message_id,
+              threadId: latestRootMessage.thread_id ?? undefined,
+              content: latestRootMessage.content,
+              mentions: latestRootMessage.mentions,
+              senderId: latestRootMessage.sender_id,
+              createdAt: latestRootMessage.created_at,
             }
           : undefined,
       };
       return out;
     })
     .with({ tag: 'foreignEntity' }, (item) => {
-      const metadata = item.data.metadata as unknown as GithubPullRequest;
+      // `authorLogin`/`authorId` are enrichment-only fields the backend now
+      // returns but that aren't on the base generated schema yet.
+      const metadata = item.data.metadata as unknown as GithubPullRequest & {
+        authorLogin?: string | null;
+        authorId?: number | null;
+      };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
 
@@ -682,6 +724,8 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
           deletions: metadata.deletions ?? 0,
           comments: metadata.comments ?? [],
           checks: metadata.checks?.filter(Boolean) ?? [],
+          authorLogin: metadata.authorLogin ?? undefined,
+          authorId: metadata.authorId ?? undefined,
         },
       };
 

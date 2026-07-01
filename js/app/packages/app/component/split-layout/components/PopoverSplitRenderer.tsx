@@ -4,7 +4,11 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitPanelContext, type SplitPanelContextType } from '../context';
+import {
+  type SplitFileMenuActionGroups,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '../context';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -49,6 +53,12 @@ function PopoverSplitModal(props: {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [titleFileMenuRef, setTitleFileMenuRef] =
+    createSignal<HTMLDivElement>();
+  const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
+    createSignal<() => void>();
+  const [titleFileMenuActions, setTitleFileMenuActions] =
+    createSignal<SplitFileMenuActionGroups>();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -70,7 +80,6 @@ function PopoverSplitModal(props: {
     isPopover: () => true,
     replace: () => {},
     removeFromHistory: () => {},
-    goToEntry: () => false,
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
@@ -88,6 +97,7 @@ function PopoverSplitModal(props: {
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
+    captureEntryState: () => {},
     currentEntryState: () => undefined,
   };
 
@@ -106,6 +116,12 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
+    titleFileMenuRef,
+    setTitleFileMenuRef,
+    titleFileMenuTrigger,
+    setTitleFileMenuTrigger,
+    titleFileMenuActions,
+    setTitleFileMenuActions,
     headerCollapser: { register: () => () => {} },
   };
 
@@ -136,7 +152,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Panel depth={2} active class="rounded-xl *:max-h-[75vh]">
+      <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
         <SplitPanelContext.Provider value={stubPanelContext}>
           <SoupContextProvider>
             <Show when={props.popover.mount}>

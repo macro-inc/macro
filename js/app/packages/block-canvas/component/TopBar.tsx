@@ -1,4 +1,8 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import {
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/component/ChatWithAgentButton';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
@@ -117,6 +121,17 @@ export function TopBar() {
   ];
 
   const tools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: documentId,
+          name: fileName(),
+          fileType: 'canvas',
+        }),
+    },
     {
       label: 'References',
       icon: Quotes,

@@ -64,10 +64,13 @@ export const useSearchSoupQuery = (
     queryFn: async (ctx) => {
       return throwOnErr(
         async () =>
-          await searchClient.search({
-            params: ctx.pageParam,
-            request: { ...request() },
-          })
+          await searchClient.search(
+            {
+              params: ctx.pageParam,
+              request: { ...request() },
+            },
+            { signal: ctx.signal }
+          )
       );
     },
     initialPageParam: {
@@ -141,10 +144,13 @@ export const useSearchChannelQuery = (
     queryFn: async (ctx) => {
       return throwOnErr(
         async () =>
-          await searchClient.searchChannel({
-            params: ctx.pageParam,
-            request: { ...request() },
-          })
+          await searchClient.searchChannel(
+            {
+              params: ctx.pageParam,
+              request: { ...request() },
+            },
+            { signal: ctx.signal }
+          )
       );
     },
     initialPageParam: {

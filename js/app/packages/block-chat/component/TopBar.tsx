@@ -9,28 +9,26 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
-import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import IconShared from '@icon/wide-share.svg';
+import ChatDebugIcon from '@phosphor/chat-text.svg';
 import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
-import Quotes from '@phosphor/quotes.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
+import type { Accessor } from 'solid-js';
 
-export function TopBar() {
-  const isAuth = useIsAuthenticated();
+export function TopBar(props: {
+  showStreamDebug?: Accessor<boolean>;
+  toggleStreamDebug?: () => void;
+}) {
   const blockId = useBlockId();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
@@ -38,7 +36,6 @@ export function TopBar() {
 
   const openInstructions = useOpenInstructionsMd();
 
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
@@ -48,6 +45,22 @@ export function TopBar() {
       icon: Info,
       action: detailsControl.toggle,
     },
+    {
+      label: 'Edit AI Instructions',
+      icon: Notepad,
+      action: openInstructions,
+    },
+    ...(DEV_MODE_ENV && props.toggleStreamDebug
+      ? [
+          {
+            label: props.showStreamDebug?.()
+              ? 'Hide Stream Debug'
+              : 'Show Stream Debug',
+            icon: ChatDebugIcon,
+            action: props.toggleStreamDebug,
+          } satisfies FileOperation,
+        ]
+      : []),
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -55,25 +68,6 @@ export function TopBar() {
   ];
 
   const tools: BlockTool[] = [
-    {
-      label: 'Edit AI Instructions',
-      icon: Notepad,
-      action: openInstructions,
-    },
-    {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={blockId}
-          documentName={chatName()}
-          buttonSize="sm"
-          entityType="chat"
-        />
-      ),
-    },
     {
       label: 'Share',
       icon: IconShared,

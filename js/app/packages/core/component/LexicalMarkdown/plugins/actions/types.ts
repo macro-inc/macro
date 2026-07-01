@@ -1,13 +1,19 @@
 import type { KlassConstructor, LexicalEditor, LexicalNode } from 'lexical';
 import type { Component } from 'solid-js';
 
+export type ActionContext = {
+  sourceDocumentId?: string;
+  sourceBlockName?: string;
+  disableMentionTracking?: boolean;
+};
+
 export type Action = {
   id: string;
   name: string;
   keywords: string[];
   icon: Component<{ class: string }>;
   category: string;
-  action: (editor: LexicalEditor) => void;
+  action: (editor: LexicalEditor, context?: ActionContext) => void;
   shortcut?: string;
   dependencies?: Array<KlassConstructor<typeof LexicalNode>>;
 };

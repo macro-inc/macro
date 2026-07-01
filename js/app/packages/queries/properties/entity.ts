@@ -50,7 +50,14 @@ export function useEntityPropertiesQuery(
                 query: { include_metadata: includeMetadata },
               })
           );
-          return data.properties.map(entityPropertyFromApi);
+          return data.properties.flatMap((property) => {
+            try {
+              return [entityPropertyFromApi(property)];
+            } catch (error) {
+              console.warn('Skipping property with unsupported type', error);
+              return [];
+            }
+          });
         },
         staleTime: 0,
       };
@@ -280,6 +287,122 @@ export function useAddEntityPropertyMutation(
       },
       callbacks
     ),
+  }));
+}
+
+type EntityPropertyOptionParams = {
+  entityId: string;
+  entityType: EntityType;
+  property: Property | PropertyDefinitionDomain;
+  optionId: string;
+  /**
+   * Full option-id array to show optimistically (current value ± optionId). The
+   * server applies the single-option delta atomically under a row lock; this
+   * array only drives the local cache so the UI updates instantly.
+   */
+  optimisticOptionIds: string[];
+};
+
+type EntityPropertyOptionContext = {
+  soupTxn?: SoupTransaction;
+};
+
+function entityPropertyOptionCallbacks(
+  failureMessage: string,
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return withCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >(
+    {
+      onMutate: (vars): EntityPropertyOptionContext => {
+        const value: SoupPropertyValue =
+          vars.optimisticOptionIds.length > 0
+            ? { type: 'SelectOption', value: vars.optimisticOptionIds }
+            : null;
+        const soupTxn = optimisticUpdateSoupEntityProperty(
+          vars.entityId,
+          vars.property,
+          value
+        );
+        return { soupTxn };
+      },
+      onError: (error, _vars, context) => {
+        context?.soupTxn?.rollback();
+        console.error(failureMessage, error);
+        toast.failure(failureMessage);
+      },
+      onSettled: (_data, _error, variables) => {
+        invalidatePropertiesForEntity(variables.entityType, variables.entityId);
+        invalidateSoupEntity(variables.entityId);
+      },
+    },
+    callbacks
+  );
+}
+
+/**
+ * Adds a single option to a multi-select value via the atomic delta endpoint.
+ * Unlike the full-value save, concurrent edits to the same value merge instead
+ * of clobbering each other.
+ */
+export function useAddEntityPropertyOptionMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: EntityPropertyOptionParams) => {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.addEntityPropertyOption({
+            entity_type: vars.entityType,
+            entity_id: vars.entityId,
+            property_id: getPropertyDefinitionId(vars.property),
+            option_id: vars.optionId,
+          })
+      );
+    },
+    ...entityPropertyOptionCallbacks('Failed to add tag', callbacks),
+  }));
+}
+
+/**
+ * Removes a single option from a multi-select value via the atomic delta
+ * endpoint. A no-op server-side if the option is already gone.
+ */
+export function useRemoveEntityPropertyOptionMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: EntityPropertyOptionParams) => {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.removeEntityPropertyOption({
+            entity_type: vars.entityType,
+            entity_id: vars.entityId,
+            property_id: getPropertyDefinitionId(vars.property),
+            option_id: vars.optionId,
+          })
+      );
+    },
+    ...entityPropertyOptionCallbacks('Failed to remove tag', callbacks),
   }));
 }
 

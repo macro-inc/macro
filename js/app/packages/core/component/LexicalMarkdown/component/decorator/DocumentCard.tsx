@@ -62,6 +62,7 @@ import { TaskPropertiesPreview } from '../../../DocumentPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
+import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink } from '../core/BlockLink';
 import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
@@ -255,12 +256,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   });
 
   const deleteCard = () => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentCardNode(node)) return false;
-      node.remove();
-      return true;
-    });
+    const currentEditor = editor();
+    if (!currentEditor) return;
+    removeNodeAndRestoreSelection(
+      currentEditor,
+      props.key,
+      $isDocumentCardNode
+    );
   };
 
   const convertToMention = () => {

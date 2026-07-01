@@ -368,7 +368,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
     const bodyData = {
       scope: 'user' as const,
-      user_id: currentUserId!,
       display_name: newPropertyName().trim(),
       data_type: buildDataType(),
     };

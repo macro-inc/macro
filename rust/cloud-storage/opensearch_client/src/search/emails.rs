@@ -69,18 +69,21 @@ const MIN_PREFIX_LEN: usize = 3;
 /// Single-word terms become `term*` so a prefix like `scri` matches the
 /// token `script` in subject/content/display-name fields. Terms shorter than
 /// `MIN_PREFIX_LEN` fall back to a grouped exact-token match to keep term
-/// expansion bounded. Multi-word terms (quoted phrases from
-/// `split_search_terms`) and `@`-containing terms are wrapped in quotes to
+/// expansion bounded. In `exact` match mode the prefix wildcard is dropped so
+/// every single-word term is an exact-token match. Multi-word terms (quoted
+/// phrases from `split_search_terms`) and `@`-containing terms are wrapped in
+/// quotes to
 /// force phrase matching — otherwise `default_operator: "AND"` would turn
 /// `(reply test)` into `reply AND test` and match each token independently
 /// anywhere in the field instead of as an adjacent phrase.
-fn build_text_query_string(terms: &[String]) -> String {
+fn build_text_query_string(terms: &[String], match_type: &str) -> String {
+    let exact = match_type == "exact";
     terms
         .iter()
         .map(|term| {
             if term.contains('@') || term.contains(' ') {
                 format!("\"{}\"", term)
-            } else if term.chars().count() < MIN_PREFIX_LEN {
+            } else if exact || term.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", term)
             } else {
                 format!("{}*", term)
@@ -206,7 +209,7 @@ impl EmailQueryBuilder {
             .default_operator("AND");
 
             let text_sqs = SimpleQueryStringQuery::new(
-                build_text_query_string(&self.inner.terms),
+                build_text_query_string(&self.inner.terms, &self.inner.match_type),
                 EMAIL_TEXT_FIELDS.iter().copied(),
             )
             .default_operator("AND");

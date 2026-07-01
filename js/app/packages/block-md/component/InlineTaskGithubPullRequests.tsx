@@ -1,3 +1,4 @@
+import { GithubPullRequestStatusIcon } from '@app/component/side-panel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import GithubIcon from '@icon/mcp-github.svg';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
@@ -90,7 +91,19 @@ function InlineTaskGithubPullRequestsContent(props: {
                 rel="noopener noreferrer"
                 title={pullRequestTitle(pr)}
               >
-                <GithubIcon class="size-3 shrink-0" aria-hidden="true" />
+                <Show
+                  when={pr.status}
+                  fallback={
+                    <GithubIcon class="size-3 shrink-0" aria-hidden="true" />
+                  }
+                >
+                  {(status) => (
+                    <GithubPullRequestStatusIcon
+                      status={status()}
+                      class="size-3 shrink-0"
+                    />
+                  )}
+                </Show>
                 <Show
                   when={name}
                   fallback={

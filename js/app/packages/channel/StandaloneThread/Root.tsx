@@ -4,6 +4,7 @@ import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createFocusRequest } from '../Thread/focus-request';
 import { ThreadRail } from '../Thread/ThreadRail';
 import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';
 import { StandaloneThreadContext } from './context';
@@ -25,6 +26,7 @@ export function Root(props: RootProps) {
 function RootInner(props: RootProps) {
   const [isExpanded, setIsExpanded] = createSignal(false);
   const [isReplying, setIsReplying] = createSignal(false);
+  const replyInputFocusRequest = createFocusRequest();
 
   const parentQuery = useChannelMessagesByIdsQuery(
     () => props.channelId,
@@ -64,6 +66,7 @@ function RootInner(props: RootProps) {
         setIsExpanded,
         isReplying,
         setIsReplying,
+        replyInputFocusRequest,
       }}
     >
       <div class="relative">

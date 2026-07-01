@@ -80,15 +80,43 @@ use crate::domain::ports::DocumentService;
 #[cfg(feature = "document_create")]
 use crate::domain::ports::create::DocumentCreationService;
 
+/// Stable machine-readable error code for an over-length document name. Clients
+/// branch on this instead of the human message and render their own copy.
+pub const DOCUMENT_NAME_TOO_LONG_CODE: &str = "DOCUMENT_NAME_TOO_LONG";
+
+/// Structured 422 body for [`DocumentError::NameTooLong`]. Carries the limit so
+/// clients can show it without hardcoding a value that could drift from the API.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NameTooLongErrorResponse {
+    code: &'static str,
+    max_length: usize,
+    message: &'static str,
+}
+
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
+        if let DocumentError::NameTooLong { max } = &self {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(NameTooLongErrorResponse {
+                    code: DOCUMENT_NAME_TOO_LONG_CODE,
+                    max_length: *max,
+                    message: "name too long",
+                }),
+            )
+                .into_response();
+        }
+
         let status_code = match &self {
             DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
             DocumentError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            DocumentError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             DocumentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            DocumentError::JwtEncoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         if status_code.is_server_error() {
@@ -130,6 +158,8 @@ pub struct DocumentRouterState<T, Svc> {
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,
+    /// JWT secret for signing document permission tokens.
+    pub document_permission_jwt_secret: String,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -143,6 +173,7 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             lexical_client: self.lexical_client.clone(),
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
+            document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
         }
     }
 }

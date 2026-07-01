@@ -1,4 +1,4 @@
-use crate::GmailClient;
+use crate::{GmailClient, sanitize_error_body};
 use anyhow::Context;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -6,8 +6,73 @@ use mail_builder::headers::address::Address;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message;
 use models_email::gmail::{
-    MessageResource, MinimalMessageResource, SendMessagePayload, SentMessageResource,
+    ListMessagesResponse, MessageResource, MinimalMessageResource, SendMessagePayload,
+    SentMessageResource,
 };
+use std::cmp::min;
+
+// 500 is the max allowed by the gmail api
+pub const LIST_MESSAGES_BATCH_SIZE: u32 = 500;
+
+/// Lists message provider ids up to the requested number (capped at 500 by the
+/// Gmail API), most recent first. `label_ids` restricts the result to messages
+/// carrying all of the given Gmail label ids; an empty slice applies no filter.
+#[tracing::instrument(skip(client, access_token), err)]
+pub(crate) async fn list_messages(
+    client: &GmailClient,
+    access_token: &str,
+    num_messages: u32,
+    label_ids: &[&str],
+) -> anyhow::Result<Vec<String>> {
+    if num_messages == 0 {
+        return Ok(Vec::new());
+    }
+
+    // The Gmail API's `maxResults` parameter is capped at 500.
+    let batch_size = min(num_messages, LIST_MESSAGES_BATCH_SIZE);
+
+    let http_client = client.inner.clone();
+    let url = format!("{}/users/me/messages", client.base_url);
+
+    let mut query_params = vec![("maxResults", batch_size.to_string())];
+
+    // `labelIds` is a repeatable param; a message matches if it carries all of them.
+    for label_id in label_ids {
+        query_params.push(("labelIds", label_id.to_string()));
+    }
+
+    let response = http_client
+        .get(&url)
+        .bearer_auth(access_token)
+        .query(&query_params)
+        .send()
+        .await
+        .context("Failed to send request to Gmail API (list messages)")?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        let sanitized = sanitize_error_body(&error_body);
+        anyhow::bail!("Gmail API error {} (list messages): {}", status, sanitized);
+    }
+
+    let gmail_response = response
+        .json::<ListMessagesResponse>()
+        .await
+        .context("Failed to parse JSON response from Gmail API (list messages)")?;
+
+    let message_ids = gmail_response
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+
+    Ok(message_ids)
+}
 
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message(

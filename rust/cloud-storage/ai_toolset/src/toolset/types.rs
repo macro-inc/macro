@@ -249,7 +249,7 @@ where
     /// # Example
     ///
     /// ```
-    /// use ai_toolset::{AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolResult};
+    /// use ai_toolset::{AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolResult};
     /// use axum_macros::FromRef;
     /// use schemars::JsonSchema;
     /// use serde::{Deserialize, Serialize};
@@ -282,11 +282,11 @@ where
     /// }
     ///
     /// // Build a subtoolset with the narrower context
-    /// let sub_toolset = AsyncToolSet::<SubContext>::new()
+    /// let sub_toolset = AsyncToolCollection::<SubContext>::new()
     ///     .add_tool::<SubTool, SubContext>();
     ///
     /// // Merge into parent toolset - tools are automatically widened
-    /// let parent_toolset = AsyncToolSet::<ParentContext>::new()
+    /// let parent_toolset = AsyncToolCollection::<ParentContext>::new()
     ///     .add_subtoolset::<SubContext>(sub_toolset);
     ///
     /// assert!(parent_toolset.tools.contains_key("SubTool"));

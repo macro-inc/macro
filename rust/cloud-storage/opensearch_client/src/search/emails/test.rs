@@ -49,14 +49,20 @@ fn test_build_keyword_query_string_email_term_mixed_with_word() {
 
 #[test]
 fn test_build_text_query_string_single_term_is_prefix() {
-    let result = build_text_query_string(&["scri".to_string()]);
+    let result = build_text_query_string(&["scri".to_string()], "partial");
     assert_eq!(result, "scri*");
 }
 
 #[test]
 fn test_build_text_query_string_multiple_terms_are_prefixed_and_anded() {
-    let result = build_text_query_string(&["scri".to_string(), "test".to_string()]);
+    let result = build_text_query_string(&["scri".to_string(), "test".to_string()], "partial");
     assert_eq!(result, "scri* + test*");
+}
+
+#[test]
+fn test_build_text_query_string_exact_drops_prefix_wildcard() {
+    let result = build_text_query_string(&["scri".to_string(), "test".to_string()], "exact");
+    assert_eq!(result, "(scri) + (test)");
 }
 
 #[test]
@@ -64,25 +70,25 @@ fn test_build_text_query_string_multi_word_term_uses_phrase() {
     // Multi-word terms come from quoted phrases via `split_search_terms`
     // and must render as a phrase so simple_query_string's AND default
     // operator doesn't decompose them into independent tokens.
-    let result = build_text_query_string(&["hi there".to_string()]);
+    let result = build_text_query_string(&["hi there".to_string()], "partial");
     assert_eq!(result, "\"hi there\"");
 }
 
 #[test]
 fn test_build_text_query_string_email_term_uses_phrase() {
-    let result = build_text_query_string(&["alice@example.com".to_string()]);
+    let result = build_text_query_string(&["alice@example.com".to_string()], "partial");
     assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
 fn test_build_text_query_string_short_term_skips_prefix() {
-    let result = build_text_query_string(&["ab".to_string()]);
+    let result = build_text_query_string(&["ab".to_string()], "partial");
     assert_eq!(result, "(ab)");
 }
 
 #[test]
 fn test_build_text_query_string_three_char_term_gets_prefix() {
-    let result = build_text_query_string(&["abc".to_string()]);
+    let result = build_text_query_string(&["abc".to_string()], "partial");
     assert_eq!(result, "abc*");
 }
 
@@ -280,7 +286,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                                 "simple_query_string": {
                                     "default_operator": "AND",
                                     "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                                    "query": "test*"
+                                    "query": "(test)"
                                 }
                             }
                         ]

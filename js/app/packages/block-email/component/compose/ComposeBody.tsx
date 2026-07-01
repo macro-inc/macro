@@ -196,6 +196,7 @@ export function ComposeBody(props: {
             />
           </Scroll>
         </div>
+        {ctx.signaturePreview?.()}
         <div class="flex flex-wrap items-center gap-2">
           <For each={ctx.attachments()}>
             {(attachment) => <AttachmentItem attachment={attachment} />}

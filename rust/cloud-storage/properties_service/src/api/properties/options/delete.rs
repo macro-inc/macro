@@ -6,7 +6,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::PropertiesHandlerState;
+use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use properties_db_client::{
     error::PropertiesDatabaseError,
@@ -68,11 +68,12 @@ impl IntoResponse for DeletePropertyOptionErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context), err)]
+#[tracing::instrument(skip(state, user_context, team), err)]
 pub async fn delete_property_option(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     tracing::info!("deleting property option");
 
@@ -96,7 +97,7 @@ pub async fn delete_property_option(
         &state.db,
         def_uuid,
         &user_context.user_id,
-        user_context.organization_id,
+        caller_team_id(&team),
     )
     .await
     .inspect_err(|e| {
@@ -121,7 +122,7 @@ pub async fn delete_property_option(
         return Err(DeletePropertyOptionErr::OptionNotFound);
     }
 
-    let deleted = property_options_delete::delete_property_option(&state.db, option_uuid)
+    let deleted = property_options_delete::delete_property_option(&state.db, def_uuid, option_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(

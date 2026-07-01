@@ -7,7 +7,10 @@ use crate::domain::{
 };
 use anyhow::anyhow;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::{EntityType, service::property_value::PropertyValue};
+use models_properties::{
+    EntityType,
+    service::{property_definition::PropertyDefinition, property_value::PropertyValue},
+};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -738,6 +741,177 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
     // Should return Ok without calling any handlers
     service
         .handle_task_assignees_property(&entity_id, None, "assigner")
+        .await
+        .unwrap();
+}
+
+// ============================================================================
+// add/remove_entity_property_option unit tests
+// ============================================================================
+
+fn multi_select_definition(id: Uuid, is_multi_select: bool) -> PropertyDefinition {
+    PropertyDefinition {
+        id,
+        owner: models_properties::PropertyOwner::System,
+        display_name: "Tags".to_string(),
+        data_type: models_properties::DataType::SelectString,
+        is_multi_select,
+        specific_entity_type: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        is_system: false,
+        is_metadata: false,
+    }
+}
+
+#[tokio::test]
+async fn test_add_entity_property_option_happy_path() {
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+    let option_id = Uuid::from_u128(0xB2);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
+    });
+    repo.expect_count_valid_property_options()
+        .returning(|_, _| Box::pin(async { Ok(1) }));
+    repo.expect_add_entity_property_option()
+        .withf(move |entity_id, entity_type, prop, opt| {
+            entity_id == "doc1"
+                && *entity_type == EntityType::Document
+                && *prop == def_id
+                && *opt == option_id
+        })
+        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    service
+        .add_entity_property_option("user1", "doc1", EntityType::Document, def_id, option_id)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_add_entity_property_option_rejects_single_select() {
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, false))) })
+    });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .add_entity_property_option(
+            "user1",
+            "doc1",
+            EntityType::Document,
+            def_id,
+            Uuid::from_u128(0xB2),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::Validation(_)
+    ));
+}
+
+#[tokio::test]
+async fn test_add_entity_property_option_rejects_invalid_option() {
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+
+    repo.expect_get_property_definition().returning(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(def_id, true))) })
+    });
+    // Option does not belong to the property.
+    repo.expect_count_valid_property_options()
+        .returning(|_, _| Box::pin(async { Ok(0) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .add_entity_property_option(
+            "user1",
+            "doc1",
+            EntityType::Document,
+            def_id,
+            Uuid::from_u128(0xB2),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::Validation(_)
+    ));
+}
+
+#[tokio::test]
+async fn test_add_entity_property_option_no_permission_service() {
+    let repo = MockPropertiesRepo::new();
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
+
+    let err = service
+        .add_entity_property_option(
+            "user1",
+            "doc1",
+            EntityType::Document,
+            Uuid::from_u128(0xA1),
+            Uuid::from_u128(0xB2),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
+}
+
+#[tokio::test]
+async fn test_remove_entity_property_option_happy_path() {
+    let mut repo = MockPropertiesRepo::new();
+    let def_id = Uuid::from_u128(0xA1);
+    let option_id = Uuid::from_u128(0xB2);
+
+    repo.expect_remove_entity_property_option()
+        .withf(move |entity_id, entity_type, prop, opt| {
+            entity_id == "doc1"
+                && *entity_type == EntityType::Document
+                && *prop == def_id
+                && *opt == option_id
+        })
+        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    service
+        .remove_entity_property_option("user1", "doc1", EntityType::Document, def_id, option_id)
         .await
         .unwrap();
 }

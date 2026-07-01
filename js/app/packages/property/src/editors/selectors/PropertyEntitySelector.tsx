@@ -434,7 +434,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
               return (
                 <div
-                  class="group flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
                   classList={{
                     'bg-hover': isKeyboardSelected(),
                   }}
@@ -484,7 +484,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       </Show>
                       <div
                         data-entity-index={index()}
-                        class="group flex items-center justify-between gap-2 py-1.5 px-2 min-w-0 h-8 rounded-md"
+                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}

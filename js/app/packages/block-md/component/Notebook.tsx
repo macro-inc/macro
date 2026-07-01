@@ -1,3 +1,5 @@
+import { AskMacroButton } from '@app/component/ChatWithAgentButton';
+import { SidePanel } from '@app/component/side-panel';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -6,7 +8,7 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
@@ -18,6 +20,7 @@ import {
 import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -25,14 +28,17 @@ import {
 import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
+import { makePersisted } from '@solid-primitives/storage';
 import {
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
   onMount,
+  Show,
   untrack,
 } from 'solid-js';
+import { DispatchAgentButton } from './DispatchAgentMenu';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -44,6 +50,16 @@ import {
   registerLexicalStateDebuggerCommand,
   registerMarkdownCommands,
 } from './useMarkdownCommands';
+
+/**
+ * Whether the Lexical state debugger panel is open, persisted across reloads so
+ * the debug panel stays where the user left it. Shared by every notebook so the
+ * toggle is consistent regardless of which editor surfaced it.
+ */
+const [showLexicalStateDebugger, setShowLexicalStateDebugger] = makePersisted(
+  createSignal(false),
+  { name: 'lexical-state-debugger-open' }
+);
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -81,6 +97,8 @@ function useCanUseLexicalStateDebugger() {
 
 export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
+  const blockId = useBlockId();
+  const blockAliasedName = useBlockAliasedName();
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
   const documentName = useBlockDocumentName();
@@ -95,8 +113,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
@@ -132,7 +148,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   createEffect(() => {
     const goToTempRedirect = useGoToTempRedirect();
-    const documentId = useBlockId();
+    const documentId = blockId;
     const recentState = tempRedirectLocation();
     if (!documentId || !recentState) return;
 
@@ -276,6 +292,26 @@ export function Notebook(props: { loroManager: LoroManager }) {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
+        <SidePanel.Section
+          id="document-ai-actions"
+          title="Actions"
+          defaultOpen
+          order={0}
+        >
+          <div class="m-px flex items-center justify-start gap-2">
+            <AskMacroButton
+              entity={{
+                type: 'document',
+                id: blockId,
+                name: documentName(),
+                fileType: 'md',
+              }}
+            />
+            <Show when={blockAliasedName === 'task' && !isMobile()}>
+              <DispatchAgentButton showPrimaryLabel />
+            </Show>
+          </div>
+        </SidePanel.Section>
         <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
@@ -322,8 +358,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
 export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
   const scopeId = blockHotkeyScopeSignal.get;
-  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
-    createSignal(false);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;

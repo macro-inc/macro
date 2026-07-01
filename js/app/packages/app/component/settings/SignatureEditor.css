@@ -1,0 +1,258 @@
+/* Theme Quill's "snow" editor with the app's design tokens so it reads in both
+   light and dark, and round its corners to match surrounding panels. Scoped to
+   .signature-editor so it never leaks to any other Quill instance. */
+
+.signature-editor .ql-toolbar.ql-snow,
+.signature-editor .ql-container.ql-snow {
+  border-color: var(--color-edge-muted);
+}
+
+.signature-editor .ql-toolbar.ql-snow {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
+
+.signature-editor .ql-container.ql-snow {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+/* Each toolbar control is wrapped in the app tooltip's inline-flex trigger
+   <span>; keep those wrappers aligned with the rest of the toolbar row. */
+.signature-editor .ql-toolbar .ql-formats > span {
+  vertical-align: middle;
+}
+
+.signature-editor .ql-editor {
+  min-height: 8rem;
+  color: var(--color-ink);
+}
+
+.signature-editor .ql-editor img {
+  max-width: 100%;
+}
+
+/* Drag-to-resize overlay for a selected image — styled to match the document
+   block's resizer: a subtle selection ring with an ink edge-bar handle that
+   brightens and scales on hover/drag. The box is click-through
+   (pointer-events: none) so the image stays selectable; only the handle is
+   interactive. Positioned by signatureImageResizer.ts within .ql-container. */
+.signature-editor .ql-image-resizer {
+  position: absolute;
+  display: none;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 2px var(--color-edge-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+.signature-editor .ql-image-resizer-handle {
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 16px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  pointer-events: auto;
+}
+/* The visible pill bar (matches the doc block's bg-ink / ring-surface bar). */
+.signature-editor .ql-image-resizer-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 4px;
+  height: 50%;
+  min-height: 2rem;
+  transform: translateY(-50%);
+  background-color: var(--color-ink);
+  box-shadow: 0 0 0 2px var(--color-surface);
+  border-radius: 9999px;
+  opacity: 0.5;
+  transition: all 200ms ease;
+  pointer-events: none;
+}
+.signature-editor .ql-image-resizer-handle:hover::before {
+  opacity: 0.8;
+}
+.signature-editor
+  .ql-image-resizer.dragging
+  .ql-image-resizer-handle::before {
+  opacity: 0.8;
+  transform: translateY(-50%) scale(1.2);
+}
+
+.signature-editor .ql-editor.ql-blank::before {
+  color: var(--color-ink-muted);
+  font-style: normal;
+}
+
+/* Toolbar icons + labels follow the theme instead of Quill's hard-coded grey. */
+.signature-editor .ql-snow .ql-stroke {
+  stroke: var(--color-ink-muted);
+}
+.signature-editor .ql-snow .ql-fill {
+  fill: var(--color-ink-muted);
+}
+.signature-editor .ql-snow .ql-picker {
+  color: var(--color-ink-muted);
+}
+
+.signature-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+.signature-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.signature-editor .ql-snow .ql-picker-label:hover .ql-stroke {
+  stroke: var(--color-ink);
+}
+.signature-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+.signature-editor .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--color-ink);
+}
+.signature-editor .ql-snow.ql-toolbar button:hover,
+.signature-editor .ql-snow.ql-toolbar button.ql-active,
+.signature-editor .ql-snow .ql-picker-label:hover,
+.signature-editor .ql-snow .ql-picker-label.ql-active {
+  color: var(--color-ink);
+}
+
+/* Dropdown panels (header levels, color swatches, font/size lists). */
+.signature-editor .ql-snow .ql-picker-options {
+  background-color: var(--color-surface);
+  border-color: var(--color-edge-muted);
+}
+
+/* Font + size picker labels. The snow theme only labels its own presets, so
+   every custom option (see FONT_OPTIONS / SIZE_OPTIONS in SignatureEditor.tsx)
+   needs a label rule; the item rules also preview the font/size. `false`
+   (default) is already labelled "Sans Serif" / "Normal" by the base theme. */
+
+/* Compact, single-line picker labels so long names (e.g. "Times New Roman")
+   don't wrap out of the toolbar. */
+.signature-editor .ql-picker {
+  font-size: 0.8125rem;
+}
+/* Font + size pickers size to their selected label (dynamic) rather than fixed
+   boxes, so "Sans Serif" isn't padded out to fit "Times New Roman". width:auto on
+   both the picker and its label removes the circular 100% sizing; the right
+   padding keeps the label text clear of the absolutely-positioned dropdown caret
+   (and gives a bit of breathing room after it). The options panel still expands
+   to the widest item via the theme's min-width:100% + nowrap. */
+.signature-editor .ql-picker.ql-font,
+.signature-editor .ql-picker.ql-size,
+.signature-editor .ql-picker.ql-font .ql-picker-label,
+.signature-editor .ql-picker.ql-size .ql-picker-label {
+  width: auto;
+}
+.signature-editor .ql-picker.ql-font .ql-picker-label,
+.signature-editor .ql-picker.ql-size .ql-picker-label {
+  padding-right: 24px;
+}
+.signature-editor .ql-picker.ql-font .ql-picker-label,
+.signature-editor .ql-picker.ql-font .ql-picker-item,
+.signature-editor .ql-picker.ql-size .ql-picker-label,
+.signature-editor .ql-picker.ql-size .ql-picker-item {
+  white-space: nowrap;
+}
+
+/* Tighten group spacing + button width so every control fits one row in the
+   narrow settings column (max-w-[710px]). */
+.signature-editor .ql-toolbar.ql-snow .ql-formats {
+  margin-right: 6px;
+}
+.signature-editor .ql-snow.ql-toolbar button {
+  width: 24px;
+  padding: 3px;
+}
+
+.signature-editor .ql-picker.ql-font .ql-picker-label[data-value="Arial"]::before,
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before {
+  content: "Arial";
+}
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before {
+  font-family: Arial, sans-serif;
+}
+
+.signature-editor .ql-picker.ql-font .ql-picker-label[data-value="Georgia"]::before,
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Georgia"]::before {
+  content: "Georgia";
+}
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Georgia"]::before {
+  font-family: Georgia, serif;
+}
+
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-label[data-value="Times New Roman"]::before,
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-item[data-value="Times New Roman"]::before {
+  content: "Times New Roman";
+}
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-item[data-value="Times New Roman"]::before {
+  font-family: "Times New Roman", serif;
+}
+
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-label[data-value="Courier New"]::before,
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-item[data-value="Courier New"]::before {
+  content: "Courier New";
+}
+.signature-editor
+  .ql-picker.ql-font
+  .ql-picker-item[data-value="Courier New"]::before {
+  font-family: "Courier New", monospace;
+}
+
+.signature-editor .ql-picker.ql-font .ql-picker-label[data-value="Verdana"]::before,
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Verdana"]::before {
+  content: "Verdana";
+}
+.signature-editor .ql-picker.ql-font .ql-picker-item[data-value="Verdana"]::before {
+  font-family: Verdana, sans-serif;
+}
+
+.signature-editor .ql-picker.ql-size .ql-picker-label[data-value="12px"]::before,
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before {
+  content: "12px";
+}
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before {
+  font-size: 12px;
+}
+
+.signature-editor .ql-picker.ql-size .ql-picker-label[data-value="14px"]::before,
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="14px"]::before {
+  content: "14px";
+}
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="14px"]::before {
+  font-size: 14px;
+}
+
+.signature-editor .ql-picker.ql-size .ql-picker-label[data-value="16px"]::before,
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before {
+  content: "16px";
+}
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before {
+  font-size: 16px;
+}
+
+.signature-editor .ql-picker.ql-size .ql-picker-label[data-value="20px"]::before,
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before {
+  content: "20px";
+}
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before {
+  font-size: 20px;
+}
+
+.signature-editor .ql-picker.ql-size .ql-picker-label[data-value="24px"]::before,
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="24px"]::before {
+  content: "24px";
+}
+.signature-editor .ql-picker.ql-size .ql-picker-item[data-value="24px"]::before {
+  font-size: 24px;
+}

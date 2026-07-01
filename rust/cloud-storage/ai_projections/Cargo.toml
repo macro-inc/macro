@@ -19,6 +19,16 @@ outbound = [
   "dep:serde_json",
   "ports",
 ]
+# Agent-backed projection generator (the outbound adapter that runs the AI
+# toolset). Pulls in the heavy agent/toolset dependencies.
+agent = [
+  "outbound",
+  "dep:ai_tools",
+  "dep:ai_toolset",
+  "dep:agent",
+  "dep:ai_usage",
+  "dep:futures",
+]
 ports = ["dep:tokio"]
 worker = [
   "ports",
@@ -59,6 +69,13 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 sqs_worker = { path = "../sqs_worker", optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+
+# Agent generator dependencies (the AI toolset adapter)
+ai_tools = { path = "../ai_tools", optional = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
+agent = { path = "../agent", optional = true }
+ai_usage = { path = "../ai_usage", optional = true }
+futures = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

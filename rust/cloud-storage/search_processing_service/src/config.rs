@@ -1,11 +1,11 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use macro_service_urls::LexicalServiceUrl;
 
 env_vars! {
     pub struct DatabaseUrl;
-    pub struct SearchEventQueue;
     pub struct OpensearchUrl;
     pub struct OpensearchUsername;
     pub struct OpensearchPassword;
@@ -87,8 +87,6 @@ pub struct Config {
     #[macro_config_default(8080)]
     pub port: usize,
 
-    /// The search text extractor queue
-    pub search_event_queue: SearchEventQueue,
     /// The queue max messages per poll
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -137,6 +135,9 @@ pub struct Config {
     /// TTL applied to the `expires_at` attribute on each job record. Acts as
     /// the GC mechanism — DynamoDB removes items shortly after this elapses.
     pub backfill_job_ttl_seconds: BackfillJobTtlSeconds,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {

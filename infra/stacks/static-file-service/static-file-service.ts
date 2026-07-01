@@ -573,10 +573,6 @@ export class StaticFileService extends pulumi.ComponentResource {
                   name: `STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME`,
                   value: args.dynamoDbTableName,
                 },
-                {
-                  name: 'STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL',
-                  value: queueQueue.url,
-                },
                 ...(args.containerEnvVars ?? []),
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],

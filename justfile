@@ -40,15 +40,6 @@ docker_up *ARGS:
   echo "startup docker compose"
   docker compose up {{ ARGS }}
 
-# Run all services locally using docker-compose
-# Requires .env file (from `just get_environment`) and FusionAuth setup (from `just setup`).
-# Automatically patches .env with local FusionAuth values before starting services.
-# Uses staged output by default; set MACRO_LOCAL_VERBOSE=1 to show command output.
-run_local *ARGS:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  bash scripts/run-local.sh "$@"
-
 # Reset and seed deterministic data used by local E2E tests.
 local-e2e-seed:
   just run_dbs -d
@@ -60,24 +51,32 @@ local-e2e-seed:
 # local services with extra env/dependency requirements blocking E2E.
 local-e2e-services := "authentication-service connection_gateway contacts_service document_storage_service email_service notification_service static_file_service static_file_cdn sync_service websocket_service"
 
+# Update the fixed-output js node_modules hash after js/bun.lock changes.
+update-node-modules-hash:
+  scripts/update-node-modules-hash.sh
+
+# Verify the fixed-output js node_modules derivation matches js/bun.lock.
+check-node-modules-nix:
+  nix build .#js-node-modules --no-link
+
 # Start the local stack, seed deterministic data, and run the Playwright smoke suite.
 local-e2e *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
   cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
 
 # Start the local stack, seed deterministic data, and run ignored Rust local E2E integration tests.
 local-e2e-rust *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
   cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture {{ ARGS }}
 
 # Start the local stack once, seed deterministic data, and run Rust + Playwright local E2E tests.
 local-e2e-all *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
   cd rust/cloud-storage && SQLX_OFFLINE=true cargo test -p local_e2e_integration_tests -- --ignored --nocapture
   cd js/app && LOCAL_E2E=true bunx playwright test {{ ARGS }}
@@ -85,7 +84,7 @@ local-e2e-all *ARGS:
 # Start the local stack, seed deterministic data, and open Playwright UI mode.
 local-e2e-ui *ARGS:
   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 just setup_localstack
-  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml just run_local -d --wait {{ local-e2e-services }}
+  COMPOSE_FILE=docker-compose.yml:docker-compose.local-e2e.yml bash scripts/run-local.sh -d --wait {{ local-e2e-services }}
   just local-e2e-seed
   cd js/app && LOCAL_E2E=true bunx playwright test --ui {{ ARGS }}
 
@@ -124,7 +123,7 @@ patch_local_fusionauth_env:
   fi
   just infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
 
-# Stop all local services
+# Stop all local services (default project; legacy alias).
 stop-local:
   docker compose down
 
@@ -133,6 +132,7 @@ stop-databases:
 
 # Import LocalStack recipes
 import 'local_stack.just'
+import 'just/xtask.just'
 
 # Sets up local database
 setup_local_dbs:

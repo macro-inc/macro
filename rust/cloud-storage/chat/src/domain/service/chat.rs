@@ -367,7 +367,7 @@ where
             None => stored_args.clone(),
         };
 
-        let request_context = RequestContext { user_id };
+        let request_context = RequestContext::new(user_id);
 
         let outcome = self
             .toolset

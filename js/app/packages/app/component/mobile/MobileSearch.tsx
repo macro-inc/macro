@@ -45,13 +45,12 @@ import { type PillTabItem, PillTabs } from './PillTabs';
 
 const CATEGORIES: PillTabItem<CategoryFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'channels', label: 'Channels' },
-  { value: 'dms', label: 'DMs' },
-  { value: 'documents', label: 'Documents' },
+  { value: 'commands', label: 'Command' },
+  { value: 'chats', label: 'Agents' },
+  { value: 'documents', label: 'Files' },
   { value: 'tasks', label: 'Tasks' },
-  { value: 'chats', label: 'Chats' },
-  { value: 'projects', label: 'Folders' },
-  { value: 'commands', label: 'Commands' },
+  { value: 'channels', label: 'Channels' },
+  { value: 'dms', label: 'People' },
 ];
 
 export function MobileSearchOuter() {

@@ -71,7 +71,7 @@ function isEntityItem(item: CommandMenuItem): item is EntityItem {
   return item.kind === 'entity';
 }
 
-function _isUserItem(item: CommandMenuItem): item is UserItem {
+function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
@@ -340,7 +340,7 @@ function useQuickAccessBuckets(): Record<
     all: allWithCommands,
     channels: quickAccess.useList('channel'),
     dms: quickAccess.useList('dm'),
-    documents: quickAccess.useList('note', 'document', 'snippet'),
+    documents: quickAccess.useList('note', 'document', 'snippet', 'project'),
     tasks: quickAccess.useList('task'),
     chats: quickAccess.useList('chat'),
     projects: quickAccess.useList('project'),
@@ -388,6 +388,30 @@ export function useCommandItems(
     const q = query();
     const items = categoryItems();
 
+    if (
+      q.trim().length <= 3 &&
+      categoryFilter() === 'all' &&
+      CommandState.commandScopeCommands().length === 0 &&
+      !CommandState.isEntityActionMode()
+    ) {
+      const trimmedQuery = q.trim();
+      const ranked = trimmedQuery
+        ? search()(items, q).map((result) => result.item)
+        : items.filter(showInRecencyList);
+      const topCommands = ranked.filter(isCommandItem).slice(0, 3);
+
+      if (!trimmedQuery || topCommands.length > 0) {
+        const topCommandIds = new Set(topCommands.map((item) => item.id));
+        const rest = ranked.filter((item) => !topCommandIds.has(item.id));
+
+        return [
+          ...(trimmedQuery ? [makeSearchItem(q, categoryFilter())] : []),
+          ...topCommands,
+          ...rest,
+        ];
+      }
+    }
+
     const ranked = q
       ? search()(items, q).map((result) => result.item)
       : items.filter(showInRecencyList);
@@ -407,5 +431,5 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export type { AskAiItem, CommandMenuItem, SearchItem };
-export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem };
+export type { AskAiItem, CommandMenuItem, SearchItem, UserItem };
+export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem, isUserItem };

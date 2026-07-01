@@ -1,6 +1,7 @@
 mod draft;
 mod previews;
 mod send;
+mod signature;
 mod thread;
 mod thread_labels;
 

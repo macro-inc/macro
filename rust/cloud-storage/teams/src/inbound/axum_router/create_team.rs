@@ -32,7 +32,7 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService>(
 ) -> Result<Json<Team>, crate::domain::model::CreateTeamError> {
     let team = state
         .service
-        .create_team(&user.macro_user_id, &req.name)
+        .create_team(&user.macro_user_id, &req.name, &user.subscription_id)
         .await?;
 
     Ok(Json(team))

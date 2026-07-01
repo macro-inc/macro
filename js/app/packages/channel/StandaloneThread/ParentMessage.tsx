@@ -30,15 +30,18 @@ export function ParentMessage(props: ParentMessageProps) {
             </Message.Slot>
             <Message.Slot
               placement="header"
-              class="flex items-center gap-1 min-w-0"
+              class="flex flex-col gap-0.5 min-w-0"
             >
-              <Message.SenderName />
-              <Message.AgentBadge />
-              <Message.EditedIndicator />
-              <Message.Timestamp
-                class="ml-auto shrink-0"
-                format="dateAndTime"
-              />
+              <div class="flex items-center gap-1 min-w-0">
+                <Message.SenderName />
+                <Message.AgentBadge />
+                <Message.EditedIndicator />
+                <Message.Timestamp
+                  class="ml-auto shrink-0"
+                  format="dateAndTime"
+                />
+              </div>
+              <Message.FromPill />
             </Message.Slot>
             <Message.Slot placement="content">
               <Message.Content />

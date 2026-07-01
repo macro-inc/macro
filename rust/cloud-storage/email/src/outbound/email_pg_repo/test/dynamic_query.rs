@@ -2429,3 +2429,202 @@ async fn test_dynamic_query_created_at_and_updated_at_combined(
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// viewed_at / email_user_history
+//
+// `email_user_history` supplies the per-user `viewed_at` column and drives the
+// sort key for the viewed-based sort modes. Non-viewed modes defer the join
+// past the candidate LIMIT (see query.rs::sort_uses_view_history); these tests
+// pin down both the deferred projection and the inline viewed-sort behaviour.
+// Inbox threads (1, 4, 5, 7) sort by latest_inbound_message_ts descending:
+// thread 1 (2024-01-15), 4 (2024-01-12), 5 (2024-01-11), 7 (2024-01-09).
+// ---------------------------------------------------------------------------
+
+const THREAD_1: &str = "20000001-0000-0000-0000-000000000001";
+const THREAD_4: &str = "20000004-0000-0000-0000-000000000004";
+const THREAD_5: &str = "20000005-0000-0000-0000-000000000005";
+const THREAD_7: &str = "20000007-0000-0000-0000-000000000007";
+
+/// Records that `link_id` viewed `thread_id` at `viewed_at`, i.e. inserts an
+/// `email_user_history` row whose `updated_at` is the supplied timestamp.
+async fn record_view(
+    pool: &Pool<Postgres>,
+    link_id: Uuid,
+    thread_id: &str,
+    viewed_at: chrono::DateTime<Utc>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO email_user_history (link_id, thread_id, created_at, updated_at) \
+         VALUES ($1, $2, $3, $3)",
+    )
+    .bind(link_id)
+    .bind(Uuid::parse_str(thread_id)?)
+    .bind(viewed_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+fn inbox_partial_query(
+    sort: SimpleSortMethod,
+) -> Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>> {
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
+    Query::new(None, sort, filter)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_updated_at_sort_projects_viewed_at_via_deferred_join(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let viewed_1 = Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let viewed_5 = Utc.with_ymd_and_hms(2024, 3, 5, 0, 0, 0).unwrap();
+    // Two of the four inbox threads have a view record; the other two don't.
+    record_view(&pool, link_id, THREAD_1, viewed_1).await?;
+    record_view(&pool, link_id, THREAD_5, viewed_5).await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        50,
+        &view,
+        inbox_partial_query(SimpleSortMethod::UpdatedAt),
+        "",
+        None,
+    )
+    .await?;
+
+    // Deferring the join must not change the result set or its order: still
+    // ordered by latest_inbound_message_ts, not by viewed_at.
+    let order: Vec<String> = results.iter().map(|r| r.id.to_string()).collect();
+    assert_eq!(
+        order,
+        vec![
+            THREAD_1.to_string(),
+            THREAD_4.to_string(),
+            THREAD_5.to_string(),
+            THREAD_7.to_string(),
+        ],
+        "UpdatedAt sort must order by the view timestamp, not viewed_at"
+    );
+
+    let viewed_at = |id: &str| {
+        results
+            .iter()
+            .find(|r| r.id.to_string() == id)
+            .unwrap_or_else(|| panic!("missing thread {id}"))
+            .viewed_at
+    };
+    // viewed_at is populated for threads with history (matched on thread_id AND
+    // link_id), NULL for the rest.
+    assert_eq!(viewed_at(THREAD_1), Some(viewed_1));
+    assert_eq!(viewed_at(THREAD_5), Some(viewed_5));
+    assert_eq!(viewed_at(THREAD_4), None);
+    assert_eq!(viewed_at(THREAD_7), None);
+
+    // sort_ts is the view timestamp (latest_inbound_message_ts), proving the
+    // deferred viewed_at did not leak into the sort key.
+    let thread_1 = results
+        .iter()
+        .find(|r| r.id.to_string() == THREAD_1)
+        .unwrap();
+    assert_eq!(
+        thread_1.sort_ts,
+        Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap()
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_viewed_at_sort_orders_by_view_history(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let viewed_7 = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+    let viewed_4 = Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap();
+    // Threads 7 and 4 viewed recently; threads 1 and 5 never viewed.
+    record_view(&pool, link_id, THREAD_7, viewed_7).await?;
+    record_view(&pool, link_id, THREAD_4, viewed_4).await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let query = inbox_partial_query(SimpleSortMethod::ViewedAt);
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, query, "", None).await?;
+
+    // Viewed threads first (most-recently-viewed first); unviewed threads fall
+    // back to epoch and tie-break on id DESC (5 before 1).
+    let order: Vec<String> = results.iter().map(|r| r.id.to_string()).collect();
+    assert_eq!(
+        order,
+        vec![
+            THREAD_7.to_string(),
+            THREAD_4.to_string(),
+            THREAD_5.to_string(),
+            THREAD_1.to_string(),
+        ],
+        "ViewedAt sort must order by email_user_history.updated_at"
+    );
+
+    let top = &results[0];
+    assert_eq!(top.viewed_at, Some(viewed_7));
+    // effective_ts == viewed_at on this path (the inline CASE).
+    assert_eq!(top.sort_ts, viewed_7);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_viewed_updated_sort_falls_back_to_view_timestamp(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let viewed_7 = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+    let viewed_4 = Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap();
+    record_view(&pool, link_id, THREAD_7, viewed_7).await?;
+    record_view(&pool, link_id, THREAD_4, viewed_4).await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let query = inbox_partial_query(SimpleSortMethod::ViewedUpdated);
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, query, "", None).await?;
+
+    // Viewed threads use their view time; unviewed threads (1, 5) fall back to
+    // latest_inbound_message_ts (2024-01-15, 2024-01-11), landing after the
+    // 2024 views: 7, 4, 1, 5.
+    let order: Vec<String> = results.iter().map(|r| r.id.to_string()).collect();
+    assert_eq!(
+        order,
+        vec![
+            THREAD_7.to_string(),
+            THREAD_4.to_string(),
+            THREAD_1.to_string(),
+            THREAD_5.to_string(),
+        ],
+        "ViewedUpdated must coalesce viewed_at with the view timestamp"
+    );
+
+    // Unviewed thread 1 falls back to its inbound timestamp for effective_ts.
+    let thread_1 = results
+        .iter()
+        .find(|r| r.id.to_string() == THREAD_1)
+        .unwrap();
+    assert_eq!(thread_1.viewed_at, None);
+    assert_eq!(
+        thread_1.sort_ts,
+        Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap()
+    );
+
+    Ok(())
+}

@@ -10,6 +10,7 @@ export const makeMoveToProjectAction = () => {
     return (
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread' &&
       entity.type !== 'foreign'
     );
   };

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use crate::api::context::PropertiesHandlerState;
+use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -24,8 +24,6 @@ pub enum ListPropertiesErr {
     InternalError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Organization ID is required for org scope")]
-    MissingOrganizationId,
 }
 
 impl IntoResponse for ListPropertiesErr {
@@ -34,7 +32,6 @@ impl IntoResponse for ListPropertiesErr {
             ListPropertiesErr::InternalError(_) | ListPropertiesErr::DatabaseError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
-            ListPropertiesErr::MissingOrganizationId => StatusCode::BAD_REQUEST,
         };
 
         if status_code.is_server_error() {
@@ -55,11 +52,11 @@ impl IntoResponse for ListPropertiesErr {
 pub enum PropertyScope {
     /// User-scoped properties only
     User,
-    /// Organization-scoped properties only
-    Org,
+    /// The caller's team properties only
+    Team,
     /// System properties only
     System,
-    /// User, organization, and system properties
+    /// User, team, and system properties
     All,
 }
 
@@ -90,7 +87,7 @@ pub enum PropertyDefinitionResponse {
     get,
     path = "/properties/definitions",
     params(
-        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user', 'org', 'system', or 'all'"),
+        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user', 'team', 'system', or 'all'"),
         ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response"),
         ("for_entity_type" = Option<EntityType>, Query, description = "Filter properties applicable to a specific entity type")
     ),
@@ -101,32 +98,26 @@ pub enum PropertyDefinitionResponse {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context), err)]
+#[tracing::instrument(skip(state, user_context, team), err)]
 pub async fn list_properties(
     Query(query): Query<ListPropertiesQuery>,
     State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
-    // Note - NOT using organization properties for now
-    let enable_organization_properties = false;
-    // Determine query parameters based on scope
-    let (org_id, user_id_opt, include_system) = match query.scope {
+    let callers_team = caller_team_id(&team);
+
+    // Determine query parameters based on scope. Team and user ids are derived from the
+    // authenticated caller, never from the request.
+    let (team_id, user_id_opt, include_system) = match query.scope {
         PropertyScope::User => (None, Some(user_context.user_id.as_str()), false),
-        PropertyScope::Org if enable_organization_properties => {
-            (user_context.organization_id, None, false)
-        }
-        PropertyScope::Org => (None, None, false),
+        PropertyScope::Team => (callers_team, None, false),
         PropertyScope::System => (None, None, true),
-        PropertyScope::All if enable_organization_properties => (
-            user_context.organization_id,
-            Some(user_context.user_id.as_str()),
-            true,
-        ),
-        PropertyScope::All => (None, Some(user_context.user_id.as_str()), true),
+        PropertyScope::All => (callers_team, Some(user_context.user_id.as_str()), true),
     };
 
     tracing::info!(
-        organization_id = ?org_id,
+        team_id = ?team_id,
         scope = ?query.scope,
         include_system = include_system,
         for_entity_type = ?query.for_entity_type,
@@ -136,14 +127,10 @@ pub async fn list_properties(
 
     let filter_entity_type = query.for_entity_type;
 
-    if enable_organization_properties && query.scope == PropertyScope::Org && org_id.is_none() {
-        return Err(ListPropertiesErr::MissingOrganizationId);
-    }
-
     let response = if query.include_options {
         let properties_with_options = property_definitions_get::get_properties_with_options(
             &state.db,
-            org_id,
+            team_id,
             user_id_opt,
             include_system,
         )
@@ -151,7 +138,7 @@ pub async fn list_properties(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                organization_id = ?org_id,
+                team_id = ?team_id,
                 scope = ?query.scope,
                 user_id = %user_context.user_id,
                 "failed to retrieve properties with options"
@@ -170,7 +157,7 @@ pub async fn list_properties(
 
         tracing::info!(
             properties_count = response.len(),
-            organization_id = ?org_id,
+            team_id = ?team_id,
             scope = ?query.scope,
             user_id = %user_context.user_id,
             "successfully retrieved properties with options"
@@ -179,7 +166,7 @@ pub async fn list_properties(
     } else {
         let properties = property_definitions_get::get_properties(
             &state.db,
-            org_id,
+            team_id,
             user_id_opt,
             include_system,
         )
@@ -187,7 +174,7 @@ pub async fn list_properties(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                organization_id = ?org_id,
+                team_id = ?team_id,
                 scope = ?query.scope,
                 user_id = %user_context.user_id,
                 "failed to retrieve properties"
@@ -206,7 +193,7 @@ pub async fn list_properties(
 
         tracing::info!(
             properties_count = response.len(),
-            organization_id = ?org_id,
+            team_id = ?team_id,
             scope = ?query.scope,
             user_id = %user_context.user_id,
             "successfully retrieved properties"

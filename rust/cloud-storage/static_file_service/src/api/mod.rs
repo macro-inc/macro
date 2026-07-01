@@ -12,8 +12,7 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::{InternalApiSecretKey, ValidInternalKey};
-use secretsmanager_client::LocalOrRemoteSecret;
+use macro_middleware::auth::internal_access::ValidInternalKey;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -25,7 +24,6 @@ static MAX_REQUEST_SIZE: usize = 4096;
 pub async fn setup_and_serve(
     config: Config,
     jwt_validation_args: JwtValidationArgs,
-    internal_api_secret: LocalOrRemoteSecret<InternalApiSecretKey>,
 ) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
@@ -50,8 +48,8 @@ pub async fn setup_and_serve(
         metadata_client,
         storage_client: Arc::new(storage_client),
         sqs_client,
+        internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        internal_api_secret,
     };
 
     let state_clone = state.clone();

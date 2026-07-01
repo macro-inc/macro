@@ -7,6 +7,7 @@ use axum::{
 };
 use macro_middleware::tracking::ClientIp;
 use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use roles_and_permissions::domain::model::PermissionId;
@@ -17,9 +18,13 @@ use crate::api::{
     context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
 };
 
+#[cfg(test)]
+mod test;
+
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
 const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
+const FREE_INBOX_LIMIT: i64 = 2;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGmailLinkResponse {
@@ -101,9 +106,11 @@ pub async fn init_gmail_link_handler(
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
 
-    if !permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
-        return Err(InitGmailLinkError::PaymentRequired);
-    }
+    enforce_inbox_paywall(
+        permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()),
+        || count_accessible_email_inboxes(&ctx.db, &user_context.macro_user_id),
+    )
+    .await?;
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
@@ -154,6 +161,36 @@ pub async fn init_gmail_link_handler(
         authorization_url: authorization_url.to_string(),
         link_id,
     }))
+}
+
+#[tracing::instrument(skip(db, macro_user_id), err)]
+async fn count_accessible_email_inboxes(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    macro_user_id: &MacroUserIdStr<'static>,
+) -> anyhow::Result<i64> {
+    let inboxes =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(db, macro_user_id.as_ref()).await?;
+
+    Ok(inboxes.len() as i64)
+}
+
+/// Enforces the inbox paywall. Free users can connect inboxes until they reach
+/// `FREE_INBOX_LIMIT`; professional users skip the count entirely.
+async fn enforce_inbox_paywall<F, Fut>(
+    has_professional_features: bool,
+    count_connected_inboxes: F,
+) -> Result<(), InitGmailLinkError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<i64>>,
+{
+    if !has_professional_features {
+        let connected_inbox_count = count_connected_inboxes().await?;
+        if connected_inbox_count >= FREE_INBOX_LIMIT {
+            return Err(InitGmailLinkError::PaymentRequired);
+        }
+    }
+    Ok(())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]

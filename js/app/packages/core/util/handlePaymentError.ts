@@ -8,19 +8,21 @@ export function isPaymentError<T>(
     return false;
   }
 
-  if (
-    result.isErr() &&
-    result.error.some((error) => error.code === 'HTTP_ERROR')
-  ) {
-    const errorMessage = result.error[0].message;
-    if (
-      errorMessage.includes('402') ||
-      errorMessage.includes('payment_required') ||
-      errorMessage.includes('403')
-    ) {
+  // A 403 (entitlement) or 402 (payment required) means the user isn't allowed
+  // to do this on their plan — always surface the paywall. 403s come through as
+  // a `FORBIDDEN` code; older paths may still report them as `HTTP_ERROR` with
+  // the status/reason in the message, so check both.
+  return result.error.some((error) => {
+    if (error.code === 'FORBIDDEN') {
       return true;
     }
-  }
-
-  return false;
+    if (error.code === 'HTTP_ERROR') {
+      return (
+        error.message.includes('402') ||
+        error.message.includes('payment_required') ||
+        error.message.includes('403')
+      );
+    }
+    return false;
+  });
 }

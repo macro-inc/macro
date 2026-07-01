@@ -120,6 +120,8 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
 
 const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
 
+const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
+
 fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
@@ -877,8 +879,10 @@ impl<
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        if args.document_name.graphemes(true).count() > 100 {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+        if args.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
         }
 
         let file_type = args.file_type;
@@ -1013,9 +1017,11 @@ impl<
         args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
         if let Some(name) = args.document_name.as_ref()
-            && name.graphemes(true).count() > 100
+            && name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES
         {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
         }
 
         // Check owner-only restrictions for authenticated users
@@ -1142,8 +1148,10 @@ impl<
     ) -> Result<DocumentResponse, DocumentError> {
         use model::document::response::DocumentResponseMetadata;
 
-        if document_name.graphemes(true).count() > 100 {
-            return Err(DocumentError::BadRequest("name too long".to_string()));
+        if document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
         }
 
         if document_context.deleted_at.is_some() {

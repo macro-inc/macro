@@ -21,7 +21,7 @@ struct EntityPropertyRow {
     property_definition_id: Uuid,
     entity_property_created_at: chrono::DateTime<chrono::Utc>,
     entity_property_updated_at: chrono::DateTime<chrono::Utc>,
-    definition_organization_id: Option<i32>,
+    definition_team_id: Option<Uuid>,
     definition_user_id: Option<String>,
     display_name: String,
     data_type: DataType,
@@ -38,7 +38,7 @@ fn row_to_entity_property_with_definition(
     row: EntityPropertyRow,
 ) -> Result<EntityPropertyWithDefinition> {
     let owner = models_properties::PropertyOwner::from_optional_ids(
-        row.definition_organization_id,
+        row.definition_team_id,
         row.definition_user_id,
         row.definition_is_system,
     );
@@ -191,7 +191,7 @@ async fn attach_property_options(
         .filter(|p| {
             matches!(
                 p.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             )
         })
         .map(|p| p.definition.id)
@@ -209,7 +209,7 @@ async fn attach_property_options(
     for property in properties {
         let is_select_type = matches!(
             property.definition.data_type,
-            DataType::SelectString | DataType::SelectNumber
+            DataType::SelectString | DataType::SelectNumber | DataType::Tag
         );
 
         if is_select_type {
@@ -241,7 +241,7 @@ async fn attach_property_options_bulk(
         .filter(|p| {
             matches!(
                 p.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             )
         })
         .map(|p| p.definition.id)
@@ -258,7 +258,7 @@ async fn attach_property_options_bulk(
         for property in properties.iter_mut() {
             let is_select_type = matches!(
                 property.definition.data_type,
-                DataType::SelectString | DataType::SelectNumber
+                DataType::SelectString | DataType::SelectNumber | DataType::Tag
             );
             if is_select_type {
                 let options = options_map
@@ -322,7 +322,7 @@ SELECT
     ep.values as "values: sqlx::types::JsonValue",
     ep.created_at as entity_property_created_at,
     ep.updated_at as entity_property_updated_at,
-    pd.organization_id as definition_organization_id,
+    pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
@@ -351,7 +351,7 @@ WHERE ep.entity_id = $1 AND ep.entity_type = $2
                 property_definition_id: row.property_definition_id,
                 entity_property_created_at: row.entity_property_created_at,
                 entity_property_updated_at: row.entity_property_updated_at,
-                definition_organization_id: row.definition_organization_id,
+                definition_team_id: row.definition_team_id,
                 definition_user_id: row.definition_user_id,
                 display_name: row.display_name,
                 data_type: row.data_type,
@@ -400,7 +400,7 @@ SELECT
     ep.values as "values: sqlx::types::JsonValue",
     ep.created_at as entity_property_created_at,
     ep.updated_at as entity_property_updated_at,
-    pd.organization_id as definition_organization_id,
+    pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
@@ -434,7 +434,7 @@ WHERE (ep.entity_id, ep.entity_type) IN (
             property_definition_id: row.property_definition_id,
             entity_property_created_at: row.entity_property_created_at,
             entity_property_updated_at: row.entity_property_updated_at,
-            definition_organization_id: row.definition_organization_id,
+            definition_team_id: row.definition_team_id,
             definition_user_id: row.definition_user_id,
             display_name: row.display_name,
             data_type: row.data_type,
@@ -500,7 +500,7 @@ SELECT
     ep.values as "values: sqlx::types::JsonValue",
     ep.created_at as entity_property_created_at,
     ep.updated_at as entity_property_updated_at,
-    pd.organization_id as definition_organization_id,
+    pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
@@ -535,7 +535,7 @@ AND pd.id = ANY($3::UUID[])
             property_definition_id: row.property_definition_id,
             entity_property_created_at: row.entity_property_created_at,
             entity_property_updated_at: row.entity_property_updated_at,
-            definition_organization_id: row.definition_organization_id,
+            definition_team_id: row.definition_team_id,
             definition_user_id: row.definition_user_id,
             display_name: row.display_name,
             data_type: row.data_type,

@@ -10,10 +10,7 @@ mod test;
 
 use crate::schema::error::ValidationError;
 use crate::schema::frontend_typegen::FrontendSchemasBuilder;
-use crate::schema::transform::{
-    AddRequired, AdditionalPropertiesFalse, NormaliseRefSiblings, NullifyOptional, OneOfToAnyOf,
-    StripUnsupported,
-};
+use crate::schema::transform::{NormaliseRefSiblings, OneOfToAnyOf, StripUnsupported};
 use crate::schema::validate::validate_tool_schema;
 use schemars::Schema;
 use schemars::generate::SchemaSettings;
@@ -62,9 +59,6 @@ pub fn generate_validated_input_schema<T: schemars::JsonSchema>()
         })
         .with_transform(RecursiveTransform(OneOfToAnyOf))
         .with_transform(RecursiveTransform(StripUnsupported))
-        .with_transform(RecursiveTransform(NullifyOptional))
-        .with_transform(RecursiveTransform(AddRequired))
-        .with_transform(RecursiveTransform(AdditionalPropertiesFalse))
         .into_generator()
         .into_root_schema_for::<T>();
     let (name, description) = validate_tool_schema(&schema)?;

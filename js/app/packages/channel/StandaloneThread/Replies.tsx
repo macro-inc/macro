@@ -40,9 +40,16 @@ export function Replies(props: RepliesProps) {
   const shouldShowCollapsedIndicator = () =>
     !ctx.isReplying() && !ctx.isExpanded() && collapsedRepliesCount() > 0;
 
+  const replyAction = () => {
+    const parent = ctx.parent();
+    if (!parent) return undefined;
+    return props.getMessageActions?.(parent)?.onReply;
+  };
+
   const shouldShowReplyButton = () =>
     !!props.showReplyButton &&
     ctx.hasReplies() &&
+    !!replyAction() &&
     !ctx.isReplying() &&
     !shouldShowCollapsedIndicator();
 
@@ -89,15 +96,18 @@ export function Replies(props: RepliesProps) {
                       <Show when={!meta()?.isGroupedWithPrevious}>
                         <Message.Slot
                           placement="header"
-                          class="flex items-center gap-1 min-w-0"
+                          class="flex flex-col gap-0.5 min-w-0"
                         >
-                          <Message.SenderName />
-                          <Message.AgentBadge />
-                          <Message.EditedIndicator />
-                          <Message.Timestamp
-                            class="ml-auto shrink-0"
-                            format="dateAndTime"
-                          />
+                          <div class="flex items-center gap-1 min-w-0">
+                            <Message.SenderName />
+                            <Message.AgentBadge />
+                            <Message.EditedIndicator />
+                            <Message.Timestamp
+                              class="ml-auto shrink-0"
+                              format="dateAndTime"
+                            />
+                          </div>
+                          <Message.FromPill />
                         </Message.Slot>
                       </Show>
                       <Message.Slot placement="content">
@@ -134,7 +144,11 @@ export function Replies(props: RepliesProps) {
               <Show when={shouldShowReplyButton()}>
                 <Thread.ReplyButton
                   getFocusTarget={() => null}
-                  onClick={() => ctx.setIsReplying(true)}
+                  onClick={(event) => {
+                    const parent = ctx.parent();
+                    if (!parent) return;
+                    replyAction()?.({ message: parent, event });
+                  }}
                   aria-label="Reply"
                 />
               </Show>

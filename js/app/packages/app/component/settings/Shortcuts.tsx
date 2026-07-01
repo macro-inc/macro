@@ -2,8 +2,8 @@ import { createSignal, For, Index, createMemo, type JSX } from 'solid-js';
 import { IS_MAC } from '@core/constant/isMac';
 import { enableScreencastHotkeys, setEnableScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import { Hotkey, ToggleSwitch } from '@ui';
-import { Panel } from '@ui';
 import { cn } from '@ui';
+import { SettingsCard, SettingsPage } from './primitives';
 
 interface ShortcutItem {
   description: JSX.Element;
@@ -264,8 +264,8 @@ function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
 
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
-    <div class="mb-3">
-      <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
+    <div class="mb-4">
+      <h3 class="text-[15px] font-semibold text-ink mb-1.5 flex items-center gap-2">
         {props.section.title}
       </h3>
       <div class="flex flex-col">
@@ -277,59 +277,46 @@ function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   );
 }
 
-function ShortcutsContent() {
+export function Shortcuts() {
   return (
-    <>
-      <Panel.Header class="px-6">
-        <div class="text-sm font-semibold">Keyboard Shortcuts</div>
-        <div class="flex items-center gap-2 ml-auto">
-          <span class="text-sm text-ink-muted">Screencast Keys</span>
+    <SettingsPage
+      title="Keyboard shortcuts"
+      actions={
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-ink-muted">Screencast keys</span>
           <ToggleSwitch
+            size="md"
             onChange={setEnableScreencastHotkeys}
             checked={enableScreencastHotkeys()}
           />
         </div>
-      </Panel.Header>
-
-      <Panel.Toolbar class="h-full px-6 py-2">
+      }
+    >
+      <SettingsCard class="px-5 py-4">
         <Keyboard keys={hoveredCodes()} />
-      </Panel.Toolbar>
+      </SettingsCard>
 
-      <Panel.Body scroll>
-        <div class="px-6 py-2 @container">
-          <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
-            {/* Core - left column */}
-            <ShortcutSectionComponent section={shortcutSections[0]} />
+      <div class="@container">
+        <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
+          {/* Core - left column */}
+          <ShortcutSectionComponent section={shortcutSections[0]} />
 
-            {/* Splits - right column */}
-            <ShortcutSectionComponent section={shortcutSections[1]} />
+          {/* Splits - right column */}
+          <ShortcutSectionComponent section={shortcutSections[1]} />
 
-            {/* Unified List - spans both columns with its own 2-column layout */}
-            <div class="@[600px]:col-span-2">
-              <h3 class="font-medium text-lg mb-2 flex items-center gap-2">
-                {shortcutSections[2].title}
-              </h3>
-              <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-6">
-                <For each={shortcutSections[2].items}>
-                  {(item) => <ShortcutRow item={item} spacer="or" />}
-                </For>
-              </div>
+          {/* Unified List - spans both columns with its own 2-column layout */}
+          <div class="@[600px]:col-span-2">
+            <h3 class="text-[15px] font-semibold text-ink mb-1.5 flex items-center gap-2">
+              {shortcutSections[2].title}
+            </h3>
+            <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
+              <For each={shortcutSections[2].items}>
+                {(item) => <ShortcutRow item={item} spacer="or" />}
+              </For>
             </div>
           </div>
         </div>
-      </Panel.Body>
-    </>
-  );
-}
-
-export function Shortcuts() {
-  return (
-    <div class="h-full overflow-hidden flex justify-center p-2">
-      <div class="max-w-200 size-full">
-        <Panel depth={2} class="h-full overflow-hidden text-ink">
-          <ShortcutsContent />
-        </Panel>
       </div>
-    </div>
+    </SettingsPage>
   );
 }

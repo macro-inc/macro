@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "agent",
   "ai_projections",
+  "ai_projections_refresh_handler",
   "ai_usage",
   "authentication_service",
   "backfill_entity_access",
@@ -58,9 +59,13 @@ members = [
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config",
+  "macro_event_broker",
+  "macro_event_topics",
+  "macro_queues",
   "prompt",
   "workspace-hack",
   "tools/xtask",
+  "graphql_soup",
 ]
 
 [workspace.dependencies]
@@ -72,6 +77,7 @@ async-openai = { version = "0.36.1", features = [
   "completions",
   "embedding",
 ] }
+async-graphql = "7.2.1"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
@@ -105,6 +111,7 @@ http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
 inquire = "0.7"
+indexmap = "2"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",
@@ -119,6 +126,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 ] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
+lol_html = "2.4.0"
 mockall = "0.13"
 nom = "8"
 opentelemetry = "0.31.0"
@@ -136,6 +144,10 @@ pdfium-render = { version = "0.8.37", default-features = false, features = ["pdf
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 quote = "1"
 rand = "0.9.0"
+rdkafka = { version = "0.37", default-features = false, features = [
+  "dynamic-linking",
+  "tokio",
+] }
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"

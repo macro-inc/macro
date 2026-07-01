@@ -39,6 +39,8 @@ pub async fn handle_non_retryable_error(
             handle_message_failure(ctx, scope).await;
         }
         BackfillOperation::BackfillAttachment(_) => {}
+        // Best-effort side seed — a failure must not fail the backfill job.
+        BackfillOperation::SeedSentContact(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
         BackfillOperation::DepopulateCrmContact(_) => {}
         BackfillOperation::PopulateCrmForUser(_) => {}
@@ -136,6 +138,12 @@ pub async fn handle_retryable_error(
             tracing::debug!(
                 attachment_db_id = %scope.payload.metadata.attachment_metadata.attachment_db_id,
                 "Retryable error backfilling attachment"
+            )
+        }
+        BackfillOperation::SeedSentContact(scope) => {
+            tracing::debug!(
+                message_id = %scope.payload.message_provider_id,
+                "Retryable error seeding contact from sent message"
             )
         }
         BackfillOperation::PopulateCrmContact(scope) => {

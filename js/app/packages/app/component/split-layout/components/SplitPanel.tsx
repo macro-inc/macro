@@ -24,6 +24,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import {
   type SplitBottomPanelRegistration,
+  type SplitFileMenuActionGroups,
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
@@ -50,6 +51,12 @@ export function SplitPanel(props: SplitPanelProps) {
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [titleFileMenuRef, setTitleFileMenuRef] =
+    createSignal<HTMLDivElement>();
+  const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
+    createSignal<() => void>();
+  const [titleFileMenuActions, setTitleFileMenuActions] =
+    createSignal<SplitFileMenuActionGroups>();
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
@@ -121,15 +128,11 @@ export function SplitPanel(props: SplitPanelProps) {
     onCleanup(() => observer.disconnect());
   });
 
-  const offsetTop = createMemo(() => {
-    // Full-frame mobile: panels start at the screen edge, so anything that
-    // offsets from the panel top (drawers, content insets) must clear the
-    // status bar as well as the header.
+  createEffect(() => {
     const safeTop = isMobile() ? getSafeAreaInset('top') : 0;
     const offset =
       safeTop + (headerSize.height ?? 0) + (toolbarSize.height ?? 0);
     setContentOffsetTop(offset);
-    return offset;
   });
 
   function multipleSplits() {
@@ -162,11 +165,17 @@ export function SplitPanel(props: SplitPanelProps) {
           },
           headerCollapser,
           layoutRefs,
+          titleFileMenuRef,
+          setTitleFileMenuRef,
+          titleFileMenuTrigger,
+          setTitleFileMenuTrigger,
+          titleFileMenuActions,
+          setTitleFileMenuActions,
           panelSize,
           panelRef,
         }}
       >
-        <SplitDrawerGroup contentOffsetTop={offsetTop} panelSize={panelSize}>
+        <SplitDrawerGroup panelSize={panelSize}>
           <Show when={props.handle.isSpotLight()}>
             <div
               class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
@@ -213,7 +222,7 @@ export function SplitPanel(props: SplitPanelProps) {
             >
               <Panel.Header
                 class={cn(
-                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
+                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
                   // On mobile the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
                   'mobile:min-h-0 mobile:border-b-0',

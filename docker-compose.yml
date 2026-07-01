@@ -9,8 +9,12 @@ include:
   - infra/stacks/fusionauth-instance/docker-compose.yml
 
 x-common-env: &common-env
+  # The xtask orchestrator points this at a per-instance generated env file via
+  # MACRO_ENV_FILE (run-local/run-dev). Defaults to .env for any legacy/manual
+  # `docker compose` invocation, and is optional so a missing file is not fatal.
   env_file:
-    - .env
+    - path: ${MACRO_ENV_FILE:-.env}
+      required: false
 
 x-rust-services-image: &rust-services-image
   image: macro-local-rust-services:dev
@@ -203,6 +207,27 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # email_pubsub_workers (local worker)
+  # Consumes the email SQS queues (backfill, scheduled, gmail sync/ops, sfs,
+  # link manager). Runs as its own deployment in prod; locally it's its own
+  # container alongside email_service. No HTTP port — pure SQS consumer.
+  # ============================================================================
+  email_pubsub_workers:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/pubsub_workers"]
+    depends_on:
+      - postgres
+      - redis
+      - authentication-service
+      - document_storage_service
+      - connection_gateway
+      - static_file_service
+      - email_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -211,6 +236,8 @@ services:
     command: ["/app/out/notification_service"]
     ports:
       - "8089:8080"
+    environment:
+      LAST_ONLINE_REDIS_URI: ${LAST_ONLINE_REDIS_URI:-${REDIS_URI:-redis://redis:6379}}
     depends_on:
       - redis
       - document_cognition_service
@@ -396,6 +423,12 @@ services:
       - "8096:8096"
     depends_on:
       - sync_service
+    # Bundle the entry before running. Executing the unbundled TS directly under
+    # Bun evaluates the circular @lexical/* ESM imports in an order that triggers
+    # a TDZ ("Cannot access 'HeadingNode'/'ElementNode' before initialization");
+    # bundling hoists/orders the declarations and resolves it (matching how the
+    # worker is run normally — wrangler/esbuild bundles it first).
+    command: ["sh", "-c", "bun build src/server.ts --target=bun --outfile=/tmp/server.js && exec bun /tmp/server.js"]
     environment:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}

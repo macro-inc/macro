@@ -16,7 +16,6 @@ interface ISplitDrawerContext {
   closeDrawer: (id: string) => boolean;
   isDrawerOpen: (id: string) => boolean;
   panelSize: NullableSize;
-  contentOffsetTop: Accessor<number>;
 }
 
 const SplitDrawerContext = createContext<ISplitDrawerContext>();
@@ -24,7 +23,6 @@ const SplitDrawerContext = createContext<ISplitDrawerContext>();
 export function SplitDrawerGroup(
   props: ParentProps<{
     panelSize: NullableSize;
-    contentOffsetTop: Accessor<number>;
   }>
 ) {
   const [currentDrawer, setCurrentDrawer] = createSignal<string | null>(null);
@@ -63,7 +61,6 @@ export function SplitDrawerGroup(
         closeDrawer,
         isDrawerOpen,
         panelSize: props.panelSize,
-        contentOffsetTop: props.contentOffsetTop,
       }}
     >
       {props.children}

@@ -2,10 +2,23 @@
 
 use crate::domain::models::{
     ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
-    MutatedMessage, Sender, SimpleMention, TypingAction,
+    MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention, TypingAction,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
+
+/// Notification context for a patched message that should notify like a new post.
+#[derive(Debug, Clone)]
+pub struct MessageChangedNotificationContext {
+    /// Resolved channel metadata for downstream notifications.
+    pub metadata: ChannelMetadata,
+    /// Active channel participants at mutation time.
+    pub participants: Vec<ChannelParticipant>,
+    /// Mentions to use for notification routing.
+    pub mentions: Vec<SimpleMention>,
+    /// Whether the message contains attachments after the patch.
+    pub has_attachments: bool,
+}
 
 /// Events emitted after durable channel state changes.
 #[derive(Debug, Clone)]
@@ -46,6 +59,8 @@ pub enum ChannelEvent {
         attachments: Vec<MutatedAttachment>,
         /// Client mutation nonce echoed to realtime listeners.
         nonce: Option<String>,
+        /// Internal notification policy for this post.
+        notification_policy: PostMessageNotificationPolicy,
     },
     /// Message attachments changed.
     AttachmentsChanged {
@@ -74,6 +89,8 @@ pub enum ChannelEvent {
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Client mutation nonce echoed to realtime listeners.
         nonce: Option<String>,
+        /// Optional notification context when this patch should notify like a new post.
+        posted_notification: Option<MessageChangedNotificationContext>,
     },
     /// Message tombstone state changed.
     MessageDeleted {
