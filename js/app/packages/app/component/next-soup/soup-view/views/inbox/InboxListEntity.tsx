@@ -1,4 +1,5 @@
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { useChannelsContext } from '@core/context/channels';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { createMemo } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
@@ -18,9 +19,18 @@ import { scopeThreadNotifications } from './utils';
 export function InboxListEntity(props: BaseListEntityProps) {
   const soup = useSoup();
   const expansion = useInboxExpansion();
-  const item = createMemo(() =>
-    toInboxCardDisplayItem(scopeThreadNotifications(props.entity))
-  );
+  const channels = useChannelsContext();
+
+  // A channel_thread soup entity comes back with a generic name ("Channel
+  // thread"), so resolve the real channel name for the row's location label.
+  const entity = createMemo(() => {
+    const scoped = scopeThreadNotifications(props.entity);
+    if (scoped.type !== 'channel_thread') return scoped;
+    const name = channels.channelsById()[scoped.channelId]?.name;
+    return name ? { ...scoped, name } : scoped;
+  });
+
+  const item = createMemo(() => toInboxCardDisplayItem(entity()));
   const selected = () => soup.previewEntity() === props.entity.id;
 
   return (
