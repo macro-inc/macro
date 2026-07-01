@@ -535,8 +535,9 @@ async function createIndices() {
       aliasName: CHANNELS_ALIAS,
       body: CHANNEL_BODY,
     });
-    // chats and call_records use parent/child join mappings; bodies live in
-    // their dedicated scripts. Idempotent — no-ops where they already exist.
+    // chats and call_records use parent/child join mappings (bodies inlined
+    // above as CHATS_V2_BODY / CALL_RECORDS_V2_BODY). Idempotent — no-ops where
+    // they already exist.
     await createIndexWithAlias(opensearchClient, {
       indexName: CHATS_INDEX,
       aliasName: CHATS_ALIAS,
