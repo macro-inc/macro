@@ -23,7 +23,7 @@ const INDEX = 'chats_v2';
 const RELATION_PARENT = 'chat';
 const RELATION_CHILD = 'message';
 
-const BODY = {
+export const CHATS_V2_BODY = {
   settings: {
     ...SHARD_SETTINGS,
     ...SLOWLOG_SETTINGS,
@@ -72,11 +72,13 @@ async function run() {
     return;
   }
   console.log(`Creating ${INDEX} (no alias)`);
-  await c.indices.create({ index: INDEX, body: BODY });
+  await c.indices.create({ index: INDEX, body: CHATS_V2_BODY });
   console.log(`${INDEX} created`);
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

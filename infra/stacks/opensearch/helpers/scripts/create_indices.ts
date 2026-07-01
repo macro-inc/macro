@@ -1,14 +1,20 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
+  CALL_RECORDS_ALIAS,
+  CALL_RECORDS_INDEX,
   CHANNELS_ALIAS,
   CHANNELS_INDEX,
+  CHATS_ALIAS,
+  CHATS_INDEX,
   DOCUMENTS_ALIAS,
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
   EMAILS_INDEX,
   SHARD_SETTINGS,
 } from '../constants';
+import { CALL_RECORDS_V2_BODY } from './create_call_records_v2';
+import { CHATS_V2_BODY } from './create_chats_v2';
 
 type CreateIndexArgs = {
   indexName: string;
@@ -421,8 +427,6 @@ async function createIndices() {
       aliasName: DOCUMENTS_ALIAS,
       body: DOCUMENT_BODY,
     });
-    // chats and call_records use parent/child join mappings and are
-    // created by create_chats_v2.ts / create_call_records_v2.ts.
     await createIndexWithAlias(opensearchClient, {
       indexName: EMAILS_INDEX,
       aliasName: EMAILS_ALIAS,
@@ -432,6 +436,18 @@ async function createIndices() {
       indexName: CHANNELS_INDEX,
       aliasName: CHANNELS_ALIAS,
       body: CHANNEL_BODY,
+    });
+    // chats and call_records use parent/child join mappings; bodies live in
+    // their dedicated scripts. Idempotent — no-ops where they already exist.
+    await createIndexWithAlias(opensearchClient, {
+      indexName: CHATS_INDEX,
+      aliasName: CHATS_ALIAS,
+      body: CHATS_V2_BODY,
+    });
+    await createIndexWithAlias(opensearchClient, {
+      indexName: CALL_RECORDS_INDEX,
+      aliasName: CALL_RECORDS_ALIAS,
+      body: CALL_RECORDS_V2_BODY,
     });
     console.log('done');
   } catch (error) {

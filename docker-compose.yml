@@ -263,19 +263,15 @@ services:
   # Search indexing worker
   # ============================================================================
   search_processing_service:
-    profiles:
-      - processors
-    <<: *common-env
-    # Pinned because search_processing_service/pdfium-lib/linux/libpdfium.so is amd64-only;
-    # on Apple Silicon this forces QEMU emulation for build and runtime.
-    platform: linux/amd64
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.search_processing_service.dev
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/search_processing_service"]
     ports:
       - "8092:8080"
+    environment:
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
     depends_on:
       - email_service
+      - lexical_service
     networks:
       databases:
       services:

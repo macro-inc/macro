@@ -24,7 +24,7 @@ const INDEX = 'call_records_v2';
 const RELATION_PARENT = 'call';
 const RELATION_CHILD = 'segment';
 
-const BODY = {
+export const CALL_RECORDS_V2_BODY = {
   settings: {
     ...SHARD_SETTINGS,
     ...SLOWLOG_SETTINGS,
@@ -79,11 +79,13 @@ async function run() {
     return;
   }
   console.log(`Creating ${INDEX} (no alias)`);
-  await c.indices.create({ index: INDEX, body: BODY });
+  await c.indices.create({ index: INDEX, body: CALL_RECORDS_V2_BODY });
   console.log(`${INDEX} created`);
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  run().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
