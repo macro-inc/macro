@@ -62,6 +62,12 @@ pub struct SendEmail {
     /// sent as a reply within the same thread.
     #[serde(default)]
     pub replying_to_id: Option<Uuid>,
+    /// Per-message signature override, set by the composer's signature preview —
+    /// not normally by you. Omit to use the inbox's default policy (always on a
+    /// new email; on replies/forwards only when the user enabled it). `false`
+    /// excludes the signature for this one email.
+    #[serde(default)]
+    pub include_signature: Option<bool>,
 }
 
 /// Response from the SendEmail tool.
@@ -120,6 +126,9 @@ where
             body_macro: None,
             headers_json: None,
             send_time: None,
+            // Composer override when present; otherwise None lets the backend
+            // apply the default signature policy.
+            include_signature: self.include_signature,
         };
 
         let sent = service_context

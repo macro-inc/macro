@@ -1,6 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { cn, Layer } from '@ui';
-import { type ParentProps, Show } from 'solid-js';
+import { type ComponentProps, Show, splitProps } from 'solid-js';
 
 /**
  * Marks an island boundary inside a SplitHeader contribution. Every header
@@ -15,18 +15,21 @@ import { type ParentProps, Show } from 'solid-js';
  *
  * Note: crossing the mobile breakpoint remounts children.
  */
-export function HeaderIsland(props: ParentProps<{ class?: string }>) {
+export function HeaderIsland(props: ComponentProps<'div'>) {
+  const [local, rest] = splitProps(props, ['class', 'children']);
+
   return (
-    <Show when={isMobile()} fallback={props.children}>
+    <Show when={isMobile()} fallback={local.children}>
       <Layer depth={3}>
         <div
+          {...rest}
           data-header-island
           class={cn(
             'island pointer-events-auto flex h-10 min-w-0 shrink-0 items-center gap-1 rounded-full px-3 empty:hidden',
-            props.class
+            local.class
           )}
         >
-          {props.children}
+          {local.children}
         </div>
       </Layer>
     </Show>

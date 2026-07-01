@@ -187,6 +187,52 @@ where
         Ok(customer_subscription_id)
     }
 
+    /// Backfills legacy teams that were created without a team subscription id.
+    #[tracing::instrument(skip(self), err)]
+    async fn backfill_legacy_team_subscription(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<(), GetTeamSubscriptionError> {
+        let team_owner = self
+            .team_repository
+            .get_team_by_id(team_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .team
+            .owner_id;
+
+        let customer_id = self
+            .team_repository
+            .get_stripe_customer_id(&team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?
+            .ok_or(CustomerError::NoStripeCustomerId)
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        let subscription_id = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.customer_repository
+            .convert_subscription_to_team(&subscription_id, team_id, &team_owner)
+            .await
+            .map_err(GetTeamSubscriptionError::Customer)?;
+
+        self.team_repository
+            .update_team_subscription(team_id, &subscription_id)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        self.team_repository
+            .update_team_payment_status(team_id, true)
+            .await
+            .map_err(GetTeamSubscriptionError::Team)?;
+
+        Ok(())
+    }
+
     /// Sends an invite notification for a team invite
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
@@ -226,6 +272,14 @@ enum GetTeamSubscriptionError {
 }
 
 impl GetTeamSubscriptionError {
+    fn into_invite_users_to_team_error(self) -> InviteUsersToTeamError {
+        match self {
+            Self::Team(e) => InviteUsersToTeamError::TeamError(e),
+            Self::Customer(e) => InviteUsersToTeamError::CustomerError(e),
+            Self::Storage(e) => InviteUsersToTeamError::StorageLayerError(e),
+        }
+    }
+
     fn into_join_team_error(self) -> JoinTeamError {
         match self {
             Self::Team(e) => JoinTeamError::TeamError(e),
@@ -285,13 +339,21 @@ where
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> Result<Team, CreateTeamError> {
         // New teams start with `team_crm_settings.crm_enabled = false`
         // (seeded by `team_repository.create_team`), so there's nothing
         // for the email-backfill fan-out to populate yet. The fan-out
         // happens later, on the disabled → enabled transition in
         // `set_team_crm_enabled`.
-        let team = self.team_repository.create_team(user_id, team_name).await?;
+        let team = self
+            .team_repository
+            .create_team(user_id, team_name, subscription_id)
+            .await?;
+        self.customer_repository
+            .convert_subscription_to_team(subscription_id, team.id(), user_id)
+            .await
+            .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?;
         self.team_repository
             .move_github_app_installation_to_team_if_exists(user_id, team.id())
             .await?;
@@ -299,9 +361,12 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn is_user_premium(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+    async fn is_user_premium(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
         let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
-            return Ok(false);
+            return Ok(None);
         };
 
         match self
@@ -309,9 +374,9 @@ where
             .get_subscription_id_for_customer(&customer_id)
             .await
         {
-            Ok(_) => Ok(true),
+            Ok(subscription_id) => Ok(Some(subscription_id)),
             Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
-                Ok(false)
+                Ok(None)
             }
             Err(e) => Err(TeamError::StorageLayerError(e.into())),
         }
@@ -331,7 +396,19 @@ where
             .get_team_payment_status(&team_id)
             .await?
         {
-            return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+                .is_some()
+            {
+                return Err(InviteUsersToTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            self.backfill_legacy_team_subscription(&team_id)
+                .await
+                .map_err(GetTeamSubscriptionError::into_invite_users_to_team_error)?;
         }
 
         let invited_by = entity_access_receipt
@@ -651,7 +728,14 @@ where
             .get_team_payment_status(&team_member.team_id)
             .await?
         {
-            self.team_repository
+            // If the team has a subscription id and they are set to not paying continue to error
+            if self
+                .team_repository
+                .get_team_subscription_id(&accepted_invite.member.team_id)
+                .await?
+                .is_some()
+            {
+                self.team_repository
                     .rollback_accept_team_invite(&accepted_invite)
                     .await
                     .inspect_err(|rollback_err| {
@@ -661,7 +745,25 @@ where
                         );
                     })
                     .ok();
-            return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+                return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying));
+            }
+
+            if let Err(e) = self
+                .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
+                .await
+            {
+                self.team_repository
+                    .rollback_accept_team_invite(&accepted_invite)
+                    .await
+                    .inspect_err(|rollback_err| {
+                        tracing::error!(
+                            error=?rollback_err,
+                            "unable to rollback accepted team invite after backfilling team subscription failed"
+                        );
+                    })
+                    .ok();
+                return Err(e.into_join_team_error());
+            }
         }
 
         let subscription_id = match self.get_team_subscription(&team_member.team_id).await {

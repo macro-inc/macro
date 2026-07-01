@@ -35,6 +35,10 @@ pub struct CreateDraftInput {
     pub headers_json: Option<JsonValue>,
     /// Scheduled send time.
     pub send_time: Option<DateTime<Utc>>,
+    /// Per-message override for signature inclusion: `Some(false)` to exclude
+    /// (the user dismissed it), `Some(true)` to force-include, `None` to apply
+    /// the inbox's default policy. Only consulted on send (ignored for drafts).
+    pub include_signature: Option<bool>,
 }
 
 /// A draft input with all IDs resolved, ready for database insertion.

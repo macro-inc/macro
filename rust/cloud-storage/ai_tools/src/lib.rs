@@ -11,6 +11,7 @@ mod display_results;
 mod schemas;
 pub mod search;
 mod search_tools;
+mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
@@ -27,6 +28,7 @@ use notification::inbound::ai_tool::notification_toolset;
 use properties::inbound::toolset::properties_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
+use self_knowledge::SelfKnowledge;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
@@ -42,15 +44,16 @@ pub use tool_context::{
     NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
     TaskPropertiesAdapter, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
-    ToolChannelMessagesService, ToolChannelToolContext, ToolChatService, ToolChatToolContext,
-    ToolCommsService, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolForeignEntityService, ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
+    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
+    ToolChatService, ToolChatToolContext, ToolCommsService, ToolDocumentService,
+    ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolForeignEntityService,
+    ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
     ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
-    build_properties_service, build_properties_tool_context, build_task_properties_adapter,
-    build_team_tool_context,
+    build_channel_tool_context_with_dispatcher, build_properties_service,
+    build_properties_tool_context, build_task_properties_adapter, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -73,6 +76,7 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
 pub(crate) fn subagent_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
+        .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())

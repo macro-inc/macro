@@ -104,7 +104,9 @@ const FIELD_CONFIG: Record<
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
+  channelMessageThreadId: { target: 'chanf', field: 'ThreadId' },
   channelThreadId: { target: 'cthf', field: 'ThreadId' },
+  channelThreadRootSenderId: { target: 'cthf', field: 'RootSender' },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
@@ -384,10 +386,13 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
-  // Channel-thread soup items are not displayable in the frontend. Always
-  // exclude them at the AST layer so hidden rows do not consume page limits or
-  // grouped counts.
-  result.cthf ??= AST.literal('ThreadId', NIL_UUID);
+  // Unless explicitly includes/excluded, channel threads are excluded by default
+  if (
+    !('channelThreadId' in state.include) &&
+    !('channelThreadId' in state.exclude)
+  ) {
+    result.cthf ??= AST.literal('ThreadId', NIL_UUID);
+  }
 
   if (state.emailView) {
     result.emailView = state.emailView;

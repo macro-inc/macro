@@ -72,6 +72,7 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
+    .with({ type: 'channel_thread' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {

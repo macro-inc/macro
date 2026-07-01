@@ -1,7 +1,7 @@
 use crate::pubsub::backfill::{
     backfill_attachment, backfill_message, backfill_thread, depopulate_crm_contact,
     depopulate_crm_for_user, error_handlers, init, list_threads, populate_crm_contact,
-    populate_crm_for_user, update_metadata,
+    populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use crate::util::gmail::auth::fetch_token_or_mark_reauth;
@@ -129,6 +129,15 @@ async fn inner_process_message(
             };
             backfill_attachment::backfill_attachment(ctx, &access_token, &link, &scope.payload)
                 .await
+        }
+        BackfillOperation::SeedSentContact(scope) => {
+            let Some(JobContext {
+                link, access_token, ..
+            }) = fetch_job_context(ctx, scope).await?
+            else {
+                return Ok(());
+            };
+            seed_sent_contact::seed_sent_contact(ctx, &access_token, scope, &link).await
         }
         BackfillOperation::PopulateCrmContact(scope) => {
             let link = fetch_link(ctx, scope.link_id).await?;

@@ -154,4 +154,58 @@ describe('layoutManager', () => {
       });
     });
   });
+
+  describe('indexed insertion', () => {
+    it('creates a split at the requested index', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'left' },
+          { type: 'md', id: 'right' },
+        ]);
+
+        const inserted = manager.createNewSplit({
+          content: { type: 'component', id: 'unified-list' },
+          activate: true,
+          referredFrom: null,
+          insertIndex: 1,
+        });
+
+        expect(manager.splits().map((split) => split.content.id)).toEqual([
+          'left',
+          'unified-list',
+          'right',
+        ]);
+        expect(manager.activeSplitId()).toBe(inserted.id);
+
+        dispose();
+      });
+    });
+
+    it('opens duplicate content at the requested index when duplicates are allowed', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'unified-list' },
+          { type: 'md', id: 'current' },
+        ]);
+
+        const inserted = manager.openWithSplit(
+          { type: 'component', id: 'unified-list' },
+          {
+            allowDuplicate: true,
+            preferNewSplit: true,
+            insertIndex: 1,
+          }
+        );
+
+        expect(manager.splits().map((split) => split.content.id)).toEqual([
+          'unified-list',
+          'unified-list',
+          'current',
+        ]);
+        expect(manager.activeSplitId()).toBe(inserted?.id);
+
+        dispose();
+      });
+    });
+  });
 });

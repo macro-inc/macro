@@ -77,6 +77,7 @@ use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
+use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -552,6 +553,20 @@ async fn main() -> anyhow::Result<()> {
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let webhook_service = webhook::domain::service::WebhookServiceImpl::new(
+        webhook::outbound::pg_repository::PgRepository::new(db.clone()),
+        webhook::outbound::http_validator::ReqwestWebhookValidationClient::new()
+            .context("failed to create webhook validation client")?,
+    );
+    let webhook_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
+        webhook_service,
+        webhook_rate_limiter,
+    );
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.
@@ -608,16 +623,24 @@ async fn main() -> anyhow::Result<()> {
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
-        SpawnedChannelEventDispatcher::new(channel_side_effects),
+        SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     ));
 
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
+    // Wire the agent's SendChannelMessage tool to the same side-effect pipeline
+    // as the HTTP API, so messages it posts fire notifications and realtime
+    // updates (the generic env builder uses a no-op dispatcher otherwise).
+    macro_agent_tool_context.channel_tool_context =
+        ai_tools::build_channel_tool_context_with_dispatcher(
+            db.clone(),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+        );
     let macro_agent_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
@@ -702,6 +725,7 @@ async fn main() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        webhook_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,

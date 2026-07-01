@@ -3,12 +3,15 @@
 mod read_channel_message_context;
 mod read_channel_messages;
 mod read_channel_thread;
+mod send_channel_message;
 mod types;
 
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::ChannelService;
+use crate::{
+    domain::ports::ChannelService, inbound::toolset::send_channel_message::SendChannelMessage,
+};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use entity_access::domain::{
     models::{AccessError, AccessLevel, EntityType},
@@ -108,4 +111,5 @@ where
         .add_tool::<ReadChannelMessages, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<ReadChannelMessageContext, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<ReadChannelThread, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<SendChannelMessage, ChannelToolContext<Svc, AccessSvc>>()
 }

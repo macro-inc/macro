@@ -20,6 +20,8 @@ pub enum DataType {
     SelectNumber,
     /// Select property with string options.
     SelectString,
+    /// Tag property - user- or team-scoped colored labels (always multi-select).
+    Tag,
     /// Entity reference property.
     Entity,
     /// Link value Property.

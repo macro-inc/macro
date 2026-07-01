@@ -62,6 +62,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -280,14 +281,14 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
-    /// Checks whether the user is a premium user, i.e. has an active
-    /// stripe subscription.
+    /// Returns the user's active stripe subscription id when the user is premium.
     fn is_user_premium(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+    ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send;
 
     /// Invites users to a team
     /// This will also handle the teams subscription.

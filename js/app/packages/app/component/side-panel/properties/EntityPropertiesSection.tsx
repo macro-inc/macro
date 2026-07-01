@@ -1,8 +1,13 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import {
+  ENABLE_TAGS_FE_FLAG,
+  ENABLE_TAGS_FE_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@phosphor/plus.svg';
 import DeleteIcon from '@phosphor/x.svg';
@@ -15,10 +20,12 @@ import {
   usePropertiesContext,
 } from '@property/context/PropertiesContext';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
+import { TagsRow } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -57,6 +64,20 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.includeMetadata ?? false
   );
 
+  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
+    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
+  });
+
+  const tagsQuery = useTagsQuery();
+  const tagDefinitionIds = createMemo(
+    () =>
+      new Set(
+        (tagsQuery.data ?? [])
+          .map((set) => set.definition?.id)
+          .filter((id): id is string => !!id)
+      )
+  );
+
   const filteredPinnedProperties = createMemo(() => {
     const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
     const pinnedIds = props.pinnedPropertyIds?.() ?? [];
@@ -64,6 +85,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       props.defaultPinnedPropertyIds !== undefined ||
       props.pinnedPropertyIds !== undefined;
     const pinned = properties().filter((property) => {
+      if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
       if (props.propertyFilter && !props.propertyFilter(property)) {
         return false;
       }
@@ -168,6 +192,22 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         >
           <Show when={isLoading()}>
             <SidePanel.Loading />
+          </Show>
+
+          <Show
+            when={
+              tagsFlag().enabled &&
+              (props.entityType === 'DOCUMENT' || props.entityType === 'TASK')
+            }
+          >
+            <div class="mb-2 flex items-center gap-3">
+              <span class="text-ink-muted">Tags</span>
+              <TagsRow
+                entityId={props.entityId}
+                entityType={props.entityType}
+                canEdit={props.canEdit}
+              />
+            </div>
           </Show>
 
           <Show when={gridPinnedProperties().length > 0}>

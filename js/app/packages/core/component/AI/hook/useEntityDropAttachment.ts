@@ -78,7 +78,7 @@ export function useEntityDropAttachment(
         entity_id: entityId,
         entity_type: 'project' as EntityType,
       }))
-      .with(P.union('channel', 'channel_message'), () => {
+      .with(P.union('channel', 'channel_message', 'channel_thread'), () => {
         const channelId =
           'channelId' in data ? (data.channelId as string) : entityId;
         return {

@@ -205,6 +205,7 @@ export type ItemType =
   | 'channel'
   | 'email'
   | 'channel_message'
+  | 'channel_thread'
   | 'call'
   | 'automation'
   | 'foreign'
@@ -351,6 +352,9 @@ const enhancements = {
 } as const;
 
 const { showPaywall } = usePaywallState();
+
+/** Machine-readable code the backend returns when a document name is too long. */
+export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
 export const storageServiceClient = {
   async ping() {
@@ -1008,18 +1012,49 @@ export const storageServiceClient = {
   },
 
   async createDocument(request: CreateDocumentRequest) {
-    const result = await dssFetch<CreateDocumentResponse>(`/documents`, {
+    const result = await fetchWithToken<
+      CreateDocumentResponse,
+      typeof DOCUMENT_NAME_TOO_LONG_CODE
+    >(`${dssHost}/documents`, {
       method: 'POST',
       body: JSON.stringify(request),
+      // A custom handler replaces safeFetch's default status mapping. For an
+      // over-length name the backend returns a machine-readable code plus the
+      // limit; forward both (limit carried as JSON in message, since ResultError
+      // is only { code, message }) so the UI can render its own copy without
+      // hardcoding the number. 403 is preserved explicitly; other statuses keep
+      // the HTTP_ERROR shape callers branch on.
+      errorResponseHandler: async (response) => {
+        const body = (await response.json().catch(() => null)) as {
+          code?: string;
+          maxLength?: number;
+        } | null;
+        if (body?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
+          return {
+            code: DOCUMENT_NAME_TOO_LONG_CODE,
+            message: JSON.stringify({ maxLength: body.maxLength }),
+          };
+        }
+        if (response.status === 403) {
+          return { code: 'FORBIDDEN', message: 'Forbidden' };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
     });
 
     if (!result.isOk()) {
-      const errors = result.error;
+      // The DOCUMENT_NAME_TOO_LONG code is carried at runtime for callers to
+      // branch on, but it is not part of the generated client's error union, so
+      // narrow back to it to satisfy StorageServiceClient.
+      const errors = result.error as ResultError<FetchWithTokenErrorCode>[];
 
       if (errors[0].message.includes('403')) {
         showPaywall(PaywallKey.FILE_LIMIT);
       }
-      return err(result.error);
+      return err(errors);
     }
 
     const { data } = result.value;

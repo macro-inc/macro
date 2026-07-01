@@ -20,6 +20,8 @@ use super::TeamRouterState;
 pub struct PremiumUserExtractor {
     /// The authenticated premium user's id.
     pub macro_user_id: MacroUserIdStr<'static>,
+    /// The authenticated premium user's active Stripe subscription id.
+    pub subscription_id: stripe::SubscriptionId,
 }
 
 /// Rejection returned when the premium user check fails.
@@ -72,12 +74,14 @@ where
     ) -> Result<Self, Self::Rejection> {
         let user = MacroUserExtractor::from_request_parts(parts, state).await?;
 
-        if !state.service.is_user_premium(&user.macro_user_id).await? {
+        let Some(subscription_id) = state.service.is_user_premium(&user.macro_user_id).await?
+        else {
             return Err(PremiumUserRejection::NotPremium);
-        }
+        };
 
         Ok(Self {
             macro_user_id: user.macro_user_id,
+            subscription_id,
         })
     }
 }

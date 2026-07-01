@@ -8,10 +8,11 @@ use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use rig_core::message::Message;
-use rig_core::tool::server::ToolServer;
+use rig_core::tool::server::{ToolServer, ToolServerHandle};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 
 const DEFAULT_MAX_TURNS: usize = 16;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
@@ -86,6 +87,39 @@ impl AgentLoop {
     where
         Context: Clone + Send + Sync + 'static,
     {
+        // The frontend selects the model by api id; route it to the provider
+        // that serves it (falling back to the default on unknown / unavailable
+        // ids). The router owns provider-specific agent construction.
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            |handle, prompt, max_turns, max_tokens| {
+                ModelRouter::shared()
+                    .expect("failed to initialize model router")
+                    .agent(&self.model, handle, prompt, max_turns, max_tokens)
+            },
+        )
+        .await
+    }
+
+    /// Like [`Self::session`], but the agent is built by `build` from the live
+    /// tool-server handle and the finalized system prompt. Production routes the
+    /// model through [`ModelRouter`]; tests inject a fake completion model. The
+    /// rest of the per-session wiring (tool adapters, tool search, cancellation
+    /// token) is identical either way.
+    async fn session_with<Context>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: &str,
+        usage_ctx: UsageContext,
+        build: impl FnOnce(ToolServerHandle, &str, usize, u64) -> ProviderAgent,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+    {
         // On-demand tool search: the toolset's searchable catalog (e.g. MCP
         // tools) is NOT sent on every request. `SearchTools` reads this catalog
         // from the request context, matches the model's query, and pushes the
@@ -103,9 +137,10 @@ impl AgentLoop {
                 buffer.lock().expect("loaded_buffer poisoned").extend(tools)
             })
         };
-        let request_context = Arc::new(RwLock::new(
-            RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader),
-        ));
+        let request_context =
+            RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader);
+        // TODO this is cringe, make request context a RW lock newtype
+        let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 
         // Keep a handle to the toolset so the stream bridge can resolve MCP
         // routing info (service / display name) for tool calls. This is the
@@ -117,7 +152,7 @@ impl AgentLoop {
         let adapters = DynToolSetAdapter::from_toolset(
             toolset.clone(),
             context.clone(),
-            request_context.clone(),
+            request_context_rw.clone(),
         );
 
         let handle = ToolServer::new().run();
@@ -142,13 +177,12 @@ impl AgentLoop {
             let handle = handle.clone();
             let toolset = toolset.clone();
             let context = context.clone();
-            let request_context = request_context.clone();
             Arc::new(move |tools: Vec<SearchableTool>| {
                 let handle = handle.clone();
                 let toolset = toolset.clone();
                 let context = context.clone();
-                let request_context = request_context.clone();
                 let loaded_names = loaded_names.clone();
+                let request_context_rw = request_context_rw.clone();
                 Box::pin(async move {
                     for tool in tools {
                         // Skip tools already loaded this session.
@@ -164,7 +198,7 @@ impl AgentLoop {
                             tool.schema,
                             toolset.clone(),
                             context.clone(),
-                            request_context.clone(),
+                            request_context_rw.clone(),
                         );
                         if let Err(e) = handle.add_tool(adapter).await {
                             tracing::warn!(error = ?e, "failed to load searched tool");
@@ -186,18 +220,7 @@ impl AgentLoop {
             system_prompt.push_str(&section);
         }
 
-        // The frontend selects the model by api id; route it to the provider
-        // that serves it (falling back to the default on unknown / unavailable
-        // ids). The router owns provider-specific agent construction.
-        let agent = ModelRouter::shared()
-            .expect("failed to initialize model router")
-            .agent(
-                &self.model,
-                handle,
-                &system_prompt,
-                self.max_turns,
-                self.max_tokens,
-            );
+        let agent = build(handle, &system_prompt, self.max_turns, self.max_tokens);
 
         Session {
             agent,
@@ -209,7 +232,38 @@ impl AgentLoop {
             recorder: self.recorder.clone(),
             usage_ctx,
             model: self.model.clone(),
+            request_context,
         }
+    }
+
+    /// Start a session backed by a caller-supplied (fake) completion model
+    /// instead of routing through [`ModelRouter`]. Exercises the real
+    /// per-session wiring and the public [`Session`] surface
+    /// ([`Session::cancellable`], [`Session::send_message`]) without a provider.
+    #[cfg(test)]
+    pub(crate) async fn test_session<Context, M>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: &str,
+        usage_ctx: UsageContext,
+        model: M,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+        M: rig_core::completion::CompletionModel + 'static,
+        M::StreamingResponse: rig_core::completion::GetTokenUsage + Send + Sync,
+    {
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            move |handle, prompt, max_turns, max_tokens| {
+                ProviderAgent::test(model, prompt, max_turns, max_tokens, handle)
+            },
+        )
+        .await
     }
 }
 
@@ -226,9 +280,15 @@ pub struct Session {
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
     model: String,
+    request_context: RequestContext,
 }
 
 impl Session {
+    /// get the cancel token for this session
+    pub fn cancellable(self) -> (Self, CancellationToken) {
+        let cancel_token = self.request_context.cancel.clone();
+        (self, cancel_token)
+    }
     /// Send a message and stream the response.
     ///
     /// The returned stream yields [`StreamPart`] items compatible with the
@@ -258,6 +318,7 @@ impl Session {
                 self.recorder.clone(),
                 self.usage_ctx.clone(),
                 self.model.clone(),
+                self.request_context.clone(),
             )
             .await;
 

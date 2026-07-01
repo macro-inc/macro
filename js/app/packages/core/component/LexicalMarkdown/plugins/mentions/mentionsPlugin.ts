@@ -281,6 +281,7 @@ const getDocumentMentionItemType = (
     .with('channel', () => 'channel')
     .with('project', () => 'project')
     .with('channel_message', () => 'channel')
+    .with('channel_thread', () => 'channel')
     .with('automation', () => 'automation')
     .with('call', () => 'call')
     .with('foreign', () => {

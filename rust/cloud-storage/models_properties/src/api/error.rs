@@ -27,6 +27,12 @@ pub enum PropertyOptionValidationError {
 
     #[error("Number option value must be finite (not NaN or Infinity)")]
     InvalidNumberValue,
+
+    #[error("Color must be a hex string like #RRGGBB")]
+    InvalidColor,
+
+    #[error("Tag options require a color")]
+    MissingColor,
 }
 
 /// Errors that can occur during property value validation

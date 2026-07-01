@@ -4,7 +4,11 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitPanelContext, type SplitPanelContextType } from '../context';
+import {
+  type SplitFileMenuActionGroups,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '../context';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -49,6 +53,12 @@ function PopoverSplitModal(props: {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [previewState, setPreviewState] = createSignal(false);
+  const [titleFileMenuRef, setTitleFileMenuRef] =
+    createSignal<HTMLDivElement>();
+  const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
+    createSignal<() => void>();
+  const [titleFileMenuActions, setTitleFileMenuActions] =
+    createSignal<SplitFileMenuActionGroups>();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -106,6 +116,12 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
+    titleFileMenuRef,
+    setTitleFileMenuRef,
+    titleFileMenuTrigger,
+    setTitleFileMenuTrigger,
+    titleFileMenuActions,
+    setTitleFileMenuActions,
     headerCollapser: { register: () => () => {} },
   };
 

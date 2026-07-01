@@ -819,3 +819,117 @@ async fn mutual_subtask_link_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Seeds an ownerless system multi-select select-string property definition and
+/// returns its id. is_system satisfies the single-owner constraint without
+/// needing a team/user row.
+async fn seed_multi_select_definition(pool: &Pool<Postgres>, display_name: &str) -> Uuid {
+    let def_id = macro_uuid::generate_uuid_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO property_definitions (id, display_name, data_type, is_multi_select, is_system)
+        VALUES ($1, $2, 'SELECT_STRING', true, true)
+        "#,
+    )
+    .bind(def_id)
+    .bind(display_name)
+    .execute(pool)
+    .await
+    .expect("seed definition");
+    def_id
+}
+
+async fn read_select_value(
+    pool: &Pool<Postgres>,
+    entity_id: &str,
+    def_id: Uuid,
+) -> serde_json::Value {
+    sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT values FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+    )
+    .bind(entity_id)
+    .bind(EntityType::Document)
+    .bind(def_id)
+    .fetch_one(pool)
+    .await
+    .expect("read value")
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties_seed"))
+)]
+async fn add_option_attaches_appends_and_dedupes(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let def_id = seed_multi_select_definition(&pool, "Test Tags Add").await;
+    let entity_id = "entity-tags-add";
+    let opt_a = macro_uuid::generate_uuid_v7();
+    let opt_b = macro_uuid::generate_uuid_v7();
+
+    // First add attaches the property and creates the value.
+    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+        .await?;
+    // Second add appends to the current stored value.
+    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+        .await?;
+    // Re-adding a present option is a no-op.
+    repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+        .await?;
+
+    assert_eq!(
+        read_select_value(&pool, entity_id, def_id).await,
+        serde_json::json!({"type": "SelectOption", "value": [opt_a, opt_b]})
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties_seed"))
+)]
+async fn remove_option_strips_and_is_tolerant(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let def_id = seed_multi_select_definition(&pool, "Test Tags Remove").await;
+    let entity_id = "entity-tags-remove";
+    let opt_a = macro_uuid::generate_uuid_v7();
+    let opt_b = macro_uuid::generate_uuid_v7();
+    let opt_c = macro_uuid::generate_uuid_v7();
+
+    for opt in [opt_a, opt_b, opt_c] {
+        repo.add_entity_property_option(entity_id, EntityType::Document, def_id, opt)
+            .await?;
+    }
+
+    // Remove a middle option.
+    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_b)
+        .await?;
+    assert_eq!(
+        read_select_value(&pool, entity_id, def_id).await,
+        serde_json::json!({"type": "SelectOption", "value": [opt_a, opt_c]})
+    );
+
+    // Removing an absent option is a no-op.
+    let absent = macro_uuid::generate_uuid_v7();
+    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, absent)
+        .await?;
+    assert_eq!(
+        read_select_value(&pool, entity_id, def_id).await,
+        serde_json::json!({"type": "SelectOption", "value": [opt_a, opt_c]})
+    );
+
+    // Removing the rest leaves an empty array, not NULL.
+    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
+        .await?;
+    repo.remove_entity_property_option(entity_id, EntityType::Document, def_id, opt_c)
+        .await?;
+    assert_eq!(
+        read_select_value(&pool, entity_id, def_id).await,
+        serde_json::json!({"type": "SelectOption", "value": []})
+    );
+
+    Ok(())
+}

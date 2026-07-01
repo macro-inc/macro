@@ -10,6 +10,7 @@ fn message(sender_id: Sender) -> MutatedMessage {
         channel_id: Uuid::new_v4(),
         thread_id: None,
         sender_id,
+        triggered_by: None,
         content: "hello".to_string(),
         created_at: now,
         updated_at: now,
@@ -24,6 +25,7 @@ fn bot_message_payload_includes_enriched_sender() {
     let message = message(Sender::Bot(bot_id));
     let sender = MessageRealtimeSender::new(
         &message.sender_id,
+        None,
         Some(BotSenderProfile {
             name: "Deploy Bot".to_string(),
             avatar_url: Some("https://example.com/bot.png".to_string()),
@@ -50,11 +52,35 @@ fn bot_message_payload_includes_enriched_sender() {
 }
 
 #[test]
+fn agent_message_payload_includes_triggering_user() {
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let message = message(Sender::Bot(bot_id));
+    let sender = MessageRealtimeSender::new(
+        &message.sender_id,
+        Some("macro|eric@macro.com".to_string()),
+        Some(BotSenderProfile {
+            name: "Macro".to_string(),
+            avatar_url: None,
+        }),
+    );
+
+    let payload = serde_json::to_value(WithNonce {
+        data: MessageRealtimeData { message, sender },
+        nonce: None,
+    })
+    .unwrap();
+
+    assert_eq!(payload["sender"]["type"], "bot");
+    assert_eq!(payload["sender"]["name"], "Macro");
+    assert_eq!(payload["sender"]["triggered_by"], "macro|eric@macro.com");
+}
+
+#[test]
 fn user_message_payload_omits_bot_fields() {
     let user = macro_user_id::user_id::MacroUserIdStr::try_from_email("alice@example.com")
         .expect("valid email");
     let message = message(Sender::User(user.clone()));
-    let sender = MessageRealtimeSender::new(&message.sender_id, None);
+    let sender = MessageRealtimeSender::new(&message.sender_id, None, None);
 
     let payload = serde_json::to_value(WithNonce {
         data: MessageRealtimeData { message, sender },

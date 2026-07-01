@@ -3059,6 +3059,10 @@
               }
             ]
           },
+          "include_signature": {
+            "type": ["boolean", "null"],
+            "description": "Per-message override for whether to include the signature on send:\n`Some(false)` to exclude (user dismissed it). Omit to use the inbox's\ndefault policy. Ignored for drafts."
+          },
           "provider_id": {
             "type": ["string", "null"],
             "description": "Provider message ID."

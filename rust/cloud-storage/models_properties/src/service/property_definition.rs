@@ -26,7 +26,7 @@ pub struct PropertyDefinition {
 
 // ===== Conversions =====
 
-impl From<PropertyDefinition> for crate::api::PropertyDefinitionResponse {
+impl From<PropertyDefinition> for crate::api::PropertyDefinitionDetailResponse {
     fn from(svc: PropertyDefinition) -> Self {
         Self {
             id: svc.id,

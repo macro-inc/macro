@@ -29,6 +29,7 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
         id,
         channel_id: Uuid::nil(),
         sender_id: "user_1".into(),
+        triggered_by: None,
         content: format!("msg {minutes_ago}"),
         created_at: now - chrono::Duration::minutes(minutes_ago),
         updated_at: now - chrono::Duration::minutes(minutes_ago),
@@ -98,6 +99,7 @@ async fn returns_messages_with_thread_info() {
         id: reply_id,
         thread_id: parent_id,
         sender_id: "user_2".into(),
+        triggered_by: None,
         content: "reply".into(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -197,6 +199,7 @@ async fn attaches_bot_profiles_to_bot_authored_messages() {
         id: Uuid::new_v4(),
         thread_id: parent_id,
         sender_id: seeded_bot.to_storage_string(),
+        triggered_by: None,
         content: "reply".into(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -296,6 +299,7 @@ impl FakeMutationRepo {
             channel_id,
             thread_id: None,
             sender_id: Sender::parse_storage_str(sender).unwrap(),
+            triggered_by: None,
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,
@@ -540,12 +544,14 @@ impl ChannelRepo for FakeMutationRepo {
         &self,
         channel_id: Uuid,
         sender_id: String,
+        triggered_by_user_id: Option<String>,
         content: String,
         thread_id: Option<Uuid>,
     ) -> Result<MutatedMessage, Self::Err> {
         let mut state = self.state.lock().unwrap();
         state.message.channel_id = channel_id;
         state.message.sender_id = Sender::parse_storage_str(&sender_id).unwrap();
+        state.message.triggered_by = triggered_by_user_id;
         state.message.content = content;
         state.message.thread_id = thread_id;
         Ok(state.message.clone())
@@ -827,6 +833,7 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
                 }],
                 nonce: Some("nonce-1".to_string()),
                 notification_policy: Default::default(),
+                triggered_by: None,
             },
         )
         .await
@@ -897,6 +904,7 @@ async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
             }],
             nonce: None,
             notification_policy: Default::default(),
+            triggered_by: None,
         },
     )
     .await
@@ -1449,6 +1457,7 @@ async fn thread_replies_resolve_and_hydrate() {
         id: Uuid::new_v4(),
         thread_id: parent.id,
         sender_id: "macro|user-a@test.com".into(),
+        triggered_by: None,
         content: "reply 1".into(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -1458,6 +1467,7 @@ async fn thread_replies_resolve_and_hydrate() {
         id: Uuid::new_v4(),
         thread_id: parent.id,
         sender_id: "macro|user-b@test.com".into(),
+        triggered_by: None,
         content: "reply 2".into(),
         created_at: Utc::now(),
         updated_at: Utc::now(),

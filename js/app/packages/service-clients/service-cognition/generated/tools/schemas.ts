@@ -1978,6 +1978,21 @@ export const SearchToolsResponse = z.object({
   results: z.array(z.object({ description: z.string(), name: z.string() })),
 });
 
+export const SelfKnowledge = z.record(z.any());
+
+export const SelfKnowledgeResponse = z.object({ about: z.string() });
+
+export const SendChannelMessage = z.object({
+  channel_id: z.string().uuid(),
+  content: z.string(),
+  thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const SendChannelMessageResponse = z.object({
+  channel_id: z.string().uuid(),
+  message_id: z.string(),
+});
+
 export const SendEmail = z.object({
   bcc: z
     .array(
@@ -1996,6 +2011,7 @@ export const SendEmail = z.object({
       })
     )
     .optional(),
+  includeSignature: z.union([z.boolean(), z.null()]).default(null),
   replyingToId: z.union([z.string().uuid(), z.null()]).default(null),
   subject: z.string(),
   to: z.array(

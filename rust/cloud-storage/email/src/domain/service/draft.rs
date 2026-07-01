@@ -55,6 +55,13 @@ where
 
         decode_html_body(&mut input)?;
 
+        // On send (not drafts), inject the inbox's signature into the body per
+        // the user's settings + per-message override. Best-effort: never blocks
+        // the send.
+        if !is_draft {
+            self.maybe_inject_signature(link, &mut input).await;
+        }
+
         // Build parsed addresses
         let from_email = String::from(link.email_address.clone());
         let addresses = ParsedAddresses {
@@ -117,6 +124,71 @@ where
             headers_json: resolved.headers_json,
             send_time: resolved.send_time,
         })
+    }
+
+    /// Appends the inbox's signature to the outgoing body (send path only).
+    /// Gated by the per-message override and the inbox's settings; replies and
+    /// forwards (a `replying_to_id` is present) require
+    /// `signature_on_replies_forwards`. Best-effort — any failure just skips.
+    async fn maybe_inject_signature(&self, link: &Link, input: &mut CreateDraftInput) {
+        if input.include_signature == Some(false) {
+            // Honor "exclude" literally: drop any server-wrapped signature a
+            // client may have baked in, rather than just declining to add one.
+            if input
+                .body_html
+                .as_deref()
+                .is_some_and(super::signature::has_signature)
+                && let Some(body_html) = input.body_html.take()
+            {
+                input.body_html = Some(super::signature::strip_signature(&body_html));
+            }
+            return;
+        }
+        // Idempotent: if the body already carries a signature — a client still
+        // baking it in during the FE cutover, or a re-sent message — don't add
+        // another (and leave body_text alone too).
+        if input
+            .body_html
+            .as_deref()
+            .is_some_and(super::signature::has_signature)
+        {
+            return;
+        }
+        let settings = match self.email_repo.fetch_email_settings(link.id).await {
+            Ok(settings) => settings,
+            Err(e) => {
+                tracing::warn!(error = ?e, "failed to fetch settings for signature; skipping");
+                return;
+            }
+        };
+        let Some(signature) = settings.signature.filter(|s| !s.trim().is_empty()) else {
+            return;
+        };
+        let include = match input.include_signature {
+            Some(value) => value,
+            None => {
+                if input.replying_to_id.is_some() {
+                    settings.signature_on_replies_forwards
+                } else {
+                    true
+                }
+            }
+        };
+        if !include {
+            return;
+        }
+        if let Some(body_html) = input.body_html.take() {
+            input.body_html = Some(super::signature::inject_signature(&body_html, &signature));
+        }
+        let plain = super::signature::signature_plain_text(&signature);
+        if !plain.is_empty()
+            && let Some(existing) = input.body_text.take().filter(|s| !s.is_empty())
+        {
+            // Only append to an existing plain-text body. HTML-only sends
+            // (body_text None/empty, e.g. the AI path) keep no text part rather
+            // than getting a signature-only one that drops the message body.
+            input.body_text = Some(format!("{existing}\n\n{plain}"));
+        }
     }
 
     async fn validate_existing_message(
