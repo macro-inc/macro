@@ -264,25 +264,12 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
     successPath: '/',
   });
 
-function Inbox2Route() {
-  return (
-    <SplitLayoutContainer
-      pairs={['component', 'inbox2']}
-      setManager={setGlobalSplitManager}
-    />
-  );
-}
-
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',
     component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/inbox-2',
-    component: Inbox2Route,
   },
   {
     path: '/agents',
