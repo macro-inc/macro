@@ -8,11 +8,10 @@ import { Stepper } from '@ui/components/Stepper';
 import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { OnboardingConnectAccounts } from './OnboardingConnectAccounts';
 import { OnboardingCreateAccount } from './OnboardingCreateAccount';
-import { OnboardingInfoFour } from './OnboardingInfoFour';
-import { OnboardingInfoThree } from './OnboardingInfoThree';
+import { OnboardingInbox } from './OnboardingInbox';
 
 const CREATE_ACCOUNT_STEP = 0;
-const LAST_STEP = 3;
+const LAST_STEP = 2;
 
 /**
  * `Stepper.transitions.scale` uses solid-transition-group's `mode: 'outin'`,
@@ -85,7 +84,7 @@ export function MobileOnboarding() {
 
       <Surface depth={1} class="flex flex-col mt-(--mobile-content-inset-top)">
         <div class="flex shrink-0 items-center justify-center pt-8 pb-4">
-          <LogoIcon class="size-16 text-accent" />
+          <LogoIcon class="size-16 text-ink" />
         </div>
 
         <div class="min-h-0 grow overflow-y-auto px-6">
@@ -98,10 +97,7 @@ export function MobileOnboarding() {
                 <OnboardingConnectAccounts />
               </Stepper.Step>
               <Stepper.Step>
-                <OnboardingInfoThree />
-              </Stepper.Step>
-              <Stepper.Step>
-                <OnboardingInfoFour />
+                <OnboardingInbox />
               </Stepper.Step>
             </Stepper>
           </div>
@@ -109,7 +105,12 @@ export function MobileOnboarding() {
 
         <Show when={step() > CREATE_ACCOUNT_STEP}>
           <div class="mx-auto w-full max-w-md shrink-0 px-6 pt-6 pb-6">
-            <Button variant="cta" size="lg" class="w-full" onClick={onContinue}>
+            <Button
+              variant="contrast"
+              size="lg"
+              class="w-full"
+              onClick={onContinue}
+            >
               {step() >= LAST_STEP ? 'Get started' : 'Continue'}
             </Button>
           </div>

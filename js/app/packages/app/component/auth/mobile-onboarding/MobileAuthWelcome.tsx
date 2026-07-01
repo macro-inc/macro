@@ -37,12 +37,12 @@ export function MobileAuthWelcome() {
       <div class="w-full max-w-105">
         <Surface depth={1}>
           <div class="flex flex-col items-center gap-2 py-10">
-            <LogoIcon class="size-20 text-accent" />
+            <LogoIcon class="size-20 text-ink" />
             <div class="text-lg font-medium">Welcome to Macro</div>
           </div>
           <div class="flex flex-col gap-3 px-8 pb-8">
             <Button
-              variant="cta"
+              variant="contrast"
               size="lg"
               onClick={() => navigate('/onboarding')}
             >

@@ -25,14 +25,14 @@ export function OnboardingCreateAccount() {
           attachments.
         </p>
         <p class="text-sm/relaxed text-ink-muted">
-          This will be your primary email account that you will use to sign in to
-          Macro.
+          This will be your primary email account that you will use to sign in
+          to Macro.
         </p>
       </div>
 
       <div class="flex flex-col gap-2 pt-2">
         <Button
-          variant="cta"
+          variant="contrast"
           size="lg"
           onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
         >

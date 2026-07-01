@@ -82,7 +82,6 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
-  Show,
   Suspense,
   Switch,
 } from 'solid-js';

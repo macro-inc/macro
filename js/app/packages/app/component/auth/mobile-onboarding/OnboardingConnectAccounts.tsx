@@ -109,14 +109,14 @@ export function OnboardingConnectAccounts() {
       <div>
         <div class="flex flex-col gap-2">
           <Button
-            variant="cta"
+            variant="contrast"
             size="lg"
             class="ring ring-edge-muted"
             disabled={!isAuthenticated()}
             onClick={() => void addInbox()}
           >
             <IconGoogle />
-            Connect Gmail
+            Connect Another Gmail
           </Button>
           <p class="text-sm/relaxed text-ink-muted">
             Connect multiple accounts to see all your emails in one inbox.
@@ -127,7 +127,7 @@ export function OnboardingConnectAccounts() {
 
         <div class="flex flex-col gap-2">
           <Button
-            variant="cta"
+            variant="contrast"
             size="lg"
             class="ring ring-edge-muted"
             disabled={
