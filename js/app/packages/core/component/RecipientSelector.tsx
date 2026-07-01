@@ -398,18 +398,46 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return email ? email.split('@')[1] : undefined;
   });
 
-  // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
-    config: FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+  const baseRecipientSearchConfig =
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
       currentUserDomain,
       getRecipientOptionEmail
-    ),
+    );
+
+  // Create search function for recipients - only used for initial sorting with no query
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
+    config: {
+      ...baseRecipientSearchConfig,
+      brevityWeight: 1,
+      timeWeight: 1.5,
+      boostFn: (item) => {
+        const sameDomainBoost = baseRecipientSearchConfig.boostFn?.(item) ?? 0;
+        if (!inputValue().trim()) return sameDomainBoost;
+
+        const personBoost =
+          item.kind === 'user' || item.kind === 'contact' ? 0.25 : 0;
+        return sameDomainBoost * 0.125 + personBoost;
+      },
+      useViewedAt: true,
+    },
     getName: getRecipientOptionTextValue,
     isChannelItem: (item) => item.kind === 'channel',
-    getTimestamp: (item) => ({
-      lastInteraction:
-        item.kind === 'user' ? item.data.lastInteraction : undefined,
-    }),
+    getTimestamp: (item) => {
+      if (item.kind === 'user') {
+        return { lastInteraction: item.data.lastInteraction };
+      }
+      if (item.kind === 'channel') {
+        const channel = item.data as typeof item.data & {
+          interacted_at?: string | null;
+          viewed_at?: string | null;
+        };
+        return {
+          viewedAt: channel.viewed_at,
+          updatedAt: channel.interacted_at ?? channel.updated_at,
+        };
+      }
+      return {};
+    },
   });
 
   const selectedEmails = createMemo(() => {
@@ -466,14 +494,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   });
 
   const options = createMemo(() => {
-    const { emails, sorted } = recipients();
+    const { raw, emails, sorted } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
     const hasExactEmailMatch =
       currentUserInput && emails.has(currentUserInput.toLowerCase());
 
-    const allOptions = [...sorted, ...customUsers()];
+    const searchTerm = currentUserInput.trim();
+    const searched = searchTerm
+      ? recipientSearch(raw, searchTerm).map((item) => item.item)
+      : sorted;
+
+    const allOptions = [...searched, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -529,6 +562,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         optionValue={getRecipientOptionValue}
         optionTextValue={getRecipientOptionTextValue}
         optionDisabled={getOptionDisabled}
+        defaultFilter={() => true}
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={debouncedHandleChange}
         onInputChange={onInputChange}
