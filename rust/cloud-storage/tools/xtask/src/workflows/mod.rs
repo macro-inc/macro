@@ -20,6 +20,7 @@ mod code_check_cloud_storage;
 mod runners;
 mod steps;
 mod vars;
+mod web_app_check_main;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -85,6 +86,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_generated",
         file_name: "check_generated.yml",
         render_yaml: || render_gh_workflow(check_generated::check_generated_workflows)(),
+    },
+    WorkflowFile {
+        slug: "web_app_check_main",
+        file_name: "web-app-check-main.yml",
+        render_yaml: || render_gh_workflow(web_app_check_main::web_app_check_main)(),
     },
 ];
 
