@@ -59,6 +59,23 @@ export type SplitFileMenuActionGroups = {
   deleteOps: SplitFileMenuAction[];
 };
 
+export type SplitFileMenuActionSection = {
+  key: keyof SplitFileMenuActionGroups;
+  actions: SplitFileMenuAction[];
+};
+
+export function getSplitFileMenuActionSections(
+  groups: SplitFileMenuActionGroups
+): SplitFileMenuActionSection[] {
+  const sections: SplitFileMenuActionSection[] = [
+    { key: 'tools', actions: groups.tools },
+    { key: 'primaryOps', actions: groups.primaryOps },
+    { key: 'deleteOps', actions: groups.deleteOps },
+  ];
+
+  return sections.filter((section) => section.actions.length > 0);
+}
+
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
