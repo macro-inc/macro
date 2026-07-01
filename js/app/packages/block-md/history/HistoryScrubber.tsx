@@ -19,7 +19,7 @@ import { formatTimestamp, userColor, userLabel } from './utils';
 
 type ScrubberUser = { id: string; label: string; color: string };
 type ScrubberLane = { user: ScrubberUser; sessions: HistorySession[] };
-const MIN_VIEW = 1000;
+const MIN_VIEW = 1;
 const DRAG_THRESHOLD = 4;
 const THUMB_HIT_PX = 12;
 

@@ -44,4 +44,3 @@ export * from './utils/diffStates';
 export * from './utils/diffTypes';
 export * from './utils/markdown-state';
 export * from './utils/mentions';
-export * from './utils/wordDiff';

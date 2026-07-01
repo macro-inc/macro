@@ -2,55 +2,84 @@ import type { HistoryVersionId } from '@service-sync/client';
 import type { Change, LoroDoc } from 'loro-crdt';
 import type { SerializedEditorState } from 'lexical';
 
-export type TimestampIndex = {
-  doc: LoroDoc;
-  /** All changes sorted by (timestamp, counter) ascending. */
-  changes: Change[];
-};
+type Slot = { startMs: number; endMs: number };
 
-export function buildTimestampIndex(doc: LoroDoc): TimestampIndex {
+// Each change gets a slot [startMs, endMs) evenly distributed within its second.
+// e.g. 3 changes in second T → [T, T+333), [T+333, T+667), [T+667, T+1000)
+function buildSlots(changes: Change[]): Slot[] {
+  const slots = new Array<Slot>(changes.length);
+  let i = 0;
+  while (i < changes.length) {
+    let j = i;
+    const sec = changes[i].timestamp;
+    while (j < changes.length && changes[j].timestamp === sec) j++;
+    const count = j - i;
+    for (let k = 0; k < count; k++) {
+      slots[i + k] = {
+        startMs: sec * 1000 + (k / count) * 1000,
+        endMs: sec * 1000 + ((k + 1) / count) * 1000,
+      };
+    }
+    i = j;
+  }
+  return slots;
+}
+
+// Within 5s of targetMs, expand changes into individual ops so scrubbing is
+// per-keystroke. Outside the window, include entire changes for efficiency.
+const EXPAND_WINDOW_MS = 5000;
+
+function frontiersAt(changes: Change[], slots: Slot[], targetMs: number) {
+  const maxByPeer = new Map<Change['peer'], number>();
+
+  for (let i = 0; i < changes.length; i++) {
+    const { startMs, endMs } = slots[i];
+    if (startMs > targetMs) break;
+
+    const change = changes[i];
+
+    if (endMs > targetMs - EXPAND_WINDOW_MS) {
+      // Within window: expand into individual ops
+      const slotSpan = endMs - startMs;
+      for (let k = 0; k < change.length; k++) {
+        const opMs = startMs + (k / change.length) * slotSpan;
+        if (opMs > targetMs) break;
+        const counter = change.counter + k;
+        if (counter > (maxByPeer.get(change.peer) ?? -1))
+          maxByPeer.set(change.peer, counter);
+      }
+    } else {
+      // Outside window: include entire change
+      const endCounter = change.counter + change.length - 1;
+      if (endCounter > (maxByPeer.get(change.peer) ?? -1))
+        maxByPeer.set(change.peer, endCounter);
+    }
+  }
+
+  return [...maxByPeer.entries()].map(([peer, counter]) => ({ peer, counter }));
+}
+
+export function buildTimestampIndex(doc: LoroDoc) {
   const changes = [...doc.getAllChanges().values()]
     .flat()
     .sort((a, b) => a.timestamp - b.timestamp || a.counter - b.counter);
-  return { doc, changes };
-}
+  const slots = buildSlots(changes);
 
-// Frontiers for the version including every change at or before `targetMs`.
-// Seeded from the shallow-snapshot baseline (empty for a full snapshot) so the
-// result never lands before the shallow history's start version. Ascending sort
-// means setLast applies same-peer changes in counter order, so each peer ends at
-// its max included counter.
-function frontiersAt(index: TimestampIndex, targetMs: number) {
-  const targetSec = Math.floor(targetMs / 1000);
-  const vv = index.doc.shallowSinceVV();
-  for (const change of index.changes) {
-    if (change.timestamp > targetSec) break;
-    vv.setLast(change);
-  }
-  return index.doc.vvToFrontiers(vv);
-}
+  return {
+    checkoutAt(targetMs: number): SerializedEditorState | null {
+      const frontiers = frontiersAt(changes, slots, targetMs);
+      if (frontiers.length === 0) return null;
+      doc.checkout(frontiers);
+      const state = doc.toJSON() as SerializedEditorState;
+      if (!state.root?.type) return null;
+      return state;
+    },
 
-export function checkoutAt(
-  index: TimestampIndex,
-  targetMs: number
-): SerializedEditorState | null {
-  const frontiers = frontiersAt(index, targetMs);
-  if (frontiers.length === 0) return null;
-  index.doc.checkout(frontiers);
-  const state = index.doc.toJSON() as SerializedEditorState;
-
-  const root = state.root;
-  if (!root?.type) return null;
-
-  return state;
-}
-
-export function versionIdAt(
-  index: TimestampIndex,
-  targetMs: number
-): HistoryVersionId | null {
-  const frontiers = frontiersAt(index, targetMs);
-  if (frontiers.length === 0) return null;
-  const f = frontiers[frontiers.length - 1];
-  return { peer: String(f.peer), counter: f.counter };
+    versionIdAt(targetMs: number): HistoryVersionId | null {
+      const frontiers = frontiersAt(changes, slots, targetMs);
+      if (frontiers.length === 0) return null;
+      const f = frontiers[frontiers.length - 1];
+      return { peer: String(f.peer), counter: f.counter };
+    },
+  };
 }

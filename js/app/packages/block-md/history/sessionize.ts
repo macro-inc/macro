@@ -15,7 +15,7 @@ type EditEvent = { userId: string; tMs: number };
 /**
  * Group `(userId, timestampMs)` events into per-user sessions. Within a user,
  * consecutive edits more than `gapMs` apart start a new session. Returns all
- * sessions sorted most-recent first (`endMs` desc, deterministic tie-breaks).
+ * sessions sorted most-recent first (`endMs` desc).
  * Sessions may overlap across users editing at the same time.
  */
 export function sessionize(

@@ -7,21 +7,14 @@ import { LoroDoc } from 'loro-crdt';
 import {
   type Accessor,
   createContext,
-  createEffect,
   createMemo,
   createResource,
   createSignal,
   type JSX,
-  onCleanup,
   useContext,
 } from 'solid-js';
 import { sessionize } from './sessionize';
-import {
-  buildTimestampIndex,
-  checkoutAt as _checkoutAt,
-  type TimestampIndex,
-  versionIdAt as _versionIdAt,
-} from './timestampIndex';
+import { buildTimestampIndex } from './timestampIndex';
 
 type HistoryContextValue = {
   isOpen: Accessor<boolean>;
@@ -57,6 +50,7 @@ export function HistoryProvider(props: {
   const open = () => setIsOpen(true);
 
   const enter = (at?: Date) => {
+  console.log(at)
     setDiffSession(null);
     setSelectedAt(at ?? null);
     setIsLive(at === undefined);
@@ -82,7 +76,7 @@ export function HistoryProvider(props: {
   // Download the full snapshot once and drive both the session timeline and
   // local scrubbing from it. The full snapshot (not updates) is required so
   // getAllChanges() carries the per-change timestamp metadata.
-  const [historyDoc, { refetch: refetchDoc }] = createResource(
+  const [historyDoc] = createResource(
     () => props.documentId(),
     async (documentId) => {
       const result = await syncServiceClient.getSnapshot({ documentId });
@@ -96,16 +90,9 @@ export function HistoryProvider(props: {
   // Peer -> user mapping for labelling sessions; lightweight JSON.
   const peerMap = useDocumentPeersQuery(props.documentId);
 
-  createEffect(() => {
-    if (!isOpen()) return;
-    const id = setInterval(() => refetchDoc(), 15_000);
-    onCleanup(() => clearInterval(id));
-  });
-
-  const historyIndex = createMemo<TimestampIndex | null>(() => {
+  const historyIndex = createMemo(() => {
     const doc = historyDoc();
-    if (!doc) return null;
-    return buildTimestampIndex(doc);
+    return doc ? buildTimestampIndex(doc) : null;
   });
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
@@ -125,15 +112,11 @@ export function HistoryProvider(props: {
     return sessionize(events);
   });
 
-  const checkoutAt = (ms: number): SerializedEditorState | null => {
-    const index = historyIndex();
-    return index ? _checkoutAt(index, ms) : null;
-  };
+  const checkoutAt = (ms: number): SerializedEditorState | null =>
+    historyIndex()?.checkoutAt(ms) ?? null;
 
-  const versionIdAt = (ms: number): HistoryVersionId | null => {
-    const index = historyIndex();
-    return index ? _versionIdAt(index, ms) : null;
-  };
+  const versionIdAt = (ms: number): HistoryVersionId | null =>
+    historyIndex()?.versionIdAt(ms) ?? null;
 
   // Diff a session: the state just before its first edit vs the state at its end,
   // paired by node id. Each changed block is attributed to whoever last edited it
@@ -178,8 +161,8 @@ export function HistoryProvider(props: {
     exit,
     sessions,
     loading: {
-      sessions: () => historyDoc.loading || peerMap.isPending,
-      doc: () => historyDoc.loading,
+      sessions: () => historyDoc() == null || peerMap.isPending,
+      doc: () => historyDoc() == null,
     },
     checkoutAt,
     versionIdAt,
