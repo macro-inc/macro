@@ -1,10 +1,8 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { ENABLE_GIT_BLAME } from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
-import { syncServiceClient } from '@service-sync/client';
+import { useNodeBlameQuery } from '@queries/blame';
 import { createScheduled, debounce } from '@solid-primitives/scheduled';
-import { createQuery } from '@tanstack/solid-query';
 import {
   createEffect,
   createMemo,
@@ -55,18 +53,7 @@ export function BlameTooltip(props: {
     setVisible(false);
   };
 
-  const query = createQuery(() => ({
-    queryKey: ['blame', props.documentId, queriedNodeId()],
-    queryFn: async () => {
-      const res = await syncServiceClient.getNodeBlame({
-        documentId: props.documentId,
-        nodeId: queriedNodeId()!,
-      });
-      return res.isOk() ? res.value : null;
-    },
-    enabled: ENABLE_GIT_BLAME() && queriedNodeId() !== null,
-    staleTime: Infinity,
-  }));
+  const query = useNodeBlameQuery(props.documentId, queriedNodeId);
 
   // Drive visibility based on cursor stillness (x/y).
   createEffect(() => {

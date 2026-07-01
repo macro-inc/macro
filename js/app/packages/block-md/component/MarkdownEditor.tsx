@@ -126,6 +126,7 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
+  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -926,7 +927,9 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
+  if (ENABLE_GIT_BLAME()) {
+    plugins.use(blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) }));
+  }
 
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
@@ -1011,7 +1014,9 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+        <Show when={ENABLE_GIT_BLAME()}>
+          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+        </Show>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
 
