@@ -548,6 +548,9 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     if (tag === 'document_mention' && isDM()) {
       action = 'shared a document with you';
       sender = senderName();
+    } else if (tag === 'channel_message_send') {
+      action = 'sent you a message';
+      sender = senderName();
     }
 
     const content = itemContent(entity(), props.item.notification);
@@ -822,9 +825,18 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   });
 
   const isDM = createMemo(() => {
-    const value = props.item.entity;
-
-    return value.type === 'channel' && value.channelType === 'direct_message';
+    const notification = props.item.notification;
+    const meta = notification?.notification_metadata;
+    return match(meta)
+      .with(
+        P.union(
+          { tag: 'channel_mention' },
+          { tag: 'channel_message_reply' },
+          { tag: 'channel_message_send' }
+        ),
+        (m) => m.content.channelType === 'directMessage'
+      )
+      .otherwise(() => false);
   });
 
   const senderName = createSenderDisplayName(senderId);
@@ -832,13 +844,15 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => {
     const metadata = props.item.notification?.notification_metadata;
     const location = channelLocation(props.item.entity);
-    let action = 'started a thread';
+
+    const includeLocation = location && !isDM();
+
+    let action = includeLocation ? 'started a thread in' : 'started a thread';
+
     if (metadata?.tag === 'channel_mention') {
-      action = location ? 'mentioned you in' : 'mentioned you';
+      action = includeLocation ? 'mentioned you in' : 'mentioned you';
     } else if (metadata?.tag === 'channel_message_reply') {
-      action = location ? 'replied in' : 'replied';
-    } else if (location) {
-      action = 'started a thread in';
+      action = includeLocation ? 'replied in' : 'replied';
     }
 
     let content = itemContent(props.item.entity, props.item.notification);
@@ -847,7 +861,11 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     }
 
     return {
-      title: buildActionLabel({ sender: senderName(), action, location }),
+      title: buildActionLabel({
+        sender: senderName(),
+        action,
+        location: includeLocation ? location : undefined,
+      }),
       content,
     };
   });
