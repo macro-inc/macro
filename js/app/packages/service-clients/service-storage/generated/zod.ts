@@ -8754,6 +8754,12 @@ export const postItemsSoupBody = zod
       )
       .optional()
       .describe('property-based filters applied across entity types'),
+    tag_option_ids: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
+      ),
   })
   .describe('a bundle of all of the filters for each entity type')
   .and(

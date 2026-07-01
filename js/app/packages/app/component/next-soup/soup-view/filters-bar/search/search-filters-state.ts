@@ -25,6 +25,12 @@ export type SearchIndexId =
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
+/** Search types whose results are documents/tasks, where tag filtering applies. */
+export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
+  'task',
+  'document-or-file',
+]);
+
 /**
  * Server-side narrowing for each index type. `defineQueryFilters` NIL-fills
  * the id field of every target the input doesn't reference, so each seed
@@ -57,6 +63,9 @@ export type SearchFiltersSections = {
 
 export type SearchFiltersState = SearchFiltersSections & {
   type: SearchTypeValue;
+  // Selected tags. Cross-cutting (not tied to a type section): each entry
+  // carries its owning definition id and option id. Combine as one OR.
+  tags: PropertyFilter[];
 };
 
 export const DEFAULT_SECTIONS: SearchFiltersSections = {
@@ -85,6 +94,12 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   const seed = SEARCH_INDEX_SEEDS[state.type];
   Object.assign(include, seed.include);
   Object.assign(exclude, seed.exclude);
+
+  // Tags only apply where results are already narrowed to documents/tasks, so a
+  // tag filter never silently empties an email/channel/call search.
+  if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
+    include.tagFilters = state.tags;
+  }
 
   if (state.type === 'email') {
     if (state.email.importance !== undefined) {
@@ -178,6 +193,7 @@ export function createSearchFiltersController() {
     taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES)
   );
   const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
+  const tags = createMemo<PropertyFilter[]>(() => include().tagFilters ?? []);
 
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
@@ -205,7 +221,7 @@ export function createSearchFiltersController() {
     });
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
-    apply({ type: type(), ...currentSections(), ...sections });
+    apply({ type: type(), tags: tags(), ...currentSections(), ...sections });
 
   const setType = (next: SearchTypeValue) => {
     const current = type();
@@ -235,12 +251,15 @@ export function createSearchFiltersController() {
       };
     }
 
-    apply({ type: next, ...stash });
+    apply({ type: next, tags: tags(), ...stash });
   };
 
   return {
     type,
     setType,
+    tags,
+    setTags: (filters: PropertyFilter[]) =>
+      apply({ type: type(), tags: filters, ...currentSections() }),
     emailImportance,
     setEmailImportance: (importance: boolean | undefined) =>
       applySections({ email: { importance, inboxIds: emailInbox() } }),

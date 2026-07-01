@@ -31,6 +31,7 @@ import {
   isListViewID,
   type ListView,
   soupItemMatchesListView,
+  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -466,6 +467,12 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // Active tag option ids, used to gate optimistic websocket inserts so an
+  // active tag filter is honored even on the grouped render path.
+  const activeTagOptionIds = createMemo(() =>
+    (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
+  );
+
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
@@ -478,7 +485,9 @@ export const SoupViewContextProvider: FlowComponent<
         enabled: !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     }
@@ -601,7 +610,9 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     },
