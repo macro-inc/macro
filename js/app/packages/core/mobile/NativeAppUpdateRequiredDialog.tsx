@@ -17,7 +17,7 @@ export function NativeAppUpdateRequiredDialog(props: {
       class="w-[90%] max-w-120"
       position="center"
     >
-      <Surface depth={2} active>
+      <Surface depth={2}>
         <div class="flex flex-col gap-4 px-4 py-5">
           <div class="flex flex-col gap-2">
             <Dialog.Title class="text-lg font-semibold text-ink">

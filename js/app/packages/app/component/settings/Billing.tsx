@@ -4,12 +4,13 @@ import { useHasPaidAccess } from '@core/auth';
 import CheckIcon from '@phosphor/check.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import { stripeServiceClient } from '@service-stripe/client';
-import { Button, Layer, Surface } from '@ui';
+import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { usePermissions, useUserId } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { plural } from '@core/util/string';
+import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   free: ['Access to Haiku', '5 GB storage'],
@@ -89,10 +90,10 @@ export const Billing = () => {
   };
 
   return (
-    <section class="p-8 flex flex-col gap-8">
-      <header class="flex flex-col">
-        <h1 class="text-2xl text-ink font-semibold">Billing</h1>
-        <p class="text-ink-extra-muted text-sm">
+    <SettingsPage
+      title="Billing"
+      description={
+        <>
           For questions about billing,{' '}
           <a
             class="text-ink inline-flex items-center hover:text-accent"
@@ -103,68 +104,71 @@ export const Billing = () => {
             contact us
             <ArrowSquareOutIcon class="size-4 inline mx-1" />
           </a>
-        </p>
-      </header>
+        </>
+      }
+    >
+      <SettingsSection>
+        <SettingsCard>
+          <section class="flex flex-col gap-4 p-4">
+            <header class="flex items-center gap-2">
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
+                  <h2 class="text-lg font-medium text-ink">
+                    <Show when={!hasPaid()} fallback={'Premium plan'}>
+                      Free plan
+                    </Show>
+                  </h2>
 
-      <Surface class="flex flex-col rounded-lg p-4" depth={2}>
-        <section class="flex flex-col gap-4">
-          <header class="flex items-center gap-2">
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-2">
-                <h1 class="text-lg font-medium text-ink">
-                  <Show when={!hasPaid()} fallback={'Premium plan'}>
-                    Free plan
-                  </Show>
-                </h1>
-
-                <Layer depth={3}>
-                  <span class="text-xs text-ink-muted px-1.5 py-0.25 border border-edge-muted rounded-md bg-active">
-                    Current
-                  </span>
-                </Layer>
-              </div>
-              <Switch>
-                <Match when={teamRole() === 'member'}>
-                  <p class="text-ink-extra-muted text-xs">
-                    Your subscription is managed by your team owner. Contact
-                    them to make changes.
-                  </p>
-                </Match>
-                <Match when={hasPaid() && teamRole() === 'owner' && team.data}>
-                  {(team) => (
+                  <Layer depth={3}>
+                    <span class="text-xs text-ink-muted px-1.5 py-0.25 border border-edge-muted rounded-md bg-active">
+                      Current
+                    </span>
+                  </Layer>
+                </div>
+                <Switch>
+                  <Match when={teamRole() === 'member'}>
                     <p class="text-ink-extra-muted text-xs">
-                      {team().members.length}{' '}
-                      {plural('user', team().members.length)} • $40 per seat/per
-                      month
+                      Your subscription is managed by your team owner. Contact
+                      them to make changes.
                     </p>
-                  )}
-                </Match>
-              </Switch>
-            </div>
+                  </Match>
+                  <Match when={hasPaid() && teamRole() === 'owner' && team.data}>
+                    {(team) => (
+                      <p class="text-ink-extra-muted text-xs">
+                        {team().members.length}{' '}
+                        {plural('user', team().members.length)} • $40 per
+                        seat/per month
+                      </p>
+                    )}
+                  </Match>
+                </Switch>
+              </div>
 
-            <Show
-              when={
-                canManageSubscription() &&
-                hasPaid() &&
-                (!teamRole() || teamRole() === 'owner')
-              }
-            >
-              <Button
-                class="ml-auto rounded-full bg-active"
-                size="sm"
-                depth={2}
-                variant="base"
-                onClick={handleManage}
+              <Show
+                when={
+                  canManageSubscription() &&
+                  hasPaid() &&
+                  (!teamRole() || teamRole() === 'owner')
+                }
               >
-                Manage
-              </Button>
-            </Show>
-          </header>
-          <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-            <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
-          </ul>
-        </section>
-      </Surface>
+                <Button
+                  class="ml-auto rounded-full bg-active"
+                  size="sm"
+                  depth={2}
+                  variant="base"
+                  onClick={handleManage}
+                >
+                  Manage
+                </Button>
+              </Show>
+            </header>
+            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
+              <PlanFeatures tier={hasPaid() ? 'premium' : 'free'} />
+            </ul>
+          </section>
+        </SettingsCard>
+      </SettingsSection>
+
       <Show
         when={
           !hasPaid() &&
@@ -172,29 +176,33 @@ export const Billing = () => {
           (!teamRole() || teamRole() === 'owner')
         }
       >
-        <Surface class="flex flex-col rounded-lg p-4" depth={2}>
-          <section class="flex flex-col gap-4">
-            <header class="flex items-center gap-2">
-              <div class="flex flex-col">
-                <h1 class="text-lg font-medium text-ink">Premium</h1>
-                <p class="text-ink-extra-muted text-xs">$40 per seat / month</p>
-              </div>
+        <SettingsSection>
+          <SettingsCard>
+            <section class="flex flex-col gap-4 p-4">
+              <header class="flex items-center gap-2">
+                <div class="flex flex-col">
+                  <h2 class="text-lg font-medium text-ink">Premium</h2>
+                  <p class="text-ink-extra-muted text-xs">
+                    $40 per seat / month
+                  </p>
+                </div>
 
-              <Button
-                class="ml-auto rounded-full py-1.5 px-3"
-                depth={2}
-                variant="cta"
-                onClick={handleCheckout}
-              >
-                Upgrade now
-              </Button>
-            </header>
-            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-              <PlanFeatures tier="premium" />
-            </ul>
-          </section>
-        </Surface>
+                <Button
+                  class="ml-auto rounded-full py-1.5 px-3"
+                  depth={2}
+                  variant="cta"
+                  onClick={handleCheckout}
+                >
+                  Upgrade now
+                </Button>
+              </header>
+              <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
+                <PlanFeatures tier="premium" />
+              </ul>
+            </section>
+          </SettingsCard>
+        </SettingsSection>
       </Show>
-    </section>
+    </SettingsPage>
   );
 };

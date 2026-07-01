@@ -27,10 +27,11 @@ const CHILD_RELATION: &str = "chunk";
 const MIN_PREFIX_LEN: usize = 3;
 
 /// Cap on chunks returned per `has_child` clause inside `inner_hits`.
-/// OpenSearch's default is 3 which would silently drop matches on docs
-/// with many hits; pick a number well above any reasonable document's
-/// matching-chunk count for a single search.
-const INNER_HITS_PER_TERM: u32 = 100;
+/// Applied per term, so an N-term query can surface up to N times this many
+/// chunks per document. Highlight cost and response size scale with it (and
+/// with the term count), so it stays small. A grouped result row only previews
+/// a handful of matching passages per document.
+const INNER_HITS_PER_TERM: u32 = 10;
 
 /// Cap on terms a `match_phrase_prefix` may expand the last word to.
 /// OpenSearch's default of 50 is too aggressive — a prefix like `wo`

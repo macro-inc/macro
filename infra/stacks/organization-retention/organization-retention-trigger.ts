@@ -9,7 +9,6 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/boo
 
 export type OrganizationRetentionTriggerEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  ORGANIZATION_RETENTION_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };

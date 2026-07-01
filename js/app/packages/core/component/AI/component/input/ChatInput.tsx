@@ -1,8 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
+import {
+  defaultModelForPlan,
+  Model,
+  modelsForPlan,
+} from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import { Model, type ToolSet } from '@core/component/AI/types';
+import type { ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -48,20 +54,29 @@ export function ChatInput(props: ChatInputComponentProps) {
   const model = input.model;
   const generating = input.isGenerating;
   const { showPaywall } = usePaywallState();
+  const hasPaidAccess = useHasPaidAccess();
 
-  // Every model is offered in the picker; the backend enforces plan
-  // entitlements on send (a free user picking a pro model is rejected there).
-  const modelOptions = createMemo(() =>
-    Object.values(Model).map((id) => ({ id, available: true }))
-  );
+  // Every model is shown to every user; availability is per-plan. Free users
+  // see the premium models locked (dimmed + lock icon), and clicking one opens
+  // the paywall via `onLocked` rather than sending and being rejected by the
+  // backend. Listing only the free model would mean free users never see the
+  // upsell at all.
+  const modelOptions = createMemo(() => {
+    const allowed = modelsForPlan(hasPaidAccess());
+    return Object.values(Model).map((id) => ({
+      id,
+      available: allowed.includes(id),
+    }));
+  });
 
-  // If the selected model isn't a known id (e.g. a stale persisted value),
-  // fall back to the first one so we never send something unroutable.
+  // Keep the selected model valid for the current plan: if it isn't a known id
+  // (e.g. a stale persisted value) or isn't available to this user (e.g. a free
+  // user defaulted to Opus), fall back to the plan default so we never send
+  // something unroutable or something the backend rejects.
   createEffect(() => {
     const options = modelOptions();
-    if (options.some((o) => o.id === model())) return;
-    const [first] = options;
-    if (first) input.setModel(first.id);
+    if (options.some((o) => o.id === model() && o.available)) return;
+    input.setModel(defaultModelForPlan(hasPaidAccess()));
   });
 
   let containerRef!: HTMLDivElement;
@@ -102,7 +117,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
-  const [isFocused, setIsFocused] = createSignal(false);
+  const [_isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -260,7 +275,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
-      <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
+      <Surface class="rounded-xl" depth={2} solid>
         <div
           onFocusOut={(e) => {
             const next = e.relatedTarget as Node | null;

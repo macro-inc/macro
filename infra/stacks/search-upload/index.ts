@@ -15,7 +15,7 @@ const tags = {
   project: 'cloud-storage-search',
 };
 
-const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
+const { searchEventQueueArn } = getSearchEventQueue();
 
 const DOCUMENT_STORAGE_SERVICE_AUTH_KEY = aws.secretsmanager
   .getSecretVersionOutput({
@@ -31,7 +31,6 @@ const searchUploadHandler = new SearchUploadHandler(
     envVars: {
       ENVIRONMENT: pulumi.interpolate`${stack}`,
       RUST_LOG: 'search_upload_handler=info',
-      SEARCH_EVENT_QUEUE: pulumi.interpolate`${searchEventQueueName}`,
       DOCUMENT_STORAGE_SERVICE_URL: getServiceUrl(
         ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL
       ),

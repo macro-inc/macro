@@ -167,8 +167,8 @@ pub fn optional_read_env_var(s: &'static str) -> Result<Option<String>, std::env
     optional_read_env_var_with(s, read_std_env)
 }
 
-/// Read an environment variable, returning `None` if it is not present.
 #[cfg(not(test))]
+#[doc(hidden)]
 pub fn maybe_read_env(s: &'static str) -> Option<String> {
     maybe_read_env_with(s, read_std_env)
 }

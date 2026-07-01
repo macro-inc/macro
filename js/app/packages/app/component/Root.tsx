@@ -25,6 +25,7 @@ import {
   useUserId,
   useUserInfo,
 } from '@core/context/user';
+import { initAndStartEmailSync } from '@core/email-link';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -505,6 +506,28 @@ function InitialInteractiveOnboardingModal() {
     if (modalOpen()) {
       setOnboardingStarted(true);
     }
+  });
+
+  // First-time users (tutorial not yet completed) reach the app without passing
+  // through a login route that inits the email link — e.g. marketing SSO returns to
+  // /app, not /login — so kick off email sync once here. Idempotent on the backend;
+  // AlreadyInitialized is ignored. Keyed by user id (not a bare flag) so a native
+  // mobile logout→login of a different user in the same session still inits.
+  let emailInitForUserId: string | undefined;
+  createEffect(() => {
+    const data = userInfoQuery.data;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) return;
+    if (emailInitForUserId === data.id) return;
+    emailInitForUserId = data.id;
+
+    void initAndStartEmailSync().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          console.error('Failed to init email link for new user', err);
+        }
+      }
+    );
   });
 
   const handleOpenChange = (nextOpen: boolean) => {

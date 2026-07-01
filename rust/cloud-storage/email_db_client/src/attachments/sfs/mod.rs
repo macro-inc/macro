@@ -12,10 +12,14 @@ where
 {
     let db_attachment_sfs: db::attachment::AttachmentSfs = attachment_sfs.clone().into();
 
+    // Skip (don't fail) if the attachment was deleted mid-flight — a concurrent
+    // DeleteMessage inbox-sync op can cascade-delete it while we upload to SFS.
     sqlx::query!(
         r#"
         INSERT INTO email_attachments_sfs (id, attachment_id, sfs_id)
-        VALUES ($1, $2, $3)
+        SELECT $1, $2, $3
+        WHERE $2::uuid IS NULL
+           OR EXISTS (SELECT 1 FROM email_attachments WHERE id = $2)
         "#,
         db_attachment_sfs.id,
         db_attachment_sfs.attachment_id,

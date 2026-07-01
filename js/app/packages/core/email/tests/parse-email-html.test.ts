@@ -82,6 +82,16 @@ describe('parseEmailContent', () => {
     expect(result.signature).toBeNull();
   });
 
+  it('extracts a Macro signature appended to outgoing mail', () => {
+    const html = `
+      <p>Hello</p>
+      <div class="macro-email-signature">Jane Doe</div>
+    `;
+    const result = parseEmailContent(html, true, false);
+    expect(result.mainContent).not.toContain('macro-email-signature');
+    expect(result.signature).toContain('Jane Doe');
+  });
+
   it('preserves style tags from head', () => {
     const html = `
       <!DOCTYPE html>

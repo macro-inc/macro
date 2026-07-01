@@ -1,10 +1,6 @@
--- Test organizations and users
--- These reference the Organization and User tables which should exist from macro_db migrations
-INSERT INTO "Organization" (id, name)
-VALUES (1, 'Test Org 1'),
-       (2, 'Test Org 2')
-ON CONFLICT (id) DO NOTHING;
-
+-- Test users, teams, and properties for properties_db_client tests.
+-- Property definitions are owned by a team, a user, or the system.
+-- The schema enforces UNIQUE (user_id) on team_user, so each user belongs to one team.
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 VALUES
     ('a1111111-1111-1111-1111-111111111111', 'user1@test.com', 'user1@test.com', 'cus_test1'),
@@ -18,30 +14,42 @@ VALUES ('user1', 'user1@test.com', 'Test User 1', 'cus_test1', 'a1111111-1111-11
        ('user3', 'user3@test.com', 'Test User 3', 'cus_test3', 'a3333333-3333-3333-3333-333333333333')
 ON CONFLICT (id) DO NOTHING;
 
+-- Teams: Team 1 has two members (user1 owner, user3 member); Team 2 has user2.
+INSERT INTO team (id, name, owner_id)
+VALUES ('0e000000-0000-0000-0000-000000000001', 'Test Team 1', 'user1'),
+       ('0e000000-0000-0000-0000-000000000002', 'Test Team 2', 'user2')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO team_user (user_id, team_id, team_role)
+VALUES ('user1', '0e000000-0000-0000-0000-000000000001', 'owner'),
+       ('user3', '0e000000-0000-0000-0000-000000000001', 'member'),
+       ('user2', '0e000000-0000-0000-0000-000000000002', 'owner')
+ON CONFLICT DO NOTHING;
+
 -- Property definitions with various data types
 -- Note: Names are prefixed with "Test" to avoid conflicts with system properties
-INSERT INTO property_definitions (id, organization_id, user_id, display_name, data_type, is_multi_select, specific_entity_type)
-VALUES 
-    -- Organization-owned properties
-    ('11111111-1111-1111-1111-111111111111', 1, NULL, 'Test Priority', 'SELECT_STRING', false, NULL),
-    ('22222222-2222-2222-2222-222222222222', 1, NULL, 'Test Department', 'SELECT_STRING', true, NULL),
-    ('33333333-3333-3333-3333-333333333333', 1, NULL, 'Test Assigned To', 'ENTITY', true, 'USER'),
-    ('44444444-4444-4444-4444-444444444444', 1, NULL, 'Test Score', 'SELECT_NUMBER', false, NULL),
-    ('55555555-5555-5555-5555-555555555555', 1, NULL, 'Test Completed', 'BOOLEAN', false, NULL),
-    ('66666666-6666-6666-6666-666666666666', 1, NULL, 'Test Due Date', 'DATE', false, NULL),
-    ('77777777-7777-7777-7777-777777777777', 1, NULL, 'Test Budget', 'NUMBER', false, NULL),
-    ('88888888-8888-8888-8888-888888888888', 1, NULL, 'Test Description', 'STRING', false, NULL),
-    ('99999999-9999-9999-9999-999999999999', 1, NULL, 'Test Website', 'LINK', false, NULL),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, NULL, 'Test Relevant Documents', 'ENTITY', false, 'DOCUMENT'),
-    -- User-owned properties
+INSERT INTO property_definitions (id, team_id, user_id, display_name, data_type, is_multi_select, specific_entity_type)
+VALUES
+    -- Team 1-owned properties
+    ('11111111-1111-1111-1111-111111111111', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Priority', 'SELECT_STRING', false, NULL),
+    ('22222222-2222-2222-2222-222222222222', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Department', 'SELECT_STRING', true, NULL),
+    ('33333333-3333-3333-3333-333333333333', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Assigned To', 'ENTITY', true, 'USER'),
+    ('44444444-4444-4444-4444-444444444444', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Score', 'SELECT_NUMBER', false, NULL),
+    ('55555555-5555-5555-5555-555555555555', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Completed', 'BOOLEAN', false, NULL),
+    ('66666666-6666-6666-6666-666666666666', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Due Date', 'DATE', false, NULL),
+    ('77777777-7777-7777-7777-777777777777', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Budget', 'NUMBER', false, NULL),
+    ('88888888-8888-8888-8888-888888888888', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Description', 'STRING', false, NULL),
+    ('99999999-9999-9999-9999-999999999999', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Website', 'LINK', false, NULL),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Relevant Documents', 'ENTITY', false, 'DOCUMENT'),
+    -- User-owned properties (user1)
     ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', NULL, 'user1', 'Test Personal Priority', 'SELECT_STRING', false, NULL),
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', NULL, 'user1', 'Test Notes', 'STRING', false, NULL),
-    -- Mixed ownership property (org and user)
-    ('dddddddd-dddd-dddd-dddd-dddddddddddd', 2, 'user2', 'Test Shared Status', 'SELECT_STRING', false, NULL);
+    -- Team 2-owned property
+    ('dddddddd-dddd-dddd-dddd-dddddddddddd', '0e000000-0000-0000-0000-000000000002', NULL, 'Test Shared Status', 'SELECT_STRING', false, NULL);
 
 -- Property options for select types
 INSERT INTO property_options (id, property_definition_id, display_order, number_value, string_value)
-VALUES 
+VALUES
     -- Priority options (string)
     ('10111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 0, NULL, 'Low'),
     ('10111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111111', 1, NULL, 'Medium'),
@@ -66,7 +74,7 @@ VALUES
 
 -- Entity properties with various values
 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
-VALUES 
+VALUES
     -- Document entities
     ('e0111111-1111-1111-1111-111111111111', 'doc1', 'DOCUMENT', '11111111-1111-1111-1111-111111111111', '{"type": "SelectOption", "value": ["10111111-1111-1111-1111-111111111113"]}'),
     ('e0111111-1111-1111-1111-111111111112', 'doc1', 'DOCUMENT', '22222222-2222-2222-2222-222222222222', '{"type": "SelectOption", "value": ["10222222-2222-2222-2222-222222222222"]}'),

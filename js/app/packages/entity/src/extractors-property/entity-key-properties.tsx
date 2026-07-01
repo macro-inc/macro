@@ -79,7 +79,16 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
-    return getSortedKeyProperties(soupProperties.map(soupPropertyToProperty));
+    return getSortedKeyProperties(
+      soupProperties.flatMap((soupProperty) => {
+        try {
+          return [soupPropertyToProperty(soupProperty)];
+        } catch (error) {
+          console.warn('Skipping property with unsupported type', error);
+          return [];
+        }
+      })
+    );
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();

@@ -138,6 +138,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     hide: solver.hide,
     show: solver.show,
     isHidden: solver.isHidden,
+    reset: solver.reset,
   };
 
   createEffect(() => {

@@ -58,10 +58,7 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
-import {
-  useSplitPanel,
-  useSplitPanelOrThrow,
-} from '@app/component/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -113,6 +110,7 @@ import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
 import {
@@ -357,15 +355,13 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-const listStateCache = new Map<
-  string,
-  {
-    focus: string | undefined;
-    searchText: string;
-    virtualCache?: CacheSnapshot;
-    scrollOffset?: number;
-  }
->();
+const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
+
+type SoupListEntryState = {
+  focus: string | undefined;
+  virtualCache?: CacheSnapshot;
+  scrollOffset?: number;
+};
 
 interface SoupViewProps {
   viewName: string;
@@ -582,7 +578,7 @@ export const SoupView = (props: SoupViewProps) => {
             >
               <Show when={!isMobile() && !narrowSearchExpanded()}>
                 <div class="flex items-center gap-1">
-                  <span class="text-base font-bold">{props.viewName}</span>
+                  <span class="text-sm font-semibold">{props.viewName}</span>
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
@@ -725,7 +721,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
-    setSearchText,
     featuredIds,
     isSearchServiceLoading,
     isLocalSearchSettling,
@@ -1032,7 +1027,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
 
-  const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
+  const readListEntryState = () =>
+    panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
+      | SoupListEntryState
+      | undefined;
 
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
@@ -1080,32 +1078,42 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(groupByCaptorTeardown);
 
-  onCleanup(() => {
-    if (isProjectList) return;
-    const virtualHandle = virtualizerHandle();
-    listStateCache.set(cacheKey, {
-      searchText: searchText(),
-      focus: soup.focus.id(),
-      virtualCache: virtualHandle?.cache,
-      scrollOffset: virtualHandle?.scrollOffset,
-    });
-  });
+  if (!isProjectList) {
+    const listStateCaptorTeardown = panel.handle.registerEntryStateCaptor(
+      SOUP_LIST_STATE_ENTRY_KEY,
+      (): SoupListEntryState => {
+        const virtualHandle = virtualizerHandle();
+        return {
+          focus: soup.focus.id(),
+          virtualCache: virtualHandle?.cache,
+          scrollOffset: virtualHandle?.scrollOffset,
+        };
+      }
+    );
+    onCleanup(listStateCaptorTeardown);
+  }
 
   // Handles restoring scroll + focus.
   let restored = false;
-  const restoreListState = () => {
-    if (restored || isProjectList) return;
-    restored = true;
+  const restoreListState = (force = false) => {
+    if (isProjectList) return;
+    if (restored && !force) return;
 
-    const cached = listStateCache.get(cacheKey);
+    const cached = readListEntryState();
     if (cached) {
-      setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
-      virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
+      const handle = virtualizerHandle();
+      if (!handle) return;
+
+      handle.scrollTo(cached.scrollOffset ?? 0);
+      restored = true;
       registerFocusEffects(false);
       return;
     }
 
+    if (force) return;
+
+    restored = true;
     registerFocusEffects();
   };
 
@@ -1114,7 +1122,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   ) => {
     setVirtualizerHandle(handle);
 
-    restoreListState();
+    if (handle) restoreListState();
   };
 
   const featuredCount = createMemo(() => featuredIds().length);
@@ -1239,7 +1247,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           setCollapseEntity={soup.collapseEntity.set}
                         >
                           <SoupList
-                            cache={listStateCache.get(cacheKey)?.virtualCache}
+                            cache={readListEntryState()?.virtualCache}
                             ref={(el) => {
                               setLocalEntityListRef(el);
                               soupNavigationTouchHighlight(el);
@@ -1554,15 +1562,15 @@ interface SoupListProps {
 const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
-  const splitPanel = useSplitPanel();
 
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+  const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacerRef);
 
   // Full-frame mobile: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
-  const topInset = () =>
-    isMobile() ? (splitPanel?.contentOffsetTop() ?? 0) : 0;
+  const topInset = () => (isMobile() ? (topSpacerSize.height ?? 0) : 0);
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1610,7 +1618,11 @@ const SoupList = (props: SoupListProps) => {
         }}
         {...soupListContainerAttribute}
       >
-        <div aria-hidden style={{ height: `${topInset()}px` }} />
+        <div
+          ref={setTopSpacerRef}
+          aria-hidden
+          class="h-0 mobile:h-(--mobile-content-inset-top)"
+        />
         <Virtualizer
           cache={props.cache}
           ref={registerVirtualizerHandler}

@@ -1008,15 +1008,6 @@ pub struct PeerResponse {
 pub static ALLOWED_ORIGINS: &[&str] = &[
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
-    "http://localhost:3004",
-    "http://localhost:3005",
-    "http://localhost:3006",
-    "http://localhost:3007",
-    "http://localhost:3008",
-    "http://localhost:3009",
     "http://host.local:3000",
     "https://dev.macro.com",
     "https://staging.macro.com",
@@ -1029,6 +1020,11 @@ pub static ALLOWED_ORIGINS: &[&str] = &[
 pub fn is_origin_allowed(origin: &str) -> bool {
     if ALLOWED_ORIGINS.contains(&origin) {
         return true;
+    }
+    if let Some(port) = origin.strip_prefix("http://localhost:")
+        && let Ok(port) = port.parse::<u16>()
+    {
+        return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);
     }
     // Allow feature branch previews: https://{subdomain}.preview.macro.com
     if let Some(host) = origin.strip_prefix("https://")

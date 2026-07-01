@@ -29,7 +29,7 @@ function SideNavRoot(props: SideNavProps) {
   return (
     <nav
       class={cn(
-        'w-[220px] shrink-0 overflow-auto border-r border-edge-muted p-2 flex flex-col gap-2',
+        'w-[220px] shrink-0 overflow-auto p-4 flex flex-col gap-2',
         props.class
       )}
     >

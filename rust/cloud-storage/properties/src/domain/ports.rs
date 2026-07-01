@@ -3,15 +3,18 @@
 //! These traits define the interfaces that the domain layer uses.
 //! Implementations live in the outbound module.
 
+use std::collections::HashMap;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::TaskAssignedMetadata;
-use models_properties::EntityType;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use notification::domain::models::SendNotificationRequest;
 use uuid::Uuid;
 
-use super::model::EntityPropertyInfo;
+use super::model::{EntityPropertiesKey, EntityPropertyInfo};
 
 /// Repository trait for property operations.
 ///
@@ -54,6 +57,27 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<PropertyValue>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically add one option to a multi-select entity property value,
+    /// attaching the property if needed. Re-adding a present option is a no-op.
+    /// Composes with concurrent option changes without a lost update.
+    fn add_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically remove one option from a multi-select entity property value.
+    /// A no-op if the property is unattached or the option is not present.
+    fn remove_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Atomically link or unlink a task's parent (for Parent Task property).
@@ -99,6 +123,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
+
+    /// Get all properties attached to multiple entities, keyed by entity id and type.
+    /// Returns properties sorted by display name for each entity.
+    fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
+    > + Send;
 
     /// Get the name of a document.
     /// Returns `None` if the document doesn't exist or has no name.

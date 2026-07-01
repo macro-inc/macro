@@ -6,7 +6,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
-import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown } from '@ui';
+import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown, cn } from '@ui';
+import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -49,6 +50,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { Transition } from 'solid-transition-group';
+import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
@@ -257,7 +259,7 @@ function ProfilePictureRow(props: { userId: string }) {
         position="center"
         class="w-120"
       >
-        <Panel active depth={2} class="rounded-xl">
+        <Panel depth={2} class="rounded-xl">
           <Panel.Header class="px-6">
             <Dialog.Title class="text-ink text-sm font-semibold">
               Remove profile picture
@@ -338,94 +340,90 @@ export function Account() {
   };
 
   return (
-      <div class="h-full overflow-hidden flex justify-center p-2">
-        <div class="max-w-200 size-full">
-          <Panel depth={2} class="h-full overflow-hidden text-ink">
-          <Panel.Header class="px-6">
-            <div class="flex items-center gap-2">
-              <div class="text-sm font-semibold">Account</div>
-            </div>
-          </Panel.Header>
-
-          <Panel.Body scroll class="text-ink">
-            <div class="grid settings-row-dividers">
-              <Show when={ENABLE_PROFILE_PICTURES}>
-                <Show when={userId()} keyed>
-                  {(id) => <ProfilePictureRow userId={id} />}
-                </Show>
-              </Show>
-
-              <Row label="Email">
-                <span class="ph-no-capture text-sm text-ink-muted">
-                  {email() ?? ''}
-                </span>
-              </Row>
-
-              <Row label="First Name">
-                <NameInput
-                  value={firstName()}
-                  onSave={(newValue) =>
-                    saveUserName(
-                      newValue,
-                      'first_name',
-                      updatedFirstName(),
-                      setUpdatedFirstName
-                    )
-                  }
-                  placeholder="Enter First Name"
-                />
-              </Row>
-
-              <Row label="Last Name">
-                <NameInput
-                  value={lastName()}
-                  onSave={(newValue) =>
-                    saveUserName(
-                      newValue,
-                      'last_name',
-                      updatedLastName(),
-                      setUpdatedLastName
-                    )
-                  }
-                  placeholder="Enter Last Name"
-                />
-              </Row>
-
-              <Show when={autoUpdateUIEnabled()}>
-                <BundleVersionRow />
-                <BundleUpdateRow />
-              </Show>
-
-              <NotificationToggle />
-            </div>
-
-            <Show when={isMobile()}>
-              <div class="flex items-center justify-center px-6 py-6">
-                <Button
-                  variant="base"
-                  size="md"
-                  depth={3}
-                  class="px-4"
-                  onClick={() => logout()}
-                >
-                  <SignOutIcon class="size-4" />
-                  Log out
-                </Button>
-              </div>
+    <SettingsPage title="Account">
+      <SettingsSection>
+        <SettingsCard>
+          <Show when={ENABLE_PROFILE_PICTURES}>
+            <Show when={userId()} keyed>
+              {(id) => <ProfilePictureRow userId={id} />}
             </Show>
+          </Show>
 
-            <Show when={isNativeMobilePlatform()}>
-              <div class="border-t border-edge pt-4">
-                <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
-                  Delete Account
-                </Button>
-                <Dialog
+          <Row label="Email">
+            <span class="ph-no-capture text-sm text-ink-muted">
+              {email() ?? ''}
+            </span>
+          </Row>
+
+          <Row label="First Name">
+            <NameInput
+              value={firstName()}
+              onSave={(newValue) =>
+                saveUserName(
+                  newValue,
+                  'first_name',
+                  updatedFirstName(),
+                  setUpdatedFirstName
+                )
+              }
+              placeholder="Enter First Name"
+            />
+          </Row>
+
+          <Row label="Last Name">
+            <NameInput
+              value={lastName()}
+              onSave={(newValue) =>
+                saveUserName(
+                  newValue,
+                  'last_name',
+                  updatedLastName(),
+                  setUpdatedLastName
+                )
+              }
+              placeholder="Enter Last Name"
+            />
+          </Row>
+
+          <Show when={autoUpdateUIEnabled()}>
+            <BundleVersionRow />
+            <BundleUpdateRow />
+          </Show>
+
+          <NotificationToggle />
+        </SettingsCard>
+      </SettingsSection>
+
+      <Show when={isMobile()}>
+        <SettingsSection>
+          <div class="flex items-center justify-center">
+            <Button
+              variant="base"
+              size="md"
+              depth={3}
+              class="px-4"
+              onClick={() => logout()}
+            >
+              <SignOutIcon class="size-4" />
+              Log out
+            </Button>
+          </div>
+        </SettingsSection>
+      </Show>
+
+      <Show when={isNativeMobilePlatform()}>
+        <SettingsSection title="Danger zone">
+          <div>
+            <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
+              Delete Account
+            </Button>
+            <Dialog
                   open={showDeleteModal()}
                   onOpenChange={setShowDeleteModal}
                   position="center"
                   class="w-120"
                 >
-                  <Panel active depth={2} class="rounded-xl">
+                  <Panel depth={2} class="rounded-xl">
                     <Panel.Header class="px-6">
                       <Dialog.Title class="text-ink text-sm font-semibold">
                         Delete Account
@@ -456,7 +454,7 @@ export function Account() {
                   position="center"
                   class="w-120"
                 >
-                  <Panel active depth={2} class="rounded-xl">
+                  <Panel depth={2} class="rounded-xl">
                     <Panel.Header class="px-6">
                       <Dialog.Title class="text-ink text-sm font-semibold">
                         Are you absolutely sure?
@@ -478,18 +476,16 @@ export function Account() {
                     </Panel.Body>
                   </Panel>
                 </Dialog>
-              </div>
-            </Show>
-          </Panel.Body>
-        </Panel>
-      </div>
-    </div>
+          </div>
+        </SettingsSection>
+      </Show>
+    </SettingsPage>
   );
 }
 
 function Row(props: { label: string; children?: any }) {
   return (
-    <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+    <div class="bg-surface flex items-center justify-between gap-4 min-h-15.25 px-6 py-3">
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
@@ -548,10 +544,10 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-extra-muted"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {
@@ -623,6 +619,7 @@ function NotificationSettings(props: {
   return (
     <Row label="Notifications">
       <ToggleSwitch
+        size="md"
         checked={props.settings.isEnabled()}
         onChange={handleToggle}
       />
@@ -670,22 +667,120 @@ type BundleDebugInfo = {
 
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
+  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
       return null;
     })
   );
+  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
+    open ? loadEntryAssetInfo() : null
+  );
+  
   return (
     <Show when={bundleDebugInfo()}>
       {(info) => (
-        <Row label="Version">
-          <span class="text-sm text-ink-muted">
-            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'})
-            {' '}
-            - {info().nativeBuild}
-          </span>
-        </Row>
+        <>
+          <Row label="Version">
+            <button
+              type="button"
+              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => setShowBuildInfo(true)}
+            >
+              {info().bundleBuild}{' '}
+              ({info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
+              {info().nativeBuild}
+            </button>
+          </Row>
+          <Dialog
+            open={showBuildInfo()}
+            onOpenChange={setShowBuildInfo}
+            position="center"
+            class="w-120"
+          >
+            <Panel active depth={2} class="rounded-xl">
+              <Panel.Header class="px-6">
+                <Dialog.Title class="text-ink text-sm font-semibold">
+                  App Debug Info
+                </Dialog.Title>
+              </Panel.Header>
+              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
+                <div class="grid gap-2 text-sm">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Selected bundle</span>
+                    <span class="text-ink">
+                      {info().bundleBuild}{' '}
+                      ({info().source === 'embedded' ? 'app' : 'ota'})
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Native build</span>
+                    <span class="text-ink">{info().nativeBuild}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Runtime entry</span>
+                    <span
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Fresh index entry</span>
+                    <span
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Matches</span>
+                    <span
+                      class={cn(
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : entryAssetInfo()?.matches == null
+                          ? 'unknown'
+                          : entryAssetInfo()?.matches
+                            ? 'true'
+                            : 'false'}
+                    </span>
+                  </div>
+                  <Show when={entryAssetInfo()?.error}>
+                    {(error) => (
+                      <div class="flex items-center justify-between gap-4">
+                        <span class="text-ink-muted">Error</span>
+                        <span class="text-right text-failure break-all">
+                          {error()}
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+              </Panel.Body>
+            </Panel>
+          </Dialog>
+        </>
       )}
     </Show>
   );

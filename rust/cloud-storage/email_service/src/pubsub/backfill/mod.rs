@@ -10,5 +10,6 @@ mod list_threads;
 mod populate_crm_contact;
 mod populate_crm_for_user;
 mod process;
+mod seed_sent_contact;
 mod update_metadata;
 pub mod worker;

@@ -56,6 +56,7 @@ impl SendMessageRequest {
             body_macro: msg.body_macro,
             headers_json: msg.headers_json,
             send_time: None,
+            include_signature: msg.include_signature,
         }
     }
 }

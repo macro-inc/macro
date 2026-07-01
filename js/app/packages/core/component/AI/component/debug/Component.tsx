@@ -1,13 +1,15 @@
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { Model } from '@core/component/AI/types';
+import { MODEL_PRETTYNAME, MODEL_PROVIDER } from '@core/component/AI/constant';
+import { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
 
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
-import { Button } from '@ui';
-import { createEffect, createSignal } from 'solid-js';
+import { Button, cn } from '@ui';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   ChatInputProvider,
   ChatProvider,
@@ -45,6 +47,8 @@ export default function Debug() {
           <StreamMessages />
           <StaticMessages />
           <FullChat />
+          <ProviderFailureChat />
+          <FreeProviderFailureChat />
           <ToolCallRender />
           <ToolCallResponseRender />
           <LoadingMessageScroll />
@@ -188,7 +192,10 @@ function StreamMessagesInner() {
         Stream
       </button>
       <StreamStatus stream={stream} />
-      <div data-chat-scroll>
+      {/* Must be height-bounded (max-h + overflow): ChatMessages sizes a child
+          to the scroll container's own height, so an unbounded container grows
+          without limit (container height -> child min-height -> container ...). */}
+      <div data-chat-scroll class="min-h-0 max-h-100 overflow-y-auto">
         <ChatMessages />
       </div>
     </Item>
@@ -286,6 +293,215 @@ function FullChatInner() {
         />
       </div>
     </Item>
+  );
+}
+
+// --- Gallery-only multi-provider model set (NOT the product model list) ---
+// A third provider (Cerebras) lets the gallery exercise multi-hop provider
+// fallback. It deliberately lives here, not in model.ts, so it never surfaces
+// in the real product model selector.
+const CEREBRAS_MODEL = 'cerebras/llama-3.3-70b';
+const GALLERY_MODELS: string[] = [...Object.values(Model), CEREBRAS_MODEL];
+
+const galleryProvider = (id: string): string =>
+  MODEL_PROVIDER[id as Model] ?? 'cerebras';
+const galleryPrettyName = (id: string): string =>
+  MODEL_PRETTYNAME[id as Model] ?? 'Cerebras Llama 3.3';
+
+// Gallery copy of alternateProviderModel that also understands Cerebras: pick a
+// candidate whose provider is neither the current one nor any that has failed.
+function galleryAlternateModel(
+  current: string,
+  opts: { candidates: string[]; failedProviders: Set<string> }
+): string | undefined {
+  const excluded = new Set(opts.failedProviders);
+  excluded.add(galleryProvider(current));
+  return opts.candidates.find((id) => !excluded.has(galleryProvider(id)));
+}
+
+// Flat, always-visible model picker for the gallery: shows every gallery model
+// with availability lock state (mirrors how the real selector dims + locks
+// inaccessible models), so the free variant can show all models with only one
+// available.
+function GalleryModelSelector(props: {
+  selected: string;
+  isAvailable: (id: string) => boolean;
+  onSelect: (id: string) => void;
+  onLocked?: (id: string) => void;
+}) {
+  return (
+    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+      <span class="text-ink-muted">Models:</span>
+      <For each={GALLERY_MODELS}>
+        {(id) => (
+          <button
+            type="button"
+            class={cn(
+              'flex items-center gap-1 rounded-md border px-2 py-1',
+              props.selected === id
+                ? 'border-accent bg-accent text-ink'
+                : 'border-edge text-ink-muted',
+              !props.isAvailable(id) && 'opacity-50'
+            )}
+            onClick={() =>
+              props.isAvailable(id) ? props.onSelect(id) : props.onLocked?.(id)
+            }
+          >
+            {galleryPrettyName(id)}
+            <Show when={!props.isAvailable(id)}>
+              <LockIcon class="size-3" />
+            </Show>
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}
+
+// A chat that always fails with a provider error, to exercise the
+// provider-outage fallback UX end to end. Parameterized by which models the
+// "user" can access so we can show both a paid variant (multi-provider
+// fallback: Anthropic -> OpenAI -> Cerebras) and a free variant (no accessible
+// alternate -> outage message).
+function ProviderFailureDemo(props: {
+  label: string;
+  initialModel: string;
+  availableModels: string[];
+}) {
+  return (
+    <ChatInputProvider model={props.initialModel as Model}>
+      <ProviderFailureDemoInner
+        label={props.label}
+        availableModels={props.availableModels}
+      />
+    </ChatInputProvider>
+  );
+}
+
+function ProviderFailureDemoInner(props: {
+  label: string;
+  availableModels: string[];
+}) {
+  const input = useChatInputContext();
+
+  // Remember which providers failed this session so we never bounce back to a
+  // known-bad one — mirrors block-chat's Chat.tsx wiring.
+  const failedProviders = new Set<string>();
+  const nextModel = () =>
+    galleryAlternateModel(input.model(), {
+      // Only ever fall back to a model the "user" can access.
+      candidates: props.availableModels,
+      failedProviders,
+    });
+  const onSwitchModel = () => {
+    const alt = nextModel();
+    if (!alt) return;
+    failedProviders.add(galleryProvider(input.model()));
+    input.setModel(alt as Model);
+  };
+
+  return (
+    <ChatProvider
+      chatId={`debug-provider-failure-${props.availableModels.length}`}
+      messages={[]}
+      controllerOptions={{
+        onSwitchModel,
+        hasAlternateModel: () => nextModel() !== undefined,
+        onShowPaywall: () => {},
+      }}
+    >
+      <ProviderFailureDemoBody
+        label={props.label}
+        isAvailable={(id) => props.availableModels.includes(id)}
+      />
+    </ChatProvider>
+  );
+}
+
+function ProviderFailureDemoBody(props: {
+  label: string;
+  isAvailable: (id: string) => boolean;
+}) {
+  const chat = useChatContext();
+  const input = useChatInputContext();
+  const [text, setText] = createSignal('Why did the AI provider fall over?');
+
+  const send = () => {
+    const content = text().trim();
+    if (!content) return;
+    // Optimistically show the user's message...
+    chat.dispatch({
+      type: 'send_started',
+      optimisticMessage: {
+        id: crypto.randomUUID(),
+        content,
+        role: 'user',
+        attachments: [],
+      },
+    });
+    // ...then simulate the provider erroring mid-stream. This drives the real
+    // controller, which emits the actual error toast — the "Switch model"
+    // button while an accessible alternate provider remains, or a "try again
+    // later" outage message once none do.
+    setTimeout(
+      () =>
+        chat.dispatch({ type: 'stream_error', streamError: 'provider_error' }),
+      350
+    );
+  };
+
+  return (
+    <Item col label={props.label}>
+      <GalleryModelSelector
+        selected={input.model()}
+        isAvailable={props.isAvailable}
+        onSelect={(id) => input.setModel(id as Model)}
+        onLocked={(id) => console.log('paywall for locked model', id)}
+      />
+      <div data-chat-scroll class="min-h-0 max-h-72 w-full overflow-y-auto">
+        <ChatMessages />
+      </div>
+      <div class="flex w-full gap-2">
+        <input
+          class="flex-1 rounded border border-accent px-2 py-1 text-sm"
+          value={text()}
+          onInput={(e) => setText(e.currentTarget.value)}
+          placeholder="Type a message and send"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') send();
+          }}
+        />
+        <Button variant="active" onClick={send}>
+          Send
+        </Button>
+      </div>
+    </Item>
+  );
+}
+
+// Paid: every provider (incl. Cerebras) is available, so the fallback chains
+// Anthropic -> OpenAI -> Cerebras before running out and showing the outage
+// message.
+function ProviderFailureChat() {
+  return (
+    <ProviderFailureDemo
+      label="Provider failure - switch-model fallback"
+      initialModel={Model.opus48}
+      availableModels={GALLERY_MODELS}
+    />
+  );
+}
+
+// Free: all models are shown but only Haiku is available, so there is no
+// accessible model on another provider — the first failure already shows the
+// outage message (no switch button).
+function FreeProviderFailureChat() {
+  return (
+    <ProviderFailureDemo
+      label="Provider failure (free) - all shown, only Haiku available"
+      initialModel={Model.haiku45}
+      availableModels={[Model.haiku45]}
+    />
   );
 }
 

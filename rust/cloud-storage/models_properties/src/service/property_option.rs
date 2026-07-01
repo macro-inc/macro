@@ -47,6 +47,7 @@ pub struct PropertyOption {
     pub property_definition_id: Uuid,
     pub display_order: i32,
     pub value: PropertyOptionValue,
+    pub color: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -69,6 +70,7 @@ impl From<PropertyOption> for crate::api::PropertyOptionResponse {
             property_definition_id: svc.property_definition_id,
             display_order: svc.display_order,
             value: svc.value.into(),
+            color: svc.color,
         }
     }
 }

@@ -51,40 +51,8 @@
           && rel != "app/tauri/target";
       };
 
-      bunDeps = pkgs.stdenvNoCC.mkDerivation {
-        pname = "macro-js-bun-deps";
-        version = appVersion;
-        src = jsSrc;
-
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
-        ];
-
-        dontConfigure = true;
-        dontBuild = true;
-        dontFixup = true;
-
-        installPhase = ''
-          runHook preInstall
-
-          export HOME="$TMPDIR"
-          export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
-          bun install --frozen-lockfile --no-progress
-
-          mkdir -p "$out"
-          cp -a node_modules "$out/node_modules"
-
-          runHook postInstall
-        '';
-
-        outputHashAlgo = "sha256";
-        outputHashMode = "recursive";
-        outputHash =
-          if isAarch64Darwin then
-            "sha256-R0C2jkhk/QiS5v5Lm5cLiv3qU/8UzssTF37+8f3wrH4="
-          else
-            "sha256-iRTxcszsC1TKGV34k2F8cBLW7Lt3FSGIN7smcHrVVkk=";
+      nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
+        src = jsRoot;
       };
 
       frontend = pkgs.stdenvNoCC.mkDerivation {
@@ -92,29 +60,34 @@
         version = appVersion;
         src = jsSrc;
 
-        nativeBuildInputs = with pkgs; [
-          bun
-          git
+        nativeBuildInputs = [
+          pkgs.bun
+          pkgs.git
         ];
 
         dontConfigure = true;
 
         buildPhase = ''
-          runHook preBuild
+            runHook preBuild
 
-          export HOME="$TMPDIR"
-          cp -a ${bunDeps}/node_modules ./node_modules
-          chmod -R u+w ./node_modules
+            cp -a ${nodeModules}/. .
 
-          printf production > app/tauri/src-tauri/.macro-tauri-env
-          (
-            cd app/packages/app
-            MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
-            printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-            BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
-          )
+            vite_resolve_replacement='      resolve: {
+          alias: [
+            { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../../node_modules/@tauri-apps/api") },
+          ],'
+            substituteInPlace app/packages/app/vite.base.ts \
+              --replace-fail "      resolve: {" "$vite_resolve_replacement"
 
-          runHook postBuild
+            printf production > app/tauri/src-tauri/.macro-tauri-env
+            (
+              cd app/packages/app
+              MODE=production NODE_ENV=production bun ../../../node_modules/vite/bin/vite.js build -c vite.config.ts
+              printf '${appVersion}+${gitRev}\n' > dist/semver.txt
+              BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+            )
+
+            runHook postBuild
         '';
 
         installPhase = ''
@@ -185,20 +158,35 @@
                 pkgs.atk
                 pkgs.librsvg
                 pkgs.libayatana-appindicator
+                pkgs.dbus
+                pkgs.gst_all_1.gstreamer
+                pkgs.gst_all_1.gst-plugins-base
+                pkgs.gst_all_1.gst-plugins-good
+                pkgs.gst_all_1.gst-plugins-bad
+                pkgs.gst_all_1.gst-libav
                 pkgs.openssl
               ]
             } \
-            --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
+            --prefix XDG_DATA_DIRS : "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}" \
+            --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${
+              lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
+                pkgs.gst_all_1.gstreamer
+                pkgs.gst_all_1.gst-plugins-base
+                pkgs.gst_all_1.gst-plugins-good
+                pkgs.gst_all_1.gst-plugins-bad
+                pkgs.gst_all_1.gst-libav
+              ]
+            }"
 
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/32x32.png} "$out/share/icons/hicolor/32x32/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/64x64.png} "$out/share/icons/hicolor/64x64/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/128x128.png} "$out/share/icons/hicolor/128x128/apps/macro.png"
           install -Dm0644 ${../js/app/tauri/src-tauri/icons/icon.png} "$out/share/icons/hicolor/256x256/apps/macro.png"
-          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<'EOF'
+          install -Dm0644 /dev/stdin "$out/share/applications/macro.desktop" <<EOF
           [Desktop Entry]
           Type=Application
           Name=Macro
-          Exec=app %U
+          Exec=$out/bin/app %U
           Icon=macro
           Categories=Office;Utility;
           MimeType=x-scheme-handler/macro;
@@ -352,6 +340,12 @@
         pkgs.atk
         pkgs.librsvg
         pkgs.libayatana-appindicator
+        pkgs.dbus
+        pkgs.gst_all_1.gstreamer
+        pkgs.gst_all_1.gst-plugins-base
+        pkgs.gst_all_1.gst-plugins-good
+        pkgs.gst_all_1.gst-plugins-bad
+        pkgs.gst_all_1.gst-libav
         pkgs.openssl
       ];
       tauriRuntimeLibraryPath = lib.makeLibraryPath tauriRuntimeLibraries;
@@ -672,20 +666,22 @@
         };
       };
 
-      packages =
-        lib.optionalAttrs isLinux {
-          tauri-frontend = frontend;
-          tauri-desktop = wrappedTauriDesktop;
-          tauri-desktop-unwrapped = tauri.app;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        }
-        // lib.optionalAttrs isX86_64Linux {
-          tauri-desktop-appimage = tauriDesktopAppImage;
-        }
-        // lib.optionalAttrs isAarch64Darwin {
-          tauri-frontend = frontend;
-          tauri-desktop-dmg = tauriDesktopDmg;
-          tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
-        };
+      packages = {
+        js-node-modules = nodeModules;
+      }
+      // lib.optionalAttrs isLinux {
+        tauri-frontend = frontend;
+        tauri-desktop = wrappedTauriDesktop;
+        tauri-desktop-unwrapped = tauri.app;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      }
+      // lib.optionalAttrs isX86_64Linux {
+        tauri-desktop-appimage = tauriDesktopAppImage;
+      }
+      // lib.optionalAttrs isAarch64Darwin {
+        tauri-frontend = frontend;
+        tauri-desktop-dmg = tauriDesktopDmg;
+        tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
+      };
     };
 }

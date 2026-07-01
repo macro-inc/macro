@@ -71,7 +71,7 @@ function isEntityItem(item: CommandMenuItem): item is EntityItem {
   return item.kind === 'entity';
 }
 
-function _isUserItem(item: CommandMenuItem): item is UserItem {
+function isUserItem(item: CommandMenuItem): item is UserItem {
   return item.kind === 'user';
 }
 
@@ -431,5 +431,5 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export type { AskAiItem, CommandMenuItem, SearchItem };
-export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem };
+export type { AskAiItem, CommandMenuItem, SearchItem, UserItem };
+export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem, isUserItem };

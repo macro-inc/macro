@@ -7,9 +7,9 @@
 import type { PropertyOwnerOneOfThreeScope } from './propertyOwnerOneOfThreeScope';
 
 /**
- * Organization-scoped property only
+ * Team-scoped property.
  */
 export type PropertyOwnerOneOfThree = {
-  organization_id: number;
   scope: PropertyOwnerOneOfThreeScope;
+  team_id: string;
 };
