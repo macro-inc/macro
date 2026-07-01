@@ -6,6 +6,7 @@ import {
   createMemo,
   createSignal,
   Index,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -70,8 +71,7 @@ type ZoneProps = {
  * ```
  */
 function Zone(props: ParentProps<ZoneProps>) {
-  // NOT REACTIVE on direction on purpose.
-  const { direction } = props;
+  const direction = () => props.direction;
 
   const gutterPx = () => props.gutter ?? 0;
   const minSize = () => props.minSize ?? 0;
@@ -79,13 +79,15 @@ function Zone(props: ParentProps<ZoneProps>) {
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const rootSize = createElementSize(root);
   const zoneSize = createMemo(() => {
-    return direction === 'horizontal'
+    return direction() === 'horizontal'
       ? (rootSize.width ?? 0)
       : (rootSize.height ?? 0);
   });
 
   const solver = createResizeSolver({
-    direction,
+    // The solver is axis-agnostic (shares are dimensionless), so it only needs
+    // the current axis to store; reactivity lives on `ctx.direction`.
+    direction: props.direction,
     gutter: gutterPx,
     size: zoneSize,
     panels: [],
@@ -255,18 +257,24 @@ function Panel(props: ParentProps<PanelProps>) {
     return props.target;
   };
 
-  onMount(() => {
-    if (props.collapsed?.() === false) return;
-    ctx.register(
-      {
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-        target: getTarget(),
-      },
-      props.index
-    );
-  });
+  let registered = false;
+  createEffect(
+    on(ctx.size, (size) => {
+      if (size <= 0 || registered || props.collapsed?.() === false) return;
+
+      registered = true;
+
+      ctx.register(
+        {
+          id: props.id,
+          minSize: props.minSize,
+          maxSize: props.maxSize ?? Infinity,
+          target: getTarget(),
+        },
+        props.index
+      );
+    })
+  );
 
   createEffect(() => {
     ctx.update(props.id, {
@@ -326,7 +334,7 @@ function Panel(props: ParentProps<PanelProps>) {
   const size = createMemo(ctx.sizeOf(props.id));
 
   const styles = createMemo(() => {
-    if (ctx.direction === 'horizontal') {
+    if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
         bottom: '0px',
@@ -378,7 +386,7 @@ type GutterProps = {
 function Gutter(props: GutterProps) {
   const ctx = useContext(ResizeZoneContext)!;
   const styles = createMemo(() => {
-    if (ctx.direction === 'horizontal') {
+    if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
         bottom: '0px',
@@ -406,16 +414,16 @@ function Gutter(props: GutterProps) {
 
     const rect = root.getBoundingClientRect();
     const visualSize =
-      ctx.direction === 'horizontal' ? rect.width : rect.height;
+      ctx.direction() === 'horizontal' ? rect.width : rect.height;
     const layoutSize =
-      ctx.direction === 'horizontal' ? root.offsetWidth : root.offsetHeight;
+      ctx.direction() === 'horizontal' ? root.offsetWidth : root.offsetHeight;
 
     if (visualSize <= 0 || layoutSize <= 0) return 1;
     return visualSize / layoutSize;
   }
 
   function eventPosition(ev: PointerEvent) {
-    return ctx.direction === 'horizontal' ? ev.clientX : ev.clientY;
+    return ctx.direction() === 'horizontal' ? ev.clientX : ev.clientY;
   }
 
   function onPointerDown(ev: PointerEvent) {
@@ -448,7 +456,7 @@ function Gutter(props: GutterProps) {
   }
 
   function onKeyDown(ev: KeyboardEvent) {
-    if (ctx?.direction === 'horizontal') {
+    if (ctx?.direction() === 'horizontal') {
       if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     } else {
       if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
@@ -459,7 +467,7 @@ function Gutter(props: GutterProps) {
     ev.stopImmediatePropagation();
 
     const step = ev.shiftKey ? 100 : 20;
-    if (ctx?.direction === 'horizontal') {
+    if (ctx?.direction() === 'horizontal') {
       const sign = ev.key === 'ArrowLeft' ? -1 : 1;
       props.nudge(props.index, sign * step);
     } else {
@@ -473,13 +481,13 @@ function Gutter(props: GutterProps) {
       class="group"
       role="separator"
       aria-orientation={
-        ctx.direction === 'horizontal' ? 'vertical' : 'horizontal'
+        ctx.direction() === 'horizontal' ? 'vertical' : 'horizontal'
       }
       tabIndex={0}
       aria-label={`resize at ${props.index}`}
       style={{
         position: 'absolute',
-        cursor: ctx.direction === 'horizontal' ? 'col-resize' : 'row-resize',
+        cursor: ctx.direction() === 'horizontal' ? 'col-resize' : 'row-resize',
         ...styles(),
       }}
       onPointerDown={onPointerDown}
@@ -492,12 +500,12 @@ function Gutter(props: GutterProps) {
           ptrDown() && 'opacity-100'
         )}
         style={{
-          left: ctx.direction === 'horizontal' ? '50%' : '0',
-          top: ctx.direction === 'vertical' ? '50%' : '0',
-          width: ctx.direction === 'horizontal' ? '2px' : '100%',
-          height: ctx.direction === 'vertical' ? '2px' : '100%',
+          left: ctx.direction() === 'horizontal' ? '50%' : '0',
+          top: ctx.direction() === 'vertical' ? '50%' : '0',
+          width: ctx.direction() === 'horizontal' ? '2px' : '100%',
+          height: ctx.direction() === 'vertical' ? '2px' : '100%',
           transform:
-            ctx.direction === 'horizontal'
+            ctx.direction() === 'horizontal'
               ? 'translateX(-50%)'
               : 'translateY(-50%)',
         }}
