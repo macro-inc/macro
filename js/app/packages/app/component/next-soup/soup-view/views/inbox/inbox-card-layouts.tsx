@@ -634,7 +634,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
               </Show>
               <button
                 type="button"
-                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40 truncate"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -642,8 +642,8 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
                 }}
               >
                 {expanded()
-                  ? 'Hide missed notifications'
-                  : 'Show missed notifications'}
+                  ? 'Hide all notifications'
+                  : 'Show all notifications'}
               </button>
             </Show>
           </InboxCard.Meta>
@@ -937,7 +937,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
               </Show>
               <button
                 type="button"
-                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40"
+                class="rounded text-ink-extra-muted transition-colors hover:text-ink-muted focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/40 truncate"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
