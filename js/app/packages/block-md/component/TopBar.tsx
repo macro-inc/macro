@@ -8,7 +8,7 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@app/component/ResponsiveBlockToolbar';
-import { SidePanel, useSidePanel } from '@app/component/side-panel';
+import { useSidePanel } from '@app/component/side-panel';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -28,7 +28,6 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -36,13 +35,11 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShared from '@icon/wide-share.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { Button, cn } from '@ui';
 import { type Accessor, createEffect, on, onCleanup, Show } from 'solid-js';
 import { useHistory } from '../history/HistoryContext';
 import { DispatchAgentButton } from './DispatchAgentMenu';

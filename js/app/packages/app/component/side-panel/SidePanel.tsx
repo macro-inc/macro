@@ -25,9 +25,9 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import { splitPanelLayer } from '../split-layout/layers';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { splitPanelLayer } from '../split-layout/layers';
 import {
   SidePanelContext,
   type SidePanelContextType,

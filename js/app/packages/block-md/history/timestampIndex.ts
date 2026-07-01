@@ -1,6 +1,6 @@
 import type { HistoryVersionId } from '@service-sync/client';
-import type { Change, LoroDoc } from 'loro-crdt';
 import type { SerializedEditorState } from 'lexical';
+import type { Change, LoroDoc } from 'loro-crdt';
 
 type Slot = { startMs: number; endMs: number };
 

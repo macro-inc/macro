@@ -17,7 +17,10 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_HISTORY_COMPONENT,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -146,7 +149,9 @@ function HistorySectionContent() {
     >
       {(sessions) => (
         <div class="min-w-0 overflow-hidden">
-          <HistoryScrubber compact />
+          <Show when={ENABLE_HISTORY_COMPONENT}>
+            <HistoryScrubber compact />
+          </Show>
           <Show when={sessions().length > 0}>
             <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
               <button

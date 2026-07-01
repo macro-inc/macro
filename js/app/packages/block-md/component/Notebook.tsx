@@ -342,19 +342,19 @@ export function Notebook(props: {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          {/* Relative wrapper so the history overlay covers only the body region,
-              leaving the title + properties above it untouched and aligned. */}
-          <div class="relative">
-            <MarkdownEditor
-              loroManager={props.loroManager}
-              showLexicalStateDebugger={
-                canUseLexicalStateDebugger() && showLexicalStateDebugger()
-              }
-              onLexicalStateDebuggerClose={() =>
-                setShowLexicalStateDebugger(false)
-              }
-            />
-            <Show when={ENABLE_HISTORY_COMPONENT}>
+          <Show when={ENABLE_HISTORY_COMPONENT}>
+            {/* Relative wrapper so the history overlay covers only the body region,
+                leaving the title + properties above it untouched and aligned. */}
+            <div class="relative">
+              <MarkdownEditor
+                loroManager={props.loroManager}
+                showLexicalStateDebugger={
+                  canUseLexicalStateDebugger() && showLexicalStateDebugger()
+                }
+                onLexicalStateDebuggerClose={() =>
+                  setShowLexicalStateDebugger(false)
+                }
+              />
               <HistoryOverlay
                 documentId={documentId}
                 documentName={documentName()}
@@ -364,8 +364,8 @@ export function Notebook(props: {
                 visible={history.isOpen()}
                 onExit={history.exit}
               />
-            </Show>
-          </div>
+            </div>
+          </Show>
           <Show when={!history.isOpen()}>
             <DocumentDiscussion />
           </Show>
