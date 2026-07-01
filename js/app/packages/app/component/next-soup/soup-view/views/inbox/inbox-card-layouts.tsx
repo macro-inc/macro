@@ -74,13 +74,22 @@ const isUnreadNotification = (notification?: Notification) =>
   notification ? !notification.viewed_at : false;
 
 const getGithubSender = (entity: EntityData, notification?: Notification) => {
-  const content = notification?.notification_metadata.content as
-    | { senderGithubLogin?: string | null }
-    | undefined;
-  const pr =
-    entity.type === 'foreign' && entity.foreignSource === 'github_pull_request'
-      ? entity.metadata
-      : undefined;
+  const meta = notification?.notification_metadata;
+  if (
+    meta &&
+    meta.tag !== 'github_pr_status_changed' &&
+    meta.tag !== 'github_review_requested' &&
+    meta.tag !== 'github_pr_comment' &&
+    meta.tag !== 'github_pr_mention' &&
+    meta.tag !== 'github_pr_review' &&
+    meta.tag !== 'github_pr_check_run'
+  )
+    return;
+
+  const content = meta?.content;
+
+  const pr = isGithubPrEntity(entity) ? entity.metadata : undefined;
+
   const login = content?.senderGithubLogin ?? pr?.authorLogin ?? undefined;
   let imageUrl: string | undefined;
   if (content?.senderGithubLogin) {
@@ -193,7 +202,15 @@ function Avatar(props: {
       }
     >
       <Match when={props.imageUrl}>
-        {(url) => <img src={url()} alt="" class="size-full object-cover" />}
+        {(url) => (
+          <img
+            src={url()}
+            alt=""
+            class="size-full object-cover"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+          />
+        )}
       </Match>
       <Match when={isMacroAgent()}>
         <MacroLogo class="m-auto size-1/2 text-accent" />
