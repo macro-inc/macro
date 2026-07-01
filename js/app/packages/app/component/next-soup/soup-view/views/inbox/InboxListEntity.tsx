@@ -1,4 +1,3 @@
-import { useSoup } from '@app/component/next-soup/soup-context';
 import { useChannelsContext } from '@core/context/channels';
 import { MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';

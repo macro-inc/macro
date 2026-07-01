@@ -8,7 +8,6 @@ import {
   Index,
   on,
   onCleanup,
-  onMount,
   type ParentProps,
   Show,
   useContext,
