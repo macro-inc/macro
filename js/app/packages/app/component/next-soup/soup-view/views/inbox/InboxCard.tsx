@@ -1,4 +1,3 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui';
 import { For, type JSX, Show } from 'solid-js';

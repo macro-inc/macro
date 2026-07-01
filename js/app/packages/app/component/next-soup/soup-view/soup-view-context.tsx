@@ -391,10 +391,25 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
+  // calls entirely, so drop that exclusion and filter to missed status instead.
+  const applyInboxCallFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const { callId: _callId, ...include } = state.include;
+    return {
+      ...state,
+      include: {
+        ...include,
+        callStatus: 'MISSED',
+      },
+    };
+  };
+
   const applyViewFilters = (state: QueryState): QueryState => {
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
+    next = applyInboxCallFilter(next);
     return next;
   };
 

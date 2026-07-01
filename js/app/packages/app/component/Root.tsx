@@ -7,10 +7,7 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
-import {
-  globalSplitManager,
-  setGlobalSplitManager,
-} from '@app/signal/splitLayout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallKitSync } from '@channel/Call';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
@@ -86,7 +83,6 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
-  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -107,7 +103,6 @@ import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
-import { SplitLayoutContainer } from './split-layout/SplitLayout';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
