@@ -264,6 +264,25 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     get_ws_id_from_tags(&tags)
 }
 
+/// send a shallow snapshot to cache and search service
+/// we should eagerly call this from tiem to time to keep our backend up to date on
+/// the status of the document:
+/// - every few seconds
+/// - on creation
+/// - on everyone being disconnected
+async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
+    if let Err(err) = DssInternalClient::new(env)
+        .publish_shallow_snapshot(document_id, snapshot)
+        .await
+    {
+        warn!(error=?err, "failed to push snapshot to DSS");
+    }
+    #[cfg(feature = "search-service")]
+    if let Err(err) = crate::sps::update(document_id, env).await {
+        warn!(error=?err, "failed to update search index");
+    }
+}
+
 /// Schedule an alarm 5 seconds from now.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
@@ -401,6 +420,11 @@ impl DocumentSyncSession {
                     );
                 }
             }
+            let document_id_owned = document_id.to_string();
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                report_new_doc_state(&document_id_owned, &snapshot, &env).await;
+            });
         }
 
         Response::empty()
@@ -910,13 +934,7 @@ impl DurableObject for DocumentSyncSession {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    // best effort
-                    if let Err(err) = DssInternalClient::new(&env)
-                        .publish_shallow_snapshot(&document_id, &snapshot)
-                        .await
-                    {
-                        warn!(error =? err, "failed to push snapshot to DSS");
-                    }
+                    report_new_doc_state(&document_id, &snapshot, &env).await;
                 }
             });
         }
@@ -959,9 +977,16 @@ impl DurableObject for DocumentSyncSession {
             .context("failed to broadcast awareness")?;
         }
 
-        #[cfg(feature = "search-service")]
         if self.state.get_websockets().len() == 1 {
-            crate::sps::update(&self.document_id().await?, &self.env).await?;
+            if let Ok(document_id) = self.document_id().await
+                && let Ok(state) = self.document_state().await
+                && let Ok(snapshot) = state.export_shallow_snapshot()
+            {
+                let env = self.env.clone();
+                self.state.wait_until(async move {
+                    report_new_doc_state(&document_id, &snapshot, &env).await;
+                });
+            }
         }
         Ok(())
     }
