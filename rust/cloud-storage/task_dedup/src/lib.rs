@@ -7,6 +7,7 @@
 //! crate's traits and injected as generic parameters into [`TaskDedupService`].
 
 pub mod domain;
+pub mod eval;
 pub mod outbound;
 
 use embedding::embedding_provider::openai::{DIMS, TextEmbedding3Small};

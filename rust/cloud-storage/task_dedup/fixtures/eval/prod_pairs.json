@@ -1,0 +1,33 @@
+{
+  "tasks": [],
+  "pairs": [
+    {
+      "a": "019f1a25-f81b-7fb5-8c87-1f3ef90ae6a1",
+      "b": "019f1a21-cf61-70ee-84e5-79be5facf783",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both in the tags feature area, but 'fix tag deletion' and 'tag filters in soup and search' are different actions."
+    },
+    {
+      "a": "019f00ce-fb4f-7c6b-bfa6-ccab4444b81d",
+      "b": "019f0095-4e95-7baf-9f37-c6dc41d961ef",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both in search, but one is a quoted-single-token exact-match bug and the other is a highlight-cost perf fix."
+    },
+    {
+      "a": "019efab2-174d-7540-8667-c13f10239b64",
+      "b": "019efab0-61fe-7059-a7d2-22f15035fde8",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both about thread-label AI tools, but one adds labels to GetThread's response and the other fixes a broken update-labels tool."
+    },
+    {
+      "a": "019f01d0-e3bf-7635-b492-06737c5a147d",
+      "b": "019efa40-e31c-78bd-90df-98870cfa31d0",
+      "expected_duplicate": false,
+      "case": "prod_observed",
+      "note": "Both search UX, but pagination experience vs. preserving search text on back navigation are different issues."
+    }
+  ]
+}

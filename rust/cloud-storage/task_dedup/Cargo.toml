@@ -9,6 +9,11 @@ name = "backfill_task_embeddings"
 path = "src/bin/backfill_task_embeddings.rs"
 required-features = ["backfill"]
 
+[[bin]]
+name = "pull_task_corpus"
+path = "src/bin/pull_task_corpus.rs"
+required-features = ["backfill"]
+
 [features]
 # Pulls in everything the `backfill_task_embeddings` binary needs. The library
 # itself does not require any of these, so default builds stay lean.
