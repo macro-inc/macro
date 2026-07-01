@@ -693,7 +693,7 @@ export const UnifiedFilterDropdown = (
           </Switch>
         </Show>
 
-        <Dropdown.Content>
+        <Dropdown.Content class="shadow-menu">
           <Dropdown.Group>
             <Show
               when={categories().length === 1 && !isTasksView()}
