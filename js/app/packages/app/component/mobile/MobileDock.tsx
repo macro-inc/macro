@@ -416,7 +416,12 @@ export function MobileDock(props: MobileDockProps) {
   };
 
   return (
-    <div class={cn("flex items-center gap-3 px-(--mobile-chrome-gutter)", props.class)}>
+    <div
+      class={cn(
+        'flex items-center gap-3 px-(--mobile-chrome-gutter)',
+        props.class
+      )}
+    >
       <MobileDockButton
         icon={HomeIcon}
         ariaLabel="Home"
