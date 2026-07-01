@@ -9,23 +9,32 @@ export function OldOverlay() {
   const oldOverlayMount = () => splitPanel?.layoutRefs.overlay;
 
   return (
-    <Show when={history.isViewingHistory() && oldOverlayMount()}>
+    <Show when={history.isOpen() && oldOverlayMount()}>
       <Portal mount={oldOverlayMount()!}>
         <div
           class="pointer-events-none absolute inset-0 overflow-hidden"
           style={{ 'z-index': 25 }}
         >
           <div
-            class="absolute inset-0 rounded-[3rem]"
-            style={{ 'box-shadow': 'inset 0 0 3rem 2.75rem oklch(var(--b0l) var(--b0c) var(--b0h) / 0.96)' }}
+            class="absolute inset-0 rounded-xl"
+            style={{
+              'box-shadow':
+                'inset 0 0 3rem 2.75rem oklch(calc(var(--b0l) * 0.9) var(--b0c) var(--b0h) / 0.96)',
+            }}
           />
           <div
-            class="absolute inset-3 rounded-[2.5rem]"
-            style={{ 'box-shadow': 'inset 0 0 6rem 1.5rem oklch(var(--b0l) var(--b0c) var(--b0h) / 0.58)' }}
+            class="absolute inset-3 rounded-xl"
+            style={{
+              'box-shadow':
+                'inset 0 0 6rem 1.5rem oklch(calc(var(--b0l) * 0.9) var(--b0c) var(--b0h) / 0.58)',
+            }}
           />
           <div
             class="absolute inset-0"
-            style={{ background: 'radial-gradient(ellipse at center, transparent 48%, oklch(var(--b0l) var(--b0c) var(--b0h) / 0.14) 68%, oklch(var(--b0l) var(--b0c) var(--b0h) / 0.58) 86%, oklch(var(--b0l) var(--b0c) var(--b0h) / 0.96) 100%)' }}
+            style={{
+              background:
+                'radial-gradient(ellipse at center, transparent 48%, oklch(calc(var(--b0l) * 0.9) var(--b0c) var(--b0h) / 0.14) 68%, oklch(calc(var(--b0l) * 0.9) var(--b0c) var(--b0h) / 0.58) 86%, oklch(calc(var(--b0l) * 0.9) var(--b0c) var(--b0h) / 0.96) 100%)',
+            }}
           />
         </div>
       </Portal>

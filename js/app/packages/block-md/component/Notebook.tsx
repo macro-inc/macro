@@ -115,7 +115,7 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
-  const showComments = () => hasComment() && !history.isViewingHistory();
+  const showComments = () => hasComment() && !history.isOpen();
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -324,13 +324,13 @@ export function Notebook(props: {
                 documentName={documentName()}
                 currentState={currentEditorState}
                 selectedAt={history.selectedAt()}
-                isScrubbedRightmost={history.isScrubbedRightmost()}
-                visible={history.isViewingHistory()}
+                isLive={history.isLive()}
+                visible={history.isOpen()}
                 onExit={history.exit}
               />
             </Show>
           </div>
-          <Show when={!history.isViewingHistory()}>
+          <Show when={!history.isOpen()}>
             <DocumentDiscussion />
           </Show>
         </ParamsProvider>

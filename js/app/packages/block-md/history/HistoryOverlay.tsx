@@ -10,7 +10,10 @@ import { Button } from '@ui';
 import type { SerializedEditorState } from 'lexical';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import type { DiffStatus } from '@lexical-core';
 import { useHistory } from './HistoryContext';
+import { UserHoverTag } from './UserHoverTag';
+import { userColor, userLabel } from './utils';
 
 const nameForkedDocument = (name: string) => `${name} (forked)`;
 
@@ -19,7 +22,7 @@ export function HistoryOverlay(props: {
   documentName: string;
   currentState: () => SerializedEditorState | undefined;
   selectedAt: Date | null;
-  isScrubbedRightmost: boolean;
+  isLive: boolean;
   visible: boolean;
   onExit: () => void;
 }) {
@@ -44,15 +47,22 @@ export function HistoryOverlay(props: {
   });
 
   const targetMs = createMemo<number | undefined>(() => {
-    if (props.isScrubbedRightmost) return undefined;
+    if (props.isLive) return undefined;
     return props.selectedAt?.getTime();
   });
 
   const previewState = createMemo(() => {
-    if (props.isScrubbedRightmost) return currentEditorState();
+    if (history.diff.session()) return history.diff.previewState() ?? undefined;
+    if (props.isLive) return currentEditorState();
     const ms = targetMs();
     if (ms === undefined) return currentEditorState();
     return history.checkoutAt(ms) ?? currentEditorState();
+  });
+
+  // Tint inline diff markers with the session author's color
+  const diffAuthorColor = createMemo(() => {
+    const session = history.diff.session();
+    return session ? userColor(session.userId) : undefined;
   });
 
   const versionId = createMemo(() => {
@@ -61,12 +71,48 @@ export function HistoryOverlay(props: {
     return history.versionIdAt(ms);
   });
 
+  // Hovering a changed run shows who changed it, reusing the scrubber's tag. The
+  // author (a user id) lives on the DiffTextNode's DOM as data-diff-author, so one
+  // delegated handler covers every run — no per-node component bridging Lexical.
+  let rootRef!: HTMLDivElement;
+  const [hoverAuthor, setHoverAuthor] = createSignal<{
+    userId: string;
+    status: DiffStatus | undefined;
+    x: number;
+    y: number;
+  } | null>(null);
+  const onDiffPointerMove = (e: PointerEvent) => {
+    const el = (e.target as HTMLElement | null)?.closest?.<HTMLElement>(
+      '[data-diff-author]'
+    );
+    if (!el) {
+      setHoverAuthor(null);
+      return;
+    }
+    const rect = rootRef.getBoundingClientRect();
+    const rawStatus = el.dataset.diffStatus;
+    setHoverAuthor({
+      userId: el.dataset.diffAuthor ?? 'unknown',
+      status:
+        rawStatus === 'insert' || rawStatus === 'delete'
+          ? rawStatus
+          : undefined,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+
+  const authorTagLabel = (userId: string, status: DiffStatus | undefined) => {
+    const who = userLabel(userId);
+    if (status === 'delete') return `Deleted by ${who}`;
+    if (status === 'insert') return `Added by ${who}`;
+    return `Edited by ${who}`;
+  };
+
   const [forking, setForking] = createSignal(false);
   const handleFork = async (keepOpen = false) => {
-    const vid = props.isScrubbedRightmost
-      ? undefined
-      : (versionId() ?? undefined);
-    if ((!props.isScrubbedRightmost && !vid) || forking()) return;
+    const vid = props.isLive ? undefined : (versionId() ?? undefined);
+    if ((!props.isLive && !vid) || forking()) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
       documentId: props.documentId,
@@ -84,8 +130,14 @@ export function HistoryOverlay(props: {
 
   return (
     <div
+      ref={rootRef}
       class="absolute inset-0 z-20"
-      style={{ display: props.visible ? undefined : 'none' }}
+      style={{
+        display: props.visible ? undefined : 'none',
+        '--diff-author': diffAuthorColor(),
+      }}
+      onPointerMove={onDiffPointerMove}
+      onPointerLeave={() => setHoverAuthor(null)}
     >
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
       <Show when={props.visible && controlMount()}>
@@ -104,8 +156,7 @@ export function HistoryOverlay(props: {
               onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
               disabled={
                 forking() ||
-                (!props.isScrubbedRightmost &&
-                  (history.isLoadingHistoryDoc() || !versionId()))
+                (!props.isLive && (history.loading.doc() || !versionId()))
               }
             >
               <GitFork class="size-4 shrink-0" />
@@ -131,6 +182,19 @@ export function HistoryOverlay(props: {
             />
           );
         }}
+      </Show>
+      <Show when={hoverAuthor()}>
+        {(hover) => (
+          <UserHoverTag
+            label={authorTagLabel(hover().userId, hover().status)}
+            color={userColor(hover().userId)}
+            left={Math.max(
+              0,
+              Math.min((rootRef?.clientWidth ?? 0) - 180, hover().x + 12)
+            )}
+            top={Math.max(0, hover().y - 32)}
+          />
+        )}
       </Show>
     </div>
   );

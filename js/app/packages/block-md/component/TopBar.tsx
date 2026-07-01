@@ -231,7 +231,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        <Show when={history.isViewingHistory()}>
+        <Show when={history.isOpen()}>
           <div class="rounded-full bg-black/70 px-3 py-1 font-medium text-white/85 text-xs tracking-wide shadow-sm">
             Viewing history
           </div>

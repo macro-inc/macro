@@ -11,6 +11,8 @@
   "author": "seamus",
   "dependencies": {
     "nanoid": "^5.1.5",
+    "diff": "^9.0.0",
+    "ts-pattern": "^5.9.0",
     "lexical": "0.32.1",
     "loro-crdt": "1.13.3",
     "@lexical/code": "0.32.1",

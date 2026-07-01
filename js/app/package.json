@@ -86,6 +86,7 @@
 		"colorjs.io": "^0.5.2",
 		"date-fns": "^4.1.0",
 		"detect-browser": "^5.3.0",
+		"diff": "^9.0.0",
 		"email-validator": "^2.0.4",
 		"emojilib": "^4.0.2",
 		"fuse.js": "^7.1.0",

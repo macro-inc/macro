@@ -5,11 +5,11 @@ import { type Accessor, createMemo, For, Show } from 'solid-js';
 import { buildActivityRows } from './activityRows';
 import { userColor, userLabel } from './utils';
 
-
 type HistorySessionListProps = {
   sessions: readonly HistorySession[];
   selectedAt: Accessor<Date | null>;
-  onSelect: (at: Date | null) => void;
+  onSelect: (at?: Date) => void;
+  onViewSessionDiff?: (session: HistorySession) => void;
   maxHeightPx?: number | null;
 };
 
@@ -34,7 +34,9 @@ function UserList(props: { userIds: readonly string[] }) {
         {(userId, index) => (
           <>
             <Show when={index() > 0}>
-              {index() === visible().length - 1 && overflow() <= 0 ? ' and ' : ', '}
+              {index() === visible().length - 1 && overflow() <= 0
+                ? ' and '
+                : ', '}
             </Show>
             <UserName userId={userId} />
           </>
@@ -75,10 +77,23 @@ export function HistorySessionList(props: HistorySessionListProps) {
                     'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     isSelected() && 'bg-active text-ink'
                   )}
-                  onClick={() => props.onSelect(new Date(row.endMs))}
+                  onClick={() => {
+                    if (props.onViewSessionDiff) {
+                      // A row aggregates a burst of activity; diff its whole
+                      // time range, tinted by its lead editor.
+                      props.onViewSessionDiff({
+                        userId: row.userIds[0] ?? 'unknown',
+                        startMs: row.startMs,
+                        endMs: row.endMs,
+                        count: row.count,
+                      });
+                    } else {
+                      props.onSelect(new Date(row.endMs));
+                    }
+                  }}
                 >
-                  <span class="flex shrink-0 items-center -space-x-1">
-                    <For each={row.userIds.slice(0, 4)}>
+                  <span class="flex w-4 shrink-0 items-center -space-x-1">
+                    <For each={row.userIds.slice(0, MAX_NAMED)}>
                       {(userId) => (
                         <span
                           class="size-2 rounded-full ring-1 ring-surface"

@@ -1,14 +1,6 @@
 import { macroIdToEmail, tryMacroId } from '@core/user';
 
-export const LANE_HUES = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
-
-export function userColor(userId: string): string {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
-  }
-  return `var(--color-accent-${LANE_HUES[Math.abs(hash) % LANE_HUES.length]})`;
-}
+export { diffAuthorColor as userColor } from '@lexical-core';
 
 export function userLabel(userId: string): string {
   if (userId === 'unknown') return 'Unknown';

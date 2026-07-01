@@ -3,18 +3,18 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { group } from 'd3-array';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   For,
   on,
   onCleanup,
-  type Setter,
   Show,
 } from 'solid-js';
 import { createTimelineScales, type WindowRange } from './createTimelineScales';
+import { useHistory } from './HistoryContext';
 import { buildVolumeShape, VOLUME_BAND_H, type VolumeShape } from './timeline';
+import { UserHoverTag } from './UserHoverTag';
 import { formatTimestamp, userColor, userLabel } from './utils';
 
 type ScrubberUser = { id: string; label: string; color: string };
@@ -23,18 +23,9 @@ const MIN_VIEW = 1000;
 const DRAG_THRESHOLD = 4;
 const THUMB_HIT_PX = 12;
 
-export type HistoryScrubberProps = {
-  sessions: readonly HistorySession[];
-  selectedAt: Accessor<Date | null>;
-  isViewingHistory: Accessor<boolean>;
-  setViewingHistory: Setter<boolean>;
-  isScrubbedRightmost: Accessor<boolean>;
-  onSelectRightmost: () => void;
-  onSelect: (at: Date | null) => void;
-  compact?: boolean;
-};
-
-export function HistoryScrubber(props: HistoryScrubberProps) {
+export function HistoryScrubber(props: { compact?: boolean }) {
+  const history = useHistory();
+  const sessions = history.sessions;
   let containerRef!: HTMLDivElement;
   let hoverLabelRef!: HTMLSpanElement;
   const size = createElementSize(() => containerRef);
@@ -55,7 +46,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   } | null>(null);
   // users (with metadata for displaying them in their tracks)
   const users = createMemo<ScrubberUser[]>(() => {
-    const ids = [...new Set(props.sessions.map((session) => session.userId))];
+    const ids = [...new Set(sessions().map((session) => session.userId))];
     return ids.map((id) => ({
       id,
       label: userLabel(id),
@@ -64,7 +55,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   });
 
   const lanes = createMemo<ScrubberLane[]>(() => {
-    const byUser = group(props.sessions, (session) => session.userId);
+    const byUser = group(sessions(), (session) => session.userId);
     return users()
       .filter((user) => byUser.has(user.id))
       .map((user) => ({ user, sessions: byUser.get(user.id)! }));
@@ -79,7 +70,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     containerPositionToWarpedPosition,
     timestampToContainerPosition,
     containerPositionToTimestamp,
-  } = createTimelineScales(() => props.sessions, width, view);
+  } = createTimelineScales(sessions, width, view);
 
   const clampView = (start: number, end: number) => {
     const total = compressedTimeline().total;
@@ -100,13 +91,13 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => {
       rafId = null;
-      props.onSelect(new Date(ms));
+      history.enter(new Date(ms));
     });
   };
 
   createEffect(
-    on(props.selectedAt, (selectedDate) => {
-      if (!selectedDate || props.isScrubbedRightmost()) return;
+    on(history.selectedAt, (selectedDate) => {
+      if (!selectedDate || history.isLive()) return;
       const warped = timestampToWarpedPosition(selectedDate.getTime());
       const { start, end } = visibleWindow();
       if (warped >= start && warped <= end) return;
@@ -139,22 +130,21 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const placeAt = (pointerPx: number) => {
     if (width() - pointerPx <= THUMB_HIT_PX) {
       setCursorMs(null);
-      props.onSelectRightmost();
+      history.enter();
       return;
     }
     const ms = containerPositionToTimestamp(pointerPx);
-    props.setViewingHistory(true);
     setCursorMs(ms);
-    props.onSelect(new Date(ms));
+    history.enter(new Date(ms));
   };
 
   const thumbPx = createMemo<number | null>(() => {
-    if (!props.isViewingHistory()) return null;
-    if (props.isScrubbedRightmost()) return width();
+    if (!history.isOpen()) return null;
+    if (history.isLive()) return width();
     const cursor =
       drag()?.mode === 'scrub'
         ? cursorMs()
-        : (props.selectedAt()?.getTime() ?? cursorMs());
+        : (history.selectedAt()?.getTime() ?? cursorMs());
     if (cursor === null) return null;
     const totalWidth = width();
     const candidatePx = timestampToContainerPosition(cursor);
@@ -166,7 +156,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   const onPointerDown = (e: PointerEvent) => {
     containerRef.setPointerCapture(e.pointerId);
     setHoverPx(null);
-    props.setViewingHistory(true);
+    history.open();
     const pointerPx = localPx(e.clientX);
     const thumbPosition = thumbPx();
     if (
@@ -231,7 +221,7 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
   });
 
   const volume = createMemo<VolumeShape | null>(() =>
-    buildVolumeShape(props.sessions, timestampToContainerPosition, width())
+    buildVolumeShape(sessions(), timestampToContainerPosition, width())
   );
 
   return (
@@ -305,7 +295,9 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
               left: `${Math.max((hoverLabelRef?.offsetWidth ?? 0) / 2, Math.min(hoverPx()!, width() - (hoverLabelRef?.offsetWidth ?? 0) / 2))}px`,
             }}
           >
-            {formatTimestamp(new Date(containerPositionToTimestamp(hoverPx()!)))}
+            {formatTimestamp(
+              new Date(containerPositionToTimestamp(hoverPx()!))
+            )}
           </span>
         </Show>
 
@@ -359,7 +351,11 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
                       timestampToContainerPosition(session.endMs);
                     return (
                       <div
-                        class="absolute inset-y-0 rounded-full"
+                        class="absolute inset-y-0 cursor-pointer rounded-full"
+                        // Stop the rail's scrub/marquee drag from starting so a
+                        // bar click cleanly opens that session's diff.
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => history.diff.view(session)}
                         onPointerEnter={(e) =>
                           setHoverUser({
                             user: lane.user,
@@ -391,19 +387,12 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
 
         <Show when={hoverUser()}>
           {(hover) => (
-            <div
-              class="pointer-events-none absolute z-30 flex items-center gap-1.5 rounded-md bg-surface px-2 py-1 text-ink text-xs shadow-lg ring-1 ring-edge-muted"
-              style={{
-                left: `${Math.max(0, Math.min(width() - 160, hover().x + 10))}px`,
-                top: `${Math.max(0, hover().y - 30)}px`,
-              }}
-            >
-              <span
-                class="size-2 rounded-full"
-                style={{ background: hover().user.color }}
-              />
-              <span class="max-w-40 truncate">{hover().user.label}</span>
-            </div>
+            <UserHoverTag
+              label={hover().user.label}
+              color={hover().user.color}
+              left={Math.max(0, Math.min(width() - 160, hover().x + 10))}
+              top={Math.max(0, hover().y - 30)}
+            />
           )}
         </Show>
 

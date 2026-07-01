@@ -37,7 +37,12 @@ export function checkoutAt(
   const frontiers = frontiersAt(index, targetMs);
   if (frontiers.length === 0) return null;
   index.doc.checkout(frontiers);
-  return index.doc.toJSON() as SerializedEditorState;
+  const state = index.doc.toJSON() as SerializedEditorState;
+
+  const root = state.root;
+  if (!root?.type) return null;
+
+  return state;
 }
 
 export function versionIdAt(

@@ -122,7 +122,7 @@ function HistorySectionContent() {
   const [showSessions, setShowSessions] = createSignal(false);
   const [activityElement, setActivityElement] = createSignal<HTMLDivElement>();
   const activityBounds = createElementBounds(activityElement);
-  const isShowingSessions = () => history.isViewingHistory() || showSessions();
+  const isShowingSessions = () => history.isOpen() || showSessions();
   const activityMaxHeightPx = () =>
     activityBounds.top === null
       ? null
@@ -136,21 +136,14 @@ function HistorySectionContent() {
 
   return (
     <Show
-      when={!history.isLoadingSessions() && totalEdits() > 1 && history.sessions()}
+      when={
+        !history.loading.sessions() && totalEdits() > 1 && history.sessions()
+      }
       fallback={<p class="text-xs text-ink-muted">No history yet</p>}
     >
       {(sessions) => (
         <div class="min-w-0 overflow-hidden">
-          <HistoryScrubber
-            sessions={sessions()}
-            selectedAt={history.selectedAt}
-            isViewingHistory={history.isViewingHistory}
-            setViewingHistory={history.setViewingHistory}
-            isScrubbedRightmost={history.isScrubbedRightmost}
-            onSelectRightmost={history.enterRightmost}
-            onSelect={history.enterAt}
-            compact
-          />
+          <HistoryScrubber compact />
           <Show when={sessions().length > 0}>
             <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
               <button
@@ -158,7 +151,7 @@ function HistorySectionContent() {
                 aria-expanded={isShowingSessions()}
                 class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 onClick={() => {
-                  history.enterRightmost();
+                  history.enter();
                   setShowSessions(true);
                 }}
               >
@@ -177,7 +170,8 @@ function HistorySectionContent() {
                   <HistorySessionList
                     sessions={sessions()}
                     selectedAt={history.selectedAt}
-                    onSelect={history.enterAt}
+                    onSelect={history.enter}
+                    onViewSessionDiff={history.diff.view}
                     maxHeightPx={activityMaxHeightPx()}
                   />
                 </div>

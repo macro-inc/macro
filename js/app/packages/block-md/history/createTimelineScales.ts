@@ -10,9 +10,6 @@ import { humanizeDuration } from './utils';
 export type WindowRange = { start: number; end: number };
 export type GapMarker = { left: number; width: number; label: string };
 
-// How many activity blocks to show by default before the user pans/zooms.
-const DEFAULT_SESSIONS = 6;
-
 // Custom hook that owns all the coordinate math for the timeline scrubber.
 // Accepts reactive inputs and returns stable function references backed by memos.
 //
@@ -60,17 +57,9 @@ export function createTimelineScales(
     return Number.isNaN(ms) ? 0 : ms;
   };
 
-  // The default visible window before the user pans or zooms. Shows everything
-  // if there are few enough activity blocks; otherwise shows only the most
-  // recent DEFAULT_SESSIONS blocks by starting the window at the 6th-from-last.
   const defaultWindow = createMemo<WindowRange>(() => {
-    const { intervals, total } = compressedTimeline();
-    if (intervals.length <= DEFAULT_SESSIONS)
-      return { start: 0, end: Math.max(1, total) };
-    return {
-      start: intervals[intervals.length - DEFAULT_SESSIONS].warpStart,
-      end: total,
-    };
+    const { total } = compressedTimeline();
+    return { start: 0, end: Math.max(1, total) };
   });
 
   const visibleWindow = createMemo<WindowRange>(
