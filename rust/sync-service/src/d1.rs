@@ -66,7 +66,7 @@ pub async fn get_user_id_from_peer_id(
     Ok(user_id)
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct PeerWithUserId {
     pub peer_id: String,
     pub user_id: String,

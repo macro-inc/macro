@@ -23,18 +23,27 @@ function UserName(props: { userId: string }) {
   return <>{firstName() || fullName() || userLabel(props.userId)}</>;
 }
 
+const MAX_NAMED = 3;
+
 function UserList(props: { userIds: readonly string[] }) {
+  const visible = () => props.userIds.slice(0, MAX_NAMED);
+  const overflow = () => props.userIds.length - MAX_NAMED;
   return (
-    <For each={props.userIds}>
-      {(userId, index) => (
-        <>
-          <Show when={index() > 0}>
-            {index() === props.userIds.length - 1 ? ' and ' : ', '}
-          </Show>
-          <UserName userId={userId} />
-        </>
-      )}
-    </For>
+    <>
+      <For each={visible()}>
+        {(userId, index) => (
+          <>
+            <Show when={index() > 0}>
+              {index() === visible().length - 1 && overflow() <= 0 ? ' and ' : ', '}
+            </Show>
+            <UserName userId={userId} />
+          </>
+        )}
+      </For>
+      <Show when={overflow() > 0}>
+        {` and ${overflow()} ${overflow() === 1 ? 'other' : 'others'}`}
+      </Show>
+    </>
   );
 }
 

@@ -36,6 +36,7 @@ export type HistoryScrubberProps = {
 
 export function HistoryScrubber(props: HistoryScrubberProps) {
   let containerRef!: HTMLDivElement;
+  let hoverLabelRef!: HTMLSpanElement;
   const size = createElementSize(() => containerRef);
   const width = () => size.width ?? 0;
   const [cursorMs, setCursorMs] = createSignal<number | null>(null);
@@ -291,12 +292,21 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
           )}
         </Show>
 
-        {/* Hover preview line */}
+        {/* Hover preview line + date label */}
         <Show when={hoverPx() !== null && drag() === null}>
           <div
             class="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/30"
             style={{ left: `${hoverPx() ?? 0}px` }}
           />
+          <span
+            ref={hoverLabelRef}
+            class="pointer-events-none absolute top-full z-10 -translate-x-1/2 whitespace-nowrap rounded bg-surface px-1 text-[10px] text-ink"
+            style={{
+              left: `${Math.max((hoverLabelRef?.offsetWidth ?? 0) / 2, Math.min(hoverPx()!, width() - (hoverLabelRef?.offsetWidth ?? 0) / 2))}px`,
+            }}
+          >
+            {formatTimestamp(new Date(containerPositionToTimestamp(hoverPx()!)))}
+          </span>
         </Show>
 
         {/* Rail */}
@@ -398,12 +408,12 @@ export function HistoryScrubber(props: HistoryScrubberProps) {
         </Show>
 
         {/* Edge time labels */}
-        <span class="absolute top-full left-0 origin-top-left -rotate-12 text-[10px] text-ink-muted">
+        <span class="absolute top-full left-0 text-[10px] text-ink-muted">
           {formatTimestamp(
             new Date(warpedPositionToTimestamp(visibleWindow().start))
           )}
         </span>
-        <span class="absolute top-full right-0 origin-top-right rotate-12 text-[10px] text-ink-muted">
+        <span class="absolute top-full right-0 text-[10px] text-ink-muted">
           {formatTimestamp(
             new Date(warpedPositionToTimestamp(visibleWindow().end))
           )}

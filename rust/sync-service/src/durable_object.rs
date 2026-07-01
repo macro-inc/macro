@@ -120,6 +120,10 @@ pub struct DocumentSyncSession {
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
+    /// In-memory peer→user map injected by set_memory_state (dev only); when
+    /// set, metadata_handler returns this instead of querying D1.
+    #[cfg(feature = "dev-endpoints")]
+    memory_peer_map: Mutex<Option<Vec<PeerWithUserId>>>,
 }
 
 mod u64_serde_strings {
@@ -423,6 +427,8 @@ impl DocumentSyncSession {
         #[derive(serde::Deserialize)]
         struct SetMemoryStateRequest {
             snapshot: Vec<u8>,
+            #[serde(default)]
+            peers: Vec<PeerWithUserId>,
         }
 
         let raw = req.bytes().await?;
@@ -435,6 +441,10 @@ impl DocumentSyncSession {
             .document_state
             .lock("DocumentSyncSession::document_state set within set_memory_state_handler") =
             Some(Arc::new(state));
+        *self
+            .memory_peer_map
+            .lock("set_memory_state_handler memory_peer_map") =
+            Some(body.peers);
 
         Response::empty()
     }
@@ -567,12 +577,35 @@ impl DocumentSyncSession {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
-        let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        let peers = crate::d1::get_peers_for_document_id(db, document_id)
-            .await?
-            .into_iter()
-            .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
-            .collect();
+
+        #[cfg(feature = "dev-endpoints")]
+        let peers: Vec<PeerWithUserId> = {
+            let mem = self
+                .memory_peer_map
+                .lock("metadata_handler memory_peer_map")
+                .clone();
+            if let Some(p) = mem {
+                p
+            } else {
+                let db = self.env.d1(USER_PEER_D1_BINDING)?;
+                crate::d1::get_peers_for_document_id(db, document_id)
+                    .await?
+                    .into_iter()
+                    .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
+                    .collect()
+            }
+        };
+
+        #[cfg(not(feature = "dev-endpoints"))]
+        let peers: Vec<PeerWithUserId> = {
+            let db = self.env.d1(USER_PEER_D1_BINDING)?;
+            crate::d1::get_peers_for_document_id(db, document_id)
+                .await?
+                .into_iter()
+                .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
+                .collect()
+        };
+
         let version_id = self.document_state().await?.version_id();
         ResponseBuilder::new().from_json(&DocumentMetadata {
             peers,
@@ -839,6 +872,8 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
+            #[cfg(feature = "dev-endpoints")]
+            memory_peer_map: Mutex::new(None),
         }
     }
 

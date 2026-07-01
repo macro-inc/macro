@@ -115,11 +115,12 @@ export function HistoryProvider(props: {
   });
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
-  // per user. Replaces the server-side history-meta endpoint.
+  // per user.
   const sessions = createMemo<readonly HistorySession[]>(() => {
     const doc = historyDoc();
     const peers = peerMap();
     if (!doc || !peers) return [];
+
     const events: { userId: string; tMs: number }[] = [];
     for (const [peer, changes] of doc.getAllChanges()) {
       const userId = peers.get(peer) ?? 'unknown';
