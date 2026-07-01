@@ -115,7 +115,7 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation',
+            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu',
             local.class
           )}
           depth={local.depth ?? 2}
