@@ -1,6 +1,7 @@
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
+  type Component,
   createContext,
   type JSX,
   type Setter,
@@ -45,6 +46,19 @@ export type SplitBottomPanelRegistration = {
   onClose?: () => void;
 };
 
+export type SplitFileMenuAction = {
+  label: string | JSX.Element;
+  icon: Component;
+  action: (e?: MouseEvent) => void;
+  group?: 'delete';
+};
+
+export type SplitFileMenuActionGroups = {
+  primaryOps: SplitFileMenuAction[];
+  tools: SplitFileMenuAction[];
+  deleteOps: SplitFileMenuAction[];
+};
+
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
@@ -64,6 +78,12 @@ export type SplitPanelContextType = {
     toolbarRight?: HTMLDivElement;
     overlay?: HTMLDivElement;
   };
+  titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
+  setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
+  titleFileMenuTrigger: Accessor<(() => void) | undefined>;
+  setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
+  titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
+  setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
   headerCollapser: HeaderCollapser;
 };
 

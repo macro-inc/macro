@@ -3,7 +3,6 @@
 use crate::domain::models::FREE_MODEL;
 use crate::domain::ports::ModelAccessService;
 use crate::domain::service::ModelAccessServiceImpl;
-use agent::AgentModel;
 use axum::extract::FromRequestParts;
 use axum::http::StatusCode;
 use axum::http::request::Parts;
@@ -27,15 +26,16 @@ impl ChatModelAccess {
         self.professional
     }
 
-    /// Whether the user may use the model identified by `model_id` (an api id).
+    /// Whether the user may use the provider-qualified model identified by
+    /// `model_id`.
     pub fn has_access(&self, model_id: &str) -> bool {
         ModelAccessServiceImpl.has_access(self.professional, model_id)
     }
 
     /// The default model for this user — the best one they're entitled to.
-    pub fn model(&self) -> AgentModel {
+    pub fn best_model(&self) -> &'static str {
         if self.professional {
-            AgentModel::Smart
+            "anthropic/claude-opus-4-8"
         } else {
             FREE_MODEL
         }
@@ -113,24 +113,25 @@ mod test {
     #[test]
     fn free_user_defaults_to_haiku_and_only_has_haiku() {
         let free = access(&[]);
-        assert_eq!(free.model(), FREE_MODEL);
-        assert!(free.has_access(FREE_MODEL.api_id()));
-        assert!(!free.has_access(AgentModel::Smart.api_id()));
+        assert_eq!(free.best_model(), FREE_MODEL);
+        assert!(free.has_access(FREE_MODEL));
+        assert!(!free.has_access("anthropic/claude-opus-4-8"));
     }
 
     #[test]
     fn professional_user_defaults_to_smart_and_has_everything() {
         let pro = access(&[PermissionId::ReadProfessionalFeatures]);
-        assert_eq!(pro.model(), AgentModel::Smart);
-        assert!(pro.has_access(AgentModel::Smart.api_id()));
-        assert!(pro.has_access(FREE_MODEL.api_id()));
+        assert_eq!(pro.best_model(), "anthropic/claude-opus-4-8");
+        assert!(pro.has_access("anthropic/claude-opus-4-8"));
+        assert!(pro.has_access(FREE_MODEL));
+        assert!(pro.has_access("openai/gpt-5.5"));
     }
 
     // Permission strings unrelated to the professional flag don't grant access.
     #[test]
     fn unrelated_permissions_stay_free() {
-        let acc = access(&[PermissionId::WriteHaiku, PermissionId::WriteOpus]);
+        let acc = access(&[PermissionId::WriteEmailTool, PermissionId::ReadDocxEditor]);
         assert!(!acc.professional());
-        assert!(!acc.has_access(AgentModel::Smart.api_id()));
+        assert!(!acc.has_access("anthropic/claude-opus-4-8"));
     }
 }

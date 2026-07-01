@@ -4,6 +4,7 @@ use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 
 // BASE_URL config value. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
@@ -25,10 +26,6 @@ env_vars! {
     pub struct GoogleClientSecretKey;
     pub struct StripeSecretKey;
     pub struct ServiceInternalAuthKey;
-    pub struct NotificationQueue;
-    pub struct SearchEventQueue;
-    pub struct LinkManagerQueue;
-    pub struct EmailBackfillQueue;
     pub struct GithubClientId;
     pub struct GithubClientSecret;
     pub struct GithubIdpId;
@@ -88,16 +85,6 @@ pub struct Config {
     pub environment: Environment,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
-    /// The notification queue
-    pub notification_queue: NotificationQueue,
-    /// The search event queue
-    pub search_event_queue: SearchEventQueue,
-    /// The email link manager queue
-    pub link_manager_queue: LinkManagerQueue,
-    /// The email backfill queue. Used by `join_team` to enqueue a
-    /// `PopulateCrmForUser` message that seeds CRM tables with the new
-    /// member's historical sent-mail contacts.
-    pub email_backfill_queue: EmailBackfillQueue,
     /// The github client id
     pub github_client_id: GithubClientId,
     /// The github client secret
@@ -120,6 +107,8 @@ pub struct Config {
     pub posthog_host: PosthogHost,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {

@@ -6,6 +6,7 @@
 !**/appRouteLambda/**/*.js
 !**/contentEncodingLambda/**/*.js
 package-lock.json
+local/generated
 
 node_modules
 dist

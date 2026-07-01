@@ -10,14 +10,14 @@ import {
 } from '@app/component/next-soup/utils';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
-import { SidePanel, useSidePanel } from '@app/component/side-panel';
+import { useSidePanel } from '@app/component/side-panel';
+import { SplitFileMenu } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
+  SplitTitleFileMenu,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -32,23 +32,20 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import IconShared from '@icon/wide-share.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import { buildMentionMarkdownString } from '@lexical-core';
 import CheckIcon from '@phosphor/check.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
-import SidePanelIcon from '@phosphor/square-half.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { Button, cn } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 
 export function TopBar(props: {
   id: string;
   title: string;
   isDraft?: boolean;
+  onCreateTask?: () => void;
 }) {
-  const { popoverSplit } = useSplitLayout();
   const splitPanel = useSplitPanel();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
@@ -126,29 +123,34 @@ export function TopBar(props: {
     });
   };
 
-  const openTaskCompose = () => {
-    const threadId = emailCtx.thread()?.db_id;
-    if (!threadId) return;
-    const title =
-      props.title.length > 70 ? `${props.title.slice(0, 70)}...` : props.title;
-    popoverSplit({
-      type: 'component',
-      id: 'task-compose',
-      params: {
-        initialTitle: title,
-        initialContent: buildMentionMarkdownString({
-          type: 'document',
-          documentId: threadId,
-          documentName: props.title,
-          blockName: 'email',
-        }),
-      },
-    });
+  const shareTool: BlockTool = {
+    label: 'Share',
+    icon: IconShared,
+    action: () => shareCtx.open(),
+    condition: () => ENABLE_EMAIL_SHARING,
+    buttonComponent: () => <ShareTrigger />,
+    focusTarget: getShareDrawerRecipientInput,
   };
 
-  const tools: BlockTool[] = [
+  const emailActions: BlockTool[] = [
     {
-      label: 'Done',
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () => {
+        const threadId = emailCtx.thread()?.db_id;
+        if (!threadId) return;
+        openChatWithAgent({ type: 'email', id: threadId, name: props.title });
+      },
+      condition: () => !!emailCtx.thread()?.db_id,
+    },
+    {
+      label: 'Task',
+      icon: AnimatedTaskIcon,
+      action: () => props.onCreateTask?.(),
+      condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
+    },
+    {
+      label: 'Mark done',
       icon: CheckIcon,
       action: () => {
         const command = getActiveCommandByToken(TOKENS.entity.action.markDone);
@@ -161,7 +163,7 @@ export function TopBar(props: {
       condition: isOwnThread,
     },
     {
-      label: 'Trash',
+      label: 'Delete',
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
@@ -172,29 +174,10 @@ export function TopBar(props: {
       action: () => emailCtx.blockSender(),
       condition: isOwnThread,
     },
-    {
-      label: 'Create Task',
-      icon: AnimatedTaskIcon,
-      action: openTaskCompose,
-      buttonComponent: () => {
-        const [hovering, setHovering] = createSignal(false);
-        return (
-          <Button
-            tooltip="Create Task"
-            variant="base"
-            size="sm"
-            onMouseEnter={() => setHovering(true)}
-            onMouseLeave={() => setHovering(false)}
-            onClick={openTaskCompose}
-            depth={2}
-            class="bg-surface text-ink-muted"
-          >
-            <AnimatedTaskIcon triggerAnimation={hovering()} />
-            <span class="text-xs text-ink-extra-muted">Task</span>
-          </Button>
-        );
-      },
-    },
+    shareTool,
+  ];
+
+  const tools: BlockTool[] = [
     {
       label: 'Chat',
       icon: ChatWithAgentIcon,
@@ -213,45 +196,7 @@ export function TopBar(props: {
         ) : null;
       },
     },
-    {
-      label: 'Share',
-      icon: IconShared,
-      action: () => shareCtx.open(),
-      condition: () => ENABLE_EMAIL_SHARING,
-      buttonComponent: () => <ShareTrigger />,
-      focusTarget: getShareDrawerRecipientInput,
-    },
-    {
-      label: () =>
-        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
-      icon: SidePanelIcon,
-      action: () => sidePanel?.toggle(),
-      isActive: () => sidePanel?.isOpen() ?? false,
-      condition: () => !(sidePanel?.isNarrow() ?? isMobile()),
-      buttonComponent: () => (
-        <Show when={sidePanel}>
-          {(panel) => (
-            <Button
-              depth={2}
-              variant="base"
-              size="icon-sm"
-              class={cn('bg-surface order-20', {
-                'bg-active': sidePanel?.isOpen(),
-              })}
-              tooltip={
-                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
-              }
-              hotkey={TOKENS.block.toggleSidePanel}
-              onClick={() => {
-                panel().toggle();
-              }}
-            >
-              <SidePanelIcon />
-            </Button>
-          )}
-        </Show>
-      ),
-    },
+    shareTool,
   ];
 
   return (
@@ -275,6 +220,22 @@ export function TopBar(props: {
         />
       </SplitHeaderLeft>
 
+      <SplitTitleFileMenu>
+        <Show
+          when={emailActions.some(
+            (action) => !action.condition || action.condition()
+          )}
+        >
+          <SplitFileMenu
+            id={props.id}
+            itemType="email"
+            name={props.title}
+            ops={[]}
+            tools={emailActions}
+          />
+        </Show>
+      </SplitTitleFileMenu>
+
       <ResponsiveBlockToolbar
         tools={tools}
         ops={[]}
@@ -282,9 +243,6 @@ export function TopBar(props: {
         itemType="email"
         name={props.title}
       />
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
     </>
   );
 }

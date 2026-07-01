@@ -17,7 +17,7 @@ export type SendChatMessagePayloadAllOf = {
   chat_id: string;
   /** The content of the message */
   content: string;
-  /** the chat model to respond with (provider api id) */
+  /** the chat model to respond with (`provider/model` id) */
   model: string;
   /** Stream ID for tracking the response */
   stream_id: string;

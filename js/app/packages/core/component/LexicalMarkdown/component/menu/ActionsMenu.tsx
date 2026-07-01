@@ -316,7 +316,7 @@ export function ActionMenu(props: {
     <Show when={isOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
-          class="w-60 cursor-default select-none z-modal-content"
+          class="w-60 cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}

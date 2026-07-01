@@ -61,13 +61,13 @@ export function Paywall() {
       position="center"
       class="w-225"
     >
-      <Surface active depth={2} class="rounded-xl">
+      <Surface depth={2} class="rounded-xl">
         <div
           class="*:max-h-[85vh] font-sans"
           ref={paywallContentEl}
           tabIndex={-1}
         >
-          <div class="overflow-y-auto p-6 sm:p-8">
+          <div class="overflow-y-auto">
             <PaywallComponent cb={hidePaywall} errorKey={paywallKey()} />
           </div>
         </div>

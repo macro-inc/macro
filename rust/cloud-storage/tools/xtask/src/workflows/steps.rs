@@ -39,9 +39,10 @@ fn uses_local(name: &str, path: &str) -> Step<Use> {
     step
 }
 
-/// `actions/checkout`, pinned. `full_history` fetches the full history, which the
-/// path-filter diff in `path-check` needs.
-pub fn checkout(full_history: bool) -> Step<Use> {
+/// `actions/checkout`, pinned. `full_history` fetches the full history, which
+/// the path-filter diff in `path-check` needs. `persist_credentials` controls
+/// whether checkout leaves the token in git config for later steps.
+pub fn checkout(full_history: bool, persist_credentials: bool) -> Step<Use> {
     Step::new("Checkout")
         .uses(
             "actions",
@@ -50,6 +51,9 @@ pub fn checkout(full_history: bool) -> Step<Use> {
         ) // v4
         .add_with(("clean", false))
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+        .when(!persist_credentials, |step| {
+            step.add_with(("persist-credentials", false))
+        })
 }
 
 /// Install the Rust toolchain only (no sccache, no cache) — for the lightweight
@@ -120,4 +124,109 @@ pub fn gated_job() -> Job {
         .cond(Expression::new(
         "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
     ))
+}
+
+// ---------------------------------------------------------------------------
+// Desktop (AppImage / DMG) shared steps
+// ---------------------------------------------------------------------------
+
+/// `actions/checkout` with a dynamic ref (for tag-triggered builds). Uses the
+/// same pinned SHA as [`checkout`].
+pub fn checkout_ref(ref_expr: &str) -> Step<Use> {
+    Step::new("Checkout Repo")
+        .uses(
+            "actions",
+            "checkout",
+            "df4cb1c069e1874edd31b4311f1884172cec0e10",
+        ) // v6
+        .add_with(("ref", ref_expr))
+        .add_with(("persist-credentials", false))
+}
+
+/// Mount only the `/nix` store cache volume (no cargo/sccache). Used by the
+/// desktop builds that delegate entirely to Nix.
+pub fn mount_nix_cache_volume() -> Step<Use> {
+    Step::new("Mount /nix cache volume")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("path", "/nix"))
+        .continue_on_error(true)
+}
+
+/// Configure Cachix (without entering a dev shell).
+pub fn setup_cachix() -> Step<Use> {
+    uses_local(
+        "Configure Cachix fallback",
+        "./.github/actions/setup-cachix",
+    )
+    .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
+}
+
+/// Derive a safe tag name from the git ref for use in artifact names.
+pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
+    Step::new("Derive artifact metadata")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            tag="${RAW_REF#refs/tags/}"
+            if [ -z "$tag" ]; then
+              tag="${GITHUB_REF_NAME:-untagged}"
+            fi
+            safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        "#})
+        .id("metadata")
+        .shell("bash")
+        .add_env(("RAW_REF", raw_ref_expr))
+}
+
+/// Upload build artifacts within the workflow run for a later publish job.
+pub fn upload_artifact(name: &str, path: &str) -> Step<Use> {
+    Step::new(format!("Upload {name} artifact"))
+        .uses(
+            "actions",
+            "upload-artifact",
+            "ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ) // v4
+        .add_with(("name", name))
+        .add_with(("path", path))
+        .add_with(("if-no-files-found", "error"))
+        .add_with(("retention-days", 30))
+}
+
+/// Download all build artifacts into one directory for release publishing.
+pub fn download_artifacts(path: &str) -> Step<Use> {
+    Step::new("Download Build Artifacts")
+        .uses(
+            "actions",
+            "download-artifact",
+            "634f93cb2916e3fdff6788551b99b062d0335ce0",
+        ) // v5
+        .add_with(("path", path))
+        .add_with(("merge-multiple", true))
+}
+
+/// Attach build artifacts to the GitHub release for the resolved release tag.
+pub fn upload_release_artifacts(path: &str) -> Step<Use> {
+    Step::new("Upload Release Artifacts")
+        .uses(
+            "softprops",
+            "action-gh-release",
+            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
+        ) // v2
+        .if_condition(Expression::new(
+            "startsWith(steps.metadata.outputs.tag, 'v')",
+        ))
+        .add_with(("tag_name", "${{ steps.metadata.outputs.tag }}"))
+        .add_with(("files", path))
+        .add_with(("fail_on_unmatched_files", true))
+}
+
+/// Teardown Nix (always runs).
+pub fn teardown_nix() -> Step<Use> {
+    uses_local("Teardown Nix", "./.github/actions/teardown-nix")
+        .if_condition(Expression::new("always()"))
 }

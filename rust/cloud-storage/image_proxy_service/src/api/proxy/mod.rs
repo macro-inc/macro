@@ -31,6 +31,13 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 /// Default connect timeout for a proxied fetch.
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// User-Agent for the primary upstream fetch. `reqwest` sends none by default,
+/// and some origins (strict WAFs, bare nginx) 403 requests with no User-Agent;
+/// a browser-like string clears those rules. Shaped like Gmail's image proxy —
+/// a real browser string plus a proxy identifier. A minority of hosts do the
+/// reverse, so [`proxy_request_handler`] retries once with no UA on failure.
+const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
 /// Build the HTTP client used to fetch upstream images.
 ///
 /// SSRF mitigations baked into the client:
@@ -72,6 +79,16 @@ pub enum ProxyError {
     NotAnImage(String),
     ImageTooLarge { content_length: u64 },
     ResponseBuild(axum::http::Error),
+}
+
+impl ProxyError {
+    /// Whether this failure might be the upstream rejecting our User-Agent —
+    /// a non-2xx status or a non-image challenge page. Worth one retry with no
+    /// UA. Network/timeout/redirect errors aren't UA-related, so we don't retry
+    /// those (it would just double latency on genuinely-broken hosts).
+    fn is_retryable_without_ua(&self) -> bool {
+        matches!(self, Self::UpstreamStatus(_) | Self::NotAnImage(_))
+    }
 }
 
 impl fmt::Display for ProxyError {
@@ -142,12 +159,49 @@ pub async fn proxy_request_handler(
     State(http_client): State<reqwest::Client>,
     _ip: ClientIp,
 ) -> Result<Response, ProxyError> {
-    let mut url = validate_url(&params.url)?;
+    let url = validate_url(&params.url)?;
+
+    // Primary attempt with a browser-like User-Agent — most hosts are fine
+    // either way, but strict origins 403 a missing UA.
+    let (response, content_type) = match fetch_upstream(&http_client, url.clone(), true).await {
+        Ok(ok) => ok,
+        // A minority of hosts reject our browser UA or serve a non-image
+        // challenge page. Retry once with no UA to cover them.
+        Err(err) if err.is_retryable_without_ua() => {
+            tracing::info!(url = %params.url, error = %err, "retrying upstream fetch without User-Agent");
+            fetch_upstream(&http_client, url, false).await?
+        }
+        Err(err) => return Err(err),
+    };
+
+    check_content_length(&response, &params.url)?;
+
+    let size_limited_stream = apply_size_limit(response.bytes_stream(), params.url.clone());
+
+    Response::builder()
+        .header("Content-Type", &content_type)
+        .header("Cache-Control", "public, max-age=31536000, immutable")
+        .header("Cross-Origin-Resource-Policy", "cross-origin")
+        .body(Body::from_stream(size_limited_stream))
+        .map_err(|e| {
+            tracing::error!(error=?e, "could not stream chunks");
+            ProxyError::ResponseBuild(e)
+        })
+}
+
+/// Follow redirects (re-checking each hop for private IPs) and validate the
+/// final response is an image. `send_user_agent` toggles the browser-like
+/// [`UPSTREAM_USER_AGENT`] so the handler can fall back to a no-UA request.
+async fn fetch_upstream(
+    http_client: &reqwest::Client,
+    mut url: Url,
+    send_user_agent: bool,
+) -> Result<(reqwest::Response, String), ProxyError> {
     let mut redirects_remaining = MAX_REDIRECTS;
 
     let response = loop {
         assert_not_internal(&url).await?;
-        let response = send_request(&http_client, &url).await?;
+        let response = send_request(http_client, &url, send_user_agent).await?;
         let status = response.status();
 
         if status.is_redirection() {
@@ -164,6 +218,7 @@ pub async fn proxy_request_handler(
         }
 
         if !status.is_success() {
+            tracing::warn!(url = %url, status = %status, with_user_agent = send_user_agent, "upstream returned non-success status");
             return Err(ProxyError::UpstreamStatus(status));
         }
 
@@ -172,19 +227,7 @@ pub async fn proxy_request_handler(
 
     let content_type = extract_content_type(&response)?;
 
-    check_content_length(&response, &params.url)?;
-
-    let size_limited_stream = apply_size_limit(response.bytes_stream(), params.url.clone());
-
-    Response::builder()
-        .header("Content-Type", &content_type)
-        .header("Cache-Control", "public, max-age=31536000, immutable")
-        .header("Cross-Origin-Resource-Policy", "cross-origin")
-        .body(Body::from_stream(size_limited_stream))
-        .map_err(|e| {
-            tracing::error!(error=?e, "could not stream chunks");
-            ProxyError::ResponseBuild(e)
-        })
+    Ok((response, content_type))
 }
 
 fn validate_url(raw_url: &str) -> Result<Url, ProxyError> {
@@ -247,8 +290,13 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 async fn send_request(
     http_client: &reqwest::Client,
     url: &Url,
+    send_user_agent: bool,
 ) -> Result<reqwest::Response, ProxyError> {
-    http_client.get(url.as_str()).send().await.map_err(|e| {
+    let mut request = http_client.get(url.as_str());
+    if send_user_agent {
+        request = request.header(reqwest::header::USER_AGENT, UPSTREAM_USER_AGENT);
+    }
+    request.send().await.map_err(|e| {
         let error_chain = build_error_chain(&e);
         tracing::warn!(url = %url, error = %error_chain, "upstream request failed");
         if e.is_timeout() {

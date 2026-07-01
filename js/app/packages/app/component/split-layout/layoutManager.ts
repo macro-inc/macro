@@ -152,6 +152,7 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  insertIndex?: number;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
@@ -167,6 +168,7 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  insertIndex?: number;
   handle?: SplitHandle;
 };
 
@@ -373,16 +375,6 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     referredFrom?: ReferredFrom;
   }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
-  /**
-   * Jump to the most-recent prior history entry matching `predicate` (or
-   * forward to the closest match if none earlier). Captures current entry
-   * state first, like back/forward. Returns true if a match was found and
-   * navigated to; false if no match (history left unchanged).
-   *
-   * Use for "open this view if it's already in my history, otherwise fall
-   * back to a fresh push" patterns (e.g. sidebar nav).
-   */
-  goToEntry: (predicate: (content: SplitContent) => boolean) => boolean;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -423,6 +415,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * keyed by `key`. Returns a teardown.
    */
   registerEntryStateCaptor: (key: string, getter: () => unknown) => () => void;
+  /**
+   * Immediately capture registered entry-state slices into the split's current
+   * history entry. This is usually done implicitly on navigation, but here we offer
+   * an explicit handle to trigger it manually, e.g. for mobile to manage it's split.
+   */
+  captureEntryState: () => void;
   /**
    * Read the `state` blob attached to this split's *current* history entry.
    * Returns `undefined` if no state has been captured.
@@ -561,7 +559,7 @@ export function createSplitLayout(
     if (idx < 0 || idx >= items.length) return;
     const currentItem = items[idx];
 
-    const state: EntryState = {};
+    const state: EntryState = { ...(currentItem.state ?? {}) };
     for (const [key, getter] of captors) {
       try {
         state[key] = getter();
@@ -764,48 +762,6 @@ export function createSplitLayout(
     reattach(split, next, undefined, 'replace');
   }
 
-  function goToEntry(
-    id: SplitId,
-    predicate: (content: SplitContent) => boolean
-  ): boolean {
-    const i = splitIndexById(id);
-    if (i < 0) {
-      console.error(`Split with id ${id} not found`);
-      return false;
-    }
-    const split = state.splits[i];
-    const items = split.history.items;
-    const currentIdx = split.history.index;
-    if (items.length === 0) return false;
-
-    // Prefer the closest match looking backwards (more common case — the
-    // user just came from there). Fall back to looking forward.
-    let targetIdx = -1;
-    for (let j = currentIdx - 1; j >= 0; j--) {
-      if (predicate(items[j])) {
-        targetIdx = j;
-        break;
-      }
-    }
-    if (targetIdx === -1) {
-      for (let j = currentIdx + 1; j < items.length; j++) {
-        if (predicate(items[j])) {
-          targetIdx = j;
-          break;
-        }
-      }
-    }
-    if (targetIdx === -1 || targetIdx === currentIdx) return false;
-
-    captureCurrentEntryState(split);
-    const target = split.history.goToIndex(targetIdx);
-    if (!target) return false;
-    const cause: NavigationCause =
-      targetIdx < currentIdx ? 'history-back' : 'history-forward';
-    reattach(split, target, undefined, cause);
-    return true;
-  }
-
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -920,8 +876,14 @@ export function createSplitLayout(
       id: currentSplit.id,
       content,
       activate: () => activateSplit(currentSplit.id),
-      canGoBack: () => currentSplit.history.canGoBack(),
-      canGoForward: () => currentSplit.history.canGoForward(),
+      // Re-resolve the split by id rather than reading the captured
+      // `currentSplit`. reconcileSplits can replace the SplitState (fresh
+      // history, same id) while this handle instance persists, so the captured
+      // reference goes stale and the button would report the old history.
+      canGoBack: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoBack(),
+      canGoForward: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
@@ -930,8 +892,6 @@ export function createSplitLayout(
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },
-      goToEntry: (predicate: (content: SplitContent) => boolean) =>
-        goToEntry(currentSplit.id, predicate),
       previousContent: () => {
         const s = findSplitById(currentSplit.id);
         if (!s) return null;
@@ -1015,6 +975,11 @@ export function createSplitLayout(
           if (map.size === 0) entryStateCaptors.delete(currentSplit.id);
         };
       },
+      captureEntryState: () => {
+        const live = s();
+        if (!live) return;
+        captureCurrentEntryState(live);
+      },
       currentEntryState: () => {
         const live = s();
         if (!live) return undefined;
@@ -1027,8 +992,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
-      options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      initialHistory,
+      insertIndex,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -1052,7 +1023,17 @@ export function createSplitLayout(
       initialHistory,
     });
 
-    setState('splits', (previousSplits) => [...previousSplits, split]);
+    setState('splits', (previousSplits) => {
+      if (insertIndex === undefined) return [...previousSplits, split];
+
+      const nextSplits = [...previousSplits];
+      nextSplits.splice(
+        Math.max(0, Math.min(insertIndex, nextSplits.length)),
+        0,
+        split
+      );
+      return nextSplits;
+    });
 
     const handle = getSplit(split.id)!;
 
@@ -1314,6 +1295,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
+        insertIndex: options.insertIndex,
       });
     }
   }

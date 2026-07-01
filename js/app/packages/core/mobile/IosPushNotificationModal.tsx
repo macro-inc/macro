@@ -27,7 +27,7 @@ export function IosPushNotificationModal() {
         }}
         class="w-[90%]"
       >
-        <Surface depth={2} active>
+        <Surface depth={2}>
           <div class="*:max-h-[75vh]">
             <div class="flex flex-col gap-4 px-4 py-6">
               <Dialog.Title class="text-lg font-semibold text-ink">

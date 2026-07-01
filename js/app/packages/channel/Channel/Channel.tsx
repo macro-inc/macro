@@ -75,6 +75,7 @@ import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
 import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import { createMessageEditor } from './create-message-editor';
@@ -91,10 +92,14 @@ import {
   defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
+  type ThreadListScrollSnapshot,
   type ThreadListScrollState,
   type ThreadListScrollTarget,
 } from './ThreadList';
-import { createThreadManager } from './thread-manager';
+import {
+  createThreadManager,
+  type ThreadManagerSnapshot,
+} from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
 
 export type ChannelProps = {
@@ -102,13 +107,20 @@ export type ChannelProps = {
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
+  initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isMobile()`. */
   autofocus?: boolean;
 };
 
+export type ChannelMessagesStateSnapshot = {
+  scroll?: ThreadListScrollSnapshot;
+  threads?: ThreadManagerSnapshot;
+};
+
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
+  getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
 };
 
 export function Channel(props: ChannelProps) {
@@ -219,7 +231,9 @@ export function Channel(props: ChannelProps) {
     markAsViewed();
   });
 
-  const threadManager = createThreadManager();
+  const threadManager = createThreadManager(
+    props.initialMessagesStateSnapshot?.threads
+  );
   const [isChannelInputHidden, setIsChannelInputHidden] = createSignal(false);
   const [channelInputEl, setChannelInputEl] = createSignal<HTMLDivElement>();
   const threadPaginator = createThreadPaginator(messagesQuery);
@@ -280,6 +294,7 @@ export function Channel(props: ChannelProps) {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     state.setIsReplying(true);
+    state.replyInputFocusRequest.request();
     return state;
   };
 
@@ -303,14 +318,21 @@ export function Channel(props: ChannelProps) {
     state.setReplyInputState(nextSnapshot);
     state.setIsReplying(true);
     requestAnimationFrame(() => {
-      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot);
+      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot, {
+        focus: false,
+      });
+      state.replyInputFocusRequest.request();
     });
   };
+
+  const deleteConfirmation = createDeleteMessageConfirmation(
+    deleteMessageMutation.mutate
+  );
 
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    deleteMessage: deleteMessageMutation.mutate,
+    deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
@@ -365,6 +387,21 @@ export function Channel(props: ChannelProps) {
     }
     targetMessageController.goToMessage(messageId, replyId);
   };
+
+  const [threadListScrollSnapshot, setThreadListScrollSnapshot] = createSignal<
+    ThreadListScrollSnapshot | undefined
+  >(props.initialMessagesStateSnapshot?.scroll);
+
+  const getMessagesStateSnapshot: ChannelHandle['getMessagesStateSnapshot'] =
+    () => {
+      const scroll = threadListScrollSnapshot();
+      const threads = threadManager.getSnapshot();
+      if (!scroll && !threads) return undefined;
+      return {
+        ...(scroll ? { scroll } : {}),
+        ...(threads ? { threads } : {}),
+      };
+    };
 
   const findBar = createChannelFindBar({
     channelId: () => props.channelId,
@@ -453,12 +490,14 @@ export function Channel(props: ChannelProps) {
       if (props.onHandleReady)
         props.onHandleReady({
           goToMessage,
+          getMessagesStateSnapshot,
         });
     })
   );
 
   return (
     <DebugSuspense name="Channel.root">
+      <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
           <MaybeMessageActionDrawerManager>
@@ -491,6 +530,12 @@ export function Channel(props: ChannelProps) {
                       onScrollNearBottom={threadPaginator.prependPaginate}
                       onNavigationReady={setThreadListNavigation}
                       onScrollStateChange={setThreadListScrollState}
+                      initialScrollSnapshot={
+                        props.targetMessageId
+                          ? undefined
+                          : props.initialMessagesStateSnapshot?.scroll
+                      }
+                      onScrollSnapshotChange={setThreadListScrollSnapshot}
                     >
                       {(item) => {
                         const message = () => messageById().get(item.id);
@@ -525,6 +570,9 @@ export function Channel(props: ChannelProps) {
                                 setReplyInputState={state.setReplyInputState}
                                 setReplyInputEl={state.setReplyInputEl}
                                 setReplyInputHandle={state.setReplyInputHandle}
+                                replyInputFocusRequest={
+                                  state.replyInputFocusRequest
+                                }
                                 listMeta={listMetaByMessageId()[item.id]}
                                 messageEditor={messageEditor}
                                 participants={participants.users}

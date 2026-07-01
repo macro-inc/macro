@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -26,6 +27,8 @@ pub struct Config {
     pub environment: Environment,
     pub redis_host: RedisHost,
     pub macro_db_url: LocalOrRemoteSecret<MacroDbUrl>,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {

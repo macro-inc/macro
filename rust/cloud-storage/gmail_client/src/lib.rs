@@ -6,7 +6,6 @@ pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
 pub(crate) mod profile;
-mod settings;
 pub(crate) mod threads;
 pub(crate) mod watch;
 
@@ -32,7 +31,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
-use crate::messages::{get_message, get_message_label_ids, get_message_thread_id};
+use crate::messages::{get_message, get_message_label_ids, get_message_thread_id, list_messages};
 use crate::threads::get_thread;
 #[allow(unused_imports)]
 use mockall::automock;
@@ -89,6 +88,19 @@ impl GmailClient {
         label_ids: &[&str],
     ) -> anyhow::Result<ServiceThreadList> {
         threads::list_threads(self, access_token, num_threads, next_page_token, label_ids).await
+    }
+
+    /// Lists the `num_messages` most recent message provider ids for the user,
+    /// optionally filtered to messages carrying all of the given Gmail label
+    /// ids (an empty slice applies no filter). Capped at 500 by the Gmail API.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_messages(
+        &self,
+        access_token: &str,
+        num_messages: u32,
+        label_ids: &[&str],
+    ) -> anyhow::Result<Vec<String>> {
+        list_messages(self, access_token, num_messages, label_ids).await
     }
 
     // Returns a list containing the message ids belonging to the thread.
@@ -311,16 +323,6 @@ impl GmailClient {
         sync_token: Option<&str>,
     ) -> anyhow::Result<(Vec<PersonResource>, String)> {
         contacts::list_other_contacts(self, access_token, sync_token).await
-    }
-
-    /// Gets the email signature for a specific email address
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_email_signature(
-        &self,
-        access_token: &str,
-        email_address: &str,
-    ) -> Result<Option<String>, GmailError> {
-        settings::get_email_signature(self, access_token, email_address).await
     }
 
     /// Blocks a sender by creating a filter that sends their emails to SPAM.

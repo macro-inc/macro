@@ -87,7 +87,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <Surface active depth={2} class="rounded-xl shadow-lg shadow-drop-shadow">
+    <Surface depth={2} class="rounded-xl shadow-lg shadow-drop-shadow">
       <div class="text-ink max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon

@@ -202,8 +202,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const name = getRecipientOptionName(option);
             const email = getRecipientOptionEmail(option);
 
-            const contactInfo =
-              name && name !== email ? `${name} | ${email}` : email;
+            // Render the email at reduced opacity (no pipe separator) when a
+            // display name is present; otherwise show the email on its own.
+            const showEmail = Boolean(name) && name !== email && Boolean(email);
 
             // Use appropriate id for UserIcon based on type
             const iconId = props.disabled ? '?' : option.id;
@@ -217,7 +218,10 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                     props.disabled && 'italic'
                   )}
                 >
-                  {contactInfo}
+                  <Show when={showEmail} fallback={name || email}>
+                    {name}
+                    <span class="ml-[0.5em] opacity-50">{email}</span>
+                  </Show>
                 </p>
               </Combobox.ItemLabel>
             );

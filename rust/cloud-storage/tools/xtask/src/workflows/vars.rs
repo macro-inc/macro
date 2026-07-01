@@ -13,6 +13,8 @@ macro_rules! secret {
 
 secret!(CACHIX_AUTH_TOKEN);
 secret!(DOPPLER_TOKEN);
+secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
+secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is

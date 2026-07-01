@@ -18,7 +18,6 @@ import {
   BlockItemSplitLabel,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
@@ -41,7 +40,6 @@ import IconShared from '@icon/wide-share.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
-import SidePanelIcon from '@phosphor/square-half.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
@@ -179,7 +177,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
     },
     {
       label: 'Share',
-      icon: IconShared,
+      icon: IconLink,
       action: () => shareCtx.open(),
       buttonComponent: () => <ShareTrigger />,
       focusTarget: getShareDrawerRecipientInput,
@@ -190,37 +188,19 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
       action: copyLink,
       condition: isMobile,
     },
+  ];
+
+  const menuTools: BlockTool[] = [
     {
-      label: () =>
-        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
-      icon: SidePanelIcon,
-      action: () => sidePanel?.toggle(),
-      isActive: () => sidePanel?.isOpen() ?? false,
-      condition: () =>
-        ENABLE_MARKDOWN_SIDE_PANEL && !(sidePanel?.isNarrow() ?? isMobile()),
-      buttonComponent: () => (
-        <Show when={sidePanel}>
-          {(panel) => (
-            <Button
-              depth={2}
-              variant="base"
-              size="icon-sm"
-              class={cn('bg-surface order-20', {
-                'bg-active': sidePanel?.isOpen(),
-              })}
-              tooltip={
-                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
-              }
-              hotkey={TOKENS.block.toggleSidePanel}
-              onClick={() => {
-                panel().toggle();
-              }}
-            >
-              <SidePanelIcon />
-            </Button>
-          )}
-        </Show>
-      ),
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: blockId,
+          name: name(),
+          fileType: 'md',
+        }),
     },
   ];
 
@@ -246,14 +226,12 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={menuTools}
         ops={ops}
         id={blockId}
         itemType={itemType}
         name={name()}
       />
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
     </>
   );
 }

@@ -22,7 +22,7 @@ export interface HttpSendChatMessageRequest {
   chat_id?: HttpSendChatMessageRequestChatId;
   /** The content of the message */
   content: string;
-  /** The model to respond with (provider api id) */
+  /** The model to respond with (`provider/model` id) */
   model: string;
   /** Which toolset to use. Defaults to `all` */
   toolset?: ToolSet;

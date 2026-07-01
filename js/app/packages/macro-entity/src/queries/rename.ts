@@ -130,6 +130,7 @@ const renameDssSetData = (
     } else if (
       itemType !== 'email' &&
       itemType !== 'channel_message' &&
+      itemType !== 'channel_thread' &&
       itemType !== 'automation' &&
       itemType !== 'foreign' &&
       // CRM companies/contacts aren't renamed via the FileList path (their

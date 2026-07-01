@@ -1,12 +1,13 @@
-use agent::AgentModel;
+use agent::PredefinedModel;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tokio::select;
 
 use crate::ToolServiceContext;
 
-static SUBAGENT_MODEL: AgentModel = AgentModel::Smart;
+static SUBAGENT_MODEL: PredefinedModel = PredefinedModel::Smart;
 
 static SUBAGENT_PROMPT: &str = include_str!("prompts/subagent.md");
 
@@ -35,23 +36,33 @@ impl AsyncTool<ToolServiceContext> for Subagent {
     async fn call(
         &self,
         service_context: ServiceContext<ToolServiceContext>,
-        _request_context: RequestContext,
+        request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         // Subagents have no feature of their own — their usage rolls up into the
         // feature that spawned them, carried on the service context.
-        let result = agent::complete(
+        //
+        // Cooperative cancellation: race the completion against the request's
+        // cancel token. If the user cancels, drop the in-flight completion and
+        // report "cancelled" rather than a partial or errored result.
+        let completion = agent::complete(
             SUBAGENT_MODEL,
             SUBAGENT_PROMPT,
             &self.task,
             service_context.recorder.as_ref(),
             service_context.usage_context.clone(),
-        )
-        .await
-        .map_err(|e| ToolCallError {
-            description: "subagent encountered an error".to_string(),
-            internal_error: e,
-        })?;
+        );
 
-        Ok(SubagentResponse { result })
+        select! {
+            biased;
+            _ = request_context.cancel.cancelled() => Ok(SubagentResponse {
+                result: "cancelled".to_string(),
+            }),
+            result = completion => result
+                .map_err(|e| ToolCallError {
+                    description: "subagent encountered an error".to_string(),
+                    internal_error: e,
+                })
+                .map(|result| SubagentResponse { result }),
+        }
     }
 }

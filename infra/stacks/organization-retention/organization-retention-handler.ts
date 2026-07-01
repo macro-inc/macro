@@ -12,8 +12,6 @@ export type OrganizationRetentionhandlerEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
-  DOCUMENT_DELETE_QUEUE: pulumi.Output<string> | string;
-  CHAT_DELETE_QUEUE: pulumi.Output<string> | string;
 };
 
 type OrganizationRetentionHandlerArgs = {

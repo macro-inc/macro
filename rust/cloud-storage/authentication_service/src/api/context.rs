@@ -14,7 +14,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use notification::outbound::queue::SqsQueue;
 use notification::{
@@ -75,7 +75,7 @@ pub(crate) struct ApiContext {
     pub environment: Environment,
     pub jwt_args: JwtValidationArgs,
     pub token_context: MacroApiTokenContext,
-    pub internal_api_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here

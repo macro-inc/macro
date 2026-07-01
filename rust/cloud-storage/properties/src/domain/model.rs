@@ -1,9 +1,25 @@
 //! Domain models for properties.
 
-use models_properties::DataType;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{DataType, EntityReference, EntityType};
 use uuid::Uuid;
+
+/// Key identifying the properties attached to one entity.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EntityPropertiesKey {
+    pub entity_id: String,
+    pub entity_type: EntityType,
+}
+
+impl From<&EntityReference> for EntityPropertiesKey {
+    fn from(value: &EntityReference) -> Self {
+        Self {
+            entity_id: value.entity_id.clone(),
+            entity_type: value.entity_type,
+        }
+    }
+}
 
 /// Summary of a property attached to an entity, including its definition and current value.
 #[derive(Debug, Clone)]

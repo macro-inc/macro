@@ -49,7 +49,7 @@ export function toNotificationEntity(entity: EntityData): Entity {
     return { type: 'foreign_entity', id: entity.id };
   }
 
-  if (entity.type === 'channel_message') {
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
     return { type: 'channel', id: entity.channelId };
   }
 

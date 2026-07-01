@@ -72,14 +72,18 @@ export function emailFilter(entity: EntityData): boolean {
 
 export function peopleFilter(entity: EntityData): boolean {
   return (
-    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    (entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread') &&
     entity.channelType === 'direct_message'
   );
 }
 
 export function teamsFilter(entity: EntityData): boolean {
   return (
-    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    (entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread') &&
     entity.channelType !== 'direct_message'
   );
 }
@@ -107,7 +111,11 @@ export function githubPrFilter(entity: EntityData): boolean {
 }
 
 export function channelsFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' || entity.type === 'channel_message';
+  return (
+    entity.type === 'channel' ||
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  );
 }
 
 export function callsFilter(entity: EntityData): boolean {

@@ -37,6 +37,7 @@ type ToolParserMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -84,6 +85,14 @@ type ToolParserMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;
@@ -131,6 +140,10 @@ const toolParserMap = {
   ListEntities: {
     call: schemas.ListEntities,
     response: schemas.ListEntitiesResponse,
+  },
+  ListInboxes: {
+    call: schemas.ListInboxes,
+    response: schemas.ListInboxesResponse,
   },
   ListLabels: {
     call: schemas.ListLabels,
@@ -191,6 +204,14 @@ const toolParserMap = {
     call: schemas.SearchTools,
     response: schemas.SearchToolsResponse,
   },
+  SelfKnowledge: {
+    call: schemas.SelfKnowledge,
+    response: schemas.SelfKnowledgeResponse,
+  },
+  SendChannelMessage: {
+    call: schemas.SendChannelMessage,
+    response: schemas.SendChannelMessageResponse,
+  },
   SendEmail: { call: schemas.SendEmail, response: schemas.UserToolResponse },
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
@@ -247,6 +268,7 @@ type ToolDataMap = {
     call: types.ListEntities;
     response: types.ListEntitiesResponse;
   };
+  ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -294,6 +316,14 @@ type ToolDataMap = {
     response: types.RenameDocumentResponse;
   };
   SearchTools: { call: types.SearchTools; response: types.SearchToolsResponse };
+  SelfKnowledge: {
+    call: types.SelfKnowledge;
+    response: types.SelfKnowledgeResponse;
+  };
+  SendChannelMessage: {
+    call: types.SendChannelMessage;
+    response: types.SendChannelMessageResponse;
+  };
   SendEmail: { call: types.SendEmail; response: types.UserToolResponse };
   SetEntityProperty: {
     call: types.SetEntityProperty;

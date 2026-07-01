@@ -4,6 +4,7 @@ use anyhow::Context;
 use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
+use macro_middleware::auth::internal_access::InternalApiKey;
 
 /// The path to the LibreOffice binary
 pub static LOK_PATH: LazyLock<String> = LazyLock::new(|| {
@@ -22,7 +23,6 @@ pub static WEB_SOCKET_RESPONSE_LAMBDA: LazyLock<String> = LazyLock::new(|| {
 });
 
 env_vars! {
-    pub struct ConvertQueue;
     pub struct LokPath;
     pub struct DocumentStorageBucket;
     pub struct WebSocketResponseLambda;
@@ -38,8 +38,6 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// The SQS queue for convert jobs
-    pub convert_queue: ConvertQueue,
     /// The queue max messages per poll
     #[macro_config_default(5)]
     pub queue_max_messages: i32,
@@ -66,6 +64,9 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
 }
 
 impl Config {

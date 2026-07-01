@@ -31,6 +31,7 @@ import {
   filenameWithoutExtension,
 } from '@service-storage/util/filename';
 import {
+  DocumentNameTooLongError,
   type UploadFileOptions as DssUploadFileOptions,
   type UploadSuccess as DssUploadSuccessResult,
   upload as dssUpload,
@@ -282,6 +283,8 @@ class UnsupportedFileTypeError extends Error {
 }
 
 class UploadError extends Error {
+  public readonly originalError?: Error | string;
+
   constructor(
     file: { name: string },
     destination?: UploadDestination,
@@ -290,6 +293,8 @@ class UploadError extends Error {
     const fileName = getFileName(file);
     const message = `Upload failed: ${fileName}`;
     super(message);
+
+    this.originalError = originalError;
 
     console.error(
       `upload${destination ? ` to ${destination}` : ''} failed:`,
@@ -517,8 +522,30 @@ export async function uploadFiles(
   return uploadResults;
 }
 
+function asNameTooLongError(error: Error): DocumentNameTooLongError | null {
+  if (error instanceof DocumentNameTooLongError) return error;
+  // The typed error can be wrapped by UploadError, which preserves the original.
+  if (
+    error instanceof UploadError &&
+    error.originalError instanceof DocumentNameTooLongError
+  ) {
+    return error.originalError;
+  }
+  return null;
+}
+
 function handleUploadError(error: Error): void {
   console.error('Upload error:', error);
+  const nameTooLong = asNameTooLongError(error);
+  if (nameTooLong != null) {
+    const { maxLength } = nameTooLong;
+    toast.failure(
+      maxLength != null
+        ? `Name too long (max ${maxLength} characters)`
+        : 'Name too long'
+    );
+    return;
+  }
   if (
     error instanceof UploadError ||
     error instanceof FileSizeExceededError ||

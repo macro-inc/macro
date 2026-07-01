@@ -238,6 +238,7 @@ export function itemToBlockName(
   if (item.fileType) {
     return fileTypeToBlockName(item.fileType, icon);
   }
+  if (item.type === 'channel_thread') return 'channel';
   return fileTypeToBlockName(item.type, icon);
 }
 

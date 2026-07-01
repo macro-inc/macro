@@ -10,6 +10,7 @@ import { displayResultsHandler } from './DisplayResults';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
+import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
@@ -35,6 +36,8 @@ import { readThreadHandler } from './ReadThread';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { searchToolsHandler } from './SearchTools';
+import { selfKnowledgeHandler } from './SelfKnowledge';
+import { sendChannelMessageHandler } from './SendChannelMessage';
 import { sendEmailHandler } from './SendEmail';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
@@ -53,6 +56,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
+  ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListNotifications: listNotificationsHandler,
   ListTeamMembers: listTeamMembersHandler,
@@ -75,6 +79,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadMetadata: readMetadataHandler,
   RenameDocument: renameDocumentHandler,
   SearchTools: searchToolsHandler,
+  SelfKnowledge: selfKnowledgeHandler,
+  SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   Subagent: subagentHandler,

@@ -1,10 +1,13 @@
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
-import { TabsInset } from '@core/component/TabsInset';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
+import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import { Layer, Panel, Scroll } from '@ui';
+import InfoIcon from '@phosphor/info.svg';
+import { Button, Layer, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -23,6 +26,8 @@ import {
   useContext,
 } from 'solid-js';
 import { splitPanelLayer } from '../split-layout/layers';
+import { HeaderIsland } from '../split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import {
   SidePanelContext,
   type SidePanelContextType,
@@ -102,12 +107,14 @@ function Layout(props: ParentProps) {
 
   return (
     <SidePanelContext.Provider value={ctx}>
+      <SidePanelHeaderToggle />
       <Resize.Zone direction="horizontal" gutter={0} resizable={false}>
         <SidePanelLayoutInner
           sections={sections}
           openIds={openIds}
           setOpenIds={setOpenIds}
           isOpen={isOpen}
+          setIsOpen={setIsOpen}
           setIsNarrow={setIsNarrow}
         >
           {props.children}
@@ -123,6 +130,7 @@ function SidePanelLayoutInner(
     openIds: Accessor<string[]>;
     setOpenIds: (ids: string[]) => void;
     isOpen: Accessor<boolean>;
+    setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsNarrow: Setter<boolean>;
   }>
 ) {
@@ -179,6 +187,17 @@ function SidePanelLayoutInner(
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
             <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
+              <div class="px-2 pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="gap-2 px-2 text-ink-muted"
+                  onClick={() => props.setIsOpen(false)}
+                >
+                  <ArrowLeft class="size-4" />
+                  Back to content
+                </Button>
+              </div>
               <SidePanelOutlet
                 sections={props.sections}
                 openIds={props.openIds}
@@ -189,6 +208,54 @@ function SidePanelLayoutInner(
         </div>
       </Show>
     </>
+  );
+}
+
+function SidePanelHeaderToggle() {
+  const ctx = useContext(SidePanelContext);
+  if (!ctx) return null;
+
+  const ToggleButton = () => (
+    <Button
+      depth={2}
+      variant="base"
+      size="icon-sm"
+      class={cn(
+        !isMobile() && 'bg-surface',
+        isMobile() &&
+          'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+        isMobile() && ctx.isOpen() && 'text-accent'
+      )}
+      tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
+      hotkey={TOKENS.block.toggleSidePanel}
+      onClick={() => ctx.toggle()}
+    >
+      <Show
+        when={ctx.isNarrow()}
+        fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
+      >
+        <InfoIcon
+          class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
+        />
+      </Show>
+    </Button>
+  );
+
+  return (
+    <Show when={ctx.hasSections()}>
+      <SplitHeaderRight>
+        <div class="order-last flex items-center">
+          <HeaderIsland
+            class={cn(
+              'size-10 justify-center !px-0',
+              ctx.isOpen() && 'text-accent'
+            )}
+          >
+            <ToggleButton />
+          </HeaderIsland>
+        </div>
+      </SplitHeaderRight>
+    </Show>
   );
 }
 
@@ -298,34 +365,6 @@ function useSidePanel() {
     isNarrow: ctx.isNarrow,
     hasSections: ctx.hasSections,
   };
-}
-
-/**
- * Pill-style tabs that switch between the main content and the side panel
- * overlay in narrow mode. Renders nothing when the layout is wide or when no
- * sections are registered, so it's safe to mount unconditionally.
- *
- * Hidden on mobile, where the header title island doubles as the
- * Content/Info switcher instead (see BlockItemSplitLabel).
- */
-function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
-  const ctx = useContext(SidePanelContext);
-  if (!ctx) return null;
-
-  const value = () => (ctx.isOpen() ? 'info' : 'content');
-
-  return (
-    <Show when={ctx.isNarrow() && ctx.hasSections() && !isMobile()}>
-      <TabsInset
-        list={[
-          { value: 'content', label: props.contentLabel ?? 'Content' },
-          { value: 'info', label: props.infoLabel ?? 'Info' },
-        ]}
-        value={value()}
-        onChange={(v) => ctx.setIsOpen(v === 'info')}
-      />
-    </Show>
-  );
 }
 
 /** Indicates whether the current subtree has a SidePanel.Layout ancestor. */
@@ -453,7 +492,6 @@ export const SidePanel = {
   EmptyPill,
   Loading,
   CountTitle,
-  NarrowTabs,
   Card,
 };
 export { useSidePanel };

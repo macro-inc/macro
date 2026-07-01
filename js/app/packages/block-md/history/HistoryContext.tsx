@@ -50,7 +50,7 @@ export function HistoryProvider(props: {
   const open = () => setIsOpen(true);
 
   const enter = (at?: Date) => {
-  console.log(at)
+    console.log(at);
     setDiffSession(null);
     setSelectedAt(at ?? null);
     setIsLive(at === undefined);

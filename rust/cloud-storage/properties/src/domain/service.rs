@@ -1,13 +1,16 @@
 //! Service trait for properties.
 
-use models_properties::EntityType;
+use std::collections::HashMap;
+
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
-use super::model::EntityPropertyInfo;
+use super::model::{EntityPropertiesKey, EntityPropertyInfo};
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
@@ -53,6 +56,17 @@ pub trait PropertiesService: Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, PropertiesErr>> + Send;
 
+    /// Get all properties attached to multiple entities, keyed by entity id and type.
+    fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>,
+            PropertiesErr,
+        >,
+    > + Send;
+
     /// Get a property value for an entity by property definition ID.
     /// Returns `None` if the property is not attached to the entity.
     fn get_property_value(
@@ -81,6 +95,31 @@ pub trait PropertiesService: Send + Sync + 'static {
         entity_type: EntityType,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Add one option to a multi-select entity property value atomically.
+    /// Attaches the property if needed and dedupes. Validates the option belongs
+    /// to the (multi-select) property. Requires edit access. Prefer this over
+    /// `set_entity_property` for add/remove of a single option: it composes with
+    /// concurrent changes instead of clobbering them.
+    fn add_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Remove one option from a multi-select entity property value atomically.
+    /// A no-op if absent. Requires edit access.
+    fn remove_entity_property_option(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
     /// Gets the owner of the entity and whether it's deleted

@@ -1,8 +1,7 @@
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use remote_env_var::LocalOrRemoteSecret;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -23,7 +22,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let port = state.config.port;
     let env = state.config.environment;
-    let app = api_router(state.internal_auth_key.clone())
+    let app = api_router(state.internal_api_key.clone())
         .with_state(state)
         .layer(cors.clone())
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
@@ -44,7 +43,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-fn api_router(internal_api_key: LocalOrRemoteSecret<InternalApiSecretKey>) -> Router<ApiContext> {
+fn api_router(internal_api_key: InternalApiKey) -> Router<ApiContext> {
     Router::new().nest(
         "/internal",
         Router::new()

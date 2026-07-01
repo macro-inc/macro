@@ -1,6 +1,6 @@
 use super::ports::*;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, AgentModel, StreamPart};
+use agent::{AgentLoop, PredefinedModel, StreamPart};
 use ai_tools::{ToolServiceContext, ToolSetWithPrompt};
 use chrono::Utc;
 use futures::stream::StreamExt;
@@ -8,8 +8,8 @@ use macro_env::Environment;
 use serde::Deserialize;
 use std::sync::Arc;
 
-static GENERATION_MODEL: AgentModel = AgentModel::Smart;
-static JUDGE_MODEL: AgentModel = AgentModel::Sonnet4_6;
+static GENERATION_MODEL: PredefinedModel = PredefinedModel::Smart;
+static JUDGE_MODEL: PredefinedModel = PredefinedModel::Sonnet4_6;
 
 static GENERATE_MEMORY_PROMPT: &str = "\
 Use tool calls to research who I am, what I care about, what I'm working on, \

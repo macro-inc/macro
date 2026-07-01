@@ -20,6 +20,9 @@ use super::DocumentToolContext;
 fn failed_to_create_document(error: DocumentError) -> ToolCallError {
     let description = match &error {
         DocumentError::BadRequest(message) => message.clone(),
+        DocumentError::NameTooLong { max } => {
+            format!("name too long (max {max} characters)")
+        }
         _ => "failed to create document".to_string(),
     };
 

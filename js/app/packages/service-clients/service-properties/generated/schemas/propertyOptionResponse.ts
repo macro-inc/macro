@@ -4,12 +4,14 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PropertyOptionResponseColor } from './propertyOptionResponseColor';
 import type { PropertyOptionValue } from './propertyOptionValue';
 
 /**
  * Property option response (API representation).
  */
 export interface PropertyOptionResponse {
+  color?: PropertyOptionResponseColor;
   displayOrder: number;
   id: string;
   propertyDefinitionId: string;

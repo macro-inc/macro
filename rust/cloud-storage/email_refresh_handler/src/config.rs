@@ -4,7 +4,6 @@ use macro_env_var::env_vars;
 
 env_vars! {
     struct DatabaseUrl;
-    struct LinkManagerQueue;
     struct DeleteUnusedAfterDays;
     struct DeleteInactiveAfterDays;
     struct InboxHealthPollIntervalHours;
@@ -14,9 +13,6 @@ env_vars! {
 pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub database_url: String,
-
-    /// The queue we put the emails on that need refreshing
-    pub link_manager_queue: String,
 
     /// The environment we are in
     #[allow(dead_code)]
@@ -38,10 +34,6 @@ impl Config {
             .context("DATABASE_URL must be provided")?
             .to_string();
 
-        let link_manager_queue = LinkManagerQueue::new()
-            .context("LINK_MANAGER_QUEUE must be provided")?
-            .to_string();
-
         let environment = Environment::new_or_prod();
 
         let delete_unused_after_days = DeleteUnusedAfterDays::new()
@@ -61,7 +53,6 @@ impl Config {
 
         Ok(Config {
             database_url,
-            link_manager_queue,
             environment,
             delete_unused_after_days,
             delete_inactive_after_days,

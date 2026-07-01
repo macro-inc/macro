@@ -304,10 +304,15 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Create a message.
+    ///
+    /// `triggered_by_user_id` is the id of the user who triggered an agent
+    /// (bot) message, persisted to the nullable `triggered_by_user_id` column;
+    /// `None` for ordinary human messages.
     fn create_message(
         &self,
         channel_id: Uuid,
         sender_id: String,
+        triggered_by_user_id: Option<String>,
         content: String,
         thread_id: Option<Uuid>,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
@@ -956,6 +961,15 @@ pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
 pub trait ChannelEventDispatcher: Send + Sync + 'static {
     /// Fire-and-forget dispatch of a channel event.
     fn dispatch(&self, event: ChannelEvent);
+}
+
+/// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is
+/// expected, so callers (e.g. the AI toolset) can inject a side-effect-wired
+/// dispatcher behind a uniform type.
+impl ChannelEventDispatcher for std::sync::Arc<dyn ChannelEventDispatcher> {
+    fn dispatch(&self, event: ChannelEvent) {
+        (**self).dispatch(event);
+    }
 }
 
 /// Dispatcher for contact graph updates.

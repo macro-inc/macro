@@ -1577,17 +1577,6 @@
         "tags": ["Links"],
         "summary": "List all links belonging to the user.",
         "operationId": "list_links",
-        "parameters": [
-          {
-            "name": "include_signature",
-            "in": "query",
-            "description": "If the user's gmail signature should be included in the response. Defaults to false.",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "",
@@ -2131,6 +2120,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnresolvedSignatureImagesError"
                 }
               }
             }
@@ -3059,6 +3058,10 @@
                 "description": "Headers JSON."
               }
             ]
+          },
+          "include_signature": {
+            "type": ["boolean", "null"],
+            "description": "Per-message override for whether to include the signature on send:\n`Some(false)` to exclude (user dismissed it). Omit to use the inbox's\ndefault policy. Ignored for drafts."
           },
           "provider_id": {
             "type": ["string", "null"],
@@ -4278,9 +4281,6 @@
           "settings": {
             "$ref": "#/components/schemas/Settings"
           },
-          "signature": {
-            "type": ["string", "null"]
-          },
           "sync_status": {
             "$ref": "#/components/schemas/SyncStatus"
           },
@@ -4844,6 +4844,10 @@
       "Settings": {
         "type": "object",
         "properties": {
+          "signature": {
+            "type": ["string", "null"],
+            "description": "The user's email signature content (HTML). On a patch, omit or send\n`null` to leave unchanged (both deserialize to `None`); pass an empty\nstring to clear it. The column cannot be set to SQL NULL via patch."
+          },
           "signature_on_replies_forwards": {
             "type": ["boolean", "null"]
           }
@@ -5051,6 +5055,18 @@
           "email_address": {
             "type": "string",
             "description": "The email address of the sender to unblock."
+          }
+        }
+      },
+      "UnresolvedSignatureImagesError": {
+        "type": "object",
+        "description": "Body returned with a 422 when signature images can't be loaded.",
+        "required": ["unresolved_image_count"],
+        "properties": {
+          "unresolved_image_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },

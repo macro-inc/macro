@@ -74,7 +74,9 @@ function StaticLabel(props: { language: SupportedLanguage }) {
   return (
     <div class="text-xs font-sans font-medium flex items-center gap-1 p-2 text-ink-extra-muted/50">
       <Dynamic component={LanguageIcons[props.language]} class="size-4" />
-      <span>{LanguageDefinitions[props.language].label}</span>
+      <span class="select-none">
+        {LanguageDefinitions[props.language].label}
+      </span>
     </div>
   );
 }

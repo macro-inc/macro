@@ -1,39 +1,31 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
-use crate::hook::{RegisterFn, StreamBridge, ToolRouter};
-use crate::model::AgentModel;
-use crate::model::router::{AllModelsRouter, RoutedModel};
-use crate::model::types::Model;
-use crate::provider_env;
-use crate::stream::{ChatCompletionStream, StreamPart};
+use crate::hook::{RegisterFn, ToolRouter};
+use crate::model::PredefinedModel;
+use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::stream::ChatCompletionStream;
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
-use futures::StreamExt;
-use rig_core::agent::{Agent, MultiTurnStreamItem};
-use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
-use rig_core::providers::{anthropic, openai};
-use rig_core::streaming::{StreamedAssistantContent, StreamingPrompt};
 use rig_core::tool::server::{ToolServer, ToolServerHandle};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 
 const DEFAULT_MAX_TURNS: usize = 16;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// Factory for creating per-request agent sessions.
 ///
-/// Holds one client per provider and routes each session to the provider
-/// serving the selected model id (see [`AllModelsRouter`]). The model is a
+/// Routes each session to the provider serving the selected model id (see
+/// [`ModelRouter`]). The model is a
 /// plain api-id string so the frontend can select it directly; backend
-/// callers pass an [`AgentModel`] via `with_model` (it is `ToString`). Tools
-/// and system prompt are provided per-session since they vary by request
+/// callers may pass a [`PredefinedModel`] via `with_model` (it is `ToString`).
+/// Tools and system prompt are provided per-session since they vary by request
 /// (MCP tools are per-user, system prompt depends on toolset selection).
 pub struct AgentLoop {
-    anthropic: Arc<anthropic::Client>,
-    openai: Arc<openai::Client>,
     model: String,
     max_turns: usize,
     max_tokens: u64,
@@ -49,15 +41,8 @@ impl AgentLoop {
     ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
-        let anthropic = Arc::new(
-            provider_env::anthropic_client_from_env().expect("ANTHROPIC_API_KEY must be set"),
-        );
-        let openai =
-            Arc::new(provider_env::openai_client_from_env().expect("OPENAI_API_KEY must be set"));
         Self {
-            anthropic,
-            openai,
-            model: AgentModel::default().to_string(),
+            model: PredefinedModel::default().to_string(),
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
@@ -85,24 +70,6 @@ impl AgentLoop {
         self
     }
 
-    fn build_agent<M: CompletionModel>(
-        &self,
-        model: M,
-        thinking: Option<serde_json::Value>,
-        handle: ToolServerHandle,
-        system_prompt: &str,
-    ) -> Agent<M> {
-        let mut builder = rig_core::agent::AgentBuilder::new(model)
-            .tool_server_handle(handle)
-            .default_max_turns(self.max_turns)
-            .max_tokens(self.max_tokens)
-            .preamble(system_prompt);
-        if let Some(params) = thinking {
-            builder = builder.additional_params(params);
-        }
-        builder.build()
-    }
-
     /// Start a new streaming session.
     ///
     /// `toolset` is the combined tool set (static + MCP) for this request.
@@ -116,6 +83,39 @@ impl AgentLoop {
         context: Arc<Context>,
         system_prompt: &str,
         usage_ctx: UsageContext,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+    {
+        // The frontend selects the model by api id; route it to the provider
+        // that serves it (falling back to the default on unknown / unavailable
+        // ids). The router owns provider-specific agent construction.
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            |handle, prompt, max_turns, max_tokens| {
+                ModelRouter::shared()
+                    .expect("failed to initialize model router")
+                    .agent(&self.model, handle, prompt, max_turns, max_tokens)
+            },
+        )
+        .await
+    }
+
+    /// Like [`Self::session`], but the agent is built by `build` from the live
+    /// tool-server handle and the finalized system prompt. Production routes the
+    /// model through [`ModelRouter`]; tests inject a fake completion model. The
+    /// rest of the per-session wiring (tool adapters, tool search, cancellation
+    /// token) is identical either way.
+    async fn session_with<Context>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: &str,
+        usage_ctx: UsageContext,
+        build: impl FnOnce(ToolServerHandle, &str, usize, u64) -> ProviderAgent,
     ) -> Session
     where
         Context: Clone + Send + Sync + 'static,
@@ -137,9 +137,10 @@ impl AgentLoop {
                 buffer.lock().expect("loaded_buffer poisoned").extend(tools)
             })
         };
-        let request_context = Arc::new(RwLock::new(
-            RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader),
-        ));
+        let request_context =
+            RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader);
+        // TODO this is cringe, make request context a RW lock newtype
+        let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 
         // Keep a handle to the toolset so the stream bridge can resolve MCP
         // routing info (service / display name) for tool calls. This is the
@@ -151,7 +152,7 @@ impl AgentLoop {
         let adapters = DynToolSetAdapter::from_toolset(
             toolset.clone(),
             context.clone(),
-            request_context.clone(),
+            request_context_rw.clone(),
         );
 
         let handle = ToolServer::new().run();
@@ -176,13 +177,12 @@ impl AgentLoop {
             let handle = handle.clone();
             let toolset = toolset.clone();
             let context = context.clone();
-            let request_context = request_context.clone();
             Arc::new(move |tools: Vec<SearchableTool>| {
                 let handle = handle.clone();
                 let toolset = toolset.clone();
                 let context = context.clone();
-                let request_context = request_context.clone();
                 let loaded_names = loaded_names.clone();
+                let request_context_rw = request_context_rw.clone();
                 Box::pin(async move {
                     for tool in tools {
                         // Skip tools already loaded this session.
@@ -198,7 +198,7 @@ impl AgentLoop {
                             tool.schema,
                             toolset.clone(),
                             context.clone(),
-                            request_context.clone(),
+                            request_context_rw.clone(),
                         );
                         if let Err(e) = handle.add_tool(adapter).await {
                             tracing::warn!(error = ?e, "failed to load searched tool");
@@ -220,31 +220,7 @@ impl AgentLoop {
             system_prompt.push_str(&section);
         }
 
-        // The frontend selects the model by api id; route it to the provider
-        // that serves it (falling back to the default on unknown / unavailable
-        // ids). Each `RoutedModel` arm yields a concrete completion model that
-        // feeds the provider-specific `ProviderAgent`.
-        let router = AllModelsRouter::new(self.anthropic.clone(), self.openai.clone());
-        let agent = match router.route_or_default(&self.model) {
-            RoutedModel::Anthropic(m) => {
-                let thinking = m.thinking_params();
-                ProviderAgent::Anthropic(self.build_agent(
-                    m.completion(),
-                    thinking,
-                    handle,
-                    &system_prompt,
-                ))
-            }
-            RoutedModel::OpenAi(m) => {
-                let thinking = m.thinking_params();
-                ProviderAgent::OpenAi(self.build_agent(
-                    m.completion(),
-                    thinking,
-                    handle,
-                    &system_prompt,
-                ))
-            }
-        };
+        let agent = build(handle, &system_prompt, self.max_turns, self.max_tokens);
 
         Session {
             agent,
@@ -256,14 +232,39 @@ impl AgentLoop {
             recorder: self.recorder.clone(),
             usage_ctx,
             model: self.model.clone(),
+            request_context,
         }
     }
-}
 
-/// A rig agent bound to the provider that serves the session's model.
-enum ProviderAgent {
-    Anthropic(Agent<anthropic::completion::CompletionModel>),
-    OpenAi(Agent<openai::responses_api::ResponsesCompletionModel>),
+    /// Start a session backed by a caller-supplied (fake) completion model
+    /// instead of routing through [`ModelRouter`]. Exercises the real
+    /// per-session wiring and the public [`Session`] surface
+    /// ([`Session::cancellable`], [`Session::send_message`]) without a provider.
+    #[cfg(test)]
+    pub(crate) async fn test_session<Context, M>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: &str,
+        usage_ctx: UsageContext,
+        model: M,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+        M: rig_core::completion::CompletionModel + 'static,
+        M::StreamingResponse: rig_core::completion::GetTokenUsage + Send + Sync,
+    {
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            move |handle, prompt, max_turns, max_tokens| {
+                ProviderAgent::test(model, prompt, max_turns, max_tokens, handle)
+            },
+        )
+        .await
+    }
 }
 
 /// A single streaming conversation session.
@@ -279,9 +280,15 @@ pub struct Session {
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,
     model: String,
+    request_context: RequestContext,
 }
 
 impl Session {
+    /// get the cancel token for this session
+    pub fn cancellable(self) -> (Self, CancellationToken) {
+        let cancel_token = self.request_context.cancel.clone();
+        (self, cancel_token)
+    }
     /// Send a message and stream the response.
     ///
     /// The returned stream yields [`StreamPart`] items compatible with the
@@ -299,38 +306,21 @@ impl Session {
             )));
         };
 
-        let stream = match &self.agent {
-            ProviderAgent::Anthropic(agent) => {
-                run_stream(
-                    agent,
-                    prompt.clone(),
-                    history.to_vec(),
-                    self.max_turns,
-                    self.routing.clone(),
-                    self.loaded_buffer.clone(),
-                    self.register_loaded.clone(),
-                    self.recorder.clone(),
-                    self.usage_ctx.clone(),
-                    self.model.clone(),
-                )
-                .await
-            }
-            ProviderAgent::OpenAi(agent) => {
-                run_stream(
-                    agent,
-                    prompt.clone(),
-                    history.to_vec(),
-                    self.max_turns,
-                    self.routing.clone(),
-                    self.loaded_buffer.clone(),
-                    self.register_loaded.clone(),
-                    self.recorder.clone(),
-                    self.usage_ctx.clone(),
-                    self.model.clone(),
-                )
-                .await
-            }
-        };
+        let stream = self
+            .agent
+            .run_stream(
+                prompt.clone(),
+                history.to_vec(),
+                self.max_turns,
+                self.routing.clone(),
+                self.loaded_buffer.clone(),
+                self.register_loaded.clone(),
+                self.recorder.clone(),
+                self.usage_ctx.clone(),
+                self.model.clone(),
+                self.request_context.clone(),
+            )
+            .await;
 
         Ok(stream)
     }
@@ -339,82 +329,4 @@ impl Session {
     pub fn get_history(&self) -> &[Message] {
         &self.history
     }
-}
-
-/// Run the agentic loop on `agent` and adapt rig's stream into the
-/// provider-agnostic [`StreamPart`] stream consumed by DCS.
-#[allow(clippy::too_many_arguments)]
-async fn run_stream<M>(
-    agent: &Agent<M>,
-    prompt: Message,
-    history: Vec<Message>,
-    max_turns: usize,
-    routing: ToolRouter,
-    loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
-    register_loaded: RegisterFn,
-    recorder: Arc<dyn UsageRecorder>,
-    usage_ctx: UsageContext,
-    model: String,
-) -> ChatCompletionStream<'static>
-where
-    M: CompletionModel + 'static,
-    M::StreamingResponse: GetTokenUsage + Send + Sync,
-{
-    let (bridge, mut rx) = StreamBridge::channel(routing, loaded_buffer, register_loaded);
-
-    let mut rig_stream = agent
-        .stream_prompt(prompt)
-        .with_history(history)
-        .multi_turn(max_turns)
-        .with_hook(bridge)
-        .await;
-
-    let stream = async_stream::stream! {
-        let mut thinking_buf = String::new();
-
-        while let Some(item) = rig_stream.next().await {
-            while let Ok(part) = rx.try_recv() {
-                yield part;
-            }
-            match item {
-                Ok(MultiTurnStreamItem::StreamAssistantItem(
-                    StreamedAssistantContent::ReasoningDelta { reasoning, .. },
-                )) => {
-                    thinking_buf.push_str(&reasoning);
-                }
-                other => {
-                    if !thinking_buf.is_empty() {
-                        yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
-                    }
-                    match other {
-                        Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                            let usage = final_resp.usage();
-                            // Best-effort cost logging; never fails the stream.
-                            recorder.record(usage_ctx.clone().into_event(
-                                model.clone(),
-                                usage.input_tokens,
-                                usage.output_tokens,
-                            ));
-                            yield Ok(StreamPart::Usage(crate::stream::Usage {
-                                input_tokens: usage.input_tokens,
-                                output_tokens: usage.output_tokens,
-                            }));
-                        }
-                        Err(e) => {
-                            yield Err(AgentError::Streaming(e));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        if !thinking_buf.is_empty() {
-            yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
-        }
-        while let Ok(part) = rx.try_recv() {
-            yield part;
-        }
-    };
-
-    Box::pin(stream)
 }

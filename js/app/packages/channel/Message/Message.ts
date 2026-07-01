@@ -4,6 +4,7 @@ import { Attachments } from './Attachments';
 import { Content } from './Content';
 import { DateDivider } from './DateDivider';
 import { EditedIndicator } from './EditedIndicator';
+import { FromPill } from './FromPill';
 import { HoverActions } from './HoverActions';
 import { Layout } from './Layout';
 import { MediaPreview } from './MediaPreview';
@@ -22,6 +23,7 @@ export const Message = {
   Slot,
   SenderName,
   AgentBadge,
+  FromPill,
   SenderIcon,
   Timestamp,
   Content,

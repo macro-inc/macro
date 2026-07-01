@@ -18,3 +18,30 @@ guppy = "0.17.24"
 # xtask is excluded from hakari traversal, so these stay out of workspace-hack.
 gh-workflow = "0.8"
 indoc = "2"
+# Local/dev orchestration (`cargo x run-local` etc.). xtask is excluded from
+# hakari traversal, so these deps never enter workspace-hack. We reuse the
+# workspace-pinned versions so the orchestrator builds against the same crate
+# graph as the services it launches.
+clap = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+macro_aws_config = { path = "../../macro_aws_config" }
+macro_queues = { path = "../../macro_queues" }
+# Typed docker-compose model (build the override as structs, not strings) +
+# Docker Engine API client for the discrete container/image ops.
+docker-compose-types = { version = "0.24", features = ["indexmap"] }
+bollard = "0.21"
+indexmap = { workspace = true }
+serde_yaml = "0.9"
+indicatif = "0.18"
+console = "0.15"
+# Parse user-provided `--env-file` overlays (reading only; no crate emits the
+# docker-compose `env_file` format we generate). EnumIter derives the port list.
+dotenvy = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+# Signal the frontend dev server's whole process group on shutdown (kill bun +
+# the Vite child it spawns, not just bun).
+libc = "0.2"

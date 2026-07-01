@@ -7,9 +7,8 @@ use frecency::{
 };
 use last_online_tracker::inbound::LastOnlineWorker;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use redis::{RedisError, aio::MultiplexedConnection};
-use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
 use stream::domain::StreamManager;
 
@@ -34,7 +33,7 @@ pub struct AppState {
     pub context: ApiContext,
     pub config: Arc<Config>,
     pub jwt_args: JwtValidationArgs,
-    pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub internal_api_key: InternalApiKey,
     pub frecency_worker: Arc<FrecencyAggregatorWorkerHandle>,
 }
 

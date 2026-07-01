@@ -225,6 +225,8 @@ pub struct ChannelMessage {
     pub channel_id: Uuid,
     /// User who sent the message.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Message body.
@@ -301,6 +303,8 @@ pub struct ThreadReply {
     pub id: Uuid,
     /// User who sent the reply.
     pub sender_id: String,
+    /// For an agent (bot) reply, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Reply body.
@@ -440,6 +444,8 @@ pub struct ChannelContextMessage {
     pub thread_id: Option<Uuid>,
     /// User who sent the message.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Message content.
@@ -510,6 +516,8 @@ pub struct TopLevelMessageRow {
     pub channel_id: Uuid,
     /// Sender user id.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Message content.
     pub content: String,
     /// Created timestamp.
@@ -542,6 +550,8 @@ pub struct ThreadReplyRow {
     pub thread_id: Uuid,
     /// Sender user id.
     pub sender_id: String,
+    /// For an agent (bot) reply, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Reply content.
     pub content: String,
     /// Created timestamp.
@@ -916,6 +926,26 @@ impl ReferencedShareItem {
     }
 }
 
+/// Internal notification behavior for a posted channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PostMessageNotificationPolicy {
+    /// Apply the normal channel notification rules.
+    #[default]
+    Default,
+    /// Do not send notifications for this post. Realtime/search side effects still run.
+    Silent,
+}
+
+/// Internal notification behavior for a patched channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PatchMessageNotificationPolicy {
+    /// Apply the normal edit behavior: realtime/search only, no notifications.
+    #[default]
+    Default,
+    /// Notify as though the patched message content had just been posted.
+    NotifyAsPostedMessage,
+}
+
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -930,6 +960,15 @@ pub struct PostMessageRequest {
     pub attachments: Vec<NewChannelAttachment>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this post.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PostMessageNotificationPolicy,
+    /// For an agent (bot) post, the id of the user who triggered it. `None`
+    /// for ordinary human posts. Set internally, never from the wire.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub triggered_by: Option<String>,
 }
 
 /// Response returned after sending a message.
@@ -956,6 +995,10 @@ pub struct PatchMessageRequest {
     pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this patch.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
 }
 
 /// Query parameters for deleting a message.
@@ -1028,6 +1071,8 @@ pub struct MutatedMessage {
     pub thread_id: Option<Uuid>,
     /// Sender actor id.
     pub sender_id: Sender,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

@@ -4,6 +4,7 @@ import type { PropertyScope } from '../../service-clients/service-properties/gen
 
 export const propertiesKeys = createQueryKeys('properties', {
   all: null,
+  tags: null,
   entity: (params: {
     entityType: EntityType;
     entityId: string;

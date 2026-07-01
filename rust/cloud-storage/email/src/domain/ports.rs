@@ -39,6 +39,16 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// The sending inbox's signature preferences, used by the send pipeline to
+/// decide whether to inject the signature into the outgoing body.
+#[derive(Debug, Clone, Default)]
+pub struct LinkEmailSettings {
+    /// The saved signature HTML (already sanitized server-side), if any.
+    pub signature: Option<String>,
+    /// Whether the signature should be added on replies and forwards.
+    pub signature_on_replies_forwards: bool,
+}
+
 pub trait EmailRepo: Send + Sync + 'static {
     type Err: Send;
     fn previews_for_view_cursor(
@@ -290,6 +300,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         link_id: Uuid,
     ) -> impl Future<Output = Result<Vec<EmailFilter>, Self::Err>> + Send;
+
+    /// Fetch the inbox's signature preferences. Defaults to "no signature" so
+    /// repos that don't override it (and the send path when settings are
+    /// missing) simply skip signature injection.
+    fn fetch_email_settings(
+        &self,
+        _link_id: Uuid,
+    ) -> impl Future<Output = Result<LinkEmailSettings, EmailErr>> + Send {
+        async { Ok(LinkEmailSettings::default()) }
+    }
 }
 
 /// Read-only trait for fetching email thread previews.
