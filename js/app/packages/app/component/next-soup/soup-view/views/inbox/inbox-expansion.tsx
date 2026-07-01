@@ -1,4 +1,9 @@
-import { createContext, createSignal, type FlowComponent, useContext } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  type FlowComponent,
+  useContext,
+} from 'solid-js';
 
 type InboxExpansion = {
   isExpanded: (entityId: string) => boolean;
