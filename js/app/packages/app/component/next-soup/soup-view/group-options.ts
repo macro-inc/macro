@@ -24,7 +24,9 @@ const GROUP_OPTIONS = [
   { value: 'date', label: 'Date' },
 ] as const satisfies GroupOption[];
 
-const buildGroupOptions = (keys: (typeof GROUP_OPTIONS)[number]['value'][]) => {
+const _buildGroupOptions = (
+  keys: (typeof GROUP_OPTIONS)[number]['value'][]
+) => {
   const options = [];
 
   for (const key of keys) {
