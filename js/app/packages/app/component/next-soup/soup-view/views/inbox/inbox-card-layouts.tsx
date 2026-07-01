@@ -289,7 +289,7 @@ function ActionBubble(props: { tag: NotificationTag }) {
 function Badge(props: { unread: boolean }) {
   return (
     <Show when={props.unread}>
-      <span class="ml-auto flex shrink-0 items-center">
+      <span class="flex shrink-0 items-center">
         <span class="size-2 rounded-full bg-accent" />
       </span>
     </Show>
@@ -453,8 +453,10 @@ function BaseCard(props: {
       {props.leading}
       <InboxCard.Body>
         <InboxCard.Header>
-          <InboxCard.Title>{props.title}</InboxCard.Title>
-          <Badge unread={props.unread} />
+          <InboxCard.Title class="flex items-center gap-1">
+            <Badge unread={props.unread} />
+            {props.title}
+          </InboxCard.Title>
         </InboxCard.Header>
 
         <Show when={props.preview?.trim()}>
@@ -619,8 +621,10 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       </Show>
       <InboxCard.Body>
         <InboxCard.Header>
-          <InboxCard.Title>{text().title}</InboxCard.Title>
-          <Badge unread={props.item.unread} />
+          <InboxCard.Title class="flex items-center gap-1">
+            <Badge unread={props.item.unread} />
+            {text().title}
+          </InboxCard.Title>
         </InboxCard.Header>
 
         <div class="flex items-center gap-1">
