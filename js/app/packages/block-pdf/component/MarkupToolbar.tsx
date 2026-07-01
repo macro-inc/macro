@@ -18,7 +18,6 @@ import Trash from '@phosphor/trash-simple.svg';
 import Cancel from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';
 import { PayloadMode } from '../type/placeables';
 
@@ -43,48 +42,6 @@ export function MarkupToolbar() {
     if (!isThreadPlaceable(activePlaceable)) return true;
     return ownedCommentSelector(uuid);
   });
-
-  const dynamicButtonMode = () => {
-    if (showCancel()) return 'cancel';
-    if (showDelete()) return 'delete';
-    return 'placeholder';
-  };
-
-  const dynamicButton = createMemo(() => ({
-    cancel: () => (
-      <Button
-        size="icon-sm"
-        variant="danger"
-        tooltip="Cancel"
-        onClick={() => {
-          setMode(PayloadMode.NoMode);
-        }}
-      >
-        <Cancel />
-      </Button>
-    ),
-    delete: () => (
-      <Button
-        size="icon-sm"
-        variant="danger"
-        tooltip="Delete"
-        onClick={() => {
-          const activePlaceableIndex_ = activePlaceableId();
-          if (activePlaceableIndex_ == null) return;
-          deletePlaceable(activePlaceableIndex_);
-        }}
-      >
-        <Trash />
-      </Button>
-    ),
-    placeholder: () => (
-      <div class="invisible">
-        <Button size="icon-sm">
-          <Cancel />
-        </Button>
-      </div>
-    ),
-  }));
 
   return (
     <Show when={canComment()}>
@@ -130,7 +87,45 @@ export function MarkupToolbar() {
         >
           <ChatTeardrop />
         </Button>
-        <Dynamic component={dynamicButton()[dynamicButtonMode()]} />
+        <Show
+          when={showCancel()}
+          fallback={
+            <Show
+              when={showDelete()}
+              fallback={
+                <div class="invisible">
+                  <Button size="icon-sm">
+                    <Cancel />
+                  </Button>
+                </div>
+              }
+            >
+              <Button
+                size="icon-sm"
+                variant="danger"
+                tooltip="Delete"
+                onClick={() => {
+                  const activePlaceableIndex_ = activePlaceableId();
+                  if (activePlaceableIndex_ == null) return;
+                  deletePlaceable(activePlaceableIndex_);
+                }}
+              >
+                <Trash />
+              </Button>
+            </Show>
+          }
+        >
+          <Button
+            size="icon-sm"
+            variant="danger"
+            tooltip="Cancel"
+            onClick={() => {
+              setMode(PayloadMode.NoMode);
+            }}
+          >
+            <Cancel />
+          </Button>
+        </Show>
       </div>
     </Show>
   );
