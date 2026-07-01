@@ -101,6 +101,8 @@ type SoupViewInitializeOptions = {
   additionalEntities?: Accessor<EntityData[]>;
 };
 
+export type ReadFilter = 'all' | 'unread' | 'read';
+
 interface SoupViewContextValues {
   soup: SoupState;
   initialize: (options?: SoupViewInitializeOptions) => void;
@@ -121,6 +123,8 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  readFilter: Accessor<ReadFilter>;
+  setReadFilter: Setter<ReadFilter>;
   groupByField: Accessor<GroupByField | undefined>;
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
@@ -280,6 +284,10 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.tab',
     { default: undefined }
   );
+  const [readFilter, setReadFilter] = useEntryState<ReadFilter>(
+    'soup.readFilter',
+    { default: 'unread' }
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
@@ -363,8 +371,32 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const applyViewFilters = (state: QueryState): QueryState =>
-    applyInboxThreadFilter(applyInboxFilter(state));
+  // Unread/read/all filter for the new inbox: injects the per-entity-type seen
+  // filters ('all' leaves them unset). Matches the experimental inbox.
+  const applyInboxReadFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const filter = readFilter();
+    if (filter === 'all') return state;
+    const seen = filter === 'read';
+    return {
+      ...state,
+      include: {
+        ...state.include,
+        documentSeen: seen,
+        emailSeen: seen,
+        channelSeen: seen,
+        chatSeen: seen,
+        folderSeen: seen,
+      },
+    };
+  };
+
+  const applyViewFilters = (state: QueryState): QueryState => {
+    let next = applyInboxFilter(state);
+    next = applyInboxThreadFilter(next);
+    next = applyInboxReadFilter(next);
+    return next;
+  };
 
   const soupBody = createMemo(() =>
     compileToAst(applyViewFilters(queryFilters.state))
@@ -697,6 +729,8 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    readFilter,
+    setReadFilter,
     groupByField,
     fetchNextGroupPage,
     isFetchingGroupPage,
