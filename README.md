@@ -76,17 +76,6 @@ claude mcp add --transport http macro https://mcp-server.macro.com/mcp
 See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.
 
  
-## Repository
- 
-| Directory | Contents |
-| --- | --- |
-| [`js/`](js) | SolidJS frontend ([`js/app`](js/app)) and TypeScript services |
-| [`rust/`](rust) | Rust backend services |
-| [`docs/`](docs) | Source for [docs.macro.com](https://docs.macro.com) |
-| [`infra/`](infra) | Infrastructure as code |
- 
-See [RUNNING_LOCALLY.md](RUNNING_LOCALLY.md) to run the stack locally (work in progress).
- 
 # Security
 
 <img width="520" alt="ISO 27001 and SOC 2 Type II badges" src=".github/readme/security-badges.svg" />
@@ -106,3 +95,9 @@ Have an idea, want to contribute, or want to work on Macro?
 - Feature requests: [contact@macro.com](mailto:contact@macro.com)
 - Contributions: open a PR, or email [contribute@macro.com](mailto:contribute@macro.com) if you're not sure where to start
 - Hiring: [teo@macro.com](mailto:teo@macro.com)
+
+<div align="center">
+  <a target="_blank" href="https://macro.com/app">
+    <img width="2195" height="721" alt="Frame 12" src="https://github.com/user-attachments/assets/61b846b0-0a61-4a65-9f7b-0e605e209d12" />
+  </a>
+</div>
