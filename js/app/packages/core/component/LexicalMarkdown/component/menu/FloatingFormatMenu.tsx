@@ -120,7 +120,15 @@ const ListOptions: ElementOption[] = [
   { format: 'list-check', icon: ListChecks, label: 'Checklist' },
 ];
 
-export function FloatingFormatMenu(props: { portalScope?: PortalScope }) {
+export function FloatingFormatMenu(props: {
+  portalScope?: PortalScope;
+  /**
+   * The link button dispatches commands handled by the links plugin, which is
+   * registered by FloatingLinkMenu. Pass false when no FloatingLinkMenu is
+   * mounted alongside this menu. Defaults to true.
+   */
+  showLinkButton?: boolean;
+}) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (!lexicalWrapper) {
     console.error('FloatingFormatMenu requires LexicalWrapperContext!');
@@ -271,19 +279,21 @@ export function FloatingFormatMenu(props: { portalScope?: PortalScope }) {
               onFormat={inlineFormat}
               onCloseAutoFocus={refocusEditor}
             />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              class="rounded-md"
-              depth={3}
-              onPointerDown={(e: PointerEvent) => e.preventDefault()}
-              onClick={handleLink}
-              tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
-            >
-              <Dynamic
-                component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
-              />
-            </Button>
+            <Show when={props.showLinkButton ?? true}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-md"
+                depth={3}
+                onPointerDown={(e: PointerEvent) => e.preventDefault()}
+                onClick={handleLink}
+                tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
+              >
+                <Dynamic
+                  component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+                />
+              </Button>
+            </Show>
           </div>
         </Layer>
       </ScopedPortal>

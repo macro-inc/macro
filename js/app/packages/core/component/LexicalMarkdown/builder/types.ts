@@ -136,6 +136,8 @@ export interface EditorConfig {
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;
+  /** Show a floating format toolbar over the current text selection. */
+  floatingFormatMenu: boolean;
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;
