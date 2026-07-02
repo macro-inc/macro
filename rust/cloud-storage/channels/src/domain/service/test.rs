@@ -807,7 +807,7 @@ fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
 }
 
 fn sender(user_id: &str) -> Sender {
-    Sender::User(macro_id(user_id))
+    Sender::from_user(macro_id(user_id))
 }
 
 #[tokio::test]
@@ -884,7 +884,7 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
 async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::from_uuid(Uuid::new_v4());
-    let actor = Sender::Bot(bot_id);
+    let actor = Sender::from_bot(bot_id);
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let events = FakeEvents::default();
     let share = FakeReferenceSharing::default();
@@ -987,7 +987,7 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     let bot_sender = bot_id.to_storage_string();
     let repo = FakeMutationRepo::new(channel_id, &bot_sender);
     repo.state.lock().unwrap().message.thread_id = Some(thread_id);
-    repo.state.lock().unwrap().message.sender_id = Sender::Bot(bot_id);
+    repo.state.lock().unwrap().message.sender_id = Sender::from_bot(bot_id);
     let message_id = repo.state.lock().unwrap().message.id;
     let events = FakeEvents::default();
     let svc = mutation_service(
@@ -997,7 +997,7 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     );
 
     svc.patch_message(
-        Sender::Bot(bot_id),
+        Sender::from_bot(bot_id),
         ParticipantRole::Member,
         channel_id,
         message_id,

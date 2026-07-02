@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::MutatedMessage;
+use crate::domain::models::{MutatedMessage, Sender};
 use bot_id::BotId;
 use chrono::Utc;
 
@@ -22,7 +22,7 @@ fn message(sender_id: Sender) -> MutatedMessage {
 #[test]
 fn bot_message_payload_includes_enriched_sender() {
     let bot_id = BotId::from_uuid(Uuid::new_v4());
-    let message = message(Sender::Bot(bot_id));
+    let message = message(Sender::from_bot(bot_id));
     let sender = MessageRealtimeSender::new(
         &message.sender_id,
         None,
@@ -54,7 +54,7 @@ fn bot_message_payload_includes_enriched_sender() {
 #[test]
 fn agent_message_payload_includes_triggering_user() {
     let bot_id = BotId::from_uuid(Uuid::new_v4());
-    let message = message(Sender::Bot(bot_id));
+    let message = message(Sender::from_bot(bot_id));
     let sender = MessageRealtimeSender::new(
         &message.sender_id,
         Some("macro|eric@macro.com".to_string()),
@@ -79,7 +79,7 @@ fn agent_message_payload_includes_triggering_user() {
 fn user_message_payload_omits_bot_fields() {
     let user = macro_user_id::user_id::MacroUserIdStr::try_from_email("alice@example.com")
         .expect("valid email");
-    let message = message(Sender::User(user.clone()));
+    let message = message(Sender::from_user(user.clone()));
     let sender = MessageRealtimeSender::new(&message.sender_id, None, None);
 
     let payload = serde_json::to_value(WithNonce {

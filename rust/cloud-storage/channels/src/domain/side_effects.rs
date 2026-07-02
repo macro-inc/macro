@@ -4,7 +4,7 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
+        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
         TypingAction,
     },
     ports::{
@@ -1114,22 +1114,24 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
     match event {
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
-            actor: Sender::User(_),
+            actor,
             participant_user_ids,
             ..
-        } => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
-            invited_by: Sender::User(_),
+            invited_by,
             active_participant_user_ids,
             ..
-        } => Some(active_participant_user_ids.iter().cloned().collect()),
+        } if invited_by.as_user().is_some() => {
+            Some(active_participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantJoined {
             channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
-            user_id: Sender::User(_),
+            user_id,
             active_participant_user_ids,
             ..
-        } if active_participant_user_ids.len() > 1 => {
+        } if user_id.as_user().is_some() && active_participant_user_ids.len() > 1 => {
             Some(active_participant_user_ids.iter().cloned().collect())
         }
         _ => None,

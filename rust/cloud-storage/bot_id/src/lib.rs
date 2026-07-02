@@ -406,7 +406,7 @@ mod tests {
 
         assert_eq!(parsed.bot_id(), bot_id);
         assert_eq!(parsed.as_uuid(), uuid);
-        assert_eq!(parsed.uuid_str(), uuid.to_string());
+        assert_eq!(parsed.bot_id().as_uuid().to_string(), uuid.to_string());
         assert_eq!(parsed.as_ref(), storage);
     }
 

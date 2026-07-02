@@ -566,7 +566,7 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
     let calls = poster.calls.lock().expect("posted message mutex poisoned");
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.actor, Sender::Bot(bot_id));
+    assert_eq!(call.actor, Sender::from_bot(bot_id));
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, "hello");
     assert!(call.req.mentions.is_empty());
@@ -602,7 +602,7 @@ async fn channel_webhook_router_raw_body_starting_with_brace_posts_as_bot() {
     let calls = poster.calls.lock().expect("posted message mutex poisoned");
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.actor, Sender::Bot(bot_id));
+    assert_eq!(call.actor, Sender::from_bot(bot_id));
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, content);
 }

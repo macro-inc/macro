@@ -41,6 +41,14 @@ impl<'a> ChannelSender<'a> {
     pub fn as_bot(&self) -> Option<&BotIdStr<'a>> {
         self.0.as_ref().left()
     }
+    /// attempt to return the user id str if this value contains a user
+    pub fn into_user(self) -> Option<MacroUserIdStr<'a>> {
+        self.0.right()
+    }
+    /// attempt to return the bot id str if this value contains a bot
+    pub fn into_bot(self) -> Option<BotIdStr<'a>> {
+        self.0.left()
+    }
 
     /// attempt to parse a value of self from an input str
     pub fn parse_from_str(value: &'a str) -> Result<Self, ParseErr> {
@@ -50,6 +58,11 @@ impl<'a> ChannelSender<'a> {
                 .map(Either::Right)
                 .map(ChannelSender),
         }
+    }
+
+    /// create a new instance of self containing a [MacroUserIdStr]
+    pub fn new_from_user(user: MacroUserIdStr<'a>) -> Self {
+        Self(InnerVal::Right(user))
     }
 }
 
