@@ -125,7 +125,10 @@ export function HoverCard(props: HoverCardComponentProps) {
       lastX = e.screenX;
       lastY = e.screenY;
     };
-    window.addEventListener('pointermove', onPointerMove, true);
+    window.addEventListener('pointermove', onPointerMove, {
+      capture: true,
+      passive: true,
+    });
     onCleanup(() =>
       window.removeEventListener('pointermove', onPointerMove, true)
     );
