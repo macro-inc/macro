@@ -975,7 +975,7 @@ fn test_matching_threads_cte_body_single_sender_uses_union_form() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
     let resolved = resolved_with(&[("a@b.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Single sender: one UNION branch (no UNION keyword needed), index probe
@@ -1004,7 +1004,7 @@ fn test_matching_threads_cte_body_or_of_kinds_emits_one_union_branch_per_literal
         Expr::Literal(EmailLiteral::Recipient(complete("x@y.com"))),
     );
     let resolved = resolved_with(&[("x@y.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Three UNIONs join the four branches.
@@ -1028,7 +1028,7 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
         Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
     );
     let resolved = resolved_with(&[("known@x.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Only one branch left → no UNION keyword.
@@ -1040,8 +1040,8 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
 #[test]
 fn test_matching_threads_cte_body_partial_emits_ilike_branch_with_email_contacts_join() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("FROM email_contacts c"));
@@ -1055,8 +1055,8 @@ fn test_matching_threads_cte_body_domain_emits_split_part_branch() {
     // own copy of the address-match SQL builder. Domain on this path must
     // also emit the exact-domain predicate, not ILIKE.
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("FROM email_contacts c"));
@@ -1076,8 +1076,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
     // union-branch builder. Verify the predicate shape is consistent across
     // address kinds.
     let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain("acme.com".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("email_message_recipients"));
@@ -1090,8 +1090,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
 #[test]
 fn test_matching_threads_cte_body_domain_lowercases_bind_value() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("AcMe.CoM".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
 
     assert!(body.has_bind_string("acme.com"));
     assert!(!body.has_bind_string("AcMe.CoM"));
@@ -1109,7 +1109,7 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
         Expr::Literal(EmailLiteral::Recipient(complete("r@x.com"))),
     );
     let resolved = resolved_with(&[("s@x.com", sender_id), ("r@x.com", recipient_id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("SELECT DISTINCT m.thread_id"));
@@ -1131,7 +1131,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
     let resolved = ResolvedFilters::empty()
         .with_contact("a@b.com", contact_id)
         .with_trash(trash_id);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("ml.label_id = "));
@@ -1144,7 +1144,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
 fn test_matching_threads_cte_body_none_when_no_address_literals() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty());
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None);
     assert!(body.is_none());
 }
 
@@ -1321,4 +1321,69 @@ fn test_has_message_literals_false_when_only_date_filters() {
         Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::LessThan(dt))),
     );
     assert!(!has_message_literals(&expr));
+}
+
+// ---------------------------------------------------------------------------
+// matching_threads link scoping (owned-only, non-team queries)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_matching_threads_partial_branch_is_link_scoped_when_scope_given() {
+    // Partial (ILIKE) branches join email_contacts/email_messages by text
+    // match; without a link scope they scan every mailbox in the table.
+    // With a scope, both the contact and message sides must be restricted.
+    let links = vec![Uuid::new_v4(), Uuid::new_v4()];
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("ILIKE"));
+    assert!(debug.contains("c.link_id = ANY("));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_domain_branch_is_link_scoped_when_scope_given() {
+    let links = vec![Uuid::new_v4()];
+    let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain(
+        "acme.com".to_string(),
+    )));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("c.link_id = ANY("));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_combined_fallback_is_link_scoped_when_scope_given() {
+    // Multiple AND conjuncts take the combined-predicate fallback, whose
+    // outer scan is over email_messages — the scope must land there.
+    let id = Uuid::new_v4();
+    let links = vec![Uuid::new_v4()];
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::Sender(complete("a@b.com"))),
+        Expr::Literal(EmailLiteral::Recipient(complete("a@b.com"))),
+    );
+    let resolved = resolved_with(&[("a@b.com", id)]);
+    let body =
+        build_matching_threads_cte_body(&expr, &resolved, Some(&links)).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("SELECT DISTINCT m.thread_id FROM email_messages m"));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_unscoped_without_link_scope() {
+    // Shared/team queries pass None — no link_id predicates may appear,
+    // since candidate threads can live on other users' links.
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(!debug.contains("link_id = ANY("));
 }
