@@ -15,11 +15,11 @@ export function Layer(props: LayerProps) {
   // HACK: on default mobile light theme, we reverse the sign
   const sign = () => (isDefaultMobileLight() ? -1 : 1);
   const depth = () => ((props.depth ?? 0) / 5) * themeDepth() * sign();
-  
+
   // As Layer depth increases, Borders should get lighter slower than surfaces. So we multiple them by this.
   const BORDER_SCALAR = 0.4;
   // If --b0 is black, or near black, we need to set a min step to get appropriate contrast
-  const nearBlackStepMin = () => (props.depth ?? 0) > 0 ? 0.19 : 0;
+  const nearBlackStepMin = () => ((props.depth ?? 0) > 0 ? 0.19 : 0);
 
   return (
     <div

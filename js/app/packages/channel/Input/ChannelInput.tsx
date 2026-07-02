@@ -388,7 +388,10 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class={cn('rounded-xl mobile:rounded-3xl mobile:island', isCollapsed() && 'hidden')}
+        class={cn(
+          'rounded-xl mobile:rounded-3xl mobile:island',
+          isCollapsed() && 'hidden'
+        )}
         highlightColor={isMobile() ? 'none' : undefined}
         depth={2}
         solid

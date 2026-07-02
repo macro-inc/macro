@@ -56,7 +56,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
       // 1px border: button centers 25px above the outer bottom edge, 8px in
       // from the border).
       class={cn('rounded-xl w-full h-12.5', props.class)}
-      bgToken='chrome'
+      bgToken="chrome"
       data-collapsed-input
     >
       <div class="flex h-full min-w-0 items-center gap-1.5 px-2">
