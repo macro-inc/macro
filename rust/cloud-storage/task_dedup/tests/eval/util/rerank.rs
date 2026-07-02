@@ -1,4 +1,4 @@
-//! Reranker adapters for task duplicate detection.
+//! Test-only reranker for the semantic evals.
 
 use embedding::{Content, RerankModel, Reranked, SearchResults};
 
@@ -6,9 +6,9 @@ use embedding::{Content, RerankModel, Reranked, SearchResults};
 /// every candidate back in input order, carrying its existing vector-similarity
 /// score through unchanged.
 ///
-/// This is the default until a real cross-encoder is wired up. A production
-/// implementation — e.g. a Cohere rerank connection — implements the same
-/// [`RerankModel`] and can be swapped in without touching the service.
+/// The evals use it so measurements isolate embedding + judge quality without a
+/// reranking model (or its API key) in the loop; production uses
+/// `task_dedup::outbound::cohere::CohereReranker`.
 #[derive(Clone, Copy, Default)]
 pub struct NoOpReranker;
 

@@ -1,10 +1,9 @@
 //! Offline guards that run in normal CI (no API calls): the committed corpus is
 //! well-formed and covers every scenario, and the metric math is correct.
 
-mod eval;
 
-use eval::corpus::load_corpus;
-use eval::metrics::{
+use crate::util::corpus::load_corpus;
+use crate::util::metrics::{
     Confusion, PairOutcome, average_precision, recall_at_k, report, threshold_sweep,
 };
 use task_dedup::eval::PairCase;

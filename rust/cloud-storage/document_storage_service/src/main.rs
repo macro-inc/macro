@@ -90,10 +90,10 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use task_dedup::{
     TaskDedupService,
     outbound::{
+        cohere::CohereReranker,
         connection_gateway::ConnectionGatewayTaskDedupNotifier,
         judge::AgentDuplicateJudge,
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
-        reranker::NoOpReranker,
     },
 };
 
@@ -595,10 +595,15 @@ async fn main() -> anyhow::Result<()> {
         !openai_api_key.trim().is_empty(),
         "OpenAI API key is required for task dedup embeddings",
     );
+    let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
+    anyhow::ensure!(
+        !cohere_api_key.trim().is_empty(),
+        "Cohere API key is required for task dedup reranking",
+    );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
-        NoOpReranker,
+        CohereReranker::new(cohere_api_key),
         Arc::new(AgentDuplicateJudge::new(ai_usage::pg_recorder(db.clone()))),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),

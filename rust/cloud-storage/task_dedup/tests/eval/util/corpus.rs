@@ -23,18 +23,19 @@ use task_dedup::eval::{CorpusTask, EvalCorpus, TaskSource};
 /// Loads and merges the committed fixtures into one corpus, panicking if any
 /// labeled pair references a task that is missing.
 pub fn load_corpus() -> EvalCorpus {
-    let mut corpus =
-        EvalCorpus::from_json(include_bytes!("../../fixtures/eval/prod_title_only.json"))
-            .expect("prod_title_only.json parses");
+    let mut corpus = EvalCorpus::from_json(include_bytes!(
+        "../../../fixtures/eval/prod_title_only.json"
+    ))
+    .expect("prod_title_only.json parses");
     for bytes in [
-        include_bytes!("../../fixtures/eval/prod_with_body.json").as_slice(),
-        include_bytes!("../../fixtures/eval/prod_pairs.json").as_slice(),
-        include_bytes!("../../fixtures/eval/prod_mined_pairs.json").as_slice(),
-        include_bytes!("../../fixtures/eval/prod_hard_negatives.json").as_slice(),
-        include_bytes!("../../fixtures/eval/prod_hard_negative_pairs.json").as_slice(),
-        include_bytes!("../../fixtures/eval/synthetic.json").as_slice(),
-        include_bytes!("../../fixtures/eval/synthetic_generated.json").as_slice(),
-        include_bytes!("../../fixtures/eval/synthetic_hard_positives.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/prod_with_body.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/prod_pairs.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/prod_mined_pairs.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/prod_hard_negatives.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/prod_hard_negative_pairs.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/synthetic.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/synthetic_generated.json").as_slice(),
+        include_bytes!("../../../fixtures/eval/synthetic_hard_positives.json").as_slice(),
     ] {
         corpus.merge(EvalCorpus::from_json(bytes).expect("fixture parses"));
     }

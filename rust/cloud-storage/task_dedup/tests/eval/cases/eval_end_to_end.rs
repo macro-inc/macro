@@ -17,17 +17,16 @@
 //!
 //! `#[ignore]` — hits OpenAI + Anthropic. Run with `just eval`.
 
-mod eval;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use embedding::embedding_provider::openai::TextEmbedding3Small;
 use embedding::{EmbeddingModel, VectorStore};
-use eval::corpus::{embeddable, load_corpus, seed_ids};
-use eval::harness::{EVAL_CONCURRENCY, build_service, openai_key};
-use eval::metrics::{PairOutcome, report};
-use eval::seed::{EVAL_OWNER, reset_matches, seed_documents};
+use crate::util::corpus::{embeddable, load_corpus, seed_ids};
+use crate::util::harness::{EVAL_CONCURRENCY, build_service, openai_key};
+use crate::util::metrics::{PairOutcome, report};
+use crate::util::seed::{EVAL_OWNER, reset_matches, seed_documents};
 use futures::StreamExt;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -36,7 +35,7 @@ use task_dedup::{EmbeddingMarkdown, NewTask, TaskDedupConfig};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../documents/fixtures", scripts("documents_test_data"))
+    fixtures(path = "../../../../documents/fixtures", scripts("documents_test_data"))
 )]
 #[ignore = "hits OpenAI + Anthropic; run locally with API keys"]
 async fn end_to_end_detection_baseline(pool: PgPool) {

@@ -6,14 +6,13 @@
 //!
 //! `#[ignore]` — hits OpenAI. Run with `just eval`.
 
-mod eval;
 
 use embedding::embedding_provider::openai::TextEmbedding3Small;
 use embedding::{EmbeddingModel, VectorStore};
-use eval::corpus::{embeddable, load_corpus, seed_ids};
-use eval::harness::{EVAL_CONCURRENCY, build_service, openai_key};
-use eval::metrics::fmt_ratio;
-use eval::seed::{EVAL_OWNER, seed_documents};
+use crate::util::corpus::{embeddable, load_corpus, seed_ids};
+use crate::util::harness::{EVAL_CONCURRENCY, build_service, openai_key};
+use crate::util::metrics::fmt_ratio;
+use crate::util::seed::{EVAL_OWNER, seed_documents};
 use futures::StreamExt;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -22,7 +21,7 @@ use task_dedup::{EmbeddingMarkdown, TaskDedupConfig};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../documents/fixtures", scripts("documents_test_data"))
+    fixtures(path = "../../../../documents/fixtures", scripts("documents_test_data"))
 )]
 #[ignore = "hits OpenAI; run locally with API keys"]
 async fn retrieval_recall_baseline(pool: PgPool) {

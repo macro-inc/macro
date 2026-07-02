@@ -427,8 +427,10 @@ services:
     # Bun evaluates the circular @lexical/* ESM imports in an order that triggers
     # a TDZ ("Cannot access 'HeadingNode'/'ElementNode' before initialization");
     # bundling hoists/orders the declarations and resolves it (matching how the
-    # worker is run normally — wrangler/esbuild bundles it first).
-    command: ["sh", "-c", "bun build src/server.ts --target=bun --outfile=/tmp/server.js && exec bun /tmp/server.js"]
+    # worker is run normally — wrangler/esbuild bundles it first). loro-crdt
+    # stays external: bundling it emits its .wasm as a second output file
+    # (breaking --outfile) and mis-wires the wasm instantiation at runtime.
+    command: ["sh", "-c", "bun build src/server.ts --target=bun --external loro-crdt --outfile=/tmp/server.js && exec bun /tmp/server.js"]
     environment:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}

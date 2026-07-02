@@ -80,6 +80,7 @@ async-openai = { version = "0.36.1", features = [
 async-graphql = "7.2.1"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
+automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.111.0"
 aws-sdk-lambda = "1.122.0"

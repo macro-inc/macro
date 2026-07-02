@@ -5,11 +5,10 @@
 //!
 //! `#[ignore]` — hits Anthropic. Run with `just eval` (see `task_dedup/justfile`).
 
-mod eval;
 
-use eval::corpus::{full_text, load_corpus};
-use eval::harness::{EVAL_CONCURRENCY, openai_key};
-use eval::metrics::{PairOutcome, report};
+use crate::util::corpus::{full_text, load_corpus};
+use crate::util::harness::{EVAL_CONCURRENCY, openai_key};
+use crate::util::metrics::{PairOutcome, report};
 use futures::StreamExt;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;

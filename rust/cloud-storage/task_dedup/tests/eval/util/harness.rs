@@ -4,13 +4,20 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use embedding::embedding_provider::openai::TextEmbedding3Small;
+use embedding::embedding_provider::openai::{DIMS, TextEmbedding3Small};
 use sqlx::PgPool;
 use task_dedup::domain::ports::TaskDedupNotifier;
 use task_dedup::outbound::judge::AgentDuplicateJudge;
 use task_dedup::outbound::postgres::{PgTaskMatchRepo, PgTaskVectorDb};
-use task_dedup::outbound::reranker::NoOpReranker;
-use task_dedup::{PgTaskDedupService, TaskDedupConfig, TaskDedupService};
+use task_dedup::{TaskDedupConfig, TaskDedupService};
+
+use super::rerank::NoOpReranker;
+
+/// The service shape the evals run: the production embedder, store, and judge,
+/// but the test-only [`NoOpReranker`] so measurements isolate embedding + judge
+/// quality (production `PgTaskDedupService` runs the Cohere reranker).
+pub type EvalDedupService =
+    TaskDedupService<DIMS, TextEmbedding3Small, PgTaskVectorDb, NoOpReranker>;
 
 /// Concurrency for the parallel measurement loops. The heavy work is network
 /// (OpenAI / Anthropic) and DB connections are released across awaits, so a
@@ -47,9 +54,10 @@ impl TaskDedupNotifier for NoopNotifier {
     }
 }
 
-/// Builds the production service (real embedder + judge) over `pool` with the
-/// given config. The judge records usage into the ephemeral db's ai_usage table.
-pub fn build_service(pool: &PgPool, config: TaskDedupConfig) -> PgTaskDedupService {
+/// Builds the eval service (real embedder + judge, no-op reranker) over `pool`
+/// with the given config. The judge records usage into the ephemeral db's
+/// ai_usage table.
+pub fn build_service(pool: &PgPool, config: TaskDedupConfig) -> EvalDedupService {
     TaskDedupService::with_config(
         config,
         TextEmbedding3Small::new(openai_key()),

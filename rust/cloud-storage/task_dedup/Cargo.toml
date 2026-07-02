@@ -46,6 +46,7 @@ embedding = { path = "../embedding" }
 futures = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 model-entity = { path = "../model-entity" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -74,6 +75,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+automod = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_env_var = { path = "../macro_env_var" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

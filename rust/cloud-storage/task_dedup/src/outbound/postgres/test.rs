@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use embedding::embedding_provider::openai::DIMS;
-use embedding::{Content, Embeddable, EmbeddingModel, LabeledEmbedding};
+use embedding::{
+    Content, Embeddable, EmbeddingModel, LabeledEmbedding, RerankModel, Reranked, SearchResults,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
@@ -11,7 +13,6 @@ use crate::domain::models::NewTask;
 use crate::domain::ports::TaskDedupNotifier;
 use crate::domain::service::TaskDedupService;
 use crate::outbound::judge::LocalDuplicateJudge;
-use crate::outbound::reranker::NoOpReranker;
 
 const OWNER: &str = "macro|user@user.com";
 const TEAM_ID: Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
@@ -20,6 +21,35 @@ const TASK_TWO: &str = "d1000000-0000-0000-0000-000000000002";
 const TASK_THREE: &str = "d1000000-0000-0000-0000-000000000003";
 
 type TestService = TaskDedupService<DIMS, LocalEmbedder, PgTaskVectorDb, NoOpReranker>;
+
+/// Test-only reranker that preserves the upstream vector-similarity ordering,
+/// carrying each candidate's best vector score through unchanged, so these
+/// tests exercise the store rather than a reranking model.
+#[derive(Clone, Copy)]
+struct NoOpReranker;
+
+impl<const D: usize> RerankModel<D> for NoOpReranker {
+    async fn rerank<'a, T: Send>(
+        &self,
+        _query: Content<'a>,
+        candidates: Vec<SearchResults<T, D>>,
+    ) -> anyhow::Result<Vec<Reranked<T>>> {
+        Ok(candidates
+            .into_iter()
+            .map(|result| {
+                let score = result
+                    .matches
+                    .iter()
+                    .map(|matched| matched.score)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                Reranked {
+                    item: result.metadata,
+                    score,
+                }
+            })
+            .collect())
+    }
+}
 
 struct NoopNotifier;
 

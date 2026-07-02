@@ -11,16 +11,15 @@
 //!
 //! `#[ignore]` — hits OpenAI. Run with `just eval`.
 
-mod eval;
 
 use std::collections::HashMap;
 
 use embedding::EmbeddingModel;
 use embedding::LabeledEmbedding;
 use embedding::embedding_provider::openai::TextEmbedding3Small;
-use eval::corpus::{embeddable, load_corpus};
-use eval::harness::{EVAL_CONCURRENCY, openai_key};
-use eval::metrics::sweep_report;
+use crate::util::corpus::{embeddable, load_corpus};
+use crate::util::harness::{EVAL_CONCURRENCY, openai_key};
+use crate::util::metrics::sweep_report;
 use futures::StreamExt;
 
 /// Cosine similarity between two equal-length vectors.
