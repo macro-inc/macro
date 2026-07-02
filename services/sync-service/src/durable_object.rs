@@ -34,7 +34,8 @@ use crate::{
         snapshot::SnapshotStorage,
     },
     tags::{get_ws_id_from_tags, new_ws_id},
-    timeit, websocket,
+    timeit,
+    socket::{Socket, protocol},
 };
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
@@ -136,7 +137,6 @@ pub struct DocumentSyncSession {
     awareness: EphemeralStore,
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
-    msg_buffer: Arc<Mutex<Vec<u8>>>,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     /// Distinct editors since the last snapshot notification.
@@ -323,6 +323,14 @@ fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentA
 }
 
 impl DocumentSyncSession {
+    pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
+        Socket::new(ws.clone())
+    }
+
+    pub(crate) fn get_sockets(&self) -> Vec<Socket> {
+        self.active_websockets().into_iter().map(Socket::new).collect()
+    }
+
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.active_websockets()
     }
@@ -512,11 +520,10 @@ impl DocumentSyncSession {
         {
             let awareness = self.awareness.encode_all();
             for ws in &self.state.get_websockets() {
-                if let Err(e) = websocket::send_initial_sync(
-                    ws,
+                if let Err(e) = protocol::send_initial_sync(
+                    &self.socket_for(ws),
                     snapshot.as_slice(),
                     awareness.as_slice(),
-                    self.msg_buffer.clone(),
                 ) {
                     warn!(
                         error =? e,
@@ -748,11 +755,10 @@ impl DocumentSyncSession {
                 // Size of the initial sync this connect sent — the server end
                 // of the client's `doc.sync.initial-sync` span.
                 tracing::Span::current().record("snapshot.bytes", snapshot.len());
-                websocket::send_initial_sync(
-                    &pair.server,
+                protocol::send_initial_sync(
+                    &self.socket_for(&pair.server),
                     snapshot.as_slice(),
                     self.awareness.encode_all().as_slice(),
-                    self.msg_buffer.clone(),
                 )
                 .context("failed to send initial sync message")?;
             } else {
@@ -991,7 +997,6 @@ impl DurableObject for DocumentSyncSession {
             session_storage: Mutex::new(None),
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
-            msg_buffer: Arc::new(Mutex::new(vec![])),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
             pending_editors: Arc::new(Mutex::new(Default::default())),
             surface_lifecycle: Mutex::new(None),
@@ -1074,7 +1079,7 @@ impl DurableObject for DocumentSyncSession {
             WebSocketIncomingMessage::Binary(bm) => bm,
         };
         worker_rs_otel::scope(&self.env, &self.state, async {
-            let mut telemetry = websocket::InboundMessageTelemetry::new(binary_message.len());
+            let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
 
             let res: Result<()> = async {
                 let document_id = self.document_id().await.inspect_err(|_| {
@@ -1084,20 +1089,19 @@ impl DurableObject for DocumentSyncSession {
                 telemetry.record_context(&document_id, ws_id);
 
                 let message =
-                    websocket::deserialize_message(&binary_message).inspect_err(|_| {
+                    protocol::deserialize_message(&binary_message).inspect_err(|_| {
                         telemetry.record_message_type("invalid");
                         telemetry.record_error_stage("deserialize");
                     })?;
-                telemetry.record_message_type(websocket::message_type(&message));
+                telemetry.record_message_type(protocol::message_type(&message));
 
-                websocket::process_message(
-                    &ws,
+                protocol::process_message(
+                    &self.socket_for(&ws),
                     &document_id,
                     &*self.document_state().await?,
                     &*self.session_storage().await?,
                     &self.awareness,
                     message,
-                    self.msg_buffer.clone(),
                     self,
                     &mut telemetry,
                 )
@@ -1231,11 +1235,10 @@ impl DurableObject for DocumentSyncSession {
                 let update = self.awareness.encode(&peer_id.to_string());
 
                 // Don't silently discard the error
-                websocket::broadcast_awareness(
-                    &ws,
-                    self.get_websockets().as_slice(),
+                protocol::broadcast_awareness(
+                    self,
+                    &self.socket_for(&ws),
                     update.as_slice(),
-                    self.msg_buffer.clone(),
                 )
                 .context("failed to broadcast awareness")?;
             }

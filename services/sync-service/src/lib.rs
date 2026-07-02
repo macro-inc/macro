@@ -16,7 +16,7 @@ mod state;
 mod storage;
 mod tags;
 mod timeout;
-mod websocket;
+mod socket;
 
 use tracing_subscriber::{
     EnvFilter, fmt::time::UtcTime, layer::SubscriberExt, util::SubscriberInitExt,
