@@ -37,7 +37,7 @@ import { senderFromStorageId } from '@queries/channel/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { stringToItemType } from '@service-storage/client';
 import { EntityType } from '@service-storage/generated/schemas';
-import { Avatar, cn } from '@ui';
+import { Avatar, cn, Tooltip } from '@ui';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
@@ -366,8 +366,37 @@ function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
   );
 }
 
-const relativeTime = (timestamp: string | undefined): string | undefined =>
-  timestamp ? formatCompactRelativeTimestamp(timestamp) : undefined;
+const formatDetailedTimestamp = (timestamp: string | undefined) => {
+  if (!timestamp) return undefined;
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  return date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+};
+
+function InboxTimestamp(props: { timestamp?: string; class?: string }) {
+  const short = () =>
+    props.timestamp
+      ? formatCompactRelativeTimestamp(props.timestamp)
+      : undefined;
+  const detailed = () => formatDetailedTimestamp(props.timestamp);
+
+  return (
+    <Show when={short()}>
+      {(value) => (
+        <Tooltip class={props.class} label={detailed() ?? value()}>
+          <span class={'whitespace-nowrap text-xs text-ink-extra-muted'}>
+            {value()}
+          </span>
+        </Tooltip>
+      )}
+    </Show>
+  );
+}
 
 const createSenderDisplayName = (
   senderId: () => string | undefined,
@@ -508,11 +537,10 @@ function BaseCard(props: {
           </Show>
         </div>
       </InboxCard.Body>
-      <Show when={props.timestamp}>
-        <span class="col-start-3 row-start-1 self-start justify-self-end whitespace-nowrap text-xs text-ink-extra-muted">
-          {relativeTime(props.timestamp)}
-        </span>
-      </Show>
+      <InboxTimestamp
+        timestamp={props.timestamp}
+        class="col-start-3 row-start-2 self-start justify-self-end"
+      />
     </InboxCard.Root>
   );
 }
@@ -628,11 +656,10 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </Show>
         </div>
       </InboxCard.Body>
-      <Show when={props.item.timestamp}>
-        <span class="col-start-3 row-start-1 self-start justify-self-end whitespace-nowrap text-xs text-ink-extra-muted">
-          {relativeTime(props.item.timestamp)}
-        </span>
-      </Show>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-1 self-start justify-self-end"
+      />
     </InboxCard.Root>
   );
 }
@@ -888,15 +915,10 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
           />
         </Show>
       </InboxCard.Body>
-      <Show when={props.item.timestamp}>
-        <span
-          class={cn(
-            'col-start-3 row-start-2 self-start justify-self-end whitespace-nowrap text-xs text-ink-extra-muted'
-          )}
-        >
-          {relativeTime(props.item.timestamp)}
-        </span>
-      </Show>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-2 self-start justify-self-end"
+      />
     </InboxCard.Root>
   );
 }
@@ -1200,11 +1222,10 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
           )}
         </Show>
       </InboxCard.Body>
-      <Show when={props.item.timestamp}>
-        <span class="col-start-3 row-start-1 self-start justify-self-end whitespace-nowrap text-xs text-ink-extra-muted">
-          {relativeTime(props.item.timestamp)}
-        </span>
-      </Show>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-1 self-start justify-self-end"
+      />
     </InboxCard.Root>
   );
 }
