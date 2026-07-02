@@ -107,7 +107,7 @@ const LIGHT_BG_THRESHOLD = 0.85;
 
 /** Remove light/white backgrounds from all elements, preserving colored/dark backgrounds (buttons, banners).
  *  Uses getComputedStyle to resolve all color formats (named colors, hex, rgb, etc.) */
-function stripContentBackgrounds(root: Node) {
+export function stripContentBackgrounds(root: Node) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let el = walker.nextNode();
   while (el) {
@@ -117,7 +117,11 @@ function stripContentBackgrounds(root: Node) {
         const rgba = normalizeRGBA(parseRGBA(bgColor));
         if (rgba && rgba.a > 0) {
           const oklch = rgbaToOklch(rgba);
-          if (oklch && oklch.l > LIGHT_BG_THRESHOLD) {
+          if (
+            oklch &&
+            oklch.l > LIGHT_BG_THRESHOLD &&
+            !hasOpaqueAncestorBackground(el, root)
+          ) {
             el.style.setProperty(
               'background-color',
               'transparent',
@@ -130,6 +134,23 @@ function stripContentBackgrounds(root: Node) {
     }
     el = walker.nextNode();
   }
+}
+
+/** True if an ancestor still has an opaque background. Parents are visited
+ *  before children, so any remaining opaque ancestor bg is one we kept
+ *  (non-light) — a light bg layered on it is content (e.g. a button face
+ *  inside a colored border div), not page chrome, and stripping it would
+ *  expose the colored bg behind text that wasn't styled to contrast with it. */
+function hasOpaqueAncestorBackground(el: HTMLElement, root: Node): boolean {
+  let ancestor = el.parentElement;
+  while (ancestor && ancestor !== root) {
+    const bg = normalizeRGBA(
+      parseRGBA(getComputedStyle(ancestor).backgroundColor)
+    );
+    if (bg && bg.a > 0) return true;
+    ancestor = ancestor.parentElement;
+  }
+  return false;
 }
 
 export function rgbaToOklch(rgba: RGBA | null): OKLCH | null {
