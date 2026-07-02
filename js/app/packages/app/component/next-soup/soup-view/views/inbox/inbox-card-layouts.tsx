@@ -276,19 +276,19 @@ function GithubStatusIcon(props: { status?: string }) {
   };
 
   return (
-    <span class="grid size-6 place-items-center">
+    <span class="grid size-4 place-items-center">
       <Show
         when={props.status === 'merged'}
         fallback={
           <Show
             when={props.status === 'open' || props.status === 'closed'}
-            fallback={<GithubIcon class="size-6" />}
+            fallback={<GithubIcon class="size-4" />}
           >
-            <GitPullRequestIcon class={cn('size-6', statusClass())} />
+            <GitPullRequestIcon class={cn('size-4', statusClass())} />
           </Show>
         }
       >
-        <GitMergeIcon class="size-6 text-note" />
+        <GitMergeIcon class="size-4 text-note" />
       </Show>
     </span>
   );
