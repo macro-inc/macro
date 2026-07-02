@@ -481,11 +481,11 @@ export function useSearchFacets(
       case 'task':
         return [
           type,
-          ...tagFacets(),
           taskStatus,
           taskPriority,
           taskAssignee,
           taskCreatedBy,
+          ...tagFacets(),
         ];
       case 'document-or-file':
         return [type, ...tagFacets()];
