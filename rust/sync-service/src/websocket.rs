@@ -14,13 +14,6 @@ use crate::{
     storage::SessionStorage,
 };
 
-fn now_ms() -> i64 {
-    web_time::SystemTime::now()
-        .duration_since(web_time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
 fn serialize<'a, T: bebop::Record<'a>>(
     obj: T,
     msg_buf: &mut Vec<u8>,
@@ -119,50 +112,32 @@ pub async fn process_message(
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
             }
-            let touched_nodes = session_storage
-                .append_pending_operation(&update, document_state)
-                .await?;
 
-            if !touched_nodes.is_empty() {
-                let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
-                if let Some(&peer_id) = peer_ids.first() {
-                    let now_ms = now_ms();
-                    dss.push_blame_events(
-                        touched_nodes
-                            .into_iter()
-                            .map(|node_id| crate::d1::BlameEvent {
-                                document_id: document_id.to_string(),
-                                node_id,
-                                peer_id,
-                                timestamp_ms: now_ms,
-                            })
-                            .collect(),
-                    );
-                }
-            }
-
-            {
-                // ACK the sender first: the update is durably stored at this
-                // point, and a failed send to some *other* peer must not block
-                // the ack, or the sender tears down a healthy connection. The
-                // reverse holds too — if the sender's socket is broken the
-                // peers below must still receive the update (the sender will
-                // re-send it after reconnecting, which is a harmless
-                // duplicate), so a failed ack is logged rather than returned.
-                let message = FromRemote::RemoteUpdateAck {
-                    update: SliceWrapper::Raw(&update),
-                };
-                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
-                let serialized =
-                    serialize(message, &mut buf).context("Failed serializing update")?;
-                if let Err(e) = ws.send_with_bytes(serialized) {
-                    tracing::warn!(error = ?e, "failed to send ack to the update's sender");
-                }
-
+            let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
+            let peer_id = peer_ids.first().copied();
+            let now_ms = web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
             for update in &updates {
-                session_storage
+                let touched_nodes = session_storage
                     .append_pending_operation(update, document_state)
                     .await?;
+                if !touched_nodes.is_empty() {
+                    if let Some(peer_id) = peer_id {
+                        dss.push_blame_events(
+                            touched_nodes
+                                .into_iter()
+                                .map(|node_id| crate::d1::BlameEvent {
+                                    document_id: document_id.to_string(),
+                                    node_id,
+                                    peer_id,
+                                    timestamp_ms: now_ms,
+                                })
+                                .collect(),
+                        );
+                    }
+                }
             }
 
             {

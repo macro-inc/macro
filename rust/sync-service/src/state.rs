@@ -1,7 +1,8 @@
 use std::{borrow::Cow, sync::Mutex};
 
-use loro::{Container, ContainerID, ExportMode, Frontiers, LoroDoc, LoroValue, ToJson};
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector};
+use loro::{
+    Container, ContainerID, ExportMode, Frontiers, LoroDoc, LoroValue, ToJson, VersionVector,
+};
 use tracing::debug;
 use web_time::Instant;
 use worker::Result;
@@ -138,7 +139,9 @@ impl DocumentState {
             let Container::Map(map) = container else {
                 continue;
             };
-            let Some(meta_voc) = map.get("$") else { continue };
+            let Some(meta_voc) = map.get("$") else {
+                continue;
+            };
             let Some(Container::Map(meta_map)) = meta_voc.into_container().ok() else {
                 continue;
             };

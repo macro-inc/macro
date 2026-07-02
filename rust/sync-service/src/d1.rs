@@ -105,10 +105,7 @@ const BATCH_CHUNK_SIZE: usize = 100;
 
 /// Bulk-upsert a list of buffered blame events. Uses D1's `batch()` so all
 /// events in a chunk commit in a single round-trip.
-pub async fn insert_blame_many(
-    env: &worker::Env,
-    events: &[BlameEvent],
-) -> worker::Result<()> {
+pub async fn insert_blame_many(env: &worker::Env, events: &[BlameEvent]) -> worker::Result<()> {
     if events.is_empty() {
         return Ok(());
     }
@@ -139,7 +136,6 @@ pub async fn insert_blame_many(
     }
     Ok(())
 }
-
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct BlameRow {
