@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
 interface SlotProps {
@@ -43,9 +43,9 @@ function Root(props: RootProps): JSX.Element {
         {
           'bg-accent/8': props.selected,
           'bg-accent/16': props.selected && props.highlighted,
-          'bg-hover/30':
+          'bg-hover/50':
             props.highlighted && !props.selected && !isTouchDevice(),
-          'hover:bg-hover/30':
+          'hover:bg-hover/50':
             !props.highlighted && !props.selected && !isTouchDevice(),
           'opacity-75': props.dimmed,
         },
@@ -76,11 +76,13 @@ function Icon(props: IconProps): JSX.Element {
         props.class
       )}
     >
-      <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
-        <Show when={props.src} fallback={props.fallback}>
-          {(src) => <img src={src()} alt="" class="size-full object-cover" />}
-        </Show>
-      </span>
+      <Layer depth={3}>
+        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface ring ring-inset ring-ink-extra-muted/8 text-ink-extra-muted">
+          <Show when={props.src} fallback={props.fallback}>
+            {(src) => <img src={src()} alt="" class="size-full object-cover" />}
+          </Show>
+        </span>
+      </Layer>
       {props.children}
     </span>
   );
@@ -88,9 +90,7 @@ function Icon(props: IconProps): JSX.Element {
 
 function Body(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('flex min-w-0 flex-col gap-1', props.class)}>
-      {props.children}
-    </div>
+    <div class={cn('flex min-w-0 flex-col', props.class)}>{props.children}</div>
   );
 }
 
@@ -104,7 +104,7 @@ function Header(props: SlotProps): JSX.Element {
 
 function Title(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('min-w-0 flex-1 truncate', props.class)}>
+    <div class={cn('min-w-0 flex-1 truncate text-sm', props.class)}>
       {props.children}
     </div>
   );
@@ -172,7 +172,7 @@ function Meta(props: MetaProps): JSX.Element {
   return (
     <div
       class={cn(
-        'flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted',
+        'flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted mt-1',
         props.class
       )}
     >
