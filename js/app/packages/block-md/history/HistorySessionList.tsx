@@ -74,7 +74,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
                 <button
                   type="button"
                   class={cn(
-                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                    'flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     isSelected() && 'bg-active text-ink'
                   )}
                   onClick={() => {
@@ -92,7 +92,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
                     }
                   }}
                 >
-                  <span class="flex w-4 shrink-0 items-center -space-x-1">
+                  <span class="flex w-4 shrink-0 items-center -space-x-1 mt-[3px]">
                     <For each={row.userIds.slice(0, MAX_NAMED)}>
                       {(userId) => (
                         <span
