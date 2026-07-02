@@ -33,14 +33,8 @@ pub async fn process_channel_message_update(
         return Ok(());
     }
 
-    let raw_content = &channel_message_info.channel_message.content;
-    let transformed_content = match ParsedXmlText::parse(raw_content) {
-        Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
-        Err(e) => {
-            tracing::error!(error = ?e, %channel_id, %message_id, "failed to parse channel message content, indexing raw content");
-            raw_content.clone()
-        }
-    };
+    let raw_content = ParsedXmlText::parse(&channel_message_info.channel_message.content)?;
+    let transformed_content = PlainTextFormatter::format_xml_text(parsed);
 
     let upsert_channel_message_args = UpsertChannelMessageArgs {
         channel_id: channel_message_info.channel_id.to_string(),
@@ -54,7 +48,7 @@ pub async fn process_channel_message_update(
             .to_string(),
         sender_id: channel_message_info.channel_message.sender_id,
         mentions: channel_message_info.channel_message.mentions,
-        content: transformed_content.trim().to_string(),
+        content: transformed_content.0.trim().to_string(),
         created_at_seconds: EpochSeconds::new(
             channel_message_info.channel_message.created_at.timestamp(),
         )?,
