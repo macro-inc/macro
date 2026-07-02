@@ -107,17 +107,24 @@ export function HistoryScrubber(props: { compact?: boolean }) {
   );
 
   createEffect(
-    on(history.diff.session, (session) => {
-      if (!session) {
-        setView({ start: 0, end: compressedTimeline().total });
-        return;
-      }
-      const warpStart = timestampToWarpedPosition(session.startMs);
-      const warpEnd = timestampToWarpedPosition(session.endMs);
-      const sessionSpan = warpEnd - warpStart;
-      const padding = Math.max(sessionSpan * 0.5, compressedTimeline().total * 0.02);
-      setView(clampView(warpStart - padding, warpEnd + padding));
-    }, { defer: true })
+    on(
+      history.diff.session,
+      (session) => {
+        if (!session) {
+          setView({ start: 0, end: compressedTimeline().total });
+          return;
+        }
+        const warpStart = timestampToWarpedPosition(session.startMs);
+        const warpEnd = timestampToWarpedPosition(session.endMs);
+        const sessionSpan = warpEnd - warpStart;
+        const padding = Math.max(
+          sessionSpan * 0.5,
+          compressedTimeline().total * 0.02
+        );
+        setView(clampView(warpStart - padding, warpEnd + padding));
+      },
+      { defer: true }
+    )
   );
 
   const onWheel = (e: WheelEvent) => {
@@ -370,7 +377,9 @@ export function HistoryScrubber(props: { compact?: boolean }) {
                         // bar click cleanly opens that session's diff.
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => {
-                          if (history.diff.session()?.startMs === session.startMs) {
+                          if (
+                            history.diff.session()?.startMs === session.startMs
+                          ) {
                             history.diff.clear();
                           } else {
                             history.diff.view(session);
