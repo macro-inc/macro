@@ -209,7 +209,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 !props.handle.isSpotLight()
               }
               class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
-              depth={1}
+              depth={isMobile() ? 0 : 1}
             >
               <Panel.Header
                 class={cn(

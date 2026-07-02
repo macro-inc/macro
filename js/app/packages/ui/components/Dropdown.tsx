@@ -117,6 +117,7 @@ function DropdownContent(props: DropdownContentProps) {
           class={cn('rounded-xl size-auto z-action-menu', local.class)}
           depth={local.depth ?? 2}
           as={Surface}
+          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >
@@ -154,6 +155,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           class={cn('rounded-xl size-auto z-action-menu', local.class)}
           depth={local.depth ?? 2}
           as={Surface}
+          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >
@@ -170,7 +172,7 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5 gap-0.5 bg-surface', local.class)}
+      class={cn('flex flex-col p-1.5 gap-0.5 bg-menu', local.class)}
       {...rest}
     />
   );

@@ -49,13 +49,14 @@ export function CollapsedInput(props: CollapsedInputProps) {
 
   return (
     <Surface
-      depth={2}
+      depth={3}
       solid
       // h-12.5 and px-2 keep the attach/send buttons exactly where the
       // expanded input's footer puts them (`p-2 mb-2 h-8` plus the surface's
       // 1px border: button centers 25px above the outer bottom edge, 8px in
       // from the border).
       class={cn('rounded-xl w-full h-12.5', props.class)}
+      bgToken='chrome'
       data-collapsed-input
     >
       <div class="flex h-full min-w-0 items-center gap-1.5 px-2">
