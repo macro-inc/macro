@@ -135,7 +135,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
-const WIDE_SPLIT_PANEL_BREAKPOINT = 512;
+const WIDE_SPLIT_PANEL_BREAKPOINT = window.innerWidth * 0.25;
 
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
@@ -913,7 +913,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    if (soup.previewEntity() && type === 'entity') {
+    if (previewVisible() && soup.previewEntity() && type === 'entity') {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
       return;
@@ -1127,9 +1127,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const featuredCount = createMemo(() => featuredIds().length);
 
+  const isWideSplitPanel = createMemo(() => {
+    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
+  });
+
   const previewVisible = createMemo(
     () =>
-      (!!soup.previewEntity() || panel.previewState[0]()) && !!soup.focus.item()
+      isWideSplitPanel() &&
+      (!!soup.previewEntity() || panel.previewState[0]()) &&
+      !!soup.focus.item()
   );
 
   createEffect(() => {
@@ -1144,10 +1150,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // unmounts (e.g. pressing enter replaces the split with the full entity);
   // otherwise it stays stale-true and the entity's toolbar keeps the border.
   onCleanup(() => panel.previewState[1](false));
-
-  const isWideSplitPanel = createMemo(() => {
-    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
-  });
 
   return (
     <MaybeSoupEntityActionDrawerManager>
