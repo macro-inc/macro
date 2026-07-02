@@ -10,7 +10,6 @@ type HistorySessionListProps = {
   selectedAt: Accessor<Date | null>;
   onSelect: (at?: Date) => void;
   onViewSessionDiff?: (session: HistorySession) => void;
-  maxHeightPx?: number | null;
 };
 
 function UserName(props: { userId: string }) {
@@ -58,12 +57,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
     <Show when={rows().length > 0}>
       <div class="mt-2 min-w-0">
         <div
-          class="min-h-0 space-y-1 overflow-y-auto pr-1"
-          style={{
-            'max-height': props.maxHeightPx
-              ? `${props.maxHeightPx}px`
-              : undefined,
-          }}
+          class="min-h-0 space-y-1 pr-1"
         >
           <For each={rows()}>
             {(row) => {

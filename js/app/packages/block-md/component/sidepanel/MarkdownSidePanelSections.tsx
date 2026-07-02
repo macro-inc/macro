@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
+  useSidePanel,
 } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -46,7 +47,6 @@ import {
 } from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
 import { blockNameToItemType } from '@service-storage/client';
-import { createElementBounds } from '@solid-primitives/bounds';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
@@ -125,14 +125,15 @@ export function MarkdownSidePanelSections(
 
 function HistorySectionContent() {
   const history = useHistory();
+  const sidePanel = useSidePanel();
   const [showSessions, setShowSessions] = createSignal(false);
-  const [activityElement, setActivityElement] = createSignal<HTMLDivElement>();
-  const activityBounds = createElementBounds(activityElement);
+
+  createEffect(() => {
+    if (history.isOpen()) {
+      sidePanel?.setOpenSectionIds(['history']);
+    }
+  });
   const isShowingSessions = () => history.isOpen() || showSessions();
-  const activityMaxHeightPx = () =>
-    activityBounds.top === null
-      ? null
-      : Math.max(120, window.innerHeight - activityBounds.top - 36);
 
   const totalEdits = createMemo(() => {
     const sessions = history.sessions();
@@ -174,21 +175,18 @@ function HistorySectionContent() {
                 </span>
               </button>
               <Show when={isShowingSessions()}>
-                <div ref={setActivityElement} class="min-h-0">
-                  <HistorySessionList
-                    sessions={sessions()}
-                    selectedAt={history.selectedAt}
-                    onSelect={history.enter}
-                    onViewSessionDiff={(session) => {
-                      if (history.diff.session()?.startMs === session.startMs) {
-                        history.diff.clear();
-                      } else {
-                        history.diff.view(session);
-                      }
-                    }}
-                    maxHeightPx={activityMaxHeightPx()}
-                  />
-                </div>
+                <HistorySessionList
+                  sessions={sessions()}
+                  selectedAt={history.selectedAt}
+                  onSelect={history.enter}
+                  onViewSessionDiff={(session) => {
+                    if (history.diff.session()?.startMs === session.startMs) {
+                      history.diff.clear();
+                    } else {
+                      history.diff.view(session);
+                    }
+                  }}
+                />
               </Show>
             </div>
           </Show>

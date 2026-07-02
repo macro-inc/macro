@@ -2,6 +2,7 @@ import { buildDiffState, buildWhoMap, diffStates } from '@lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';
+import { tryMacroId, useDisplayName } from '@core/user';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -11,10 +12,18 @@ import {
   createResource,
   createSignal,
   type JSX,
+  mapArray,
   useContext,
 } from 'solid-js';
 import { sessionize } from './sessionize';
 import { buildTimestampIndex } from './timestampIndex';
+import { userColor, userLabel } from './utils';
+
+export type HistoryUser = {
+  userId: string;
+  displayName: () => string;
+  color: string;
+};
 
 type HistoryContextValue = {
   isOpen: Accessor<boolean>;
@@ -33,6 +42,7 @@ type HistoryContextValue = {
     view: (session: HistorySession) => void;
     clear: () => void;
   };
+  userByPeer: (peerId: string) => HistoryUser;
 };
 
 const HistoryContext = createContext<HistoryContextValue>();
@@ -89,6 +99,27 @@ export function HistoryProvider(props: {
 
   // Peer -> user mapping for labelling sessions; lightweight JSON.
   const peerMap = useDocumentPeersQuery(props.documentId);
+
+  // One stable useDisplayName per unique userId — batched into a single fetch.
+  const uniqueUserIds = createMemo(() =>
+    peerMap.data ? [...new Set(peerMap.data.values())] : []
+  );
+  const userEntries = mapArray(uniqueUserIds, (userId) => {
+    const [displayName] = useDisplayName(tryMacroId(userId), {
+      emailFallback: 'local-part',
+    });
+    return { userId, displayName, color: userColor(userId) };
+  });
+  const userByPeer = (peerId: string): HistoryUser => {
+    const userId = peerMap.data?.get(peerId) ?? 'unknown';
+    return (
+      userEntries().find((e) => e.userId === userId) ?? {
+        userId,
+        displayName: () => userLabel(userId),
+        color: userColor(userId),
+      }
+    );
+  };
 
   const historyIndex = createMemo(() => {
     const doc = historyDoc();
@@ -166,6 +197,7 @@ export function HistoryProvider(props: {
     },
     checkoutAt,
     versionIdAt,
+    userByPeer,
     diff: {
       session: diffSession,
       previewState: diffPreviewState,
