@@ -1,18 +1,21 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { mergeRegister } from '@lexical/utils';
 import {
+  $createTextNode,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
+  $isTextNode,
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_NORMAL,
   FORMAT_TEXT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   KEY_DOWN_COMMAND,
   type LexicalEditor,
+  type LexicalNode,
   type RangeSelection,
   type TextFormatType,
 } from 'lexical';
-import { $isAtEndOfTextNode } from '../../utils';
 
 const META_OR_CTRL = IS_MAC ? 'meta' : 'ctrl';
 
@@ -26,6 +29,80 @@ const escapableInlineFormats: TextFormatType[] = [
 
 const $shouldEscapeRight = (selection: RangeSelection) => {
   return escapableInlineFormats.some((format) => selection.hasFormat(format));
+};
+
+const $hasEscapableInlineFormat = (node: LexicalNode | null | undefined) => {
+  return (
+    $isTextNode(node) &&
+    escapableInlineFormats.some((format) => node.hasFormat(format))
+  );
+};
+
+const $isAtEndOfTextNode = (selection: RangeSelection) => {
+  if (!selection.isCollapsed()) return false;
+  const focusNode = selection.focus.getNode();
+  return (
+    $isTextNode(focusNode) &&
+    selection.focus.offset === focusNode.getTextContentSize()
+  );
+};
+
+const $movePastSpaceOrInsertAfter = (
+  leftNode: LexicalNode,
+  rightNode: LexicalNode | null | undefined
+) => {
+  if ($isTextNode(rightNode) && rightNode.getTextContent().startsWith(' ')) {
+    rightNode.select(1, 1);
+    return;
+  }
+
+  const space = $createTextNode(' ');
+  space.setFormat(0);
+  space.setStyle('');
+  leftNode.insertAfter(space);
+  space.select(1, 1);
+};
+
+const $movePastAdjacentSpaceOrInsertOne = (selection: RangeSelection) => {
+  const focusNode = selection.focus.getNode();
+  if (!$isTextNode(focusNode)) return;
+  $movePastSpaceOrInsertAfter(focusNode, focusNode.getNextSibling());
+};
+
+const $handleCaretAfterEscapableInlineFormat = (selection: RangeSelection) => {
+  if (!selection.isCollapsed()) return false;
+
+  const focusNode = selection.focus.getNode();
+  if ($isTextNode(focusNode) && selection.focus.offset === 0) {
+    const prevSibling = focusNode.getPreviousSibling();
+    if ($hasEscapableInlineFormat(prevSibling)) {
+      $movePastSpaceOrInsertAfter(prevSibling, focusNode);
+      return true;
+    }
+  }
+
+  if (
+    selection.focus.type === 'element' &&
+    $isElementNode(focusNode) &&
+    selection.focus.offset > 0
+  ) {
+    const prevChild = focusNode.getChildAtIndex(selection.focus.offset - 1);
+    const nextChild = focusNode.getChildAtIndex(selection.focus.offset);
+    if ($hasEscapableInlineFormat(prevChild)) {
+      $movePastSpaceOrInsertAfter(prevChild, nextChild);
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const $shouldEscapeRightAtEndOfTextNode = (selection: RangeSelection) => {
+  if (!$isAtEndOfTextNode(selection)) return false;
+  return (
+    $shouldEscapeRight(selection) ||
+    $hasEscapableInlineFormat(selection.focus.getNode())
+  );
 };
 
 const metaOrCtrl = (meta: boolean, ctrl: boolean) => {
@@ -72,13 +149,17 @@ function registerKeyboardShortcutsPlugin(
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
           return false;
         }
-        if (!$shouldEscapeRight(selection)) return false;
-        if (!$isAtEndOfTextNode(selection)) return false;
+        if ($handleCaretAfterEscapableInlineFormat(selection)) {
+          e.preventDefault();
+          return true;
+        }
+        if (!$shouldEscapeRightAtEndOfTextNode(selection)) return false;
 
         e.preventDefault();
         for (const format of escapableInlineFormats) {
           if (selection.hasFormat(format)) selection.toggleFormat(format);
         }
+        $movePastAdjacentSpaceOrInsertOne(selection);
         return true;
       },
       COMMAND_PRIORITY_HIGH
