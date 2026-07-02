@@ -179,6 +179,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import {
@@ -1017,7 +1018,9 @@ export function MarkdownEditor(props: {
           </div>
         </Show>
         <Show when={ENABLE_GIT_BLAME()}>
-          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          <Suspense>
+            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          </Suspense>
         </Show>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
