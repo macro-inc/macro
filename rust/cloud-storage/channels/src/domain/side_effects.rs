@@ -13,6 +13,7 @@ use crate::domain::{
         ChannelSideEffectContext,
     },
 };
+use bot_id::BotIdStr;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
@@ -620,18 +621,14 @@ where
 
     /// Resolve the public bot profile when the message sender is a bot.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
-        match &message.sender_id {
-            Sender::Bot(bot_id) => {
-                if *bot_id == bot_id::MACRO_AI_BOT_ID {
-                    return Some(BotSenderProfile {
-                        name: bot_id::MACRO_AI_NAME.to_string(),
-                        avatar_url: None,
-                    });
-                }
-                self.context.get_bot_sender_profile(*bot_id).await
-            }
-            Sender::User(_) => None,
+        let bot_id = message.sender_id.as_bot()?.bot_id();
+        if bot_id == bot_id::MACRO_AI_BOT_ID {
+            return Some(BotSenderProfile {
+                name: bot_id::MACRO_AI_NAME.to_string(),
+                avatar_url: None,
+            });
         }
+        self.context.get_bot_sender_profile(bot_id).await
     }
 
     async fn publish_realtime(&self, effect: ChannelRealtimeEffect) {
@@ -658,15 +655,17 @@ where
             has_attachments,
             bot_profile,
         } = inputs;
-        let resolved_sender = match &message.sender_id {
-            Sender::User(user_id) => ResolvedNotificationSender {
+        let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
+            let user_id = user_id.clone();
+            ResolvedNotificationSender {
                 sender: NotificationSender::User(user_id.clone()),
                 profile_picture_url: self
                     .context
                     .get_sender_profile_picture_url(user_id.clone())
                     .await,
-            },
-            Sender::Bot(bot_id) => match bot_profile {
+            }
+        } else if let Some(bot_id) = message.sender_id.as_bot().map(|id| id.bot_id()) {
+            match bot_profile {
                 Some(profile) => ResolvedNotificationSender {
                     sender: NotificationSender::Bot { name: profile.name },
                     profile_picture_url: profile.avatar_url,
@@ -675,7 +674,9 @@ where
                     tracing::warn!(bot_id = %bot_id, "missing bot profile, skipping message notifications");
                     return;
                 }
-            },
+            }
+        } else {
+            return;
         };
         let context = match self
             .build_posted_message_context(
@@ -1084,7 +1085,7 @@ struct PostedMessageNotificationContext {
 /// Bots are not user recipients and are not valid `MacroUserIdStr`s, so they are
 /// skipped before parsing to avoid spurious parse warnings.
 fn is_bot_principal(id: &str) -> bool {
-    BotId::parse_storage_str(id).is_ok()
+    BotIdStr::parse_from_str(id).is_ok()
 }
 
 fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {

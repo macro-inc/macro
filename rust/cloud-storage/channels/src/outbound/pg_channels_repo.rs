@@ -15,13 +15,14 @@ use crate::domain::{
         CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
         GetThreadReplyRowsParams, LatestMessage, MessageAttachment, MessagePageDirection,
         MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, Sender, SimpleMention,
+        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, SimpleMention,
         ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName,
         fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
 use anyhow::Context;
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
 use filter_ast::Expr;
@@ -284,7 +285,8 @@ struct ExistsRow {
 }
 
 fn mutated_message_from_row(row: MutatedMessageRow) -> anyhow::Result<MutatedMessage> {
-    let sender_id = Sender::parse_storage_str(&row.sender_id)
+    let sender_id = ChannelSender::parse_from_str(&row.sender_id)
+        .map(CowLike::into_owned)
         .with_context(|| format!("invalid message sender_id {}", row.sender_id))?;
     Ok(MutatedMessage {
         id: row.id,
@@ -449,7 +451,7 @@ async fn get_message_owner(
     pool: &PgPool,
     channel_id: Uuid,
     message_id: Uuid,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<Option<ChannelSender<'static>>> {
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
@@ -464,7 +466,12 @@ async fn get_message_owner(
     .fetch_optional(pool)
     .await
     .context("unable to get message owner")?;
-    Ok(row.map(|row| row.sender_id.to_string()))
+    row.map(|row| {
+        ChannelSender::parse_from_str(&row.sender_id)
+            .map(CowLike::into_owned)
+            .with_context(|| format!("invalid message sender_id {}", row.sender_id))
+    })
+    .transpose()
 }
 
 async fn get_channel_participants_for_thread_id(
@@ -3134,7 +3141,7 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_id: Uuid,
         message_id: Uuid,
-    ) -> Result<Option<String>, Self::Err> {
+    ) -> Result<Option<ChannelSender<'static>>, Self::Err> {
         get_message_owner(&self.pool, channel_id, message_id).await
     }
 

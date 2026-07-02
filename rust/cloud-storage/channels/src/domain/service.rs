@@ -244,7 +244,7 @@ fn bot_profile_for(
     profiles: &HashMap<BotId, BotSenderProfile>,
     sender_id: &str,
 ) -> Option<BotSenderProfile> {
-    let bot_id = BotId::parse_storage_str(sender_id).ok()?;
+    let bot_id = BotIdStr::parse_from_str(sender_id).ok()?.bot_id();
     profiles.get(&bot_id).cloned()
 }
 
@@ -635,7 +635,7 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?
             .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
-        if owner.as_str() != actor_storage_id.as_str() && !is_admin_or_owner(actor_role) {
+        if owner.as_ref() != actor_storage_id.as_str() && !is_admin_or_owner(actor_role) {
             return Err(ChannelMutationErr::Unauthorized(
                 "user is not authorized to edit this message".to_string(),
             ));
@@ -795,8 +795,8 @@ where
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?
             .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
         // Any participant may delete bot-authored messages.
-        let owner_is_bot = Sender::parse_storage_str(&owner).is_ok_and(|owner| owner.is_bot());
-        if owner.as_str() != actor_storage_id.as_str()
+        let owner_is_bot = owner.as_bot().is_some();
+        if owner.as_ref() != actor_storage_id.as_str()
             && !owner_is_bot
             && !is_admin_or_owner(actor_role)
         {

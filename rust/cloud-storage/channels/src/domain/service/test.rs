@@ -16,8 +16,9 @@ use crate::domain::{
         TopLevelMessagesQueryResult,
     },
 };
+use channel_sender::ChannelSender;
 use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -672,12 +673,15 @@ impl ChannelRepo for FakeMutationRepo {
         &self,
         _channel_id: Uuid,
         _message_id: Uuid,
-    ) -> Result<Option<String>, Self::Err> {
+    ) -> Result<Option<ChannelSender<'static>>, Self::Err> {
         let state = self.state.lock().unwrap();
         if state.message.deleted_at.is_some() {
             return Ok(None);
         }
-        Ok(Some(state.owner.clone()))
+        ChannelSender::parse_from_str(&state.owner)
+            .map(CowLike::into_owned)
+            .map(Some)
+            .map_err(Into::into)
     }
 
     async fn get_participants(

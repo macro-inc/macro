@@ -34,12 +34,12 @@ impl<'a> CowLike<'a> for ChannelSender<'a> {
 
 impl<'a> ChannelSender<'a> {
     /// attempt to return the user id str if this value contains a user
-    pub fn as_user<'b>(&'b self) -> Option<MacroUserIdStr<'b>> {
-        self.0.as_ref().right().map(CowLike::copied)
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'a>> {
+        self.0.as_ref().right()
     }
     /// attempt to return the bot id str if this value contains a bot
-    pub fn as_bot<'b>(&'b self) -> Option<BotIdStr<'b>> {
-        self.0.as_ref().left().map(CowLike::copied)
+    pub fn as_bot(&self) -> Option<&BotIdStr<'a>> {
+        self.0.as_ref().left()
     }
 
     /// attempt to parse a value of self from an input str

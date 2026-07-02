@@ -23,6 +23,7 @@ use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
 };
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
@@ -409,7 +410,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
         message_id: Uuid,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ChannelSender<'static>>, Self::Err>> + Send;
 
     /// Fetch active participants.
     fn get_participants(

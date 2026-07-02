@@ -2,8 +2,6 @@
 
 //! Bot identity primitives.
 
-use std::borrow::Cow;
-
 use cowlike::{ArcCowStr, CowLike};
 use nom::{
     Finish, IResult, Parser,
