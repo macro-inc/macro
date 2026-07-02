@@ -779,7 +779,7 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
             },
             mentions: vec![SimpleMention {
                 entity_type: "user".to_string(),
-                entity_id: bot_id::MACRO_AI_BOT_ID.to_string(),
+                entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
             }],
             has_attachments: false,
             attachments: Vec::new(),
@@ -979,8 +979,9 @@ fn mention(entity_type: &str, entity_id: &str) -> SimpleMention {
 
 #[test]
 fn bot_mentions_recognize_bot_and_macro_ai_user_tags() {
-    let macro_ai = bot_id::MACRO_AI_BOT_ID.as_uuid().to_string();
-    let other_bot = Uuid::new_v4().to_string();
+    let macro_ai = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+    let other_bot = BotId::new_from_uuid(Uuid::new_v4());
+    let other_bot_principal = other_bot.into_storage_id().to_string();
     let mentions = vec![
         // Macro AI surfaced through the user-mention UI.
         mention("user", &macro_ai),
@@ -989,30 +990,7 @@ fn bot_mentions_recognize_bot_and_macro_ai_user_tags() {
         // A real user mention is ignored.
         mention("user", "macro|teo@macro.com"),
         // An explicitly bot-tagged mention.
-        mention(BOT_MENTION_ENTITY_TYPE, &other_bot),
-        mention(BOT_MENTION_ENTITY_TYPE, &other_bot),
-    ];
-
-    let bots = bot_mention_ids(&mentions);
-    assert_eq!(
-        bots,
-        vec![
-            bot_id::MACRO_AI_BOT_ID,
-            BotId::parse_uuid_str(&other_bot).unwrap()
-        ]
-    );
-}
-
-#[test]
-fn bot_mentions_accept_canonical_bot_principal_ids() {
-    let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
-    let other_bot = BotId::new_from_uuid(Uuid::new_v4());
-    let other_bot_principal = other_bot.into_storage_id().to_string();
-    let mentions = vec![
-        // New clients send the canonical `bot|<uuid>` form.
-        mention("user", &macro_ai_principal),
-        // Duplicates collapse across encodings.
-        mention("user", &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()),
+        mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
         mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
     ];
 
@@ -1021,14 +999,27 @@ fn bot_mentions_accept_canonical_bot_principal_ids() {
 }
 
 #[test]
+fn bot_mentions_reject_bare_uuid_ids() {
+    // Bare UUIDs are a legacy encoding; producers must send `bot|<uuid>`
+    // and historical content is normalized by migration.
+    let mentions = vec![
+        mention("user", &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()),
+        mention(BOT_MENTION_ENTITY_TYPE, &Uuid::new_v4().to_string()),
+    ];
+
+    assert!(bot_mention_ids(&mentions).is_empty());
+}
+
+#[test]
 fn macro_ai_user_mention_is_not_a_user_recipient() {
     assert!(is_bot_user_mention(&mention(
         "user",
-        &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()
-    )));
-    assert!(is_bot_user_mention(&mention(
-        "user",
         bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
+    )));
+    // The legacy bare-UUID encoding is no longer treated as a bot mention.
+    assert!(!is_bot_user_mention(&mention(
+        "user",
+        &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()
     )));
     assert!(!is_bot_user_mention(&mention(
         "user",

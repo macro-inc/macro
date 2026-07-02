@@ -42,31 +42,37 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 /// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
 /// bot is recognized as a bot mention too.
 ///
-/// Ids are parsed leniently (`bot|<uuid>` or bare UUID): new clients send the
-/// canonical `bot|<uuid>` form, while old clients and historical content use
-/// the bare UUID.
+/// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
+/// rejected (historical bare-UUID content is normalized by migration).
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
         .filter_map(|mention| match mention.entity_type.as_str() {
-            BOT_MENTION_ENTITY_TYPE => BotId::parse_lenient(&mention.entity_id).ok(),
-            "user" => BotId::parse_lenient(&mention.entity_id)
-                .ok()
-                .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
+            BOT_MENTION_ENTITY_TYPE => mention_bot_id(&mention.entity_id),
+            "user" => {
+                mention_bot_id(&mention.entity_id).filter(|id| *id == bot_id::MACRO_AI_BOT_ID)
+            }
             _ => None,
         })
         .filter(|id| seen.insert(*id))
         .collect()
 }
 
+/// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
+fn mention_bot_id(entity_id: &str) -> Option<BotId> {
+    BotIdStr::parse_from_str(entity_id)
+        .ok()
+        .map(|id| id.bot_id())
+}
+
 /// Whether a `user`-tagged mention actually targets a bot (and so must not be
 /// treated as a user recipient). Real user ids are `macro|<email>` strings,
-/// never bare UUIDs or `bot|<uuid>` principals, so this only matches the Macro
-/// AI bot surfaced through the user-mention UI.
+/// never `bot|<uuid>` principals, so this only matches the Macro AI bot
+/// surfaced through the user-mention UI.
 fn is_bot_user_mention(mention: &SimpleMention) -> bool {
     mention.entity_type == "user"
-        && BotId::parse_lenient(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
+        && mention_bot_id(&mention.entity_id) == Some(bot_id::MACRO_AI_BOT_ID)
 }
 
 /// Realtime update requested by the channel domain.
