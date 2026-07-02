@@ -94,7 +94,7 @@ export function buildVolumeShape(
   // this lets us see more detail when the detail has meaning. if we show deep
   // detail (low smoothing) when there are just a few sessions then we will just
   // see spikes for those specific sessions, which isn't super useful.
-  const visibleCount = sessions.filter(s => {
+  const visibleCount = sessions.filter((s) => {
     const leftPos = toXPosition(s.startMs);
     const rightPos = toXPosition(s.endMs);
     // "is it in view at all?"

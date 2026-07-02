@@ -56,9 +56,7 @@ export function HistorySessionList(props: HistorySessionListProps) {
   return (
     <Show when={rows().length > 0}>
       <div class="mt-2 min-w-0">
-        <div
-          class="min-h-0 space-y-1 pr-1"
-        >
+        <div class="min-h-0 space-y-1 pr-1">
           <For each={rows()}>
             {(row) => {
               const isSelected = () => selectedMs() === row.endMs;
