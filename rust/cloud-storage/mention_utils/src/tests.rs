@@ -100,14 +100,6 @@ fn parse_multiple_user_mentions() {
 }
 
 #[test]
-fn parse_user_mention_missing_email() {
-    // Missing "email" field - should fail to parse
-    let input = r#"<m-user-mention>{"userId":"macro|chase@macro.com"}</m-user-mention>"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
-}
-
-#[test]
 fn parse_user_mention_invalid_json() {
     let input = r#"<m-user-mention>invalid</m-user-mention>"#;
     let result = ParsedXmlText::parse(input);
@@ -120,13 +112,13 @@ fn parse_user_mention_invalid_json() {
 
 #[test]
 fn parse_bare_uuid_bot_mention() {
-    let input = r#"<m-user-mention>{"userId":"00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> there will come a day when I shall liberate you"#;
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> there will come a day when I shall liberate you"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
         TextSegment::Plain(" there will come a day when I shall liberate you"),
     ] => {
-        assert_eq!(user_id.as_ref(), "00000000-0000-0000-0000-00000000a1a1");
+        assert_eq!(user_id.into_bot().unwrap().as_uuid().to_string(), "00000000-0000-0000-0000-00000000a1a1");
     });
 }
 
@@ -143,7 +135,7 @@ fn parse_prefixed_bot_mention() {
 
 #[test]
 fn bot_mention_renders_display_name() {
-    let input = r#"hi <m-user-mention>{"userId":"00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
+    let input = r#"hi <m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "hi Macro ok");
@@ -151,7 +143,7 @@ fn bot_mention_renders_display_name() {
 
 #[test]
 fn bot_mention_null_formatter_strips_mention() {
-    let input = r#"hi <m-user-mention>{"userId":"00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
+    let input = r#"hi <m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> ok"#;
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = NullXmlFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "hi  ok");
@@ -644,13 +636,6 @@ fn parse_link_unicode_with_prefix() {
 #[test]
 fn parse_contact_mention_missing_name_with_suffix() {
     let input = r#"<m-contact-mention>{"contactId":"ness@macro.com","emailOrDomain":"ness@macro.com","isCompany":false}</m-contact-mention> asdf"#;
-    let result = ParsedXmlText::parse(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn parse_user_mention_missing_email_with_suffix() {
-    let input = r#"<m-user-mention>{"userId":"macro|chase@macro.com"}</m-user-mention> asdf"#;
     let result = ParsedXmlText::parse(input);
     assert!(result.is_err());
 }

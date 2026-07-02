@@ -322,7 +322,7 @@ impl XmlFormatter for PlainTextFormatter {
     fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &user.user_id.0 {
             Either::Left(_l) => write!(f, "Macro"),
-            Either::Right(r) => write!(f, "{}", r.email_part().local_part()),
+            Either::Right(r) => write!(f, "{}", r.email_part().as_ref()),
         }
     }
 
