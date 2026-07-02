@@ -724,20 +724,6 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
-  const rootSenderId = () => {
-    const value = props.item.entity;
-    return value.type === 'channel_thread' ? value.senderId : undefined;
-  };
-
-  const rootSenderName = createSenderDisplayName(rootSenderId);
-  const rootSenderLabel = () =>
-    rootSenderId() === currentUserId() ? 'You' : rootSenderName();
-
-  const isReply = createMemo(() => {
-    const metadata = props.item.notification?.notification_metadata;
-    return metadata?.tag === 'channel_message_reply';
-  });
-
   const attachments = createMemo(() => {
     if (
       isLatestNotificationReply() ||
@@ -806,7 +792,6 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <InboxCard.Root
-      class={isReply() ? 'grid-rows-[min-content_2rem_0.5rem]' : ''}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -820,41 +805,6 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
         ></InboxCard.Icon>
       </div>
       <InboxCard.Body class="contents">
-        <Show when={isReply()}>
-          <div class="col-start-2 row-start-1 flex min-w-0 items-center gap-1 mb-1">
-            <span
-              aria-hidden="true"
-              class="relative -ml-2 -mb-2 h-3 w-3 shrink-0 rounded-tl-md border-l border-t border-edge-muted"
-            />
-            <Show when={!isDM()}>
-              <span class="flex gap-1 items-center text-xs whitespace-nowrap text-ink/80">
-                <Show when={rootSenderId()}>
-                  {(id) => (
-                    <UserIcon
-                      id={id()}
-                      size="sm"
-                      suppressClick
-                      showTooltip={false}
-                    />
-                  )}
-                </Show>
-                {rootSenderLabel()}:
-              </span>
-            </Show>
-
-            <Show when={text().context?.trim()}>
-              {(value) => (
-                <InboxCard.Content class="truncate text-xs text-ink/60">
-                  <StaticMarkdown
-                    markdown={value()}
-                    singleLine
-                    theme={unifiedListMarkdownTheme}
-                  />
-                </InboxCard.Content>
-              )}
-            </Show>
-          </div>
-        </Show>
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
             <InboxCard.Title class="flex items-center gap-1">
