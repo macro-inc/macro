@@ -148,7 +148,7 @@ function HistorySectionContent() {
       fallback={<p class="text-xs text-ink-muted">No history yet</p>}
     >
       {(sessions) => (
-        <div class="min-w-0 overflow-hidden">
+        <div class="hidden min-w-0 overflow-hidden md:block">
           <Show when={ENABLE_HISTORY_COMPONENT}>
             <HistoryScrubber compact />
           </Show>
@@ -180,7 +180,6 @@ function HistorySectionContent() {
                     selectedAt={history.selectedAt}
                     onSelect={history.enter}
                     onViewSessionDiff={(session) => {
-                      // if we're already viewing it because we just clicked it reset the viewport
                       if (history.diff.session()?.startMs === session.startMs) {
                         history.diff.clear();
                       } else {

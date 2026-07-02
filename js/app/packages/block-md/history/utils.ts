@@ -10,6 +10,7 @@ export function userLabel(userId: string): string {
 
 export function formatTimestamp(at: Date): string {
   return at.toLocaleString(undefined, {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

@@ -2,10 +2,10 @@
 // simple script to dump a document's loro state for a document that exists in dev or prod into your locally running instance. locally running instances have a feature flag that exposes an endpoint that makes this possible
 const argv = process.argv.slice(2);
 const useDev = argv.includes('--dev');
-const [token, srcDocId, targetDocId] = argv.filter((a) => !a.startsWith('--'));
+const [token, srcDocId, targetDocId, targetUrlArg] = argv.filter((a) => !a.startsWith('--'));
 if (!token || !srcDocId || !targetDocId) {
   console.error(
-    'usage: bun run scripts/grab-snapshot.ts [--dev] <token> <source-document-id> <target-dev-document-id>'
+    'usage: bun run scripts/grab-snapshot.ts [--dev] <token> <source-document-id> <target-dev-document-id> [target-url]'
   );
   process.exit(1);
 }
@@ -15,7 +15,7 @@ const SOURCE_URL =
   (useDev
     ? 'https://sync-service-dev3.macroverse.workers.dev'
     : 'https://sync-service-prod2.macroverse.workers.dev');
-const TARGET_URL = process.env.TARGET_URL ?? 'http://localhost:8787';
+const TARGET_URL = targetUrlArg ?? process.env.TARGET_URL ?? 'http://localhost:8787';
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
 const grab = await fetch(`${SOURCE_URL}/document/${srcDocId}/snapshot`, {

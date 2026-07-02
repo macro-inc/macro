@@ -60,7 +60,6 @@ export type VolumeShape = { area: string; line: string };
 export const VOLUME_BAND_H = 32;
 
 const VOLUME_BUCKETS = 160;
-const VOLUME_BLUR_RADIUS = 5;
 
 // Histogram of edit intensity across the timeline. Each session contributes
 // edits/minute to the buckets it spans (in pixel space), normalized to the
@@ -91,7 +90,21 @@ export function buildVolumeShape(
     for (let i = firstBucket; i <= lastBucket; i++) buckets[i] += rate;
   }
 
-  const roundedBuckets = Array.from(blur([...buckets], VOLUME_BLUR_RADIUS));
+  // More sessions in view -> lower blur radius.
+  // this lets us see more detail when the detail has meaning. if we show deep
+  // detail (low smoothing) when there are just a few sessions then we will just
+  // see spikes for those specific sessions, which isn't super useful.
+  const visibleCount = sessions.filter(s => {
+    const leftPos = toXPosition(s.startMs);
+    const rightPos = toXPosition(s.endMs);
+    // "is it in view at all?"
+    return rightPos >= 0 && leftPos <= width;
+  }).length;
+
+  // the actual amount of blur radius proportional to the number of visible
+  // sessions is log-based.
+  const blurRadius = Math.max(1, Math.floor(8 / Math.log2(2 + visibleCount)));
+  const roundedBuckets = Array.from(blur([...buckets], blurRadius));
   const peak = max(roundedBuckets) ?? 0;
   if (peak <= 0) return null;
 
