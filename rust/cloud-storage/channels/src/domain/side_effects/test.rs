@@ -169,7 +169,7 @@ async fn macro_ai_bot_profile_is_builtin_without_context_lookup() {
         id: Uuid::new_v4(),
         channel_id: Uuid::new_v4(),
         thread_id: None,
-        sender_id: Sender::from_bot(bot_id::MACRO_AI_BOT_ID),
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         triggered_by: None,
         content: "hello".to_string(),
         created_at: now,
@@ -206,7 +206,7 @@ async fn non_macro_bot_profile_uses_context_lookup() {
         id: Uuid::new_v4(),
         channel_id: Uuid::new_v4(),
         thread_id: None,
-        sender_id: Sender::from_bot(BotId::from_uuid(Uuid::new_v4())),
+        sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
         triggered_by: None,
         content: "hello".to_string(),
         created_at: now,
@@ -270,7 +270,7 @@ async fn message_posted_derives_realtime_search_and_notification_effects() {
                 id: message_id,
                 channel_id,
                 thread_id: None,
-                sender_id: Sender::from_user(sender.clone()),
+                sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
                 content: "hello".to_string(),
                 created_at: now,
@@ -354,7 +354,7 @@ fn bot_message_posted_event(
             id: message_id,
             channel_id,
             thread_id,
-            sender_id: Sender::from_bot(BotId::from_uuid(Uuid::new_v4())),
+            sender_id: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
             triggered_by: None,
             content: "hello".to_string(),
             created_at: now,
@@ -415,7 +415,7 @@ async fn silent_message_posted_skips_notifications_only() {
                 id: message_id,
                 channel_id,
                 thread_id: None,
-                sender_id: Sender::from_user(sender),
+                sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 content: "transient".to_string(),
                 created_at: now,
@@ -465,12 +465,12 @@ async fn message_changed_with_posted_notification_context_sends_notification() {
     service
         .handle(ChannelEvent::MessageChanged {
             channel_id,
-            actor: Sender::from_bot(bot_id::MACRO_AI_BOT_ID),
+            actor: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
             message: MutatedMessage {
                 id: message_id,
                 channel_id,
                 thread_id: Some(thread_id),
-                sender_id: Sender::from_bot(bot_id::MACRO_AI_BOT_ID),
+                sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
                 triggered_by: None,
                 content: "final answer".to_string(),
                 created_at: now,
@@ -694,7 +694,9 @@ async fn bot_thread_reply_sends_reply_notification() {
 async fn bot_participant_is_never_a_notification_recipient() {
     let channel_id = Uuid::new_v4();
     let recipient = user("recipient@example.com");
-    let bot_principal = BotId::from_uuid(Uuid::new_v4()).to_storage_id().to_string();
+    let bot_principal = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
@@ -767,7 +769,7 @@ async fn user_message_with_bot_mention_enqueues_bot_trigger() {
                 id: message_id,
                 channel_id,
                 thread_id: None,
-                sender_id: Sender::from_user(sender),
+                sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 content: "@macro help".to_string(),
                 created_at: now,
@@ -854,7 +856,7 @@ async fn document_mentions_notify_participants_except_sender() {
                 id: message_id,
                 channel_id,
                 thread_id: None,
-                sender_id: Sender::from_user(sender.clone()),
+                sender_id: Sender::new_from_user(sender.clone()),
                 triggered_by: None,
                 content: "hello".to_string(),
                 created_at: now,
@@ -896,7 +898,7 @@ async fn document_mentions_notify_participants_except_sender() {
 fn contact_sync_is_derived_from_private_channel_created() {
     let event = ChannelEvent::ChannelCreated {
         channel_id: Uuid::nil(),
-        actor: Sender::from_user(user("alice@example.com")),
+        actor: Sender::new_from_user(user("alice@example.com")),
         channel_type: ChannelType::Private,
         participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
     };
@@ -912,7 +914,7 @@ fn contact_sync_is_derived_from_private_channel_created() {
 fn contact_sync_ignores_public_channel_created() {
     let event = ChannelEvent::ChannelCreated {
         channel_id: Uuid::nil(),
-        actor: Sender::from_user(user("alice@example.com")),
+        actor: Sender::new_from_user(user("alice@example.com")),
         channel_type: ChannelType::Public,
         participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
     };
@@ -926,7 +928,7 @@ fn contact_sync_ignores_bot_actor() {
         channel_id: Uuid::nil(),
         channel_type: ChannelType::Team,
         active_participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
-        invited_by: Sender::from_bot(BotId::from_uuid(Uuid::new_v4())),
+        invited_by: Sender::new_from_bot(BotId::new_from_uuid(Uuid::new_v4())),
         recipient_user_ids: users(&["bob@example.com"]),
         metadata: ChannelMetadata {
             channel_type: ChannelType::Team,
@@ -944,7 +946,7 @@ fn contact_sync_is_derived_from_team_participants_added() {
         channel_id: Uuid::nil(),
         channel_type: ChannelType::Team,
         active_participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
-        invited_by: Sender::from_user(user("alice@example.com")),
+        invited_by: Sender::new_from_user(user("alice@example.com")),
         recipient_user_ids: users(&["bob@example.com"]),
         metadata: ChannelMetadata {
             channel_type: ChannelType::Team,
@@ -961,7 +963,7 @@ fn contact_sync_ignores_single_user_join() {
     let event = ChannelEvent::ParticipantJoined {
         channel_id: Uuid::nil(),
         channel_type: ChannelType::Public,
-        user_id: Sender::from_user(user("alice@example.com")),
+        user_id: Sender::new_from_user(user("alice@example.com")),
         active_participant_user_ids: users(&["alice@example.com"]),
     };
 
@@ -1012,7 +1014,7 @@ fn macro_ai_user_mention_is_not_a_user_recipient() {
         "macro|teo@macro.com"
     )));
     assert!(is_bot_principal(
-        bot_id::MACRO_AI_BOT_ID.to_storage_id().as_ref()
+        bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
     ));
     assert!(!is_bot_principal("macro|teo@macro.com"));
 }

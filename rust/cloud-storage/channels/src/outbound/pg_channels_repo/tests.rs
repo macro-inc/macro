@@ -1796,21 +1796,25 @@ async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow
     .execute(&pool)
     .await?;
 
-    let missing = BotId::from_uuid(Uuid::new_v4());
+    let missing = BotId::new_from_uuid(Uuid::new_v4());
     let profiles = repo(pool)
-        .get_bot_profiles(&[BotId::from_uuid(active), BotId::from_uuid(deleted), missing])
+        .get_bot_profiles(&[
+            BotId::new_from_uuid(active),
+            BotId::new_from_uuid(deleted),
+            missing,
+        ])
         .await?;
 
     assert_eq!(profiles.len(), 2);
     assert_eq!(
-        profiles.get(&BotId::from_uuid(active)),
+        profiles.get(&BotId::new_from_uuid(active)),
         Some(&BotSenderProfile {
             name: "Active Bot".to_string(),
             avatar_url: Some("https://example.com/a.png".to_string()),
         })
     );
     assert_eq!(
-        profiles.get(&BotId::from_uuid(deleted)),
+        profiles.get(&BotId::new_from_uuid(deleted)),
         Some(&BotSenderProfile {
             name: "Deleted Bot".to_string(),
             avatar_url: None,

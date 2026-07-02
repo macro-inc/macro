@@ -253,7 +253,7 @@ where
     /// React to a Macro AI mention.
     #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
     pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
-        let actor = Sender::from_bot(bot_id::MACRO_AI_BOT_ID);
+        let actor = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
 
         // 1. Gather conversational context (before posting, so our own
         //    "thinking" message is not included).

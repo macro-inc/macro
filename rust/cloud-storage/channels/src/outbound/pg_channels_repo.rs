@@ -3455,7 +3455,7 @@ impl ChannelRepo for PgChannelsRepo {
             .into_iter()
             .map(|row| {
                 (
-                    BotId::from_uuid(row.id),
+                    BotId::new_from_uuid(row.id),
                     BotSenderProfile {
                         name: row.name,
                         avatar_url: row.avatar_url,

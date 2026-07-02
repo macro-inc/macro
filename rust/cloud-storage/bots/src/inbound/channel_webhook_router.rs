@@ -243,7 +243,7 @@ where
     let response = state
         .channel_poster
         .post_message(
-            Sender::from_bot(authenticated.bot_id),
+            Sender::new_from_bot(authenticated.bot_id),
             path.channel_id,
             PostMessageRequest {
                 content,

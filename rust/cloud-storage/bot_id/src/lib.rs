@@ -49,7 +49,7 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
 
 /// Stable [`BotId`] for the first-party "Macro AI" system bot.
 pub const MACRO_AI_BOT_ID: BotId =
-    BotId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
 
 /// Stable handle for the "Macro AI" system bot (used for `@` mentions).
 pub const MACRO_AI_HANDLE: &str = "macro";
@@ -64,7 +64,7 @@ pub struct BotId(Uuid);
 
 impl BotId {
     /// Build a bot id from its UUID.
-    pub const fn from_uuid(id: Uuid) -> Self {
+    pub const fn new_from_uuid(id: Uuid) -> Self {
         Self(id)
     }
 
@@ -81,20 +81,13 @@ impl BotId {
     }
 
     /// Canonical storage representation as a parsed [`BotIdStr`].
-    pub fn to_storage_id(self) -> BotIdStr<'static> {
-        BotIdStr::from(self)
-    }
-}
-
-impl From<Uuid> for BotId {
-    fn from(value: Uuid) -> Self {
-        Self::from_uuid(value)
-    }
-}
-
-impl From<BotId> for Uuid {
-    fn from(value: BotId) -> Self {
-        value.as_uuid()
+    pub fn into_storage_id(self) -> BotIdStr<'static> {
+        let storage_id = format!("{BOT_STORAGE_PREFIX}|{}", self.0);
+        BotIdStr(BotIdStorage {
+            bot_id: self,
+            bot_id_part_offset: BOT_STORAGE_PREFIX.len() + 1,
+            storage_id: ArcCowStr::Owned(storage_id.into()),
+        })
     }
 }
 
@@ -258,12 +251,7 @@ impl<'a> BotIdStr<'a> {
 
 impl From<BotId> for BotIdStr<'static> {
     fn from(value: BotId) -> Self {
-        let storage_id = format!("{BOT_STORAGE_PREFIX}|{value}");
-        BotIdStr(BotIdStorage {
-            bot_id: value,
-            bot_id_part_offset: BOT_STORAGE_PREFIX.len() + 1,
-            storage_id: ArcCowStr::Owned(storage_id.into()),
-        })
+        BotId::into_storage_id(value)
     }
 }
 
@@ -386,10 +374,10 @@ mod tests {
     #[test]
     fn storage_string_round_trips() {
         let uuid = Uuid::new_v4();
-        let bot_id = BotId::from_uuid(uuid);
+        let bot_id = BotId::new_from_uuid(uuid);
 
         assert_eq!(
-            BotIdStr::parse_from_str(bot_id.to_storage_id().as_ref())
+            BotIdStr::parse_from_str(bot_id.into_storage_id().as_ref())
                 .unwrap()
                 .bot_id(),
             bot_id
@@ -399,7 +387,7 @@ mod tests {
     #[test]
     fn bot_id_str_parses_storage_string() {
         let uuid = Uuid::new_v4();
-        let bot_id = BotId::from_uuid(uuid);
+        let bot_id = BotId::new_from_uuid(uuid);
         let storage = format!("bot|{uuid}");
 
         let parsed = BotIdStr::parse_from_str(&storage).unwrap();
@@ -412,7 +400,7 @@ mod tests {
 
     #[test]
     fn bot_id_str_from_bot_id_creates_storage_string() {
-        let bot_id = BotId::from_uuid(Uuid::new_v4());
+        let bot_id = BotId::new_from_uuid(Uuid::new_v4());
         let storage = BotIdStr::from(bot_id);
 
         assert_eq!(storage.bot_id(), bot_id);

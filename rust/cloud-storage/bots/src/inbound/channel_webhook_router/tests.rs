@@ -478,7 +478,7 @@ fn scoped_bot_request_body() -> Body {
 
 #[tokio::test]
 async fn channel_webhook_router_member_cannot_create_scoped_bot() {
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let service = TestBotService::for_create(scoped_bot_response(bot_id));
     let poster = TestChannelPoster::new();
     let channel_id = Uuid::new_v4();
@@ -500,7 +500,7 @@ async fn channel_webhook_router_member_cannot_create_scoped_bot() {
 
 #[tokio::test]
 async fn channel_webhook_router_admin_can_create_scoped_bot() {
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let service = TestBotService::for_create(scoped_bot_response(bot_id));
     let poster = TestChannelPoster::new();
     let channel_id = Uuid::new_v4();
@@ -532,7 +532,7 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
 #[tokio::test]
 async fn channel_webhook_router_valid_json_posts_as_bot() {
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let token = "mbot_test_valid";
     let service = TestBotService::for_webhook(channel_id, token, bot_id);
     let poster = TestChannelPoster::new();
@@ -566,7 +566,7 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
     let calls = poster.calls.lock().expect("posted message mutex poisoned");
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.actor, Sender::from_bot(bot_id));
+    assert_eq!(call.actor, Sender::new_from_bot(bot_id));
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, "hello");
     assert!(call.req.mentions.is_empty());
@@ -578,7 +578,7 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
 #[tokio::test]
 async fn channel_webhook_router_raw_body_starting_with_brace_posts_as_bot() {
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let token = "mbot_test_valid";
     let content = "{raw alert payload";
     let service = TestBotService::for_webhook(channel_id, token, bot_id);
@@ -602,7 +602,7 @@ async fn channel_webhook_router_raw_body_starting_with_brace_posts_as_bot() {
     let calls = poster.calls.lock().expect("posted message mutex poisoned");
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
-    assert_eq!(call.actor, Sender::from_bot(bot_id));
+    assert_eq!(call.actor, Sender::new_from_bot(bot_id));
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, content);
 }
@@ -610,7 +610,7 @@ async fn channel_webhook_router_raw_body_starting_with_brace_posts_as_bot() {
 #[tokio::test]
 async fn channel_webhook_router_invalid_token_returns_unauthorized_without_posting() {
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let service = TestBotService::for_webhook(channel_id, "mbot_test_valid", bot_id);
     let poster = TestChannelPoster::new();
     let request = Request::builder()
@@ -673,7 +673,7 @@ async fn channel_webhook_router_missing_token_header_returns_unauthorized_withou
 async fn channel_webhook_router_wrong_channel_returns_unauthorized_without_posting() {
     let expected_channel_id = Uuid::new_v4();
     let requested_channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let token = "mbot_test_valid";
     let service = TestBotService::for_webhook(expected_channel_id, token, bot_id);
     let poster = TestChannelPoster::new();

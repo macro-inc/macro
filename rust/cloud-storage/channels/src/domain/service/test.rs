@@ -186,20 +186,20 @@ async fn returns_messages_with_thread_info() {
 
 #[tokio::test]
 async fn attaches_bot_profiles_to_bot_authored_messages() {
-    let seeded_bot = BotId::from_uuid(Uuid::new_v4());
+    let seeded_bot = BotId::new_from_uuid(Uuid::new_v4());
     let unseeded_bot = bot_id::MACRO_AI_BOT_ID;
     let parent_id = Uuid::new_v4();
     let macro_ai_msg_id = Uuid::new_v4();
 
     let mut bot_row = make_row(parent_id, 10);
-    bot_row.sender_id = seeded_bot.to_storage_id().to_string();
+    bot_row.sender_id = seeded_bot.into_storage_id().to_string();
     let mut macro_ai_row = make_row(macro_ai_msg_id, 5);
-    macro_ai_row.sender_id = unseeded_bot.to_storage_id().to_string();
+    macro_ai_row.sender_id = unseeded_bot.into_storage_id().to_string();
 
     let reply_row = ThreadReplyRow {
         id: Uuid::new_v4(),
         thread_id: parent_id,
-        sender_id: seeded_bot.to_storage_id().to_string(),
+        sender_id: seeded_bot.into_storage_id().to_string(),
         triggered_by: None,
         content: "reply".into(),
         created_at: Utc::now(),
@@ -811,7 +811,7 @@ fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
 }
 
 fn sender(user_id: &str) -> Sender {
-    Sender::from_user(macro_id(user_id))
+    Sender::new_from_user(macro_id(user_id))
 }
 
 #[tokio::test]
@@ -887,8 +887,8 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
 #[tokio::test]
 async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
     let channel_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
-    let actor = Sender::from_bot(bot_id);
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let actor = Sender::new_from_bot(bot_id);
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
     let events = FakeEvents::default();
     let share = FakeReferenceSharing::default();
@@ -926,7 +926,10 @@ async fn bot_post_message_persists_bot_sender_and_skips_user_only_effects() {
     let ChannelEvent::MessagePosted { message, .. } = &emitted[0] else {
         panic!("expected MessagePosted event, got {:?}", emitted[0]);
     };
-    assert_eq!(message.sender_id.as_ref(), bot_id.to_storage_id().as_ref());
+    assert_eq!(
+        message.sender_id.as_ref(),
+        bot_id.into_storage_id().as_ref()
+    );
 }
 
 #[tokio::test]
@@ -984,11 +987,11 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
 async fn patch_message_notify_as_posted_adds_notification_context() {
     let channel_id = Uuid::new_v4();
     let thread_id = Uuid::new_v4();
-    let bot_id = BotId::from_uuid(Uuid::new_v4());
-    let bot_sender = bot_id.to_storage_id().to_string();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_sender = bot_id.into_storage_id().to_string();
     let repo = FakeMutationRepo::new(channel_id, &bot_sender);
     repo.state.lock().unwrap().message.thread_id = Some(thread_id);
-    repo.state.lock().unwrap().message.sender_id = Sender::from_bot(bot_id);
+    repo.state.lock().unwrap().message.sender_id = Sender::new_from_bot(bot_id);
     let message_id = repo.state.lock().unwrap().message.id;
     let events = FakeEvents::default();
     let svc = mutation_service(
@@ -998,7 +1001,7 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
     );
 
     svc.patch_message(
-        Sender::from_bot(bot_id),
+        Sender::new_from_bot(bot_id),
         ParticipantRole::Member,
         channel_id,
         message_id,
@@ -1037,7 +1040,9 @@ async fn patch_message_notify_as_posted_adds_notification_context() {
 #[tokio::test]
 async fn patch_of_deleted_message_is_not_found() {
     let channel_id = Uuid::new_v4();
-    let bot_sender = BotId::from_uuid(Uuid::new_v4()).to_storage_id().to_string();
+    let bot_sender = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
     let repo = FakeMutationRepo::new(channel_id, &bot_sender);
     let message_id = repo.state.lock().unwrap().message.id;
     repo.state.lock().unwrap().message.deleted_at = Some(Utc::now());
@@ -1075,7 +1080,9 @@ async fn patch_of_deleted_message_is_not_found() {
 #[tokio::test]
 async fn member_can_delete_bot_authored_message() {
     let channel_id = Uuid::new_v4();
-    let bot_sender = BotId::from_uuid(Uuid::new_v4()).to_storage_id().to_string();
+    let bot_sender = BotId::new_from_uuid(Uuid::new_v4())
+        .into_storage_id()
+        .to_string();
     let repo = FakeMutationRepo::new(channel_id, &bot_sender);
     let message_id = repo.state.lock().unwrap().message.id;
     let events = FakeEvents::default();

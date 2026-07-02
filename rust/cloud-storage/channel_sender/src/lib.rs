@@ -80,26 +80,9 @@ impl<'a> ChannelSender<'a> {
         Self(InnerVal::Right(user))
     }
 
-    /// create a new instance of self containing a [MacroUserIdStr]
-    pub fn from_user(user: MacroUserIdStr<'a>) -> Self {
-        Self::new_from_user(user)
-    }
-
     /// create a new instance of self containing a [BotIdStr] derived from the given [BotId]
-    pub fn from_bot(bot_id: BotId) -> ChannelSender<'static> {
-        ChannelSender(Either::Left(bot_id.to_storage_id()))
-    }
-}
-
-impl From<BotId> for ChannelSender<'static> {
-    fn from(value: BotId) -> Self {
-        Self::from_bot(value)
-    }
-}
-
-impl<'a> From<MacroUserIdStr<'a>> for ChannelSender<'a> {
-    fn from(value: MacroUserIdStr<'a>) -> Self {
-        Self::from_user(value)
+    pub fn new_from_bot(bot_id: BotId) -> ChannelSender<'static> {
+        ChannelSender(Either::Left(bot_id.into_storage_id()))
     }
 }
 
