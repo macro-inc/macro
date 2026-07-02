@@ -106,6 +106,20 @@ export function HistoryScrubber(props: { compact?: boolean }) {
     })
   );
 
+  createEffect(
+    on(history.diff.session, (session) => {
+      if (!session) {
+        setView({ start: 0, end: compressedTimeline().total });
+        return;
+      }
+      const warpStart = timestampToWarpedPosition(session.startMs);
+      const warpEnd = timestampToWarpedPosition(session.endMs);
+      const sessionSpan = warpEnd - warpStart;
+      const padding = Math.max(sessionSpan * 0.5, compressedTimeline().total * 0.02);
+      setView(clampView(warpStart - padding, warpEnd + padding));
+    }, { defer: true })
+  );
+
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     const { start, end } = visibleWindow();
@@ -355,7 +369,13 @@ export function HistoryScrubber(props: { compact?: boolean }) {
                         // Stop the rail's scrub/marquee drag from starting so a
                         // bar click cleanly opens that session's diff.
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => history.diff.view(session)}
+                        onClick={() => {
+                          if (history.diff.session()?.startMs === session.startMs) {
+                            history.diff.clear();
+                          } else {
+                            history.diff.view(session);
+                          }
+                        }}
                         onPointerEnter={(e) =>
                           setHoverUser({
                             user: lane.user,

@@ -31,6 +31,7 @@ type HistoryContextValue = {
     session: Accessor<HistorySession | null>;
     previewState: Accessor<SerializedEditorState | null>;
     view: (session: HistorySession) => void;
+    clear: () => void;
   };
 };
 
@@ -50,7 +51,6 @@ export function HistoryProvider(props: {
   const open = () => setIsOpen(true);
 
   const enter = (at?: Date) => {
-    console.log(at);
     setDiffSession(null);
     setSelectedAt(at ?? null);
     setIsLive(at === undefined);
@@ -170,6 +170,11 @@ export function HistoryProvider(props: {
       session: diffSession,
       previewState: diffPreviewState,
       view: viewSessionDiff,
+      clear: () => {
+        setDiffSession(null);
+        setSelectedAt(null);
+        setIsLive(true);
+      },
     },
   };
 

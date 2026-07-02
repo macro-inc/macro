@@ -179,7 +179,14 @@ function HistorySectionContent() {
                     sessions={sessions()}
                     selectedAt={history.selectedAt}
                     onSelect={history.enter}
-                    onViewSessionDiff={history.diff.view}
+                    onViewSessionDiff={(session) => {
+                      // if we're already viewing it because we just clicked it reset the viewport
+                      if (history.diff.session()?.startMs === session.startMs) {
+                        history.diff.clear();
+                      } else {
+                        history.diff.view(session);
+                      }
+                    }}
                     maxHeightPx={activityMaxHeightPx()}
                   />
                 </div>
