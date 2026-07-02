@@ -1165,14 +1165,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         data-soup-view
         data-soup-view-id={panel.handle.id + (previewPanel ? '-preview' : '')}
       >
-        <Resize.Zone
-          direction={
-            !isNewInboxEnabled() || isWideSplitPanel()
-              ? 'horizontal'
-              : 'vertical'
-          }
-          gutter={0}
-        >
+        <Resize.Zone direction="horizontal" gutter={0}>
           <Resize.Panel
             id="soup-list"
             minSize={200}
@@ -1511,10 +1504,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
           <Show when={previewVisible()}>
             <Resize.Panel
               id="soup-preview"
-              minSize={300}
+              minSize={500}
               target={{
                 kind: 'percent',
-                percent: isNewInboxEnabled() ? 80 : 70,
+                percent: isNewInboxEnabled() ? 75 : 70,
               }}
             >
               <div
