@@ -104,7 +104,7 @@ function Header(props: SlotProps): JSX.Element {
 
 function Title(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('min-w-0 flex-1 truncate text-sm', props.class)}>
+    <div class={cn('min-w-0 flex-1 truncate text-sm font-medium', props.class)}>
       {props.children}
     </div>
   );

@@ -7,6 +7,7 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
 import {
@@ -538,6 +539,9 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
   };
 
   const senderName = createSenderDisplayName(senderId);
+  const currentUserId = useUserId();
+  const senderLabel = () =>
+    senderId() === currentUserId() ? 'You' : senderName();
 
   const isDM = createMemo(() => {
     const value = entity();
@@ -605,25 +609,15 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </InboxCard.Title>
         </InboxCard.Header>
 
-        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1">
+        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-sm text-ink/60">
           <Show when={!isDM()}>
-            <span class="flex gap-1 items-center text-sm whitespace-nowrap">
-              <Show when={senderId()}>
-                {(id) => (
-                  <UserIcon
-                    id={id()}
-                    size="sm"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                )}
-              </Show>
-              {senderName()}
+            <span class="flex gap-1 items-center whitespace-nowrap text-ink/80">
+              {senderLabel()}:
             </span>
           </Show>
           <Show when={text().content?.trim()}>
             {(value) => (
-              <InboxCard.Content class="truncate text-sm text-ink/60">
+              <InboxCard.Content class="truncate">
                 <StaticMarkdown
                   markdown={value()}
                   singleLine
@@ -722,14 +716,18 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   });
 
   const senderName = createSenderDisplayName(senderId);
+  const currentUserId = useUserId();
+  const senderLabel = () =>
+    senderId() === currentUserId() ? 'You' : senderName();
 
   const rootSenderId = () => {
     const value = props.item.entity;
-    console.log(value.content, value.senderId);
     return value.type === 'channel_thread' ? value.senderId : undefined;
   };
 
   const rootSenderName = createSenderDisplayName(rootSenderId);
+  const rootSenderLabel = () =>
+    rootSenderId() === currentUserId() ? 'You' : rootSenderName();
 
   const isReply = createMemo(() => {
     const metadata = props.item.notification?.notification_metadata;
@@ -827,7 +825,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
               class="relative -ml-2 -mb-2 h-3 w-3 shrink-0 rounded-tl-md border-l border-t border-edge-muted"
             />
             <Show when={!isDM()}>
-              <span class="flex gap-1 items-center text-xs whitespace-nowrap">
+              <span class="flex gap-1 items-center text-xs whitespace-nowrap text-ink/80">
                 <Show when={rootSenderId()}>
                   {(id) => (
                     <UserIcon
@@ -838,7 +836,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                     />
                   )}
                 </Show>
-                {rootSenderName()}
+                {rootSenderLabel()}:
               </span>
             </Show>
 
@@ -865,18 +863,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
           <div class="flex min-w-0 items-center gap-1">
             <Show when={!isDM()}>
-              <span class="flex gap-1 items-center text-sm whitespace-nowrap">
-                <Show when={senderId()}>
-                  {(id) => (
-                    <UserIcon
-                      id={id()}
-                      size="sm"
-                      suppressClick
-                      showTooltip={false}
-                    />
-                  )}
-                </Show>
-                {senderName()}
+              <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink/80">
+                {senderLabel()}:
               </span>
             </Show>
             <Show when={text().content?.trim()}>
