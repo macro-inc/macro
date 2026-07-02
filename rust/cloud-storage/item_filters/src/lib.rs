@@ -489,9 +489,9 @@ pub struct ChannelThreadFilters {
     pub root_sender_ids: Vec<String>,
 
     /// Thread participant user IDs. A participant is the root message sender, anyone
-    /// who replied in the thread, or anyone @-mentioned in the thread; a group mention
-    /// (e.g. @here) makes every active channel member a participant. Empty to include
-    /// threads regardless of participants.
+    /// who replied in the thread, or anyone @-mentioned in the thread (group mentions
+    /// like @here count through their per-user expansion at send time). Empty to
+    /// include threads regardless of participants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub participant_ids: Vec<String>,
 }

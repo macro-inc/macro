@@ -151,8 +151,8 @@ pub enum ChannelThreadLiteral {
     /// The sender of the root thread message must be the included user.
     RootSender(MacroUserIdStr<'static>),
     /// The included user must be a participant of the thread: the root message sender,
-    /// anyone who replied in the thread, or anyone @-mentioned in the thread. A group
-    /// mention (e.g. @here) makes every active channel member a participant.
+    /// anyone who replied in the thread, or anyone @-mentioned in the thread (group
+    /// mentions like @here count through their per-user expansion at send time).
     Participant(MacroUserIdStr<'static>),
     /// this node value filters by notification done state for the thread notification.
     NotificationDone(bool),

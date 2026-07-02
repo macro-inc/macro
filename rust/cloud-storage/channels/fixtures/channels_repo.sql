@@ -127,8 +127,10 @@ INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, le
 --   t41 (10:00): user-c replied (10:05); left-user replied (10:06); a soft-deleted
 --       reply from user-e (10:07) that must NOT make user-e a participant
 --   t42 (11:00): user-c is @-mentioned in the root message
---   t43 (12:00): root message contains a group mention (@here)
---   t44 (13:00): plain root; a reply (13:05) contains a group mention (@here)
+--   t43 (12:00): root message contains a group mention (@here), stored as the
+--       client-side expansion: one user mention row per member at send time
+--   t44 (13:00): plain root; a reply (13:05) contains a group mention (@here),
+--       likewise expanded into per-user mention rows
 INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at) VALUES
   ('00000000-0000-0000-0000-000000000c04', 'participant-filter', 'public', NULL, 'macro|user-b@test.com',
    '2024-01-02 00:00:00+00', '2024-01-02 00:00:00+00');
@@ -172,6 +174,26 @@ INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content, creat
 INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
   ('00000000-0000-0000-0000-00000000e042', 'message', '00000000-0000-0000-0000-000000000042',
    'user', 'macro|user-c@test.com', NULL, '2024-01-02 11:00:00+00');
+
+-- @here in t43's root message and t44's reply, as sent by the client: expanded into
+-- one user mention row per channel member at send time (left-user had not left yet)
+INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000e431', 'message', '00000000-0000-0000-0000-000000000043',
+   'user', 'macro|user-b@test.com', NULL, '2024-01-02 12:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e432', 'message', '00000000-0000-0000-0000-000000000043',
+   'user', 'macro|user-c@test.com', NULL, '2024-01-02 12:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e433', 'message', '00000000-0000-0000-0000-000000000043',
+   'user', 'macro|user-e@test.com', NULL, '2024-01-02 12:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e434', 'message', '00000000-0000-0000-0000-000000000043',
+   'user', 'macro|left-user@test.com', NULL, '2024-01-02 12:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e441', 'message', '00000000-0000-0000-0000-00000000b044',
+   'user', 'macro|user-b@test.com', NULL, '2024-01-02 13:05:00+00'),
+  ('00000000-0000-0000-0000-00000000e442', 'message', '00000000-0000-0000-0000-00000000b044',
+   'user', 'macro|user-c@test.com', NULL, '2024-01-02 13:05:00+00'),
+  ('00000000-0000-0000-0000-00000000e443', 'message', '00000000-0000-0000-0000-00000000b044',
+   'user', 'macro|user-e@test.com', NULL, '2024-01-02 13:05:00+00'),
+  ('00000000-0000-0000-0000-00000000e444', 'message', '00000000-0000-0000-0000-00000000b044',
+   'user', 'macro|left-user@test.com', NULL, '2024-01-02 13:05:00+00');
 
 -- entity mentions (used by attachment-references tests)
 -- doc-mention is mentioned inside msg3 (a message source → channel reference, gated by participation)

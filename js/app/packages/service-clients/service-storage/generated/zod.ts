@@ -8357,7 +8357,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            'Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread; a group mention\n(e.g. @here) makes every active channel member a participant. Empty to include\nthreads regardless of participants.'
+            'Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants.'
           ),
         root_sender_ids: zod
           .array(zod.string())

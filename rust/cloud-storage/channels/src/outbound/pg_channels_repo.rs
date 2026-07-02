@@ -882,17 +882,19 @@ fn push_channel_thread_filter_expr(
     }
 }
 
-/// SQL LIKE pattern matching a group mention tag (e.g. @here) in message content.
-/// Group mentions are only persisted inside the message body as
-/// `<m-group-mention>{"groupAlias":"..."}</m-group-mention>` tags (see the
-/// `mention_utils` crate); they have no rows in `comms_entity_mentions`.
-#[cfg(feature = "list")]
-const GROUP_MENTION_LIKE_PATTERN: &str = "%<m-group-mention>%";
-
 /// A user is a participant of a thread when they are still an active member of the
-/// channel AND they sent the root message or any reply, were @-mentioned anywhere in
-/// the thread, or the thread contains a group mention (e.g. @here), which makes every
-/// active channel member a participant.
+/// channel AND they sent the root message or any reply, or were @-mentioned anywhere
+/// in the thread.
+///
+/// Group mentions (e.g. @here) are covered indirectly: the client expands them into
+/// per-user mention rows for every channel member at send time, so they match the
+/// mention arm below. That expansion is a send-time snapshot made by a single
+/// producer (the web client) — members who join the channel later, and messages from
+/// producers that don't expand (bots, webhooks), are missed. TODO: persist group
+/// mentions as `entity_type = 'group'` rows in `comms_entity_mentions` (parsed
+/// server-side from the `<m-group-mention>` content tag, see `mention_utils`) and
+/// add an arm here treating every active channel member as a participant of threads
+/// containing one.
 #[cfg(feature = "list")]
 fn push_channel_thread_participant_filter_expr(
     builder: &mut QueryBuilder<'static, Postgres>,
@@ -919,11 +921,6 @@ fn push_channel_thread_participant_filter_expr(
                 tm.sender_id = "#,
     );
     builder.push_bind(participant.clone());
-    builder.push(
-        r#"
-                OR tm.content LIKE "#,
-    );
-    builder.push_bind(GROUP_MENTION_LIKE_PATTERN);
     builder.push(
         r#"
                 OR EXISTS (

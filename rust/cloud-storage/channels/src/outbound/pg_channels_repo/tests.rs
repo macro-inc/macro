@@ -402,9 +402,8 @@ async fn threads_matching_participant(
 async fn channel_thread_rows_filter_by_participant_reply_and_mention(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    // user-c replied in t41, is @-mentioned in t42, and is an active ch4 member so the
-    // group mentions in t43/t44 include them too. No ch1 threads match despite user-c
-    // being a ch1 member.
+    // user-c replied in t41, is @-mentioned in t42, and is in the @here expansion
+    // rows on t43/t44. No ch1 threads match despite user-c being a ch1 member.
     let parent_ids = threads_matching_participant(pool, USER_B, USER_C).await?;
     assert_eq!(parent_ids, vec![T44, T43, T42, T41]);
     Ok(())
@@ -417,8 +416,8 @@ async fn channel_thread_rows_filter_by_participant_reply_and_mention(
 async fn channel_thread_rows_filter_by_participant_group_mention(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    // user-e never posted or got @-mentioned (their only reply is soft-deleted), so
-    // only the group-mention threads match: t43 (root @here) and t44 (reply @here).
+    // user-e's only reply is soft-deleted, so they match only through the @here
+    // expansion rows: t43 (root @here) and t44 (reply @here).
     let parent_ids = threads_matching_participant(pool, USER_B, USER_E).await?;
     assert_eq!(parent_ids, vec![T44, T43]);
     Ok(())
@@ -445,8 +444,8 @@ async fn channel_thread_rows_filter_by_participant_root_sender(
 async fn channel_thread_rows_filter_by_participant_excludes_departed_users(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    // left-user replied in t41 and the channel has group mentions, but they left the
-    // channel, so nothing matches.
+    // left-user replied in t41 and sits in the @here expansion rows on t43/t44, but
+    // they left the channel, so nothing matches.
     let parent_ids = threads_matching_participant(pool, USER_B, LEFT_USER).await?;
     assert!(parent_ids.is_empty());
     Ok(())
