@@ -75,7 +75,7 @@ const $handleCaretAfterEscapableInlineFormat = (selection: RangeSelection) => {
   const focusNode = selection.focus.getNode();
   if ($isTextNode(focusNode) && selection.focus.offset === 0) {
     const prevSibling = focusNode.getPreviousSibling();
-    if ($hasEscapableInlineFormat(prevSibling)) {
+    if (prevSibling && $hasEscapableInlineFormat(prevSibling)) {
       $movePastSpaceOrInsertAfter(prevSibling, focusNode);
       return true;
     }
@@ -88,7 +88,7 @@ const $handleCaretAfterEscapableInlineFormat = (selection: RangeSelection) => {
   ) {
     const prevChild = focusNode.getChildAtIndex(selection.focus.offset - 1);
     const nextChild = focusNode.getChildAtIndex(selection.focus.offset);
-    if ($hasEscapableInlineFormat(prevChild)) {
+    if (prevChild && $hasEscapableInlineFormat(prevChild)) {
       $movePastSpaceOrInsertAfter(prevChild, nextChild);
       return true;
     }
