@@ -38,7 +38,7 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        'group/inbox-item relative grid w-full grid-cols-[2.5rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg px-2 py-2.5',
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg px-2 py-2.5',
 
         {
           'bg-accent/8': props.selected,
@@ -47,7 +47,7 @@ function Root(props: RootProps): JSX.Element {
             props.highlighted && !props.selected && !isTouchDevice(),
           'hover:bg-hover/50':
             !props.highlighted && !props.selected && !isTouchDevice(),
-          'opacity-75': props.dimmed,
+          'opacity-80': props.dimmed,
         },
         props.class
       )}
@@ -72,12 +72,12 @@ function Icon(props: IconProps): JSX.Element {
   return (
     <span
       class={cn(
-        'relative grid size-10 shrink-0 place-items-center self-start overflow-visible rounded-full',
+        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible',
         props.class
       )}
     >
       <Layer depth={3}>
-        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface ring ring-inset ring-ink-extra-muted/8 text-ink-extra-muted">
+        <span class="grid size-full place-items-center overflow-hidden rounded-lg bg-surface ring ring-inset ring-ink-extra-muted/8 text-ink-extra-muted">
           <Show when={props.src} fallback={props.fallback}>
             {(src) => <img src={src()} alt="" class="size-full object-cover" />}
           </Show>

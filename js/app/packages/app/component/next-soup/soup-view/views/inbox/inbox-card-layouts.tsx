@@ -7,9 +7,10 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@core/context/user';
 import { isMacroAgentId } from '@core/constant/macroAgent';
+import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { plural } from '@core/util/string';
 import {
   type EntityData,
   isGithubPrEntity,
@@ -39,6 +40,7 @@ import { stringToItemType } from '@service-storage/client';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
 import {
@@ -48,8 +50,6 @@ import {
   getNotificationTag,
   itemContent,
 } from './utils';
-import { Dynamic } from 'solid-js/web';
-import { plural } from '@core/util/string';
 
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
@@ -175,24 +175,6 @@ export function SenderIcon(props: SenderIconProps) {
   );
 }
 
-function FloatingSenderBubble(props: {
-  senderId?: string;
-  fallbackName?: string;
-  imageUrl?: string;
-}) {
-  return (
-    <Show when={props.senderId || props.fallbackName || props.imageUrl}>
-      <span class="absolute -right-1 -bottom-1 grid size-5 place-items-center overflow-hidden rounded-full bg-surface ring-2 ring-surface">
-        <InboxAvatar
-          senderId={props.senderId}
-          fallbackName={props.fallbackName}
-          imageUrl={props.imageUrl}
-        />
-      </span>
-    </Show>
-  );
-}
-
 function InboxAvatar(props: {
   senderId?: string;
   fallbackName?: string;
@@ -230,35 +212,35 @@ const tagBubbleIcon = (tag: NotificationTag) =>
   match(tag)
     .with('new_email', () => () => (
       <EntityIcon
-        class="size-5"
+        class="size-4"
         targetType="email"
         theme="monochrome"
         size="fill"
       />
     ))
     .with('task_assigned', () => () => (
-      <EntityIcon class="size-5" targetType="task" size="fill" />
+      <EntityIcon class="size-4" targetType="task" size="fill" />
     ))
     .with('ai_response', () => () => (
-      <EntityIcon class="size-5" targetType="chat" size="fill" />
+      <EntityIcon class="size-4" targetType="chat" size="fill" />
     ))
     .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class="size-5" />
+      <AtIcon class="size-4" />
     ))
-    .with('document_mention', () => () => <FilesIcon class="size-5" />)
+    .with('document_mention', () => () => <FilesIcon class="size-4" />)
     .with(
       'channel_message_reply',
       'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class="size-5" />
+      () => () => <ArrowBendUpLeftIcon class="size-4" />
     )
     .with('commented_on_document', () => () => (
-      <ChatCircleIcon class="size-5" />
+      <ChatCircleIcon class="size-4" />
     ))
-    .with('channel_message_send', () => () => <ChatTextIcon class="size-5" />)
+    .with('channel_message_send', () => () => <ChatTextIcon class="size-4" />)
     .with('channel_invite', 'invite_to_team', () => () => (
-      <UserPlusIcon class="size-5" />
+      <UserPlusIcon class="size-4" />
     ))
-    .with('call_started', () => () => <PhoneIcon class="size-5" />)
+    .with('call_started', () => () => <PhoneIcon class="size-4" />)
     .with(
       'github_pr_status_changed',
       'github_pr_check_run',
@@ -266,11 +248,11 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'github_pr_comment',
       'github_pr_mention',
       'github_pr_review',
-      () => () => <GithubIcon class="size-5" />
+      () => () => <GithubIcon class="size-4" />
     )
     .with(
       P.when((value) => value?.startsWith('github_') ?? false),
-      () => () => <GithubIcon class="size-5" />
+      () => () => <GithubIcon class="size-4" />
     )
     .otherwise(() => undefined);
 
@@ -472,15 +454,15 @@ const githubAction = (notification?: Notification): string => {
   return match(metadata)
     .with(
       { tag: 'github_pr_status_changed', content: { status: 'merged' } },
-      () => 'merged'
+      () => ''
     )
     .with(
       { tag: 'github_pr_status_changed', content: { status: 'closed' } },
-      () => 'closed'
+      () => ''
     )
     .with({ tag: 'github_review_requested' }, () => 'requested your review on')
     .with({ tag: 'github_pr_comment' }, () => 'commented on')
-    .with({ tag: 'github_pr_mention' }, () => 'mentioned you in')
+    .with({ tag: 'github_pr_mention' }, () => 'mentioned you')
     .with({ tag: 'github_pr_review' }, () => 'reviewed')
     .otherwise(() => 'updated');
 };
@@ -618,15 +600,13 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           <InboxCard.Icon
             fallback={
               <EntityIcon
-                class="size-5"
+                class="size-4"
                 targetType={getEntityIconType(entity())}
                 size="fill"
                 theme="monochrome"
               />
             }
-          >
-            {/* <FloatingSenderBubble senderId={senderId()} /> */}
-          </InboxCard.Icon>
+          ></InboxCard.Icon>
         </Show>
       </div>
       <InboxCard.Body class="contents">
@@ -674,7 +654,6 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
 
   const text = createMemo(() => {
     const location = channelLocation(props.item.entity);
-    const tag = getNotificationTag(props.item.notification);
     let action = 'sent a message';
     if (location) {
       action = 'sent a message in';
@@ -699,9 +678,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
           fallback={
             <ActionBubble tag={getNotificationTag(props.item.notification)} />
           }
-        >
-          {/* <FloatingSenderBubble senderId={senderId()} /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
@@ -840,9 +817,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
           fallback={
             <ActionBubble tag={getNotificationTag(props.item.notification)} />
           }
-        >
-          {/* <FloatingSenderBubble senderId={senderId()} /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       </div>
       <InboxCard.Body class="contents">
         <Show when={isReply()}>
@@ -1000,12 +975,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
               <ActionBubble tag={getNotificationTag(props.item.notification)} />
             </Show>
           }
-        >
-          {/* <FloatingSenderBubble */}
-          {/*   senderId={senderId()} */}
-          {/*   fallbackName={senderFallbackName()} */}
-          {/* /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
@@ -1055,7 +1025,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
               when={props.item.notification}
               fallback={
                 <EntityIcon
-                  class="size-5"
+                  class="size-4"
                   size="fill"
                   targetType={getEntityIconType(props.item.entity)}
                 />
@@ -1064,12 +1034,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
               <ActionBubble tag={getNotificationTag(props.item.notification)} />
             </Show>
           }
-        >
-          {/* <FloatingSenderBubble */}
-          {/*   senderId={senderId()} */}
-          {/*   fallbackName={senderFallbackName()} */}
-          {/* /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
@@ -1079,16 +1044,6 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 }
 
 export function AiCardLayout(props: InboxCardLayoutProps) {
-  const senderId = () => props.item.notification?.sender_id ?? undefined;
-
-  const senderFallbackName = () => {
-    return props.item.notification
-      ? getNotificationSenderFallbackName(props.item.notification)
-      : 'Ai';
-  };
-
-  const senderName = createSenderDisplayName(senderId, () => 'Macro');
-
   const text = createMemo(() => {
     const content = itemContent(props.item.entity, props.item.notification);
     const location = entityLocation(props.item.entity);
@@ -1097,15 +1052,8 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
       return { title: props.item.entity.name, content };
     }
 
-    let action = 'responded';
-    if (location) action = 'responded in';
-
     return {
-      title: buildActionLabel({
-        sender: senderName(),
-        action,
-        location,
-      }),
+      title: location || props.item.entity.name,
       content,
     };
   });
@@ -1125,7 +1073,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
               when={props.item.notification}
               fallback={
                 <EntityIcon
-                  class="size-5"
+                  class="size-4"
                   targetType={getEntityIconType(props.item.entity)}
                   size="fill"
                 />
@@ -1134,12 +1082,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
               <ActionBubble tag={getNotificationTag(props.item.notification)} />
             </Show>
           }
-        >
-          {/* <FloatingSenderBubble */}
-          {/*   senderId={senderId()} */}
-          {/*   fallbackName={senderFallbackName()} */}
-          {/* /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
@@ -1181,12 +1124,9 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
       onClick={props.onClick}
     >
       <div class="col-start-1 row-start-1 row-span-3">
-        <InboxCard.Icon fallback={<ActionBubble tag="new_email" />}>
-          {/* <FloatingSenderBubble */}
-          {/*   senderId={senderId()} */}
-          {/*   fallbackName={senderFallbackName()} */}
-          {/* /> */}
-        </InboxCard.Icon>
+        <InboxCard.Icon
+          fallback={<ActionBubble tag="new_email" />}
+        ></InboxCard.Icon>
       </div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
@@ -1232,8 +1172,6 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
   const senderId = () => sender()?.id;
   const senderFallbackName = () => sender()?.fallbackName;
 
-  const avatarUrl = () => sender()?.imageUrl;
-
   const senderName = createSenderDisplayName(senderId, senderFallbackName);
 
   const status = createMemo(() => {
@@ -1259,7 +1197,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
       )?.startsWith('github_');
 
       let sender = entity.metadata.authorLogin;
-      let action = 'opened';
+      let action = '';
       if (hasGithubNotification) {
         sender = senderName() ?? entity.metadata.authorLogin;
         action = githubAction(props.item.notification);
@@ -1269,11 +1207,11 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
         title: buildActionLabel({
           sender,
           action,
-          location: githubLocation(entity),
         }),
         content:
           getGithubTitle(entity, props.item.notification) ||
           entity.metadata.name,
+        location: githubLocation(entity),
       };
     }
 
@@ -1281,21 +1219,20 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
       title: buildActionLabel({
         sender: senderName(),
         action: githubAction(props.item.notification),
-        location: githubLocation(entity),
       }),
       content: getGithubTitle(entity, props.item.notification) || entity.name,
+      location: githubLocation(entity),
     };
   });
 
   return (
-    <BaseCard
-      entityId={props.item.entity.id}
+    <InboxCard.Root
+      dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
       onClick={props.onClick}
-      unread={props.item.unread}
-      timestamp={props.item.timestamp}
-      leading={
+    >
+      <div class="col-start-1 row-start-1 row-span-3">
         <InboxCard.Icon
           fallback={
             <Show
@@ -1316,16 +1253,41 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
               <GithubStatusIcon status={status()} />
             </Show>
           }
-        >
-          {/* <FloatingSenderBubble */}
-          {/*   fallbackName={senderFallbackName()} */}
-          {/*   imageUrl={avatarUrl()} */}
-          {/* /> */}
-        </InboxCard.Icon>
-      }
-      title={text().title}
-      preview={text().content}
-    />
+        ></InboxCard.Icon>
+      </div>
+      <InboxCard.Body class="contents">
+        <InboxCard.Header class="col-start-2 row-start-1 self-center">
+          <InboxCard.Title class="flex items-center gap-1">
+            <Badge unread={props.item.unread} />
+            {text().title}
+          </InboxCard.Title>
+        </InboxCard.Header>
+
+        <Show when={text().content?.trim()}>
+          {(value) => (
+            <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm text-ink/60">
+              <StaticMarkdown
+                markdown={value()}
+                singleLine
+                theme={unifiedListMarkdownTheme}
+              />
+            </InboxCard.Content>
+          )}
+        </Show>
+
+        <Show when={text().location}>
+          {(location) => (
+            <InboxCard.Content class="col-start-2 row-start-3 truncate text-xs text-ink/40">
+              {location()}
+            </InboxCard.Content>
+          )}
+        </Show>
+      </InboxCard.Body>
+      <InboxTimestamp
+        timestamp={props.item.timestamp}
+        class="col-start-3 row-start-1 self-start justify-self-end"
+      />
+    </InboxCard.Root>
   );
 }
 
@@ -1385,15 +1347,13 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
         <InboxCard.Icon
           fallback={
             <EntityIcon
-              class="size-5"
+              class="size-4"
               targetType="call"
               size="fill"
               theme="monochrome"
             />
           }
-        >
-          {/* <FloatingSenderBubble senderId={senderId()} /> */}
-        </InboxCard.Icon>
+        ></InboxCard.Icon>
       }
       title={text().title}
       preview={text().content}
@@ -1421,7 +1381,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
         <InboxCard.Icon
           fallback={
             <EntityIcon
-              class="size-5"
+              class="size-4"
               targetType={getEntityIconType(props.item.entity)}
               size="fill"
               theme="monochrome"
