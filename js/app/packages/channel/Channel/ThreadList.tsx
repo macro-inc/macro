@@ -300,7 +300,7 @@ export function ThreadList(props: ThreadListProps) {
 
   // Scroll to the newest message, then keep re-pinning to the true bottom for a
   // short window so late-settling content can't leave the last message cut off.
-  // Aborts as soon as the user scrolls up or grabs the scroll surface.
+  // Aborts on a real scroll gesture (wheel up or touch drag), not on taps.
   const pinToBottom = (handle: VirtualizerHandle): boolean => {
     cancelPinToBottom?.();
 
@@ -314,7 +314,7 @@ export function ThreadList(props: ThreadListProps) {
     const stop = () => {
       if (rafId) cancelAnimationFrame(rafId);
       el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('pointerdown', stop);
+      el.removeEventListener('pointerdown', onPointerDown);
       if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
     };
 
@@ -322,8 +322,14 @@ export function ThreadList(props: ThreadListProps) {
       if (event.deltaY < 0) stop();
     }
 
+    // A press on a message, reply button, or reaction is not a scroll and must
+    // not cancel pinning. Only a wheel-up or a touch drag is the user scrolling.
+    function onPointerDown(event: PointerEvent) {
+      if (event.pointerType === 'touch') stop();
+    }
+
     el.addEventListener('wheel', onWheel, { passive: true });
-    el.addEventListener('pointerdown', stop, { passive: true });
+    el.addEventListener('pointerdown', onPointerDown, { passive: true });
     cancelPinToBottom = stop;
 
     const tick = () => {
