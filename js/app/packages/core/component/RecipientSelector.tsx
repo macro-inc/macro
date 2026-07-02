@@ -529,6 +529,23 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return allOptions as CombinedRecipientItem<K>[];
   });
 
+  const visibleOptionKeys = createMemo(
+    () => new Set(options().map(getRecipientOptionValue))
+  );
+
+  // Kobalte resolves selected values against the `options` prop
+  // (getOptionsFromValues) and silently drops any selection it can't find
+  // there, so selected options that the search filtered out must stay in the
+  // collection. `defaultFilter` keeps them hidden from the dropdown.
+  const optionsWithSelected = createMemo(() => {
+    const visible = options();
+    const keys = visibleOptionKeys();
+    const hiddenSelected = (
+      props.selectedOptions as CombinedRecipientItem[]
+    ).filter((option) => !keys.has(getRecipientOptionValue(option)));
+    return [...visible, ...hiddenSelected];
+  });
+
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
     () => {}
   );
@@ -559,12 +576,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         onOpenChange={setIsOpen}
         disabled={props.disabled}
         validationState={invalid() ? 'invalid' : 'valid'}
-        options={options() as CombinedRecipientItem[]}
+        options={optionsWithSelected()}
         optionLabel={getRecipientOptionLabel}
         optionValue={getRecipientOptionValue}
         optionTextValue={getRecipientOptionTextValue}
         optionDisabled={getOptionDisabled}
-        defaultFilter={() => true}
+        defaultFilter={(option) =>
+          visibleOptionKeys().has(getRecipientOptionValue(option))
+        }
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={debouncedHandleChange}
         onInputChange={onInputChange}
