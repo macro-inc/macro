@@ -21,7 +21,11 @@ export function OldOverlay() {
   const handleFork = async () => {
     if (forking()) return;
     const ms = history.selectedAt()?.getTime();
-    const vid = history.isLive() ? undefined : (ms ? history.versionIdAt(ms) ?? undefined : undefined);
+    const vid = history.isLive()
+      ? undefined
+      : ms
+        ? (history.versionIdAt(ms) ?? undefined)
+        : undefined;
     if (!history.isLive() && !vid) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
@@ -42,7 +46,8 @@ export function OldOverlay() {
     <Show when={history.isOpen()}>
       <div class="flex w-full items-center gap-2 bg-alert-bg px-3 py-2 text-xs text-alert-ink">
         <span class="flex items-center gap-1 flex-1">
-          You are viewing history. Press <Hotkey shortcut="escape" theme="current" /> to exit.
+          You are viewing history. Press{' '}
+          <Hotkey shortcut="escape" theme="current" /> to exit.
         </span>
         <Button variant="base" size="sm" onClick={history.exit}>
           <XIcon />
@@ -52,7 +57,12 @@ export function OldOverlay() {
           variant="active"
           size="sm"
           onClick={handleFork}
-          disabled={forking() || (!history.isLive() && (history.loading.doc() || !history.versionIdAt(history.selectedAt()?.getTime() ?? 0)))}
+          disabled={
+            forking() ||
+            (!history.isLive() &&
+              (history.loading.doc() ||
+                !history.versionIdAt(history.selectedAt()?.getTime() ?? 0)))
+          }
         >
           <GitFork class="size-3.5 shrink-0" />
           {forking() ? 'Forking…' : 'Fork'}
