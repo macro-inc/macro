@@ -3,9 +3,9 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
-import { type Accessor, createSignal, type JSX } from 'solid-js';
+import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import type { ScrollToIndexOpts } from 'virtua/unstable_core';
+import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 
 const BASE_ITEM_SIZE: number = 64;
@@ -18,6 +18,10 @@ export type ThreadListScrollTarget =
   | { tag: 'bottom'; align?: ScrollAlignment }
   | { tag: 'index'; index: number; align?: ScrollAlignment }
   | { tag: 'id'; id: string; align?: ScrollAlignment };
+
+type InitialScrollTarget =
+  | ThreadListScrollTarget
+  | { tag: 'offset'; scrollOffset: number };
 
 export function defaultThreadListTargetFromMessage(
   targetMessageId: string | undefined
@@ -59,6 +63,12 @@ export type ThreadListScrollState = {
   viewportSize: number;
 };
 
+export type ThreadListScrollSnapshot = {
+  scrollOffset: number;
+  virtualCache?: CacheSnapshot;
+  isNearBottom: boolean;
+};
+
 export type FullFrameThreadListScrollInsets = {
   /** Space reserved before the first message (e.g. status bar + floating header). */
   start: number;
@@ -74,6 +84,8 @@ type ThreadListProps = {
   onScrollNearBottom?: () => void;
   onNavigationReady?: (navigation: ThreadListNavigation) => void;
   onScrollStateChange?: (state: ThreadListScrollState) => void;
+  initialScrollSnapshot?: ThreadListScrollSnapshot;
+  onScrollSnapshotChange?: (snapshot: ThreadListScrollSnapshot) => void;
   shift?: Accessor<boolean>;
   prepend?: Accessor<boolean>;
   /**
@@ -86,6 +98,14 @@ type ThreadListProps = {
 
 const NEAR_TOP_THRESHOLD = 800;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
+
+// After an imperative scroll-to-bottom, hold the viewport at the true bottom for
+// this long. virtua targets a scroll offset from its cached item sizes and stops
+// correcting ~150ms after the last measurement, and the scroller runs with
+// `overflow-anchor: none`, so a last message that grows afterwards (a loading
+// image or video, a new reaction, an opening reply input) is left cut off. The
+// re-pin window absorbs that late growth so a single action lands fully down.
+const SCROLL_TO_BOTTOM_SETTLE_MS = 1000;
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
   tag: 'bottom',
@@ -145,13 +165,13 @@ export function ThreadList(props: ThreadListProps) {
   let nearBottomFired = false;
   let previousScrollOffset: number | undefined;
   let explicitScrollDownDistance = 0;
+  let cancelPinToBottom: (() => void) | undefined;
 
   const scrollIntent = createScrollIntentTracker();
 
   let initialScrollStarted = false;
   let initialScrollRetried = false;
-  let initialScrollTarget: ThreadListScrollTarget =
-    DEFAULT_INITIAL_SCROLL_TARGET;
+  let initialScrollTarget: InitialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
 
   const resetInitialScroll = () => {
     initialScrollStarted = false;
@@ -189,6 +209,16 @@ export function ThreadList(props: ThreadListProps) {
     return true;
   };
 
+  const scrollToInitialTarget = (
+    handle: VirtualizerHandle,
+    target: InitialScrollTarget
+  ): boolean => {
+    if (target.tag !== 'offset') return scrollToTarget(handle, target);
+
+    handle.scrollTo(target.scrollOffset);
+    return true;
+  };
+
   // DOM-based so the scroll insets are accounted for — virtua's scrollSize
   // only covers its own items, not the inset padding around them.
   const getDistanceFromBottom = (handle: VirtualizerHandle): number => {
@@ -203,9 +233,11 @@ export function ThreadList(props: ThreadListProps) {
 
   const isScrollPositionCorrect = (
     handle: VirtualizerHandle,
-    target: ThreadListScrollTarget
+    target: InitialScrollTarget
   ): boolean => {
     switch (target.tag) {
+      case 'offset':
+        return Math.abs(handle.scrollOffset - target.scrollOffset) <= 1;
       case 'bottom':
         return getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD;
       case 'top':
@@ -255,6 +287,62 @@ export function ThreadList(props: ThreadListProps) {
   const completeInitialScroll = (handle: VirtualizerHandle) => {
     setDidInitialScroll(true);
     emitScrollState(handle, false);
+    emitScrollSnapshot(handle);
+  };
+
+  const emitScrollSnapshot = (handle: VirtualizerHandle) => {
+    props.onScrollSnapshotChange?.({
+      scrollOffset: handle.scrollOffset,
+      virtualCache: handle.cache,
+      isNearBottom: getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD,
+    });
+  };
+
+  // Scroll to the newest message, then keep re-pinning to the true bottom for a
+  // short window so late-settling content can't leave the last message cut off.
+  // Aborts on a real scroll gesture (wheel up or touch drag), not on taps.
+  const pinToBottom = (handle: VirtualizerHandle): boolean => {
+    cancelPinToBottom?.();
+
+    const didScroll = scrollToTarget(handle, { tag: 'bottom', align: 'end' });
+    const el = scrollRef;
+    if (!didScroll || !el) return didScroll;
+
+    let rafId = 0;
+    const start = performance.now();
+
+    const stop = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerdown', onPointerDown);
+      if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
+    };
+
+    function onWheel(event: WheelEvent) {
+      if (event.deltaY < 0) stop();
+    }
+
+    // A press on a message, reply button, or reaction is not a scroll and must
+    // not cancel pinning. Only a wheel-up or a touch drag is the user scrolling.
+    function onPointerDown(event: PointerEvent) {
+      if (event.pointerType === 'touch') stop();
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: true });
+    el.addEventListener('pointerdown', onPointerDown, { passive: true });
+    cancelPinToBottom = stop;
+
+    const tick = () => {
+      if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
+      if (performance.now() - start >= SCROLL_TO_BOTTOM_SETTLE_MS) {
+        stop();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return true;
   };
 
   const createNavigation = (
@@ -278,8 +366,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToTop: (align = 'start') =>
       scrollToTarget(handle, { tag: 'top', align }),
 
-    scrollToBottom: (align = 'end') =>
-      scrollToTarget(handle, { tag: 'bottom', align }),
+    scrollToBottom: () => pinToBottom(handle),
 
     scrollToId: (id, opts = {}) =>
       scrollToTarget(handle, { tag: 'id', id, align: opts.align }),
@@ -301,11 +388,10 @@ export function ThreadList(props: ThreadListProps) {
     markUserIntent: scrollIntent.markUserIntent,
   });
 
-  function scrollOnMount(handle: VirtualizerHandle) {
-    if (initialScrollStarted) return;
-    initialScrollStarted = true;
-
-    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+  function beginInitialTargetScroll(
+    handle: VirtualizerHandle,
+    target: InitialScrollTarget
+  ) {
     initialScrollTarget = target;
 
     console.debug('ThreadList: scrollOnMount', {
@@ -316,7 +402,7 @@ export function ThreadList(props: ThreadListProps) {
       viewportSize: handle.viewportSize,
     });
 
-    const didScroll = scrollToTarget(handle, target);
+    const didScroll = scrollToInitialTarget(handle, target);
 
     if (!didScroll) {
       // Empty list or target not found — nothing to verify.
@@ -339,6 +425,28 @@ export function ThreadList(props: ThreadListProps) {
         completeInitialScroll(handle);
       }
     });
+  }
+
+  function scrollOnMount(handle: VirtualizerHandle) {
+    if (initialScrollStarted) return;
+    initialScrollStarted = true;
+
+    const snapshot = props.initialScrollSnapshot;
+    if (snapshot) {
+      if (snapshot.isNearBottom) {
+        beginInitialTargetScroll(handle, DEFAULT_INITIAL_SCROLL_TARGET);
+      } else {
+        beginInitialTargetScroll(handle, {
+          tag: 'offset',
+          scrollOffset: snapshot.scrollOffset,
+        });
+      }
+
+      return;
+    }
+
+    const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+    beginInitialTargetScroll(handle, target);
   }
 
   const handleScrollEnd = () => {
@@ -366,7 +474,10 @@ export function ThreadList(props: ThreadListProps) {
         distanceFromBottom: getDistanceFromBottom(handle),
       });
       requestAnimationFrame(() => {
-        const retryScrolled = scrollToTarget(handle, initialScrollTarget);
+        const retryScrolled = scrollToInitialTarget(
+          handle,
+          initialScrollTarget
+        );
         if (!retryScrolled) {
           // Target disappeared between mount and retry — finalize now since
           // no scroll events will fire to trigger another onScrollEnd.
@@ -424,6 +535,7 @@ export function ThreadList(props: ThreadListProps) {
     }
     previousScrollOffset = handle.scrollOffset;
     emitScrollState(handle, nextIsScrollingDown);
+    emitScrollSnapshot(handle);
 
     if (!didInitialScroll()) return;
 
@@ -447,6 +559,8 @@ export function ThreadList(props: ThreadListProps) {
       nearBottomFired = false;
     }
   };
+
+  onCleanup(() => cancelPinToBottom?.());
 
   return (
     <>
@@ -474,6 +588,7 @@ export function ThreadList(props: ThreadListProps) {
         />
         <div style="flex-grow: 1" />
         <Virtualizer
+          cache={props.initialScrollSnapshot?.virtualCache}
           ref={(ref) => {
             if (!ref) return;
             setVirtualHandle(ref);

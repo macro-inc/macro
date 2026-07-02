@@ -4640,6 +4640,16 @@
               }
             }
           },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -4676,11 +4686,19 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a markdown document.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
-                      "description": "The document ID of the created markdown document."
+                      "description": "The document ID of the created markdown document"
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -4820,11 +4838,15 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document"
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -4835,6 +4857,10 @@
                       "type": ["integer", "null"],
                       "format": "int32",
                       "description": "The task number assigned within the team."
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -8966,6 +8992,266 @@
           }
         }
       }
+    },
+    "/webhook/webhooks": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Create a webhook.",
+        "operationId": "create_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}": {
+      "delete": {
+        "tags": ["webhook"],
+        "summary": "Delete a webhook.",
+        "operationId": "delete_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook deleted"
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["webhook"],
+        "summary": "Patch a webhook.",
+        "operationId": "patch_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/webhooks/{webhook_id}/validate": {
+      "post": {
+        "tags": ["webhook"],
+        "summary": "Validate a webhook endpoint.",
+        "operationId": "validate_webhook",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "description": "Webhook id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateWebhookResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9934,6 +10220,10 @@
             "type": ["string", "null"],
             "description": "Display name for bot senders."
           },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "For an agent (bot) message, the id of the user who triggered it."
+          },
           "type": {
             "$ref": "#/components/schemas/ApiMessageSenderType",
             "description": "Sender type."
@@ -10085,6 +10375,15 @@
             "format": "date-time",
             "description": "When the reply was last updated."
           }
+        }
+      },
+      "BTreeMap": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "propertyNames": {
+          "type": "string"
         }
       },
       "BasicDocument": {
@@ -11134,6 +11433,13 @@
             },
             "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
           },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants."
+          },
           "root_sender_ids": {
             "type": "array",
             "items": {
@@ -11818,11 +12124,19 @@
       "CreateMarkdownDocumentResponse": {
         "type": "object",
         "description": "Response for creating a markdown document.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
-            "description": "The document ID of the created markdown document."
+            "description": "The document ID of the created markdown document"
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document"
+          },
+          "token": {
+            "type": "string",
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },
@@ -11925,11 +12239,15 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document"
           },
           "teamId": {
             "type": ["string", "null"],
@@ -11940,6 +12258,10 @@
             "type": ["integer", "null"],
             "format": "int32",
             "description": "The task number assigned within the team."
+          },
+          "token": {
+            "type": "string",
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },
@@ -12008,6 +12330,39 @@
           "config": {},
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "description": "Request to create a webhook.",
+        "required": ["scope", "name", "endpoint_url", "rule"],
+        "properties": {
+          "endpoint_url": {
+            "type": "string",
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers."
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Rule definition used to match events."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/WebhookScope",
+            "description": "Scope that owns the webhook."
           }
         }
       },
@@ -12340,6 +12695,7 @@
           "STRING",
           "SELECT_NUMBER",
           "SELECT_STRING",
+          "TAG",
           "ENTITY",
           "LINK"
         ]
@@ -13514,6 +13870,13 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "tag_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
           }
         }
       },
@@ -15559,6 +15922,45 @@
           }
         }
       },
+      "PatchWebhookRequest": {
+        "type": "object",
+        "description": "Request to patch a webhook.",
+        "properties": {
+          "endpoint_url": {
+            "type": ["string", "null"],
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BTreeMap",
+                "description": "Optional custom delivery headers. When present, replaces existing headers."
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Rule definition used to match events."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookStatus",
+                "description": "Webhook lifecycle status."
+              }
+            ]
+          }
+        }
+      },
       "PdfAnchor": {
         "oneOf": [
           {
@@ -16613,7 +17015,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-scoped property only",
+            "description": "User-scoped property.",
             "required": ["user_id", "scope"],
             "properties": {
               "scope": {
@@ -16627,40 +17029,22 @@
           },
           {
             "type": "object",
-            "description": "Organization-scoped property only",
-            "required": ["organization_id", "scope"],
+            "description": "Team-scoped property.",
+            "required": ["team_id", "scope"],
             "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
               "scope": {
                 "type": "string",
-                "enum": ["organization"]
+                "enum": ["team"]
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           },
           {
             "type": "object",
-            "description": "Both user and organization-scoped",
-            "required": ["user_id", "organization_id", "scope"],
-            "properties": {
-              "organization_id": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["user_and_organization"]
-              },
-              "user_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "System-owned property (no user or org owner)",
+            "description": "System-owned property (no user or team owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -16670,7 +17054,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
+        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -18444,6 +18828,9 @@
           }
         }
       },
+      "String": {
+        "type": "string"
+      },
       "SuccessResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -18848,6 +19235,31 @@
           }
         }
       },
+      "ValidateWebhookResponse": {
+        "type": "object",
+        "description": "Sanitized result of validating a webhook endpoint.",
+        "required": ["webhook_id", "is_valid"],
+        "properties": {
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the endpoint accepted the signed validation delivery."
+          },
+          "message": {
+            "type": ["string", "null"],
+            "description": "Sanitized message explaining validation failure."
+          },
+          "response_status": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "HTTP response status returned by the webhook endpoint, when available.",
+            "minimum": 0
+          },
+          "webhook_id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id that was validated."
+          }
+        }
+      },
       "View": {
         "type": "object",
         "required": [
@@ -18908,6 +19320,85 @@
             }
           }
         }
+      },
+      "Webhook": {
+        "type": "object",
+        "description": "Webhook row returned by application APIs.",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "endpoint_url",
+          "headers",
+          "status",
+          "is_valid",
+          "created_by_user_id",
+          "created_at",
+          "updated_at",
+          "rule"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "description": "User that created the webhook."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "endpoint_url": {
+            "type": "string",
+            "description": "HTTPS endpoint URL."
+          },
+          "headers": {
+            "$ref": "#/components/schemas/BTreeMap",
+            "description": "Custom delivery headers, after decryption by the repository."
+          },
+          "id": {
+            "$ref": "#/components/schemas/String",
+            "description": "Webhook id."
+          },
+          "is_valid": {
+            "type": "boolean",
+            "description": "Whether the current endpoint configuration has passed validation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "rule": {
+            "description": "Event matching rule."
+          },
+          "status": {
+            "$ref": "#/components/schemas/WebhookStatus",
+            "description": "Webhook lifecycle status."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Owning workspace id."
+          }
+        }
+      },
+      "WebhookScope": {
+        "type": "string",
+        "description": "Scope that owns a newly-created webhook.",
+        "enum": ["user", "team"]
+      },
+      "WebhookStatus": {
+        "type": "string",
+        "description": "Webhook lifecycle status.",
+        "enum": ["active", "paused", "disabled"]
       },
       "WithCallId": {
         "type": "object",

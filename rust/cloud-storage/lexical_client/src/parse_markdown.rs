@@ -51,6 +51,51 @@ impl MarkdownTarget {
     }
 }
 
+/// Markdown rendered in the compact embedding format ([`MarkdownTarget::Embedding`]):
+/// internal markdown with mentions reduced to display names plus their ids. This
+/// is the only format the task-dedup embedder should ever see, so it is a newtype
+/// rather than a bare `String` — the type is the guarantee.
+///
+/// There is deliberately no `From<String>`. Obtain one only from
+/// [`LexicalClient::get_embedding_markdown`] (the authoritative backend render)
+/// or [`EmbeddingMarkdown::from_client_trusted`] (when the frontend already
+/// rendered it with lexical-core's `markdownToEmbeddingText`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddingMarkdown(String);
+
+impl EmbeddingMarkdown {
+    /// Wraps markdown the client rendered in embedding format itself (lexical-core
+    /// `markdownToEmbeddingText`, the same output as the service's
+    /// `target=embedding`). Named to make the trust boundary explicit wherever a
+    /// caller vouches for client-supplied text instead of rendering it here.
+    pub fn from_client_trusted(markdown: String) -> Self {
+        Self(markdown)
+    }
+
+    /// An empty body, for tasks embedded by title alone (e.g. when the embedding
+    /// render is unavailable and we degrade to title-only rather than embed
+    /// wrong-format text).
+    pub fn empty() -> Self {
+        Self(String::new())
+    }
+
+    /// The underlying embedding-format text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the wrapper, returning the owned text.
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl AsRef<str> for EmbeddingMarkdown {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 impl From<LexicalResponseItem> for MarkdownParseResult {
     fn from(result: LexicalResponseItem) -> MarkdownParseResult {
         MarkdownParseResult {
@@ -92,6 +137,18 @@ impl LexicalClient {
         );
         let response: MarkdownResponse = self.get_json(&url).await?;
         Ok(response.data)
+    }
+
+    /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),
+    /// typed so callers can only consume it as an [`EmbeddingMarkdown`]. Prefer
+    /// this over [`get_markdown`](Self::get_markdown) with
+    /// [`MarkdownTarget::Embedding`] anywhere the result feeds task-dedup.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_embedding_markdown(&self, document_id: &str) -> Result<EmbeddingMarkdown> {
+        let markdown = self
+            .get_markdown(document_id, MarkdownTarget::Embedding)
+            .await?;
+        Ok(EmbeddingMarkdown(markdown))
     }
 
     #[tracing::instrument(skip(self), err)]

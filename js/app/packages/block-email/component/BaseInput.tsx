@@ -25,7 +25,10 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SCHEDULED_SEND,
+  ENABLE_EMAIL_SIGNATURES,
+} from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
@@ -70,6 +73,7 @@ import {
 import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
+  useEmailSignature,
   useNonPrimaryEmailLinkIdHeader,
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
@@ -129,6 +133,7 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
+import { SignaturePreview } from './compose/SignaturePreview';
 import {
   type EmailRecipient,
   markThreadDraftSaved,
@@ -451,6 +456,27 @@ export function BaseInput(props: {
     emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
       ?.email_address ?? userEmail();
 
+  // The full Link object for the sending inbox (for its saved signature and the
+  // "add to replies & forwards" preference).
+  const sendingLink = createMemo(() =>
+    emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
+  );
+  const signature = useEmailSignature(activeLinkId);
+  // Whether this reply includes the signature. Defaults on, reset per reply,
+  // and dismissable via the preview ✕.
+  const [includeSignature, setIncludeSignature] = createSignal(true);
+  // Signature HTML for the preview (and whether to show it): only for
+  // replies/forwards, when the inbox's "add to replies & forwards" setting is on
+  // and the user hasn't dismissed it. The backend does the actual injection on
+  // send — this just mirrors when that will happen.
+  const replySignatureHtml = (): string | undefined =>
+    ENABLE_EMAIL_SIGNATURES &&
+    props.replyingTo() &&
+    includeSignature() &&
+    sendingLink()?.settings.signature_on_replies_forwards
+      ? signature()
+      : undefined;
+
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
@@ -690,10 +716,7 @@ export function BaseInput(props: {
       !hasDraftContent(
         prepared.bodyText,
         form().subject(),
-        form().attachments.list().length,
-        form().recipients().to.length +
-          form().recipients().cc.length +
-          form().recipients().bcc.length
+        form().attachments.list().length
       )
     ) {
       return null;
@@ -720,6 +743,7 @@ export function BaseInput(props: {
       if (draftId) {
         await deleteDraftMutation.mutateAsync({
           draftId,
+          threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
         });
         refetchThreadMessages();
@@ -829,13 +853,18 @@ export function BaseInput(props: {
   // After a send, the bottom input stays mounted and its replyingTo flips to
   // the just-sent message once the thread refetches. Cancel the inhibited
   // post-send save and re-enable saves so a fresh edit under the new form
-  // context can be persisted.
+  // context can be persisted. The memo gates on the db_id *value*: replyingTo
+  // is recreated on every thread/draft refetch (e.g. after a debounced draft
+  // save), and resetting on those would resurrect a dismissed signature.
+  const replyingToDbId = createMemo(() => props.replyingTo()?.db_id);
   createEffect(
     on(
-      () => props.replyingTo()?.db_id,
+      replyingToDbId,
       () => {
         if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
         pendingSend = false;
+        // Each new reply starts with the signature included again.
+        setIncludeSignature(true);
       },
       { defer: true }
     )
@@ -1048,6 +1077,9 @@ export function BaseInput(props: {
         subject: form().subject(),
         thread_db_id: currentThread?.db_id,
         to,
+        // Replies/forwards follow the inbox's "add to replies & forwards"
+        // setting on the backend; only signal an explicit per-reply dismiss.
+        include_signature: includeSignature() ? undefined : false,
       },
       linkId: toHeaderLinkId(linkId),
     });
@@ -1092,6 +1124,7 @@ export function BaseInput(props: {
       if (draftId) {
         await deleteDraftMutation.mutateAsync({
           draftId,
+          threadId: ctx.thread()?.db_id,
           linkId: headerLinkId(),
         });
         refetchThreadMessages();
@@ -1766,7 +1799,18 @@ export function BaseInput(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-row w-full h-9 justify-between items-end px-2 pb-2 pt-0.5 space-x-2">
+        <Show when={replySignatureHtml()}>
+          {(html) => (
+            <SignaturePreview
+              html={html()}
+              onDismiss={() => setIncludeSignature(false)}
+            />
+          )}
+        </Show>
+        {/* No fixed height: the send button (size-7.5) is taller than the icon
+            buttons, and a fixed h-9 minus the vertical padding left it 4px short
+            — with items-end it bled upward over the signature bar above. */}
+        <div class="flex flex-row w-full justify-between items-end px-2 pb-2 pt-1.5 space-x-2">
           <div class="flex flex-row items-center gap-1">
             <div class="relative flex">
               <Button

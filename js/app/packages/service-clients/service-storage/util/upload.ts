@@ -7,7 +7,10 @@ import type { ResultError } from '@core/util/result';
 import { toaster } from '@kobalte/core/toast';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  DOCUMENT_NAME_TOO_LONG_CODE,
+  storageServiceClient,
+} from '@service-storage/client';
 import { filenameWithoutExtension } from '@service-storage/util/filename';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { storageWS } from '@service-storage/websocket';
@@ -18,6 +21,17 @@ import { uploadDocx } from './uploadDocx';
 const dismissToast = (toastId: number | null) => {
   if (toastId !== null) toaster.dismiss(toastId);
 };
+
+/**
+ * Thrown when the backend rejects a document name as too long. Carries the
+ * limit so the UI can render its own copy without hardcoding the number.
+ */
+export class DocumentNameTooLongError extends Error {
+  constructor(public readonly maxLength?: number) {
+    super('Document name too long');
+    this.name = 'DocumentNameTooLongError';
+  }
+}
 
 const uploadWithPresignedUrl = async (params: {
   presignedUrl: string;
@@ -73,6 +87,17 @@ export async function upload(
     toastId: number | null
   ) => {
     dismissToast(toastId);
+
+    if (Array.isArray(err) && err[0]?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
+      let maxLength: number | undefined;
+      try {
+        maxLength = (JSON.parse(err[0].message) as { maxLength?: number })
+          .maxLength;
+      } catch {
+        maxLength = undefined;
+      }
+      throw new DocumentNameTooLongError(maxLength);
+    }
 
     const isPaywallError = Array.isArray(err) && err[0].message.includes('403');
 

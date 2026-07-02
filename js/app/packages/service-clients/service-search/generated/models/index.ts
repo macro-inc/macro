@@ -171,8 +171,6 @@ export * from './propertyOwnerOneOf';
 export * from './propertyOwnerOneOfFive';
 export * from './propertyOwnerOneOfFiveScope';
 export * from './propertyOwnerOneOfScope';
-export * from './propertyOwnerOneOfSeven';
-export * from './propertyOwnerOneOfSevenScope';
 export * from './propertyOwnerOneOfThree';
 export * from './propertyOwnerOneOfThreeScope';
 export * from './propertyValue';

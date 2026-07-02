@@ -25,16 +25,10 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
 let MACRO_API_TOKENS = getMacroApiToken();
 
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
-  pulumi.interpolate`${internalApiKeyArn}`,
   MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
 ];
 

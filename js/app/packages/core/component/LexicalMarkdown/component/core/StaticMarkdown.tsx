@@ -24,6 +24,7 @@ import {
   type ImageNode,
   isSupportedLanguage,
   normalizedLanguage,
+  type PasteNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type ThemeMentionNode,
@@ -80,6 +81,7 @@ import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention
 import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
+import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
 import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
@@ -686,6 +688,16 @@ const DocumentCard: RenderableEntity<DocumentCardNode> = {
   },
 };
 
+const Paste: RenderableEntity<PasteNode> = {
+  guard: (node: LexicalNode): node is PasteNode => node.__type === 'paste',
+  render: (props) =>
+    PasteNodeDecorator({
+      ...props.node.exportComponentProps(),
+      key: props.node.getKey(),
+      theme: props.theme,
+    }),
+};
+
 // Table rendering components for Lexical tables
 const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
@@ -769,6 +781,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ThemeMention,
   UnknownMention,
   Watermark,
+  Paste,
 ] as const;
 
 const Elements: RenderableElement[] = [

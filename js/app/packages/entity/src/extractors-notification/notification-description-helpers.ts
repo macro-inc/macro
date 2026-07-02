@@ -17,6 +17,44 @@ export function getUniqueSenderIds(notifications: Notification[]): string[] {
 }
 
 /**
+ * GitHub PR notifications are triggered by GitHub users who usually aren't Macro
+ * users, so `sender_id` is empty. Their GitHub login lives in the notification
+ * metadata instead. Pull it out so the description can name who acted.
+ * @internal
+ */
+export function getGithubSenderLogin(
+  notification: Notification
+): string | undefined {
+  const metadata = notification.notification_metadata;
+  const content = (metadata as { content?: unknown }).content;
+  if (
+    content &&
+    typeof content === 'object' &&
+    'senderGithubLogin' in content
+  ) {
+    const login = (content as { senderGithubLogin?: string | null })
+      .senderGithubLogin;
+    return login ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Gets unique GitHub sender logins from a notification stack, preserving order.
+ * @internal
+ */
+export function getUniqueGithubLogins(notifications: Notification[]): string[] {
+  const logins = new Set<string>();
+  for (const notification of notifications) {
+    const login = getGithubSenderLogin(notification);
+    if (login) {
+      logins.add(login);
+    }
+  }
+  return Array.from(logins);
+}
+
+/**
  * Gets the action verb for a notification type
  * @internal
  */

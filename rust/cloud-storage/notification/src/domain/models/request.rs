@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 /// User-facing notification categories used for list filtering.
 #[allow(missing_docs)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum NotificationItemType {
@@ -49,7 +49,7 @@ impl NotificationItemType {
 }
 
 /// User-facing reference to one specific entity to filter notifications by.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tool", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationEntityRef {

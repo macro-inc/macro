@@ -1,7 +1,6 @@
 //! Conversion utilities for mapping Gmail API responses to service layer models.
 
 mod payload;
-mod sanitizer;
 
 pub mod contact;
 pub mod history;

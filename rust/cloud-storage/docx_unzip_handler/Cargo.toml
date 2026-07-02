@@ -42,4 +42,5 @@ urlencoding = { workspace = true }
 zip = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 

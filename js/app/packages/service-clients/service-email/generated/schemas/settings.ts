@@ -4,8 +4,13 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SettingsSignature } from './settingsSignature';
 import type { SettingsSignatureOnRepliesForwards } from './settingsSignatureOnRepliesForwards';
 
 export interface Settings {
+  /** The user's email signature content (HTML). On a patch, omit or send
+`null` to leave unchanged (both deserialize to `None`); pass an empty
+string to clear it. The column cannot be set to SQL NULL via patch. */
+  signature?: SettingsSignature;
   signature_on_replies_forwards?: SettingsSignatureOnRepliesForwards;
 }

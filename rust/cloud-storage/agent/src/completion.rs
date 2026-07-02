@@ -1,21 +1,14 @@
-/// One-shot completion — send a prompt and get a string response.
-use crate::model::router::{AllModelsRouter, RoutedModel};
-use crate::model::types::Model;
-use crate::provider_env;
+//! One-shot completion — send a prompt and get a string response.
+//!
+//! This is the non-streaming API layer: routing only resolves a model, and the
+//! actual prompting lives here.
+use crate::model::router::{ModelRouter, RoutedModel};
 use ai_usage::{UsageContext, UsageRecorder};
-use rig_core::agent::PromptResponse;
+use rig_core::agent::{AgentBuilder, PromptResponse};
 use rig_core::completion::{CompletionModel, Prompt};
 use rig_core::message::Message;
-use std::sync::Arc;
 
-/// Build a router over provider clients from `APP_SECRETS_JSON` or the environment.
-///
-/// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
-fn env_router() -> anyhow::Result<AllModelsRouter> {
-    let anthropic = Arc::new(provider_env::anthropic_client_from_env()?);
-    let openai = Arc::new(provider_env::openai_client_from_env()?);
-    Ok(AllModelsRouter::new(anthropic, openai))
-}
+const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
 
 /// Send a system prompt + user message and return the model's text response.
 ///
@@ -34,11 +27,16 @@ pub async fn complete<M: ToString>(
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
     let model = model.to_string();
-    let response = match env_router()?.route_or_default(&model) {
+    let response = match ModelRouter::shared()?.route_or_default(&model) {
         RoutedModel::Anthropic(m) => {
             prompt_once(m.completion(), system_prompt, user_message).await?
         }
-        RoutedModel::OpenAi(m) => prompt_once(m.completion(), system_prompt, user_message).await?,
+        RoutedModel::OpenAiChatCompletions(m) => {
+            prompt_once(m.completion(), system_prompt, user_message).await?
+        }
+        RoutedModel::OpenAiResponses(m) => {
+            prompt_once(m.completion(), system_prompt, user_message).await?
+        }
     };
     record(recorder, ctx, model, &response);
     Ok(response.output)
@@ -57,11 +55,14 @@ pub async fn complete_with_history<M: ToString>(
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
     let model = model.to_string();
-    let response = match env_router()?.route_or_default(&model) {
+    let response = match ModelRouter::shared()?.route_or_default(&model) {
         RoutedModel::Anthropic(m) => {
             prompt_with_history(m.completion(), system_prompt, messages).await?
         }
-        RoutedModel::OpenAi(m) => {
+        RoutedModel::OpenAiChatCompletions(m) => {
+            prompt_with_history(m.completion(), system_prompt, messages).await?
+        }
+        RoutedModel::OpenAiResponses(m) => {
             prompt_with_history(m.completion(), system_prompt, messages).await?
         }
     };
@@ -83,27 +84,30 @@ fn record(
     ));
 }
 
+/// Build a toolless agent and prompt it with a single user message.
 async fn prompt_once<M: CompletionModel + 'static>(
     completion_model: M,
     system_prompt: &str,
     user_message: &str,
 ) -> anyhow::Result<PromptResponse> {
-    let agent = rig_core::agent::AgentBuilder::new(completion_model)
+    let agent = AgentBuilder::new(completion_model)
         .preamble(system_prompt)
-        .max_tokens(16_000)
+        .max_tokens(ONE_SHOT_MAX_TOKENS)
         .build();
 
     Ok(agent.prompt(user_message).extended_details().await?)
 }
 
+/// Build a toolless agent and prompt it with the last message of `messages`,
+/// using the rest as history.
 async fn prompt_with_history<M: CompletionModel + 'static>(
     completion_model: M,
     system_prompt: &str,
     messages: Vec<Message>,
 ) -> anyhow::Result<PromptResponse> {
-    let agent = rig_core::agent::AgentBuilder::new(completion_model)
+    let agent = AgentBuilder::new(completion_model)
         .preamble(system_prompt)
-        .max_tokens(16_000)
+        .max_tokens(ONE_SHOT_MAX_TOKENS)
         .build();
 
     let Some((prompt, history)) = messages.split_last() else {

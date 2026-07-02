@@ -5,12 +5,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use documents_hex::domain::permission_token::encode_permission_token;
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
+use model::{response::ErrorResponse, user::UserContext};
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
-use std::time::{SystemTime, UNIX_EPOCH};
 use utoipa::ToSchema;
 
 use crate::api::context::ApiContext;
@@ -49,40 +49,22 @@ pub async fn handler(
     users_access_level: DocumentAccessExtractor<ViewAccessLevel, EntityAccessService>,
     Path(Params { document_id }): Path<Params>,
 ) -> Result<Response, Response> {
-    // Get the current time
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as usize;
-
     let user_id = if user_context.user_id.is_empty() {
         None
     } else {
         Some(user_context.user_id.clone())
     };
 
-    let document_permissions_token = DocumentPermissionsToken {
-        user_id,
-        document_id,
-        access_level: match users_access_level.entity_access_receipt.entity_permission() {
-            EntityPermission::AccessLevel { access_level } => *access_level,
-            _ => AccessLevel::View,
-        },
-        exp: now + 3600, // Token expires in 1 hour
-        iss: "document_storage_service".to_string(),
+    let access_level = match users_access_level.entity_access_receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        _ => AccessLevel::View,
     };
 
-    let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
-    let token = jsonwebtoken::encode(
-        &header,
-        &document_permissions_token,
-        &jsonwebtoken::EncodingKey::from_secret(
-            state
-                .config
-                .document_permission_jwt_secret_key
-                .as_ref()
-                .as_bytes(),
-        ),
+    let token = encode_permission_token(
+        user_id,
+        document_id,
+        access_level,
+        state.config.document_permission_jwt_secret_key.as_ref(),
     )
     .map_err(|e| {
         tracing::error!(error=?e, "unable to encode jwt");

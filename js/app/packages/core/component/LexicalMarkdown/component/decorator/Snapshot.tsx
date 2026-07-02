@@ -16,15 +16,12 @@ import TrashSimple from '@phosphor/trash-simple.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import {
-  $getNodeByKey,
-  COMMAND_PRIORITY_NORMAL,
-  KEY_ENTER_COMMAND,
-} from 'lexical';
+import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import type { JSX } from 'solid-js';
 import { createMemo, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
+import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 
@@ -108,12 +105,8 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
   }
 
   const deleteSnapshot = () => {
-    editor?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isSnapshotNode(node)) return false;
-      node.remove();
-      return true;
-    });
+    if (!editor) return;
+    removeNodeAndRestoreSelection(editor, props.key, $isSnapshotNode);
   };
 
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {

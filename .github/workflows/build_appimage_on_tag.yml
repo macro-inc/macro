@@ -1,0 +1,166 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/build_appimage_on_tag.rs
+name: Build AppImage
+'on':
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to check out and build
+        required: true
+        type: string
+jobs:
+  build-appimage:
+    name: Build AppImage
+    runs-on: namespace-profile-linux-rust-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ inputs.ref }}
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Configure Cachix fallback
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ inputs.ref }}
+    - name: Build AppImage with Nix
+      run: |
+        set -euo pipefail
+        cachix_pid=
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+          cachix_pid=$!
+          trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+        fi
+        restart_nix_daemon() {
+          echo "::warning::Restarting nix-daemon before retrying AppImage build."
+          sudo systemctl restart nix-daemon.service 2>/dev/null || true
+          sudo pkill -x nix-daemon 2>/dev/null || true
+          sudo rm -f /nix/var/nix/daemon-socket/socket
+          sudo mkdir -p /nix/var/nix/daemon-socket
+          sudo sh -c 'nohup /nix/var/nix/profiles/default/bin/nix-daemon >/tmp/nix-daemon-retry.log 2>&1 &'
+          for _ in $(seq 1 30); do
+            if sudo test -S /nix/var/nix/daemon-socket/socket; then
+              return 0
+            fi
+            sleep 1
+          done
+          echo "nix-daemon failed to restart; log follows:" >&2
+          sudo cat /tmp/nix-daemon-retry.log >&2 || true
+          return 1
+        }
+
+        build_appimage() {
+          local attempt="$1"
+          local -a fallback_args=()
+          if [ "$attempt" -eq 3 ]; then
+            fallback_args=(--fallback)
+          fi
+
+          # Force a hermetic Nix sandbox for linuxdeploy. Namespace's restored
+          # Nix daemon can otherwise run unsandboxed under /nix/var/nix/builds,
+          # where linuxdeploy sees host libraries/tools and can fail with only
+          # `failed to run linuxdeploy` in Tauri's default output.
+          nix build \
+            "${fallback_args[@]}" \
+            --option sandbox true \
+            --option sandbox-build-dir /build \
+            --option download-attempts 10 \
+            --print-build-logs \
+            ".#tauri-desktop-appimage"
+        }
+
+        for attempt in 1 2 3; do
+          if build_appimage "$attempt"; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            exit 1
+          fi
+          echo "::warning::AppImage nix build failed on attempt $attempt; retrying."
+          restart_nix_daemon
+          sleep $((attempt * 10))
+        done
+        if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+          cachix push "$CACHIX_CACHE_NAME" result || echo "::warning::Failed to push AppImage result closure to Cachix."
+        fi
+      shell: bash
+    - name: Collect AppImage artifact
+      run: |
+        set -euo pipefail
+        mkdir -p artifacts
+        shopt -s nullglob
+        appimages=(result/*.AppImage)
+        if [ "${#appimages[@]}" -eq 0 ]; then
+          echo "No AppImage files found in nix build result" >&2
+          find -L result -maxdepth 2 -type f -print >&2 || true
+          exit 1
+        fi
+        cp -v "${appimages[@]}" artifacts/
+        chmod 0755 artifacts/*.AppImage
+        (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
+      shell: bash
+    - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-appimage-${{ steps.metadata.outputs.safe_tag }}
+        path: artifacts/*
+        if-no-files-found: error
+        retention-days: '30'
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  publish-appimage:
+    needs:
+    - build-appimage
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - id: metadata
+      name: Derive artifact metadata
+      run: |
+        set -euo pipefail
+        tag="${RAW_REF#refs/tags/}"
+        if [ -z "$tag" ]; then
+          tag="${GITHUB_REF_NAME:-untagged}"
+        fi
+        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ inputs.ref }}
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: release-artifacts
+        merge-multiple: 'true'
+    - name: Upload Release Artifacts
+      if: startsWith(steps.metadata.outputs.tag, 'v')
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+      with:
+        tag_name: ${{ steps.metadata.outputs.tag }}
+        files: release-artifacts/*
+        fail_on_unmatched_files: 'true'

@@ -137,9 +137,9 @@ Heavy use of AWS services:
 - DynamoDB for connection tracking
 - OpenSearch for search capabilities
 
-### Environment Variables
-
-When adding new environment variables for a service or Lambda, also update the related `infra/stacks/<STACK>` configuration for that item so the variable is provisioned in the deployed environment.
+###
+Environment variables are managed in doppler. New env vars should be added to doppler. All environment variables should
+_always_ be loaded with the macros in the macro_env_var crate. They should never be loaded with std::env::var.
 
 ## Development Notes
 

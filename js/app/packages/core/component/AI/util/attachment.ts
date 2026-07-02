@@ -1,6 +1,6 @@
 import { SUPPORTED_IMAGE_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { FileType as FileTypeMap } from '@service-cognition/generated/schemas/fileType';
-import type { AttachmentMetadata, AttachmentPreview, FileType } from '../types';
+import type { AttachmentPreview, FileType } from '../types';
 
 const FILE_TYPE_SET = new Set(Object.keys(FileTypeMap));
 
@@ -25,15 +25,4 @@ export const isImageAttachment = (attachment: AttachmentPreview) => {
     return false;
   }
   return false;
-};
-
-// returns true for dss image and false for sfs image
-export const isDssImage = (
-  attachment: AttachmentPreview
-): attachment is {
-  entity_type: 'document';
-  metadata: Extract<AttachmentMetadata, { type: 'document' }>;
-} => {
-  if (!isImageAttachment(attachment)) return false;
-  return attachment.metadata?.type === 'document';
 };

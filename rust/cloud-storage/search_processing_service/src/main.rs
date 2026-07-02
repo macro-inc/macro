@@ -12,10 +12,9 @@ use anyhow::Context;
 use config::{Config, Environment};
 use lexical_client::LexicalClient;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
+#[cfg(feature = "pdf")]
 use rust_embed::RustEmbed;
-use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -56,6 +55,7 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
     }
 }
 
+#[cfg(feature = "pdf")]
 #[allow(dead_code)]
 #[derive(RustEmbed)]
 #[folder = "pdfium-lib/linux/"]
@@ -71,8 +71,9 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
+    let search_event_queue = macro_queues::SearchEventQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.search_event_queue);
+        .search_event_queue(&search_event_queue);
 
     let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
@@ -107,8 +108,6 @@ async fn main() -> anyhow::Result<()> {
         return Err(e);
     }
 
-    let internal_auth_key = LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?);
-
     // Backfills run against the read-replica when available so they don't
     // contend with writes on the primary. Queue workers always read from the
     // primary because replica lag would cause them to miss rows they are
@@ -136,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         use std::sync::Arc;
 
         // Ensures that pdfium binary exists so we can kill the container early on failure
+        #[cfg(feature = "pdf")]
         if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
             anyhow::bail!("libpdfium.so is missing");
         } else {
@@ -143,13 +143,13 @@ async fn main() -> anyhow::Result<()> {
         }
 
         let lexical_client = LexicalClient::new(
-            internal_auth_key.as_ref().to_string(),
+            config.internal_api_key.to_string(),
             config.lexical_service_url.clone(),
         );
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.search_event_queue.to_string(),
+            search_event_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
@@ -179,9 +179,9 @@ async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(ApiContext {
         db,
+        internal_api_key: config.internal_api_key.clone(),
         sqs_client,
         opensearch_client: Arc::new(opensearch_client),
-        internal_auth_key,
         config: Arc::new(config),
         backfill_service,
         backfill_jobs,

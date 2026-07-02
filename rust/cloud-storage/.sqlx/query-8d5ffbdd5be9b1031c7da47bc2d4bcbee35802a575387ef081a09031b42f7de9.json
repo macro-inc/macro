@@ -28,7 +28,8 @@
                 "SELECT_NUMBER",
                 "SELECT_STRING",
                 "ENTITY",
-                "LINK"
+                "LINK",
+                "TAG"
               ]
             }
           }

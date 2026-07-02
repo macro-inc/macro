@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
 
 use super::response::DocumentResponse;
@@ -40,9 +41,19 @@ pub enum DocumentError {
     /// A bad request was made.
     #[error("bad request: {0}")]
     BadRequest(String),
+    /// The provided document name exceeds the maximum allowed length.
+    #[error("name too long")]
+    NameTooLong {
+        /// Maximum allowed name length, in grapheme clusters.
+        max: usize,
+    },
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+    /// JWT encoding failed.
+    #[cfg(feature = "axum")]
+    #[error(transparent)]
+    JwtEncoding(#[from] jsonwebtoken::errors::Error),
 }
 
 /// Response wrapper for the copy document endpoint.
@@ -403,8 +414,12 @@ pub struct CreateMarkdownDocumentRequest {
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
-    /// The document ID of the created markdown document.
+    /// The document ID of the created markdown document
     pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
 }
 
 /// Request body for creating a task.
@@ -436,6 +451,10 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskResponse {
     /// The document ID of the created task.
     pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
     /// The team this task number is scoped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<uuid::Uuid>,

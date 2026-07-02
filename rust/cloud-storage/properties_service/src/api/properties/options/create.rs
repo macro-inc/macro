@@ -7,7 +7,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::PropertiesHandlerState;
+use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use models_properties::api::AddPropertyOptionRequest;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -70,11 +70,12 @@ impl IntoResponse for AddPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(property_id = %property_uuid, request = ?request), err)]
+#[tracing::instrument(skip(state, user_context, team), fields(property_id = %property_uuid, request = ?request), err)]
 pub async fn add_property_option(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
     tracing::info!("adding property option");
@@ -99,7 +100,7 @@ pub async fn add_property_option(
         &state.db,
         property_uuid,
         &user_context.user_id,
-        user_context.organization_id,
+        caller_team_id(&team),
     )
     .await
     .inspect_err(|e| {
@@ -128,22 +129,43 @@ pub async fn add_property_option(
         return Err(AddPropertyOptionErr::InvalidRequest(err.to_string()));
     }
 
-    let (display_order, option_value) = match &request {
+    let (display_order, option_value, color) = match &request {
         AddPropertyOptionRequest::SelectString { option } => (
             option.display_order,
             PropertyOptionValue::String(option.value.clone()),
+            option.color.clone(),
         ),
         AddPropertyOptionRequest::SelectNumber { option } => (
             option.display_order,
             PropertyOptionValue::Number(option.value),
+            None,
         ),
     };
+
+    if color.is_some() && property_definition.data_type != models_properties::DataType::Tag {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "color is only supported on tag options".to_string(),
+        ));
+    }
+    if let Some(color) = &color
+        && !models_properties::api::is_valid_hex_color(color)
+    {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "color must be a hex string like #RRGGBB".to_string(),
+        ));
+    }
+    if property_definition.data_type == models_properties::DataType::Tag && color.is_none() {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "tag options require a color".to_string(),
+        ));
+    }
 
     let option = property_options_insert::create_property_option(
         &state.db,
         property_uuid,
         display_order,
         option_value,
+        color,
     )
     .await
     .inspect_err(|e| {

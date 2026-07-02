@@ -35,7 +35,9 @@ services:
     networks:
       - databases
   search:
-    image: opensearchproject/opensearch:latest
+    build:
+      context: ./infra/local/opensearch
+    image: macro-local-opensearch:dev
     environment:
       cluster.name: search 
       discovery.type: single-node

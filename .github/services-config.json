@@ -82,11 +82,15 @@
     },
     "document-cognition-service": {
       "source_paths": [
-        "rust/cloud-storage/document_cognition_service/**"
+        "rust/cloud-storage/document_cognition_service/**",
+        "rust/cloud-storage/ai_projections_refresh_handler/**"
       ],
       "stack_path": "infra/stacks/document-cognition-service/**",
       "deploy_binaries": [
         "document_cognition_service"
+      ],
+      "deploy_lambdas": [
+        "ai_projections_refresh_handler"
       ]
     },
     "document-storage-service": {

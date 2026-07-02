@@ -10,7 +10,6 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/boo
 type EnvVars = {
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
-  SEARCH_EVENT_QUEUE: pulumi.Output<string> | string;
   DOCUMENT_STORAGE_SERVICE_URL: pulumi.Output<string> | string;
   DOCUMENT_STORAGE_SERVICE_AUTH_KEY: pulumi.Output<string> | string;
 };

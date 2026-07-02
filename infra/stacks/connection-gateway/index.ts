@@ -17,31 +17,10 @@ export const connectionGatewayTable: {
   policy: aws.iam.Policy;
 } = getConnectionGatewayTable();
 
-const LEGACY_JWT_SECRET = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get(`legacy_jwt_secret_key`) ?? '',
-  })
-  .apply((secret) => secret.secretString);
-
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
-
-const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
-
-const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: fusionauthClientIdSecretKey,
-  })
-  .apply((secret) => secret.secretString);
-const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
-
-const INTERNAL_AUTH_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get(`internal_auth_key`) ?? '',
-  })
-  .apply((secret) => secret.secretString);
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
@@ -94,49 +73,6 @@ const connectionGateway = new ConnectionGateway(`connection-gateway-${stack}`, {
     {
       name: 'ENVIRONMENT',
       value: stack,
-    },
-    {
-      name: 'RUST_LOG',
-      value: `connection_gateway=${
-        stack === 'prod' ? 'info' : 'trace'
-      },tower_http=debug,frecency=warn`,
-    },
-    {
-      name: 'LEGACY_JWT_SECRET',
-      value: pulumi.interpolate`${LEGACY_JWT_SECRET}`,
-    },
-    {
-      name: 'INTERNAL_API_SECRET_KEY',
-      value: pulumi.interpolate`${INTERNAL_AUTH_KEY}`,
-    },
-    { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
-    {
-      name: 'JWT_SECRET_KEY',
-      value: pulumi.interpolate`${JWT_SECRET_KEY}`,
-    },
-    {
-      name: 'AUDIENCE',
-      value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-    },
-    {
-      name: 'CONNECTION_GATEWAY_TABLE',
-      value: pulumi.interpolate`${connectionGatewayTable.table.name}`,
-    },
-    {
-      name: 'REDIS_HOST',
-      value: pulumi.interpolate`redis://${connectionGatewayRedis.endpoint}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_ISSUER',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenIssuer}`,
-    },
-    {
-      name: 'MACRO_API_TOKEN_PUBLIC_KEY',
-      value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
-    },
-    {
-      name: 'MACRO_DB_URL',
-      value: pulumi.interpolate`${MACRO_DB_URL}`,
     },
     // OpenTelemetry / Datadog tracing configuration
     {

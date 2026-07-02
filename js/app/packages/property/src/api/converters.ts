@@ -64,7 +64,11 @@ export function entityPropertyFromApi(
   };
 
   const propertyValue = apiProperty.value;
-  const valueType = apiProperty.definition.data_type as ValueType;
+  const valueType = (
+    apiProperty.definition.data_type === 'TAG'
+      ? 'SELECT_STRING'
+      : apiProperty.definition.data_type
+  ) as ValueType;
 
   // Handle each value type with proper type checking
   switch (valueType) {

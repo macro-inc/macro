@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
@@ -20,7 +21,9 @@ import {
   isCommandItem,
   isEntityItem,
   isSearchItem,
+  isUserItem,
   type SearchItem,
+  type UserItem,
 } from './useCommandItems';
 
 interface CommandItemProps {
@@ -148,6 +151,26 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
+function UserDisplay(props: { item: UserItem }) {
+  const name = () => props.item.data.name;
+  const email = () => props.item.data.email;
+  const showEmail = () => Boolean(name()) && name() !== email();
+
+  return (
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <div class="size-5 flex items-center justify-center shrink-0">
+        <UserIcon id={props.item.id} size="sm" isDeleted={false} />
+      </div>
+      <span class="truncate">
+        <Show when={showEmail()} fallback={email()}>
+          {name()}
+          <span class="ml-[0.5em] opacity-50">{email()}</span>
+        </Show>
+      </span>
+    </div>
+  );
+}
+
 function SearchDisplay(props: { item: SearchItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -188,6 +211,9 @@ function ItemDisplay(props: { item: CommandMenuItem }) {
       </Match>
       <Match when={isEntityItem(props.item) && props.item}>
         {(item) => <EntityDisplay entity={item().data} />}
+      </Match>
+      <Match when={isUserItem(props.item) && props.item}>
+        {(item) => <UserDisplay item={item()} />}
       </Match>
     </Switch>
   );

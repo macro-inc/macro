@@ -2,7 +2,7 @@ use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_env::Environment;
 use macro_env_var::{env_var, env_vars, maybe_env_var};
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use std::sync::LazyLock;
 
 // We load this through `macro_config` at startup as part of [`Config`]. This lazy is retained for
@@ -18,10 +18,6 @@ env_vars! {
     #[derive(Debug, Clone)]
     pub(crate) struct BaseUrl;
     #[derive(Debug, Clone)]
-    pub(crate) struct NotificationQueue;
-    #[derive(Debug, Clone)]
-    pub(crate) struct NotificationIngressQueue;
-    #[derive(Debug, Clone)]
     pub(crate) struct AppleBundleId;
     #[derive(Debug, Clone)]
     pub(crate) struct SnsApnsPlatformArn;
@@ -29,8 +25,6 @@ env_vars! {
     pub(crate) struct SnsFcmPlatformArn;
     #[derive(Debug, Clone)]
     pub(crate) struct SenderBaseAddress;
-    #[derive(Debug, Clone)]
-    pub(crate) struct PushNotificationEventHandlerQueue;
     #[derive(Debug, Clone)]
     pub(crate) struct LastOnlineRedisUri;
 }
@@ -58,8 +52,8 @@ pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub(crate) database_url: DatabaseUrl,
 
-    /// Internal API secret key name/value.
-    pub(crate) internal_api_secret_key: InternalApiSecretKey,
+    /// Internal API key.
+    pub(crate) internal_api_key: InternalApiKey,
 
     /// Secret name/value for digest unsubscribe URL signing.
     pub(crate) url_signing_hmac: UrlSigningHmac,
@@ -80,12 +74,6 @@ pub struct Config {
     #[macro_config_default(4)]
     pub(crate) notification_queue_wait_time_seconds: i32,
 
-    /// The SQS queue for egress notification delivery.
-    pub(crate) notification_queue: NotificationQueue,
-
-    /// The SQS queue for ingress notification creation.
-    pub(crate) notification_ingress_queue: NotificationIngressQueue,
-
     /// Redis used by notification-service for digest batching, rate limiting, etc.
     pub(crate) redis_uri: RedisUri,
 
@@ -103,9 +91,6 @@ pub struct Config {
 
     /// The SNS iOS VoIP platform ARN (APNS_VOIP). Optional locally.
     pub(crate) sns_apns_voip_platform_arn: SnsApnsVoipPlatformArn,
-
-    /// The push notification event handler queue.
-    pub(crate) push_notification_event_handler_queue: PushNotificationEventHandlerQueue,
 }
 
 impl Config {

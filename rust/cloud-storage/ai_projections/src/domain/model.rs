@@ -82,6 +82,17 @@ impl FromStr for RefreshCadence {
     }
 }
 
+impl Expiry {
+    /// The duration after which a freshly materialized projection becomes stale.
+    pub fn to_duration(self) -> chrono::Duration {
+        match self {
+            Expiry::Day => chrono::Duration::days(1),
+            Expiry::Week => chrono::Duration::days(7),
+            Expiry::Month => chrono::Duration::days(30),
+        }
+    }
+}
+
 impl Display for Expiry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -251,6 +262,9 @@ pub enum AiProjectionError {
     /// A stored value could not be parsed into a domain type.
     #[error("invalid stored data: {0}")]
     InvalidStoredData(#[from] ParseEnumError),
+    /// Generating the projection result via the AI toolset failed.
+    #[error("generation failed: {0}")]
+    Generation(String),
     /// Storage layer error.
     #[error("storage layer error: {0}")]
     StorageLayerError(#[from] anyhow::Error),

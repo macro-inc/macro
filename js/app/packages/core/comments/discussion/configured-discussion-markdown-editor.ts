@@ -38,6 +38,7 @@ export function createConfiguredDiscussionMarkdownEditor(
       onCreate: options.onMentionCreate,
       onRemove: options.onMentionRemove,
       users: options.users,
+      disableMentionTracking: true,
     });
   }
 

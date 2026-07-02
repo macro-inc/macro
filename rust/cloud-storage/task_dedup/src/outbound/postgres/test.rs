@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use embedding::embedding_provider::openai::DIMS;
-use embedding::{Content, Embeddable, EmbeddingModel, LabeledEmbedding};
+use embedding::{
+    Content, Embeddable, EmbeddingModel, LabeledEmbedding, RerankModel, Reranked, SearchResults,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
 use super::*;
+use crate::EmbeddingMarkdown;
 use crate::domain::models::NewTask;
 use crate::domain::ports::TaskDedupNotifier;
-use crate::domain::service::{TaskDedupConfig, TaskDedupService};
+use crate::domain::service::TaskDedupService;
 use crate::outbound::judge::LocalDuplicateJudge;
-use crate::outbound::reranker::NoOpReranker;
 
 const OWNER: &str = "macro|user@user.com";
 const TEAM_ID: Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
@@ -19,6 +21,35 @@ const TASK_TWO: &str = "d1000000-0000-0000-0000-000000000002";
 const TASK_THREE: &str = "d1000000-0000-0000-0000-000000000003";
 
 type TestService = TaskDedupService<DIMS, LocalEmbedder, PgTaskVectorDb, NoOpReranker>;
+
+/// Test-only reranker that preserves the upstream vector-similarity ordering,
+/// carrying each candidate's best vector score through unchanged, so these
+/// tests exercise the store rather than a reranking model.
+#[derive(Clone, Copy)]
+struct NoOpReranker;
+
+impl<const D: usize> RerankModel<D> for NoOpReranker {
+    async fn rerank<'a, T: Send>(
+        &self,
+        _query: Content<'a>,
+        candidates: Vec<SearchResults<T, D>>,
+    ) -> anyhow::Result<Vec<Reranked<T>>> {
+        Ok(candidates
+            .into_iter()
+            .map(|result| {
+                let score = result
+                    .matches
+                    .iter()
+                    .map(|matched| matched.score)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                Reranked {
+                    item: result.metadata,
+                    score,
+                }
+            })
+            .collect())
+    }
+}
 
 struct NoopNotifier;
 
@@ -85,7 +116,6 @@ fn local_embedding(text: &str) -> [f32; DIMS] {
 
 fn service(pool: PgPool) -> TestService {
     TaskDedupService::new(
-        TaskDedupConfig::default(),
         LocalEmbedder,
         PgTaskVectorDb::new(pool.clone()),
         NoOpReranker,
@@ -203,7 +233,7 @@ fn detection_task(document_id: &str) -> NewTask {
         owner: OWNER.to_string(),
         team_id: Some(TEAM_ID),
         title: DETECTION_TITLE.to_string(),
-        markdown: DETECTION_BODY.to_string(),
+        markdown: EmbeddingMarkdown::from_client_trusted(DETECTION_BODY.to_string()),
     }
 }
 
@@ -307,7 +337,7 @@ async fn cross_field_match_query_title_to_stored_body(pool: PgPool) {
             // query title == TASK_TWO body
             "echo foxtrot golf hotel",
             // query body matches nothing
-            "india juliet kilo lima",
+            &EmbeddingMarkdown::from_client_trusted("india juliet kilo lima".to_string()),
         )
         .await
         .unwrap();
@@ -470,7 +500,12 @@ async fn similarity_search_returns_similar_without_persisting(pool: PgPool) {
 
     let service = service(pool.clone());
     let results = service
-        .similarity_search(OWNER, Some(TEAM_ID), DETECTION_TITLE, DETECTION_BODY)
+        .similarity_search(
+            OWNER,
+            Some(TEAM_ID),
+            DETECTION_TITLE,
+            &EmbeddingMarkdown::from_client_trusted(DETECTION_BODY.to_string()),
+        )
         .await
         .unwrap();
 

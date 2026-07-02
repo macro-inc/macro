@@ -39,8 +39,15 @@ const REPLY4: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
 const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000a004);
 const USER_A: &str = "macro|user-a@test.com";
 const USER_B: &str = "macro|user-b@test.com";
+const USER_C: &str = "macro|user-c@test.com";
 const NON_MEMBER: &str = "macro|user-d@test.com";
+const USER_E: &str = "macro|user-e@test.com";
 const LEFT_USER: &str = "macro|left-user@test.com";
+// Participant-filter fixture threads in ch4 (see channels_repo.sql).
+const T41: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000041);
+const T42: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000042);
+const T43: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000043);
+const T44: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000044);
 
 fn repo(pool: Pool<Postgres>) -> PgChannelsRepo {
     PgChannelsRepo::new(pool)
@@ -363,6 +370,84 @@ async fn channel_thread_rows_filter_by_root_sender(pool: Pool<Postgres>) -> anyh
 
     let parent_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
     assert_eq!(parent_ids, vec![MSG3, MSG1, MSG31]);
+    Ok(())
+}
+
+async fn threads_matching_participant(
+    pool: Pool<Postgres>,
+    querying_user: &str,
+    participant: &str,
+) -> anyhow::Result<Vec<Uuid>> {
+    let rows = repo(pool)
+        .get_thread_messages(
+            thread_rows_request(
+                querying_user,
+                thread_filter(ChannelThreadLiteral::Participant(macro_user_id(
+                    participant,
+                ))),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+    Ok(rows.iter().map(|row| row.id).collect())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_participant_reply_and_mention(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // user-c replied in t41, is @-mentioned in t42, and is in the @here expansion
+    // rows on t43/t44. No ch1 threads match despite user-c being a ch1 member.
+    let parent_ids = threads_matching_participant(pool, USER_B, USER_C).await?;
+    assert_eq!(parent_ids, vec![T44, T43, T42, T41]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_participant_group_mention(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // user-e's only reply is soft-deleted, so they match only through the @here
+    // expansion rows: t43 (root @here) and t44 (reply @here).
+    let parent_ids = threads_matching_participant(pool, USER_B, USER_E).await?;
+    assert_eq!(parent_ids, vec![T44, T43]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_participant_root_sender(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // user-b rooted every ch4 thread and replied to msg1 in ch1; msg3 doesn't match
+    // because channel membership alone doesn't make a participant.
+    let parent_ids = threads_matching_participant(pool, USER_B, USER_B).await?;
+    assert_eq!(parent_ids, vec![T44, T43, T42, T41, MSG1]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_participant_excludes_departed_users(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // left-user replied in t41 and sits in the @here expansion rows on t43/t44, but
+    // they left the channel, so nothing matches.
+    let parent_ids = threads_matching_participant(pool, USER_B, LEFT_USER).await?;
+    assert!(parent_ids.is_empty());
     Ok(())
 }
 

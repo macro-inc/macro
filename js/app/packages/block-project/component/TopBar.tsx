@@ -8,7 +8,6 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
-import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import {
   type FileOperation,
@@ -18,7 +17,10 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import {
+  BlockItemSplitLabel,
+  SplitTitleFileMenu,
+} from '@app/component/split-layout/components/SplitLabel';
 import {
   SplitToolbarLeft,
   SplitToolbarRight,
@@ -122,64 +124,58 @@ export function TopBar() {
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
+  const toolbarTools = () => tools.filter((tool) => tool.label !== 'Share');
+  const showShare = () => ENABLE_PROJECT_SHARING && !isSpecialProject;
 
   return (
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
-      <ResponsivePermissionsBadge />
-      <Show
-        when={isMobile()}
-        fallback={
-          <>
-            <SplitToolbarLeft class="flex-0">
-              <div class="flex gap-2 p-1">
-                <Show when={ops().length > 0}>
-                  <SplitFileMenu
-                    id={id}
-                    itemType="project"
-                    name={name()}
-                    ops={ops()}
-                  />
-                  <Show when={canEdit()}>
-                    <ProjectCreateMenu id={id} />
-                  </Show>
-                </Show>
-              </div>
-            </SplitToolbarLeft>
-            <Show when={showToolbarRight()}>
-              <SplitToolbarRight>
-                <For each={tools}>
-                  {(tool) => (
-                    <Show when={!tool.condition || tool.condition()}>
-                      {tool.buttonComponent ? (
-                        <tool.buttonComponent />
-                      ) : (
-                        <ToolButton tool={tool} />
-                      )}
-                    </Show>
-                  )}
-                </For>
-              </SplitToolbarRight>
-            </Show>
-          </>
-        }
-      >
-        {/* Mobile layout */}
-        <SplitHeaderRight>
-          <Show when={ops().length > 0 || !isSpecialProject}>
-            <HeaderIsland>
-              <SplitFileMenu
-                id={id}
-                itemType="project"
-                name={name()}
-                ops={ops()}
-                tools={[...tools, ...createTools]}
-              />
-            </HeaderIsland>
+      <SplitHeaderRight>
+        <div class="order-[1000] flex items-center gap-1">
+          <Show when={showShare()}>
+            <ShareTrigger copyLink={handleCopyLink} />
           </Show>
-        </SplitHeaderRight>
+        </div>
+      </SplitHeaderRight>
+      <ResponsivePermissionsBadge />
+      <SplitTitleFileMenu>
+        <Show when={ops().length > 0 || (isMobile() && !isSpecialProject)}>
+          <SplitFileMenu
+            id={id}
+            itemType="project"
+            name={name()}
+            ops={ops()}
+            tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
+          />
+        </Show>
+      </SplitTitleFileMenu>
+      <Show when={!isMobile()}>
+        <SplitToolbarLeft class="flex-0">
+          <div class="flex gap-2 p-1">
+            <Show when={ops().length > 0}>
+              <Show when={canEdit()}>
+                <ProjectCreateMenu id={id} />
+              </Show>
+            </Show>
+          </div>
+        </SplitToolbarLeft>
+        <Show when={showToolbarRight()}>
+          <SplitToolbarRight>
+            <For each={toolbarTools()}>
+              {(tool) => (
+                <Show when={!tool.condition || tool.condition()}>
+                  {tool.buttonComponent ? (
+                    <tool.buttonComponent />
+                  ) : (
+                    <ToolButton tool={tool} />
+                  )}
+                </Show>
+              )}
+            </For>
+          </SplitToolbarRight>
+        </Show>
       </Show>
       <CreateDialog />
     </>

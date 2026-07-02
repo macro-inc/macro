@@ -1,9 +1,13 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createSplitLayout, type SplitContent } from '../layoutManager';
+import {
+  createSplitLayout,
+  type SplitContent,
+  SplitEvent,
+} from '../layoutManager';
 
-vi.mock('../componentRegistry.tsx', () => ({
+vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
     type: 'mock-component',
     id,
@@ -11,7 +15,10 @@ vi.mock('../componentRegistry.tsx', () => ({
   })),
 }));
 
-vi.mock('zod', () => ({ z: undefined }));
+vi.mock('@core/constant/allBlocks', () => ({
+  isBlockAlias: vi.fn(() => false),
+  resolveBlockAlias: vi.fn((type: string) => type),
+}));
 
 beforeAll(() => {
   // Mock window.matchMedia for tests
@@ -113,6 +120,119 @@ describe('layoutManager', () => {
 
         expect(manager.splits()).toHaveLength(3);
         expect(manager.splits().map((s) => s.content)).toEqual(ORIGINAL_SPLITS);
+
+        dispose();
+      });
+    });
+  });
+
+  describe('entry state', () => {
+    it('captures registered entry state and merges with existing state', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          {
+            type: 'component',
+            id: 'unified-list',
+            state: { existing: true },
+          },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+        split.registerEntryStateCaptor('soup.listState', () => ({
+          scrollOffset: 120,
+          focus: 'entity-1',
+        }));
+
+        split.captureEntryState();
+
+        expect(split.currentEntryState()).toEqual({
+          existing: true,
+          'soup.listState': {
+            scrollOffset: 120,
+            focus: 'entity-1',
+          },
+        });
+        expect(split.history()[0].state).toEqual(split.currentEntryState());
+
+        dispose();
+      });
+    });
+  });
+
+  describe('split history', () => {
+    it('marks mergeHistory content changes as replace navigation', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        split.replace({
+          next: { type: 'md', id: 'created-doc' },
+          mergeHistory: true,
+        });
+
+        expect(manager.events()).toMatchObject({
+          type: SplitEvent.ContentChange,
+          cause: 'replace',
+          newContent: { type: 'md', id: 'created-doc' },
+          previousContent: { type: 'component', id: 'inbox' },
+        });
+
+        dispose();
+      });
+    });
+  });
+
+  describe('indexed insertion', () => {
+    it('creates a split at the requested index', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'left' },
+          { type: 'md', id: 'right' },
+        ]);
+
+        const inserted = manager.createNewSplit({
+          content: { type: 'component', id: 'unified-list' },
+          activate: true,
+          referredFrom: null,
+          insertIndex: 1,
+        });
+
+        expect(manager.splits().map((split) => split.content.id)).toEqual([
+          'left',
+          'unified-list',
+          'right',
+        ]);
+        expect(manager.activeSplitId()).toBe(inserted.id);
+
+        dispose();
+      });
+    });
+
+    it('opens duplicate content at the requested index when duplicates are allowed', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'unified-list' },
+          { type: 'md', id: 'current' },
+        ]);
+
+        const inserted = manager.openWithSplit(
+          { type: 'component', id: 'unified-list' },
+          {
+            allowDuplicate: true,
+            preferNewSplit: true,
+            insertIndex: 1,
+          }
+        );
+
+        expect(manager.splits().map((split) => split.content.id)).toEqual([
+          'unified-list',
+          'unified-list',
+          'current',
+        ]);
+        expect(manager.activeSplitId()).toBe(inserted?.id);
 
         dispose();
       });

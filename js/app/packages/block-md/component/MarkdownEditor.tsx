@@ -72,6 +72,11 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import {
+  BlameTooltip,
+  blameTooltipPlugin,
+  createBlameTooltipStore,
+} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
@@ -121,6 +126,7 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
+  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
@@ -173,6 +179,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import {
@@ -920,6 +927,13 @@ export function MarkdownEditor(props: {
     },
   });
 
+  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
+  if (ENABLE_GIT_BLAME()) {
+    plugins.use(
+      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
+    );
+  }
+
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
@@ -1003,6 +1017,11 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
+        <Show when={ENABLE_GIT_BLAME()}>
+          <Suspense>
+            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          </Suspense>
+        </Show>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
 
@@ -1054,7 +1073,14 @@ export function MarkdownEditor(props: {
           sourceDocumentId={blockId}
         />
 
-        <ActionMenu editor={editor} menu={actionsMenuOperations} />
+        <ActionMenu
+          editor={editor}
+          menu={actionsMenuOperations}
+          actionContext={{
+            sourceDocumentId: blockId,
+            sourceBlockName: blockName,
+          }}
+        />
 
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode="common-tlds" />

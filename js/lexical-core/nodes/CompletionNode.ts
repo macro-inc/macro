@@ -1,5 +1,6 @@
 import {
   $applyNodeReplacement,
+  type DOMConversionMap,
   ElementNode,
   type LexicalEditor,
   type LexicalNode,
@@ -56,6 +57,10 @@ export class CompletionNode extends ElementNode {
 
   exportDOM(_: LexicalEditor) {
     return { element: null };
+  }
+
+  static importDOM(): DOMConversionMap | null {
+    return null;
   }
 
   excludeFromCopy() {

@@ -10,6 +10,7 @@ import type { Result } from 'neverthrow';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
 import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
+import type { EnsureTagSetRequest } from './generated/schemas/ensureTagSetRequest';
 import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
 import type { EntityType } from './generated/schemas/entityType';
 import type { GetBulkEntityProperties200 } from './generated/schemas/getBulkEntityProperties200';
@@ -19,6 +20,8 @@ import type { PropertyDefinition } from './generated/schemas/propertyDefinition'
 import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
 import type { PropertyOption } from './generated/schemas/propertyOption';
 import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
+import type { TagSetResponse } from './generated/schemas/tagSetResponse';
+import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
 
 type PropertiesEntityType = EntityType;
 
@@ -43,6 +46,12 @@ type SetEntityPropertyArgs = {
 type DeleteEntityPropertyArgs = {
   entity_property_id: string;
 };
+type EntityPropertyOptionArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  property_id: string;
+  option_id: string;
+};
 type GetPropertyOptionsArgs = {
   definition_id: string;
 };
@@ -60,6 +69,14 @@ type SetPropertyStatusCompleteArgs = {
 };
 type GetBulkEntityPropertiesArgs = {
   body: BulkEntityPropertiesRequest;
+};
+type EnsureTagSetArgs = {
+  body: EnsureTagSetRequest;
+};
+type UpdatePropertyOptionArgs = {
+  definition_id: string;
+  option_id: string;
+  body: UpdatePropertyOptionRequest;
 };
 
 const propertiesHost: string = SERVER_HOSTS['document-storage-service'];
@@ -158,6 +175,22 @@ export const propertiesServiceClient = {
     return result.map(() => ({ success: true }));
   },
 
+  addEntityPropertyOption: async (args: EntityPropertyOptionArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}/options/${args.option_id}`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'POST',
+    });
+    return result.map(() => ({ success: true }));
+  },
+
+  removeEntityPropertyOption: async (args: EntityPropertyOptionArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}/options/${args.option_id}`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'DELETE',
+    });
+    return result.map(() => ({ success: true }));
+  },
+
   getPropertyOptions: async (args: GetPropertyOptionsArgs) => {
     return await propertiesFetch<PropertyOption[]>(
       `/properties/definitions/${args.definition_id}/options`,
@@ -201,6 +234,29 @@ export const propertiesServiceClient = {
       `/properties/entities/bulk`,
       {
         method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
+  },
+
+  listTags: async () => {
+    return await propertiesFetch<TagSetResponse[]>(`/properties/tags`, {
+      method: 'GET',
+    });
+  },
+
+  ensureTagSet: async (args: EnsureTagSetArgs) => {
+    return await propertiesFetch<TagSetResponse>(`/properties/tags`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
+  updatePropertyOption: async (args: UpdatePropertyOptionArgs) => {
+    return await propertiesFetch<PropertyOption>(
+      `/properties/definitions/${args.definition_id}/options/${args.option_id}`,
+      {
+        method: 'PATCH',
         body: JSON.stringify(args.body),
       }
     );

@@ -66,7 +66,6 @@ pub fn broadcast_awareness(
     Ok(())
 }
 
-
 // Max receiving websocket message is 1Mb
 const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
 
@@ -114,10 +113,31 @@ pub async fn process_message(
                 return Ok(());
             }
 
+            let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
+            let peer_id = peer_ids.first().copied();
+            let now_ms = web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
             for update in &updates {
-                session_storage
+                let touched_nodes = session_storage
                     .append_pending_operation(update, document_state)
                     .await?;
+                if !touched_nodes.is_empty() {
+                    if let Some(peer_id) = peer_id {
+                        dss.push_blame_events(
+                            touched_nodes
+                                .into_iter()
+                                .map(|node_id| crate::d1::BlameEvent {
+                                    document_id: document_id.to_string(),
+                                    node_id,
+                                    peer_id,
+                                    timestamp_ms: now_ms,
+                                })
+                                .collect(),
+                        );
+                    }
+                }
             }
 
             {

@@ -126,14 +126,17 @@ function RegularMessageLayout(props: {
       <Message.Slot placement="icon">
         <Message.SenderIcon />
       </Message.Slot>
-      <Message.Slot placement="header" class="flex items-center gap-1 min-w-0">
-        <Message.SenderName />
-        <Message.AgentBadge />
-        <Message.EditedIndicator />
-        {/* On message hover, timestamp floats above actions. */}
-        <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1 group-hover/message:bg-surface group-hover/message:rounded-md">
-          <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+      <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
+        <div class="flex items-center gap-1 min-w-0">
+          <Message.SenderName />
+          <Message.AgentBadge />
+          <Message.EditedIndicator />
+          {/* On message hover, timestamp floats above actions. */}
+          <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1 group-hover/message:bg-surface group-hover/message:rounded-md">
+            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+          </div>
         </div>
+        <Message.FromPill />
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot

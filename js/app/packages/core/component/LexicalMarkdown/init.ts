@@ -10,6 +10,7 @@ import {
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  PasteNode as PasteNodeClass,
   PullRequestMentionNode,
   SnapshotNode,
   ThemeMentionNode,
@@ -31,6 +32,7 @@ import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
+import { PasteNode } from './component/decorator/PasteNode';
 import { PullRequestMention } from './component/decorator/PullRequestMention';
 import { Snapshot } from './component/decorator/Snapshot';
 import { ThemeMention } from './component/decorator/ThemeMention';
@@ -49,6 +51,7 @@ export function initializeLexical() {
   setDecorator(GroupMentionNode, GroupMention);
   setDecorator(DocumentMentionNode, DocumentMention);
   setDecorator(DocumentCardNode, DocumentCard);
+  setDecorator(PasteNodeClass, PasteNode);
   setDecorator(PullRequestMentionNode, PullRequestMention);
   setDecorator(ContactMentionNode, ContactMention);
   setDecorator(DateMentionNode, DateMention);

@@ -186,7 +186,12 @@ pub async fn get_bulk_entity_properties(
         property_ids: request.property_ids.clone(),
     };
 
-    get_bulk_entity_properties_impl(&state, filtered_request)
-        .await
-        .map(Json)
+    let mut result = get_bulk_entity_properties_impl(&state, filtered_request).await?;
+    for response in result.values_mut() {
+        crate::api::properties::entities::types::retain_caller_visible_tags(
+            &mut response.properties,
+            &user_context.user_id,
+        );
+    }
+    Ok(Json(result))
 }

@@ -4,9 +4,8 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use macro_env_var::env_var;
+use macro_env_var::env_vars;
 use model::user::UserContext;
-use remote_env_var::LocalOrRemoteSecret;
 use std::borrow::Cow;
 
 /// The header key for the internal api key
@@ -15,9 +14,11 @@ static INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 static INTERNAL_MACRO_ORGANIZATION_ID_HEADER: &str = "x-internal-macro-organization-id";
 static INTERNAL_FUSIONAUTH_USER_ID_HEADER: &str = "x-internal-fusionauth-user-id";
 
-env_var!(
+env_vars!(
+    /// The internal api secret key for the service.
+    /// NOTE: this value may be different depending on the service that is using this middleware.
     #[derive(Clone)]
-    pub struct InternalApiSecretKey;
+    pub struct InternalApiKey;
 );
 
 /// Sentinel value which represensts that we were able to validate the internal auth key in the header of the request
@@ -26,7 +27,7 @@ pub struct ValidInternalKey(());
 
 impl<S> FromRequestParts<S> for ValidInternalKey
 where
-    LocalOrRemoteSecret<InternalApiSecretKey>: FromRef<S>,
+    InternalApiKey: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = (StatusCode, Cow<'static, str>);
@@ -44,7 +45,7 @@ where
             ));
         };
 
-        let expected_key = <LocalOrRemoteSecret<InternalApiSecretKey>>::from_ref(state);
+        let expected_key = <InternalApiKey>::from_ref(state);
 
         // TODO: this should be constant time eq to prevent DOS attacks
         (expected_key.as_ref() == auth_token)
@@ -55,7 +56,7 @@ where
 
 impl<S> OptionalFromRequestParts<S> for ValidInternalKey
 where
-    LocalOrRemoteSecret<InternalApiSecretKey>: FromRef<S>,
+    InternalApiKey: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = std::convert::Infallible;
@@ -74,7 +75,7 @@ where
 
 /// Validates that the INTERNAL_API_KEY_HEADER header is
 /// provided and valid
-#[axum::debug_middleware(state = LocalOrRemoteSecret<InternalApiSecretKey>)]
+#[axum::debug_middleware(state = InternalApiKey)]
 pub async fn handler(
     _valid_internal_key: ValidInternalKey,
     mut req: Request,

@@ -66,7 +66,7 @@ const SingleValueSegment = (props: {
       >
         <ValueDisplay values={props.facet.values()} />
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content class="shadow-menu">
         <Dropdown.Group>
           <For each={props.facet.options}>
             {(option) => (

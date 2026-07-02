@@ -7,7 +7,7 @@
 import type { PropertyOwnerOneOfScope } from './propertyOwnerOneOfScope';
 
 /**
- * User-scoped property only
+ * User-scoped property.
  */
 export type PropertyOwnerOneOf = {
   scope: PropertyOwnerOneOfScope;

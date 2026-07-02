@@ -1,7 +1,3 @@
-#[cfg(test)]
-mod test;
-
-/// Accumulation of streamed agent parts into a persistable message.
 use crate::convert::merge_consecutive_parts;
 use crate::stream::{StreamPart, ToolResponse};
 use crate::types::AssistantMessagePart;

@@ -49,6 +49,25 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name static-file-s3-event-notification-queue || true
   @echo "SQS queues created"
 
+# Purge all messages from every SQS queue in LocalStack
+purge_queues:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  queues=$(aws --endpoint-url=http://localhost:4566 sqs list-queues --query 'QueueUrls[]' --output text)
+  # `--output text` emits the literal "None" (not empty) when there are no queues.
+  if [ -z "$queues" ] || [ "$queues" = "None" ]; then
+    echo "No SQS queues found"
+    exit 0
+  fi
+  for queue_url in $queues; do
+    if aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url "$queue_url"; then
+      echo "Purged $queue_url"
+    else
+      echo "Failed to purge $queue_url" >&2
+    fi
+  done
+  echo "All SQS queues purged"
+
 # Create DynamoDB tables in LocalStack
 create_local_tables:
   # bulk-upload table (PK + SK with GSI)

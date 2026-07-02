@@ -14,8 +14,8 @@ name = "document_cognition_service_openapi"
 path = "src/openapi.rs"
 
 [[bin]]
-name = "document_cognition_service_models"
-path = "src/models_bin.rs"
+name = "document_cognition_service_doppler_config"
+path = "src/doppler_config.rs"
 
 [features]
 local = []
@@ -25,7 +25,7 @@ local_queue = []
 
 [dependencies]
 agent = { path = "../agent", features = ["debug-messages"] }
-ai_projections = { path = "../ai_projections" }
+ai_projections = { path = "../ai_projections", features = ["agent"] }
 ai_usage = { path = "../ai_usage" }
 aho-corasick = "1.1.3"
 attachment = { path = "../attachment", features = ["provider"] }
@@ -51,6 +51,7 @@ crm = { path = "../crm" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 documents = { path = "../documents", features = ["ai_tools", "attachment"] }
 doppleganger = { workspace = true }
+doppler-config = { workspace = true }
 email = { path = "../email", features = ["outbound", "attachment"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
@@ -67,10 +68,12 @@ log = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
+macro_config = { path = "../macro_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",

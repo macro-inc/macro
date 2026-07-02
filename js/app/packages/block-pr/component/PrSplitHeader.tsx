@@ -2,22 +2,18 @@ import {
   type BlockTool,
   ResponsiveBlockToolbar,
 } from '@app/component/ResponsiveBlockToolbar';
-import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
-import { TOKENS } from '@core/hotkey/tokens';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
 import LinkIcon from '@phosphor/link.svg';
-import SidePanelIcon from '@phosphor/square-half.svg';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { Button, cn, Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { Show } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
@@ -89,7 +85,6 @@ export function PrSplitHeader(props: {
   enrichment: GithubPullRequest | undefined;
 }) {
   const blockId = useBlockId();
-  const sidePanel = useSidePanel();
   const title = () => props.enrichment?.name ?? prDisplayName(props.prRef);
   const githubUrl = () => props.enrichment?.url ?? prHtmlUrl(props.prRef);
 
@@ -114,37 +109,6 @@ export function PrSplitHeader(props: {
       icon: LinkIcon,
       action: copyLink,
     },
-    {
-      label: () =>
-        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
-      icon: SidePanelIcon,
-      action: () => sidePanel?.toggle(),
-      isActive: () => sidePanel?.isOpen() ?? false,
-      condition: () => !(sidePanel?.isNarrow() ?? false),
-      buttonComponent: () => (
-        <Show when={sidePanel}>
-          {(panel) => (
-            <Button
-              depth={2}
-              variant="base"
-              size="icon-sm"
-              class={cn('bg-surface order-20', {
-                'bg-active': sidePanel?.isOpen(),
-              })}
-              tooltip={
-                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
-              }
-              hotkey={TOKENS.block.toggleSidePanel}
-              onClick={() => {
-                panel().toggle();
-              }}
-            >
-              <SidePanelIcon />
-            </Button>
-          )}
-        </Show>
-      ),
-    },
   ];
 
   return (
@@ -168,10 +132,6 @@ export function PrSplitHeader(props: {
         itemType="foreign"
         name={title()}
       />
-
-      <SplitToolbarLeft>
-        <SidePanel.NarrowTabs />
-      </SplitToolbarLeft>
     </>
   );
 }

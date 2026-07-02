@@ -1,7 +1,6 @@
-import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, stack } from '../../packages/shared';
+import { stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ConvertService } from './service';
 
@@ -20,13 +19,6 @@ export const convertQueueArn = convertQueue.queue.arn;
 export const convertQueueName = convertQueue.queue.name;
 
 export const coparse_api_vpc = get_coparse_api_vpc();
-
-const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
-const secretKeyArns = [pulumi.interpolate`${internalApiKeyArn}`];
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
@@ -88,7 +80,6 @@ const convertService = new ConvertService('convert-service', {
   isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
-  secretKeyArns,
 });
 
 export const convertServiceRoleArn = pulumi.interpolate`${convertService.role.arn}`;

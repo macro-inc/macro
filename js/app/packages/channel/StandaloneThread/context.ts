@@ -6,6 +6,7 @@ import {
   type Setter,
   useContext,
 } from 'solid-js';
+import type { FocusRequest } from '../Thread/focus-request';
 
 export type StandaloneThreadContextValue = {
   channelId: Accessor<string>;
@@ -18,6 +19,7 @@ export type StandaloneThreadContextValue = {
   setIsExpanded: Setter<boolean>;
   isReplying: Accessor<boolean>;
   setIsReplying: Setter<boolean>;
+  replyInputFocusRequest: FocusRequest;
 };
 
 const StandaloneThreadContext = createContext<StandaloneThreadContextValue>();

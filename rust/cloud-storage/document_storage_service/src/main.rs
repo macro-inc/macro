@@ -70,11 +70,14 @@ use macro_env_var::maybe_env_vars;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
+#[cfg(feature = "graphql")]
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
+use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -85,12 +88,12 @@ use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
-    TaskDedupConfig, TaskDedupService,
+    TaskDedupService,
     outbound::{
+        cohere::CohereReranker,
         connection_gateway::ConnectionGatewayTaskDedupNotifier,
         judge::AgentDuplicateJudge,
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
-        reranker::NoOpReranker,
     },
 };
 
@@ -171,14 +174,18 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::trace!("initialized s3 client");
 
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let document_delete_queue = macro_queues::DocumentDeleteQueue::new();
+    let contacts_queue = macro_queues::ContactsQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.search_event_queue)
-        .document_delete_queue(&config.document_delete_queue);
+        .search_event_queue(&search_event_queue)
+        .document_delete_queue(&document_delete_queue);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.contacts_queue.to_string(),
+            contacts_queue.to_string(),
         ),
     });
 
@@ -201,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
 
@@ -211,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
-        config.internal_api_secret_key.as_ref().to_string(),
+        config.internal_api_key.to_string(),
         LexicalServiceUrl::new()?.to_string(),
     ));
 
@@ -259,11 +266,26 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.to_string(),
+        notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
+    #[cfg(feature = "graphql")]
+    let graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+        });
     tracing::trace!("initialized notification ingress service");
 
     let entity_access_service = Arc::new(
@@ -531,12 +553,27 @@ async fn main() -> anyhow::Result<()> {
 
     let call_state = CallRouterState::new(call_service.clone(), entity_access_service.clone());
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let webhook_service = webhook::domain::service::WebhookServiceImpl::new(
+        webhook::outbound::pg_repository::PgRepository::new(db.clone()),
+        webhook::outbound::http_validator::ReqwestWebhookValidationClient::new()
+            .context("failed to create webhook validation client")?,
+    );
+    let webhook_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let webhook_state = webhook::inbound::axum_router::WebhookRouterState::new(
+        webhook_service,
+        webhook_rate_limiter,
+    );
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
-    // Create the SQS worker for delete document processing before config is moved
+    // Create the SQS worker for delete document processing before config is moved.
+    #[cfg(feature = "delete_document_worker")]
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.document_delete_queue.to_string(),
+        document_delete_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -549,7 +586,6 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
-    let task_dedup_config = TaskDedupConfig::default();
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's
@@ -559,11 +595,15 @@ async fn main() -> anyhow::Result<()> {
         !openai_api_key.trim().is_empty(),
         "OpenAI API key is required for task dedup embeddings",
     );
+    let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
+    anyhow::ensure!(
+        !cohere_api_key.trim().is_empty(),
+        "Cohere API key is required for task dedup reranking",
+    );
     let task_dedup_service = Arc::new(TaskDedupService::new(
-        task_dedup_config.clone(),
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
-        NoOpReranker,
+        CohereReranker::new(cohere_api_key),
         Arc::new(AgentDuplicateJudge::new(ai_usage::pg_recorder(db.clone()))),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
@@ -586,16 +626,24 @@ async fn main() -> anyhow::Result<()> {
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
-        SpawnedChannelEventDispatcher::new(channel_side_effects),
+        SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     ));
 
     // Wire Macro AI to react to mentions. The router posts replies through the
     // channel service we just built and runs the agent loop in-process with the
     // same pre-configured toolset used by other AI hosts.
-    let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
+    // Wire the agent's SendChannelMessage tool to the same side-effect pipeline
+    // as the HTTP API, so messages it posts fire notifications and realtime
+    // updates (the generic env builder uses a no-op dispatcher otherwise).
+    macro_agent_tool_context.channel_tool_context =
+        ai_tools::build_channel_tool_context_with_dispatcher(
+            db.clone(),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+        );
     let macro_agent_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
@@ -613,21 +661,27 @@ async fn main() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
         );
 
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+        frecency_service,
+        readonly_email_service,
+        channel_service_for_soup,
+        call_record_query_service,
+        crm_service.clone(),
+        foreign_entity_service_for_soup,
+    ));
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
-        soup_router_state: SoupRouterState::new(
-            SoupImpl::new(
-                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-                frecency_service,
-                readonly_email_service,
-                channel_service_for_soup,
-                call_record_query_service,
-                crm_service.clone(),
-                foreign_entity_service_for_soup,
-            ),
+        soup_router_state: SoupRouterState::from_arc(
+            soup_service.clone(),
             email_service,
             entity_access_service.clone(),
         ),
+        #[cfg(feature = "graphql")]
+        graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
+        #[cfg(feature = "graphql")]
+        graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),
@@ -643,7 +697,6 @@ async fn main() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
-        config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
         // Shared frecency storage and legacy channel list routes.
@@ -661,7 +714,9 @@ async fn main() -> anyhow::Result<()> {
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
+            document_permission_jwt_secret: config.document_permission_jwt_secret_key.as_ref().to_string(),
         },
+        config: Arc::new(config),
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
@@ -673,6 +728,7 @@ async fn main() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        webhook_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
@@ -682,18 +738,21 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    // Spawn the delete document worker
-    let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
-        worker: Arc::new(delete_document_worker),
-        db: db.clone(),
-        s3_client: api_context.s3_client.clone(),
-        redis_client: api_context.redis_client.clone(),
-        sync_service_client: api_context.sync_service_client.clone(),
-    };
+    #[cfg(feature = "delete_document_worker")]
+    {
+        // Spawn the delete document worker.
+        let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
+            worker: Arc::new(delete_document_worker),
+            db: db.clone(),
+            s3_client: api_context.s3_client.clone(),
+            redis_client: api_context.redis_client.clone(),
+            sync_service_client: api_context.sync_service_client.clone(),
+        };
 
-    tokio::spawn(async move {
-        service::delete_document_worker::run_worker(delete_worker_ctx).await;
-    });
+        tokio::spawn(async move {
+            service::delete_document_worker::run_worker(delete_worker_ctx).await;
+        });
+    }
 
     api::setup_and_serve(api_context).await?;
 

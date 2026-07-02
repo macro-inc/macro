@@ -51,7 +51,6 @@ env_var! {
         SyncServiceAuthKey,
         DocumentStorageBucket,
         DocxDocumentUploadBucket,
-        EmailScheduledQueue,
         DocumentStorageServiceCloudfrontDistributionUrl,
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
@@ -60,7 +59,9 @@ env_var! {
 
 maybe_env_var! {
     struct ToolContextMaybeEnvVars {
-        NotificationQueue,
+        EnableEmailScheduledQueue,
+        EnableGmailOpsQueue,
+        EnableNotificationQueue,
     }
 }
 
@@ -74,16 +75,20 @@ maybe_env_var! {
 ///
 /// Required env vars: `SYNC_SERVICE_AUTH_KEY`,
 /// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `DOCUMENT_STORAGE_BUCKET`,
-/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
 ///
-/// Service URLs are resolved through the `macro_service_urls` crate, using optional
-/// `OVERRIDE_*` env vars before environment defaults.
+/// Service URLs are resolved through the `macro_service_urls` crate, and queue
+/// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
+/// vars before environment defaults).
 ///
-/// Optional env vars:
-/// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
+/// Queue wiring is opt-in via boolean flags (default `false`); the queue name
+/// itself comes from `macro_queues` when enabled:
+/// - `ENABLE_EMAIL_SCHEDULED_QUEUE`
+/// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
+/// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -98,15 +103,43 @@ pub async fn build_tool_service_context_from_env(
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
-    let sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
-        .email_scheduled_queue(&env.email_scheduled_queue);
-    let notification_queue = maybe_env
-        .notification_queue
+    let enable_email_scheduled_queue = maybe_env
+        .enable_email_scheduled_queue
         .as_ref()
-        .map(|queue_url| {
-            ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, queue_url.to_string()))
-        })
-        .unwrap_or(ToolNotificationQueue::NoOp);
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_gmail_ops_queue = maybe_env
+        .enable_gmail_ops_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_notification_queue = maybe_env
+        .enable_notification_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone());
+    if enable_email_scheduled_queue {
+        let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+        sqs_client = sqs_client.email_scheduled_queue(email_scheduled_queue.as_ref());
+    }
+    if enable_gmail_ops_queue {
+        let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+        sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue.as_ref());
+    }
+    let notification_queue = if enable_notification_queue {
+        let notification_queue = macro_queues::NotificationIngressQueue::new();
+        ToolNotificationQueue::Sqs(SqsQueue::new(
+            aws_sqs_client,
+            notification_queue.to_string(),
+        ))
+    } else {
+        ToolNotificationQueue::NoOp
+    };
 
     let secretsmanager_client =
         SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
