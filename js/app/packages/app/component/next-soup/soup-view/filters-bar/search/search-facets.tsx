@@ -2,23 +2,17 @@ import type {
   CallStatus,
   PropertyFilter,
 } from '@app/component/next-soup/filters/filter-store/types';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_TAGS_FE_FLAG,
-  ENABLE_TAGS_FE_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { TagDot } from '@property/tags/TagDot';
-import { useTagsQuery } from '@queries/properties/tags';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
+import { useTagOptions } from '../tag-filter';
 import type {
   SearchFiltersController,
   SearchIndexId,
@@ -293,30 +287,7 @@ export function useSearchFacets(
     setSelectedIds: controller.setEmailInbox,
   });
 
-  const tagsFlag = useFeatureFlag(ENABLE_TAGS_FE_FLAG, {
-    enabledOverride: ENABLE_TAGS_FE_OVERRIDE,
-  });
-  const tagsQuery = useTagsQuery();
-  // Each tag option carries the id of its owning definition, needed to build
-  // the soup literal; keyed here so `onChange` can rebuild PropertyFilters.
-  const tagDefByOption = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const set of tagsQuery.data ?? []) {
-      for (const option of set.options) {
-        map.set(option.id, option.propertyDefinitionId);
-      }
-    }
-    return map;
-  });
-  const tagOptions = createMemo<SearchableOption[]>(() =>
-    (tagsQuery.data ?? []).flatMap((set) =>
-      set.options.map((option) => ({
-        id: option.id,
-        label: option.value.type === 'string' ? option.value.value : option.id,
-        icon: () => <TagDot color={option.color ?? undefined} />,
-      }))
-    )
-  );
+  const tagSource = useTagOptions();
 
   const type = singleFacet({
     id: 'type',
@@ -478,10 +449,10 @@ export function useSearchFacets(
     label: 'Tags',
     neutralLabel: 'Any tag',
     placeholder: 'Filter by tag...',
-    options: tagOptions,
+    options: tagSource.options,
     activeIds: () => controller.tags().map((t) => t.value),
     onChange: (ids) => {
-      const byOption = tagDefByOption();
+      const byOption = tagSource.defByOption();
       controller.setTags(
         ids.reduce<PropertyFilter[]>((acc, id) => {
           const propertyId = byOption.get(id);
@@ -495,7 +466,7 @@ export function useSearchFacets(
   // Tags show only where tagging applies (documents/tasks), gated behind the
   // tags feature flag, and hidden when the caller has no tags defined.
   const tagFacets = (): SearchFacetVM[] =>
-    tagsFlag().enabled && tagOptions().length ? [tags] : [];
+    tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
 
   return createMemo(() => {
     switch (controller.type()) {

@@ -63,8 +63,10 @@ export type SearchFiltersSections = {
 
 export type SearchFiltersState = SearchFiltersSections & {
   type: SearchTypeValue;
-  // Selected tags. Cross-cutting (not tied to a type section): each entry
-  // carries its owning definition id and option id. Combine as one OR.
+  // Selected tags. Applied only on the document/task types (TAG_SEARCH_TYPES)
+  // and read live from the compiled query, so they persist across those types
+  // but clear when switching to a type where tags do not apply (all/email/etc).
+  // Each entry carries its owning definition id and option id; combined as one OR.
   tags: PropertyFilter[];
 };
 
