@@ -128,6 +128,18 @@ export function invalidateSoupEntity(entityId: string): void {
   }
 }
 
+/** Mark stale soup queries whose query key references any of the given ids (e.g. project-scoped views). */
+export function invalidateSoupQueriesReferencing(ids: string[]): void {
+  if (ids.length === 0) return;
+  queryClient.invalidateQueries({
+    queryKey: ['soup'],
+    predicate: (query) => {
+      const serialized = JSON.stringify(query.queryKey);
+      return ids.some((id) => serialized.includes(id));
+    },
+  });
+}
+
 /** Mark every soup list query stale. Use `invalidateSoupEntity` when the entity ID is known. */
 export function invalidateAllSoup(): void {
   queryClient.invalidateQueries({
