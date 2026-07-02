@@ -356,8 +356,6 @@ export function Notebook(props: {
                 }
               />
               <HistoryOverlay
-                documentId={documentId}
-                documentName={documentName()}
                 currentState={currentEditorState}
                 selectedAt={history.selectedAt()}
                 isLive={history.isLive()}

@@ -43,6 +43,7 @@ type HistoryContextValue = {
     clear: () => void;
   };
   userByPeer: (peerId: string) => HistoryUser;
+  userById: (userId: string) => HistoryUser;
 };
 
 const HistoryContext = createContext<HistoryContextValue>();
@@ -110,16 +111,14 @@ export function HistoryProvider(props: {
     });
     return { userId, displayName, color: userColor(userId) };
   });
-  const userByPeer = (peerId: string): HistoryUser => {
-    const userId = peerMap.data?.get(peerId) ?? 'unknown';
-    return (
-      userEntries().find((e) => e.userId === userId) ?? {
-        userId,
-        displayName: () => userLabel(userId),
-        color: userColor(userId),
-      }
-    );
-  };
+  const userById = (userId: string): HistoryUser =>
+    userEntries().find((e) => e.userId === userId) ?? {
+      userId,
+      displayName: () => userLabel(userId),
+      color: userColor(userId),
+    };
+  const userByPeer = (peerId: string): HistoryUser =>
+    userById(peerMap.data?.get(peerId) ?? 'unknown');
 
   const historyIndex = createMemo(() => {
     const doc = historyDoc();
@@ -198,6 +197,7 @@ export function HistoryProvider(props: {
     checkoutAt,
     versionIdAt,
     userByPeer,
+    userById,
     diff: {
       session: diffSession,
       previewState: diffPreviewState,

@@ -3,7 +3,7 @@ import type { HistorySession } from '@service-sync/client';
 import { cn } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
 import { buildActivityRows } from './activityRows';
-import { userColor, userLabel } from './utils';
+import { userColor } from './utils';
 
 type HistorySessionListProps = {
   sessions: readonly HistorySession[];
@@ -13,13 +13,8 @@ type HistorySessionListProps = {
 };
 
 function UserName(props: { userId: string }) {
-  const { firstName, fullName } = useDisplayNameParts(
-    tryMacroId(props.userId),
-    {
-      emailFallback: 'local-part',
-    }
-  );
-  return <>{firstName() || fullName() || userLabel(props.userId)}</>;
+  const { firstName } = useDisplayNameParts(tryMacroId(props.userId));
+  return <>{firstName()}</>;
 }
 
 const MAX_NAMED = 3;
