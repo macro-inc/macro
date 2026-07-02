@@ -217,9 +217,13 @@ export const BulkMoveToProjectView = (props: {
       itemMap[project.id] = { ...project, children: [] };
     }
 
-    // Second pass: attach children; projects with a missing parent become roots
+    // Second pass: attach children; projects with a missing or self-referencing parent become roots
     for (const project of allProjects) {
-      if (project.parentId && itemMap[project.parentId]) {
+      if (
+        project.parentId &&
+        project.parentId !== project.id &&
+        itemMap[project.parentId]
+      ) {
         itemMap[project.parentId].children!.push(project);
       } else {
         rootItems.push(project);
