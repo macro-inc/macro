@@ -330,6 +330,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         setPendingJoinCall(true);
       }
     },
+    goToLatestMessages: async () => {
+      setActiveTab(DEFAULT_CHANNEL_TAB);
+      await awaitCondition(() => messagesHandle() !== undefined, 10_000).catch(
+        () => {}
+      );
+      messagesHandle()?.goToLatest();
+    },
   });
 
   const initialTargetMessageParams = (): ChannelTargetMessageParams => {

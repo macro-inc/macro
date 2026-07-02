@@ -1,4 +1,5 @@
 import type { CanvasSpec } from '../block-canvas/definition';
+import type { ChannelBlockSpec } from '../block-channel/definition';
 import type { BlockChatSpec } from '../block-chat/blockClient';
 import type { MarkdownBlockSpec } from '../block-md/definition';
 import type { BlockName } from './block';
@@ -17,7 +18,7 @@ type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 export interface BlockMethodRegistry {
   call: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
-  channel: EmptySpec;
+  channel: AssertSpec<ChannelBlockSpec>;
   write: EmptySpec;
   pdf: EmptySpec;
   html: EmptySpec;

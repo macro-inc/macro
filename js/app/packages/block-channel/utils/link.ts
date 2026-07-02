@@ -61,3 +61,16 @@ export async function navigateToChannelMessage(
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
   await handle?.goToLocationFromParams(params);
 }
+
+/**
+ * Lands an explicitly opened channel on its newest messages. Covers the case
+ * where the channel was already mounted (e.g. open in another split) parked at
+ * an older position, which a plain open would otherwise leave untouched.
+ */
+export async function goToLatestChannelMessages(
+  orchestrator: BlockOrchestrator,
+  channelId: string
+) {
+  const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+  await handle?.goToLatestMessages();
+}

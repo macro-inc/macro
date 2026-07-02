@@ -6,7 +6,10 @@ import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { getChannelParams } from '@block-channel/utils/link';
+import {
+  getChannelParams,
+  goToLatestChannelMessages,
+} from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -417,6 +420,10 @@ export const openEntityInSplitFromUnifiedList = async (
       },
       blockOrchestrator
     );
+  } else if (entity.type === 'channel') {
+    // NOTE: This lands an already-open channel on its newest messages instead
+    // of leaving it parked at an older scroll position.
+    await goToLatestChannelMessages(blockOrchestrator, content.id);
   }
 };
 
