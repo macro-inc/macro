@@ -33,7 +33,7 @@ pub async fn process_channel_message_update(
         return Ok(());
     }
 
-    let raw_content = ParsedXmlText::parse(&channel_message_info.channel_message.content)?;
+    let parsed = ParsedXmlText::parse(&channel_message_info.channel_message.content)?;
     let transformed_content = PlainTextFormatter::format_xml_text(parsed);
 
     let upsert_channel_message_args = UpsertChannelMessageArgs {

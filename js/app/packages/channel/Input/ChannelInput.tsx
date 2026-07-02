@@ -32,7 +32,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
+import { isMacroAiId, macroAiMentionUser } from '../macroAi';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -220,7 +220,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // `@`-mention typeahead as participants and re-tagged as a bot at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
     const base = props.participants?.() ?? [];
-    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+    return base.some((user) => isMacroAiId(user.id))
       ? base
       : [macroAiMentionUser(), ...base];
   };

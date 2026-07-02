@@ -1004,10 +1004,31 @@ fn bot_mentions_recognize_bot_and_macro_ai_user_tags() {
 }
 
 #[test]
+fn bot_mentions_accept_canonical_bot_principal_ids() {
+    let macro_ai_principal = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+    let other_bot = BotId::new_from_uuid(Uuid::new_v4());
+    let other_bot_principal = other_bot.into_storage_id().to_string();
+    let mentions = vec![
+        // New clients send the canonical `bot|<uuid>` form.
+        mention("user", &macro_ai_principal),
+        // Duplicates collapse across encodings.
+        mention("user", &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()),
+        mention(BOT_MENTION_ENTITY_TYPE, &other_bot_principal),
+    ];
+
+    let bots = bot_mention_ids(&mentions);
+    assert_eq!(bots, vec![bot_id::MACRO_AI_BOT_ID, other_bot]);
+}
+
+#[test]
 fn macro_ai_user_mention_is_not_a_user_recipient() {
     assert!(is_bot_user_mention(&mention(
         "user",
         &bot_id::MACRO_AI_BOT_ID.as_uuid().to_string()
+    )));
+    assert!(is_bot_user_mention(&mention(
+        "user",
+        bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref()
     )));
     assert!(!is_bot_user_mention(&mention(
         "user",

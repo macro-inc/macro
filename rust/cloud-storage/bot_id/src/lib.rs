@@ -80,6 +80,21 @@ impl BotId {
             .map_err(|_| BotIdParseError::invalid(value))
     }
 
+    /// Parse a bot id from either the canonical storage form (`bot|<uuid>`)
+    /// or a bare UUID string.
+    ///
+    /// The bare UUID form exists only for backwards compatibility: old
+    /// clients emitted Macro AI mentions with a bare UUID id, and stored
+    /// message content and mention rows produced before the `bot|<uuid>`
+    /// normalization may still carry it. New producers must always use the
+    /// canonical `bot|<uuid>` form.
+    pub fn parse_lenient(value: &str) -> Result<Self, BotIdParseError> {
+        if let Ok(storage) = BotIdStr::parse_from_str(value) {
+            return Ok(storage.bot_id());
+        }
+        Self::parse_uuid_str(value)
+    }
+
     /// Canonical storage representation as a parsed [`BotIdStr`].
     pub fn into_storage_id(self) -> BotIdStr<'static> {
         let storage_id = format!("{BOT_STORAGE_PREFIX}|{}", self.0);
@@ -405,6 +420,20 @@ mod tests {
 
         assert_eq!(storage.bot_id(), bot_id);
         assert_eq!(storage.to_string(), format!("bot|{bot_id}"));
+    }
+
+    #[test]
+    fn parse_lenient_accepts_storage_and_bare_uuid() {
+        let uuid = Uuid::new_v4();
+        let bot_id = BotId::new_from_uuid(uuid);
+
+        assert_eq!(
+            BotId::parse_lenient(&format!("bot|{uuid}")).unwrap(),
+            bot_id
+        );
+        assert_eq!(BotId::parse_lenient(&uuid.to_string()).unwrap(), bot_id);
+        assert!(BotId::parse_lenient("macro|teo@macro.com").is_err());
+        assert!(BotId::parse_lenient("not-a-uuid").is_err());
     }
 
     #[test]

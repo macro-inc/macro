@@ -1,6 +1,5 @@
 use channel_sender::ChannelSender;
 use either::Either;
-use macro_user_id::email::{EmailStr, ReadEmailParts};
 use nom::{
     Finish, IResult, Parser,
     branch::alt,

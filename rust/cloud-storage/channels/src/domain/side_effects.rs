@@ -41,13 +41,17 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 /// Bot mentions normally arrive tagged `bot`, but Macro AI is surfaced through
 /// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
 /// bot is recognized as a bot mention too.
+///
+/// Ids are parsed leniently (`bot|<uuid>` or bare UUID): new clients send the
+/// canonical `bot|<uuid>` form, while old clients and historical content use
+/// the bare UUID.
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
         .filter_map(|mention| match mention.entity_type.as_str() {
-            BOT_MENTION_ENTITY_TYPE => BotId::parse_uuid_str(&mention.entity_id).ok(),
-            "user" => BotId::parse_uuid_str(&mention.entity_id)
+            BOT_MENTION_ENTITY_TYPE => BotId::parse_lenient(&mention.entity_id).ok(),
+            "user" => BotId::parse_lenient(&mention.entity_id)
                 .ok()
                 .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
             _ => None,
@@ -57,11 +61,12 @@ fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
 }
 
 /// Whether a `user`-tagged mention actually targets a bot (and so must not be
-/// treated as a user recipient). Real user ids are not bare UUIDs, so this only
-/// matches the Macro AI bot surfaced through the user-mention UI.
+/// treated as a user recipient). Real user ids are `macro|<email>` strings,
+/// never bare UUIDs or `bot|<uuid>` principals, so this only matches the Macro
+/// AI bot surfaced through the user-mention UI.
 fn is_bot_user_mention(mention: &SimpleMention) -> bool {
     mention.entity_type == "user"
-        && BotId::parse_uuid_str(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
+        && BotId::parse_lenient(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
 }
 
 /// Realtime update requested by the channel domain.
