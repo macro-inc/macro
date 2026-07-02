@@ -53,6 +53,12 @@ type HoverCardComponentProps = {
   triggerTabIndex?: number;
   /** Whether to disable the hover card */
   disabled?: boolean;
+  /**
+   * Don't open from the synthetic pointerenter fired when the trigger mounts
+   * under a stationary cursor (e.g. a chip inserted via keyboard); require
+   * real pointer movement first.
+   */
+  requirePointerMovement?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -102,7 +108,34 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const isTopLevel = parentNestedContext === undefined;
 
+  // Distinguish real hovers from the synthetic pointerenter browsers fire
+  // when the trigger mounts under a stationary cursor: only coordinate
+  // changes across pointermove events count as movement (synthetic moves
+  // repeat the same position).
+  let pointerMoved = false;
+  if (props.requirePointerMovement) {
+    let lastX: number | undefined;
+    let lastY: number | undefined;
+    const onPointerMove = (e: PointerEvent) => {
+      if (lastX !== undefined && (e.screenX !== lastX || e.screenY !== lastY)) {
+        pointerMoved = true;
+        window.removeEventListener('pointermove', onPointerMove, true);
+        return;
+      }
+      lastX = e.screenX;
+      lastY = e.screenY;
+    };
+    window.addEventListener('pointermove', onPointerMove, true);
+    onCleanup(() =>
+      window.removeEventListener('pointermove', onPointerMove, true)
+    );
+  }
+
   const handleOpenChange = (open: boolean) => {
+    if (open && props.requirePointerMovement && !pointerMoved) {
+      return;
+    }
+
     if (!open && nestedOpenCount() > 0) {
       return;
     }

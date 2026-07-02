@@ -59,6 +59,9 @@ function ChipWithUserTooltip(props: {
       triggerAs="div"
       trigger={props.chip}
       content={props.renderTooltip(() => setOpen(false))}
+      // Chips mount under the cursor when a recipient is picked via keyboard;
+      // don't treat that as a hover.
+      requirePointerMovement
     />
   );
 }
