@@ -48,10 +48,7 @@ import {
   isWithNotification,
   toNotificationEntity,
 } from '@entity';
-import {
-  useEntityTypeNotifications,
-  useNotificationsForEntity,
-} from '@notifications';
+import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -313,6 +310,7 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
 
   const activeListView = createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
@@ -320,30 +318,13 @@ export const SoupViewContextProvider: FlowComponent<
     return isListViewID(content.id) ? content.id : undefined;
   });
 
-  // The new inbox surfaces channel threads the user was mentioned in or replied
-  // to (matching the experimental inbox), injected as `channelThreadId`
-  // includes — soup otherwise only surfaces whole channels.
+  // The new inbox surfaces channel threads the current user participates in —
+  // the root sender, anyone who replied, or anyone @-mentioned — via the
+  // `channelThreadParticipantId` filter, since soup otherwise only surfaces
+  // whole channels.
   const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
     enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
   });
-  const channelNotifications = useEntityTypeNotifications(
-    notificationSource,
-    'channel'
-  );
-  const mentionedMessages = createMemo(() =>
-    channelNotifications()
-      .map((notification) => {
-        const metadata = notification.notification_metadata;
-        if (metadata.tag === 'channel_mention') {
-          return metadata.content.threadId ?? metadata.content.messageId;
-        }
-        if (metadata.tag === 'channel_message_reply') {
-          return metadata.content.threadId;
-        }
-        return undefined;
-      })
-      .filter((id): id is string => Boolean(id))
-  );
   const isNewInbox = () =>
     activeListView() === 'inbox' && newInboxFlag().enabled;
 
@@ -361,13 +342,13 @@ export const SoupViewContextProvider: FlowComponent<
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
     if (!isNewInbox()) return state;
-    const threadIds = mentionedMessages();
-    if (!threadIds.length) return state;
+    const id = userId();
+    if (!id) return state;
     return {
       ...state,
       include: {
         ...state.include,
-        channelThreadId: threadIds,
+        channelThreadParticipantId: [id],
       },
     };
   };
@@ -386,6 +367,7 @@ export const SoupViewContextProvider: FlowComponent<
         documentSeen: seen,
         emailSeen: seen,
         channelSeen: seen,
+        channelThreadSeen: seen,
         chatSeen: seen,
         folderSeen: seen,
       },
@@ -442,7 +424,6 @@ export const SoupViewContextProvider: FlowComponent<
     });
   };
 
-  const userId = useUserId();
   const showSupportedForeignEntitiesFF = useFeatureFlag(
     ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
     {
