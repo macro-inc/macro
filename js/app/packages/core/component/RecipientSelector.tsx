@@ -530,7 +530,10 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   });
 
   const visibleOptionKeys = createMemo(
-    () => new Set(options().map(getRecipientOptionValue))
+    () =>
+      new Set(
+        (options() as CombinedRecipientItem[]).map(getRecipientOptionValue)
+      )
   );
 
   // Kobalte resolves selected values against the `options` prop
@@ -538,7 +541,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   // there, so selected options that the search filtered out must stay in the
   // collection. `defaultFilter` keeps them hidden from the dropdown.
   const optionsWithSelected = createMemo(() => {
-    const visible = options();
+    const visible = options() as CombinedRecipientItem[];
     const keys = visibleOptionKeys();
     const hiddenSelected = (
       props.selectedOptions as CombinedRecipientItem[]
