@@ -39,7 +39,7 @@ fn bot_message_payload_includes_enriched_sender() {
     .unwrap();
 
     // Flattened message fields stay at the top level for existing clients.
-    assert_eq!(payload["sender_id"], bot_id.to_storage_string());
+    assert_eq!(payload["sender_id"], bot_id.to_storage_id().as_ref());
     assert_eq!(payload["content"], "hello");
     assert_eq!(payload["nonce"], "nonce-1");
     assert_eq!(payload["sender"]["type"], "bot");

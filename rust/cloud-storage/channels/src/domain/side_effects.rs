@@ -524,7 +524,7 @@ where
                 self.publish_realtime(ChannelRealtimeEffect::Typing {
                     recipients,
                     channel_id,
-                    user_id: actor.to_storage_string(),
+                    user_id: actor.as_ref().to_string(),
                     action,
                     thread_id,
                     nonce,

@@ -2558,7 +2558,7 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn create_channel(
         &self,
-        owner_id: String,
+        owner_id: MacroUserIdStr<'_>,
         _org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<Uuid, Self::Err> {
@@ -2571,7 +2571,7 @@ impl ChannelRepo for PgChannelsRepo {
             "#,
             channel_id,
             req.name.as_deref(),
-            &owner_id,
+            owner_id.as_ref(),
             None::<i64>,
             req.team_id,
             req.channel_type as ChannelType,
@@ -2587,7 +2587,7 @@ impl ChannelRepo for PgChannelsRepo {
             "#,
             channel_id,
             ParticipantRole::Owner as ParticipantRole,
-            &owner_id,
+            owner_id.as_ref(),
         )
         .execute(&mut *transaction)
         .await
@@ -2596,7 +2596,7 @@ impl ChannelRepo for PgChannelsRepo {
         for participant in req
             .participants
             .into_iter()
-            .filter(|participant| participant != &owner_id)
+            .filter(|participant| participant.as_ref() != owner_id.as_ref())
         {
             sqlx::query!(
                 r#"
@@ -2605,14 +2605,14 @@ impl ChannelRepo for PgChannelsRepo {
                 "#,
                 channel_id,
                 ParticipantRole::Member as ParticipantRole,
-                participant,
+                participant.as_ref(),
             )
             .execute(&mut *transaction)
             .await
             .context("unable to create channel participant")?;
         }
 
-        create_activity(&mut *transaction, channel_id, &owner_id)
+        create_activity(&mut *transaction, channel_id, owner_id.as_ref())
             .await
             .context("unable to create activity for channel")?;
         transaction
@@ -2624,8 +2624,8 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn maybe_get_dm(
         &self,
-        user_id: String,
-        recipient_id: String,
+        user_id: MacroUserIdStr<'_>,
+        recipient_id: ChannelSender<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
         let row = sqlx::query_as!(
             ChannelIdRow,
@@ -2646,8 +2646,8 @@ impl ChannelRepo for PgChannelsRepo {
                     AND cp.user_id = $2
               )
             "#,
-            user_id,
-            recipient_id,
+            user_id.as_ref(),
+            recipient_id.as_ref(),
         )
         .fetch_optional(&self.pool)
         .await
@@ -2657,8 +2657,12 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn maybe_get_private_channel(
         &self,
-        participants: Vec<String>,
+        participants: HashSet<ChannelSender<'_>>,
     ) -> Result<Option<Uuid>, Self::Err> {
+        let participants: Vec<String> = participants
+            .iter()
+            .map(|participant| participant.as_ref().to_string())
+            .collect();
         let row = sqlx::query_as!(
             ChannelIdRow,
             r#"
@@ -2767,7 +2771,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn add_participant(
         &self,
         channel_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
@@ -2776,7 +2780,7 @@ impl ChannelRepo for PgChannelsRepo {
             VALUES ($1, $2, $3)
             "#,
             channel_id,
-            user_id,
+            user_id.as_ref(),
             role as ParticipantRole,
         )
         .execute(&self.pool)
@@ -2803,7 +2807,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn create_message(
         &self,
         channel_id: Uuid,
-        sender_id: String,
+        sender_id: ChannelSender<'_>,
         triggered_by_user_id: Option<String>,
         content: String,
         thread_id: Option<Uuid>,
@@ -2828,7 +2832,7 @@ impl ChannelRepo for PgChannelsRepo {
             "#,
             message_id,
             channel_id,
-            sender_id,
+            sender_id.as_ref(),
             triggered_by_user_id,
             content,
             thread_id,
@@ -3189,7 +3193,11 @@ impl ChannelRepo for PgChannelsRepo {
         get_channel_participants_for_thread_id(&self.pool, thread_id).await
     }
 
-    async fn upsert_activity(&self, user_id: String, channel_id: Uuid) -> Result<(), Self::Err> {
+    async fn upsert_activity(
+        &self,
+        user_id: ChannelSender<'_>,
+        channel_id: Uuid,
+    ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             INSERT INTO comms_activity (id, user_id, channel_id, interacted_at)
@@ -3198,7 +3206,7 @@ impl ChannelRepo for PgChannelsRepo {
             SET interacted_at = NOW(), updated_at = NOW()
             "#,
             macro_uuid::generate_uuid_v7(),
-            user_id,
+            user_id.as_ref(),
             channel_id,
         )
         .execute(&self.pool)
@@ -3325,7 +3333,7 @@ impl ChannelRepo for PgChannelsRepo {
         channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
-        user_id: String,
+        user_id: ChannelSender<'_>,
     ) -> Result<(), Self::Err> {
         let row = sqlx::query_as!(
             ExistsRow,
@@ -3346,7 +3354,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             message_id,
             emoji,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_one(&self.pool)
         .await
@@ -3362,7 +3370,7 @@ impl ChannelRepo for PgChannelsRepo {
         channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
-        user_id: String,
+        user_id: ChannelSender<'_>,
     ) -> Result<(), Self::Err> {
         let row = sqlx::query_as!(
             ExistsRow,
@@ -3384,7 +3392,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             message_id,
             emoji,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_one(&self.pool)
         .await

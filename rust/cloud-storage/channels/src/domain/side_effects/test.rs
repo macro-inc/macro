@@ -694,7 +694,7 @@ async fn bot_thread_reply_sends_reply_notification() {
 async fn bot_participant_is_never_a_notification_recipient() {
     let channel_id = Uuid::new_v4();
     let recipient = user("recipient@example.com");
-    let bot_principal = BotId::from_uuid(Uuid::new_v4()).to_storage_string();
+    let bot_principal = BotId::from_uuid(Uuid::new_v4()).to_storage_id().to_string();
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext::default(),
@@ -1012,7 +1012,7 @@ fn macro_ai_user_mention_is_not_a_user_recipient() {
         "macro|teo@macro.com"
     )));
     assert!(is_bot_principal(
-        &bot_id::MACRO_AI_BOT_ID.to_storage_string()
+        bot_id::MACRO_AI_BOT_ID.to_storage_id().as_ref()
     ));
     assert!(!is_bot_principal("macro|teo@macro.com"));
 }

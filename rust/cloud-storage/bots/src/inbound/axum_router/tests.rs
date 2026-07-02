@@ -598,7 +598,7 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
         .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
         .await?;
 
-    let bot_principal_id = bot.id.to_storage_string();
+    let bot_principal_id = bot.id.to_storage_id().to_string();
     let router = real_router(pool.clone(), BOT_OWNER_ID);
     let list_request = Request::builder()
         .method("GET")
@@ -680,7 +680,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
         )
         .await?;
 
-    let bot_principal_id = bot.id.to_storage_string();
+    let bot_principal_id = bot.id.to_storage_id().to_string();
     let router = real_router(pool.clone(), ADMIN_USER_ID);
     let add_request = Request::builder()
         .method("POST")

@@ -460,7 +460,7 @@ impl SoupChannel {
 
 impl SoupMessageSender {
     fn from_storage_string(sender_id: &str) -> Self {
-        let Ok(sender) = channels::domain::models::Sender::parse_storage_str(sender_id) else {
+        let Ok(sender) = channels::domain::models::ChannelSender::parse_from_str(sender_id) else {
             return Self {
                 sender_type: SoupMessageSenderType::User,
                 id: sender_id.to_string(),

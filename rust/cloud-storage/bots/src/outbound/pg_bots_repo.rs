@@ -31,7 +31,7 @@ impl PgBotsRepo {
 }
 
 fn principal_id(bot_id: BotId) -> String {
-    bot_id.to_storage_string()
+    bot_id.to_storage_id().to_string()
 }
 
 fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {

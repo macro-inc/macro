@@ -699,6 +699,7 @@ pub struct CreateChannelRequest {
     /// Team id for team channels.
     pub team_id: Option<Uuid>,
     /// Participants to add, excluding the owner.
+    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
     pub participants: HashSet<ChannelSender<'static>>,
 }
 

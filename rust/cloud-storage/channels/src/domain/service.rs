@@ -250,13 +250,6 @@ fn bot_profile_for(
     profiles.get(&bot_id).cloned()
 }
 
-fn parse_macro_user_id(
-    user_id: impl Into<String>,
-) -> Result<MacroUserIdStr<'static>, ChannelMutationErr> {
-    MacroUserIdStr::try_from(user_id.into())
-        .map_err(|_| ChannelMutationErr::BadRequest("invalid user id".to_string()))
-}
-
 fn require_user_actor(actor: &Sender) -> Result<MacroUserIdStr<'static>, ChannelMutationErr> {
     actor
         .as_user()
@@ -288,15 +281,6 @@ fn extract_share_items(
 
 fn is_admin_or_owner(role: ParticipantRole) -> bool {
     matches!(role, ParticipantRole::Owner | ParticipantRole::Admin)
-}
-
-fn parse_user_ids(
-    users: impl IntoIterator<Item = String>,
-) -> Result<Vec<MacroUserIdStr<'static>>, ChannelMutationErr> {
-    users
-        .into_iter()
-        .map(parse_macro_user_id)
-        .collect::<Result<Vec<_>, _>>()
 }
 
 /// returns all user participants in a channel given an iterator of participants and the channel owner
@@ -402,7 +386,7 @@ where
 
         self.get_or_create_channel(
             existing_channel_id,
-            ChannelSender::new_from_user(actor.clone()),
+            actor.clone(),
             None,
             crate::domain::models::CreateChannelRequest {
                 name: None,
@@ -421,7 +405,7 @@ where
     async fn get_or_create_private(
         &self,
         actor: Sender,
-        mut req: GetOrCreatePrivateRequest,
+        req: GetOrCreatePrivateRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
         if req.recipients.is_empty() {
@@ -440,7 +424,7 @@ where
 
         self.get_or_create_channel(
             existing_channel_id,
-            ChannelSender::new_from_user(actor),
+            actor,
             None,
             crate::domain::models::CreateChannelRequest {
                 name: None,
@@ -1059,7 +1043,7 @@ where
     async fn get_or_create_channel(
         &self,
         existing_channel_id: Option<Uuid>,
-        owner_id: ChannelSender<'_>,
+        owner_id: MacroUserIdStr<'static>,
         org_id: Option<i64>,
         create_req: crate::domain::models::CreateChannelRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
@@ -1071,8 +1055,11 @@ where
         }
 
         let channel_type = create_req.channel_type;
+        let owner_sender = ChannelSender::new_from_user(owner_id.clone());
         let participant_user_ids =
-            created_channel_participant_ids(owner_id.copied(), create_req.participants);
+            created_channel_participant_ids(owner_sender.clone(), create_req.participants.clone())
+                .into_iter()
+                .collect();
         let channel_id = self
             .create_channel_record(owner_id, org_id, create_req)
             .await?;
@@ -1417,7 +1404,7 @@ where
     ) -> Result<Activity, ChannelMutationErr> {
         let activity = self
             .repo
-            .set_activity(actor.to_storage_string(), channel_id, activity_type)
+            .set_activity(actor.as_ref().to_string(), channel_id, activity_type)
             .await
             .map_err(anyhow::Error::from)?;
 
