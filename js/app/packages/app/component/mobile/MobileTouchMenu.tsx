@@ -9,8 +9,8 @@ import {
   type Component,
   createSignal,
   For,
-  Show,
   type JSXElement,
+  Show,
 } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
 import { pressPulse } from './pressPulse';

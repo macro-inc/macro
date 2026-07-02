@@ -1,8 +1,8 @@
 import { isMobile } from '@core/mobile/isMobile';
+import type { SemanticToken } from '@theme/types/themeTypes';
 import { type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
-import type { SemanticToken } from '@theme/types/themeTypes';
 
 export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
