@@ -632,6 +632,7 @@ enum GraphqlChannelThreadLiteral {
     ThreadId(ID),
     ChannelId(ID),
     RootSender(String),
+    Participant(String),
     NotificationDone(bool),
     NotificationSeen(bool),
 }
@@ -643,6 +644,9 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
             Self::ChannelId(id) => ChannelThreadLiteral::ChannelId(parse_id(id, "channelId")?),
             Self::RootSender(sender) => {
                 ChannelThreadLiteral::RootSender(parse_macro_user_id(sender, "rootSender")?)
+            }
+            Self::Participant(participant) => {
+                ChannelThreadLiteral::Participant(parse_macro_user_id(participant, "participant")?)
             }
             Self::NotificationDone(done) => ChannelThreadLiteral::NotificationDone(done),
             Self::NotificationSeen(seen) => ChannelThreadLiteral::NotificationSeen(seen),

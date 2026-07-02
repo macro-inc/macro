@@ -11,6 +11,11 @@
 export interface ChannelThreadFilters {
   /** Channel IDs containing the thread. Empty to include threads from all accessible channels. */
   channel_ids?: string[];
+  /** Thread participant user IDs. A participant is the root message sender, anyone
+who replied in the thread, or anyone @-mentioned in the thread; a group mention
+(e.g. @here) makes every active channel member a participant. Empty to include
+threads regardless of participants. */
+  participant_ids?: string[];
   /** Sender IDs for the root thread message. Empty to include all root senders. */
   root_sender_ids?: string[];
   /** Channel thread parent message IDs to include. Empty to include all accessible threads. */

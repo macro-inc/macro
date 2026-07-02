@@ -854,6 +854,9 @@ fn push_channel_thread_filter_expr(
             builder.push("m.sender_id = ");
             builder.push_bind(sender.as_ref().to_string());
         }
+        Expr::Literal(ChannelThreadLiteral::Participant(participant)) => {
+            push_channel_thread_participant_filter_expr(builder, participant);
+        }
         Expr::Literal(ChannelThreadLiteral::NotificationDone(done)) => {
             push_channel_thread_notification_filter_expr(
                 builder,
@@ -877,6 +880,67 @@ fn push_channel_thread_filter_expr(
             );
         }
     }
+}
+
+/// SQL LIKE pattern matching a group mention tag (e.g. @here) in message content.
+/// Group mentions are only persisted inside the message body as
+/// `<m-group-mention>{"groupAlias":"..."}</m-group-mention>` tags (see the
+/// `mention_utils` crate); they have no rows in `comms_entity_mentions`.
+#[cfg(feature = "list")]
+const GROUP_MENTION_LIKE_PATTERN: &str = "%<m-group-mention>%";
+
+/// A user is a participant of a thread when they are still an active member of the
+/// channel AND they sent the root message or any reply, were @-mentioned anywhere in
+/// the thread, or the thread contains a group mention (e.g. @here), which makes every
+/// active channel member a participant.
+#[cfg(feature = "list")]
+fn push_channel_thread_participant_filter_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    participant: &MacroUserIdStr<'_>,
+) {
+    let participant = participant.as_ref().to_string();
+    builder.push(
+        r#"(EXISTS (
+            SELECT 1
+            FROM comms_channel_participants pcp
+            WHERE pcp.channel_id = m.channel_id
+              AND pcp.user_id = "#,
+    );
+    builder.push_bind(participant.clone());
+    builder.push(
+        r#"
+              AND pcp.left_at IS NULL
+        ) AND EXISTS (
+            SELECT 1
+            FROM comms_messages tm
+            WHERE (tm.id = m.id OR tm.thread_id = m.id)
+              AND tm.deleted_at IS NULL
+              AND (
+                tm.sender_id = "#,
+    );
+    builder.push_bind(participant.clone());
+    builder.push(
+        r#"
+                OR tm.content LIKE "#,
+    );
+    builder.push_bind(GROUP_MENTION_LIKE_PATTERN);
+    builder.push(
+        r#"
+                OR EXISTS (
+                    SELECT 1
+                    FROM comms_entity_mentions em
+                    WHERE em.source_entity_type = 'message'
+                      AND em.source_entity_id = tm.id::text
+                      AND em.entity_type = 'user'
+                      AND em.entity_id = "#,
+    );
+    builder.push_bind(participant);
+    builder.push(
+        r#"
+                )
+              )
+        ))"#,
+    );
 }
 
 #[cfg(feature = "list")]

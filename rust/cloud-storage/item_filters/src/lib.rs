@@ -487,6 +487,13 @@ pub struct ChannelThreadFilters {
     /// Sender IDs for the root thread message. Empty to include all root senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub root_sender_ids: Vec<String>,
+
+    /// Thread participant user IDs. A participant is the root message sender, anyone
+    /// who replied in the thread, or anyone @-mentioned in the thread; a group mention
+    /// (e.g. @here) makes every active channel member a participant. Empty to include
+    /// threads regardless of participants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participant_ids: Vec<String>,
 }
 
 impl IsEmpty for ChannelThreadFilters {
@@ -495,8 +502,12 @@ impl IsEmpty for ChannelThreadFilters {
             thread_ids,
             channel_ids,
             root_sender_ids,
+            participant_ids,
         } = self;
-        thread_ids.is_empty() && channel_ids.is_empty() && root_sender_ids.is_empty()
+        thread_ids.is_empty()
+            && channel_ids.is_empty()
+            && root_sender_ids.is_empty()
+            && participant_ids.is_empty()
     }
 }
 

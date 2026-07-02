@@ -8353,6 +8353,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Channel IDs containing the thread. Empty to include threads from all accessible channels.'
           ),
+        participant_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread; a group mention\n(e.g. @here) makes every active channel member a participant. Empty to include\nthreads regardless of participants.'
+          ),
         root_sender_ids: zod
           .array(zod.string())
           .optional()
