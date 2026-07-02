@@ -97,7 +97,24 @@ export default function SignatureEditor(props: {
         : op.insert != null
     );
     if (!hasContent) return '';
-    return quill.getSemanticHTML();
+    // Quill emits one bare <p> per line. The sent email carries no stylesheet,
+    // so recipients' clients would apply their default ~1em paragraph margins
+    // (the editor and previews zero them via app CSS) — inline margin:0 so the
+    // wire format matches what the editor shows.
+    const doc = new DOMParser().parseFromString(
+      quill.getSemanticHTML(),
+      'text/html'
+    );
+    for (const p of doc.body.querySelectorAll('p')) {
+      p.style.setProperty('margin', '0');
+      // getSemanticHTML drops the placeholder <br> from blank lines, and with
+      // margins zeroed an empty <p> collapses to nothing — put the <br> back so
+      // blank separator lines keep their one-line height in the sent email.
+      if (!p.textContent && !p.querySelector('br, img')) {
+        p.append(doc.createElement('br'));
+      }
+    }
+    return doc.body.innerHTML;
   };
 
   const setHtml = (html: string) => {
