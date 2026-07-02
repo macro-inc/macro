@@ -38,7 +38,7 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        'group/inbox-item relative grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2 py-1.5',
+        'group/inbox-item relative grid w-full grid-cols-[2.5rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg px-2 py-2.5',
 
         {
           'bg-accent/8': props.selected,
