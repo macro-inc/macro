@@ -478,7 +478,7 @@ function BaseCard(props: {
       <div class="col-start-1 row-start-1 row-span-2">{props.leading}</div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
-          <InboxCard.Title class="flex items-center gap-1">
+          <InboxCard.Title class="flex items-center gap-1 truncate">
             <Badge unread={props.unread} />
             {props.title}
           </InboxCard.Title>
