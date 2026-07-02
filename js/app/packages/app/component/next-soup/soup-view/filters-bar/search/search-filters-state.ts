@@ -212,6 +212,10 @@ export function createSearchFiltersController() {
   // Per-index values are remembered for the lifetime of the view: switching
   // the type away stashes the active section, switching back rehydrates it.
   let stash: SearchFiltersSections = structuredClone(DEFAULT_SECTIONS);
+  // Tags aren't a per-type section but are still remembered across type
+  // switches (they compile only for TAG_SEARCH_TYPES, so `tags()` reads empty
+  // on other types — snapshot them on switch-away so the selection survives).
+  let stashedTags: PropertyFilter[] = [];
 
   const apply = (state: SearchFiltersState) =>
     batch(() => {
@@ -253,7 +257,11 @@ export function createSearchFiltersController() {
       };
     }
 
-    apply({ type: next, tags: tags(), ...stash });
+    // Refresh the tag snapshot from the live value only while leaving a type
+    // that compiles tags; other types read empty and would clobber it.
+    if (TAG_SEARCH_TYPES.has(current)) stashedTags = tags();
+
+    apply({ type: next, tags: stashedTags, ...stash });
   };
 
   return {
