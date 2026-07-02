@@ -1167,15 +1167,9 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => {
     const subject = props.item.entity.name;
 
-    let entitySnippet: string | undefined;
-    if (props.item.entity.type === 'email') {
-      entitySnippet = props.item.entity.snippet;
-    }
-
     return {
       sender: senderName(),
       subject,
-      content: entitySnippet,
     };
   });
 

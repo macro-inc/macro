@@ -40,7 +40,7 @@ export function InboxListEntity(props: BaseListEntityProps) {
           onClick={props.onClick}
         />
       </MaybeEntityRow>
-      <div class="w-[calc(100%_-_2rem)] h-px mx-4 my-2 bg-edge-muted/50" />
+      {/* <div class="w-[calc(100%_-_2rem)] h-px mx-4 my-2 bg-edge-muted/50" /> */}
     </div>
   );
 }
