@@ -7966,7 +7966,10 @@ dependencies = [
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
+ "channel_sender",
  "cool_asserts",
+ "either",
+ "macro_user_id",
  "nom 8.0.0",
  "serde",
  "serde_json",
