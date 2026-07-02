@@ -169,6 +169,14 @@ export type OpenWithSplitOptions = {
   preferNewSplit?: boolean;
   insertIndex?: number;
   handle?: SplitHandle;
+  /**
+   * Ask the block to land on its latest content via the `goToLatest` block
+   * method. Covers content that is already mounted (e.g. a channel open in
+   * another split parked at an old scroll position), which would otherwise
+   * just be activated as-is. Omit when navigating to a specific location
+   * within the block.
+   */
+  reopen?: 'latest';
 };
 
 /**
@@ -1248,6 +1256,16 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    if (options.reopen === 'latest') {
+      // Fire-and-forget so it covers every open path (fresh mount, duplicate
+      // activation, interceptor-consumed navigation). The block-handle proxy
+      // waits for the block and method to register before invoking.
+      void orchestrator
+        .getBlockHandle(content.id)
+        .then((handle) => handle?.goToLatest())
+        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
+    }
+
     if (navigationInterceptor) {
       const result = navigationInterceptor(content, options);
       if (result.handled) return undefined;

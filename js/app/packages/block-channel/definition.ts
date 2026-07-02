@@ -18,7 +18,3 @@ export const definition = defineBlock({
 });
 
 export type ChannelData = ExtractLoadType<(typeof definition)['load']>;
-
-export type ChannelBlockSpec = {
-  goToLatestMessages: () => Promise<void>;
-};

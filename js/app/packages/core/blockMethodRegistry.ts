@@ -1,5 +1,4 @@
 import type { CanvasSpec } from '../block-canvas/definition';
-import type { ChannelBlockSpec } from '../block-channel/definition';
 import type { BlockChatSpec } from '../block-chat/blockClient';
 import type { MarkdownBlockSpec } from '../block-md/definition';
 import type { BlockName } from './block';
@@ -9,6 +8,8 @@ type BlockMethodSpec = Record<string, (...args: any[]) => any | Promise<any>>;
 
 export type SharedBlockSpec = {
   goToLocationFromParams: (params: Record<string, any>) => Promise<void>;
+  /** Land the block on its latest content (e.g. newest channel messages). */
+  goToLatest: () => Promise<void>;
 };
 
 // Ensure all block specs extend BlockMethodSpec
@@ -18,7 +19,7 @@ type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 export interface BlockMethodRegistry {
   call: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
-  channel: AssertSpec<ChannelBlockSpec>;
+  channel: EmptySpec;
   write: EmptySpec;
   pdf: EmptySpec;
   html: EmptySpec;

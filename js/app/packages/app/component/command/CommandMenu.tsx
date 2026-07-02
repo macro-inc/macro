@@ -4,7 +4,6 @@ import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { goToLatestChannelMessages } from '@block-channel/utils/link';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
@@ -265,14 +264,9 @@ export function CommandMenuInner(props: {
             {
               referredFrom: 'kommand-menu',
               preferNewSplit: openInNewSplit,
+              reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
-          if (blockName === 'channel') {
-            const orchestrator = globalSplitManager()?.getOrchestrator();
-            if (orchestrator) {
-              void goToLatestChannelMessages(orchestrator, item.id);
-            }
-          }
         }
       }
       CommandState.close();
