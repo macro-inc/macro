@@ -2,10 +2,6 @@
 // possible) the SharedWorker. Classic script (importScripts-compatible) —
 // no modules, to maximize browser compatibility.
 
-/* eslint-disable no-unused-vars */
-
-'use strict';
-
 /** Wraps a promise with a timeout so a hung API can't stall the matrix. */
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -68,7 +64,8 @@ async function probeSyncAccessHandle() {
 
 async function probeWebLocks() {
   try {
-    if (!('locks' in navigator)) return outcome(false, 'navigator.locks missing');
+    if (!('locks' in navigator))
+      return outcome(false, 'navigator.locks missing');
     const res = await withTimeout(
       navigator.locks.request('__probe_lock', () => 'ok'),
       3000,
@@ -98,6 +95,7 @@ function probeNestedWorkerCtor() {
 }
 
 /** Full capability sweep for the current context. */
+// biome-ignore lint/correctness/noUnusedVariables: used by workers via importScripts
 async function runCaps() {
   return {
     opfsRoot: await probeOpfsRoot(),
@@ -115,7 +113,8 @@ async function runCaps() {
 function stats(samplesMs) {
   const sorted = [...samplesMs].sort((a, b) => a - b);
   const total = sorted.reduce((a, b) => a + b, 0);
-  const pick = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  const pick = (q) =>
+    sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
   return {
     n: sorted.length,
     totalMs: +total.toFixed(2),
@@ -129,6 +128,7 @@ function stats(samplesMs) {
  * OPFS sync-access-handle benchmark. Dedicated-worker only.
  * Sequential 4KiB writes, one flush, then random 4KiB reads.
  */
+// biome-ignore lint/correctness/noUnusedVariables: used by workers via importScripts
 async function benchOpfsSync(opCount) {
   const N = opCount || 1000;
   const CHUNK = 4096;
@@ -153,7 +153,7 @@ async function benchOpfsSync(opCount) {
     const readBuf = new Uint8Array(CHUNK);
     const reads = [];
     for (let i = 0; i < N; i++) {
-      const at = (Math.floor(Math.random() * N)) * CHUNK;
+      const at = Math.floor(Math.random() * N) * CHUNK;
       const t0 = performance.now();
       handle.read(readBuf, { at });
       reads.push(performance.now() - t0);
@@ -175,6 +175,7 @@ async function benchOpfsSync(opCount) {
  * IndexedDB benchmark: batched puts in one txn, individual gets, getAll.
  * Records shaped like normalized cache records (~1KiB JSON-ish values).
  */
+// biome-ignore lint/correctness/noUnusedVariables: used by workers via importScripts
 function benchIdb(recordCount) {
   const N = recordCount || 1000;
   const DB = '__probe_idb_bench';
@@ -186,7 +187,10 @@ function benchIdb(recordCount) {
       name: `Document ${i} — ${'x'.repeat(512)}`,
       ownerId: `user-${i % 50}`,
       updatedAt: new Date().toISOString(),
-      links: Array.from({ length: 8 }, (_, j) => `GraphqlSoupProperty:p-${i}-${j}`),
+      links: Array.from(
+        { length: 8 },
+        (_, j) => `GraphqlSoupProperty:p-${i}-${j}`
+      ),
     },
     meta: { lastWritten: Date.now(), stale: false },
   });
@@ -196,7 +200,8 @@ function benchIdb(recordCount) {
     del.onerror = () => reject(del.error);
     del.onsuccess = del.onblocked = () => {
       const open = indexedDB.open(DB, 1);
-      open.onupgradeneeded = () => open.result.createObjectStore(STORE, { keyPath: 'key' });
+      open.onupgradeneeded = () =>
+        open.result.createObjectStore(STORE, { keyPath: 'key' });
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result;
@@ -211,7 +216,8 @@ function benchIdb(recordCount) {
           // Individual gets, sequential await-per-get (worst case read path).
           const getSamples = [];
           let i = 0;
-          const getTxn = () => db.transaction(STORE, 'readonly').objectStore(STORE);
+          const getTxn = () =>
+            db.transaction(STORE, 'readonly').objectStore(STORE);
           const nextGet = () => {
             if (i >= N) {
               const tAll0 = performance.now();
