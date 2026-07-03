@@ -1,3 +1,5 @@
+-- no-transaction
+
 -- Normalize Macro-bot mention ids to the canonical `bot|<uuid>` principal form.
 --
 -- Historically the frontend surfaced the Macro AI bot through the user-mention
@@ -19,15 +21,43 @@
 --    already used `bot|<uuid>` participant ids), so the rewrite is scoped to
 --    its constant id. Whitespace around the JSON colon is tolerated and the
 --    match is case-insensitive; already-normalized `bot|<uuid>` ids do not
---    match the pattern, so the statement is idempotent.
-UPDATE comms_messages
-SET content = regexp_replace(
-    content,
-    '"userId"[[:space:]]*:[[:space:]]*"(00000000-0000-0000-0000-00000000a1a1)"',
-    '"userId":"bot|\1"',
-    'gi'
-)
-WHERE content ILIKE '%"userId"%00000000-0000-0000-0000-00000000a1a1%';
+--    match the pattern, so the rewrite is idempotent.
+CREATE OR REPLACE PROCEDURE normalize_macro_bot_mention_ids_in_messages()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    batch_size integer := 1000;
+    updated_count integer;
+BEGIN
+    LOOP
+        WITH batch AS (
+            SELECT id
+            FROM comms_messages
+            WHERE content ILIKE '%"userId"%00000000-0000-0000-0000-00000000a1a1%'
+              AND content ~* '"userId"[[:space:]]*:[[:space:]]*"00000000-0000-0000-0000-00000000a1a1"'
+            ORDER BY id
+            LIMIT batch_size
+        )
+        UPDATE comms_messages AS m
+        SET content = regexp_replace(
+            m.content,
+            '"userId"[[:space:]]*:[[:space:]]*"(00000000-0000-0000-0000-00000000a1a1)"',
+            '"userId":"bot|\1"',
+            'gi'
+        )
+        FROM batch
+        WHERE m.id = batch.id;
+
+        GET DIAGNOSTICS updated_count = ROW_COUNT;
+        COMMIT;
+
+        EXIT WHEN updated_count < batch_size;
+        PERFORM pg_sleep(0.05);
+    END LOOP;
+END $$;
+
+CALL normalize_macro_bot_mention_ids_in_messages();
+DROP PROCEDURE normalize_macro_bot_mention_ids_in_messages();
 
 -- 2. Normalize `bot`-tagged mention rows that carry a bare UUID entity id.
 --    These rows are read back (e.g. for search indexing) and must use the

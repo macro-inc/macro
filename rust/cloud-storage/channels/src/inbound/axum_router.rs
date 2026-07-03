@@ -120,9 +120,7 @@ fn actor_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<Sender, ChannelsHandlerErr> {
     match receipt.auth() {
-        EntityAccessAuth::Authenticated(user_id) => {
-            Ok(ChannelSender::new_from_user(user_id.clone()))
-        }
+        EntityAccessAuth::Authenticated(user_id) => Ok(Sender::new_from_user(user_id.clone())),
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => Err(
             ChannelsHandlerErr::BadRequest("authenticated actor required"),
         ),
@@ -371,7 +369,7 @@ pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>
     let res = state
         .service
         .create_channel(
-            ChannelSender::new_from_user(user.macro_user_id),
+            Sender::new_from_user(user.macro_user_id),
             user.user_context.organization_id.map(i64::from),
             req,
         )

@@ -960,7 +960,7 @@ pub struct PostTypingRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct AddParticipantsRequest {
     /// User ids to add.
-    #[cfg_attr(feature = "inbound", schema(value_type = Vec<String>))]
+    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
