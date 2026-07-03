@@ -27,15 +27,12 @@ import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
-import TableActionMenu, {
-  anchorElemRefSignal,
-  menuButtonRefSignal,
-  tableCellNodeKeySignal,
-} from '@core/component/LexicalMarkdown/component/menu/TableActionMenu';
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
+import { TableDeleteButtons } from '@core/component/LexicalMarkdown/component/misc/TableDeleteButtons';
 import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
+import { TableMobileControls } from '@core/component/LexicalMarkdown/component/misc/TableMobileControls';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -65,7 +62,6 @@ import {
   pinnedPropertiesPlugin,
   selectionDataPlugin,
   tabIndentationPlugin,
-  tableActionMenuPlugin,
   tableCellResizerPlugin,
   tableClipboardPlugin,
   tablePlugin,
@@ -131,6 +127,7 @@ import {
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   blockFileSignal,
@@ -491,16 +488,6 @@ export function MarkdownEditor(props: {
     }
   });
 
-  const tableActionsMenuPluginProps = {
-    menuButtonRef: menuButtonRefSignal.get,
-    anchorElem: anchorElemRefSignal.get,
-
-    tableCellNodeKey: tableCellNodeKeySignal.get,
-    setTableCellNodeKey: (cellNodeKey: string | null) => {
-      tableCellNodeKeySignal.set(cellNodeKey ?? undefined);
-    },
-  };
-
   const peerIdValidator: Accessor<PeerIdValidator> = () => {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
@@ -556,7 +543,6 @@ export function MarkdownEditor(props: {
       })
     )
     .use(tableCellResizerPlugin())
-    .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
     .use(tableClipboardPlugin())
     .use(
       filePastePlugin({
@@ -1093,8 +1079,17 @@ export function MarkdownEditor(props: {
 
         <Show when={canEdit()}>
           <TableCellResizer />
-          <TableInsertButton />
-          <TableActionMenu anchorElem={editorContainerRef} cellMerge={true} />
+          <Show
+            when={isMobile()}
+            fallback={
+              <>
+                <TableInsertButton />
+                <TableDeleteButtons />
+              </>
+            }
+          >
+            <TableMobileControls />
+          </Show>
         </Show>
 
         <Show when={ENABLE_MARKDOWN_AI_GENERATE}>

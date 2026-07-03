@@ -355,7 +355,9 @@ ol.static-md.depth-6 > li:not(.list-none)::before {
   width: fit-content;
   vertical-align: top;
   text-align: start;
-  padding: 0.5rem;
+  /* Roomy enough that the floating insert/delete buttons on cell edges don't
+     cover text. */
+  padding: 0.75rem;
   position: relative;
   outline: none;
   overflow: auto;
@@ -463,30 +465,6 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   background-color: var(--color-accent);
   height: 100%;
   top: 0;
-}
-
-.md-table-cell-action-button-container {
-  display: block;
-  right: 5px;
-  top: 6px;
-  position: absolute;
-  z-index: 4;
-  width: 20px;
-  height: 20px;
-}
-
-.md-table-cell-action-button {
-  display: block;
-  border: 0;
-  border-radius: 20px;
-  width: 20px;
-  height: 20px;
-  color: var(--color-ink-muted);
-  background-color: transparent;
-}
-
-.md-table-cell-action-button:hover {
-  background-color: rgb(from var(--color-edge) r g b / 0.15);
 }
 
 .md-editor-equation {
