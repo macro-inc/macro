@@ -1,5 +1,6 @@
 //! Port definition for the AI editing worker.
 
+use macro_sync_service_jwt::DocumentPermissionToken;
 use std::future::Future;
 
 /// Result returned by a successful edit operation.
@@ -31,7 +32,7 @@ pub trait EditingWorkerService: Send + Sync + 'static {
     fn edit(
         &self,
         document_id: &str,
-        document_token: &str,
+        document_token: &DocumentPermissionToken,
         instructions: &str,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
 }

@@ -67,9 +67,9 @@ const res = await fetch(`${workerUrl}/edit`, {
 		documentId,
 		prompt,
 		models: {
-			supervisor: parseModel(supervisorModelFlag),
-			interpret: parseModel(interpretModelFlag),
-			coding: parseModel(codingModelFlag),
+			supervisor: [parseModel(supervisorModelFlag)],
+			interpret: [parseModel(interpretModelFlag)],
+			coding: [parseModel(codingModelFlag)],
 		},
 		debug: wantDebug,
 	}),

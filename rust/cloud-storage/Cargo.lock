@@ -2915,6 +2915,15 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "convert_case"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
@@ -3696,10 +3705,12 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
 dependencies = [
+ "convert_case 0.10.0",
  "proc-macro2",
  "quote",
  "rustc_version",
  "syn 2.0.117",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -3977,6 +3988,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_sha_count_client",
+ "macro_sync_service_jwt",
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
@@ -4151,6 +4163,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env_var",
  "macro_service_urls",
+ "macro_sync_service_jwt",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -7615,6 +7628,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_sync_service_jwt"
+version = "0.1.0"
+dependencies = [
+ "derive_more 2.1.1",
+ "jsonwebtoken 10.3.0",
+ "serde",
+]
+
+[[package]]
 name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
@@ -10896,7 +10918,7 @@ name = "rig-derive"
 version = "0.38.2"
 source = "git+https://github.com/macro-inc/rig?branch=feat%2Fresponses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7"
 dependencies = [
- "convert_case",
+ "convert_case 0.11.0",
  "deluxe",
  "indoc",
  "proc-macro-crate 3.5.0",

@@ -76,7 +76,8 @@ pub async fn handler(
             }),
         )
             .into_response()
-    })?;
+    })?
+    .into_inner();
 
     Ok((
         StatusCode::OK,

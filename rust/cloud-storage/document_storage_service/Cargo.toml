@@ -94,6 +94,7 @@ macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_service_urls = { path = "../macro_service_urls" }
+macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_env_var = { path = "../macro_env_var" }
 macro_queues = { path = "../macro_queues" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [

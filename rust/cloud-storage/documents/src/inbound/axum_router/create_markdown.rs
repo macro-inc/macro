@@ -77,7 +77,8 @@ pub async fn create_markdown_handler<
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");
         DocumentError::Internal(e.into())
-    })?;
+    })?
+    .into_inner();
 
     Ok(Json(CreateMarkdownDocumentResponse {
         document_id,

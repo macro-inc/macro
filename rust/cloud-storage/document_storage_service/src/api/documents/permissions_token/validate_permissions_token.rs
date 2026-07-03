@@ -6,8 +6,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use documents_hex::domain::permission_token::ISSUER;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use macro_sync_service_jwt::ISSUER;
 use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
 use utoipa::ToSchema;
 
@@ -85,7 +85,7 @@ pub async fn handler(
         },
     };
 
-    if decoded_jwt.user_id != user_id {
+    if decoded_jwt.user_id.as_ref().map(|id| id.to_string()) != user_id {
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {

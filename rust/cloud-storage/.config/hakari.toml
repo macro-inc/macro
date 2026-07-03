@@ -36,4 +36,8 @@ platforms = [
 # the deploy dependency layers that every service build warms. Excluding it
 # also means manage-deps does not add the workspace-hack dep to it.
 [traversal-excludes]
-workspace-members = ["xtask"]
+# xtask: dev-only automation (see above).
+# macro_sync_service_jwt: must stay wasm-safe (the sync service compiles it to
+# wasm32), so it must not gain the workspace-hack dep, which pulls native-only
+# features.
+workspace-members = ["xtask", "macro_sync_service_jwt"]

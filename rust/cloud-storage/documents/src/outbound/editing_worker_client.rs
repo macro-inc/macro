@@ -1,6 +1,7 @@
 //! Outbound adapter for the AI editing worker.
 
 use crate::domain::ports::editing::{EditResult, EditUsage, EditingWorkerService};
+use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
@@ -28,11 +29,11 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     async fn edit(
         &self,
         document_id: &str,
-        document_token: &str,
+        document_token: &DocumentPermissionToken,
         instructions: &str,
     ) -> anyhow::Result<EditResult> {
         let request_body = serde_json::json!({
-            "documentToken": document_token,
+            "documentToken": document_token.as_str(),
             "documentId": document_id,
             "prompt": instructions,
             // Each role lists models tried in order: Cerebras primary, with an

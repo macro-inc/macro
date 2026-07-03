@@ -62,6 +62,7 @@ members = [
   "macro_event_broker",
   "macro_event_topics",
   "macro_queues",
+  "macro_sync_service_jwt",
   "prompt",
   "workspace-hack",
   "tools/xtask",
