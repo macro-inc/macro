@@ -177,19 +177,6 @@ const processService = async (
 			);
 		}
 
-		// Special handling for cloud-storage: orval only generates zod.ts/schemas
-		// from openapi.json, but generated/graphql.ts is produced separately by
-		// graphql-codegen from rust/cloud-storage/schema.graphql. Since the
-		// `rm -rf ${generatedDir}` above wipes graphql.ts too, regenerate it here.
-		if (service.name === "cloud-storage") {
-			stepStart = performance.now();
-			const appDir = path.resolve(import.meta.dirname, "..");
-			await $`cd ${appDir} && bun run gen-graphql`.quiet();
-			console.log(
-				`[${service.name}] GraphQL types generation finished (${elapsed(stepStart)})`,
-			);
-		}
-
 		console.log(`[${service.name}] ✓ Done (total: ${elapsed(serviceStart)})`);
 		return { service: service.name, status: "success" as const };
 	} catch (error) {
