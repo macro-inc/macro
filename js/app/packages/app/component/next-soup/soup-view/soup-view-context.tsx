@@ -180,6 +180,11 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
+  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+  const resolveTransport = (groupBy: GroupByField | undefined) =>
+    useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined;
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
@@ -227,8 +232,7 @@ export const SoupViewContextProvider: FlowComponent<
         params: soupParams(),
         body: soupBody(),
         groupBy,
-        transport:
-          useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined,
+        transport: resolveTransport(groupBy),
       }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
         if (!prev) return;
@@ -456,10 +460,6 @@ export const SoupViewContextProvider: FlowComponent<
       enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
     }
   );
-  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
-
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
     userId: userId(),
@@ -490,8 +490,7 @@ export const SoupViewContextProvider: FlowComponent<
         params: soupParams(),
         body: soupBody(),
         groupBy,
-        transport:
-          useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined,
+        transport: resolveTransport(groupBy),
       };
     },
     () => {
