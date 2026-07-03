@@ -54,3 +54,20 @@ fn rejects_non_canonical_storage_uuid() {
 
     assert!(BotIdStr::parse_from_str(&format!("bot|{uuid}")).is_err());
 }
+
+#[test]
+fn equality_and_hash_ignore_uuid_case() {
+    let lowercase = "bot|0a0b0c0d-0000-0000-0000-00000000a1a1".to_string();
+    let uppercase = "bot|0A0B0C0D-0000-0000-0000-00000000A1A1".to_string();
+
+    let lower = BotIdStr::parse_from_str(&lowercase).unwrap();
+    let upper = BotIdStr::parse_from_str(&uppercase).unwrap();
+
+    // Different original strings, same bot: equal and hash-compatible.
+    assert_eq!(lower, upper);
+    assert_eq!(lower.bot_id(), upper.bot_id());
+
+    let set: std::collections::HashSet<BotIdStr<'_>> =
+        [lower.clone(), upper.clone()].into_iter().collect();
+    assert_eq!(set.len(), 1);
+}
