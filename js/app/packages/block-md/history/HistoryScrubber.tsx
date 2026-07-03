@@ -111,7 +111,12 @@ export function HistoryScrubber(props: { compact?: boolean }) {
       history.diff.session,
       (session) => {
         if (!session) {
-          setView({ start: 0, end: compressedTimeline().total });
+          // Only zoom back out when the diff is truly dismissed (back to live).
+          // Scrubbing to a timestamp also clears the session — don't yank the
+          // zoom out from under the user in that case.
+          if (history.isLive()) {
+            setView({ start: 0, end: compressedTimeline().total });
+          }
           return;
         }
         const warpStart = timestampToWarpedPosition(session.startMs);

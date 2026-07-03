@@ -535,7 +535,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
       <SidePanel.Section
         id="references"
         title={<SidePanel.CountTitle label="References" count={count()} />}
-        order={50}
+        order={33}
       >
         <div class="text-xs">
           <References documentId={props.documentId} />

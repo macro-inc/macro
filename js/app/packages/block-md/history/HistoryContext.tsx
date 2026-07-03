@@ -1,4 +1,9 @@
-import { buildDiffState, buildWhoMap, diffStates } from '@lexical-core';
+import {
+  buildDiffState,
+  buildWhoMap,
+  diffStates,
+  serializedEditorStateToMarkdown,
+} from '@lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';
@@ -82,6 +87,28 @@ export function HistoryProvider(props: {
     setIsLive(false);
     setIsOpen(true);
     setDiffSession(session);
+
+    // DEBUG: dump this session's before/after markdown and computed diffs.
+    const index = historyIndex();
+    const before = index?.checkoutAt(session.startMs - 1) ?? null;
+    const after = index?.checkoutAt(session.endMs) ?? null;
+    const beforeMd = before ? serializedEditorStateToMarkdown(before) : null;
+    const afterMd = after ? serializedEditorStateToMarkdown(after) : null;
+    console.group(
+      `[history] session ${session.userId} ${new Date(
+        session.startMs
+      ).toISOString()} → ${new Date(session.endMs).toISOString()} (${
+        session.count
+      } changes)`
+    );
+    console.log('before markdown:\n', beforeMd);
+    console.log('after markdown:\n', afterMd);
+    console.log('markdown changed:', beforeMd !== afterMd);
+    console.log(
+      'diffs:',
+      before && after ? diffStates(before, after) : '(missing state)'
+    );
+    console.groupEnd();
   };
 
   // Download the full snapshot once and drive both the session timeline and
@@ -126,7 +153,9 @@ export function HistoryProvider(props: {
   });
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
-  // per user.
+  // per user. Sessions with no visible change — the start and end states render
+  // to identical markdown (formatting-only, block reorders, metadata, or
+  // typed-then-deleted edits) — are dropped so only real edits surface.
   const sessions = createMemo<readonly HistorySession[]>(() => {
     const doc = historyDoc();
     const peers = peerMap.data;
@@ -139,7 +168,19 @@ export function HistoryProvider(props: {
         events.push({ userId, tMs: change.timestamp * 1000 });
       }
     }
-    return sessionize(events);
+
+    const index = historyIndex();
+    if (!index) return sessionize(events);
+    return sessionize(events).filter((s) => {
+      const before = index.checkoutAt(s.startMs - 1);
+      const after = index.checkoutAt(s.endMs);
+      // Can't compute both states (edge frontiers) — keep rather than hide.
+      if (!before || !after) return true;
+      return (
+        serializedEditorStateToMarkdown(before) !==
+        serializedEditorStateToMarkdown(after)
+      );
+    });
   });
 
   const checkoutAt = (ms: number): SerializedEditorState | null =>
