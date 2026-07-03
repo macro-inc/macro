@@ -4,7 +4,7 @@ const config: CodegenConfig = {
   schema: '../../rust/cloud-storage/schema.graphql',
   documents: ['packages/service-clients/service-storage/graphql/**/*.graphql'],
   generates: {
-    'packages/service-clients/service-storage/generated/graphql.ts': {
+    'packages/service-clients/service-storage/graphql/generated/graphql.ts': {
       plugins: ['typescript-operations', 'typed-document-node'],
       config: {
         enumsAsTypes: true,

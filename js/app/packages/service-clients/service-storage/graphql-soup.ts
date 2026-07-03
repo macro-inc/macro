@@ -5,13 +5,13 @@ import { platformFetch } from '@core/util/platformFetch';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createClient, fetchExchange } from '@urql/core';
 import { match } from 'ts-pattern';
+import type { SoupApiItem, SoupPage } from './generated/schemas';
 import {
   type SoupInput,
   type SoupQuery,
   SoupDocument as SoupQueryDocument,
   type SoupQueryVariables,
-} from './generated/graphql';
-import type { SoupApiItem, SoupPage } from './generated/schemas';
+} from './graphql/generated/graphql';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 
