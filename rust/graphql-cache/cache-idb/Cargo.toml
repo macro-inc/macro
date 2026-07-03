@@ -1,0 +1,22 @@
+[package]
+name = "cache-idb"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# wasm32-only implementation; the crate compiles to an empty shell on other
+# targets so plain `cargo test` at the workspace root stays green.
+
+[dependencies]
+cache-core = { path = "../cache-core" }
+thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+idb = "0.6"
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+serde_json = { workspace = true }

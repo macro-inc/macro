@@ -236,19 +236,26 @@ js/app/packages/graphql-cache/ # JS glue
   run when tuning tier budgets.
 - Remaining deliverable: wire protocol sketch (`CacheHost` RPC).
 
-**Phase 1 — cache-core (native, no wasm)**
-- Schema metadata codegen from `rust/cloud-storage/schema.graphql`.
-- Normalize/denormalize for the real `Soup` query document (fixtures from
-  recorded responses), union handling, key config.
-- Dependency index, LRU hot tier, in-memory Storage impl.
-- Exhaustive native tests incl. property tests (normalize→denormalize
-  round-trip).
+**Phase 1 — cache-core (native, no wasm)** *(done — `rust/graphql-cache/cache-core`)*
+- Schema metadata codegen from `rust/cloud-storage/schema.graphql`
+  (`build.rs` + `key_config.toml`, build fails on drift).
+- Normalize/denormalize for the real `Soup` query shape, union + fragment
+  handling, alias-aware storage, canonical-args field keys.
+- Dependency index, LRU hot tier, in-memory Storage impl, engine with
+  batch-fetch read loop and changed-key/affected-ops write results.
+- Deferred: nullability-based partial results (metadata already generated),
+  byte-based LRU budgets, proptest round-trips, staleness metadata.
 
-**Phase 2 — persistence**
-- IndexedDB backend via the `idb` crate (browser), object stores for
-  records / operation roots / meta; batch-oriented transactions.
-- SQLite backend (Tauri native).
-- Namespace/versioning, corruption → discard & rebuild, logout clearing.
+**Phase 2 — persistence** *(done — `cache-sqlite`, `cache-idb`)*
+- Shared postcard record codec + `cache_namespace(scope)` embedding
+  schema hash + format version.
+- SQLite backend (Tauri native): WAL mode, batch txns, namespace
+  wipe-on-mismatch; tested natively incl. engine integration.
+- IndexedDB backend via the `idb` crate: one DB per namespace, atomic
+  batch txns; tested in headless Chromium via wasm-bindgen-test incl.
+  engine-over-IDB round trip.
+- Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
+  `approx_size` for GC (hardening phase).
 
 **Phase 3 — hosts + JS glue**
 - `cache-tauri` plugin (commands + change-broadcast events).
