@@ -15,9 +15,9 @@ import { createTimelineScales, type WindowRange } from './createTimelineScales';
 import { useHistory } from './HistoryContext';
 import { buildVolumeShape, VOLUME_BAND_H, type VolumeShape } from './timeline';
 import { UserHoverTag } from './UserHoverTag';
-import { formatTimestamp, userColor, userLabel } from './utils';
+import { formatTimestamp, userColor } from './utils';
 
-type ScrubberUser = { id: string; label: string; color: string };
+type ScrubberUser = { id: string; displayName: () => string; color: string };
 type ScrubberLane = { user: ScrubberUser; sessions: HistorySession[] };
 const MIN_VIEW = 1;
 const DRAG_THRESHOLD = 4;
@@ -49,7 +49,7 @@ export function HistoryScrubber(props: { compact?: boolean }) {
     const ids = [...new Set(sessions().map((session) => session.userId))];
     return ids.map((id) => ({
       id,
-      label: userLabel(id),
+      displayName: () => history.userById(id).displayName(),
       color: userColor(id),
     }));
   });
@@ -422,7 +422,7 @@ export function HistoryScrubber(props: { compact?: boolean }) {
         <Show when={hoverUser()}>
           {(hover) => (
             <UserHoverTag
-              label={hover().user.label}
+              label={hover().user.displayName()}
               color={hover().user.color}
               left={Math.max(0, Math.min(width() - 160, hover().x + 10))}
               top={Math.max(0, hover().y - 30)}
