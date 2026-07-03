@@ -2395,6 +2395,7 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

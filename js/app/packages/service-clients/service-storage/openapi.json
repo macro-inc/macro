@@ -9298,7 +9298,8 @@
             "items": {
               "type": "string"
             },
-            "description": "User ids to add."
+            "description": "User ids to add.",
+            "uniqueItems": true
           }
         }
       },
