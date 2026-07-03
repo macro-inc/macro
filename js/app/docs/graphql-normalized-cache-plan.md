@@ -133,16 +133,29 @@ One Rust core engine, two hosts:
 
 ### 4.2 Multi-consumer strategy (browser only)
 
-- **Preferred:** SharedWorker owning the wasm engine + OPFS sync-access
-  storage (single instance, single writer). Chrome/Edge/Firefox/Safari ≥ 16
-  support SharedWorker.
-- **Fallback:** dedicated worker per tab over the IndexedDB backend (IDB is
-  safe for concurrent multi-instance access), Web Locks to serialize writes,
-  BroadcastChannel for cross-tab dependency-invalidation broadcasts.
+> **Phase 0 finding (Chromium):** `createSyncAccessHandle` is unavailable in
+> SharedWorker (spec: dedicated workers only), and Chromium does not expose
+> `Worker` inside a SharedWorker either — so a SharedWorker can neither do
+> sync OPFS IO nor delegate it to a nested worker. The "SharedWorker + OPFS"
+> topology is not viable on Chromium. See Appendix A.
+
+Candidate topologies, decision pending Firefox/Safari probe runs:
+
+- **A (leading candidate): Web-Locks-elected leader.** Each tab spawns a
+  dedicated worker; one wins a `navigator.locks` leadership lock and owns the
+  engine + OPFS sync-access storage. Follower tabs RPC to the leader
+  (BroadcastChannel with correlation ids); lock release on tab close triggers
+  failover (re-election + engine re-open; cache state is on disk, so
+  failover is a re-open, not a rebuild).
+- **B: SharedWorker engine on IndexedDB.** Single instance, trivial routing,
+  no election — but forgoes OPFS sync IO (IDB perf may be acceptable; see
+  Appendix A benchmarks) and needs a fallback where SharedWorker is missing.
+- **C: engine per tab over IndexedDB.** No leader at all; IDB tolerates
+  concurrent instances; Web Locks serialize writes; BroadcastChannel
+  broadcasts changed-keys. Simplest, but N copies of the hot tier.
 - Selection at startup: Tauri detection (`isTauri`) → native transport;
-  otherwise browser capability check picks SharedWorker+OPFS or the IDB
-  fallback. All paths sit behind the same `Storage` trait and `CacheHost`
-  RPC interface.
+  otherwise browser capability check picks the topology. All paths sit
+  behind the same `Storage` trait and `CacheHost` RPC interface.
 
 ### 4.3 Storage backends
 
@@ -200,10 +213,11 @@ js/app/packages/graphql-cache/ # JS glue
 
 ## 6. Phases
 
-**Phase 0 — spike (validate the risky bits first)**
-- OPFS sync-access + SharedWorker support matrix in browsers only:
-  Chrome/Firefox/Safari. (Tauri always uses the native host, so webview
-  storage capabilities are irrelevant.)
+**Phase 0 — spike (validate the risky bits first)** *(in progress)*
+- ~~Build browser probe harness~~ — done:
+  `js/app/spikes/graphql-cache-probe/` (capabilities + OPFS/IDB/RTT
+  benchmarks, markdown export). Chromium results in Appendix A; **needs
+  manual runs on Firefox + Safari (normal & private windows)**.
 - Tauri IPC throughput for cache-read payloads (invoke + channels) on
   desktop and mobile to validate read-latency budgets.
 - Measure real soup payloads: record count/size per page → set tier budgets.
@@ -258,3 +272,48 @@ js/app/packages/graphql-cache/ # JS glue
   the module; never import the wasm package from page code.
 - **Offline correctness** — staleness semantics must be explicit
   (`stale: true` emissions) so UI can indicate offline data.
+
+## Appendix A — Phase 0 probe results
+
+Harness: `js/app/spikes/graphql-cache-probe/` (see its README).
+
+### Chromium 149 (headless, Linux) — 2026-07-03
+
+| Capability | Window | Dedicated worker | SharedWorker | Nested worker in SharedWorker |
+|---|---|---|---|---|
+| SharedWorker constructor | ✅ | — | — | — |
+| Worker constructor (nested spawn) | — | ✅ | ❌ | — |
+| OPFS root (getDirectory) | ✅ | ✅ | ✅ | — |
+| createSyncAccessHandle (working) | ❌ (expected) | ✅ | ❌ | — (`Worker is not defined`) |
+| Web Locks | ✅ | ✅ | ✅ | — |
+| BroadcastChannel | ✅ | ✅ | ✅ | — |
+
+Benchmarks (headless chromium on dev machine — order of magnitude only):
+
+| Metric | Result |
+|---|---|
+| OPFS sync write 4 KiB | avg 2.0 ms, p50 1.0 ms, p95 5.3 ms (n=1000) |
+| OPFS sync read 4 KiB (random) | avg 2.0 ms, p50 1.9 ms, p95 3.6 ms (n=1000) |
+| OPFS flush after 1000 writes | 0.1 ms |
+| IDB batched put ×1000 (≈1 KiB records, one txn) | 119 ms total |
+| IDB individual get | avg 0.35 ms, p95 0.5 ms (n=1000) |
+| IDB getAll ×1000 | 24 ms |
+| postMessage RTT tiny (window↔dedicated) | avg 0.10 ms |
+| postMessage RTT 64 KiB clone (window↔dedicated) | avg 0.85 ms, p95 3.0 ms |
+| postMessage RTT 64 KiB clone (window↔shared) | avg 0.22 ms |
+
+Takeaways so far:
+
+1. **SharedWorker + OPFS is not viable on Chromium** (no sync handles in
+   SharedWorker, no nested `Worker`). Topology A (locks-elected dedicated
+   worker) or B (SharedWorker + IDB) — §4.2.
+2. Surprisingly, **IDB point-reads (0.35 ms) beat OPFS sync 4 KiB reads
+   (2 ms)** in this environment — sync-handle IO still pays a per-call cost.
+   OPFS wins on write batching/compaction control, but topology B/C (IDB)
+   may be entirely sufficient; re-verify on macOS + real hardware.
+3. RTT is a non-issue: ≤1 ms for 64 KiB payloads, well within the read
+   budget.
+
+### Firefox — *pending manual run*
+
+### Safari (normal + private) — *pending manual run*
