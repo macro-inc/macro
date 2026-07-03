@@ -66,6 +66,7 @@ import {
   tabIndentationPlugin,
   tableActionMenuPlugin,
   tableCellResizerPlugin,
+  tableClipboardPlugin,
   tablePlugin,
   textPastePlugin,
   wordcountPlugin,
@@ -555,6 +556,7 @@ export function MarkdownEditor(props: {
     )
     .use(tableCellResizerPlugin())
     .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
+    .use(tableClipboardPlugin())
     .use(
       filePastePlugin({
         onPasteFilesAndDirs: (fileEntries, directories) =>
