@@ -75,7 +75,7 @@ fn main() {
         }
         match ty {
             ExtendedType::Object(obj) => {
-                let key_literal = key_literal(&name, &name == &query_root, &config, &mut errors);
+                let key_literal = key_literal(&name, name == query_root, &config, &mut errors);
                 let fields = fields_literal(&schema, obj.fields.iter(), &mut errors);
                 entries.push((
                     name.clone(),
@@ -215,7 +215,10 @@ fn fields_literal<'a>(
             | Some(ExtendedType::Union(_)) => "Composite",
             Some(ExtendedType::Enum(_)) => "Leaf",
             Some(ExtendedType::Scalar(_)) => {
-                if matches!(named.as_str(), "Int" | "Float" | "String" | "Boolean" | "ID") {
+                if matches!(
+                    named.as_str(),
+                    "Int" | "Float" | "String" | "Boolean" | "ID"
+                ) {
                     "Leaf"
                 } else {
                     "OpaqueScalar" // e.g. JSON

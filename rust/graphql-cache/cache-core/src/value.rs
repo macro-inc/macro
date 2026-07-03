@@ -176,7 +176,10 @@ mod tests {
             EntityKey::entity("GraphqlSoupDocument", &["doc-1"]).0,
             "GraphqlSoupDocument:doc-1"
         );
-        assert_eq!(field_key("soup", Some(r#"{"input":{}}"#)), r#"soup({"input":{}})"#);
+        assert_eq!(
+            field_key("soup", Some(r#"{"input":{}}"#)),
+            r#"soup({"input":{}})"#
+        );
         assert_eq!(field_key("id", None), "id");
     }
 }

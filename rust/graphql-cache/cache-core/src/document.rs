@@ -100,7 +100,11 @@ impl Document {
                         .to_string();
                     fragments.insert(name, frag);
                 }
-                _ => return Err(DocumentError::Malformed("type-system definition in executable document")),
+                _ => {
+                    return Err(DocumentError::Malformed(
+                        "type-system definition in executable document",
+                    ))
+                }
             }
         }
         if operations_cst.is_empty() {
@@ -159,7 +163,9 @@ fn convert_selection_set(
     depth: usize,
 ) -> Result<Vec<Selection>, DocumentError> {
     if depth > MAX_FRAGMENT_DEPTH {
-        return Err(DocumentError::Malformed("fragment nesting too deep (cycle?)"));
+        return Err(DocumentError::Malformed(
+            "fragment nesting too deep (cycle?)",
+        ));
     }
     let mut out = Vec::new();
     for sel in set.selections() {
@@ -207,8 +213,9 @@ fn convert_selection_set(
                     .and_then(|nt| nt.name())
                     .map(|n| n.text().to_string());
                 let selection_set = convert_selection_set(
-                    frag.selection_set()
-                        .ok_or(DocumentError::Malformed("inline fragment without selections"))?,
+                    frag.selection_set().ok_or(DocumentError::Malformed(
+                        "inline fragment without selections",
+                    ))?,
                     fragments,
                     depth + 1,
                 )?;
