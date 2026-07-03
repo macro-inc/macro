@@ -3,6 +3,7 @@ import { createCerebras } from '@ai-sdk/cerebras';
 import { createOpenAI } from '@ai-sdk/openai';
 import { zValidator } from '@hono/zod-validator';
 import type { LanguageModel } from 'ai';
+import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
 import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
@@ -29,14 +30,19 @@ const ModelSchema: z.ZodType<Model> = z.object({
   model: z.string(),
 });
 
+// Each role takes a non-empty list of models tried in order: the first is
+// primary, the rest are fallbacks used in order, only when a provider errors or
+// rate-limits.
+const ModelListSchema = z.array(ModelSchema).min(1);
+
 const EditBody = z.object({
   userToken: z.string(),
   documentId: z.string(),
   prompt: z.string(),
   models: z.object({
-    supervisor: ModelSchema,
-    interpret: ModelSchema,
-    coding: ModelSchema,
+    supervisor: ModelListSchema,
+    interpret: ModelListSchema,
+    coding: ModelListSchema,
   }),
   typingAnimations: z.boolean().optional(),
   /** Animation speed multiplier applied while nobody is watching the doc. */
@@ -60,9 +66,21 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     debug,
   } = c.req.valid('json');
 
-  const resolveModel = ({ provider, model }: Model): LanguageModel => {
+  const resolveOne = ({ provider, model }: Model) => {
     const apiKey = env[PROVIDERS[provider].key];
     return PROVIDERS[provider].create({ apiKey })(model);
+  };
+
+  // A single model resolves directly; multiple wrap in a fallback that advances
+  // to the next model on provider errors/rate limits.
+  const resolveModel = (specs: Model[]): LanguageModel => {
+    const resolved = specs.map(resolveOne);
+    if (resolved.length === 1) return resolved[0];
+    return createFallback({
+      models: resolved,
+      onError: (error, modelId) =>
+        console.error(`edit model ${modelId} failed, falling back:`, error),
+    });
   };
 
   // FYI cancellation only works on live cloudflare not workerd. And it requires enable_request_signal.

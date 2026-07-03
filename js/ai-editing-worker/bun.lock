@@ -10,6 +10,7 @@
         "@ai-sdk/openai": "^3.0.73",
         "@hono/zod-validator": "^0.8.0",
         "ai": "^6.0.207",
+        "ai-fallback": "2",
         "envsafe": "^2.0.3",
         "hono": "^4.6.20",
         "quickjs-emscripten": "^0.31.0",
@@ -200,6 +201,8 @@
     "@vercel/oidc": ["@vercel/oidc@3.2.0", "", {}, "sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug=="],
 
     "ai": ["ai@6.0.208", "", { "dependencies": { "@ai-sdk/gateway": "3.0.133", "@ai-sdk/provider": "3.0.10", "@ai-sdk/provider-utils": "4.0.30", "@opentelemetry/api": "^1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-STz+AaZqJ4ZjH7UkpXkbHx+bjgIDOsE8fIUoZjkZ2whoZcfVmG9K/TqEKouJZ03SuZuD7lagntlU3zBhAEkRpQ=="],
+
+    "ai-fallback": ["ai-fallback@2.0.1", "", { "peerDependencies": { "@ai-sdk/provider": ">=3.0.0", "@ai-sdk/provider-utils": ">=4.0.0" } }, "sha512-uF/7dstZFT5Lu5DuHjJI6edCnbg8s8sxqxlsLbfcv9YvWnrYIh8aPAW7j9ij/L334Ad4v1rNjSJiL7gOB/iRfA=="],
 
     "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
 

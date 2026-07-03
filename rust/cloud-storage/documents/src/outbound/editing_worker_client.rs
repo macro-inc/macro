@@ -35,10 +35,22 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "userToken": user_token,
             "documentId": document_id,
             "prompt": instructions,
+            // Each role lists models tried in order: Cerebras primary, with an
+            // Anthropic fallback so edits keep working if Cerebras is rate-limited
+            // or down.
             "models": {
-                "supervisor": { "provider": "cerebras", "model": "zai-glm-4.7" },
-                "interpret": { "provider": "cerebras", "model": "zai-glm-4.7" },
-                "coding": { "provider": "cerebras", "model": "gpt-oss-120b" },
+                "supervisor": [
+                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
+                    { "provider": "openai", "model": "gpt-5.5" },
+                ],
+                "interpret": [
+                    { "provider": "cerebras", "model": "zai-glm-4.7" },
+                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
+                ],
+                "coding": [
+                    { "provider": "cerebras", "model": "gpt-oss-120b" },
+                    { "provider": "anthropic", "model": "claude-haiku-4-5" },
+                ],
             },
             "interpret": true,
         });

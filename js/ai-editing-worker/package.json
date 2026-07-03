@@ -13,6 +13,7 @@
 		"@ai-sdk/openai": "^3.0.73",
 		"@hono/zod-validator": "^0.8.0",
 		"ai": "^6.0.207",
+		"ai-fallback": "2",
 		"envsafe": "^2.0.3",
 		"hono": "^4.6.20",
 		"quickjs-emscripten": "^0.31.0",
