@@ -6,7 +6,7 @@ import type { LanguageModel } from 'ai';
 import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
 import * as z from 'zod';
-import type { Bindings, EnvVariables } from '../env';
+import { type Bindings, getEnv } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
@@ -51,10 +51,10 @@ const EditBody = z.object({
   debug: z.boolean().default(false),
 });
 
-const edit = new Hono<{ Bindings: Bindings; Variables: EnvVariables }>();
+const edit = new Hono<{ Bindings: Bindings }>();
 
 edit.post('/', zValidator('json', EditBody), async (c) => {
-  const env = c.var.env;
+  const env = getEnv(c.env);
   const {
     documentToken,
     documentId,

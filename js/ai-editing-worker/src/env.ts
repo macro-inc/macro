@@ -1,5 +1,4 @@
 import { envsafe, str } from 'envsafe';
-import { createMiddleware } from 'hono/factory';
 
 export type Bindings = {
   ANTHROPIC_API_KEY: string | undefined;
@@ -22,20 +21,11 @@ function validateEnv(rawEnv: Bindings) {
   );
 }
 
-export type EnvVariables = { env: Env };
-
-export const envMiddleware = createMiddleware<{
-  Bindings: Bindings;
-  Variables: EnvVariables;
-}>(async (c, next) => {
-  let env: Env;
-  try {
-    env = validateEnv(c.env);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[env] validation failed: ${msg}`);
-    return c.json({ error: `env misconfiguration: ${msg}` }, 500);
+let cachedEnv: Env | undefined;
+export function getEnv(rawEnv: Bindings): Env {
+  if (cachedEnv === undefined) {
+    cachedEnv = validateEnv(rawEnv);
   }
-  c.set('env', env);
-  await next();
-});
+
+  return cachedEnv;
+}
