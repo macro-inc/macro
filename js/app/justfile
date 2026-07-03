@@ -150,3 +150,7 @@ cycles:
 
 cycles-ci:
     bunx --bun biome lint --changed --only=nursery/noImportCycles
+
+# Build the GraphQL cache wasm module into packages/graphql-cache/wasm (gitignored).
+build-cache-wasm:
+    wasm-pack build {{justfile_directory()}}/../../rust/graphql-cache/cache-wasm --target web --release --out-dir {{justfile_directory()}}/packages/graphql-cache/wasm
