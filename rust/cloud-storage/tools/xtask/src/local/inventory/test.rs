@@ -3,14 +3,12 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    // 12 distinct binaries (the bundled set), excluding the opt-in processor.
-    assert_eq!(bins.len(), 12, "{bins:?}");
+    // 13 distinct binaries (the bundled set, including the local-only
+    // search_processing_service).
+    assert_eq!(bins.len(), 13, "{bins:?}");
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
-    assert!(
-        !bins.contains(&"search_processing_service"),
-        "opt-in must be excluded"
-    );
+    assert!(bins.contains(&"search_processing_service"));
     let mut sorted = bins.clone();
     sorted.dedup();
     assert_eq!(sorted.len(), bins.len(), "binaries must be deduplicated");

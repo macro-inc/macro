@@ -210,6 +210,7 @@ export function MobileNotificationStacks(props: MobileNotificationStacksProps) {
           visibleCount={props.visibleCount ?? 3}
           togglePosition="bottom"
           expandText={(count) => `Show ${count} more`}
+          persistKey={`notif-stacks:${props.entity.id}`}
         >
           {(stack) => (
             <MobileStackRow

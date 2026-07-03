@@ -52,6 +52,29 @@ function getParentSplitId(element: Element | null) {
   return splitId as SplitId;
 }
 
+function sameSplitContentIdentity(a: SplitContent, b: SplitContent) {
+  return a.type === b.type && a.id === b.id;
+}
+
+function getUrlSyncAffectedSplit(
+  splitManager: SplitManager,
+  currentPairs: SplitContent[],
+  nextPairs: SplitContent[]
+) {
+  const changedIndex = nextPairs.findIndex(
+    (nextPair, index) =>
+      !currentPairs[index] ||
+      !sameSplitContentIdentity(currentPairs[index], nextPair)
+  );
+
+  if (changedIndex < 0) return undefined;
+
+  const affectedPair = nextPairs[changedIndex];
+  return splitManager
+    .splits()
+    .find((split) => sameSplitContentIdentity(split.content, affectedPair));
+}
+
 /**
  * Creates an effect that syncs the layout manager with the URL.
  *
@@ -73,8 +96,17 @@ function createLayoutUrlSync(
   createEffect(
     on([() => splitManager.getUrlSegments().join('/')], () => {
       if (urlLayoutDrift()) {
+        const nextUrlSegments = splitManager.getUrlSegments();
+        const nextPairs = decodePairs(nextUrlSegments);
+        const affectedSplit = getUrlSyncAffectedSplit(
+          splitManager,
+          decodedPairs(),
+          nextPairs
+        );
+        const replace = affectedSplit?.lastNavigationCause === 'replace';
+
         // Flush the state to the url
-        navigate(`/${splitManager.getUrlSegments().join('/')}`);
+        navigate(`/${nextUrlSegments.join('/')}`, { replace });
       }
     })
   );

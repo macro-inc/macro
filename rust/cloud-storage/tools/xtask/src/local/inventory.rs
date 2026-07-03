@@ -41,10 +41,10 @@ pub struct RustService {
     /// Opt-in services (e.g. `search_processing_service`) only start with an
     /// explicit profile and are never converted to the runtime image.
     pub opt_in: bool,
-    /// Built locally with `--no-default-features` (true only for
-    /// `authentication_service`): its `rate_limit` feature is in the default
-    /// set, and dropping it removes the 1-request/minute login-code throttle
-    /// that otherwise makes local dev painful.
+    /// Built locally with `--no-default-features` (plus any [`Self::build_features`]).
+    /// `authentication_service` drops the default `rate_limit` feature (removing
+    /// the 1-request/minute login-code throttle that makes local dev painful);
+    /// `search_processing_service` drops the default amd64-only `pdf` feature.
     pub no_default_features: bool,
 }
 
@@ -59,10 +59,20 @@ impl RustService {
     pub fn is_opt_in(&self) -> bool {
         self.opt_in
     }
+
+    /// Cargo features to re-enable alongside `--no-default-features` for this
+    /// service's local build (empty = none). Only `search_processing_service`
+    /// needs this: dropping default features removes the amd64-only `pdf`
+    /// feature, but its bin still requires `processing`/`service`.
+    pub fn build_features(&self) -> &'static [&'static str] {
+        match self.cargo_bin {
+            "search_processing_service" => &["processing", "service"],
+            _ => &[],
+        }
+    }
 }
 
-/// The full service inventory: the 12 binaries bundled today plus the opt-in
-/// `search_processing_service`.
+/// The full service inventory of the local service binaries.
 pub const RUST_SERVICES: &[RustService] = &[
     RustService {
         compose_name: "authentication-service",
@@ -209,12 +219,13 @@ pub const RUST_SERVICES: &[RustService] = &[
         host_port: Some(Port::SearchProcessing),
         path_prefix: None,
         is_websocket: false,
-        // Opt-in: profiles:[processors], amd64-only libpdfium, separate
-        // Dockerfile. Auto-starts in no mode; never converted to the runtime
-        // image by gen-compose.
-        modes: &[],
-        opt_in: true,
-        no_default_features: false,
+        // Local-only: the default `pdf` feature bundles an amd64-only libpdfium,
+        // so local builds drop it (see `build_features`) and cross-compile native
+        // like every other service. Dev/prod still deploy from the dedicated
+        // Dockerfile with the default (pdf-enabled) build.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: true,
     },
 ];
 

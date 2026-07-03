@@ -25,9 +25,18 @@
   vertical-align: middle;
 }
 
+/* The editor surface is always white with near-black text, regardless of app
+   theme: the signature is sent as HTML email and recipients see it on white, so
+   the editor previews exactly that — and pasted light-UI content (e.g. Gmail
+   signatures with white text backgrounds) doesn't render as white boxes in dark
+   mode. */
+.signature-editor .ql-container.ql-snow {
+  background-color: white;
+}
+
 .signature-editor .ql-editor {
   min-height: 8rem;
-  color: var(--color-ink);
+  color: #1f1f1f;
 }
 
 .signature-editor .ql-editor img {
@@ -43,7 +52,7 @@
   position: absolute;
   display: none;
   box-sizing: border-box;
-  box-shadow: 0 0 0 2px var(--color-edge-muted);
+  box-shadow: 0 0 0 2px rgba(0 0 0 / 0.15);
   pointer-events: none;
   z-index: 1;
 }
@@ -57,7 +66,8 @@
   touch-action: none;
   pointer-events: auto;
 }
-/* The visible pill bar (matches the doc block's bg-ink / ring-surface bar). */
+/* The visible pill bar (matches the doc block's bg-ink / ring-surface bar).
+   Fixed colors, not ink/surface tokens: the editor surface is always white. */
 .signature-editor .ql-image-resizer-handle::before {
   content: '';
   position: absolute;
@@ -67,8 +77,8 @@
   height: 50%;
   min-height: 2rem;
   transform: translateY(-50%);
-  background-color: var(--color-ink);
-  box-shadow: 0 0 0 2px var(--color-surface);
+  background-color: #1f1f1f;
+  box-shadow: 0 0 0 2px white;
   border-radius: 9999px;
   opacity: 0.5;
   transition: all 200ms ease;
@@ -84,8 +94,10 @@
   transform: translateY(-50%) scale(1.2);
 }
 
+/* Fixed grey (not the theme's muted ink, which is light in dark mode and would
+   vanish on the always-white surface). */
 .signature-editor .ql-editor.ql-blank::before {
-  color: var(--color-ink-muted);
+  color: #8a8a8a;
   font-style: normal;
 }
 

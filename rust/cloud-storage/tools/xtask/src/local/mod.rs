@@ -30,6 +30,7 @@ pub mod kickstart;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
+pub mod opensearch;
 pub mod proxy;
 pub mod resources;
 pub mod stage;
@@ -559,6 +560,11 @@ fn bring_up_infra(
         fa.arg("up").arg("-d").arg("fusionauth");
         stage.run("Starting FusionAuth", &mut fa)?;
         fusionauth::wait_ready(stage, instance)?;
+
+        // OpenSearch is up (`--wait`) but empty. Create the search indices +
+        // aliases (idempotent) so the unified search path works out of the box
+        // instead of 404ing on the missing `documents`/`chats`/… indices.
+        opensearch::provision_indices(stage, instance, &env.merged)?;
     }
     Ok(())
 }

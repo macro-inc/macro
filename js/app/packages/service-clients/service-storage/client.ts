@@ -1212,11 +1212,7 @@ export const storageServiceClient = {
     ).map((result) => result.duplicates);
   },
 
-  async searchSimilarTasks(params: {
-    taskName: string;
-    markdown?: string;
-    shareWithTeam?: boolean;
-  }) {
+  async searchSimilarTasks(params: { taskName: string; markdown?: string }) {
     return (
       await dssFetch<TaskSimilaritySearchResponse>(
         `/documents/similarity_search`,
@@ -1225,7 +1221,6 @@ export const storageServiceClient = {
           body: JSON.stringify({
             taskName: params.taskName,
             markdown: params.markdown,
-            shareWithTeam: params.shareWithTeam ?? false,
           }),
         }
       )

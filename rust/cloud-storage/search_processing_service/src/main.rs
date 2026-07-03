@@ -13,6 +13,7 @@ use config::{Config, Environment};
 use lexical_client::LexicalClient;
 use macro_entrypoint::MacroEntrypoint;
 use opensearch_client::OpensearchClient;
+#[cfg(feature = "pdf")]
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -54,6 +55,7 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
     }
 }
 
+#[cfg(feature = "pdf")]
 #[allow(dead_code)]
 #[derive(RustEmbed)]
 #[folder = "pdfium-lib/linux/"]
@@ -133,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         use std::sync::Arc;
 
         // Ensures that pdfium binary exists so we can kill the container early on failure
+        #[cfg(feature = "pdf")]
         if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
             anyhow::bail!("libpdfium.so is missing");
         } else {

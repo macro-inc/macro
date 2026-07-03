@@ -33,7 +33,11 @@ pub(crate) fn has_signature(body_html: &str) -> bool {
 /// matches (e.g. a bare fragment with no `<body>`), it is appended to the end so
 /// the signature is never silently dropped.
 pub(crate) fn inject_signature(body_html: &str, signature_html: &str) -> String {
-    let wrapped = format!(r#"<div class="{SIGNATURE_CLASS}">{signature_html}</div>"#);
+    // The leading <div><br></div> is a blank line separating the signature from
+    // the message body (the text/plain part gets "\n\n" for the same reason).
+    // It sits inside the marker div so strip_signature removes it too.
+    let wrapped =
+        format!(r#"<div class="{SIGNATURE_CLASS}"><div><br></div>{signature_html}</div>"#);
 
     let has_quote = Selector::parse(".macro_quote")
         .ok()

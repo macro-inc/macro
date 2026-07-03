@@ -334,7 +334,13 @@ fn build_query(
     let matching_threads_body = if wants_message_exists_pushdown(email_filter, view) {
         None
     } else {
-        build_matching_threads_cte_body(email_filter, &params.resolved)
+        // Owned-only, non-team queries can scope the CTE's contact/message
+        // scans to the caller's links; shared/team candidates include
+        // threads from other links, so scoping there would drop rows.
+        let link_scope = (matches!(params.shared, SharedEmailFilter::Exclude)
+            && params.team_id.is_none())
+        .then_some(params.link_ids.as_slice());
+        build_matching_threads_cte_body(email_filter, &params.resolved, link_scope)
     };
 
     let mut builder = sqlx::QueryBuilder::new("");
@@ -737,6 +743,13 @@ pub(crate) async fn dynamic_email_thread_cursor(
     );
 
     qb.build()
+        // Unnamed statement: the SQL text varies per filter shape (and per
+        // interpolated date literal), so cached prepared statements get
+        // little reuse but do flip to generic plans after five executions —
+        // and the generic plan's inflated cost estimate also triggers JIT
+        // compilation per execution. Planning with real bind values each
+        // time keeps the plan stable for ~1ms of planning.
+        .persistent(false)
         .try_map(|row| {
             Ok(ThreadPreviewCursorDbRow {
                 id: row.try_get("id")?,

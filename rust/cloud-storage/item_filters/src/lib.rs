@@ -487,6 +487,13 @@ pub struct ChannelThreadFilters {
     /// Sender IDs for the root thread message. Empty to include all root senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub root_sender_ids: Vec<String>,
+
+    /// Thread participant user IDs. A participant is the root message sender, anyone
+    /// who replied in the thread, or anyone @-mentioned in the thread (group mentions
+    /// like @here count through their per-user expansion at send time). Empty to
+    /// include threads regardless of participants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participant_ids: Vec<String>,
 }
 
 impl IsEmpty for ChannelThreadFilters {
@@ -495,8 +502,12 @@ impl IsEmpty for ChannelThreadFilters {
             thread_ids,
             channel_ids,
             root_sender_ids,
+            participant_ids,
         } = self;
-        thread_ids.is_empty() && channel_ids.is_empty() && root_sender_ids.is_empty()
+        thread_ids.is_empty()
+            && channel_ids.is_empty()
+            && root_sender_ids.is_empty()
+            && participant_ids.is_empty()
     }
 }
 
@@ -631,6 +642,11 @@ pub struct EntityFilters {
     /// property-based filters applied across entity types
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_filters: Vec<PropertyFilter>,
+    /// tag option ids matched against `properties.values`, OR'd together across
+    /// all tag definitions. Option ids are globally unique, so the match ignores
+    /// the owning definition id (personal and team tags combine into one OR).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_option_ids: Vec<String>,
 }
 
 impl IsEmpty for EntityFilters {
@@ -646,6 +662,7 @@ impl IsEmpty for EntityFilters {
             crm_company_filters,
             foreign_entity_filters,
             property_filters,
+            tag_option_ids,
         } = self;
         project_filters.is_empty()
             && document_filters.is_empty()
@@ -657,5 +674,6 @@ impl IsEmpty for EntityFilters {
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
+            && tag_option_ids.is_empty()
     }
 }

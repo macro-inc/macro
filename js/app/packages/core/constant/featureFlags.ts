@@ -162,6 +162,15 @@ export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_GIT_BLAME_FLAG = 'enable-git-blame';
+export const ENABLE_GIT_BLAME_OVERRIDE =
+  resolveFeatureFlag('ENABLE_GIT_BLAME', DEV_MODE_ENV) || undefined;
+
+export function ENABLE_GIT_BLAME(): boolean {
+  if (ENABLE_GIT_BLAME_OVERRIDE !== undefined) return ENABLE_GIT_BLAME_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_GIT_BLAME_FLAG) ?? false;
+}
+
 export const ENABLE_MARKDOWN_SEARCH_TEXT = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SEARCH_TEXT',
   DEV_MODE_ENV

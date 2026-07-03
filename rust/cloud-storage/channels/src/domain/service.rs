@@ -987,6 +987,19 @@ where
                 "cannot add or remove participants from direct message channel".to_string(),
             ));
         }
+        let active_participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        let targets_owner = active_participants
+            .iter()
+            .any(|p| p.role == ParticipantRole::Owner && req.participants.contains(&p.user_id));
+        if targets_owner {
+            return Err(ChannelMutationErr::Unauthorized(
+                "cannot remove the channel owner".to_string(),
+            ));
+        }
         for participant in req.participants {
             self.repo
                 .remove_participant(channel_id, participant)

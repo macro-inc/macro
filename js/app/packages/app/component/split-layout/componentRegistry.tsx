@@ -458,6 +458,11 @@ if (DEV_MODE_ENV) {
     )
   );
 
+  registerComponent(
+    'projection-playground',
+    withAuth(lazy(() => import('@app/component/debug/ProjectionPlayground')))
+  );
+
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan
   registerComponent(
     'pixel-icon',
