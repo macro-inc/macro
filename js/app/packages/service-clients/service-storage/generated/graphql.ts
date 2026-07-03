@@ -222,6 +222,7 @@ export type GraphqlChannelThreadLiteral =
       channelId: string | number;
       notificationDone?: never;
       notificationSeen?: never;
+      participant?: never;
       rootSender?: never;
       threadId?: never;
     }
@@ -229,6 +230,7 @@ export type GraphqlChannelThreadLiteral =
       channelId?: never;
       notificationDone: boolean;
       notificationSeen?: never;
+      participant?: never;
       rootSender?: never;
       threadId?: never;
     }
@@ -236,6 +238,7 @@ export type GraphqlChannelThreadLiteral =
       channelId?: never;
       notificationDone?: never;
       notificationSeen: boolean;
+      participant?: never;
       rootSender?: never;
       threadId?: never;
     }
@@ -243,6 +246,15 @@ export type GraphqlChannelThreadLiteral =
       channelId?: never;
       notificationDone?: never;
       notificationSeen?: never;
+      participant: string;
+      rootSender?: never;
+      threadId?: never;
+    }
+  | {
+      channelId?: never;
+      notificationDone?: never;
+      notificationSeen?: never;
+      participant?: never;
       rootSender: string;
       threadId?: never;
     }
@@ -250,6 +262,7 @@ export type GraphqlChannelThreadLiteral =
       channelId?: never;
       notificationDone?: never;
       notificationSeen?: never;
+      participant?: never;
       rootSender?: never;
       threadId: string | number;
     };
@@ -1123,8 +1136,8 @@ export type GraphqlSoupEntityType =
   | 'CALL'
   /** Channel entity. */
   | 'CHANNEL'
-  /** Channel message entity. */
-  | 'CHANNEL_MESSAGE'
+  /** Channel thread entity. */
+  | 'CHANNEL_THREAD'
   /** Chat entity. */
   | 'CHAT'
   /** CRM company entity. */
@@ -1197,7 +1210,7 @@ export type SoupQuery = {
             id: string;
             channelType: string;
             ownerId: string;
-            organizationId: number | null;
+            organizationId: string | null;
             createdAt: string;
             updatedAt: string;
             viewedAt: string | null;
