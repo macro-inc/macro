@@ -340,7 +340,7 @@ export function HistoryScrubber(props: { compact?: boolean }) {
         </Show>
 
         {/* Rail */}
-        <div class="relative h-8 overflow-hidden">
+        <div class="relative h-10 overflow-hidden">
           <div class="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded bg-edge" />
           <For each={gapMarkers()}>
             {(marker) => (
@@ -379,7 +379,7 @@ export function HistoryScrubber(props: { compact?: boolean }) {
         <div class="flex flex-col gap-0.5">
           <For each={lanes()}>
             {(lane) => (
-              <div class="relative h-2 overflow-hidden rounded-full">
+              <div class="relative h-1.5 overflow-hidden rounded-full">
                 <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-edge/60" />
                 <For each={lane.sessions}>
                   {(session) => {
