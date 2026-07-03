@@ -121,9 +121,6 @@
 
   --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(0.15 0 0 / 0.04);
-  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
-  --color-hover:           var(--b2);
-  --color-active:          var(--b1);
   --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
   
   --color-edge-muted:      var(--b3);
@@ -149,6 +146,8 @@
   --color-hover:           var(--theme-hover, var(--b2));
   --color-active:          var(--theme-active, var(--b1));
   --color-button:          var(--theme-button, var(--b0));
+  /* Used for floating mobile navigation chrome */
+  --color-chrome:          var(--theme-chrome, color-mix(in oklch, var(--color-menu) 85%, var(--color-active)));
   
 
   /* Below are hardcoded colors */
@@ -254,7 +253,7 @@
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  @apply bg-[color-mix(in_oklch,var(--color-menu)_85%,var(--color-active))] text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  @apply bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 }
 
 [data-press-pulse] {

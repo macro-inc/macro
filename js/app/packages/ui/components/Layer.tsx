@@ -55,7 +55,7 @@ export function Layer(props: LayerProps) {
         '--color-ink-muted': 'var(--c1)',
         '--color-ink-extra-muted': 'var(--c2)',
         '--color-ink-disabled': 'var(--c3)',
-        '--color-ink-placeholder': 'oklch(var(--c4) / 0.5))',
+        '--color-ink-placeholder': 'var(--c4)',
 
         // Semantic design tokens with theme overrides, get set to the theme override, otherwise, they get set to --b0, same as `--color-surface`, and get controlled entirely by Layer system
         '--color-page': 'var(--theme-page, var(--b0))',

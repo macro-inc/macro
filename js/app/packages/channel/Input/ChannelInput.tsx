@@ -412,8 +412,9 @@ export function ChannelInput(props: ChannelInputProps) {
           'rounded-xl mobile:rounded-3xl mobile:island',
           isCollapsed() && 'hidden'
         )}
-        highlightColor={isMobile() ? 'none' : undefined}
-        depth={2}
+        bgToken={isMobile() ? 'chrome' : undefined}
+        hideBorder={isMobile()}
+        depth={isMobile() ? 3 : 2}
         solid
       >
         <Input.DropZone

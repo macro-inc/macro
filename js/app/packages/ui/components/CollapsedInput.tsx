@@ -6,6 +6,7 @@ import { cn } from '../utils/classname';
 import { Button } from './Button';
 import { SendButton } from './SendButton';
 import { Surface } from './Surface';
+import { Layer } from './Layer';
 
 export type CollapsedInputProps = {
   /** Draft of the real input, shown as the one-line preview. */
@@ -48,18 +49,13 @@ export function CollapsedInput(props: CollapsedInputProps) {
   const hasAttachments = () => attachmentCount() > 0;
 
   return (
-    <Surface
-      depth={3}
-      solid
-      // h-12.5 and px-2 keep the attach/send buttons exactly where the
-      // expanded input's footer puts them (`p-2 mb-2 h-8` plus the surface's
-      // 1px border: button centers 25px above the outer bottom edge, 8px in
-      // from the border).
-      class={cn('rounded-xl w-full h-12.5', props.class)}
-      bgToken="chrome"
-      data-collapsed-input
-    >
-      <div class="flex h-full min-w-0 items-center gap-1.5 px-2">
+    <Layer depth={3} data-collapsed-input>
+      <div
+        class={cn(
+          'rounded-xl w-full h-12.5 island flex min-w-0 items-center gap-1.5 px-2',
+          props.class
+        )}
+      >
         <Button
           variant="ghost"
           size="icon-sm"
@@ -88,7 +84,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
             }
           >
             {/* Interactive content in the rendered draft (mentions, links)
-                must not swallow the tap that opens the input. */}
+                  must not swallow the tap that opens the input. */}
             <div class="pointer-events-none min-w-0 flex-1 truncate">
               {props.renderDraft ? props.renderDraft(text) : text()}
             </div>
@@ -127,6 +123,6 @@ export function CollapsedInput(props: CollapsedInputProps) {
           />
         </Show>
       </div>
-    </Surface>
+    </Layer>
   );
 }
