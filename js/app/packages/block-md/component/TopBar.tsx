@@ -40,7 +40,7 @@ import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import { type Accessor, createEffect, on, onCleanup, Show } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { useHistory } from '../history/HistoryContext';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 
@@ -115,7 +115,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
   const sidePanel = useSidePanel();
   const splitPanel = useSplitPanel();
-  const history = useHistory();
+  const _history = useHistory();
 
   // Register at the split scope so `]` works from anywhere in the split
   // (header, toolbar, drawer), but tie disposal to this TopBar so the
