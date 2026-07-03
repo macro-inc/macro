@@ -1,5 +1,12 @@
 # GraphQL cache — browser storage probe (Phase 0 spike)
 
+> **Status: decision made — spike closed.** Based on the Chromium results
+> (see Appendix A of the design doc), we committed to IndexedDB-backed
+> persistence via the Rust [`idb` crate](https://docs.rs/idb/latest/idb/),
+> with the engine in a SharedWorker where available and a dedicated-worker
+> fallback. OPFS was dropped; Firefox/Safari runs were skipped. The harness
+> is kept for future re-measurement.
+
 Probes browser capabilities and storage performance needed by the normalized
 GraphQL cache (see `js/app/docs/graphql-normalized-cache-plan.md`, Phase 0).
 
