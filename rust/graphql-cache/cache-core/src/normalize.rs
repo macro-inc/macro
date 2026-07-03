@@ -168,21 +168,21 @@ fn write_value(
         }
         Json::Bool(b) => match kind {
             FieldKind::Leaf => Ok(CacheValue::Bool(*b)),
-            FieldKind::OpaqueScalar => Ok(CacheValue::Opaque(value.clone())),
+            FieldKind::OpaqueScalar => Ok(CacheValue::opaque(value)),
             FieldKind::Composite => return Err("expected object, got boolean"),
         },
         Json::Number(n) => match kind {
-            FieldKind::Leaf => Ok(CacheValue::Number(n.clone())),
-            FieldKind::OpaqueScalar => Ok(CacheValue::Opaque(value.clone())),
+            FieldKind::Leaf => Ok(CacheValue::Number(n.into())),
+            FieldKind::OpaqueScalar => Ok(CacheValue::opaque(value)),
             FieldKind::Composite => return Err("expected object, got number"),
         },
         Json::String(s) => match kind {
             FieldKind::Leaf => Ok(CacheValue::String(s.clone())),
-            FieldKind::OpaqueScalar => Ok(CacheValue::Opaque(value.clone())),
+            FieldKind::OpaqueScalar => Ok(CacheValue::opaque(value)),
             FieldKind::Composite => return Err("expected object, got string"),
         },
         Json::Object(obj) => match kind {
-            FieldKind::OpaqueScalar => Ok(CacheValue::Opaque(value.clone())),
+            FieldKind::OpaqueScalar => Ok(CacheValue::opaque(value)),
             FieldKind::Leaf => return Err("expected scalar, got object"),
             FieldKind::Composite => {
                 match normalize_object(field, named_type, obj, variables, records) {

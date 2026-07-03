@@ -2,6 +2,7 @@
 //!
 //! Design doc: `js/app/docs/graphql-normalized-cache-plan.md`.
 
+pub mod codec;
 pub mod denormalize;
 pub mod deps;
 pub mod document;

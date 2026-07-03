@@ -170,9 +170,16 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         Ok(match value {
             CacheValue::Null => Some(Json::Null),
             CacheValue::Bool(b) => Some(Json::Bool(*b)),
-            CacheValue::Number(n) => Some(Json::Number(n.clone())),
+            CacheValue::Number(n) => Some(Json::Number(n.to_json())),
             CacheValue::String(s) => Some(Json::String(s.clone())),
-            CacheValue::Opaque(j) => Some(j.clone()),
+            CacheValue::Opaque(j) => {
+                Some(
+                    serde_json::from_str(j).map_err(|_| DenormalizeError::Shape {
+                        type_name: named_type.to_string(),
+                        field: field.name.clone(),
+                    })?,
+                )
+            }
             CacheValue::List(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 let mut complete = true;

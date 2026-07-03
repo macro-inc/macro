@@ -9,6 +9,7 @@ publish.workspace = true
 apollo-parser = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+postcard = { workspace = true }
 thiserror = { workspace = true }
 lru = { workspace = true }
 sha2 = { workspace = true }

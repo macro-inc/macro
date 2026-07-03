@@ -52,12 +52,45 @@ pub fn field_key(name: &str, args: Option<&str>) -> FieldKey {
     }
 }
 
+/// A JSON number in a postcard-serializable representation
+/// (`serde_json::Number` requires self-describing formats).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum CacheNumber {
+    PosInt(u64),
+    NegInt(i64),
+    Float(f64),
+}
+
+impl From<&serde_json::Number> for CacheNumber {
+    fn from(n: &serde_json::Number) -> Self {
+        if let Some(u) = n.as_u64() {
+            CacheNumber::PosInt(u)
+        } else if let Some(i) = n.as_i64() {
+            CacheNumber::NegInt(i)
+        } else {
+            CacheNumber::Float(n.as_f64().expect("number is u64, i64 or f64"))
+        }
+    }
+}
+
+impl CacheNumber {
+    pub fn to_json(self) -> serde_json::Number {
+        match self {
+            CacheNumber::PosInt(u) => serde_json::Number::from(u),
+            CacheNumber::NegInt(i) => serde_json::Number::from(i),
+            CacheNumber::Float(f) => {
+                serde_json::Number::from_f64(f).expect("stored floats are finite")
+            }
+        }
+    }
+}
+
 /// A value stored inside a record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CacheValue {
     Null,
     Bool(bool),
-    Number(serde_json::Number),
+    Number(CacheNumber),
     String(String),
     /// Link to another normalized record.
     Ref(EntityKey),
@@ -65,8 +98,16 @@ pub enum CacheValue {
     /// field when known, for fragment matching on read.
     Object(BTreeMap<FieldKey, CacheValue>),
     List(Vec<CacheValue>),
-    /// Opaque custom-scalar blob (e.g. `JSON`), stored verbatim.
-    Opaque(serde_json::Value),
+    /// Opaque custom-scalar blob (e.g. `JSON`) as canonical JSON text
+    /// (canonical → comparable; text → postcard-serializable).
+    Opaque(String),
+}
+
+impl CacheValue {
+    /// Wraps an opaque custom-scalar JSON value.
+    pub fn opaque(value: &serde_json::Value) -> Self {
+        CacheValue::Opaque(canonical_json(value))
+    }
 }
 
 /// A normalized record: field key → value.
