@@ -3,8 +3,6 @@
 // SharedWorker) plus storage/RPC benchmarks, then renders a support matrix
 // and a copy-pastable markdown report.
 
-'use strict';
-
 const statusEl = document.getElementById('status');
 const resultsEl = document.getElementById('results');
 const markdownEl = document.getElementById('markdown');
@@ -44,11 +42,20 @@ function makeRpc(target /* Worker | MessagePort */) {
 
 async function windowCaps() {
   const caps = {
-    sharedWorkerCtor: { supported: typeof SharedWorker === 'function', detail: null },
+    sharedWorkerCtor: {
+      supported: typeof SharedWorker === 'function',
+      detail: null,
+    },
     opfsRoot: { supported: false, detail: null },
-    syncAccessHandle: { supported: false, detail: 'not expected on main thread' },
+    syncAccessHandle: {
+      supported: false,
+      detail: 'not expected on main thread',
+    },
     webLocks: { supported: 'locks' in navigator, detail: null },
-    broadcastChannel: { supported: typeof BroadcastChannel === 'function', detail: null },
+    broadcastChannel: {
+      supported: typeof BroadcastChannel === 'function',
+      detail: null,
+    },
     storagePersist: { supported: false, detail: null },
     storageEstimate: { supported: false, detail: null },
   };
@@ -57,8 +64,11 @@ async function windowCaps() {
       const root = await navigator.storage.getDirectory();
       caps.opfsRoot.supported = !!root;
       if (root) {
-        const f = await root.getFileHandle('__probe_main.bin', { create: true });
-        caps.syncAccessHandle.supported = typeof f.createSyncAccessHandle === 'function';
+        const f = await root.getFileHandle('__probe_main.bin', {
+          create: true,
+        });
+        caps.syncAccessHandle.supported =
+          typeof f.createSyncAccessHandle === 'function';
         caps.syncAccessHandle.detail = caps.syncAccessHandle.supported
           ? 'method exists on main thread (calling it may still throw)'
           : 'method absent on main thread (expected)';
@@ -154,7 +164,9 @@ async function runAll() {
     if (sharedRpc) {
       setStatus('probing nested worker inside SharedWorker…');
       try {
-        report.contexts.nestedInShared = (await sharedRpc({ type: 'nested-caps' })).caps;
+        report.contexts.nestedInShared = (
+          await sharedRpc({ type: 'nested-caps' })
+        ).caps;
       } catch (e) {
         report.errors.push(`nested worker in SharedWorker: ${e}`);
         report.contexts.nestedInShared = null;
@@ -168,18 +180,25 @@ async function runAll() {
   if (dedicatedRpc) {
     setStatus('benchmark: OPFS sync handle (dedicated worker)…');
     try {
-      report.benches.opfsDedicated = (await dedicatedRpc({ type: 'bench-opfs', opCount: 1000 }, 60000)).result;
+      report.benches.opfsDedicated = (
+        await dedicatedRpc({ type: 'bench-opfs', opCount: 1000 }, 60000)
+      ).result;
     } catch (e) {
       report.errors.push(`bench opfs (dedicated): ${e}`);
     }
     setStatus('benchmark: IndexedDB (dedicated worker)…');
     try {
-      report.benches.idbDedicated = (await dedicatedRpc({ type: 'bench-idb', recordCount: 1000 }, 120000)).result;
+      report.benches.idbDedicated = (
+        await dedicatedRpc({ type: 'bench-idb', recordCount: 1000 }, 120000)
+      ).result;
     } catch (e) {
       report.errors.push(`bench idb (dedicated): ${e}`);
     }
     setStatus('benchmark: RTT to dedicated worker…');
-    report.benches.rttDedicated = await benchRtt(dedicatedRpc, 'window ↔ dedicated');
+    report.benches.rttDedicated = await benchRtt(
+      dedicatedRpc,
+      'window ↔ dedicated'
+    );
   }
   if (sharedRpc) {
     setStatus('benchmark: RTT to SharedWorker…');
@@ -187,7 +206,9 @@ async function runAll() {
     if (report.contexts.nestedInShared?.syncAccessHandle?.supported) {
       setStatus('benchmark: OPFS via nested worker in SharedWorker…');
       try {
-        report.benches.opfsNested = (await sharedRpc({ type: 'nested-bench-opfs', opCount: 1000 }, 60000)).result;
+        report.benches.opfsNested = (
+          await sharedRpc({ type: 'nested-bench-opfs', opCount: 1000 }, 60000)
+        ).result;
       } catch (e) {
         report.errors.push(`bench opfs (nested): ${e}`);
       }
@@ -234,13 +255,17 @@ function renderHtml(report) {
     html += `<tr><td>${label}</td>`;
     for (const [ctx] of CONTEXTS) {
       const c = cell(report.contexts[ctx]?.[key]);
-      const detail = c.text.includes(' ') ? c.text.slice(c.text.indexOf(' ') + 1) : '';
+      const detail = c.text.includes(' ')
+        ? c.text.slice(c.text.indexOf(' ') + 1)
+        : '';
       html += `<td class="${c.cls}">${c.text.split(' ')[0]}${detail ? `<span class="detail">${detail}</span>` : ''}</td>`;
     }
     html += '</tr>';
   }
-  html += '</table><h2>Benchmarks</h2><pre>' +
-    JSON.stringify(report.benches, null, 2) + '</pre>';
+  html +=
+    '</table><h2>Benchmarks</h2><pre>' +
+    JSON.stringify(report.benches, null, 2) +
+    '</pre>';
   if (report.errors.length) {
     html += '<h2>Errors</h2><pre>' + report.errors.join('\n') + '</pre>';
   }

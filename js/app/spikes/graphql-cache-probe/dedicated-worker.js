@@ -1,8 +1,6 @@
 // Dedicated worker probe target. Also used as the *nested* worker spawned
 // from inside the SharedWorker (same protocol over a MessagePort).
 
-'use strict';
-
 importScripts('./probe-lib.js');
 
 async function handle(msg) {

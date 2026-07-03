@@ -5,8 +5,6 @@
 //     dedicated worker from inside the SharedWorker and running the full
 //     probe/bench suite there.
 
-'use strict';
-
 importScripts('./probe-lib.js');
 
 let nested = null;
@@ -24,7 +22,8 @@ function getNestedWorker() {
     }
   };
   nested.onerror = (e) => {
-    for (const p of nestedPending.values()) p.reject(new Error(`nested worker error: ${e.message}`));
+    for (const p of nestedPending.values())
+      p.reject(new Error(`nested worker error: ${e.message}`));
     nestedPending.clear();
   };
   return nested;
@@ -42,7 +41,8 @@ function callNested(msg, timeoutMs) {
     const id = `n${++nestedSeq}`;
     nestedPending.set(id, { resolve, reject });
     setTimeout(() => {
-      if (nestedPending.delete(id)) reject(new Error(`nested call timeout: ${msg.type}`));
+      if (nestedPending.delete(id))
+        reject(new Error(`nested call timeout: ${msg.type}`));
     }, timeoutMs || 15000);
     w.postMessage({ ...msg, id });
   });
@@ -58,7 +58,10 @@ async function handle(msg) {
       return { type: 'nested-caps', caps: res.caps };
     }
     case 'nested-bench-opfs': {
-      const res = await callNested({ type: 'bench-opfs', opCount: msg.opCount }, 60000);
+      const res = await callNested(
+        { type: 'bench-opfs', opCount: msg.opCount },
+        60000
+      );
       if (!res.ok) throw new Error(res.error);
       return { type: 'nested-bench-opfs', result: res.result };
     }
