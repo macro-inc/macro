@@ -93,7 +93,6 @@ export type SplitPanelContextType = {
     headerRight?: HTMLDivElement;
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
-    overlay?: HTMLDivElement;
   };
   titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
   setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;

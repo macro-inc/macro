@@ -221,15 +221,6 @@ export function SplitPanel(props: SplitPanelProps) {
               class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
               depth={isMobile() ? 0 : 1}
             >
-              <div
-                class={cn(
-                  'pointer-events-none absolute inset-0',
-                  splitPanelLayer.oldOverlay
-                )}
-                ref={(ref) => {
-                  layoutRefs.overlay = ref;
-                }}
-              />
               <Panel.Header
                 class={cn(
                   'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
@@ -256,7 +247,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 <SplitToolbar ref={setToolbarRef} />
               </Panel.Toolbar>
 
-              <Panel.Body class="relative">
+              <Panel.Body>
                 <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
                   <div
                     class={cn(

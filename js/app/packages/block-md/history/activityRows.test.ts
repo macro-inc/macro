@@ -54,12 +54,4 @@ describe('buildActivityRows', () => {
     expect(rows[0].userIds).toEqual(['wolf']);
     expect(rows[1].userIds).toEqual(['bob']);
   });
-
-  it('uses coarser labels for old edits', () => {
-    const rows = buildActivityRows([session('jonah', 2 * WEEK)], NOW);
-
-    expect(rows).toHaveLength(1);
-    expect(rows[0].userIds).toEqual(['jonah']);
-    expect(rows[0].label).toBe('2 weeks ago');
-  });
 });

@@ -1,8 +1,6 @@
 use crate::timeit;
-use std::collections::HashMap;
 use tracing::{error, trace};
 use worker::D1Database;
-
 pub async fn insert_user_mapping(
     db: D1Database,
     user_id: &str,
@@ -10,7 +8,7 @@ pub async fn insert_user_mapping(
     document_id: &str,
 ) -> worker::Result<()> {
     let elapsed = timeit!({
-        let resp = db.prepare(
+        let dbres = db.prepare(
             "INSERT OR REPLACE INTO peer_user_map (document_id, peer_id, user_id) VALUES (?, ?, ?);",
         )
         .bind(&[
@@ -20,7 +18,7 @@ pub async fn insert_user_mapping(
         ])?
         .run()
         .await?;
-        if let Some(e) = resp.error() {
+        if let Some(e) = dbres.error() {
             error!(
                 error = e,
                 user_id = user_id,
@@ -30,7 +28,7 @@ pub async fn insert_user_mapping(
             );
             return Err(worker::Error::from(e));
         }
-        resp
+        dbres
     })
     .1;
     trace!(
@@ -66,7 +64,7 @@ pub async fn get_user_id_from_peer_id(
     Ok(user_id)
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct PeerWithUserId {
     pub peer_id: String,
     pub user_id: String,
@@ -75,7 +73,7 @@ pub struct PeerWithUserId {
 pub async fn get_peers_for_document_id(
     db: D1Database,
     document_id: &str,
-) -> worker::Result<HashMap<String, String>> {
+) -> worker::Result<Vec<PeerWithUserId>> {
     let statement = db.prepare(
         "
             SELECT peer_id, user_id
@@ -88,7 +86,7 @@ pub async fn get_peers_for_document_id(
 
     let peers = result.results::<PeerWithUserId>()?;
 
-    Ok(peers.into_iter().map(|p| (p.peer_id, p.user_id)).collect())
+    Ok(peers)
 }
 
 /// A single pending "last edited by" event, buffered until the

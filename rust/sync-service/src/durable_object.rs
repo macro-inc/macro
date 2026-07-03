@@ -59,9 +59,6 @@ mod path {
     pub const DEBUG_DO_KV_GET: &str = "debug_do_kv_get";
     pub const DEBUG_DO_KV_LIST: &str = "debug_do_kv_list";
     pub const WAKEUP: &str = "wakeup";
-
-    #[cfg(feature = "dev-endpoints")]
-    pub const SET_MEMORY_STATE: &str = "set_memory_state";
 }
 
 pub fn response(status_code: u16) -> Response {
@@ -121,15 +118,8 @@ pub struct DocumentSyncSession {
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
-<<<<<<< HEAD
-    /// In-memory peer→user map injected by set_memory_state (dev only); when
-    /// set, metadata_handler returns this instead of querying D1.
-    #[cfg(feature = "dev-endpoints")]
-    memory_peer_map: Mutex<Option<Vec<PeerWithUserId>>>,
-=======
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
->>>>>>> main
 }
 
 mod u64_serde_strings {
@@ -370,13 +360,6 @@ impl DocumentSyncSession {
                         .await;
                 }
                 path::WAKEUP => return self.wakeup(document_id).await,
-
-                // only for dev, for forced setting the result
-                #[cfg(feature = "dev-endpoints")]
-                path::SET_MEMORY_STATE => {
-                    return self.set_memory_state_handler(req).await;
-                }
-
                 // These need auth
                 rest => {
                     let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::Headers).ok());
@@ -478,35 +461,6 @@ impl DocumentSyncSession {
                 report_new_doc_state(&document_id_owned, &snapshot, &env).await;
             });
         }
-
-        Response::empty()
-    }
-
-    // Added specifically so that we can "transfer" a prod document to dev
-    // This is feature-flagged and ONLY for dev
-    #[cfg(feature = "dev-endpoints")]
-    async fn set_memory_state_handler(&self, mut req: Request) -> Result<Response> {
-        #[derive(serde::Deserialize)]
-        struct SetMemoryStateRequest {
-            snapshot: Vec<u8>,
-            #[serde(default)]
-            peers: Vec<PeerWithUserId>,
-        }
-
-        let raw = req.bytes().await?;
-        let body: SetMemoryStateRequest =
-            serde_json::from_slice(&raw).context("invalid set_memory_state JSON body")?;
-
-        let state = DocumentState::try_from_snapshot(&body.snapshot)
-            .context("failed to build DocumentState from posted snapshot")?;
-        *self
-            .document_state
-            .lock("DocumentSyncSession::document_state set within set_memory_state_handler") =
-            Some(Arc::new(state));
-        *self
-            .memory_peer_map
-            .lock("set_memory_state_handler memory_peer_map") =
-            Some(body.peers);
 
         Response::empty()
     }
@@ -639,35 +593,8 @@ impl DocumentSyncSession {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
-
-        #[cfg(feature = "dev-endpoints")]
-        let peers: Vec<PeerWithUserId> = {
-            let mem = self
-                .memory_peer_map
-                .lock("metadata_handler memory_peer_map")
-                .clone();
-            if let Some(p) = mem {
-                p
-            } else {
-                let db = self.env.d1(USER_PEER_D1_BINDING)?;
-                crate::d1::get_peers_for_document_id(db, document_id)
-                    .await?
-                    .into_iter()
-                    .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
-                    .collect()
-            }
-        };
-
-        #[cfg(not(feature = "dev-endpoints"))]
-        let peers: Vec<PeerWithUserId> = {
-            let db = self.env.d1(USER_PEER_D1_BINDING)?;
-            crate::d1::get_peers_for_document_id(db, document_id)
-                .await?
-                .into_iter()
-                .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
-                .collect()
-        };
-
+        let db = self.env.d1(USER_PEER_D1_BINDING)?;
+        let peers = crate::d1::get_peers_for_document_id(db, document_id).await?;
         let version_id = self.document_state().await?.version_id();
         ResponseBuilder::new().from_json(&DocumentMetadata {
             peers,
@@ -902,13 +829,6 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
     router
         .insert("/document/{document_id}/metadata", path::METADATA)
         .unwrap();
-    #[cfg(feature = "dev-endpoints")]
-    router
-        .insert(
-            "/document/{document_id}/set_memory_state",
-            path::SET_MEMORY_STATE,
-        )
-        .unwrap();
     router
         .insert("/document/{document_id}/blame/{node_id}", path::BLAME)
         .unwrap();
@@ -947,12 +867,7 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
-<<<<<<< HEAD
-            #[cfg(feature = "dev-endpoints")]
-            memory_peer_map: Mutex::new(None),
-=======
             pending_blame: Arc::new(Mutex::new(Vec::new())),
->>>>>>> main
         }
     }
 

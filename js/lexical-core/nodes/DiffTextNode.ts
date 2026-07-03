@@ -17,6 +17,7 @@ export type SerializedDiffTextNode = Spread<
 const LANE_HUES = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
 
 export function diffAuthorColor(author: string): string {
+  // claude hashing magic
   let hash = 0x811c9dc5;
   for (let i = 0; i < author.length; i++) {
     hash ^= author.charCodeAt(i);

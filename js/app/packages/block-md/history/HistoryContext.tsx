@@ -131,9 +131,7 @@ export function HistoryProvider(props: {
   });
 
   // Sessions derived locally from the oplog: one edit event per change, grouped
-  // per user. Sessions with no visible change — the start and end states render
-  // to identical markdown (formatting-only, block reorders, metadata, or
-  // typed-then-deleted edits) — are dropped so only real edits surface.
+  // per user.
   const sessions = createMemo<readonly HistorySession[]>(() => {
     const doc = historyDoc();
     const peers = peerMap.data;
@@ -155,6 +153,7 @@ export function HistoryProvider(props: {
       // Can't compute both states (edge frontiers) — keep rather than hide.
       if (!before || !after) return true;
       return (
+        // HACK: basically, some deltas are not visually different, and that's confusing
         serializedEditorStateToMarkdown(before) !==
         serializedEditorStateToMarkdown(after)
       );

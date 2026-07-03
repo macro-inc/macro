@@ -6,13 +6,27 @@ export type ActivitySession = {
 };
 
 export type ActivityRow = {
-  id: string;
   userIds: string[];
   startMs: number;
   endMs: number;
   count: number;
   label: string;
 };
+
+// Algorithm for bucketing:
+//
+// 1. Sort sessions newest-first (by endMs, then startMs).
+// 2. Bucket each session into an age tier by how long ago its endMs was.
+//    Tiers widen as they get older (last 10 min, last hour, last day, ...).
+//    Great, we have a bunch of bucketed sessions now. Let's cluster within
+//    sessions.
+// 3. Within each tier, walk newest->oldest and accumulate sessions into a
+//    group while the group's total span (newest end − oldest start) stays
+//    under that tier's maxActiveSpanMs. When adding one would exceed it,
+//    emit the group as a row and start a new group. Coarser tiers tolerate
+//    wider spans, so old activity is grouped more loosely than recent.
+// 4. Sessions older than the last tier collapse into a single trailing row.
+// 5. Emit each group as a summarized row with a relative label.
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -21,6 +35,7 @@ const WEEK_MS = 7 * DAY_MS;
 const MONTH_MS = 30 * DAY_MS;
 const YEAR_MS = 365 * DAY_MS;
 
+// these "feel right" but we can change it
 const ACTIVITY_TIERS = [
   { boundaryMs: 10 * MINUTE_MS, maxActiveSpanMs: 10 * MINUTE_MS },
   { boundaryMs: HOUR_MS, maxActiveSpanMs: HOUR_MS },
@@ -63,7 +78,6 @@ function activityLabel(endMs: number, nowMs: number) {
 
 function createRow(
   sessions: readonly ActivitySession[],
-  id: string,
   nowMs: number
 ): ActivityRow {
   const userIds: string[] = [];
@@ -79,7 +93,6 @@ function createRow(
   }
 
   return {
-    id,
     userIds,
     startMs,
     endMs,
@@ -127,7 +140,7 @@ export function buildActivityRows(
         ...group.map((item) => item.startMs)
       );
       if (groupEndMs - nextStartMs > tier.maxActiveSpanMs) {
-        rows.push(createRow(group, `activity:${rows.length}`, nowMs));
+        rows.push(createRow(group, nowMs));
         group = [session];
       } else {
         group.push(session);
@@ -135,7 +148,7 @@ export function buildActivityRows(
     }
 
     if (group.length > 0) {
-      rows.push(createRow(group, `activity:${rows.length}`, nowMs));
+      rows.push(createRow(group, nowMs));
     }
 
     previousBoundaryMs = tierBoundaryMs;
@@ -143,7 +156,7 @@ export function buildActivityRows(
 
   if (cursor < sorted.length) {
     const remaining = sorted.slice(cursor);
-    rows.push(createRow(remaining, `activity:${rows.length}`, nowMs));
+    rows.push(createRow(remaining, nowMs));
   }
 
   return rows;

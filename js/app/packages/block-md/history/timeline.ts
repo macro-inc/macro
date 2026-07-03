@@ -1,6 +1,9 @@
 import { blur, max } from 'd3-array';
 import { area, curveBasis } from 'd3-shape';
 
+// the "activity" meter is mostly vibe and not really designed to be super
+// useful right now :/
+
 export const SESSION_GAP_MS = 10 * 60 * 1000;
 const GAP_COMPRESSION_MULTIPLIER = 0.25;
 export const ACTIVE_TIME_MULTIPLIER = 8;

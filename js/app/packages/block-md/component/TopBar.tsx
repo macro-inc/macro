@@ -208,11 +208,6 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        <Show when={history.isOpen()}>
-          <div class="rounded-full bg-black/70 px-3 py-1 font-medium text-white/85 text-xs tracking-wide shadow-sm">
-            Viewing history
-          </div>
-        </Show>
         {/* Hidden on mobile: no floating-island treatment for live avatars yet. */}
         <div class="-order-1 mobile:hidden">
           <BlockLiveIndicators />

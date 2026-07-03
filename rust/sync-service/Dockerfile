@@ -44,8 +44,8 @@ RUN cd bebop && npx bebopc build
 # Copy remaining source files
 COPY . .
 
-# Add a feature that adds an insecure debug endpoint for dev for seeding snapshots
-RUN worker-build --release --features dev-endpoints
+# Build the actual application
+RUN worker-build --release
 
 EXPOSE 8787
 
