@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cache-core", "cache-sqlite"]
+members = ["cache-core", "cache-idb", "cache-sqlite"]
 
 [workspace.package]
 edition = "2021"
