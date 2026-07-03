@@ -409,6 +409,11 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
 
+export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
+export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_GRAPHQL_SOUP'
+);
+
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'

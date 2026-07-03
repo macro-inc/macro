@@ -26,8 +26,10 @@ import type { EntityFilters } from '@service-storage/generated/schemas/entityFil
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas/postSoupAstRequestAllOf';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
+import { fetchGraphqlSoup } from '@service-storage/graphql-soup';
 import { type StaleTime, useInfiniteQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { makeGraphqlSoupInput } from './graphql-ast';
 
 export type SoupParams = Params;
 
@@ -48,6 +50,7 @@ export type SoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
   groupBy?: GroupByField;
+  transport?: 'rest' | 'graphql';
 };
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
@@ -146,10 +149,11 @@ export const useSoupAstItemsQuery = (
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const { params, body, groupBy } = args();
+    const { params, body, groupBy, transport } = args();
 
     return {
-      queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
+      queryKey: soupKeys.astItems({ params, body, groupBy, transport })
+        .queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
           let sort_method = params.sort_method ?? undefined;
@@ -180,18 +184,42 @@ export const useSoupAstItemsQuery = (
           };
         }
 
-        const response = await throwOnErr(
-          async () =>
-            await storageServiceClient.getSoupAstItems({
-              params: {
-                cursor: ctx.pageParam,
-              },
-              body: {
-                ...body,
-                ...params,
-              },
+        const fetchRest = () =>
+          throwOnErr(
+            async () =>
+              await storageServiceClient.getSoupAstItems({
+                params: {
+                  cursor: ctx.pageParam,
+                },
+                body: {
+                  ...body,
+                  ...params,
+                },
+              })
+          );
+
+        const fetchGraphql = async () =>
+          await fetchGraphqlSoup(
+            makeGraphqlSoupInput({
+              params,
+              body,
+              cursor: ctx.pageParam,
             })
-        );
+          );
+
+        const response =
+          transport === 'graphql'
+            ? await fetchGraphql().catch((error: unknown) => {
+                if (
+                  error instanceof Error &&
+                  error.message.startsWith('Unsupported GraphQL Soup AST:')
+                ) {
+                  console.warn(error.message);
+                  return fetchRest();
+                }
+                throw error;
+              })
+            : await fetchRest();
 
         return {
           kind: 'flat',

@@ -94,6 +94,8 @@ import {
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
 import { Login } from './auth/Login';
+import { MobileAuthWelcome } from './auth/mobile-onboarding/MobileAuthWelcome';
+import { MobileOnboarding } from './auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
@@ -356,7 +358,21 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/welcome',
-    component: () => <Navigate href="/login" />,
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileAuthWelcome />
+      ) : (
+        <Navigate href="/login" />
+      ),
+  },
+  {
+    path: '/onboarding',
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileOnboarding />
+      ) : (
+        <Navigate href="/login" />
+      ),
   },
   {
     path: '/team-invite',
@@ -481,6 +497,7 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
 

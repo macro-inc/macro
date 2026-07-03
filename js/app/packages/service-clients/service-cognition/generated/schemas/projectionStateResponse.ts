@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ProjectionStateResponseData } from './projectionStateResponseData';
+import type { ProjectionStateResponseError } from './projectionStateResponseError';
 import type { ProjectionStateResponseGeneratedAt } from './projectionStateResponseGeneratedAt';
 import type { ProjectionStateResponseStaleAt } from './projectionStateResponseStaleAt';
 import type { ProjectionStatus } from './projectionStatus';
@@ -13,8 +14,11 @@ import type { ProjectionStatus } from './projectionStatus';
  * The current state of a user's projection instance.
  */
 export interface ProjectionStateResponse {
-  /** The cached result, if any. */
+  /** The cached result, if any. JSON-encoded when the projection defines an
+`output_schema`. */
   data?: ProjectionStateResponseData;
+  /** The most recent materialization error, if any. */
+  error?: ProjectionStateResponseError;
   /** When the result was generated. */
   generated_at?: ProjectionStateResponseGeneratedAt;
   /** The projection id. */

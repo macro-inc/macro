@@ -359,6 +359,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ai_tools::all_tools(),
         );
 
+    let projection_notifier =
+        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
+            connection_gateway_client::ConnectionGatewayClient::new(
+                "testing".to_string(),
+                "http://localhost".to_string(),
+            ),
+        ));
+
     let ai_projections_service = Arc::new(
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
@@ -366,6 +374,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ),
             sqs_client.clone(),
             projection_generator,
+            projection_notifier,
         ),
     );
 

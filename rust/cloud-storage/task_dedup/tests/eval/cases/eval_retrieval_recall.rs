@@ -53,12 +53,16 @@ async fn retrieval_recall_baseline(pool: PgPool) {
         }
     }
 
-    // Large limits: measure retrievability above the floor, not the UI top-5.
+    // Large limits: measure retrievability above the vector floor, not the UI
+    // top-5. The rerank floor is disabled so this keeps measuring what reaches
+    // the detect path's judge (which has no rerank floor); the similarity
+    // endpoint's floor has its own eval (`eval_similarity_rerank_floor`).
     let service = build_service(
         &pool,
         TaskDedupConfig {
             vector_candidate_limit: 300,
             duplicate_limit: 300,
+            min_rerank_score: f64::NEG_INFINITY,
             ..TaskDedupConfig::default()
         },
     );

@@ -435,6 +435,15 @@ async fn main() -> anyhow::Result<()> {
             tool_service_context.clone(),
             ai_tools::all_tools(),
         );
+    // Notifier that pushes finished materializations to the target's connected
+    // clients through the connection gateway.
+    let projection_notifier =
+        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
+            connection_gateway_client::ConnectionGatewayClient::new(
+                internal_api_key.clone(),
+                ConnectionGatewayUrl::new()?.to_string(),
+            ),
+        ));
     let ai_projections_service_impl =
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
@@ -442,6 +451,7 @@ async fn main() -> anyhow::Result<()> {
             ),
             sqs_client.clone(),
             projection_generator,
+            projection_notifier,
         );
 
     // Spawn the inbound worker that polls ai_projection_queue and materializes

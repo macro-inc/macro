@@ -44,6 +44,27 @@ pub fn openai_key() -> String {
         .to_string()
 }
 
+macro_env_var::env_var! {
+    /// Env read only by the rerank-floor eval, which runs the production Cohere
+    /// reranker instead of [`NoOpReranker`](super::rerank::NoOpReranker).
+    struct CohereVars {
+        CohereApiKey,
+    }
+}
+
+/// The Cohere key for the production reranker, with a clear message when it is
+/// missing.
+pub fn cohere_key() -> String {
+    CohereVars::new()
+        .expect(
+            "COHERE_API_KEY must be set to run the rerank-floor eval \
+             (it scores with the production Cohere reranker); export it first",
+        )
+        .cohere_api_key
+        .as_ref()
+        .to_string()
+}
+
 /// Notifier that drops live-update notifications (irrelevant to the eval).
 struct NoopNotifier;
 

@@ -7,42 +7,79 @@ use sqlx::{Pool, Postgres};
 use super::*;
 use crate::domain::ai_projection_service::READ_PROFESSIONAL_FEATURES;
 
+/// Upserts a plain user-targeted definition with the given id and hash.
+async fn upsert_definition(
+    repo: &AiProjectionRepositoryImpl,
+    id: &str,
+    prompt: &str,
+    prompt_hash: &str,
+) -> Result<AiProjection, AiProjectionError> {
+    repo.upsert_projection_definition(
+        id,
+        prompt,
+        prompt_hash,
+        TargetType::User,
+        RefreshCadence::High,
+        Expiry::Day,
+        None,
+        None,
+    )
+    .await
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("ai_projections"))
 )]
-async fn get_or_create_projection_is_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn upsert_projection_definition_is_idempotent_for_same_version(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = AiProjectionRepositoryImpl::new(pool);
 
-    let first = repo
-        .get_or_create_projection(
-            "inbox/important",
-            "What is important?",
-            "hash_v1",
-            TargetType::User,
-            RefreshCadence::High,
-            Expiry::Day,
-        )
-        .await?;
-
-    // A second call with a different prompt/target_type must NOT update the existing row.
-    let second = repo
-        .get_or_create_projection(
-            "inbox/important",
-            "A totally different prompt",
-            "hash_v2",
-            TargetType::Team,
-            RefreshCadence::Low,
-            Expiry::Month,
-        )
-        .await?;
+    let first =
+        upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+    let second =
+        upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
 
     assert_eq!(first, second);
     assert_eq!(second.prompt, "What is important?");
     assert_eq!(second.prompt_hash, "hash_v1");
-    assert_eq!(second.target_type, TargetType::User);
-    assert_eq!(second.refresh_cadence, RefreshCadence::High);
-    assert_eq!(second.expiry, Expiry::Day);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn upsert_projection_definition_revises_on_version_change(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+
+    // A new prompt hash revises the stored definition in place.
+    let schema = serde_json::json!({"type": "object"});
+    let revised = repo
+        .upsert_projection_definition(
+            "inbox/important",
+            "A totally different prompt",
+            "hash_v2",
+            TargetType::User,
+            RefreshCadence::Low,
+            Expiry::Month,
+            Some("cerebras/llama-3.3-70b"),
+            Some(&schema),
+        )
+        .await?;
+
+    assert_eq!(revised.prompt, "A totally different prompt");
+    assert_eq!(revised.prompt_hash, "hash_v2");
+    assert_eq!(revised.refresh_cadence, RefreshCadence::Low);
+    assert_eq!(revised.expiry, Expiry::Month);
+    assert_eq!(revised.model.as_deref(), Some("cerebras/llama-3.3-70b"));
+    assert_eq!(revised.output_schema.as_ref(), Some(&schema));
 
     Ok(())
 }
@@ -55,15 +92,7 @@ async fn get_or_create_target_projection_is_idempotent(pool: Pool<Postgres>) -> 
     let repo = AiProjectionRepositoryImpl::new(pool);
     let user = MacroUserIdStr::parse_from_str("macro|pro@user.com")?;
 
-    repo.get_or_create_projection(
-        "inbox/important",
-        "What is important?",
-        "hash_v1",
-        TargetType::User,
-        RefreshCadence::High,
-        Expiry::Day,
-    )
-    .await?;
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
 
     let first = repo
         .get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
@@ -87,21 +116,51 @@ async fn get_or_create_target_projection_is_idempotent(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("ai_projections"))
 )]
+async fn get_or_create_target_projection_resets_to_cold_on_version_change(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let user = MacroUserIdStr::parse_from_str("macro|pro@user.com")?;
+
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
+        .await?;
+
+    // Materialize the v1 instance.
+    let generated_at = chrono::Utc::now();
+    repo.set_projection_result(
+        "inbox/important",
+        user.as_ref(),
+        "hash_v1",
+        "v1 result",
+        generated_at,
+        generated_at + Expiry::Day.to_duration(),
+    )
+    .await?;
+
+    // Requesting the instance under a new version resets it to cold but keeps
+    // the previous result visible until regeneration overwrites it.
+    let reset = repo
+        .get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v2")
+        .await?;
+    assert_eq!(reset.status, ProjectionStatus::Cold);
+    assert_eq!(reset.prompt_hash, "hash_v2");
+    assert_eq!(reset.result.as_deref(), Some("v1 result"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
 async fn get_or_create_target_projection_bumps_last_requested_at(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = AiProjectionRepositoryImpl::new(pool.clone());
     let user = MacroUserIdStr::parse_from_str("macro|pro@user.com")?;
 
-    repo.get_or_create_projection(
-        "inbox/important",
-        "What is important?",
-        "hash_v1",
-        TargetType::User,
-        RefreshCadence::High,
-        Expiry::Day,
-    )
-    .await?;
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
 
     repo.get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
         .await?;
@@ -154,13 +213,15 @@ async fn get_or_create_target_projection_supports_team_targets(
 ) -> anyhow::Result<()> {
     let repo = AiProjectionRepositoryImpl::new(pool);
 
-    repo.get_or_create_projection(
+    repo.upsert_projection_definition(
         "team/focus",
         "What is my team focused on?",
         "hash_v1",
         TargetType::Team,
         RefreshCadence::Medium,
         Expiry::Week,
+        None,
+        None,
     )
     .await?;
 
@@ -171,6 +232,35 @@ async fn get_or_create_target_projection_supports_team_targets(
         .await?;
 
     assert_eq!(instance.target_id, team_id);
+    assert_eq!(instance.status, ProjectionStatus::Cold);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn get_target_projection_returns_instance_or_not_found(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let user = MacroUserIdStr::parse_from_str("macro|pro@user.com")?;
+
+    assert!(matches!(
+        repo.get_target_projection("inbox/important", user.as_ref())
+            .await,
+        Err(AiProjectionError::NotFound)
+    ));
+
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/important", user.as_ref(), "hash_v1")
+        .await?;
+
+    let instance = repo
+        .get_target_projection("inbox/important", user.as_ref())
+        .await?;
+    assert_eq!(instance.ai_projection_id, "inbox/important");
     assert_eq!(instance.status, ProjectionStatus::Cold);
 
     Ok(())
@@ -212,15 +302,7 @@ async fn get_projection_returns_definition_or_not_found(
         Err(AiProjectionError::NotFound)
     ));
 
-    repo.get_or_create_projection(
-        "inbox/important",
-        "What is important?",
-        "hash_v1",
-        TargetType::User,
-        RefreshCadence::High,
-        Expiry::Day,
-    )
-    .await?;
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
 
     let projection = repo.get_projection("inbox/important").await?;
     assert_eq!(projection.prompt, "What is important?");
@@ -236,15 +318,7 @@ async fn get_projection_returns_definition_or_not_found(
 async fn processing_claim_is_exclusive_and_releasable(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = AiProjectionRepositoryImpl::new(pool);
 
-    repo.get_or_create_projection(
-        "inbox/important",
-        "What is important?",
-        "hash_v1",
-        TargetType::User,
-        RefreshCadence::High,
-        Expiry::Day,
-    )
-    .await?;
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
 
     let target = "macro|pro@user.com";
 
@@ -267,15 +341,7 @@ async fn set_projection_result_and_error_update_status(pool: Pool<Postgres>) -> 
     let repo = AiProjectionRepositoryImpl::new(pool);
     let target = "macro|pro@user.com";
 
-    repo.get_or_create_projection(
-        "inbox/important",
-        "What is important?",
-        "hash_v1",
-        TargetType::User,
-        RefreshCadence::High,
-        Expiry::Day,
-    )
-    .await?;
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
     repo.get_or_create_target_projection("inbox/important", target, "hash_v1")
         .await?;
 
@@ -284,6 +350,7 @@ async fn set_projection_result_and_error_update_status(pool: Pool<Postgres>) -> 
     repo.set_projection_result(
         "inbox/important",
         target,
+        "hash_v1",
         "the result",
         generated_at,
         stale_at,
@@ -291,19 +358,86 @@ async fn set_projection_result_and_error_update_status(pool: Pool<Postgres>) -> 
     .await?;
 
     let ready = repo
-        .get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .get_target_projection("inbox/important", target)
         .await?;
     assert_eq!(ready.status, ProjectionStatus::Ready);
     assert_eq!(ready.result.as_deref(), Some("the result"));
     assert!(ready.generated_at.is_some());
 
-    repo.set_projection_error("inbox/important", target, "it broke")
+    repo.set_projection_error("inbox/important", target, "hash_v1", "it broke")
         .await?;
     let errored = repo
-        .get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .get_target_projection("inbox/important", target)
         .await?;
     assert_eq!(errored.status, ProjectionStatus::Error);
     assert_eq!(errored.error.as_deref(), Some("it broke"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn projection_writes_are_scoped_to_the_message_version(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let target = "macro|pro@user.com";
+
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .await?;
+
+    // The instance moved to v2 (e.g. the prompt changed mid-flight); writes
+    // carrying the old v1 hash must not clobber it.
+    repo.get_or_create_target_projection("inbox/important", target, "hash_v2")
+        .await?;
+
+    let generated_at = chrono::Utc::now();
+    repo.set_projection_result(
+        "inbox/important",
+        target,
+        "hash_v1",
+        "stale v1 result",
+        generated_at,
+        generated_at + Expiry::Day.to_duration(),
+    )
+    .await?;
+    repo.set_projection_error("inbox/important", target, "hash_v1", "stale v1 error")
+        .await?;
+    repo.set_projection_loading("inbox/important", target, "hash_v1")
+        .await?;
+
+    let instance = repo
+        .get_target_projection("inbox/important", target)
+        .await?;
+    assert_eq!(instance.status, ProjectionStatus::Cold);
+    assert!(instance.result.is_none());
+    assert!(instance.error.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn set_projection_refreshing_updates_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let target = "macro|pro@user.com";
+
+    upsert_definition(&repo, "inbox/important", "What is important?", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/important", target, "hash_v1")
+        .await?;
+
+    repo.set_projection_refreshing("inbox/important", target)
+        .await?;
+
+    let instance = repo
+        .get_target_projection("inbox/important", target)
+        .await?;
+    assert_eq!(instance.status, ProjectionStatus::Refreshing);
 
     Ok(())
 }

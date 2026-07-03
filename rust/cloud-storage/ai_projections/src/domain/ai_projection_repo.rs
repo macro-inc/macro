@@ -8,9 +8,12 @@ use crate::domain::model::{
 
 /// The AiProjectionRepository defines the persistence actions for ai projections.
 pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
-    /// Gets an existing projection definition by id, or creates it if it does
-    /// not exist. Existing definitions are returned unchanged.
-    fn get_or_create_projection(
+    /// Gets a projection definition by id, creating it if absent. An existing
+    /// definition whose `prompt_hash` (or cadence/expiry) differs from the
+    /// request is updated in place, so re-upserting with a changed prompt,
+    /// model, or output schema revises the definition.
+    #[allow(clippy::too_many_arguments)]
+    fn upsert_projection_definition(
         &self,
         id: &str,
         prompt: &str,
@@ -18,15 +21,27 @@ pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
         target_type: TargetType,
         refresh_cadence: RefreshCadence,
         expiry: Expiry,
+        model: Option<&str>,
+        output_schema: Option<&serde_json::Value>,
     ) -> impl Future<Output = Result<AiProjection, AiProjectionError>> + Send;
 
     /// Gets the target's instance of a projection, or creates a cold instance
-    /// if one does not exist for the given prompt version.
+    /// if one does not exist. An existing instance whose `prompt_hash` differs
+    /// from the definition's is reset to cold (keeping its previous result
+    /// visible until regeneration overwrites it).
     fn get_or_create_target_projection(
         &self,
         ai_projection_id: &str,
         target_id: &str,
         prompt_hash: &str,
+    ) -> impl Future<Output = Result<UserAiProjection, AiProjectionError>> + Send;
+
+    /// Gets the target's instance of a projection. Returns
+    /// [`AiProjectionError::NotFound`] if no instance exists.
+    fn get_target_projection(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
     ) -> impl Future<Output = Result<UserAiProjection, AiProjectionError>> + Send;
 
     /// Gets an existing projection definition by id. Returns
@@ -55,30 +70,45 @@ pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
         target_id: &str,
     ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
 
-    /// Marks the target's projection instance as loading.
+    /// Marks the target's projection instance as loading. A no-op if the
+    /// instance's `prompt_hash` no longer matches (a newer version exists).
     fn set_projection_loading(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+        prompt_hash: &str,
+    ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
+
+    /// Marks the target's projection instance as refreshing, signalling that a
+    /// regeneration is in flight while the previous result remains available.
+    fn set_projection_refreshing(
         &self,
         ai_projection_id: &str,
         target_id: &str,
     ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
 
     /// Stores a materialized result on the target's projection instance and
-    /// marks it ready.
+    /// marks it ready. A no-op if the instance's `prompt_hash` no longer
+    /// matches (the result belongs to an outdated version).
+    #[allow(clippy::too_many_arguments)]
     fn set_projection_result(
         &self,
         ai_projection_id: &str,
         target_id: &str,
+        prompt_hash: &str,
         result: &str,
         generated_at: chrono::DateTime<chrono::Utc>,
         stale_at: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
 
     /// Records a materialization error on the target's projection instance and
-    /// marks it errored.
+    /// marks it errored. A no-op if the instance's `prompt_hash` no longer
+    /// matches.
     fn set_projection_error(
         &self,
         ai_projection_id: &str,
         target_id: &str,
+        prompt_hash: &str,
         error: &str,
     ) -> impl Future<Output = Result<(), AiProjectionError>> + Send;
 
