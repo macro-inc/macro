@@ -49,6 +49,8 @@ import { TopBar } from './TopBar';
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
 const SCROLL_AFTER_SEND_DELAY_MS = 100;
+const SCROLL_SETTLE_STABLE_FRAMES = 15;
+const SCROLL_SETTLE_MAX_MS = 2000;
 
 type EmailViewProps = {
   title: string;
@@ -199,6 +201,56 @@ function EmailContent(props: EmailViewProps) {
     return true;
   };
 
+  // Message bodies keep resizing briefly after render (images load, inline
+  // cid: images fail and collapse), so a scroll computed against that
+  // transient layout gets displaced — browser scroll anchoring can clamp it
+  // to the very top of the thread. Re-assert the initial scroll whenever the
+  // content height changes until layout settles or the user scrolls.
+  let cancelActiveScrollPin: (() => void) | undefined;
+  const pinInitialScroll = (messageId: string) => {
+    cancelActiveScrollPin?.();
+    const list = untrack(context.messagesListRef);
+    if (!list) return;
+
+    let cancelled = false;
+    let stableFrames = 0;
+    let lastHeight = list.scrollHeight;
+    const startedAt = performance.now();
+
+    const cancel = () => {
+      cancelled = true;
+      list.removeEventListener('wheel', cancel);
+      list.removeEventListener('touchstart', cancel);
+      list.removeEventListener('pointerdown', cancel);
+    };
+    cancelActiveScrollPin = cancel;
+    list.addEventListener('wheel', cancel, { passive: true });
+    list.addEventListener('touchstart', cancel, { passive: true });
+    list.addEventListener('pointerdown', cancel, { passive: true });
+
+    const tick = () => {
+      if (cancelled || !list.isConnected) return cancel();
+      if (list.scrollHeight !== lastHeight) {
+        lastHeight = list.scrollHeight;
+        stableFrames = 0;
+        performScrollToMessage(messageId, {
+          behavior: 'instant',
+          focus: false,
+        });
+      } else {
+        stableFrames++;
+      }
+      if (
+        stableFrames >= SCROLL_SETTLE_STABLE_FRAMES ||
+        performance.now() - startedAt > SCROLL_SETTLE_MAX_MS
+      ) {
+        return cancel();
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+
   const scrollToLastMessage = (
     behavior: ScrollBehavior = 'instant',
     focus = false
@@ -254,14 +306,17 @@ function EmailContent(props: EmailViewProps) {
       const lastUnreadMessageId_ = untrack(firstUnreadMessageId);
       // Check if there is an unread message
       if (lastUnreadMessageId_) {
-        setTimeout(() =>
+        setTimeout(() => {
           performScrollToMessage(lastUnreadMessageId_!, {
             behavior: 'instant',
-          })
-        );
+          });
+          pinInitialScroll(lastUnreadMessageId_!);
+        });
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
         scrollToLastMessage('instant', false);
+        const lastMessageId = untrack(context.messages.list).at(-1)?.db_id;
+        if (lastMessageId) pinInitialScroll(lastMessageId);
       }
     }
 
@@ -285,9 +340,10 @@ function EmailContent(props: EmailViewProps) {
           fetchNextPage();
           await waitForQueryLoad();
           // Scroll to the message after DOM updates
-          setTimeout(() =>
-            performScrollToMessage(messageId, { behavior: 'instant' })
-          );
+          setTimeout(() => {
+            performScrollToMessage(messageId, { behavior: 'instant' });
+            pinInitialScroll(messageId);
+          });
         } else {
           // Message not found, fallback to last message
           setTimeout(() => scrollToLastMessage('instant', true));
@@ -301,15 +357,18 @@ function EmailContent(props: EmailViewProps) {
     else if (targetIndex === 0) {
       fetchNextPage();
       await waitForQueryLoad();
-      setTimeout(() =>
-        performScrollToMessage(messageId, { behavior: 'instant' })
-      );
+      setTimeout(() => {
+        performScrollToMessage(messageId, { behavior: 'instant' });
+        pinInitialScroll(messageId);
+      });
     }
-
     // Case 3: Message is in current batch with sufficient context
-    setTimeout(() =>
-      performScrollToMessage(messageId, { behavior: 'instant' })
-    );
+    else {
+      setTimeout(() => {
+        performScrollToMessage(messageId, { behavior: 'instant' });
+        pinInitialScroll(messageId);
+      });
+    }
   }
 
   // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
@@ -617,9 +676,7 @@ function EmailContent(props: EmailViewProps) {
                           'border-transparent': !isScrolled(),
                         }}
                       >
-                        <div class="pt-12">
-                          <div class="h-8 mb-4" />
-                        </div>
+                        <div class="h-12" />
                         <h1 class="ph-no-capture text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
                           {props.title}
                         </h1>

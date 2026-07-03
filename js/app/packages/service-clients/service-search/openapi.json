@@ -634,6 +634,13 @@
             },
             "description": "Channel IDs containing the thread. Empty to include threads from all accessible channels."
           },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Thread participant user IDs. A participant is the root message sender, anyone\nwho replied in the thread, or anyone @-mentioned in the thread (group mentions\nlike @here count through their per-user expansion at send time). Empty to\ninclude threads regardless of participants."
+          },
           "root_sender_ids": {
             "type": "array",
             "items": {
@@ -1635,6 +1642,13 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
+          },
+          "tag_option_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "tag option ids matched against `properties.values`, OR'd together across\nall tag definitions. Option ids are globally unique, so the match ignores\nthe owning definition id (personal and team tags combine into one OR)."
           }
         }
       },

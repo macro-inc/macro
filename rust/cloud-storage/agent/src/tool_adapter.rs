@@ -1,7 +1,4 @@
 /// Adapts `ai_toolset` tool types into RIG [`ToolDyn`] objects.
-#[cfg(test)]
-mod test;
-
 use ai_toolset::tool_object::ToolSetCallable;
 use ai_toolset::{AsyncToolCollection, RequestContext, RequestSchema, ToolSet as AiToolSet};
 use rig_core::completion::ToolDefinition;

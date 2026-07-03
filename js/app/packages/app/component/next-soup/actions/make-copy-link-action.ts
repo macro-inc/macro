@@ -12,14 +12,17 @@ const getEntityUrlType = (entity: EntityData): string => {
   if (entity.type === 'document') {
     const { fileType, subType } = entity;
     return fileTypeToBlockName(subType?.type ?? fileType);
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     return 'channel';
   }
   return entity.type;
 };
 
 const getEntityUrlId = (entity: EntityData): string => {
-  if (entity.type === 'channel_message') {
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
     return entity.channelId;
   }
   return entity.id;
@@ -28,7 +31,9 @@ const getEntityUrlId = (entity: EntityData): string => {
 const getEntityUrlParams = (
   entity: EntityData
 ): Record<string, string> | undefined => {
-  if (entity.type !== 'channel_message') return undefined;
+  if (entity.type !== 'channel_message' && entity.type !== 'channel_thread') {
+    return undefined;
+  }
   return getChannelParams(entity.messageId, entity.threadId);
 };
 

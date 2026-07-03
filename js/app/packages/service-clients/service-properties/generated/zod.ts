@@ -1285,6 +1285,55 @@ export const setEntityPropertyBody = zod
   .describe('Type-safe request for setting entity property values.');
 
 /**
+ * Atomic delta: the option is appended to the current stored value (deduped,
+attaching the property if needed), so concurrent edits to the same value
+merge rather than overwrite each other. Prefer this over the full-value PUT
+when adding one option.
+ * @summary Add a single option to an entity's multi-select property value.
+ */
+export const addEntityPropertyOptionParams = zod.object({
+  entity_type: zod
+    .enum([
+      'CHANNEL',
+      'CHAT',
+      'COMPANY',
+      'DOCUMENT',
+      'PROJECT',
+      'TASK',
+      'THREAD',
+      'USER',
+    ])
+    .describe('Entity type (user, document, channel, project, thread)'),
+  entity_id: zod.string().describe('Entity ID'),
+  property_id: zod.uuid().describe('Property ID'),
+  option_id: zod.uuid().describe('Option ID to add'),
+});
+
+/**
+ * Atomic delta: the option is stripped from the current stored value (a no-op
+if absent), so concurrent edits to the same value merge rather than overwrite
+each other.
+ * @summary Remove a single option from an entity's multi-select property value.
+ */
+export const removeEntityPropertyOptionParams = zod.object({
+  entity_type: zod
+    .enum([
+      'CHANNEL',
+      'CHAT',
+      'COMPANY',
+      'DOCUMENT',
+      'PROJECT',
+      'TASK',
+      'THREAD',
+      'USER',
+    ])
+    .describe('Entity type (user, document, channel, project, thread)'),
+  entity_id: zod.string().describe('Entity ID'),
+  property_id: zod.uuid().describe('Property ID'),
+  option_id: zod.uuid().describe('Option ID to remove'),
+});
+
+/**
  * @summary Remove a specific entity property by its ID
  */
 export const deleteEntityPropertyParams = zod.object({

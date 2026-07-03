@@ -11,7 +11,7 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Context, Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair, durable_object,
 };
@@ -55,6 +55,7 @@ mod path {
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
+    pub const BLAME: &str = "blame";
     pub const DEBUG_DUMP_OPERATIONS: &str = "debug_dump_operations";
     pub const DEBUG_DO_KV_GET: &str = "debug_do_kv_get";
     pub const DEBUG_DO_KV_LIST: &str = "debug_do_kv_list";
@@ -118,6 +119,8 @@ pub struct DocumentSyncSession {
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
+    /// Buffered blame events. Flushed via D1 batch on each alarm tick.
+    pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
 }
 
 mod u64_serde_strings {
@@ -204,7 +207,7 @@ impl<'a> Wsm<'a> {
         }
         Ok(())
     }
-    async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
+    pub async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
@@ -265,6 +268,25 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     get_ws_id_from_tags(&tags)
 }
 
+/// send a shallow snapshot to cache and search service
+/// we should eagerly call this from tiem to time to keep our backend up to date on
+/// the status of the document:
+/// - every few seconds
+/// - on creation
+/// - on everyone being disconnected
+async fn report_new_doc_state(document_id: &str, snapshot: &[u8], env: &Env) {
+    if let Err(err) = DssInternalClient::new(env)
+        .publish_shallow_snapshot(document_id, snapshot)
+        .await
+    {
+        warn!(error=?err, "failed to push snapshot to DSS");
+    }
+    #[cfg(feature = "search-service")]
+    if let Err(err) = crate::sps::update(document_id, env).await {
+        warn!(error=?err, "failed to update search index");
+    }
+}
+
 /// Schedule an alarm 5 seconds from now.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
@@ -283,6 +305,35 @@ async fn bump_alarm(state: &State) -> Result<()> {
 impl DocumentSyncSession {
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
+    }
+
+    pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
+        if events.is_empty() {
+            return;
+        }
+        self.pending_blame
+            .lock("DocumentSyncSession::push_blame_events")
+            .extend(events);
+    }
+
+    /// Drain the pending blame buffer and write all events via a single D1
+    /// batch in the background. Returns immediately; the actual write runs
+    /// inside `wait_until` so the alarm handler doesn't block on D1.
+    fn flush_pending_blame(&self) {
+        let pending: Vec<crate::d1::BlameEvent> = std::mem::take(
+            &mut *self
+                .pending_blame
+                .lock("DocumentSyncSession::flush_pending_blame"),
+        );
+        if pending.is_empty() {
+            return;
+        }
+        let env = self.env.clone();
+        self.state.wait_until(async move {
+            if let Err(e) = crate::d1::insert_blame_many(&env, &pending).await {
+                warn!(error = ?e, "failed to flush pending blame");
+            }
+        });
     }
     async fn inner_fetch(&self, req: Request) -> Result<Response> {
         let url = req.url()?;
@@ -316,6 +367,9 @@ impl DocumentSyncSession {
                     or_unauth!(claims.has_document_id_access(document_id).then_some(()));
                     match rest {
                         path::METADATA => return self.metadata_handler(document_id).await,
+                        path::BLAME => {
+                            return self.blame_handler(matched.params.get("node_id")).await;
+                        }
                         path::RAW => return self.raw_handler(document_id).await,
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
                         path::ACTIVE_PEERS_MARKER => {
@@ -410,6 +464,11 @@ impl DocumentSyncSession {
                     );
                 }
             }
+            let document_id_owned = document_id.to_string();
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                report_new_doc_state(&document_id_owned, &snapshot, &env).await;
+            });
         }
 
         Response::empty()
@@ -557,6 +616,16 @@ impl DocumentSyncSession {
             version_id: version_id.to_string(),
             id: document_id.to_string(),
         })
+    }
+
+    async fn blame_handler(&self, node_id: Option<&str>) -> Result<Response> {
+        let node_id = node_id.ok_or_else(|| Error::from("missing node_id"))?;
+        let document_id = self.document_id().await?.to_string();
+        let db = self.env.d1(USER_PEER_D1_BINDING)?;
+        match crate::d1::get_blame_for_node(db, &document_id, node_id).await? {
+            Some(row) => ResponseBuilder::new().from_json(&row),
+            None => Ok(response(status_codes::NOT_FOUND)),
+        }
     }
 
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
@@ -776,6 +845,9 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/metadata", path::METADATA)
         .unwrap();
     router
+        .insert("/document/{document_id}/blame/{node_id}", path::BLAME)
+        .unwrap();
+    router
         .insert(
             "/document/{document_id}/debug_dump_operations",
             path::DEBUG_DUMP_OPERATIONS,
@@ -810,6 +882,7 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
+            pending_blame: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -925,16 +998,12 @@ impl DurableObject for DocumentSyncSession {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    // best effort
-                    if let Err(err) = DssInternalClient::new(&env)
-                        .publish_shallow_snapshot(&document_id, &snapshot)
-                        .await
-                    {
-                        warn!(error =? err, "failed to push snapshot to DSS");
-                    }
+                    report_new_doc_state(&document_id, &snapshot, &env).await;
                 }
             });
         }
+
+        self.flush_pending_blame();
 
         // Re-arm the alarm while clients are connected so the in-memory state
         // stays warm and pending updates keep getting persisted. Updates reach
@@ -974,9 +1043,16 @@ impl DurableObject for DocumentSyncSession {
             .context("failed to broadcast awareness")?;
         }
 
-        #[cfg(feature = "search-service")]
         if self.state.get_websockets().len() == 1 {
-            crate::sps::update(&self.document_id().await?, &self.env).await?;
+            if let Ok(document_id) = self.document_id().await
+                && let Ok(state) = self.document_state().await
+                && let Ok(snapshot) = state.export_shallow_snapshot()
+            {
+                let env = self.env.clone();
+                self.state.wait_until(async move {
+                    report_new_doc_state(&document_id, &snapshot, &env).await;
+                });
+            }
         }
         Ok(())
     }
@@ -1023,15 +1099,6 @@ pub struct PeerResponse {
 pub static ALLOWED_ORIGINS: &[&str] = &[
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
-    "http://localhost:3004",
-    "http://localhost:3005",
-    "http://localhost:3006",
-    "http://localhost:3007",
-    "http://localhost:3008",
-    "http://localhost:3009",
     "http://host.local:3000",
     "https://dev.macro.com",
     "https://staging.macro.com",
@@ -1044,6 +1111,11 @@ pub static ALLOWED_ORIGINS: &[&str] = &[
 pub fn is_origin_allowed(origin: &str) -> bool {
     if ALLOWED_ORIGINS.contains(&origin) {
         return true;
+    }
+    if let Some(port) = origin.strip_prefix("http://localhost:")
+        && let Ok(port) = port.parse::<u16>()
+    {
+        return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);
     }
     // Allow feature branch previews: https://{subdomain}.preview.macro.com
     if let Some(host) = origin.strip_prefix("https://")

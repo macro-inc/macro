@@ -10,6 +10,14 @@ local = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
+# Local-mode SMTP delivery (Mailpit). rustls (no native-tls/openssl); the local
+# transport itself is plaintext via builder_dangerous.
+lettre = { version = "0.11", default-features = false, features = [
+  "builder",
+  "smtp-transport",
+  "tokio1-rustls-tls",
+] }
+macro_env_var = { path = "../macro_env_var" }
 mockall = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

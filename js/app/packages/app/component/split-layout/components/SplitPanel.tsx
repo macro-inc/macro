@@ -234,7 +234,7 @@ export function SplitPanel(props: SplitPanelProps) {
 
               <Panel.Toolbar
                 class={cn(
-                  'items-start py-2 overflow-visible',
+                  'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   isMobile() && 'hidden',
                   (!previewState() ||

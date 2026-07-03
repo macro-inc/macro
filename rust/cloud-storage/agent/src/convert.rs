@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod test;
-
 /// Conversions between agent message types and `rig` message types.
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use attachment::image::ImageData;

@@ -46,10 +46,11 @@ export function openDocument(
   const targetBlock = fileTypeToBlockName(blockOrFileType);
   if (!targetBlock) return;
 
+  const hasParams = !!params && Object.keys(params).length > 0;
+
   if (
     currentBlockId === id &&
-    params &&
-    Object.keys(params).length > 0 &&
+    hasParams &&
     isBlockNameWithLocation(targetBlock) &&
     !inNewSplit
   ) {
@@ -57,7 +58,13 @@ export function openDocument(
     return;
   }
 
-  openWithSplit({ type: targetBlock, id }, { preferNewSplit: inNewSplit });
+  openWithSplit(
+    { type: targetBlock, id },
+    {
+      preferNewSplit: inNewSplit,
+      reopen: targetBlock === 'channel' && !hasParams ? 'latest' : undefined,
+    }
+  );
 
   if (isBlockNameWithLocation(targetBlock)) {
     openLocation(targetBlock, id, params);

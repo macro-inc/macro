@@ -308,7 +308,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
               }}
             />
             <Show when={blockAliasedName === 'task' && !isMobile()}>
-              <DispatchAgentButton />
+              <DispatchAgentButton showPrimaryLabel />
             </Show>
           </div>
         </SidePanel.Section>

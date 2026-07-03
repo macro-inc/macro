@@ -33,6 +33,15 @@ export function MentionsMenuItem(props: {
 
   const name = () => getMentionItemName(props.item);
 
+  // For user items we render the email at reduced opacity (no pipe separator)
+  // instead of baking it into the display string.
+  const userParts = () => {
+    if (props.item.kind !== 'user') return undefined;
+    const { name, email } = props.item.data;
+    if (!name || name === email) return { name: email, email: undefined };
+    return { name, email };
+  };
+
   const icon = () => {
     switch (props.item.kind) {
       case 'user':
@@ -93,7 +102,16 @@ export function MentionsMenuItem(props: {
           class="ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-ink text-xs sm:text-sm font-medium"
           style={{ 'text-overflow': 'ellipsis' }}
         >
-          {name()}
+          <Show when={userParts()} fallback={name()}>
+            {(parts) => (
+              <>
+                {parts().name}
+                <Show when={parts().email}>
+                  <span class="ml-[0.5em] opacity-50">{parts().email}</span>
+                </Show>
+              </>
+            )}
+          </Show>
         </span>
         <Show when={isBotMentionItem(props.item)}>
           <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">

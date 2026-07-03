@@ -19,7 +19,7 @@ import type { CommentThread } from '@service-storage/generated/schemas/commentTh
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
-import { type Component, createSignal, For, type JSX } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   discussionThreads,
@@ -198,7 +198,9 @@ export function useDispatchAgentAction() {
   };
 }
 
-export function DispatchAgentButton() {
+export function DispatchAgentButton(
+  props: { showPrimaryLabel?: boolean } = {}
+) {
   const [open, setOpen] = createSignal(false);
   const { blockId, lastUsed, executeAction, executeLastUsed } =
     useDispatchAgentAction();
@@ -207,9 +209,9 @@ export function DispatchAgentButton() {
     <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup
         variant="ghost"
-        size="icon-sm"
+        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
         depth={2}
-        class="rounded-full text-ink-extra-muted ring ring-edge-muted"
+        class="rounded-full ring ring-edge-muted"
       >
         <Button
           onClick={executeLastUsed}
@@ -220,6 +222,11 @@ export function DispatchAgentButton() {
             component={lastUsed().buttonIcon ?? lastUsed().icon}
             class="size-3!"
           />
+          <Show when={props.showPrimaryLabel}>
+            <span class="max-w-36 truncate text-xs font-medium">
+              {lastUsed().name}
+            </span>
+          </Show>
         </Button>
         <ButtonGroup.Divider />
         <Dropdown.Trigger

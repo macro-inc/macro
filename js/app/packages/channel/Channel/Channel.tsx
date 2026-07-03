@@ -75,6 +75,7 @@ import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelMessageActions } from './create-channel-message-actions';
+import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
 import { createInlineInputKeyboardHandler } from './create-inline-input-keyboard-handler';
 import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import { createMessageEditor } from './create-message-editor';
@@ -119,6 +120,7 @@ export type ChannelMessagesStateSnapshot = {
 
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
+  goToLatest: () => void;
   getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
 };
 
@@ -324,10 +326,14 @@ export function Channel(props: ChannelProps) {
     });
   };
 
+  const deleteConfirmation = createDeleteMessageConfirmation(
+    deleteMessageMutation.mutate
+  );
+
   const getMessageActions = createChannelMessageActions({
     channelId: () => props.channelId,
     userId,
-    deleteMessage: deleteMessageMutation.mutate,
+    deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
@@ -415,6 +421,31 @@ export function Channel(props: ChannelProps) {
     }
   };
 
+  const [pendingScrollToLatest, setPendingScrollToLatest] = createSignal(false);
+
+  const goToLatest: ChannelHandle['goToLatest'] = () => {
+    handleScrollToBottom();
+    setPendingScrollToLatest(true);
+  };
+
+  // When handleScrollToBottom resets a mid-history slice, the newest page
+  // arrives asynchronously and swaps the message set, so a single scroll can
+  // settle mid-list. Keep scrolling until the viewport rests at the bottom of
+  // fully loaded data.
+  createEffect(() => {
+    if (!pendingScrollToLatest()) return;
+    const navigation = threadListNavigation();
+    const scrollState = threadListScrollState();
+    if (!navigation || !scrollState?.didInitialScroll) return;
+    if (messageIndex.keys.length === 0) return;
+    if (messagesQuery.isFetching || messagesQuery.hasPreviousPage) return;
+    if (scrollState.isNearBottom) {
+      setPendingScrollToLatest(false);
+      return;
+    }
+    navigation.scrollToBottom('end');
+  });
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -485,6 +516,7 @@ export function Channel(props: ChannelProps) {
       if (props.onHandleReady)
         props.onHandleReady({
           goToMessage,
+          goToLatest,
           getMessagesStateSnapshot,
         });
     })
@@ -492,6 +524,7 @@ export function Channel(props: ChannelProps) {
 
   return (
     <DebugSuspense name="Channel.root">
+      <deleteConfirmation.ConfirmationDialog />
       <StaticMarkdownContext>
         <SearchHighlightTermsProvider value={findBar.getSearchTermsForMessage}>
           <MaybeMessageActionDrawerManager>

@@ -15,3 +15,5 @@ run-local.fish
 **/result-*
 .pi/plan/
 .pi/plans/
+# Per-instance generated local-stack artifacts (compose override, env, kickstart, Caddyfile).
+infra/local/generated/

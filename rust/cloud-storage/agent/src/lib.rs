@@ -13,6 +13,9 @@ mod stream;
 /// Structured output via prompted JSON generation.
 pub mod structured_output;
 mod tool_adapter;
+
+#[cfg(test)]
+mod test;
 pub mod types;
 
 pub use accumulator::StreamAccumulator;
@@ -24,5 +27,6 @@ pub use model::PredefinedModel;
 pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};
 
+pub use rig_core::completion::CompletionError;
 pub use rig_core::message::Message;
 pub use rig_core::tool::{Tool, ToolDyn};

@@ -87,7 +87,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     if (props.selectedEntity.type === 'document') {
       blockType = fileTypeToResolvedBlockName(props.selectedEntity.fileType);
       blockId = props.selectedEntity.id;
-    } else if (props.selectedEntity.type === 'channel_message') {
+    } else if (
+      props.selectedEntity.type === 'channel_message' ||
+      props.selectedEntity.type === 'channel_thread'
+    ) {
       blockType = 'channel';
       blockId = props.selectedEntity.channelId;
     } else if (props.selectedEntity.type === 'foreign') {
@@ -124,7 +127,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     }
 
     const entity = props.selectedEntity;
-    if (isChannelMessageEntity(entity)) {
+    if (isChannelMessageEntity(entity) || entity.type === 'channel_thread') {
       const channelId = entity.channelId;
       const messageId = entity.messageId;
       const threadId = entity.threadId;

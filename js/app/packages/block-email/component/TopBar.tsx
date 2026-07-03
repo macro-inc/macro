@@ -143,6 +143,7 @@ export function TopBar(props: {
       },
       condition: () => !!emailCtx.thread()?.db_id,
     },
+    shareTool,
     {
       label: 'Task',
       icon: AnimatedTaskIcon,
@@ -174,7 +175,6 @@ export function TopBar(props: {
       action: () => emailCtx.blockSender(),
       condition: isOwnThread,
     },
-    shareTool,
   ];
 
   const tools: BlockTool[] = [

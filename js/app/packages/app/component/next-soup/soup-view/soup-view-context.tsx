@@ -31,10 +31,13 @@ import {
   isListViewID,
   type ListView,
   soupItemMatchesListView,
+  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
+  ENABLE_NEW_INBOX_FLAG,
+  ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -45,7 +48,10 @@ import {
   isWithNotification,
   toNotificationEntity,
 } from '@entity';
-import { useNotificationsForEntity } from '@notifications';
+import {
+  useEntityTypeNotifications,
+  useNotificationsForEntity,
+} from '@notifications';
 import { useQueryClient } from '@queries/client';
 import type {
   GroupMeta as ApiGroupMeta,
@@ -96,6 +102,8 @@ type SoupViewInitializeOptions = {
   additionalEntities?: Accessor<EntityData[]>;
 };
 
+export type ReadFilter = 'all' | 'unread' | 'read';
+
 interface SoupViewContextValues {
   soup: SoupState;
   initialize: (options?: SoupViewInitializeOptions) => void;
@@ -116,6 +124,8 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  readFilter: Accessor<ReadFilter>;
+  setReadFilter: Setter<ReadFilter>;
   groupByField: Accessor<GroupByField | undefined>;
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
@@ -275,6 +285,10 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.tab',
     { default: undefined }
   );
+  const [readFilter, setReadFilter] = useEntryState<ReadFilter>(
+    'soup.readFilter',
+    { default: 'unread' }
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
@@ -298,6 +312,41 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
+  const notificationSource = useGlobalNotificationSource();
+
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component') return;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
+  // The new inbox surfaces channel threads the user was mentioned in or replied
+  // to (matching the experimental inbox), injected as `channelThreadId`
+  // includes — soup otherwise only surfaces whole channels.
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+  const channelNotifications = useEntityTypeNotifications(
+    notificationSource,
+    'channel'
+  );
+  const mentionedMessages = createMemo(() =>
+    channelNotifications()
+      .map((notification) => {
+        const metadata = notification.notification_metadata;
+        if (metadata.tag === 'channel_mention') {
+          return metadata.content.threadId ?? metadata.content.messageId;
+        }
+        if (metadata.tag === 'channel_message_reply') {
+          return metadata.content.threadId;
+        }
+        return undefined;
+      })
+      .filter((id): id is string => Boolean(id))
+  );
+  const isNewInbox = () =>
+    activeListView() === 'inbox' && newInboxFlag().enabled;
+
   const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
     if (inboxes === undefined) return state;
@@ -310,8 +359,63 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const applyInboxThreadFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const threadIds = mentionedMessages();
+    if (!threadIds.length) return state;
+    return {
+      ...state,
+      include: {
+        ...state.include,
+        channelThreadId: threadIds,
+      },
+    };
+  };
+
+  // Unread/read/all filter for the new inbox: injects the per-entity-type seen
+  // filters ('all' leaves them unset). Matches the experimental inbox.
+  const applyInboxReadFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const filter = readFilter();
+    if (filter === 'all') return state;
+    const seen = filter === 'read';
+    return {
+      ...state,
+      include: {
+        ...state.include,
+        documentSeen: seen,
+        emailSeen: seen,
+        channelSeen: seen,
+        chatSeen: seen,
+        folderSeen: seen,
+      },
+    };
+  };
+
+  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
+  // calls entirely, so drop that exclusion and filter to missed status instead.
+  const applyInboxCallFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const { callId: _callId, ...include } = state.include;
+    return {
+      ...state,
+      include: {
+        ...include,
+        callStatus: 'MISSED',
+      },
+    };
+  };
+
+  const applyViewFilters = (state: QueryState): QueryState => {
+    let next = applyInboxFilter(state);
+    next = applyInboxThreadFilter(next);
+    next = applyInboxReadFilter(next);
+    next = applyInboxCallFilter(next);
+    return next;
+  };
+
   const soupBody = createMemo(() =>
-    compileToAst(applyInboxFilter(queryFilters.state))
+    compileToAst(applyViewFilters(queryFilters.state))
   );
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
@@ -320,7 +424,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const search = createSearchState({
     soup,
-    filters: () => applyInboxFilter(queryFilters.state),
+    filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
@@ -338,7 +442,6 @@ export const SoupViewContextProvider: FlowComponent<
     });
   };
 
-  const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const showSupportedForeignEntitiesFF = useFeatureFlag(
     ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -364,11 +467,11 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const activeListView = createMemo<ListView | undefined>(() => {
-    const content = panel.handle.content();
-    if (content.type !== 'component') return;
-    return isListViewID(content.id) ? content.id : undefined;
-  });
+  // Active tag option ids, used to gate optimistic websocket inserts so an
+  // active tag filter is honored even on the grouped render path.
+  const activeTagOptionIds = createMemo(() =>
+    (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
+  );
 
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
@@ -382,7 +485,9 @@ export const SoupViewContextProvider: FlowComponent<
         enabled: !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     }
@@ -505,7 +610,9 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     },
@@ -648,6 +755,8 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    readFilter,
+    setReadFilter,
     groupByField,
     fetchNextGroupPage,
     isFetchingGroupPage,

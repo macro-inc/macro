@@ -203,6 +203,7 @@ export function NotificationStacks(props: NotificationStacksProps) {
             items={stacks}
             visibleCount={props.visibleCount ?? DEFAULT_VISIBLE_COUNT}
             togglePosition="bottom"
+            persistKey={`notif-stacks:${props.entity.id}`}
           >
             {(stack) => (
               <NotificationStackRow

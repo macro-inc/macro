@@ -59,6 +59,27 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         value: Option<PropertyValue>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Atomically add one option to a multi-select entity property value,
+    /// attaching the property if needed. Re-adding a present option is a no-op.
+    /// Composes with concurrent option changes without a lost update.
+    fn add_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically remove one option from a multi-select entity property value.
+    /// A no-op if the property is unattached or the option is not present.
+    fn remove_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Atomically link or unlink a task's parent (for Parent Task property).
     ///
     /// When `parent_task_id` is `Some(parent)`:

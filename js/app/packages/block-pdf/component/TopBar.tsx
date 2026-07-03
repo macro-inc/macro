@@ -15,14 +15,12 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   REFERENCES_DRAWER_ID,
@@ -34,17 +32,12 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_PDF_MARKUP,
-  ENABLE_REFERENCES_MODAL,
-} from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
+import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/wide-share.svg';
 import DownloadIcon from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
 import Printer from '@phosphor/printer.svg';
 import Quotes from '@phosphor/quotes.svg';
 import {
@@ -54,11 +47,9 @@ import {
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { platformFetch } from 'core/util/platformFetch';
-import { Show } from 'solid-js';
 import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
-import { MarkupToolbar } from './MarkupToolbar';
-import { PageNumberInput } from './PageNumberInput';
+import { PdfSplitToolbar } from './PdfSplitToolbar';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
@@ -69,7 +60,6 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
 
   const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
@@ -163,11 +153,6 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -237,6 +222,20 @@ export function TopBar() {
     },
   ];
 
+  const menuTools: BlockTool[] = [
+    {
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () =>
+        openChatWithAgent({
+          type: 'document',
+          id: documentId,
+          name: fileName(),
+          fileType,
+        }),
+    },
+  ];
+
   return (
     <>
       <SplitHeaderLeft>
@@ -248,21 +247,11 @@ export function TopBar() {
           <BlockLiveIndicators />
         </div>
       </SplitHeaderRight>
+      <PdfSplitToolbar />
       <ResponsivePermissionsBadge />
-      <SplitToolbarLeft>
-        <Show when={pdfDocumentProxy()}>
-          <div class="flex items-center p-1">
-            <Show when={!isMobile()}>
-              <div class="w-5" />
-            </Show>
-            <PageNumberInput />
-            <div class="w-5" />
-            {ENABLE_PDF_MARKUP && <MarkupToolbar />}
-          </div>
-        </Show>
-      </SplitToolbarLeft>
       <ResponsiveBlockToolbar
         tools={tools}
+        menuTools={menuTools}
         ops={ops}
         id={documentId}
         itemType={itemType}

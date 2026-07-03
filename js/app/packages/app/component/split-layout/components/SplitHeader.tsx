@@ -13,6 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { EntityDragEvent } from '@entity';
+import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import CollapseIcon from '@phosphor/arrows-in.svg';
@@ -22,7 +23,6 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import SplitIcon from '@phosphor/square-half.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -56,7 +56,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
     };
   }
 
-  if (data.type === 'channel_message') {
+  if (data.type === 'channel_message' || data.type === 'channel_thread') {
     return { type: 'channel', id: data.channelId };
   }
 
@@ -252,15 +252,15 @@ function SplitHeaderContextMenu(props: ParentProps) {
     const index = splitIndex();
     if (index < 0) return;
 
-    const nextContents = layout.manager
-      .splits()
-      .map((split) => ({ ...split.content }));
     const insertIndex = side === 'left' ? index : index + 1;
 
-    nextContents.splice(insertIndex, 0, content);
-    layout.manager.reconcile(nextContents);
-    layout.manager.splits()[insertIndex]?.id &&
-      layout.manager.activateSplit(layout.manager.splits()[insertIndex].id);
+    layout.manager.createNewSplit({
+      content,
+      activate: true,
+      allowDuplicate: true,
+      insertIndex,
+      referredFrom: null,
+    });
   };
 
   const copyDebugInfo = async () => {
@@ -301,6 +301,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
         <ContextMenuContent width="md">
           <MenuItem
             icon={SplitIcon}
+            iconClass="rotate-180"
             text="New split left"
             disabled={!layout.manager.canAppendSplit()}
             onClick={() => insertSplitBeside('left', newSplitContent())}

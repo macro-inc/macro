@@ -1,7 +1,4 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
-#[cfg(test)]
-mod test;
-
 use crate::error::AgentError;
 use crate::hook::{RegisterFn, ToolRouter};
 use crate::model::PredefinedModel;

@@ -5,6 +5,7 @@ use filter_ast::Expr;
 use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{Email, EmailLiteral};
 use recursion::CollapsibleExt;
+use uuid::Uuid;
 
 fn date_predicate(col: &str, lit: &DateLiteral) -> SqlFragment {
     let sql = match lit {
@@ -549,6 +550,7 @@ fn build_union_branch(
     kind: AddressKind,
     email: &Email,
     resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
 ) -> Option<SqlFragment> {
     let trash = build_trash_check(resolved);
     match (resolved.contact_ids_for(email), email) {
@@ -581,7 +583,8 @@ fn build_union_branch(
         (None, Email::Complete(_)) => None,
         (None, Email::Partial(s)) => {
             let pattern = format!("%{}%", escape_like_pattern(s));
-            let mut f = build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern);
+            let mut f =
+                build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern, link_scope);
             f.push_raw(" AND ");
             f.extend(trash);
             Some(f)
@@ -592,6 +595,7 @@ fn build_union_branch(
                 kind,
                 "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
                 domain,
+                link_scope,
             );
             f.push_raw(" AND ");
             f.extend(trash);
@@ -600,12 +604,32 @@ fn build_union_branch(
     }
 }
 
+/// `AND <alias>.link_id = ANY($links)` when a link scope applies, empty otherwise.
+fn link_scope_fragment(alias: &str, link_scope: Option<&[Uuid]>) -> SqlFragment {
+    match link_scope {
+        Some(links) => {
+            let mut f = SqlFragment::raw(format!(" AND {alias}.link_id = ANY("));
+            f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+            f.push_raw(")");
+            f
+        }
+        None => SqlFragment::empty(),
+    }
+}
+
 /// Shared shape for a union-branch SELECT that joins through
 /// `email_contacts` with a single bound predicate against `c.*`.
+///
+/// Text matches (ILIKE / domain equality) are not contact-id-scoped like the
+/// Complete branches are, so without `link_scope` they scan matches across
+/// every mailbox in the table before the candidate stage intersects with the
+/// caller's threads. Scoping both `c` and `m` by the caller's links bounds
+/// the CTE to the caller's own mail.
 fn build_union_branch_text_match(
     kind: AddressKind,
     predicate_prefix: &str,
     bind_value: String,
+    link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
     match kind {
         AddressKind::Sender => {
@@ -615,6 +639,8 @@ fn build_union_branch_text_match(
                  WHERE {predicate_prefix}"
             ));
             f.extend(SqlFragment::bind_string(bind_value));
+            f.extend(link_scope_fragment("c", link_scope));
+            f.extend(link_scope_fragment("m", link_scope));
             f
         }
         _ => {
@@ -627,6 +653,8 @@ fn build_union_branch_text_match(
             ));
             f.extend(SqlFragment::bind_string(bind_value));
             f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
+            f.extend(link_scope_fragment("c", link_scope));
+            f.extend(link_scope_fragment("m", link_scope));
             f
         }
     }
@@ -651,9 +679,16 @@ fn build_union_branch_text_match(
 ///    every conjunct).
 ///
 /// Returns `None` when there are no pure-address conjuncts to push down.
+///
+/// `link_scope` restricts the CTE's contact/message scans to the given
+/// links. Only pass it when every candidate thread is known to belong to
+/// those links (owned-only, non-team queries) — shared and team candidate
+/// selects include threads from other users' links, which the scoped CTE
+/// would wrongly filter out.
 pub(super) fn build_matching_threads_cte_body(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
 ) -> Option<SqlFragment> {
     let conjuncts = extract_address_only_conjuncts(ast);
     if conjuncts.is_empty() {
@@ -665,7 +700,7 @@ pub(super) fn build_matching_threads_cte_body(
     {
         let branches: Vec<SqlFragment> = literals
             .into_iter()
-            .filter_map(|(k, e)| build_union_branch(k, e, resolved))
+            .filter_map(|(k, e)| build_union_branch(k, e, resolved, link_scope))
             .collect();
         if !branches.is_empty() {
             let mut iter = branches.into_iter();
@@ -694,6 +729,7 @@ pub(super) fn build_matching_threads_cte_body(
     f.extend(build_trash_check(resolved));
     f.push_raw(" AND ");
     f.extend(predicate);
+    f.extend(link_scope_fragment("m", link_scope));
     Some(f)
 }
 

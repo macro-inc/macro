@@ -34,7 +34,7 @@ type RemoveReactionInput = {
   currentReactions: MessageData['reactions'];
 };
 
-type DeleteMessageInput = {
+export type DeleteMessageInput = {
   channelID: string;
   messageID: string;
   threadID?: string;

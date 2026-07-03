@@ -131,7 +131,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       isPersonal() && !isMacroSender()
         ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
         : '';
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
+    // Let long &nbsp;-joined signature lines wrap (overflow-wrap is inherited)
+    // and fixed-width tables scroll, so a wide signature doesn't trip the
+    // fit-to-width zoom below and shrink the whole message.
+    const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
+    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';

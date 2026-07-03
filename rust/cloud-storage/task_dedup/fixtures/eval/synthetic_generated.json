@@ -1,0 +1,766 @@
+{
+  "tasks": [
+    {
+      "id": "gen-rephrasing-0-a",
+      "title": "Fix off-by-one in date range picker",
+      "body": "Selecting a date range excludes the final day. The end date should be inclusive.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-0-b",
+      "title": "Date filter drops the last selected day",
+      "body": "When users pick a start and end date, results for the end date are missing. Make the range inclusive of the end.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-1-a",
+      "title": "Migrate CI from Jenkins to GitHub Actions",
+      "body": "Replace our existing Jenkins pipelines with equivalent GitHub Actions workflows for build and test.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-1-b",
+      "title": "Move build pipeline off Jenkins",
+      "body": "We want to retire Jenkins and run our CI builds and tests using GitHub Actions instead.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-2-a",
+      "title": "Cache product catalog lookups in Redis",
+      "body": "Frequent catalog reads hit the database directly. Add a Redis caching layer to reduce DB load.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-2-b",
+      "title": "Reduce database load from catalog queries",
+      "body": "The product catalog is queried constantly and hammering Postgres. Introduce a Redis cache in front of these reads.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-3-a",
+      "title": "Paginate the /orders API endpoint",
+      "body": "The orders endpoint returns all records at once, causing slow responses. Add limit/offset pagination.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-3-b",
+      "title": "Orders API times out on large accounts",
+      "body": "Accounts with thousands of orders can't load because the endpoint returns everything in one response. Introduce pagination to fix this.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-4-a",
+      "title": "Add dark mode toggle to settings",
+      "body": "Implement a user-facing toggle in the settings page that switches the app between light and dark themes.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-4-b",
+      "title": "Support dark theme selection for users",
+      "body": "Let users choose a dark color scheme from their preferences. Should persist across sessions.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-5-a",
+      "title": "Password reset email not being sent",
+      "body": "Users report that clicking 'Forgot Password' does not deliver the reset email. Investigate the mailer queue and fix delivery.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-5-b",
+      "title": "Forgot password flow broken — no email arrives",
+      "body": "When a user requests a password reset, no message ever shows up in their inbox. We need to get reset emails working again.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-6-a",
+      "title": "Broken avatar images on profile page",
+      "body": "User avatars show a broken image icon on the profile view. Likely a wrong URL path after the CDN change.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-6-b",
+      "title": "Profile pictures not loading",
+      "body": "After the recent CDN migration, avatar images fail to render on user profiles. Fix the image URLs.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-7-a",
+      "title": "Export report data as CSV",
+      "body": "Add a button on the reports screen that downloads the current report as a CSV file.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-7-b",
+      "title": "Allow downloading reports in CSV format",
+      "body": "Users need to export their reports to a spreadsheet. Provide a CSV download option from the report view.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-8-a",
+      "title": "Rate limit the public search API",
+      "body": "Add per-IP rate limiting to the search endpoint to prevent abuse and scraping.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-8-b",
+      "title": "Prevent search endpoint abuse with throttling",
+      "body": "The public search API is being scraped heavily. Implement request throttling by IP address.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-9-a",
+      "title": "Add unit tests for currency conversion util",
+      "body": "The convertCurrency helper has no test coverage. Write tests covering rounding and unsupported currencies.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-rephrasing-9-b",
+      "title": "Improve test coverage for money conversion helper",
+      "body": "Our currency conversion function is untested. Add unit tests, including edge cases like rounding and invalid currency codes.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-0-a",
+      "title": "Add retry logic to payment webhook handler",
+      "body": "When the Stripe webhook processor fails, retry with exponential backoff up to five times before dead-lettering the event.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-0-b",
+      "title": "Support Apple Pay in payment flow",
+      "body": "Integrate Apple Pay as an additional payment method in the checkout, including button rendering and token handling.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-1-a",
+      "title": "Add CSV export to analytics dashboard",
+      "body": "Let users download the currently filtered metrics table as a CSV file with proper column headers.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-1-b",
+      "title": "Add date range picker to analytics dashboard",
+      "body": "Replace the fixed 7/30/90 day buttons with a custom date range selector that updates all charts on the dashboard.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-2-a",
+      "title": "Add dark mode toggle to settings page",
+      "body": "Introduce a theme switcher in user preferences that persists the choice and applies a dark color palette across the app.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-2-b",
+      "title": "Increase font size options in settings",
+      "body": "Add small/medium/large text size controls to the accessibility section of the settings page and apply them globally.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-3-a",
+      "title": "Add fuzzy matching to product search",
+      "body": "Improve the search engine to tolerate typos and partial matches using trigram similarity. Users should find products even with minor spelling errors.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-3-b",
+      "title": "Implement infinite scroll on search results",
+      "body": "Replace the numbered pagination on the search results page with infinite scroll that loads more items as the user reaches the bottom.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-4-a",
+      "title": "Encrypt user PII at rest in the database",
+      "body": "Add column-level encryption for email, phone, and address fields in the users table. Keys should be managed via the KMS service.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-4-b",
+      "title": "Add password strength meter to signup form",
+      "body": "Show a real-time strength indicator as the user types their password during registration, enforcing a minimum score before submission.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-5-a",
+      "title": "Optimize checkout cart total calculation",
+      "body": "The cart totals endpoint recomputes taxes and discounts on every render. Cache intermediate results to reduce latency.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-5-b",
+      "title": "Add gift wrapping option at checkout",
+      "body": "Allow customers to select gift wrapping and add a personalized message during the checkout flow, adding a small fee to the order.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-6-a",
+      "title": "Add rate limiting to the public API",
+      "body": "Implement per-API-key rate limiting with a sliding window to protect the public REST endpoints from abuse.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-6-b",
+      "title": "Add pagination cursors to the public API",
+      "body": "Replace offset-based pagination with cursor-based pagination on the list endpoints of the public API for stable results.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-7-a",
+      "title": "Migrate notifications service to Kafka",
+      "body": "Move the notification event stream from RabbitMQ to Kafka to improve throughput and enable replay of missed events.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-7-b",
+      "title": "Add email digest for notifications",
+      "body": "Allow users to batch non-urgent notifications into a daily email digest instead of receiving them individually.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-8-a",
+      "title": "Fix memory leak in video player component",
+      "body": "The video player retains event listeners after unmount, causing memory to grow during long sessions. Clean up listeners on teardown.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-8-b",
+      "title": "Add playback speed control to video player",
+      "body": "Introduce a speed selector (0.5x to 2x) in the video player controls that adjusts playback rate in real time.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-9-a",
+      "title": "Add unit tests for the invoice generator",
+      "body": "Cover edge cases in the invoice generation module including proration, multi-currency, and zero-total invoices.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_project_different_action-9-b",
+      "title": "Support PDF export for invoices",
+      "body": "Generate downloadable PDF versions of invoices with company branding and line-item breakdowns from the invoice module.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-0-a",
+      "title": "Send order confirmation emails via SendGrid",
+      "body": "Integrate SendGrid to deliver transactional order confirmation emails. Include order summary and tracking link in the template.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-0-b",
+      "title": "Send order confirmation SMS via Twilio",
+      "body": "Integrate Twilio to deliver order confirmation text messages with a shortened tracking URL. Support opt-out handling per region.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-1-a",
+      "title": "Integrate Stripe for subscription billing",
+      "body": "Set up Stripe to handle recurring subscription charges, webhooks for renewals, and failed payment retries.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-1-b",
+      "title": "Integrate PayPal for one-time checkout",
+      "body": "Set up PayPal Checkout for single-purchase orders, including capture flow and refund handling.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-2-a",
+      "title": "Export analytics dashboard to PDF",
+      "body": "Allow users to export the current analytics dashboard view as a formatted PDF including charts and date range.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-2-b",
+      "title": "Export analytics dashboard to CSV",
+      "body": "Allow users to export the underlying analytics dataset as a CSV file matching the selected filters and date range.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-3-a",
+      "title": "Add OAuth login for Google",
+      "body": "Implement Google OAuth 2.0 flow on the login page so users can sign in with their Google accounts. Store tokens securely and map to existing user records.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-3-b",
+      "title": "Add OAuth login for Microsoft",
+      "body": "Implement Microsoft Entra ID OAuth flow on the login page so users can sign in with their Microsoft accounts. Handle tenant configuration and token refresh.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-4-a",
+      "title": "Add caching layer using Redis for product catalog",
+      "body": "Introduce Redis to cache product catalog reads and reduce database load on the storefront listing pages.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-4-b",
+      "title": "Add caching layer using Memcached for session data",
+      "body": "Introduce Memcached to store ephemeral user session data and reduce read pressure on the primary datastore.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-5-a",
+      "title": "Add file upload support to AWS S3",
+      "body": "Wire up the media upload service to store user attachments in an S3 bucket with signed URLs for retrieval.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-5-b",
+      "title": "Add file upload support to Google Cloud Storage",
+      "body": "Wire up the media upload service to store user attachments in a GCS bucket with signed URLs and lifecycle rules for cleanup.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-6-a",
+      "title": "Add dark mode to the mobile app",
+      "body": "Implement a dark theme for the iOS and Android mobile app that respects the system appearance setting.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-6-b",
+      "title": "Add dark mode to the web dashboard",
+      "body": "Implement a dark theme toggle for the web dashboard, persisting the user's preference across sessions.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-7-a",
+      "title": "Add push notifications via Firebase Cloud Messaging",
+      "body": "Integrate FCM to send push notifications to Android devices for chat message alerts.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-7-b",
+      "title": "Add push notifications via APNs",
+      "body": "Integrate Apple Push Notification service to send push notifications to iOS devices for chat message alerts.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-8-a",
+      "title": "Ship logs to Datadog",
+      "body": "Configure the log forwarder to ship application logs to Datadog with proper service tagging and log levels.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-8-b",
+      "title": "Ship logs to Splunk",
+      "body": "Configure the log forwarder to ship application logs to Splunk HEC with indexing by environment and source.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-9-a",
+      "title": "Sync contacts to Salesforce CRM",
+      "body": "Build a nightly job that pushes new and updated contact records into Salesforce, mapping our fields to their lead objects.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-same_action_different_integration-9-b",
+      "title": "Sync contacts to HubSpot CRM",
+      "body": "Build a nightly job that pushes new and updated contact records into HubSpot, mapping our fields to their contact properties.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-0-a",
+      "title": "Fix crash when uploading HEIC images on iOS",
+      "body": "The app crashes when a user selects a HEIC photo from their library. Add conversion handling before upload.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-0-b",
+      "title": "Implement rate limiting on public API endpoints",
+      "body": "Add per-IP rate limiting to the public REST API to prevent abuse. Return 429 responses with retry-after headers.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-1-a",
+      "title": "Investigate memory leak in WebSocket service",
+      "body": "Memory usage grows steadily on the chat WebSocket service until it OOMs after ~12 hours. Profile and fix the leak.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-1-b",
+      "title": "Add CSV export for monthly sales report",
+      "body": "Finance needs to export the monthly sales report as CSV. Add a download button that generates the file with all line items.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-2-a",
+      "title": "Support keyboard shortcuts in the code editor",
+      "body": "Add configurable keyboard shortcuts for common actions like save, format, and find in the in-app code editor.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-2-b",
+      "title": "Reduce Docker image size for the API service",
+      "body": "The API Docker image is 1.2GB. Switch to a multi-stage build with an alpine base to shrink it significantly.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-3-a",
+      "title": "Add dark mode toggle to settings page",
+      "body": "Users have requested a dark theme option. Implement a toggle in the settings panel that persists across sessions.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-3-b",
+      "title": "Optimize nightly database backup job",
+      "body": "The nightly Postgres backup is taking over 4 hours. Investigate compression and incremental backup strategies to reduce runtime.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-4-a",
+      "title": "Add pagination to the customer orders list",
+      "body": "The orders page loads all records at once and slows down for large accounts. Add server-side pagination with page size controls.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-4-b",
+      "title": "Redesign the mobile app splash screen",
+      "body": "Update the splash screen with the new brand logo and animation per the latest design spec.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-5-a",
+      "title": "Update onboarding email copy for new pricing",
+      "body": "Marketing has revised pricing tiers. Update the welcome email template to reflect the new plans and CTA links.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-5-b",
+      "title": "Migrate CI pipeline from Jenkins to GitHub Actions",
+      "body": "Replace the legacy Jenkins jobs with GitHub Actions workflows for build, test, and deploy stages.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-6-a",
+      "title": "Add unit tests for the tax calculation module",
+      "body": "The tax module has no coverage. Write unit tests covering edge cases like exemptions and multi-state rules.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-6-b",
+      "title": "Fix misaligned footer on the landing page",
+      "body": "The footer columns are misaligned on tablet-width viewports. Adjust the CSS grid to render evenly.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-7-a",
+      "title": "Integrate Stripe webhook for subscription events",
+      "body": "Handle Stripe webhooks for subscription.created and canceled events to keep our billing records in sync.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-7-b",
+      "title": "Improve accessibility of the search filter dropdown",
+      "body": "The filter dropdown is not navigable via keyboard and lacks ARIA labels. Add proper focus management and screen reader support.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-8-a",
+      "title": "Cache geocoding results to reduce API costs",
+      "body": "We call the maps geocoding API repeatedly for the same addresses. Add a Redis cache keyed by normalized address.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-8-b",
+      "title": "Add a confirmation modal before deleting a project",
+      "body": "Users accidentally delete projects. Show a confirmation dialog requiring them to type the project name to confirm.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-9-a",
+      "title": "Localize the checkout flow into German and French",
+      "body": "Add translations for all checkout screen strings and format currency and dates per locale.",
+      "source": "synthetic"
+    },
+    {
+      "id": "gen-unrelated-9-b",
+      "title": "Set up alerting for high CPU on production nodes",
+      "body": "Configure Prometheus alerts to page on-call when CPU usage exceeds 85% for more than 5 minutes on any prod node.",
+      "source": "synthetic"
+    }
+  ],
+  "pairs": [
+    {
+      "a": "gen-rephrasing-0-a",
+      "b": "gen-rephrasing-0-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-1-a",
+      "b": "gen-rephrasing-1-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-2-a",
+      "b": "gen-rephrasing-2-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-3-a",
+      "b": "gen-rephrasing-3-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-4-a",
+      "b": "gen-rephrasing-4-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-5-a",
+      "b": "gen-rephrasing-5-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-6-a",
+      "b": "gen-rephrasing-6-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-7-a",
+      "b": "gen-rephrasing-7-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-8-a",
+      "b": "gen-rephrasing-8-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-rephrasing-9-a",
+      "b": "gen-rephrasing-9-b",
+      "expected_duplicate": true,
+      "case": "rephrasing",
+      "note": "generated + verified (rephrasing)"
+    },
+    {
+      "a": "gen-same_project_different_action-0-a",
+      "b": "gen-same_project_different_action-0-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-1-a",
+      "b": "gen-same_project_different_action-1-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-2-a",
+      "b": "gen-same_project_different_action-2-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-3-a",
+      "b": "gen-same_project_different_action-3-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-4-a",
+      "b": "gen-same_project_different_action-4-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-5-a",
+      "b": "gen-same_project_different_action-5-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-6-a",
+      "b": "gen-same_project_different_action-6-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-7-a",
+      "b": "gen-same_project_different_action-7-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-8-a",
+      "b": "gen-same_project_different_action-8-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_project_different_action-9-a",
+      "b": "gen-same_project_different_action-9-b",
+      "expected_duplicate": false,
+      "case": "same_project_different_action",
+      "note": "generated + verified (same_project_different_action)"
+    },
+    {
+      "a": "gen-same_action_different_integration-0-a",
+      "b": "gen-same_action_different_integration-0-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-1-a",
+      "b": "gen-same_action_different_integration-1-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-2-a",
+      "b": "gen-same_action_different_integration-2-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-3-a",
+      "b": "gen-same_action_different_integration-3-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-4-a",
+      "b": "gen-same_action_different_integration-4-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-5-a",
+      "b": "gen-same_action_different_integration-5-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-6-a",
+      "b": "gen-same_action_different_integration-6-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-7-a",
+      "b": "gen-same_action_different_integration-7-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-8-a",
+      "b": "gen-same_action_different_integration-8-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-same_action_different_integration-9-a",
+      "b": "gen-same_action_different_integration-9-b",
+      "expected_duplicate": false,
+      "case": "same_action_different_integration",
+      "note": "generated + verified (same_action_different_integration)"
+    },
+    {
+      "a": "gen-unrelated-0-a",
+      "b": "gen-unrelated-0-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-1-a",
+      "b": "gen-unrelated-1-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-2-a",
+      "b": "gen-unrelated-2-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-3-a",
+      "b": "gen-unrelated-3-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-4-a",
+      "b": "gen-unrelated-4-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-5-a",
+      "b": "gen-unrelated-5-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-6-a",
+      "b": "gen-unrelated-6-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-7-a",
+      "b": "gen-unrelated-7-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-8-a",
+      "b": "gen-unrelated-8-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    },
+    {
+      "a": "gen-unrelated-9-a",
+      "b": "gen-unrelated-9-b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "generated + verified (unrelated)"
+    }
+  ]
+}

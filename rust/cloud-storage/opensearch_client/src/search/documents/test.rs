@@ -289,6 +289,62 @@ fn test_build_bool_query_property_filter_empty_values_skipped() -> anyhow::Resul
 }
 
 #[test]
+fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .tag_option_ids(vec![
+            "00000001-0000-0000-0003-000000000001".to_string(),
+            "00000001-0000-0000-0003-000000000002".to_string(),
+        ]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+
+    let nested: Vec<&serde_json::Value> = filter
+        .iter()
+        .filter(|f| f.get("nested").is_some())
+        .collect();
+    assert_eq!(
+        nested.len(),
+        1,
+        "tags collapse to one nested clause: {filter:?}"
+    );
+
+    let tags = &nested[0]["nested"];
+    assert_eq!(tags["path"], "properties");
+    assert_eq!(tags["ignore_unmapped"], true);
+    // No definition_id term: match is on the globally-unique option ids alone.
+    assert_eq!(
+        tags["query"],
+        serde_json::json!({
+            "terms": {"properties.values": [
+                "00000001-0000-0000-0003-000000000001",
+                "00000001-0000-0000-0003-000000000002"
+            ]}
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .tag_option_ids(vec![]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter.iter().any(|f| f.get("nested").is_some()),
+        "empty tag_option_ids should emit no nested clause: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn document_index_deserializes_parent_shape() {
     // Parent docs carry only parent-level metadata in `_source`; the
     // matching chunks' node_id / raw_content come via `inner_hits`.

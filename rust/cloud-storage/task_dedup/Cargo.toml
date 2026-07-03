@@ -9,14 +9,22 @@ name = "backfill_task_embeddings"
 path = "src/bin/backfill_task_embeddings.rs"
 required-features = ["backfill"]
 
+[[bin]]
+name = "pull_task_corpus"
+path = "src/bin/pull_task_corpus.rs"
+required-features = ["backfill"]
+
+[[bin]]
+name = "expand_eval_corpus"
+path = "src/bin/expand_eval_corpus.rs"
+required-features = ["backfill"]
+
 [features]
 # Pulls in everything the `backfill_task_embeddings` binary needs. The library
 # itself does not require any of these, so default builds stay lean.
 backfill = [
   "dep:aws-sdk-secretsmanager",
   "dep:clap",
-  "dep:futures",
-  "dep:lexical_client",
   "dep:macro_aws_config",
   "dep:macro_entrypoint",
   "dep:macro_env",
@@ -35,7 +43,10 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 embedding = { path = "../embedding" }
+futures = { workspace = true }
+lexical_client = { path = "../lexical_client" }
 model-entity = { path = "../model-entity" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -47,8 +58,6 @@ uuid = { workspace = true }
 # Optional — only compiled in for the `backfill` feature (the backfill binary).
 aws-sdk-secretsmanager = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
-lexical_client = { path = "../lexical_client", optional = true }
 macro_aws_config = { path = "../macro_aws_config", optional = true }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env = { path = "../macro_env", optional = true }
@@ -66,5 +75,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+automod = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env_var = { path = "../macro_env_var" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

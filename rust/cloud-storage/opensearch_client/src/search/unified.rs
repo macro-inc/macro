@@ -80,6 +80,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             sub_types: args.document_search_args.sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
+            tag_option_ids: args.document_search_args.tag_option_ids,
         }
     }
 }
@@ -176,6 +177,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
