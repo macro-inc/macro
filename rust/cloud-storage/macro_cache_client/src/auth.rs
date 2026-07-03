@@ -95,13 +95,10 @@ impl MacroCache {
     }
 
     /// Consumes the just-signed-up marker for an email. Returns true exactly
-    /// once per marker: the first caller wins and the key is deleted.
+    /// once per marker: GETDEL is atomic, so the first caller wins.
     pub async fn take_user_just_signed_up(&self, email: &str) -> anyhow::Result<bool> {
         let key = macro_just_signed_up!(email.to_lowercase());
-        let value = macro_redis::get::get_optional::<u8>(&self.inner, &key).await?;
-        if value.is_some() {
-            macro_redis::delete::delete(&self.inner, &key).await?;
-        }
+        let value = macro_redis::get::get_del_optional::<u8>(&self.inner, &key).await?;
         Ok(value.is_some())
     }
 }

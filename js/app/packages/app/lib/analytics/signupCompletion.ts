@@ -41,7 +41,9 @@ function readAndStripSignedUpParam(): boolean {
     const hashQueryIndex = url.hash.indexOf('?');
     if (hashQueryIndex !== -1) {
       const hashPath = url.hash.slice(0, hashQueryIndex);
-      const hashParams = new URLSearchParams(url.hash.slice(hashQueryIndex + 1));
+      const hashParams = new URLSearchParams(
+        url.hash.slice(hashQueryIndex + 1)
+      );
       if (hashParams.get(SIGNED_UP_PARAM) === 'true') {
         found = true;
         hashParams.delete(SIGNED_UP_PARAM);
@@ -94,9 +96,17 @@ export function trackSignupCompletion(
 
   // Paid signups return from Stripe with a `type` param; plain signups have
   // no tier yet and count at the free-signup lead value. Purchase value is
-  // tracked separately via subscription_success.
+  // tracked separately via subscription_success. Checked in both the search
+  // and hash query for the same hash-router reason as the signed_up param.
+  const hashQueryIndex = window.location.hash.indexOf('?');
+  const hashParams =
+    hashQueryIndex !== -1
+      ? new URLSearchParams(window.location.hash.slice(hashQueryIndex + 1))
+      : null;
   const tier =
-    new URLSearchParams(window.location.search).get('type') ?? 'free';
+    new URLSearchParams(window.location.search).get('type') ??
+    hashParams?.get('type') ??
+    'free';
   const value = SIGNUP_LEAD_VALUE_BY_TIER[tier] ?? SIGNUP_LEAD_VALUE_DEFAULT;
 
   analytics.trackMeta('CompleteRegistration', {
