@@ -348,11 +348,9 @@ function ActionMenu({
   // Component Render
   return (
     <Dropdown placement="right-start">
-      <Dropdown.Trigger class="dropdown-menu__trigger">
+      <Dropdown.Trigger class="dropdown-menu__trigger size-6 p-0 bg-surface">
         <Tooltip label="Table Options">
-          <div class="size-6 rounded-md p-0 bg-surface hover:bg-hover hover-transition-bg flex items-center justify-center">
-            <CaretDown class="size-4" />
-          </div>
+          <CaretDown class="size-4" />
         </Tooltip>
       </Dropdown.Trigger>
       <Dropdown.Content>
@@ -435,7 +433,7 @@ function ActionMenuContainer({
       class="table-cell-action-button-container--inactive"
     >
       <Show when={tableCellNodeKey()}>
-        <div class="size-4 rounded-md p-0">
+        <div class="size-6 rounded-md p-0">
           <ActionMenu
             tableCellNodeKey={tableCellNodeKey()!}
             cellMerge={cellMerge}
