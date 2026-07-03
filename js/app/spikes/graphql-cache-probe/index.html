@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GraphQL cache — browser storage probe</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; }
+    h1 { font-size: 1.3rem; }
+    button { font-size: 1rem; padding: 0.4rem 1rem; margin-right: 0.5rem; }
+    table { border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #ccc; padding: 0.3rem 0.7rem; text-align: left; }
+    td.yes { background: #d7f5d7; }
+    td.no { background: #f8d7d7; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; white-space: pre-wrap; }
+    #status { color: #666; }
+    .detail { color: #999; font-size: 0.8em; display: block; max-width: 18rem; }
+  </style>
+</head>
+<body>
+  <h1>GraphQL cache — browser storage probe (Phase 0)</h1>
+  <p>
+    Run in Chrome, Firefox and Safari (normal + private windows). Paste the
+    markdown output into the design doc's support matrix.
+  </p>
+  <button id="run">Run probes</button>
+  <button id="copy" disabled>Copy markdown</button>
+  <span id="status"></span>
+  <div id="results"></div>
+  <pre id="markdown" hidden></pre>
+  <script src="./probe-main.js"></script>
+</body>
+</html>
