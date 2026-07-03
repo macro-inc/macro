@@ -257,12 +257,19 @@ js/app/packages/graphql-cache/ # JS glue
 - Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
   `approx_size` for GC (hardening phase).
 
-**Phase 3 — hosts + JS glue**
-- `cache-tauri` plugin (commands + change-broadcast events).
-- `cache-wasm` + SharedWorker/dedicated-worker entries + Web Locks write
-  serialization (fallback topology) + BroadcastChannel fanout.
-- `CacheHost` TS interface with both transports; `isTauri` → native,
-  otherwise SharedWorker-availability selection.
+**Phase 3 — hosts + JS glue** *(browser path done; Tauri host pending)*
+- ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id
+  interning `"{clientId}:{urqlKey}"`), browser-verified via
+  wasm-bindgen-test. Build: `just build-cache-wasm` →
+  `packages/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
+- ~~JS glue~~ (`js/app/packages/graphql-cache/`, alias `@graphql-cache/*`):
+  wire protocol (`protocol.ts`), `CacheWorkerCore` +
+  SharedWorker/dedicated-worker entries (Web Locks write serialization +
+  BroadcastChannel fanout in the fallback topology), `createWorkerCacheHost`
+  implementing `CacheHost`. Type-checked; end-to-end browser exercise
+  happens with the Phase 4 exchange integration.
+- **Pending:** `cache-tauri` plugin (commands + change events) + Tauri
+  `CacheHost` transport; `isTauri` → native selection.
 
 **Phase 4 — urql exchange, behind flag**
 - `normalizedCacheExchange` with policies, re-execution, teardown.
