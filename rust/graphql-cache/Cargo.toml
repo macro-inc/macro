@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cache-core", "cache-idb", "cache-sqlite"]
+members = ["cache-core", "cache-idb", "cache-sqlite", "cache-wasm"]
 
 [workspace.package]
 edition = "2021"
@@ -17,3 +17,8 @@ thiserror = "2"
 lru = "0.16"
 sha2 = "0.10"
 toml = "0.9"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3"
+async-lock = "3"
