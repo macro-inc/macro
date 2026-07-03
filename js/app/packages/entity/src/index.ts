@@ -43,7 +43,6 @@ export {
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
-  isTaskClosed,
 } from './utils/task-properties';
 export {
   formatDateAndTime,
