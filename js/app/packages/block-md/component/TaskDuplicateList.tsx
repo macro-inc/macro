@@ -5,7 +5,7 @@ import {
   ENABLE_TASK_DUPLICATES_FLAG,
   ENABLE_TASK_DUPLICATES_OVERRIDE,
 } from '@core/constant/featureFlags';
-import { ListLayoutProvider } from '@entity';
+import { isTaskClosed, isTaskEntity, ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -66,11 +66,13 @@ function SimilarTasksInner(props: {
     () => ({ enabled: ids().length > 0, staleTime: 30 * 1000 })
   );
 
-  // Keep the similarity ranking order.
+  // Keep the similarity ranking order. Completed/canceled tasks are not
+  // useful duplicate candidates, so drop them.
   const entities = () => {
     const order = new Map(ids().map((id, index) => [id, index] as const));
     return [...(soup.data ?? [])]
       .filter((entity) => order.has(entity.id))
+      .filter((entity) => !(isTaskEntity(entity) && isTaskClosed(entity)))
       .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   };
 
@@ -93,9 +95,12 @@ function SimilarTasksInner(props: {
         </button>
         <Show when={expanded()}>
           <ListLayoutProvider ref={listRef}>
+            {/* Named `u-list` container so the task rows pick up the narrow
+                (<=840px) container queries and collapse status/priority/
+                assignee pills to icons, leaving the width for task names. */}
             <div
               ref={setListRef}
-              class="flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
+              class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
             >
               <For each={entities()}>
                 {(entity) => (
