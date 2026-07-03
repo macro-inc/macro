@@ -5,7 +5,7 @@ import { hideBin } from "yargs/helpers";
 const {
 	port,
 	"worker-url": workerUrlOpt,
-	"user-token": userToken,
+	"ws-url": wsUrl,
 	"supervisor-model": supervisorModelFlag,
 	"interpret-model": interpretModelFlag,
 	"coding-model": codingModelFlag,
@@ -14,9 +14,9 @@ const {
 	"prompt-file": promptFile,
 	_,
 } = await yargs(hideBin(process.argv))
-	.usage("$0 <document-id> [prompt]")
+	.usage("$0 [prompt] --ws-url <url>")
 	.help()
-	.option("user-token", { type: "string", demandOption: true, describe: "user JWT or full browser cookie string" })
+	.option("ws-url", { type: "string", demandOption: true, describe: "sync service ws url with token, e.g. wss://…/document/<id>/connect?token=<doc-token>" })
 	.option("port", { type: "number", default: 8933, describe: "worker port" })
 	.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
 	.option("supervisor-model", { type: "string", demandOption: true, describe: "provider:model for the supervisor" })
@@ -27,12 +27,20 @@ const {
 	.option("prompt-file", { type: "string", describe: "read the prompt from this file instead of the positional arg" })
 	.parse();
 
-const documentId = _[0] as string | undefined;
 const prompt = promptFile
 	? (await Bun.file(promptFile as string).text()).trim()
-	: (_[1] as string | undefined);
-if (!documentId || !prompt) {
-	console.error("Usage: bun run scripts/edit.ts <document-id> [prompt] --user-token <jwt>  (or pass --prompt-file <path>)");
+	: (_[0] as string | undefined);
+if (!prompt) {
+	console.error("Usage: bun run scripts/edit.ts [prompt] --ws-url <url>  (or pass --prompt-file <path>)");
+	process.exit(1);
+}
+
+const parsed = new URL(wsUrl as string);
+const pathParts = parsed.pathname.split("/");
+const documentId = pathParts[2];
+const documentToken = parsed.searchParams.get("token");
+if (!documentId || !documentToken) {
+	console.error("--ws-url must be in the form wss://…/document/<id>/connect?token=<doc-token>");
 	process.exit(1);
 }
 
@@ -42,12 +50,6 @@ const parseModel = (flag: string) => {
 };
 
 const workerUrl = workerUrlOpt ?? `http://localhost:${port}`;
-
-const resolvedToken = (userToken as string).includes("=")
-	? Object.fromEntries(
-			(userToken as string).split(";").map((p) => p.trim().split(/=(.+)/)).filter((p) => p.length >= 2).map(([k, v]) => [k!.trim(), v!.trim()])
-		)["local-macro-access-token"] ?? (() => { console.error("local-macro-access-token not found in cookie"); process.exit(1); })()
-	: userToken as string;
 
 const controller = new AbortController();
 process.on("SIGINT", () => {
@@ -61,7 +63,7 @@ const res = await fetch(`${workerUrl}/edit`, {
 	signal: controller.signal,
 	headers: { "content-type": "application/json" },
 	body: JSON.stringify({
-		userToken: resolvedToken,
+		documentToken,
 		documentId,
 		prompt,
 		models: {

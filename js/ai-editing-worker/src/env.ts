@@ -6,7 +6,6 @@ export type Bindings = {
   CEREBRAS_API_KEY: string | undefined;
   OPENAI_API_KEY: string | undefined;
   SYNC_WS_BASE: string;
-  DSS_BASE: string;
 };
 
 export type Env = ReturnType<typeof validateEnv>;
@@ -18,7 +17,6 @@ function validateEnv(rawEnv: Bindings) {
       CEREBRAS_API_KEY: str({ allowEmpty: false }),
       OPENAI_API_KEY: str({ allowEmpty: false }),
       SYNC_WS_BASE: str({ allowEmpty: false }),
-      DSS_BASE: str({ allowEmpty: false }),
     },
     { env: rawEnv as Record<string, string | undefined> }
   );

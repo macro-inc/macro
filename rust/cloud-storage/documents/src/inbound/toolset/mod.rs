@@ -56,6 +56,9 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
+    /// JWT secret used to mint document permission tokens for the editing worker.
+    pub document_permission_jwt_secret: String,
+
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -75,6 +78,7 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
         }
     }
@@ -93,6 +97,7 @@ impl<
         lexical_client: LexicalClient,
         sync_service_client: SyncServiceClient,
         editing: EDSvc,
+        document_permission_jwt_secret: String,
     ) -> Self {
         let service = Arc::new(service);
         let lexical_client = Arc::new(lexical_client);
@@ -113,6 +118,7 @@ impl<
             sync_service_client,
             creator,
             editing: Arc::new(editing),
+            document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
         }
     }

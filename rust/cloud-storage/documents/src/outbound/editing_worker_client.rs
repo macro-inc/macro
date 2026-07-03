@@ -28,11 +28,11 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     async fn edit(
         &self,
         document_id: &str,
-        user_token: &str,
+        document_token: &str,
         instructions: &str,
     ) -> anyhow::Result<EditResult> {
         let request_body = serde_json::json!({
-            "userToken": user_token,
+            "documentToken": document_token,
             "documentId": document_id,
             "prompt": instructions,
             // Each role lists models tried in order: Cerebras primary, with an

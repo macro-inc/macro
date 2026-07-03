@@ -1,11 +1,16 @@
 //! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
 
+use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{
+    models::{EditAccessLevel, EntityType},
+    ports::EntityAccessService,
+};
+use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -49,13 +54,30 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        let user_token = request_context.user_bearer.as_deref().ok_or_else(|| {
-            let e = anyhow::anyhow!("user_bearer not set on RequestContext");
-            ToolCallError {
-                description: "editing worker requires a user token".to_string(),
-                internal_error: e,
-            }
+        ctx.entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &request_context.user_id,
+                None,
+                &self.document_id,
+                EntityType::Document,
+            )
+            .await
+            .map_err(|e| ToolCallError {
+                description: "you do not have edit access to this document".to_string(),
+                internal_error: e.into(),
+            })?;
+
+        let document_token = encode_permission_token(
+            Some(request_context.user_id.to_string()),
+            self.document_id.clone(),
+            AccessLevel::Edit,
+            &ctx.document_permission_jwt_secret,
+        )
+        .map_err(|e| ToolCallError {
+            description: "failed to mint document token".to_string(),
+            internal_error: e.into(),
         })?;
+
         // Honor user cancellation: if the request is cancelled mid-edit, drop the
         // in-flight worker call (closing the HTTP connection so the worker aborts
         // its own LLM work) and surface a `cancelled` tool error -- matching how
@@ -67,7 +89,7 @@ where
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, user_token, &self.instructions) => r,
+            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions) => r,
         }
         .map_err(|e| ToolCallError {
             description: e.to_string(),

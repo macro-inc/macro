@@ -9,7 +9,7 @@ import * as z from 'zod';
 import type { Bindings, EnvVariables } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
-import { fetchDocToken, watchPresenceSpeed } from '../service-clients';
+import { watchPresenceSpeed } from '../service-clients';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -36,7 +36,7 @@ const ModelSchema: z.ZodType<Model> = z.object({
 const ModelListSchema = z.array(ModelSchema).min(1);
 
 const EditBody = z.object({
-  userToken: z.string(),
+  documentToken: z.string(),
   documentId: z.string(),
   prompt: z.string(),
   models: z.object({
@@ -56,7 +56,7 @@ const edit = new Hono<{ Bindings: Bindings; Variables: EnvVariables }>();
 edit.post('/', zValidator('json', EditBody), async (c) => {
   const env = c.var.env;
   const {
-    userToken,
+    documentToken,
     documentId,
     prompt,
     models,
@@ -90,8 +90,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
   });
 
   try {
-    const docToken = await fetchDocToken(env.DSS_BASE, documentId, userToken);
-    const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${docToken}`;
+    const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${documentToken}`;
 
     // Animations play at 1x while a human is watching and speed up to
     // `unwatchedSpeed` when nobody is, so unseen edits finish faster without
@@ -100,7 +99,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     const presence = watchPresenceSpeed({
       syncWsBase: env.SYNC_WS_BASE,
       documentId,
-      docToken,
+      docToken: documentToken,
       unwatchedSpeed,
       signal,
     });

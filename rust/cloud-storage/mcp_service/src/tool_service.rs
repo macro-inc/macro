@@ -1,6 +1,5 @@
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_auth_proxy::inbound::middleware::JwtAccessToken;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
@@ -66,12 +65,6 @@ impl<Context> AuthenticatedToolService<Context> {
             .ok_or_else(|| {
                 rmcp::ErrorData::internal_error("missing user identity — is auth configured?", None)
             })
-    }
-
-    fn authenticated_user_bearer(extensions: &rmcp::model::Extensions) -> Option<JwtAccessToken> {
-        extensions
-            .get::<http::request::Parts>()
-            .and_then(|parts| parts.extensions.get::<JwtAccessToken>().cloned())
     }
 
     async fn require_paid_subscription(
@@ -160,12 +153,6 @@ where
             .arguments
             .map(serde_json::Value::Object)
             .ok_or(rmcp::ErrorData::invalid_params("No params provided", None))?;
-
-        let token = Self::authenticated_user_bearer(&context.extensions);
-        let request_context = RequestContext {
-            user_bearer: token.map(|t| t.0),
-            ..request_context
-        };
 
         let result = self
             .toolset

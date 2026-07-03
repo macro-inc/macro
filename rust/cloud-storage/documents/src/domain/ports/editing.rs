@@ -27,12 +27,11 @@ pub struct EditUsage {
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
-    /// Apply AI-driven edits to `document_id` using `user_token` (the caller's
-    /// Bearer token) for auth. The worker exchanges it for a document-scoped JWT.
+    /// Apply AI-driven edits to `document_id` using a pre-minted `document_token`.
     fn edit(
         &self,
         document_id: &str,
-        user_token: &str,
+        document_token: &str,
         instructions: &str,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
 }

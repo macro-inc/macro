@@ -56,6 +56,7 @@ env_var! {
         DocumentStorageServiceCloudfrontDistributionUrl,
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        DocumentPermissionJwtSecretKey,
     }
 }
 
@@ -261,6 +262,7 @@ pub async fn build_tool_service_context_from_env(
         lexical_client,
         sync_client.as_ref().clone(),
         ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        env.document_permission_jwt_secret_key.to_string(),
     );
 
     let properties_tool_context =

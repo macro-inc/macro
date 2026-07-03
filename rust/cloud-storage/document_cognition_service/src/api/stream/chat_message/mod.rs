@@ -515,7 +515,7 @@ fn stream_and_save_message(
             mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
         );
         let agent_loop =
-            AgentLoop::new(tool_context.recorder.clone()).with_model(&model).with_user_bearer(jwt_token.clone());
+            AgentLoop::new(tool_context.recorder.clone()).with_model(&model);
 
 
         let rig_messages = agent::to_rig_messages(&request);
