@@ -14,7 +14,7 @@ import type {
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
   GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
   SoupInput as GraphqlSoupInput,
-} from '@service-storage/generated/graphql';
+} from '@service-storage/graphql/generated/graphql';
 
 type GraphqlExprInput<TLiteral> =
   | {
