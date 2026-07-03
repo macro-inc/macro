@@ -1,12 +1,13 @@
--- no-transaction
-
 -- Normalize Macro-bot mention ids to the canonical `bot|<uuid>` principal form.
 --
 -- Historically the frontend surfaced the Macro AI bot through the user-mention
 -- typeahead with a bare UUID id (`00000000-0000-0000-0000-00000000a1a1`), so:
 --   * persisted message content contains
---     `<m-user-mention>{"userId":"<bare uuid>", ...}</m-user-mention>`, and
---   * `comms_entity_mentions` rows tagged `bot` carry a bare UUID `entity_id`.
+--     `<m-user-mention>{"userId":"<bare uuid>", ...}</m-user-mention>`,
+--   * `comms_entity_mentions` rows tagged `bot` carry a bare UUID `entity_id`,
+--     and
+--   * `comms_messages.sender_id` may carry a bare UUID for bot-authored rows
+--     written before the `bot|<uuid>` form was enforced.
 --
 -- The strict mention parser rejects bare UUIDs, which made these messages fail
 -- search indexing (see PR #4410). The producer now always emits `bot|<uuid>`;
@@ -22,42 +23,15 @@
 --    its constant id. Whitespace around the JSON colon is tolerated and the
 --    match is case-insensitive; already-normalized `bot|<uuid>` ids do not
 --    match the pattern, so the rewrite is idempotent.
-CREATE OR REPLACE PROCEDURE normalize_macro_bot_mention_ids_in_messages()
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    batch_size integer := 1000;
-    updated_count integer;
-BEGIN
-    LOOP
-        WITH batch AS (
-            SELECT id
-            FROM comms_messages
-            WHERE content ILIKE '%"userId"%00000000-0000-0000-0000-00000000a1a1%'
-              AND content ~* '"userId"[[:space:]]*:[[:space:]]*"00000000-0000-0000-0000-00000000a1a1"'
-            ORDER BY id
-            LIMIT batch_size
-        )
-        UPDATE comms_messages AS m
-        SET content = regexp_replace(
-            m.content,
-            '"userId"[[:space:]]*:[[:space:]]*"(00000000-0000-0000-0000-00000000a1a1)"',
-            '"userId":"bot|\1"',
-            'gi'
-        )
-        FROM batch
-        WHERE m.id = batch.id;
-
-        GET DIAGNOSTICS updated_count = ROW_COUNT;
-        COMMIT;
-
-        EXIT WHEN updated_count < batch_size;
-        PERFORM pg_sleep(0.05);
-    END LOOP;
-END $$;
-
-CALL normalize_macro_bot_mention_ids_in_messages();
-DROP PROCEDURE normalize_macro_bot_mention_ids_in_messages();
+UPDATE comms_messages
+SET content = regexp_replace(
+    content,
+    '"userId"[[:space:]]*:[[:space:]]*"(00000000-0000-0000-0000-00000000a1a1)"',
+    '"userId":"bot|\1"',
+    'gi'
+)
+WHERE content ILIKE '%"userId"%00000000-0000-0000-0000-00000000a1a1%'
+  AND content ~* '"userId"[[:space:]]*:[[:space:]]*"00000000-0000-0000-0000-00000000a1a1"';
 
 -- 2. Normalize `bot`-tagged mention rows that carry a bare UUID entity id.
 --    These rows are read back (e.g. for search indexing) and must use the
@@ -75,3 +49,13 @@ SET entity_type = 'bot',
     entity_id   = 'bot|' || entity_id
 WHERE entity_type = 'user'
   AND lower(entity_id) = '00000000-0000-0000-0000-00000000a1a1';
+
+-- 4. Normalize bare-UUID message senders to the canonical `bot|<uuid>` form.
+--    Real user senders are `macro|<email>` strings, so a bare UUID sender can
+--    only be a bot-authored message. The typed sender parser
+--    (`ChannelSender::parse_from_str`) rejects bare UUIDs, which would fail
+--    message-owner lookups for these rows. Any sender ids that remain
+--    unparseable after this rewrite are accepted as hard errors.
+UPDATE comms_messages
+SET sender_id = 'bot|' || sender_id
+WHERE sender_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';

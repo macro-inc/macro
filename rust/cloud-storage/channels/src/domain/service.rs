@@ -285,13 +285,12 @@ fn is_admin_or_owner(role: ParticipantRole) -> bool {
 
 /// returns all user participants in a channel given an iterator of participants and the channel owner
 fn created_channel_participant_ids<'a>(
-    owner_id: ChannelSender<'a>,
-    participants: impl IntoIterator<Item = ChannelSender<'a>>,
+    owner_id: MacroUserIdStr<'a>,
+    participants: impl IntoIterator<Item = MacroUserIdStr<'a>>,
 ) -> HashSet<MacroUserIdStr<'a>> {
     participants
         .into_iter()
-        .filter_map(ChannelSender::into_user)
-        .chain(owner_id.as_user().cloned())
+        .chain(std::iter::once(owner_id))
         .collect()
 }
 
@@ -349,12 +348,9 @@ where
             channel_id,
             actor: Sender::new_from_user(actor.clone()),
             channel_type,
-            participant_user_ids: created_channel_participant_ids(
-                ChannelSender::new_from_user(actor),
-                participants_clone,
-            )
-            .into_iter()
-            .collect(),
+            participant_user_ids: created_channel_participant_ids(actor, participants_clone)
+                .into_iter()
+                .collect(),
         });
 
         Ok(crate::domain::models::CreateChannelResponse {
@@ -370,9 +366,7 @@ where
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
 
-        if let Some(user_recipient) = recipient_id.as_user()
-            && actor == *user_recipient
-        {
+        if actor == recipient_id {
             return Err(ChannelMutationErr::BadRequest(
                 "recipient_id cannot be the same as the user_id".to_string(),
             ));
@@ -392,10 +386,7 @@ where
                 name: None,
                 channel_type: ChannelType::DirectMessage,
                 team_id: None,
-                participants: HashSet::from([
-                    ChannelSender::new_from_user(actor),
-                    recipient_id.clone(),
-                ]),
+                participants: HashSet::from([actor, recipient_id.clone()]),
             },
         )
         .await
@@ -415,7 +406,7 @@ where
         }
 
         let mut lookup = req.recipients.clone();
-        lookup.insert(ChannelSender::new_from_user(actor.clone()));
+        lookup.insert(actor.clone());
         let existing_channel_id = self
             .repo
             .maybe_get_private_channel(lookup)
@@ -1057,7 +1048,7 @@ where
         let channel_type = create_req.channel_type;
         let owner_sender = ChannelSender::new_from_user(owner_id.clone());
         let participant_user_ids =
-            created_channel_participant_ids(owner_sender.clone(), create_req.participants.clone())
+            created_channel_participant_ids(owner_id.clone(), create_req.participants.clone())
                 .into_iter()
                 .collect();
         let channel_id = self

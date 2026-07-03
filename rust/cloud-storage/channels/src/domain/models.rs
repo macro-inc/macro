@@ -700,7 +700,7 @@ pub struct CreateChannelRequest {
     pub team_id: Option<Uuid>,
     /// Participants to add, excluding the owner.
     #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
-    pub participants: HashSet<ChannelSender<'static>>,
+    pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Response returned after creating a channel.
@@ -717,7 +717,7 @@ pub struct CreateChannelResponse {
 pub struct GetOrCreateDmRequest {
     /// Recipient user id.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub recipient_id: ChannelSender<'static>,
+    pub recipient_id: MacroUserIdStr<'static>,
 }
 
 /// Request to get or create a private channel.
@@ -726,7 +726,7 @@ pub struct GetOrCreateDmRequest {
 pub struct GetOrCreatePrivateRequest {
     /// Recipient user ids.
     #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
-    pub recipients: HashSet<ChannelSender<'static>>,
+    pub recipients: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Response for get-or-create channel operations.

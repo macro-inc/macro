@@ -265,13 +265,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-        recipient_id: ChannelSender<'a>,
+        recipient_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Fetch an existing private channel.
     fn maybe_get_private_channel<'a>(
         &self,
-        participants: HashSet<ChannelSender<'a>>,
+        participants: HashSet<MacroUserIdStr<'a>>,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Patch a channel.

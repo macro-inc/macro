@@ -130,7 +130,7 @@ where
     T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.storage_id == other.storage_id
+        self.bot_id == other.bot_id
     }
 }
 
@@ -141,7 +141,7 @@ where
     T: std::hash::Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.storage_id.hash(state);
+        self.bot_id.hash(state);
     }
 }
 

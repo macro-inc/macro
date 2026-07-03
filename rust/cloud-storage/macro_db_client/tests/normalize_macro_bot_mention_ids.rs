@@ -5,7 +5,7 @@ const OTHER_UUID: &str = "11111111-1111-1111-1111-111111111111";
 const MIGRATION: &str =
     include_str!("../migrations/20260702200905_normalize_macro_bot_mention_ids.sql");
 
-#[sqlx::test]
+#[sqlx::test(migrations = false)]
 async fn migration_normalizes_macro_bot_user_ids_in_message_content(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -64,7 +64,7 @@ async fn migration_normalizes_macro_bot_user_ids_in_message_content(
     Ok(())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrations = false)]
 async fn migration_normalizes_comms_entity_mentions(pool: Pool<Postgres>) -> anyhow::Result<()> {
     create_minimal_tables(&pool).await?;
 
@@ -126,12 +126,66 @@ async fn migration_normalizes_comms_entity_mentions(pool: Pool<Postgres>) -> any
     Ok(())
 }
 
-async fn create_minimal_tables(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+#[sqlx::test(migrations = false)]
+async fn migration_normalizes_bare_uuid_message_senders(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    create_minimal_tables(&pool).await?;
+
     sqlx::query(
+        r#"
+        INSERT INTO comms_messages (id, content, sender_id)
+        VALUES
+            ('bare-uuid-bot', 'hello', '11111111-1111-1111-1111-111111111111'),
+            ('bare-uuid-bot-uppercase', 'hello', '22222222-2222-2222-2222-22222222AAAA'),
+            ('already-normalized-bot', 'hello', 'bot|00000000-0000-0000-0000-00000000a1a1'),
+            ('user-sender', 'hello', 'macro|alice@example.com'),
+            ('dirty-sender', 'hello', 'not-a-principal')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    run_migration(&pool).await?;
+    // Run it twice to ensure sender normalization is idempotent.
+    run_migration(&pool).await?;
+
+    let rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT id, sender_id FROM comms_messages ORDER BY id",
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "already-normalized-bot".to_owned(),
+                NORMALIZED_MACRO_BOT_ID.to_owned(),
+            ),
+            ("bare-uuid-bot".to_owned(), format!("bot|{OTHER_UUID}"),),
+            (
+                "bare-uuid-bot-uppercase".to_owned(),
+                "bot|22222222-2222-2222-2222-22222222AAAA".to_owned(),
+            ),
+            ("dirty-sender".to_owned(), "not-a-principal".to_owned()),
+            (
+                "user-sender".to_owned(),
+                "macro|alice@example.com".to_owned(),
+            ),
+        ]
+    );
+
+    Ok(())
+}
+
+async fn create_minimal_tables(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::raw_sql(
         r#"
         CREATE TABLE comms_messages (
             id text PRIMARY KEY,
-            content text NOT NULL
+            content text NOT NULL,
+            sender_id text NOT NULL DEFAULT 'macro|someone@example.com'
         );
 
         CREATE TABLE comms_entity_mentions (
@@ -148,11 +202,7 @@ async fn create_minimal_tables(pool: &Pool<Postgres>) -> anyhow::Result<()> {
 }
 
 async fn run_migration(pool: &Pool<Postgres>) -> anyhow::Result<()> {
-    for statement in MIGRATION.split(";\n") {
-        if !statement.trim().is_empty() {
-            sqlx::query(statement).execute(pool).await?;
-        }
-    }
+    sqlx::raw_sql(MIGRATION).execute(pool).await?;
 
     Ok(())
 }

@@ -499,14 +499,14 @@ impl ChannelRepo for FakeMutationRepo {
     async fn maybe_get_dm(
         &self,
         _user_id: MacroUserIdStr<'_>,
-        _recipient_id: ChannelSender<'_>,
+        _recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
         Ok(None)
     }
 
     async fn maybe_get_private_channel(
         &self,
-        _participants: std::collections::HashSet<ChannelSender<'_>>,
+        _participants: std::collections::HashSet<MacroUserIdStr<'_>>,
     ) -> Result<Option<Uuid>, Self::Err> {
         Ok(None)
     }

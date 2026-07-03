@@ -2625,7 +2625,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn maybe_get_dm(
         &self,
         user_id: MacroUserIdStr<'_>,
-        recipient_id: ChannelSender<'_>,
+        recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
         let row = sqlx::query_as!(
             ChannelIdRow,
@@ -2657,7 +2657,7 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn maybe_get_private_channel(
         &self,
-        participants: HashSet<ChannelSender<'_>>,
+        participants: HashSet<MacroUserIdStr<'_>>,
     ) -> Result<Option<Uuid>, Self::Err> {
         let participants: Vec<String> = participants
             .iter()
