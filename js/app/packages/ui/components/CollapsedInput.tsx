@@ -5,7 +5,6 @@ import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
 import { SendButton } from './SendButton';
-import { Surface } from './Surface';
 import { Layer } from './Layer';
 
 export type CollapsedInputProps = {
