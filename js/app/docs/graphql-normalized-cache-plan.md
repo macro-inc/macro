@@ -64,7 +64,7 @@ entire cache in browser memory. With 10s of thousands of cached objects
 ### Open questions
 
 - Encryption-at-rest for cached content (email bodies/snippets will flow
-  through this). OPFS/IDB are origin-scoped but plaintext on disk.
+  through this). IDB/SQLite are origin-/app-scoped but plaintext on disk.
 - Disk budget (proposal: 256 MB default, configurable).
 - Memory hot-tier budget (proposal: 32 MB default).
 
@@ -101,14 +101,14 @@ One Rust core engine, two hosts:
               ▼                                            ▼
 ┌───────────────────────────────┐        ┌─────────────────────────────────┐
 │ BROWSER ONLY: wasm-bindgen    │        │ TAURI: native engine in the     │
-│ module in a worker            │        │ Tauri host process (Rust);      │
-│ • SharedWorker where available│        │ no OPFS/SharedWorker/webview    │
-│   → OPFS sync-access backend  │        │ storage ever                    │
-│ • fallback: worker-per-tab    │        │ • naturally shared across ALL   │
-│   → IndexedDB backend +       │        │   webviews/windows              │
-│   BroadcastChannel invalidate │        │ • SQLite (or fs) storage        │
-│                               │        │ • glue over invoke + channels/  │
-│                               │        │   events                        │
+│ module in a worker;           │        │ Tauri host process (Rust);      │
+│ IndexedDB via the `idb` crate │        │ no webview storage ever         │
+│ (storage entirely in Rust)    │        │ • naturally shared across ALL   │
+│ • SharedWorker where available│        │   webviews/windows              │
+│   (single engine instance)    │        │ • SQLite (or fs) storage        │
+│ • fallback: worker-per-tab +  │        │ • glue over invoke + channels/  │
+│   Web Locks write serializing │        │   events                        │
+│   + BroadcastChannel fanout   │        │                                 │
 └───────────────┬───────────────┘        └────────────────┬────────────────┘
                 └──────────────────┬──────────────────────┘
                                    ▼
@@ -123,50 +123,61 @@ One Rust core engine, two hosts:
 ### 4.1 Why the engine lives outside the page
 
 - Keeps main thread free (normalization of large pages off-thread).
-- OPFS `createSyncAccessHandle` is worker-only.
-- On Tauri we do **not** use OPFS or SharedWorker at all — webview storage
-  and worker support are inconsistent across WKWebView/WebView2/Android
-  WebView, and webviews can't share a SharedWorker across windows. The Tauri
-  host process is the shared singleton: it gets us the multi-webview
-  requirement for free, with real SQLite instead of webview storage. The
-  wasm/worker/OPFS path is **browser-only**.
+- A worker is the natural place for a shared single engine instance
+  (SharedWorker) and keeps wasm out of every page context.
+- On Tauri we do **not** use SharedWorker or webview storage at all —
+  support is inconsistent across WKWebView/WebView2/Android WebView, and
+  webviews can't share a SharedWorker across windows. The Tauri host process
+  is the shared singleton: it gets us the multi-webview requirement for
+  free, with real SQLite instead of webview storage. The wasm/worker path is
+  **browser-only**.
 
 ### 4.2 Multi-consumer strategy (browser only)
 
-> **Phase 0 finding (Chromium):** `createSyncAccessHandle` is unavailable in
-> SharedWorker (spec: dedicated workers only), and Chromium does not expose
-> `Worker` inside a SharedWorker either — so a SharedWorker can neither do
-> sync OPFS IO nor delegate it to a nested worker. The "SharedWorker + OPFS"
-> topology is not viable on Chromium. See Appendix A.
+**Decision: IndexedDB-backed persistence via the [`idb`
+crate](https://docs.rs/idb/latest/idb/), engine in a worker that may or may
+not be a SharedWorker. OPFS is dropped.**
 
-Candidate topologies, decision pending Firefox/Safari probe runs:
+Rationale (see Appendix A):
 
-- **A (leading candidate): Web-Locks-elected leader.** Each tab spawns a
-  dedicated worker; one wins a `navigator.locks` leadership lock and owns the
-  engine + OPFS sync-access storage. Follower tabs RPC to the leader
-  (BroadcastChannel with correlation ids); lock release on tab close triggers
-  failover (re-election + engine re-open; cache state is on disk, so
-  failover is a re-open, not a rebuild).
-- **B: SharedWorker engine on IndexedDB.** Single instance, trivial routing,
-  no election — but forgoes OPFS sync IO (IDB perf may be acceptable; see
-  Appendix A benchmarks) and needs a fallback where SharedWorker is missing.
-- **C: engine per tab over IndexedDB.** No leader at all; IDB tolerates
-  concurrent instances; Web Locks serialize writes; BroadcastChannel
-  broadcasts changed-keys. Simplest, but N copies of the hot tier.
+- OPFS sync access handles are unusable from SharedWorker on Chromium (no
+  sync handles, no nested `Worker` to delegate to), forcing a
+  leader-election topology with failover — significant complexity.
+- IDB point-reads measured *faster* than OPFS sync 4 KiB reads in the probe
+  (0.35 ms vs 2 ms avg), and batched writes (119 ms / 1000 records / txn)
+  are fine for our write rates.
+- IDB is available in window, dedicated workers and SharedWorker, and
+  tolerates concurrent instances — so the same backend works in every
+  topology.
+- Using the `idb` Rust crate keeps the entire storage layer inside the wasm
+  module (no JS-callback storage shim; JS glue is transport only).
+
+Topology:
+
+- **Preferred: SharedWorker** hosting the wasm engine — single instance,
+  no election, trivial routing. (Chromium probe: IDB, Web Locks and
+  BroadcastChannel all available in SharedWorker.)
+- **Fallback (no SharedWorker): dedicated worker per tab**, each with its
+  own engine instance over the same IDB database. Web Locks serialize
+  writes/GC (single writer at a time); BroadcastChannel broadcasts
+  changed-keys so every tab's exchange re-executes affected operations.
+  Cost: N copies of the hot tier — acceptable.
 - Selection at startup: Tauri detection (`isTauri`) → native transport;
-  otherwise browser capability check picks the topology. All paths sit
-  behind the same `Storage` trait and `CacheHost` RPC interface.
+  otherwise `typeof SharedWorker === 'function'` picks the worker kind. All
+  paths sit behind the same `Storage` trait and `CacheHost` RPC interface.
 
 ### 4.3 Storage backends
 
-| Backend    | Host           | Notes                                          |
-|------------|----------------|------------------------------------------------|
-| SQLite     | Tauri native   | records + links + meta tables; WAL mode        |
-| OPFS       | browser (leader) | log-structured KV, sync access handles, compaction |
-| IndexedDB  | browser (fallback) | chunked KV via JS callbacks into the worker  |
+| Backend    | Host         | Notes                                          |
+|------------|--------------|------------------------------------------------|
+| SQLite     | Tauri native | records + links + meta tables; WAL mode        |
+| IndexedDB  | browser      | via the `idb` crate inside the wasm module; one DB, object stores for records / operation roots / meta |
 
 `Storage` trait (async): `get_batch`, `put_batch`, `delete_batch`,
-`scan_prefix`, `approx_size`. Records serialized with `postcard`.
+`scan_prefix`, `approx_size`. Records serialized with `postcard` (stored as
+`Uint8Array` values in IDB / blobs in SQLite). Note: wasm futures are not
+`Send`, so the trait must be `?Send` (e.g. `async_trait(?Send)` or a
+maybe-send abstraction) to be implementable by both `idb` and native SQLite.
 
 ### 4.4 Data model
 
@@ -208,20 +219,22 @@ rust/graphql-cache/            # new cargo workspace (or members of an existing 
 js/app/packages/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
-  worker/                      # SharedWorker/worker entry, leader election
+  worker/                      # SharedWorker/dedicated-worker entries
 ```
 
 ## 6. Phases
 
-**Phase 0 — spike (validate the risky bits first)** *(in progress)*
-- ~~Build browser probe harness~~ — done:
-  `js/app/spikes/graphql-cache-probe/` (capabilities + OPFS/IDB/RTT
-  benchmarks, markdown export). Chromium results in Appendix A; **needs
-  manual runs on Firefox + Safari (normal & private windows)**.
-- Tauri IPC throughput for cache-read payloads (invoke + channels) on
-  desktop and mobile to validate read-latency budgets.
-- Measure real soup payloads: record count/size per page → set tier budgets.
-- Deliverable: go/no-go on architecture 4.2/4.3, wire protocol sketch.
+**Phase 0 — spike** *(closed)*
+- Browser probe harness built (`js/app/spikes/graphql-cache-probe/`);
+  Chromium results in Appendix A. **Decision made: IDB-backed persistence
+  via the `idb` crate, SharedWorker preferred with dedicated-worker
+  fallback (§4.2).** Safari/Firefox probe runs and the Tauri IPC benchmark
+  were deliberately skipped — the IDB + worker approach is the lowest
+  common denominator and doesn't depend on their results.
+- Soup payload measurement script available
+  (`js/app/scripts/measure-soup-payloads.ts`, needs credentials) — optional,
+  run when tuning tier budgets.
+- Remaining deliverable: wire protocol sketch (`CacheHost` RPC).
 
 **Phase 1 — cache-core (native, no wasm)**
 - Schema metadata codegen from `rust/cloud-storage/schema.graphql`.
@@ -232,15 +245,17 @@ js/app/packages/graphql-cache/ # JS glue
   round-trip).
 
 **Phase 2 — persistence**
-- SQLite backend (unlocks Tauri first — simplest host, biggest user base).
-- OPFS log-structured backend + compaction; IndexedDB fallback backend.
+- IndexedDB backend via the `idb` crate (browser), object stores for
+  records / operation roots / meta; batch-oriented transactions.
+- SQLite backend (Tauri native).
 - Namespace/versioning, corruption → discard & rebuild, logout clearing.
 
 **Phase 3 — hosts + JS glue**
 - `cache-tauri` plugin (commands + change-broadcast events).
-- `cache-wasm` + worker entry + leader election + BroadcastChannel fanout.
+- `cache-wasm` + SharedWorker/dedicated-worker entries + Web Locks write
+  serialization (fallback topology) + BroadcastChannel fanout.
 - `CacheHost` TS interface with both transports; `isTauri` → native,
-  otherwise browser capability-based selection.
+  otherwise SharedWorker-availability selection.
 
 **Phase 4 — urql exchange, behind flag**
 - `normalizedCacheExchange` with policies, re-execution, teardown.
@@ -259,13 +274,17 @@ js/app/packages/graphql-cache/ # JS glue
 
 ## 7. Risks
 
-- **Browser storage quirks** (Safari OPFS/SharedWorker edge cases, storage
-  eviction under pressure) — mitigated by the IDB fallback path and the
-  disposable-cache design; Phase 0 exists to confirm. Tauri is unaffected
-  (native host only).
+- **Browser storage quirks** (Safari IDB edge cases/private mode, storage
+  eviction under pressure) — mitigated by the disposable-cache design
+  (detect → discard → rebuild from network) and the dedicated-worker
+  fallback topology. Tauri is unaffected (native host only).
+- **`idb` crate dependency** — maintained third-party wasm bindings; if it
+  stalls, the `Storage` trait isolates us (swap for hand-rolled
+  `web-sys`-based bindings).
 - **RPC latency on hot paths** — reads are one round-trip to a worker/host;
-  budget ~1–2 ms web, measure Tauri IPC in Phase 0. Batch reads per
-  operation, not per record.
+  Chromium probe shows ≤1 ms for 64 KiB payloads. Batch reads per
+  operation, not per record. Tauri IPC assumed adequate (benchmark skipped);
+  revisit only if Phase 4 integration shows latency problems.
 - **Two normalization layers during migration** — consistency hazard;
   mitigated by per-entity-type ownership rule (§4.6).
 - **wasm dual-instantiation** (known loro pitfall) — single worker entry owns
@@ -302,18 +321,17 @@ Benchmarks (headless chromium on dev machine — order of magnitude only):
 | postMessage RTT 64 KiB clone (window↔dedicated) | avg 0.85 ms, p95 3.0 ms |
 | postMessage RTT 64 KiB clone (window↔shared) | avg 0.22 ms |
 
-Takeaways so far:
+Takeaways:
 
 1. **SharedWorker + OPFS is not viable on Chromium** (no sync handles in
-   SharedWorker, no nested `Worker`). Topology A (locks-elected dedicated
-   worker) or B (SharedWorker + IDB) — §4.2.
-2. Surprisingly, **IDB point-reads (0.35 ms) beat OPFS sync 4 KiB reads
-   (2 ms)** in this environment — sync-handle IO still pays a per-call cost.
-   OPFS wins on write batching/compaction control, but topology B/C (IDB)
-   may be entirely sufficient; re-verify on macOS + real hardware.
+   SharedWorker, no nested `Worker`).
+2. **IDB point-reads (0.35 ms) beat OPFS sync 4 KiB reads (2 ms)** in this
+   environment — sync-handle IO still pays a per-call cost.
 3. RTT is a non-issue: ≤1 ms for 64 KiB payloads, well within the read
    budget.
 
-### Firefox — *pending manual run*
-
-### Safari (normal + private) — *pending manual run*
+These takeaways drove the §4.2 decision (IDB via the `idb` crate, engine in
+a worker that may or may not be a SharedWorker). Firefox/Safari probe runs
+and the Tauri IPC benchmark were **skipped by decision** — the chosen
+approach relies only on APIs universally available (IndexedDB, dedicated
+workers, Web Locks, BroadcastChannel).
