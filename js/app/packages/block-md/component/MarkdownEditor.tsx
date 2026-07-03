@@ -35,6 +35,7 @@ import TableActionMenu, {
 import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
+import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -1092,6 +1093,7 @@ export function MarkdownEditor(props: {
 
         <Show when={canEdit()}>
           <TableCellResizer />
+          <TableInsertButton />
           <TableActionMenu anchorElem={editorContainerRef} cellMerge={true} />
         </Show>
 
