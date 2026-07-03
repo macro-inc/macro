@@ -4,8 +4,8 @@ import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
-import { SendButton } from './SendButton';
 import { Layer } from './Layer';
+import { SendButton } from './SendButton';
 
 export type CollapsedInputProps = {
   /** Draft of the real input, shown as the one-line preview. */
