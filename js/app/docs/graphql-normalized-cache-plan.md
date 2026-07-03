@@ -271,11 +271,26 @@ js/app/packages/graphql-cache/ # JS glue
 - **Pending:** `cache-tauri` plugin (commands + change events) + Tauri
   `CacheHost` transport; `isTauri` → native selection.
 
-**Phase 4 — urql exchange, behind flag**
-- `normalizedCacheExchange` with policies, re-execution, teardown.
-- Wire into the soup client under `ENABLE_GRAPHQL_SOUP`-style flag;
-  `cache-and-network` for the soup infinite query; REST fallback untouched.
-- Offline: serve persisted operation roots when network fails/absent.
+**Phase 4 — urql exchange, behind flag** *(done — needs manual smoke test)*
+- `normalizedCacheExchange`
+  (`packages/graphql-cache/exchange/`): async cache reads with a
+  forward-queue re-injection (cache is off-thread, unlike graphcache's sync
+  reads), all four request policies, push-driven re-execution downgraded to
+  `cache-first`, write-through of network results, cache errors degrade to
+  network. 8 vitest cases against a scripted fake host.
+- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_CACHE` override
+  (browser only, `isTauri` → plain client): lazily builds the cached client
+  scoped to the current `userId`; `fetchGraphqlSoup` uses
+  `cache-and-network` (`.toPromise()` skips stale emissions → identical
+  fresh semantics today) and falls back to a `cache-only` re-read on
+  network errors → offline replay of previously-seen pages.
+- Production build verified: worker chunks + `cache_wasm_bg.wasm` emitted
+  as hashed assets (explicit `module_or_path` URL — vite copies the
+  wasm-pack JS as an opaque asset, so its internal relative wasm URL had to
+  be resolved at the caller).
+- **Manual smoke test pending**: dev-server run with the override enabled
+  (localStorage `ENABLE_GRAPHQL_CACHE=true`), verify hit/miss + offline
+  behavior in the browser.
 
 **Phase 5 — write path & coexistence**
 - `writeFragment`/`invalidate` from websocket handlers.

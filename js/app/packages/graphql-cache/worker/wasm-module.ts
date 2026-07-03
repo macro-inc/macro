@@ -44,7 +44,12 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
     modulePromise = (async () => {
       const url = new URL('../wasm/cache_wasm.js', import.meta.url).href;
       const mod = (await import(/* @vite-ignore */ url)) as CacheWasmModule;
-      await mod.default();
+      // Resolve the wasm binary explicitly: vite copies the generated JS as
+      // an opaque asset, so its internal relative `cache_wasm_bg.wasm` URL
+      // would 404 in production. This `new URL` pattern is statically
+      // analyzable, so vite emits the binary as an asset and rewrites it.
+      const wasmUrl = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
+      await mod.default({ module_or_path: wasmUrl });
       return mod;
     })();
   }
