@@ -110,9 +110,11 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <SidePanel.Section id="history" title="History" defaultOpen order={35}>
-        <HistorySectionContent />
-      </SidePanel.Section>
+      <Show when={ENABLE_HISTORY_COMPONENT}>
+        <SidePanel.Section id="history" title="History" defaultOpen order={35}>
+          <HistorySectionContent />
+        </SidePanel.Section>
+      </Show>
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
@@ -150,9 +152,7 @@ function HistorySectionContent() {
     >
       {(sessions) => (
         <div class="hidden min-w-0 overflow-hidden md:block">
-          <Show when={ENABLE_HISTORY_COMPONENT}>
-            <HistoryScrubber compact />
-          </Show>
+          <HistoryScrubber compact />
           <Show when={sessions().length > 0}>
             <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
               <button

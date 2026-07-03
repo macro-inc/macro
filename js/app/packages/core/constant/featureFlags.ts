@@ -150,10 +150,10 @@ export const ENABLE_MARKDOWN_DIFF = resolveFeatureFlag(
   true
 );
 
-// Toggle the new experimental history viewer
+// Toggle the new experimental history viewer — on in dev/preview, off in prod.
 export const ENABLE_HISTORY_COMPONENT = resolveFeatureFlag(
   'ENABLE_HISTORY_COMPONENT',
-  false
+  DEV_MODE_ENV
 );
 
 export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(
