@@ -16,7 +16,8 @@ inbound = ["axum", "ports"]
 outbound = [
   "dep:sqlx",
   "dep:sqs_client",
-  "dep:serde_json",
+  "dep:connection_gateway_client",
+  "dep:model-entity",
   "ports",
 ]
 # Agent-backed projection generator (the outbound adapter that runs the AI
@@ -34,7 +35,6 @@ worker = [
   "ports",
   "dep:sqs_worker",
   "dep:aws-sdk-sqs",
-  "dep:serde_json",
 ]
 
 [dependencies]
@@ -44,6 +44,7 @@ chrono = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_ai_projection = { path = "../models_ai_projection" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -64,11 +65,12 @@ sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "ai_projection",
 ], optional = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+model-entity = { path = "../model-entity", optional = true }
 
 # Worker (inbound SQS poller) dependencies
 sqs_worker = { path = "../sqs_worker", optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 
 # Agent generator dependencies (the AI toolset adapter)
 ai_tools = { path = "../ai_tools", optional = true }

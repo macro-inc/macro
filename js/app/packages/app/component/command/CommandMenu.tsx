@@ -264,6 +264,7 @@ export function CommandMenuInner(props: {
             {
               referredFrom: 'kommand-menu',
               preferNewSplit: openInNewSplit,
+              reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
         }

@@ -136,6 +136,8 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
+const WIDE_SPLIT_PANEL_BREAKPOINT = 512;
+
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
@@ -1145,6 +1147,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // otherwise it stays stale-true and the entity's toolbar keeps the border.
   onCleanup(() => panel.previewState[1](false));
 
+  const isWideSplitPanel = createMemo(() => {
+    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
+  });
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1161,7 +1167,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
         data-soup-view
         data-soup-view-id={panel.handle.id + (previewPanel ? '-preview' : '')}
       >
-        <Resize.Zone direction="horizontal" gutter={0}>
+        <Resize.Zone
+          direction={
+            !isNewInboxEnabled() || isWideSplitPanel()
+              ? 'horizontal'
+              : 'vertical'
+          }
+          gutter={0}
+        >
           <Resize.Panel
             id="soup-list"
             minSize={200}
@@ -1515,17 +1528,24 @@ export const SoupViewList = (props: SoupViewListProps) => {
               minSize={300}
               target={{
                 kind: 'percent',
-                percent: isNewInboxEnabled() ? 50 : 70,
+                percent: isNewInboxEnabled() ? 80 : 70,
               }}
             >
-              <PreviewPanel
-                selectedEntity={soup.focus.item()}
-                orchestrator={orchestrator}
-                splitPanelContext={panel}
-                onFocusOut={() => {
-                  soupViewRef()?.focus();
-                }}
-              />
+              <div
+                class={cn(
+                  'size-full',
+                  !isWideSplitPanel() && 'border-t border-t-edge-muted'
+                )}
+              >
+                <PreviewPanel
+                  selectedEntity={soup.focus.item()}
+                  orchestrator={orchestrator}
+                  splitPanelContext={panel}
+                  onFocusOut={() => {
+                    soupViewRef()?.focus();
+                  }}
+                />
+              </div>
             </Resize.Panel>
           </Show>
         </Resize.Zone>

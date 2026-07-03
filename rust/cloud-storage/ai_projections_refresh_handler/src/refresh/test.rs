@@ -192,6 +192,19 @@ async fn claim_stale_selects_and_marks_refreshing(pool: Pool<Postgres>) -> anyho
         now,
     )
     .await?;
+    // errored before ever producing a result (stale_at is NULL) + active ->
+    // claimed, so failed first materializations are retried by the sweep.
+    insert_instance(
+        &pool,
+        "high/day",
+        "error_never_generated",
+        "error",
+        None,
+        None,
+        active,
+        now,
+    )
+    .await?;
     // stale + active + loading -> in flight, skipped.
     insert_instance(
         &pool,
@@ -271,13 +284,23 @@ async fn claim_stale_selects_and_marks_refreshing(pool: Pool<Postgres>) -> anyho
     let claimed_ids: Vec<&str> = claimed.iter().map(|t| t.target_id.as_str()).collect();
     assert_eq!(
         claimed_ids,
-        vec!["error_stale", "ready_stale", "stuck_refreshing"]
+        vec![
+            "error_never_generated",
+            "error_stale",
+            "ready_stale",
+            "stuck_refreshing"
+        ]
     );
     // The returned prompt_hash comes from the definition.
     assert!(claimed.iter().all(|t| t.prompt_hash == "hash_v1"));
 
     // Claimed instances are now marked refreshing.
-    for id in ["ready_stale", "error_stale", "stuck_refreshing"] {
+    for id in [
+        "ready_stale",
+        "error_stale",
+        "error_never_generated",
+        "stuck_refreshing",
+    ] {
         assert_eq!(
             status_of(&pool, "high/day", id).await?.as_deref(),
             Some("refreshing"),
@@ -311,6 +334,49 @@ async fn claim_stale_selects_and_marks_refreshing(pool: Pool<Postgres>) -> anyho
             .as_deref(),
         Some("ready")
     );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claim_stale_moves_instance_onto_current_version(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_projection(&pool, "high/day", "high", "day").await?;
+
+    let now = Utc::now();
+    insert_instance(
+        &pool,
+        "high/day",
+        "old_version",
+        "ready",
+        Some(now - Duration::hours(2)),
+        Some(now - Duration::hours(1)),
+        now,
+        now,
+    )
+    .await?;
+
+    // The definition was revised since the instance materialized.
+    sqlx::query!("UPDATE ai_projection SET prompt_hash = 'hash_v2' WHERE id = 'high/day'")
+        .execute(&pool)
+        .await?;
+
+    let claimed = claim_stale(&pool, RefreshCadence::High).await?;
+    assert_eq!(claimed.len(), 1);
+    assert_eq!(claimed[0].prompt_hash, "hash_v2");
+
+    // The claimed instance was moved onto the definition's version so the
+    // worker's hash-scoped writes land.
+    let instance_hash = sqlx::query_scalar!(
+        r#"
+        SELECT prompt_hash FROM user_ai_projection
+        WHERE ai_projection_id = 'high/day' AND target_id = 'old_version'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(instance_hash, "hash_v2");
 
     Ok(())
 }

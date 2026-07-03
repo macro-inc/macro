@@ -93,17 +93,21 @@ impl DurableKVStorage {
         self.list_do_kv(PENDING_OP_PREFIX).await
     }
 
-    pub async fn apply_op(&self, document_state: &DocumentState, op_update: &[u8]) -> Result<()> {
+    pub async fn apply_op(
+        &self,
+        document_state: &DocumentState,
+        op_update: &[u8],
+    ) -> Result<Vec<String>> {
         let op_id = self.ids.id();
         let op_key = pending_op_key(&op_id);
-        document_state.import(op_update)?;
+        let touched_nodes = document_state.import(op_update)?;
         self.inner.put(&op_key, op_update).await?;
         self.applied_keys
             .write()
             .unwrap_context("applied_keys mutex poisoned")
             .insert(op_key);
         self.inner.put(&all_op_key(&op_id), op_update).await?;
-        Ok(())
+        Ok(touched_nodes)
     }
 
     pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {

@@ -240,6 +240,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
+    let tag_option_ids = req.filters.tag_option_ids.clone();
 
     let search_filters = SearchEntityFilters::from(req.filters);
     let channel_filters = search_filters.channel_filters;
@@ -315,6 +316,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     // has_child clause ANDed via bool.must.
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
+    filter_document_response.tag_option_ids = tag_option_ids;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
     filter_email_response.terms = email_terms.clone();

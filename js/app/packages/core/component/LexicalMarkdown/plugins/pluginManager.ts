@@ -21,7 +21,7 @@ import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
 
-type PluginFunction = (editor: LexicalEditor) => () => void;
+export type PluginFunction = (editor: LexicalEditor) => () => void;
 
 /**
  * Create a binding between a LexicalEditor and the ability to register plugins

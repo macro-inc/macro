@@ -25,6 +25,12 @@ export type SearchIndexId =
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
+/** Search types whose results are documents/tasks, where tag filtering applies. */
+export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
+  'task',
+  'document-or-file',
+]);
+
 /**
  * Server-side narrowing for each index type. `defineQueryFilters` NIL-fills
  * the id field of every target the input doesn't reference, so each seed
@@ -57,6 +63,11 @@ export type SearchFiltersSections = {
 
 export type SearchFiltersState = SearchFiltersSections & {
   type: SearchTypeValue;
+  // Selected tags. Applied only on the document/task types (TAG_SEARCH_TYPES)
+  // and read live from the compiled query, so they persist across those types
+  // but clear when switching to a type where tags do not apply (all/email/etc).
+  // Each entry carries its owning definition id and option id; combined as one OR.
+  tags: PropertyFilter[];
 };
 
 export const DEFAULT_SECTIONS: SearchFiltersSections = {
@@ -85,6 +96,12 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   const seed = SEARCH_INDEX_SEEDS[state.type];
   Object.assign(include, seed.include);
   Object.assign(exclude, seed.exclude);
+
+  // Tags only apply where results are already narrowed to documents/tasks, so a
+  // tag filter never silently empties an email/channel/call search.
+  if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
+    include.tagFilters = state.tags;
+  }
 
   if (state.type === 'email') {
     if (state.email.importance !== undefined) {
@@ -178,6 +195,7 @@ export function createSearchFiltersController() {
     taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES)
   );
   const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
+  const tags = createMemo<PropertyFilter[]>(() => include().tagFilters ?? []);
 
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
@@ -194,6 +212,10 @@ export function createSearchFiltersController() {
   // Per-index values are remembered for the lifetime of the view: switching
   // the type away stashes the active section, switching back rehydrates it.
   let stash: SearchFiltersSections = structuredClone(DEFAULT_SECTIONS);
+  // Tags aren't a per-type section but are still remembered across type
+  // switches (they compile only for TAG_SEARCH_TYPES, so `tags()` reads empty
+  // on other types — snapshot them on switch-away so the selection survives).
+  let stashedTags: PropertyFilter[] = [];
 
   const apply = (state: SearchFiltersState) =>
     batch(() => {
@@ -205,7 +227,7 @@ export function createSearchFiltersController() {
     });
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
-    apply({ type: type(), ...currentSections(), ...sections });
+    apply({ type: type(), tags: tags(), ...currentSections(), ...sections });
 
   const setType = (next: SearchTypeValue) => {
     const current = type();
@@ -235,12 +257,19 @@ export function createSearchFiltersController() {
       };
     }
 
-    apply({ type: next, ...stash });
+    // Refresh the tag snapshot from the live value only while leaving a type
+    // that compiles tags; other types read empty and would clobber it.
+    if (TAG_SEARCH_TYPES.has(current)) stashedTags = tags();
+
+    apply({ type: next, tags: stashedTags, ...stash });
   };
 
   return {
     type,
     setType,
+    tags,
+    setTags: (filters: PropertyFilter[]) =>
+      apply({ type: type(), tags: filters, ...currentSections() }),
     emailImportance,
     setEmailImportance: (importance: boolean | undefined) =>
       applySections({ email: { importance, inboxIds: emailInbox() } }),

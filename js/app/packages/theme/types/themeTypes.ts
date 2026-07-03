@@ -45,12 +45,21 @@ export type ThemePrevious = {
   c4: { l: number; c: number; h: number };
 };
 
+export const semanticTokens = ['page', 'panel', 'inset', 'dialog', 'menu', 'input', 'message', 'hover', 'active', 'button', 'chrome'] as const;
+export type SemanticToken = (typeof semanticTokens)[number];
+
+type TokenColor = {
+  token: SemanticToken,
+  value: { l: number; c: number; h: number }
+}
+
 export type ThemeV2 = {
   id: string;
   name: string;
   version: number;
   depth: number;
   tokens: ThemeV2Tokens;
+  overrides?: TokenColor[];
 };
 
 export type ThemeV2Tokens = {

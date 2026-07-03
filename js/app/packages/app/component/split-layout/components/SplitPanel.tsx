@@ -218,8 +218,8 @@ export function SplitPanel(props: SplitPanelProps) {
                 multipleSplits() &&
                 !props.handle.isSpotLight()
               }
-              class="relative overflow-hidden rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
-              depth={1}
+              class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
+              depth={isMobile() ? 0 : 1}
             >
               <div
                 class={cn(
@@ -245,8 +245,7 @@ export function SplitPanel(props: SplitPanelProps) {
 
               <Panel.Toolbar
                 class={cn(
-                  'relative items-start py-2 overflow-visible',
-                  splitPanelLayer.controls,
+                  'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   isMobile() && 'hidden',
                   (!previewState() ||

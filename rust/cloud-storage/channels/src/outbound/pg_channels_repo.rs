@@ -854,6 +854,9 @@ fn push_channel_thread_filter_expr(
             builder.push("m.sender_id = ");
             builder.push_bind(sender.as_ref().to_string());
         }
+        Expr::Literal(ChannelThreadLiteral::Participant(participant)) => {
+            push_channel_thread_participant_filter_expr(builder, participant);
+        }
         Expr::Literal(ChannelThreadLiteral::NotificationDone(done)) => {
             push_channel_thread_notification_filter_expr(
                 builder,
@@ -877,6 +880,64 @@ fn push_channel_thread_filter_expr(
             );
         }
     }
+}
+
+/// A user is a participant of a thread when they are still an active member of the
+/// channel AND they sent the root message or any reply, or were @-mentioned anywhere
+/// in the thread.
+///
+/// Group mentions (e.g. @here) are covered indirectly: the client expands them into
+/// per-user mention rows for every channel member at send time, so they match the
+/// mention arm below. That expansion is a send-time snapshot made by a single
+/// producer (the web client) — members who join the channel later, and messages from
+/// producers that don't expand (bots, webhooks), are missed. TODO: persist group
+/// mentions as `entity_type = 'group'` rows in `comms_entity_mentions` (parsed
+/// server-side from the `<m-group-mention>` content tag, see `mention_utils`) and
+/// add an arm here treating every active channel member as a participant of threads
+/// containing one.
+#[cfg(feature = "list")]
+fn push_channel_thread_participant_filter_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    participant: &MacroUserIdStr<'_>,
+) {
+    let participant = participant.as_ref().to_string();
+    builder.push(
+        r#"(EXISTS (
+            SELECT 1
+            FROM comms_channel_participants pcp
+            WHERE pcp.channel_id = m.channel_id
+              AND pcp.user_id = "#,
+    );
+    builder.push_bind(participant.clone());
+    builder.push(
+        r#"
+              AND pcp.left_at IS NULL
+        ) AND EXISTS (
+            SELECT 1
+            FROM comms_messages tm
+            WHERE (tm.id = m.id OR tm.thread_id = m.id)
+              AND tm.deleted_at IS NULL
+              AND (
+                tm.sender_id = "#,
+    );
+    builder.push_bind(participant.clone());
+    builder.push(
+        r#"
+                OR EXISTS (
+                    SELECT 1
+                    FROM comms_entity_mentions em
+                    WHERE em.source_entity_type = 'message'
+                      AND em.source_entity_id = tm.id::text
+                      AND em.entity_type = 'user'
+                      AND em.entity_id = "#,
+    );
+    builder.push_bind(participant);
+    builder.push(
+        r#"
+                )
+              )
+        ))"#,
+    );
 }
 
 #[cfg(feature = "list")]

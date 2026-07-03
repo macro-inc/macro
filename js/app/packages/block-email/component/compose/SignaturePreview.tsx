@@ -7,13 +7,16 @@ import { createEffect, createSignal } from 'solid-js';
 // Rendered inside a shadow root so the signature's structural markup (lists,
 // headings, bold) keeps its default styling instead of being flattened by the
 // app's global CSS reset — the same isolation EmailMessageBody uses for received
-// mail. CSS custom properties still pierce the boundary, so --color-ink themes
-// any text the signature didn't color itself.
+// mail. Near-black text on the always-white surface below (not theme ink):
+// recipients see the signature on white, and pasted light-UI content would
+// otherwise show as white boxes in dark mode. Links keep the UA default blue,
+// matching what mail clients do with unstyled anchors. Paragraph margins are
+// deliberately NOT reset here: recipients' clients don't reset them either, so
+// the preview shows the signature's real spacing (the editor inlines margin:0
+// on its <p>s at save time — see SignatureEditor's currentHtml).
 const SHADOW_STYLE = `
-  :host { color: var(--color-ink); font-family: inherit; }
+  :host { color: #1f1f1f; font-family: inherit; }
   img { max-width: 100%; height: auto; }
-  p { margin: 0; }
-  a { color: inherit; }
 `;
 
 /**
@@ -86,7 +89,7 @@ export function SignaturePreview(props: {
       </div>
       <div
         ref={mountEl}
-        class="px-3 py-2 text-sm"
+        class="rounded-b-lg bg-[white] px-3 py-2 text-sm"
         classList={{ hidden: !expanded() }}
       />
     </div>

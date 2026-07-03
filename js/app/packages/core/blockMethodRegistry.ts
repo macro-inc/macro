@@ -8,6 +8,8 @@ type BlockMethodSpec = Record<string, (...args: any[]) => any | Promise<any>>;
 
 export type SharedBlockSpec = {
   goToLocationFromParams: (params: Record<string, any>) => Promise<void>;
+  /** Land the block on its latest content (e.g. newest channel messages). */
+  goToLatest: () => Promise<void>;
 };
 
 // Ensure all block specs extend BlockMethodSpec

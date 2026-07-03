@@ -323,7 +323,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           }}
         >
           <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface mobile:rounded-none mobile:border-0 mobile:bg-transparent">
+            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
               {/* Compact modal chrome: no split header to host the tabs, so
                   the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its

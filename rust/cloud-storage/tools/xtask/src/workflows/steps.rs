@@ -33,7 +33,7 @@ impl<T> FluentBuilder for Step<T> {}
 /// Reference a repo-local composite action (`uses: ./path`). The base
 /// `gh-workflow` `uses()` only builds `owner/repo@version`, so we set the raw
 /// `uses` field directly. Kept in one place so the workaround is contained.
-fn uses_local(name: &str, path: &str) -> Step<Use> {
+pub(crate) fn uses_local(name: &str, path: &str) -> Step<Use> {
     let mut step = Step::new(name).uses("local", "local", "0");
     step.value.uses = Some(path.to_string());
     step

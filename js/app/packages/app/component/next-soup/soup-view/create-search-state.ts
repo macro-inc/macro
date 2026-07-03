@@ -183,6 +183,12 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     filters.property_filters = propertyFilters;
   }
 
+  // Tags: match on the option ids alone (globally unique), OR'd across all tag
+  // definitions. No definition id is sent — the backend matches values only.
+  if (include.tagFilters?.length) {
+    filters.tag_option_ids = include.tagFilters.map((t) => t.value);
+  }
+
   return filters;
 }
 

@@ -289,6 +289,7 @@ struct FakeMutationRepoState {
     attachments: Vec<MutatedAttachment>,
     patched_content: Option<String>,
     activity_upserts: usize,
+    removed_participants: Vec<String>,
 }
 
 impl FakeMutationRepo {
@@ -333,6 +334,7 @@ impl FakeMutationRepo {
                 attachments: vec![],
                 patched_content: None,
                 activity_upserts: 0,
+                removed_participants: vec![],
             })),
         }
     }
@@ -535,8 +537,13 @@ impl ChannelRepo for FakeMutationRepo {
     async fn remove_participant(
         &self,
         _channel_id: Uuid,
-        _user_id: String,
+        user_id: String,
     ) -> Result<(), Self::Err> {
+        self.state
+            .lock()
+            .unwrap()
+            .removed_participants
+            .push(user_id);
         Ok(())
     }
 
@@ -1529,4 +1536,58 @@ async fn thread_replies_resolve_and_hydrate() {
     assert_eq!(replies[1].id, reply_2.id);
     assert_eq!(replies[1].reactions.len(), 0);
     assert_eq!(replies[1].attachments.len(), 1);
+}
+
+#[tokio::test]
+async fn remove_participants_rejects_removing_channel_owner() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .remove_participants(
+            sender("macro|recipient@test.com"),
+            channel_id,
+            RemoveParticipantsRequest {
+                participants: vec![
+                    "macro|sender@test.com".to_string(),
+                    "macro|recipient@test.com".to_string(),
+                ],
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::Unauthorized(_)));
+    assert!(repo.state.lock().unwrap().removed_participants.is_empty());
+}
+
+#[tokio::test]
+async fn remove_participants_allows_removing_non_owner() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.remove_participants(
+        sender("macro|sender@test.com"),
+        channel_id,
+        RemoveParticipantsRequest {
+            participants: vec!["macro|recipient@test.com".to_string()],
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.state.lock().unwrap().removed_participants,
+        vec!["macro|recipient@test.com".to_string()]
+    );
 }

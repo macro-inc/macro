@@ -1,10 +1,25 @@
 import { hapticImpact } from '@core/mobile/haptics';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
-import { createEffect, For, type JSXElement, on } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSXElement,
+  on,
+  Show,
+} from 'solid-js';
+import { MobileTouchMenu } from './MobileTouchMenu';
+import { computeVisiblePillValues } from './pillTabsLayout';
 import { pressPulse } from './pressPulse';
 
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
+
+const PILL_CLASS =
+  'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island';
 
 export type PillTabItem<T extends string = string> = {
   value: T;
@@ -18,7 +33,7 @@ export type PillTabItem<T extends string = string> = {
  *
  * Presentational only: the caller owns selection state via `value`/`onChange`
  * and wraps this with its own layout (gutters, sibling controls, region
- * chrome). The active pill is kept scrolled into view automatically.
+ * chrome). Pills that do not fit move into the overflow menu.
  */
 export function PillTabs<T extends string>(props: {
   items: readonly PillTabItem<T>[];
@@ -32,49 +47,109 @@ export function PillTabs<T extends string>(props: {
   /** Extra classes on the scroll strip. */
   class?: string;
 }) {
-  let stripRef: HTMLDivElement | undefined;
+  const [stripRef, setStripRef] = createSignal<HTMLDivElement>();
+  const [measureRef, setMeasureRef] = createSignal<HTMLDivElement>();
+  const [overflowMeasureRef, setOverflowMeasureRef] =
+    createSignal<HTMLButtonElement>();
+  const stripSize = createElementSize(stripRef);
+  const measureSize = createElementSize(measureRef);
+  const overflowMeasureSize = createElementSize(overflowMeasureRef);
+  const measuredButtons = new Map<T, HTMLButtonElement>();
+  const [visibleValues, setVisibleValues] = createSignal<T[]>([]);
+  const [measured, setMeasured] = createSignal(false);
 
-  // Keep the active pill scrolled into view within the horizontal strip.
-  // Re-runs on selection change or when the list of items changes.
+  const itemKey = () => props.items.map((item) => item.value).join('\u0000');
+
+  const getContentWidth = (el: HTMLElement) => {
+    const style = window.getComputedStyle(el);
+    return (
+      el.clientWidth -
+      Number.parseFloat(style.paddingLeft || '0') -
+      Number.parseFloat(style.paddingRight || '0')
+    );
+  };
+
+  const getGap = (el: HTMLElement) => {
+    const style = window.getComputedStyle(el);
+    return Number.parseFloat(style.columnGap || style.gap || '0') || 0;
+  };
+
+  const computeVisibleValues = () => {
+    const strip = stripRef();
+    const overflowButton = overflowMeasureRef();
+    if (!strip || !overflowButton) return;
+
+    const items = props.items;
+    const values = items.map((item) => item.value);
+    const widths = items.map(
+      (item) => measuredButtons.get(item.value)?.offsetWidth ?? 0
+    );
+
+    if (items.length === 0 || widths.some((width) => width === 0)) {
+      setVisibleValues(items.map((item) => item.value));
+      setMeasured(false);
+      return;
+    }
+
+    const available = getContentWidth(strip);
+    const gap = getGap(strip);
+    const overflowWidth = overflowButton.offsetWidth;
+    setVisibleValues(
+      computeVisiblePillValues({
+        values,
+        activeValue: props.value,
+        currentVisibleValues: visibleValues(),
+        widths,
+        availableWidth: available,
+        gap,
+        overflowWidth,
+      })
+    );
+    setMeasured(true);
+  };
+
   createEffect(
     on(
-      () => [props.value, props.items] as const,
+      () =>
+        [
+          props.value,
+          itemKey(),
+          stripSize.width,
+          measureSize.width,
+          overflowMeasureSize.width,
+        ] as const,
       () => {
-        const strip = stripRef;
-        if (!strip) return;
-        queueMicrotask(() => {
-          const active = strip.querySelector<HTMLElement>('[data-checked]');
-          if (!active) return;
-          const stripRect = strip.getBoundingClientRect();
-          const activeRect = active.getBoundingClientRect();
-          if (activeRect.left < stripRect.left) {
-            strip.scrollBy({
-              left: activeRect.left - stripRect.left - 8,
-              behavior: 'smooth',
-            });
-          } else if (activeRect.right > stripRect.right) {
-            strip.scrollBy({
-              left: activeRect.right - stripRect.right + 8,
-              behavior: 'smooth',
-            });
-          }
-        });
+        queueMicrotask(computeVisibleValues);
       }
     )
   );
 
+  const visibleItems = createMemo(() => {
+    if (!measured()) return props.items;
+    const itemsByValue = new Map(props.items.map((item) => [item.value, item]));
+    return visibleValues().flatMap((value) => {
+      const item = itemsByValue.get(value);
+      return item ? [item] : [];
+    });
+  });
+
+  const overflowItems = createMemo(() => {
+    if (!measured()) return [];
+    const visible = new Set(visibleValues());
+    return props.items.filter((item) => !visible.has(item.value));
+  });
+
   return (
     <div
-      ref={stripRef}
+      ref={setStripRef}
       class={cn(
-        // overflow-x:auto forces overflow-y to auto, which clips the pills'
-        // shadow. The padding gives the shadow room inside the (clipping)
-        // padding box; the matching negative margin cancels its layout impact.
-        'pointer-events-auto -my-3 flex min-w-0 items-center gap-2 overflow-x-auto py-3 pr-2 scrollbar-hidden',
+        // The padding gives the pills' shadow room inside the clipping box;
+        // the matching negative margin cancels its layout impact.
+        'pointer-events-auto relative -my-3 flex w-full min-w-0 flex-1 max-w-full items-center gap-2 py-3 pr-2',
         props.class
       )}
     >
-      <For each={props.items}>
+      <For each={visibleItems()}>
         {(item) => {
           const active = () => props.value === item.value;
           return (
@@ -83,10 +158,10 @@ export function PillTabs<T extends string>(props: {
               use:pressPulse
               data-checked={active() ? '' : undefined}
               class={cn(
-                'h-10 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium shadow-md',
+                PILL_CLASS,
                 active()
-                  ? 'bg-accent text-surface border-accent'
-                  : 'bg-surface text-ink-extra-muted border-edge'
+                  ? 'bg-accent text-surface ring-accent'
+                  : 'text-ink-extra-muted'
               )}
               onPointerDown={(e) => {
                 if (props.preserveFocus) e.preventDefault();
@@ -99,6 +174,61 @@ export function PillTabs<T extends string>(props: {
           );
         }}
       </For>
+      <Show when={overflowItems().length > 0}>
+        <MobileTouchMenu
+          triggerAriaLabel="More tabs"
+          position="trigger-bottom"
+          footerLabel="Tabs"
+          items={overflowItems().map((item) => ({
+            id: item.value,
+            label: item.label,
+            active: () => props.value === item.value,
+            onSelect: () => props.onChange(item.value),
+          }))}
+          trigger={(trigger) => (
+            <button
+              type="button"
+              use:pressPulse
+              ref={trigger.ref}
+              aria-label="More tabs"
+              class="h-10 w-10 shrink-0 rounded-full text-ink-extra-muted island flex items-center justify-center [&_svg]:size-5"
+              onPointerDown={(e) => {
+                if (props.preserveFocus) e.preventDefault();
+                trigger.onPointerDown();
+              }}
+              onClick={trigger.onClick}
+              onTouchMove={trigger.onTouchMove}
+              onTouchEnd={trigger.onTouchEnd}
+            >
+              <DotsThreeIcon />
+            </button>
+          )}
+        />
+      </Show>
+      <div
+        ref={setMeasureRef}
+        aria-hidden="true"
+        class="pointer-events-none invisible absolute top-0 left-0 -z-10 flex w-max items-center gap-2 py-3 pr-2"
+      >
+        <For each={props.items}>
+          {(item) => (
+            <button
+              type="button"
+              ref={(el) => measuredButtons.set(item.value, el)}
+              tabIndex={-1}
+              class={PILL_CLASS}
+            >
+              {item.label}
+            </button>
+          )}
+        </For>
+        <button
+          type="button"
+          ref={setOverflowMeasureRef}
+          tabIndex={-1}
+          class="h-10 w-10 shrink-0 rounded-full island"
+        />
+      </div>
     </div>
   );
 }

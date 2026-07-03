@@ -15,7 +15,7 @@ use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
-use task_dedup::NewTask;
+use task_dedup::{EmbeddingMarkdown, NewTask};
 
 use super::task_duplicates::spawn_task_duplicate_detection;
 
@@ -67,7 +67,7 @@ pub async fn create_task_handler<
             user_context.macro_user_id.clone(),
             NewMarkdownTextDocument {
                 metadata: metadata.build(),
-                markdown: markdown.clone(),
+                markdown,
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
                     share_with_team: req.share_with_team && team_id.is_some(), // we should only try and share if the user is in a team and they have share_with_team set
@@ -87,7 +87,9 @@ pub async fn create_task_handler<
             owner,
             team_id: task_metadata.team_id,
             title: task_name,
-            markdown,
+            // Filled from lexical (embedding format) inside the spawn; defaults
+            // to title-only so a failed render never embeds wrong-format text.
+            markdown: EmbeddingMarkdown::empty(),
         },
     );
 

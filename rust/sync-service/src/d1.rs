@@ -90,3 +90,92 @@ pub async fn get_peers_for_document_id(
 
     Ok(peers.into_iter().map(|p| (p.peer_id, p.user_id)).collect())
 }
+
+/// A single pending "last edited by" event, buffered until the
+/// next alarm tick flushes everything
+#[derive(Debug, Clone)]
+pub struct BlameEvent {
+    pub document_id: String,
+    pub node_id: String,
+    pub peer_id: u64,
+    pub timestamp_ms: i64,
+}
+
+/// Maximum statements per D1 `batch()` call. D1 has a per-batch statement
+/// limit; chunking keeps us comfortably under it.
+const BATCH_CHUNK_SIZE: usize = 100;
+
+/// Bulk-upsert a list of buffered blame events. Uses D1's `batch()` so all
+/// events in a chunk commit in a single round-trip.
+pub async fn insert_blame_many(env: &worker::Env, events: &[BlameEvent]) -> worker::Result<()> {
+    if events.is_empty() {
+        return Ok(());
+    }
+    tracing::info!(count = events.len(), "insert_blame_many");
+
+    for chunk in events.chunks(BATCH_CHUNK_SIZE) {
+        let db = env.d1(crate::constants::USER_PEER_D1_BINDING)?;
+        let stmts: Vec<_> = chunk
+            .iter()
+            .map(|e| {
+                db.prepare(
+                    "INSERT INTO blame (document_id, node_id, peer_id, timestamp_ms) \
+                     VALUES (?, ?, ?, ?) \
+                     ON CONFLICT(document_id, node_id) DO UPDATE SET \
+                        peer_id = excluded.peer_id, \
+                        timestamp_ms = excluded.timestamp_ms;",
+                )
+                .bind(&[
+                    e.document_id.as_str().into(),
+                    e.node_id.as_str().into(),
+                    e.peer_id.to_string().into(),
+                    // d1 js doesn't support bigint
+                    (e.timestamp_ms as f64).into(),
+                ])
+            })
+            .collect::<worker::Result<Vec<_>>>()?;
+        db.batch(stmts).await?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct BlameRow {
+    pub peer_id: String,
+    pub user_id: Option<String>,
+    pub timestamp_ms: i64,
+}
+
+/// JOIN blame with peer_user_map to get last-edit info plus resolved user_id.
+pub async fn get_blame_for_node(
+    db: D1Database,
+    document_id: &str,
+    node_id: &str,
+) -> worker::Result<Option<BlameRow>> {
+    let statement = db.prepare(
+        "
+            SELECT b.peer_id AS peer_id,
+                   p.user_id AS user_id,
+                   b.timestamp_ms AS timestamp_ms
+            FROM blame b
+            LEFT JOIN peer_user_map p
+                   ON p.document_id = b.document_id
+                  AND p.peer_id = b.peer_id
+            WHERE b.document_id = ? AND b.node_id = ?
+            LIMIT 1;
+        ",
+    );
+    let result = statement
+        .bind(&[document_id.into(), node_id.into()])?
+        .all()
+        .await?;
+    let mut rows = result.results::<BlameRow>()?;
+    let row = rows.pop();
+    tracing::info!(
+        document_id = document_id,
+        node_id = node_id,
+        found = row.is_some(),
+        "get_blame_for_node"
+    );
+    Ok(row)
+}

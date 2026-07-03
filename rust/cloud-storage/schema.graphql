@@ -65,6 +65,7 @@ input GraphqlChannelThreadLiteral @oneOf {
 	threadId: ID
 	channelId: ID
 	rootSender: String
+	participant: String
 	notificationDone: Boolean
 	notificationSeen: Boolean
 }

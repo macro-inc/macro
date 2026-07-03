@@ -102,7 +102,7 @@ export const SidebarCreateMenu = (props: { isSlim: () => boolean }) => {
           </div>
         </Show>
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-52">
+      <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
           <For each={blocks()}>
             {(block, index) => {

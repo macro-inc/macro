@@ -31,10 +31,13 @@ import {
   isListViewID,
   type ListView,
   soupItemMatchesListView,
+  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -177,6 +180,11 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
+  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+  const resolveTransport = (groupBy: GroupByField | undefined) =>
+    useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined;
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
@@ -217,10 +225,14 @@ export const SoupViewContextProvider: FlowComponent<
   onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
+    const groupBy = groupByField();
+
     queryClient.setQueryData(
       soupKeys.astItems({
         params: soupParams(),
         body: soupBody(),
+        groupBy,
+        transport: resolveTransport(groupBy),
       }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
         if (!prev) return;
@@ -448,7 +460,6 @@ export const SoupViewContextProvider: FlowComponent<
       enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
     }
   );
-
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
     userId: userId(),
@@ -466,19 +477,31 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // Active tag option ids, used to gate optimistic websocket inserts so an
+  // active tag filter is honored even on the grouped render path.
+  const activeTagOptionIds = createMemo(() =>
+    (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
+  );
+
   const itemsQuery = useSoupAstItemsQuery(
-    () => ({
-      params: soupParams(),
-      body: soupBody(),
-      groupBy: groupByField(),
-    }),
+    () => {
+      const groupBy = groupByField();
+      return {
+        params: soupParams(),
+        body: soupBody(),
+        groupBy,
+        transport: resolveTransport(groupBy),
+      };
+    },
     () => {
       const view = activeListView();
       return {
         enabled: !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     }
@@ -601,7 +624,9 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     },

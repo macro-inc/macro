@@ -161,6 +161,15 @@ export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_GIT_BLAME_FLAG = 'enable-git-blame';
+export const ENABLE_GIT_BLAME_OVERRIDE =
+  resolveFeatureFlag('ENABLE_GIT_BLAME', DEV_MODE_ENV) || undefined;
+
+export function ENABLE_GIT_BLAME(): boolean {
+  if (ENABLE_GIT_BLAME_OVERRIDE !== undefined) return ENABLE_GIT_BLAME_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_GIT_BLAME_FLAG) ?? false;
+}
+
 export const ENABLE_MARKDOWN_SEARCH_TEXT = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SEARCH_TEXT',
   DEV_MODE_ENV
@@ -398,6 +407,11 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
 export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
+
+export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
+export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_GRAPHQL_SOUP'
+);
 
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(

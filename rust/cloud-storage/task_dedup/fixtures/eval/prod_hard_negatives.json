@@ -1,0 +1,725 @@
+{
+  "tasks": [
+    {
+      "id": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "title": "eval-task: recalibrate the flux capacitor sync interval",
+      "body": "Bump the flux sync interval from 250ms to 100ms and add a jitter budget so the desktop watcher stops thrashing under load. Repro'd off the CI flake here:\n\n[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f15b6-f731-7185-8e93-f7f9ec6726d4)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-9547-700b-b038-add6fbec437b",
+      "title": "eval-task: paint the submarine a friendlier shade of teal",
+      "body": "[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f18f9-e1d0-7b45-a593-6956a0dd41a2)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "title": "eval-task: give the loading spinner a motivational speech",
+      "body": "[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f191e-ed93-7aaf-9ffc-04c89997a3e9)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "title": "eval-task: teach the widget gnome to fold laundry",
+      "body": "[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f15c0-7d68-70c9-b2f6-f0a041d8b72a)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "title": "eval-task: migrate the moon rocks to cold storage",
+      "body": "Move the lunar sample cache into the tier-2 vault and backfill checksums. Blocked on the collapse regression referenced below:\n\n[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f18f2-4dda-74d4-9274-c063a8d859bd)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "title": "eval-task: install a moat around the settings panel",
+      "body": "Add a drawbridge gate so only privileged crocodiles can edit account settings. Spun out of the delete-permissions discussion:\n\n[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f197a-cee8-7bbf-96a0-bf63b8211371)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "title": "eval-task: convince the soup to identify as gazpacho",
+      "body": "[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f1a88-4e10-7dfe-8377-4706f64c8abd)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "title": "eval-task: negotiate a truce between the semicolons and the commas",
+      "body": "Draft a punctuation peace treaty and enforce it in the linter. Context on the bricked mentions that kicked this off:\n\n[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f1914-91ad-70bb-b1dc-a3a2c2f6cdcf)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "title": "eval-task: thaw the frozen hamster wheel powering the tab",
+      "body": "Swap the cryogenic hamster for a warm-blooded replacement so tabs stop freezing on wake. Original report:\n\n[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f1a8f-86ae-7b64-8153-05b82d3cc0f9)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "title": "eval-task: teach cmd+k to stop reading minds",
+      "body": "[bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019f1e4e-3330-7620-806a-78075ce19c5d)",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    }
+  ],
+  "pairs": []
+}

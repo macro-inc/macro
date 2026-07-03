@@ -1,4 +1,3 @@
-import { useSoup } from '@app/component/next-soup/soup-context';
 import { useChannelsContext } from '@core/context/channels';
 import { MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
@@ -18,7 +17,6 @@ import { scopeThreadNotifications } from './utils';
  * view); without a provider the card falls back to its own local state.
  */
 export function InboxListEntity(props: BaseListEntityProps) {
-  const soup = useSoup();
   const expansion = useInboxExpansion();
   const channels = useChannelsContext();
 
@@ -32,16 +30,13 @@ export function InboxListEntity(props: BaseListEntityProps) {
   });
 
   const item = createMemo(() => toInboxCardDisplayItem(entity()));
-  // The preview follows the focused row, so the selected row is the focused one
-  // (preview target and focus can diverge from `previewEntity` after a click).
-  const selected = () => soup.focus.id() === props.entity.id;
 
   return (
     <div class="mx-1" ref={props.ref} onMouseMove={props.onMouseMove}>
       <MaybeEntityRow entityId={props.entity.id} config={props.entityRowConfig}>
         <InboxCardLayout
           item={item()}
-          selected={selected()}
+          selected={props.checked}
           highlighted={props.highlighted}
           onClick={props.onClick}
           expanded={
