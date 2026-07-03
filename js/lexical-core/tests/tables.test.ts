@@ -1,0 +1,229 @@
+import {
+  $convertFromMarkdownString,
+  $convertToMarkdownString,
+} from '@lexical/markdown';
+import {
+  $createTableCellNode,
+  $createTableNode,
+  $createTableRowNode,
+  $isTableCellNode,
+  $isTableNode,
+  $isTableRowNode,
+  TableCellHeaderStates,
+  type TableCellNode,
+  type TableNode,
+  type TableRowNode,
+} from '@lexical/table';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  createEditor,
+} from 'lexical';
+import { describe, expect, it } from 'vitest';
+import { SupportedNodeTypes } from '../node-list';
+import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
+
+function createTestEditor() {
+  return createEditor({
+    nodes: SupportedNodeTypes,
+    onError: (error) => {
+      throw error;
+    },
+  });
+}
+
+function $createCell(
+  text: string,
+  headerState: number = TableCellHeaderStates.NO_STATUS
+): TableCellNode {
+  const cell = $createTableCellNode(headerState);
+  const paragraph = $createParagraphNode();
+  paragraph.append($createTextNode(text));
+  cell.append(paragraph);
+  return cell;
+}
+
+async function buildEditorState(
+  editor: ReturnType<typeof createEditor>,
+  $build: () => void
+) {
+  await new Promise<void>((resolve) => {
+    editor.update($build, { onUpdate: () => resolve() });
+  });
+}
+
+function exportMarkdown(
+  editor: ReturnType<typeof createEditor>,
+  transformers = INTERNAL_TRANSFORMERS
+): string {
+  let markdown = '';
+  editor.getEditorState().read(() => {
+    markdown = $convertToMarkdownString(transformers);
+  });
+  return markdown;
+}
+
+async function importMarkdown(
+  editor: ReturnType<typeof createEditor>,
+  markdown: string
+) {
+  await buildEditorState(editor, () => {
+    $getRoot().clear();
+    $convertFromMarkdownString(markdown, INTERNAL_TRANSFORMERS);
+  });
+}
+
+function $getFirstTable(): TableNode {
+  const table = $getRoot()
+    .getChildren()
+    .find((child) => $isTableNode(child));
+  expect(table).toBeDefined();
+  return table as TableNode;
+}
+
+describe('m-table internal transformer', () => {
+  it('round-trips colspan, rowspan, header state, col widths and row height', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      table.setColWidths([120, 240, 360]);
+
+      const headerRow = $createTableRowNode();
+      headerRow.append(
+        $createCell('Name', TableCellHeaderStates.ROW),
+        $createCell('Role', TableCellHeaderStates.ROW),
+        $createCell('Team', TableCellHeaderStates.ROW)
+      );
+
+      const mergedRow = $createTableRowNode();
+      mergedRow.setHeight(48);
+      const mergedCell = $createCell('Wolf');
+      mergedCell.setColSpan(2);
+      mergedCell.setRowSpan(2);
+      mergedRow.append(mergedCell, $createCell('Eng'));
+
+      const lastRow = $createTableRowNode();
+      lastRow.append($createCell('Design'));
+
+      table.append(headerRow, mergedRow, lastRow);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-table col-widths="120,240,360">');
+    expect(markdown).toContain('<m-table-row height="48">');
+    expect(markdown).toContain('<m-table-cell colspan="2" rowspan="2">Wolf');
+    expect(markdown).toContain('<m-table-cell header="row">Name');
+
+    await importMarkdown(editor, markdown);
+
+    editor.getEditorState().read(() => {
+      const table = $getFirstTable();
+      expect(table.getColWidths()).toEqual([120, 240, 360]);
+
+      const rows = table.getChildren().filter($isTableRowNode);
+      expect(rows).toHaveLength(3);
+      expect((rows[1] as TableRowNode).getHeight()).toBe(48);
+
+      const headerCells = (rows[0] as TableRowNode)
+        .getChildren()
+        .filter($isTableCellNode);
+      for (const cell of headerCells) {
+        expect(cell.__headerState).toBe(TableCellHeaderStates.ROW);
+      }
+
+      const [mergedCell] = (rows[1] as TableRowNode)
+        .getChildren()
+        .filter($isTableCellNode);
+      expect(mergedCell.getColSpan()).toBe(2);
+      expect(mergedCell.getRowSpan()).toBe(2);
+      expect(mergedCell.getTextContent()).toBe('Wolf');
+    });
+  });
+
+  it('serializes plain tables without attributes, identical to the legacy format', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      row.append($createCell('a'), $createCell('b'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    expect(exportMarkdown(editor)).toBe(
+      '<m-table><m-table-row><m-table-cell>a</m-table-cell><m-table-cell>b</m-table-cell></m-table-row></m-table>'
+    );
+  });
+
+  it('imports legacy attribute-less markup', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>a</m-table-cell><m-table-cell>b\\nc</m-table-cell></m-table-row></m-table>'
+    );
+
+    editor.getEditorState().read(() => {
+      const table = $getFirstTable();
+      const [row] = table.getChildren().filter($isTableRowNode);
+      const cells = (row as TableRowNode)
+        .getChildren()
+        .filter($isTableCellNode);
+      expect(cells).toHaveLength(2);
+      expect(cells[0].getColSpan()).toBe(1);
+      expect(cells[0].getRowSpan()).toBe(1);
+      expect(cells[0].__headerState).toBe(TableCellHeaderStates.NO_STATUS);
+      expect(cells[0].getTextContent()).toBe('a');
+    });
+  });
+
+  it('ignores malformed attribute values', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table col-widths="abc,def"><m-table-row height="-5"><m-table-cell colspan="0" rowspan="x" header="nope">a</m-table-cell></m-table-row></m-table>'
+    );
+
+    editor.getEditorState().read(() => {
+      const table = $getFirstTable();
+      expect(table.getColWidths()).toBeUndefined();
+      const [row] = table.getChildren().filter($isTableRowNode);
+      expect((row as TableRowNode).getHeight()).toBeUndefined();
+      const [cell] = (row as TableRowNode)
+        .getChildren()
+        .filter($isTableCellNode);
+      expect(cell.getColSpan()).toBe(1);
+      expect(cell.getRowSpan()).toBe(1);
+      expect(cell.__headerState).toBe(TableCellHeaderStates.NO_STATUS);
+    });
+  });
+});
+
+describe('pipe table external transformer', () => {
+  it('pads merged cells so exported rows stay rectangular', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+
+      const firstRow = $createTableRowNode();
+      const wideCell = $createCell('wide');
+      wideCell.setColSpan(2);
+      firstRow.append(wideCell, $createCell('c'));
+
+      const secondRow = $createTableRowNode();
+      secondRow.append($createCell('x'), $createCell('y'), $createCell('z'));
+
+      table.append(firstRow, secondRow);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    const lines = markdown.split('\n');
+    expect(lines[0]).toBe('| wide |  | c |');
+    expect(lines[1]).toBe('| x | y | z |');
+  });
+});

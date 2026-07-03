@@ -7,6 +7,7 @@ import {
   type Transformer,
 } from '@lexical/markdown';
 import {
+  $computeTableMapSkipCellCheck,
   $createTableNode,
   $createTableRowNode,
   $isTableCellNode,
@@ -28,11 +29,7 @@ import {
   I_DOCUMENT_MENTION,
   I_USER_MENTION,
 } from './mentions';
-import {
-  BR_TAG_TO_LINE_BREAK,
-  HTML_ENTITY_TRANSFORMERS,
-  xmlMatcher,
-} from './transformers';
+import { BR_TAG_TO_LINE_BREAK, HTML_ENTITY_TRANSFORMERS } from './transformers';
 
 // Internal Table Node
 
@@ -40,9 +37,53 @@ const TAG_TABLE = 'm-table';
 const TAG_TABLE_ROW = 'm-table-row';
 const TAG_TABLE_CELL = 'm-table-cell';
 
-const REG_EXP_XML_TABLE = xmlMatcher(TAG_TABLE, '');
-const REG_EXP_XML_TABLE_ROW = xmlMatcher(TAG_TABLE_ROW, 'gs');
-const REG_EXP_XML_TABLE_CELL = xmlMatcher(TAG_TABLE_CELL, 'gs');
+// Like `xmlMatcher`, but tolerates optional `key="value"` attributes on the
+// opening tag so attribute-less tags from older documents still match.
+// Group 1 is the raw attribute string, group 2 the tag content.
+function xmlMatcherWithAttrs(tag: string, flags?: string) {
+  return new RegExp(
+    `<${tag}((?:\\s+[\\w-]+="[^"]*")*)\\s*>(.*?)</${tag}>`,
+    flags ?? 's'
+  );
+}
+
+function serializeXmlAttrs(
+  attrs: Record<string, string | number | undefined>
+): string {
+  return Object.entries(attrs)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => ` ${key}="${value}"`)
+    .join('');
+}
+
+function parseXmlAttrs(raw: string | undefined): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of (raw ?? '').matchAll(/([\w-]+)="([^"]*)"/g)) {
+    attrs[match[1]] = match[2];
+  }
+  return attrs;
+}
+
+// Upstream's exact definition from @lexical/table's LexicalTableCellNode.ts;
+// the package doesn't re-export the type from its root (not even on main).
+type TableCellHeaderState =
+  (typeof TableCellHeaderStates)[keyof typeof TableCellHeaderStates];
+
+const HEADER_ATTR_BY_STATE: Record<number, string> = {
+  [TableCellHeaderStates.ROW]: 'row',
+  [TableCellHeaderStates.COLUMN]: 'col',
+  [TableCellHeaderStates.BOTH]: 'both',
+};
+
+const HEADER_STATE_BY_ATTR: Record<string, TableCellHeaderState> = {
+  row: TableCellHeaderStates.ROW,
+  col: TableCellHeaderStates.COLUMN,
+  both: TableCellHeaderStates.BOTH,
+};
+
+const REG_EXP_XML_TABLE = xmlMatcherWithAttrs(TAG_TABLE, '');
+const REG_EXP_XML_TABLE_ROW = xmlMatcherWithAttrs(TAG_TABLE_ROW, 'gs');
+const REG_EXP_XML_TABLE_CELL = xmlMatcherWithAttrs(TAG_TABLE_CELL, 'gs');
 
 const internalTransformersWithinTables: Transformer[] = [
   CHECK_LIST,
@@ -79,17 +120,26 @@ export const I_TABLE_NODE: ElementTransformer = {
   export: (node) => {
     if (!(node instanceof TableNode)) return null;
 
-    let output = `<${TAG_TABLE}>`;
+    const colWidths = node.getColWidths();
+    let output = `<${TAG_TABLE}${serializeXmlAttrs({
+      'col-widths': colWidths?.map((width) => Math.round(width)).join(','),
+    })}>`;
     const rows = node.getChildren();
 
     for (const row of rows) {
       if (row instanceof TableRowNode) {
-        output += `<${TAG_TABLE_ROW}>`;
+        output += `<${TAG_TABLE_ROW}${serializeXmlAttrs({
+          height: row.getHeight(),
+        })}>`;
         const cells = row.getChildren();
 
         for (const cell of cells) {
           if (cell instanceof TableCellNode) {
-            output += `<${TAG_TABLE_CELL}>`;
+            output += `<${TAG_TABLE_CELL}${serializeXmlAttrs({
+              colspan: cell.getColSpan() > 1 ? cell.getColSpan() : undefined,
+              rowspan: cell.getRowSpan() > 1 ? cell.getRowSpan() : undefined,
+              header: HEADER_ATTR_BY_STATE[cell.__headerState],
+            })}>`;
             output += $convertToMarkdownString(
               internalTransformersWithinTables,
               cell
@@ -109,17 +159,40 @@ export const I_TABLE_NODE: ElementTransformer = {
   replace: (node, _children, match, _isImport) => {
     try {
       const xmlContent = match[0];
+      const tableAttrs = parseXmlAttrs(match[1]);
       const tableNode = new TableNode();
       const rowMatches = xmlContent.matchAll(REG_EXP_XML_TABLE_ROW);
 
       for (const rowMatch of rowMatches) {
-        const rowContent = rowMatch[1];
+        const rowAttrs = parseXmlAttrs(rowMatch[1]);
+        const rowContent = rowMatch[2];
         const rowNode = new TableRowNode();
+
+        const height = Number(rowAttrs.height);
+        if (Number.isFinite(height) && height > 0) {
+          rowNode.setHeight(height);
+        }
+
         const cellMatches = rowContent.matchAll(REG_EXP_XML_TABLE_CELL);
 
         for (const cellMatch of cellMatches) {
-          const cellContent = cellMatch[1];
+          const cellAttrs = parseXmlAttrs(cellMatch[1]);
+          const cellContent = cellMatch[2];
           const cellNode = new TableCellNode();
+
+          const colSpan = Number(cellAttrs.colspan);
+          if (Number.isInteger(colSpan) && colSpan > 1) {
+            cellNode.setColSpan(colSpan);
+          }
+          const rowSpan = Number(cellAttrs.rowspan);
+          if (Number.isInteger(rowSpan) && rowSpan > 1) {
+            cellNode.setRowSpan(rowSpan);
+          }
+          const headerState = HEADER_STATE_BY_ATTR[cellAttrs.header];
+          if (headerState !== undefined) {
+            cellNode.setHeaderStyles(headerState);
+          }
+
           $convertFromMarkdownString(
             cellContent.replace(/\\n/g, '\n').replaceAll('<br>', ''),
             internalTransformersWithinTables,
@@ -129,6 +202,16 @@ export const I_TABLE_NODE: ElementTransformer = {
         }
 
         tableNode.append(rowNode);
+      }
+
+      const colWidths = tableAttrs['col-widths']
+        ?.split(',')
+        .map((width) => Number(width));
+      if (
+        colWidths?.length &&
+        colWidths.every((width) => Number.isFinite(width) && width > 0)
+      ) {
+        tableNode.setColWidths(colWidths);
       }
 
       node.replace(tableNode);
@@ -189,27 +272,37 @@ export const E_TABLE_NODE: ElementTransformer = {
       return null;
     }
 
-    const output: string[] = [];
-    for (const row of node.getChildren()) {
-      if (!$isTableRowNode(row)) {
-        continue;
-      }
+    // Walk the computed grid rather than the row children so merged cells
+    // (colspan/rowspan) pad the slots they cover and rows stay rectangular —
+    // pipe tables cannot express merges.
+    const [gridMap] = $computeTableMapSkipCellCheck(node, null, null);
 
-      const rowOutput = [];
+    const output: string[] = [];
+    for (let row = 0; row < gridMap.length; row++) {
+      const rowOutput: string[] = [];
       let isHeaderRow = false;
-      for (const cell of row.getChildren()) {
-        if ($isTableCellNode(cell)) {
+
+      for (let column = 0; column < gridMap[row].length; column++) {
+        const mapCell = gridMap[row][column];
+        if (!mapCell?.cell) {
+          rowOutput.push('');
+          continue;
+        }
+
+        if (mapCell.startRow === row && mapCell.startColumn === column) {
           const cellContent = $convertToMarkdownString(
             externalTransformersWithinTables,
-            cell
+            mapCell.cell
           )
             .replace(/\n/g, '\\n')
             .trim();
-
           rowOutput.push(cellContent);
-          if (cell.__headerState === TableCellHeaderStates.ROW) {
-            isHeaderRow = true;
-          }
+        } else {
+          rowOutput.push('');
+        }
+
+        if (mapCell.cell.__headerState === TableCellHeaderStates.ROW) {
+          isHeaderRow = true;
         }
       }
 
