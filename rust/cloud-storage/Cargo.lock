@@ -12951,6 +12951,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

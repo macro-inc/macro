@@ -50,6 +50,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }

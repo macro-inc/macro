@@ -65,6 +65,7 @@ async fn recall_at_k_baseline(pool: PgPool) {
             vector_candidate_limit: 500,
             duplicate_limit: 500,
             min_vector_similarity: f64::NEG_INFINITY,
+            min_rerank_score: f64::NEG_INFINITY,
             ..TaskDedupConfig::default()
         },
     );
