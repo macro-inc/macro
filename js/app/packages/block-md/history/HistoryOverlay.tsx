@@ -50,12 +50,6 @@ export function HistoryOverlay(props: {
     return session ? userColor(session.userId) : undefined;
   });
 
-  const versionId = createMemo(() => {
-    const ms = targetMs();
-    if (ms === undefined) return null;
-    return history.versionIdAt(ms);
-  });
-
   // Hovering a changed run shows who changed it, reusing the scrubber's tag. The
   // author (a user id) lives on the DiffTextNode's DOM as data-diff-author, so one
   // delegated handler covers every run — no per-node component bridging Lexical.

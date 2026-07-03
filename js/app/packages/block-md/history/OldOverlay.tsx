@@ -1,10 +1,10 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
 import { useBlockId } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { storageServiceClient } from '@service-storage/client';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import { storageServiceClient } from '@service-storage/client';
 import { Button, Hotkey } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useHistory } from './HistoryContext';

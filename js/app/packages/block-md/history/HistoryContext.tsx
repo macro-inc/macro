@@ -1,3 +1,4 @@
+import { tryMacroId, useDisplayName } from '@core/user';
 import {
   buildDiffState,
   buildWhoMap,
@@ -7,7 +8,6 @@ import {
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';
-import { tryMacroId, useDisplayName } from '@core/user';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -87,28 +87,6 @@ export function HistoryProvider(props: {
     setIsLive(false);
     setIsOpen(true);
     setDiffSession(session);
-
-    // DEBUG: dump this session's before/after markdown and computed diffs.
-    const index = historyIndex();
-    const before = index?.checkoutAt(session.startMs - 1) ?? null;
-    const after = index?.checkoutAt(session.endMs) ?? null;
-    const beforeMd = before ? serializedEditorStateToMarkdown(before) : null;
-    const afterMd = after ? serializedEditorStateToMarkdown(after) : null;
-    console.group(
-      `[history] session ${session.userId} ${new Date(
-        session.startMs
-      ).toISOString()} → ${new Date(session.endMs).toISOString()} (${
-        session.count
-      } changes)`
-    );
-    console.log('before markdown:\n', beforeMd);
-    console.log('after markdown:\n', afterMd);
-    console.log('markdown changed:', beforeMd !== afterMd);
-    console.log(
-      'diffs:',
-      before && after ? diffStates(before, after) : '(missing state)'
-    );
-    console.groupEnd();
   };
 
   // Download the full snapshot once and drive both the session timeline and

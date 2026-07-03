@@ -66,7 +66,7 @@ export class DiffTextNode extends TextNode {
   }
 
   updateDOM(prev: DiffTextNode, dom: HTMLElement, config: EditorConfig) {
-    const updated = super.updateDOM(prev, dom, config);
+    const updated = super.updateDOM(prev as this, dom, config);
     return (
       updated ||
       prev.__diffStatus !== this.__diffStatus ||
