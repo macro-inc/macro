@@ -414,6 +414,15 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
 
+/**
+ * Normalized wasm cache for the soup GraphQL client (browser only for now;
+ * Tauri gets a native host later). See
+ * js/app/docs/graphql-normalized-cache-plan.md.
+ */
+export const ENABLE_GRAPHQL_CACHE_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_GRAPHQL_CACHE'
+);
+
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'
