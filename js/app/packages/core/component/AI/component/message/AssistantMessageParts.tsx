@@ -314,6 +314,12 @@ export function AssistantMessageParts(props: {
                 <ChatMessageMarkdown
                   text={text()}
                   generating={() => outer.isStreaming}
+                  setStateRef={
+                    outer.isStreaming &&
+                    props.item().index === outer.parts.length - 1
+                      ? chat.setStreamTailState
+                      : undefined
+                  }
                 />
               </Show>
             );

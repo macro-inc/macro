@@ -882,6 +882,10 @@ export function StaticMarkdown(props: {
   parentEditor?: LexicalEditor;
   theme?: EditorThemeClasses;
   setEditorRef?: (editor: LexicalEditor) => void;
+  /* Accessor for the parsed state this instance renders. Unlike setEditorRef
+     (which may hand back the shared context editor), the state snapshot is
+     always this instance's own parse of its markdown. */
+  setStateRef?: (state: Accessor<EditorState | null>) => void;
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
@@ -893,6 +897,7 @@ export function StaticMarkdown(props: {
     lazy: parentLazy,
   } = useContext(context);
   let [editorState, setEditorState] = createSignal<EditorState | null>(null);
+  if (props.setStateRef) props.setStateRef(editorState);
 
   if (contextEditor === null) {
     console.warn(

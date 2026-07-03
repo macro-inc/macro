@@ -1,6 +1,7 @@
 // import '@core/component/AI/css/prism-theme.css';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import type { EditorState } from 'lexical';
 import type { Accessor } from 'solid-js';
 
 function sliceUnclosedBrackets(text: string): string {
@@ -21,6 +22,8 @@ export function ChatMessageMarkdown(props: {
   text: string;
   generating: Accessor<boolean>;
   rootRef?: (ref: HTMLDivElement) => void;
+  /* receives this message's parsed editor state accessor */
+  setStateRef?: (state: Accessor<EditorState | null>) => void;
 }) {
   const text = () => {
     if (props.generating()) {
@@ -36,6 +39,7 @@ export function ChatMessageMarkdown(props: {
       markdown={text()}
       theme={aiChatTheme}
       rootRef={props.rootRef}
+      setStateRef={props.setStateRef}
       target="internal"
     />
   );

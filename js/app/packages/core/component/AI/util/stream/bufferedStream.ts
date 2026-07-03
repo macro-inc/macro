@@ -9,6 +9,8 @@ import {
 } from '@service-connection/stream';
 import { createEffect, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
+import { createMentionBufferPlugin } from './mentionPlugin';
+import type { StreamPlugin } from './types';
 
 /* Target latency between character */
 const TARGET_LATENCY_MS = 6;
@@ -17,6 +19,12 @@ const TARGET_LATENCY_MS = 6;
   the source stream. This can happen on reconnects
 */
 const CATCHUP_LATENCY_CHUNKS = 2;
+/*
+  A plugin may hold output back while it decides how to render it. If the
+  source goes quiet (no new data and no stream end) before the plugin
+  resolves, force a flush so held content is never stuck invisibly.
+*/
+const PLUGIN_HOLD_FLUSH_MS = 2_000;
 
 /*
  Communicates what part of source stream has been consumed
@@ -46,6 +54,10 @@ type BufferedStream = {
   source: ChatMessageStream;
   controller: ChatStreamController;
   dispatch: (event: BufferEvent) => void;
+  /* emit units to the output, routed through the plugin chain */
+  emit: (parts: ChatStream[]) => void;
+  /* flush every plugin, then complete the output stream */
+  finish: () => void;
 };
 
 type BufferState =
@@ -253,7 +265,7 @@ function createSmoothConsumer(
     if (!part) {
       stream.dispatch({ event: 'consumer-done' });
     } else {
-      stream.controller.setData((p) => [...p, part]);
+      stream.emit([part]);
       timeout = setTimeout(takeOne, TARGET_LATENCY_MS);
     }
   }
@@ -281,7 +293,7 @@ function createCatchUpConsumer(
 ): ConsumerHandle {
   const consumed = prev ? prev : createConsumed();
   const rest = consumed.takeRemaining(stream);
-  stream.controller.setData((p) => [...p, ...rest]);
+  stream.emit(rest);
   stream.dispatch({ event: 'catch-up-done' });
 
   /* Nothing to tear down; just surface the advanced marker. */
@@ -331,8 +343,8 @@ function transition(
         /* flush anything buffered past the consumed marker before completing */
         const consumed = state.consumed ?? createConsumed();
         const rest = consumed.takeRemaining(state.stream);
-        state.stream.controller.setData((p) => [...p, ...rest]);
-        state.stream.controller.setDone();
+        state.stream.emit(rest);
+        state.stream.finish();
         return { type: 'done', stream: state.stream };
       })
       /* ignore waiting [consumer-done, catch-up-done, fall-behind-detected] */
@@ -343,7 +355,7 @@ function transition(
         ([state, _]) => {
           if (state.stream.source.isDone()) {
             state.consumer.cleanup();
-            state.stream.controller.setDone();
+            state.stream.finish();
             return { type: 'done', stream: state.stream };
           } else {
             const consumed = state.consumer.cleanup();
@@ -367,7 +379,7 @@ function transition(
         ([state, _e]) => {
           if (state.stream.source.isDone()) {
             state.consumer.cleanup();
-            state.stream.controller.setDone();
+            state.stream.finish();
             return { type: 'done', stream: state.stream };
           } else {
             const consumed = state.consumer.cleanup();
@@ -407,24 +419,77 @@ function createEventQueue<E>(handler: (event: E) => void) {
 }
 
 /**
+ * Flushes every plugin in chain order: what an earlier plugin releases still
+ * passes through the plugins after it before the later ones flush themselves.
+ */
+function flushPlugins(plugins: StreamPlugin[]): ChatStream[] {
+  const out: ChatStream[] = [];
+  plugins.forEach((plugin, i) => {
+    let parts = plugin.flush();
+    for (const later of plugins.slice(i + 1)) {
+      parts = parts.flatMap((part) => later.transform(part));
+    }
+    out.push(...parts);
+  });
+  return out;
+}
+
+/**
  * Wraps a raw chat stream in a smoothing buffer. Rather than dumping tokens as
  * they arrive, it replays them character-by-character at a steady cadence for a
  * typewriter feel, while still snapping forward to the live position whenever it
- * falls too far behind (e.g. on reconnect). The returned stream emits the same
- * content in the same order as the source — only the chunking and timing differ.
+ * falls too far behind (e.g. on reconnect). Every outgoing unit is routed
+ * through the plugin chain (by default the mention buffer, which keeps partial
+ * `<m-document-mention>` tags from rendering as raw text); with no plugins the
+ * returned stream emits the same content in the same order as the source —
+ * only the chunking and timing differ.
  *
  * Solid is used purely to observe the source (`data`/`isDone`); all sequencing
  * runs through the FIFO event queue feeding the `transition` state machine.
  */
-export function bufferedStream(source: ChatMessageStream): ChatMessageStream {
+export function bufferedStream(
+  source: ChatMessageStream,
+  plugins: StreamPlugin[] = [createMentionBufferPlugin()]
+): ChatMessageStream {
   const controller = createStreamController<'chat'>(source.id);
+
+  let holdFlushTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  function push(parts: ChatStream[]) {
+    if (parts.length === 0) return;
+    controller.setData((p) => [...p, ...parts]);
+  }
+
+  function emit(parts: ChatStream[]) {
+    push(
+      plugins.reduce<ChatStream[]>(
+        (acc, plugin) => acc.flatMap((part) => plugin.transform(part)),
+        parts
+      )
+    );
+    /* re-arm the stalled-hold flush: any emission counts as source activity */
+    if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
+    holdFlushTimeout = undefined;
+    if (plugins.some((plugin) => plugin.isHolding())) {
+      holdFlushTimeout = setTimeout(
+        () => push(flushPlugins(plugins)),
+        PLUGIN_HOLD_FLUSH_MS
+      );
+    }
+  }
+
+  function finish() {
+    if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
+    push(flushPlugins(plugins));
+    controller.setDone();
+  }
 
   let state: BufferState;
   const dispatch = createEventQueue<BufferEvent>((event) => {
     state = transition(state, event);
   });
 
-  const stream: BufferedStream = { source, controller, dispatch };
+  const stream: BufferedStream = { source, controller, dispatch, emit, finish };
   state = { type: 'waiting', stream };
 
   /* Solid only bridges the reactive inputs into the queue */
