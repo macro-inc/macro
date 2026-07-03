@@ -132,6 +132,18 @@ export function HistoryScrubber(props: { compact?: boolean }) {
     )
   );
 
+  // Exiting history drops any scrub/marquee zoom so the next open starts from
+  // the full range. A null view falls back to the full window in the scales.
+  createEffect(
+    on(
+      history.isOpen,
+      (open) => {
+        if (!open) setView(null);
+      },
+      { defer: true }
+    )
+  );
+
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     const { start, end } = visibleWindow();
