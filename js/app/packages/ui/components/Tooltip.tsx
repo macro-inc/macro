@@ -6,6 +6,7 @@ import type { ParentProps } from 'solid-js';
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { Hotkey } from '../../ui/components/Hotkey';
 import { cn } from '../utils/classname';
+import { tooltipsEnabled } from '../signals/signals';
 
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
@@ -102,7 +103,7 @@ export function Tooltip(props: TooltipProps) {
       closeDelay={0}
       flip={true}
       gutter={4}
-      disabled={props.disabled}
+      disabled={props.disabled || !tooltipsEnabled()}
     >
       <KobalteTooltip.Trigger
         ref={(ref) => {
