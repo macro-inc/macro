@@ -1,0 +1,433 @@
+diff --git a/dist-js/index.cjs b/dist-js/index.cjs
+index 65aaf61d22e6657af116e590041a945d468d8eae..e9e567f89a42f99327c2e6a9f8f5ab473e495686 100644
+--- a/dist-js/index.cjs
++++ b/dist-js/index.cjs
+@@ -1,66 +1,147 @@
+-'use strict';
++// Built from https://github.com/seanaye/plugins-workspace @ 65794e62 (seanaye/feat/ws-replay-buffer)
++var __defProp = Object.defineProperty;
++var __getOwnPropNames = Object.getOwnPropertyNames;
++var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
++var __hasOwnProp = Object.prototype.hasOwnProperty;
++function __accessProp(key) {
++  return this[key];
++}
++var __toCommonJS = (from) => {
++  var entry = (__moduleCache ??= new WeakMap).get(from), desc;
++  if (entry)
++    return entry;
++  entry = __defProp({}, "__esModule", { value: true });
++  if (from && typeof from === "object" || typeof from === "function") {
++    for (var key of __getOwnPropNames(from))
++      if (!__hasOwnProp.call(entry, key))
++        __defProp(entry, key, {
++          get: __accessProp.bind(from, key),
++          enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
++        });
++  }
++  __moduleCache.set(from, entry);
++  return entry;
++};
++var __moduleCache;
++var __returnValue = (v) => v;
++function __exportSetter(name, newValue) {
++  this[name] = __returnValue.bind(null, newValue);
++}
++var __export = (target, all) => {
++  for (var name in all)
++    __defProp(target, name, {
++      get: all[name],
++      enumerable: true,
++      configurable: true,
++      set: __exportSetter.bind(all, name)
++    });
++};
+ 
+-var core = require('@tauri-apps/api/core');
++// guest-js/index.ts
++var exports_guest_js = {};
++__export(exports_guest_js, {
++  default: () => WebSocket
++});
++module.exports = __toCommonJS(exports_guest_js);
++var import_core = require("@tauri-apps/api/core");
+ 
+-// Copyright 2019-2023 Tauri Programme within The Commons Conservancy
+-// SPDX-License-Identifier: Apache-2.0
+-// SPDX-License-Identifier: MIT
+ class WebSocket {
+-    constructor(id, listeners) {
+-        this.id = id;
+-        this.listeners = listeners;
+-    }
+-    static async connect(url, config) {
+-        const listeners = new Set();
+-        const onMessage = new core.Channel();
+-        onMessage.onmessage = (message) => {
+-            listeners.forEach((l) => {
+-                l(message);
+-            });
+-        };
+-        if (config?.headers) {
+-            config.headers = Array.from(new Headers(config.headers).entries());
++  id;
++  listeners;
++  state;
++  deliver;
++  constructor(id, listeners, state, deliver) {
++    this.id = id;
++    this.listeners = listeners;
++    this.state = state;
++    this.deliver = deliver;
++  }
++  static async connect(url, config) {
++    const listeners = new Set;
++    const state = { lastSeq: 0, recovering: false, queued: [] };
++    const deliver = (envelope) => {
++      if (envelope.seq > 0) {
++        if (envelope.seq <= state.lastSeq) {
++          return;
+         }
+-        return await core.invoke('plugin:websocket|connect', {
+-            url,
+-            onMessage,
+-            config
+-        }).then((id) => new WebSocket(id, listeners));
++        state.lastSeq = envelope.seq;
++      }
++      listeners.forEach((l) => {
++        l(envelope.message);
++      });
++    };
++    const onMessage = new import_core.Channel;
++    onMessage.onmessage = (envelope) => {
++      if (state.recovering) {
++        state.queued.push(envelope);
++      } else {
++        deliver(envelope);
++      }
++    };
++    if (config?.headers) {
++      config.headers = Array.from(new Headers(config.headers).entries());
+     }
+-    addListener(cb) {
+-        this.listeners.add(cb);
+-        return () => {
+-            this.listeners.delete(cb);
+-        };
++    return await import_core.invoke("plugin:websocket|connect", {
++      url,
++      onMessage,
++      config
++    }).then((id) => new WebSocket(id, listeners, state, deliver));
++  }
++  async recover() {
++    if (this.state.recovering) {
++      return false;
+     }
+-    async send(message) {
+-        let m;
+-        if (typeof message === 'string') {
+-            m = { type: 'Text', data: message };
+-        }
+-        else if (typeof message === 'object' && 'type' in message) {
+-            m = message;
+-        }
+-        else if (Array.isArray(message)) {
+-            m = { type: 'Binary', data: message };
+-        }
+-        else {
+-            throw new Error('invalid `message` type, expected a `{ type: string, data: any }` object, a string or a numeric array');
+-        }
+-        await core.invoke('plugin:websocket|send', {
+-            id: this.id,
+-            message: m
+-        });
++    this.state.recovering = true;
++    try {
++      const res = await import_core.invoke("plugin:websocket|recover", {
++        id: this.id,
++        after: this.state.lastSeq
++      });
++      for (const envelope of res.messages) {
++        this.deliver(envelope);
++      }
++      return res.gap;
++    } finally {
++      const queued = this.state.queued;
++      this.state.queued = [];
++      this.state.recovering = false;
++      for (const envelope of queued) {
++        this.deliver(envelope);
++      }
+     }
+-    async disconnect() {
+-        await this.send({
+-            type: 'Close',
+-            data: {
+-                code: 1000,
+-                reason: 'Disconnected by client'
+-            }
+-        });
++  }
++  addListener(cb) {
++    this.listeners.add(cb);
++    return () => {
++      this.listeners.delete(cb);
++    };
++  }
++  async send(message) {
++    let m;
++    if (typeof message === "string") {
++      m = { type: "Text", data: message };
++    } else if (typeof message === "object" && "type" in message) {
++      m = message;
++    } else if (Array.isArray(message)) {
++      m = { type: "Binary", data: message };
++    } else {
++      throw new Error("invalid `message` type, expected a `{ type: string, data: any }` object, a string or a numeric array");
+     }
++    await import_core.invoke("plugin:websocket|send", {
++      id: this.id,
++      message: m
++    });
++  }
++  async disconnect() {
++    await this.send({
++      type: "Close",
++      data: {
++        code: 1000,
++        reason: "Disconnected by client"
++      }
++    });
++  }
+ }
+ 
+-module.exports = WebSocket;
++// match rollup exports:"default" interop of the upstream package
++module.exports = module.exports.default;
+diff --git a/dist-js/index.d.ts b/dist-js/index.d.ts
+index 3a095f09384f7002520c6be934fe13d16b9bda26..cb5defc9d8ec83d40520bad9e5657b637df7041c 100644
+--- a/dist-js/index.d.ts
++++ b/dist-js/index.d.ts
+@@ -1,3 +1,4 @@
++// Built from https://github.com/seanaye/plugins-workspace @ 65794e62 (seanaye/feat/ws-replay-buffer)
+ export interface ConnectionConfig {
+     /**
+      * Read buffer capacity. The default value is 128 KiB.
+@@ -31,6 +32,11 @@ export interface ConnectionConfig {
+      * Additional connect request headers.
+      */
+     headers?: HeadersInit;
++    /**
++     * Number of incoming messages retained on the Rust side for replay via
++     * {@link WebSocket.recover}. Defaults to 256. Set to 0 to disable buffering.
++     */
++    replayBufferSize?: number;
+ }
+ export interface MessageKind<T, D> {
+     type: T;
+@@ -41,12 +47,37 @@ export interface CloseFrame {
+     reason: string;
+ }
+ export type Message = MessageKind<'Text', string> | MessageKind<'Binary', number[]> | MessageKind<'Ping', number[]> | MessageKind<'Pong', number[]> | MessageKind<'Close', CloseFrame | null>;
++interface ReplayEnvelope {
++    seq: number;
++    message: Message;
++}
++interface SocketState {
++    lastSeq: number;
++    recovering: boolean;
++    queued: ReplayEnvelope[];
++}
+ export default class WebSocket {
+     id: number;
+     private readonly listeners;
+-    constructor(id: number, listeners: Set<(arg: Message) => void>);
++    private readonly state;
++    private readonly deliver;
++    constructor(id: number, listeners: Set<(arg: Message) => void>, state: SocketState, deliver: (envelope: ReplayEnvelope) => void);
+     static connect(url: string, config?: ConnectionConfig): Promise<WebSocket>;
++    /**
++     * Requests redelivery of messages that were received by the Rust side but
++     * may not have reached this webview, e.g. while it was suspended in the
++     * background. Recovered messages are dispatched to the registered listeners
++     * in order; messages that were already delivered are skipped.
++     *
++     * Call this when the document becomes visible again
++     * (`document.visibilitychange`).
++     *
++     * @returns `true` if messages were missed but already evicted from the
++     * replay buffer, meaning the application must resync by other means.
++     */
++    recover(): Promise<boolean>;
+     addListener(cb: (arg: Message) => void): () => void;
+     send(message: Message | string | number[]): Promise<void>;
+     disconnect(): Promise<void>;
+ }
++export {};
+diff --git a/dist-js/index.js b/dist-js/index.js
+index b2144fa329a2ab0c9a3a6b9742afb8d9a0bc1527..4f4b56dd60a777cf122cf67c3938334fcb41c0d1 100644
+--- a/dist-js/index.js
++++ b/dist-js/index.js
+@@ -1,64 +1,104 @@
+-import { Channel, invoke } from '@tauri-apps/api/core';
++// Built from https://github.com/seanaye/plugins-workspace @ 65794e62 (seanaye/feat/ws-replay-buffer)
++// guest-js/index.ts
++import { invoke, Channel } from "@tauri-apps/api/core";
+ 
+-// Copyright 2019-2023 Tauri Programme within The Commons Conservancy
+-// SPDX-License-Identifier: Apache-2.0
+-// SPDX-License-Identifier: MIT
+ class WebSocket {
+-    constructor(id, listeners) {
+-        this.id = id;
+-        this.listeners = listeners;
+-    }
+-    static async connect(url, config) {
+-        const listeners = new Set();
+-        const onMessage = new Channel();
+-        onMessage.onmessage = (message) => {
+-            listeners.forEach((l) => {
+-                l(message);
+-            });
+-        };
+-        if (config?.headers) {
+-            config.headers = Array.from(new Headers(config.headers).entries());
++  id;
++  listeners;
++  state;
++  deliver;
++  constructor(id, listeners, state, deliver) {
++    this.id = id;
++    this.listeners = listeners;
++    this.state = state;
++    this.deliver = deliver;
++  }
++  static async connect(url, config) {
++    const listeners = new Set;
++    const state = { lastSeq: 0, recovering: false, queued: [] };
++    const deliver = (envelope) => {
++      if (envelope.seq > 0) {
++        if (envelope.seq <= state.lastSeq) {
++          return;
+         }
+-        return await invoke('plugin:websocket|connect', {
+-            url,
+-            onMessage,
+-            config
+-        }).then((id) => new WebSocket(id, listeners));
++        state.lastSeq = envelope.seq;
++      }
++      listeners.forEach((l) => {
++        l(envelope.message);
++      });
++    };
++    const onMessage = new Channel;
++    onMessage.onmessage = (envelope) => {
++      if (state.recovering) {
++        state.queued.push(envelope);
++      } else {
++        deliver(envelope);
++      }
++    };
++    if (config?.headers) {
++      config.headers = Array.from(new Headers(config.headers).entries());
+     }
+-    addListener(cb) {
+-        this.listeners.add(cb);
+-        return () => {
+-            this.listeners.delete(cb);
+-        };
++    return await invoke("plugin:websocket|connect", {
++      url,
++      onMessage,
++      config
++    }).then((id) => new WebSocket(id, listeners, state, deliver));
++  }
++  async recover() {
++    if (this.state.recovering) {
++      return false;
+     }
+-    async send(message) {
+-        let m;
+-        if (typeof message === 'string') {
+-            m = { type: 'Text', data: message };
+-        }
+-        else if (typeof message === 'object' && 'type' in message) {
+-            m = message;
+-        }
+-        else if (Array.isArray(message)) {
+-            m = { type: 'Binary', data: message };
+-        }
+-        else {
+-            throw new Error('invalid `message` type, expected a `{ type: string, data: any }` object, a string or a numeric array');
+-        }
+-        await invoke('plugin:websocket|send', {
+-            id: this.id,
+-            message: m
+-        });
++    this.state.recovering = true;
++    try {
++      const res = await invoke("plugin:websocket|recover", {
++        id: this.id,
++        after: this.state.lastSeq
++      });
++      for (const envelope of res.messages) {
++        this.deliver(envelope);
++      }
++      return res.gap;
++    } finally {
++      const queued = this.state.queued;
++      this.state.queued = [];
++      this.state.recovering = false;
++      for (const envelope of queued) {
++        this.deliver(envelope);
++      }
+     }
+-    async disconnect() {
+-        await this.send({
+-            type: 'Close',
+-            data: {
+-                code: 1000,
+-                reason: 'Disconnected by client'
+-            }
+-        });
++  }
++  addListener(cb) {
++    this.listeners.add(cb);
++    return () => {
++      this.listeners.delete(cb);
++    };
++  }
++  async send(message) {
++    let m;
++    if (typeof message === "string") {
++      m = { type: "Text", data: message };
++    } else if (typeof message === "object" && "type" in message) {
++      m = message;
++    } else if (Array.isArray(message)) {
++      m = { type: "Binary", data: message };
++    } else {
++      throw new Error("invalid `message` type, expected a `{ type: string, data: any }` object, a string or a numeric array");
+     }
++    await invoke("plugin:websocket|send", {
++      id: this.id,
++      message: m
++    });
++  }
++  async disconnect() {
++    await this.send({
++      type: "Close",
++      data: {
++        code: 1000,
++        reason: "Disconnected by client"
++      }
++    });
++  }
+ }
+-
+-export { WebSocket as default };
++export {
++  WebSocket as default
++};

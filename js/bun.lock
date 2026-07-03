@@ -386,12 +386,13 @@
     "esbuild",
   ],
   "patchedDependencies": {
+    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
+    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
-    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
+    "@tauri-apps/plugin-websocket@2.4.2": "app/patches/@tauri-apps%2Fplugin-websocket@2.4.2.patch",
     "@lexical/markdown@0.45.0": "app/patches/@lexical%2Fmarkdown@0.45.0.patch",
     "@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
-    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
     "@lexical/clipboard": "0.45.0",
