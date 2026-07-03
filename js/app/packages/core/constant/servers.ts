@@ -41,10 +41,40 @@ const serverHostRemote = {
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
 
+// Single-origin local backend: when the xtask orchestrator's reverse proxy is
+// in use it sets VITE_LOCAL_BACKEND_ORIGIN to the proxy origin, and the whole
+// app talks to it via path prefixes instead of many direct host ports. Unset =>
+// direct-port behavior (unchanged). Declared BEFORE SERVER_HOSTS so it is
+// initialized before SERVER_HOSTS evaluates selectLocalServers() at module load
+// (these are consts in a temporal dead zone; the functions below are hoisted).
+const proxyOrigin: string | undefined = import.meta.env
+  .VITE_LOCAL_BACKEND_ORIGIN;
+const wsProxyOrigin = proxyOrigin?.replace(/^http/, 'ws');
+
 export const SERVER_HOSTS: Servers =
   import.meta.env.MODE === 'development'
     ? selectLocalServers()
     : serverHostRemote;
+
+function proxyServers(): Servers | undefined {
+  if (!proxyOrigin || !wsProxyOrigin) return undefined;
+  return {
+    'auth-service': `${proxyOrigin}/auth`,
+    'auth-logout': serverHostLocal['auth-logout'],
+    'pdf-service': serverHostLocal['pdf-service'], // no local container
+    'document-storage-service': `${proxyOrigin}/dss`,
+    'websocket-service': `${wsProxyOrigin}/websocket`,
+    'cognition-service': `${proxyOrigin}/cognition`,
+    'connection-gateway': `${wsProxyOrigin}/connection-gateway`,
+    'notification-service': `${proxyOrigin}/notification`,
+    'static-file': `${proxyOrigin}/static-file`,
+    'unfurl-service': `${proxyOrigin}/unfurl`,
+    contacts: `${proxyOrigin}/contacts`,
+    'email-service': `${proxyOrigin}/email`,
+    'image-proxy-service': `${proxyOrigin}/image-proxy`,
+    'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+  };
+}
 
 function selectLocalServers(): Servers {
   const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
@@ -54,7 +84,7 @@ function selectLocalServers(): Servers {
 
   // Keyword to make running everything locally easier
   if (selectedLocalServers === 'ALL') {
-    return serverHostLocal;
+    return proxyServers() ?? serverHostLocal;
   }
 
   function assertValidName(name: string): name is keyof Servers {
@@ -118,6 +148,10 @@ function selectSyncServiceHost():
     selectedLocalServers === 'ALL' ||
     selectedLocalServers?.includes('sync-service')
   ) {
+    // Route sync through the single-origin proxy when it is in use.
+    if (proxyOrigin && wsProxyOrigin) {
+      return { worker: `${proxyOrigin}/sync`, ws: `${wsProxyOrigin}/sync` };
+    }
     return syncServiceHostLocal;
   }
   return syncServiceHostRemote;

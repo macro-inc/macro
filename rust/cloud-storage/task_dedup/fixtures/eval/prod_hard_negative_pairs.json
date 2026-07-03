@@ -1,0 +1,320 @@
+{
+  "tasks": [],
+  "pairs": [
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-9547-700b-b038-add6fbec437b",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-93a6-721d-92ae-f063b71c8c21",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9547-700b-b038-add6fbec437b",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-95e3-782c-9c39-4ed2a158d118",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-946c-7621-93ed-a866f835e6f6",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "b": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-94d8-7d96-bf81-b0b2f7332ffb",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "b": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-961e-7a25-b984-c04a59fac5fd",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "b": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9663-7f0d-8648-7fb6a04f4ca3",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "b": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-9598-77dd-a498-2ea4e625be46",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    },
+    {
+      "a": "019f1f19-96a7-7732-8adb-ddd7f8a4b086",
+      "b": "019f1f19-96e8-7452-945e-e9cde4421ff6",
+      "expected_duplicate": false,
+      "case": "unrelated",
+      "note": "Intentional hard-negative batch: whimsical eval tasks that share surface structure (same prefix, same channel reference) but are topically unrelated; none are duplicates."
+    }
+  ]
+}

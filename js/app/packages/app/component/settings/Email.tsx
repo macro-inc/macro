@@ -3,6 +3,7 @@ import { match } from 'ts-pattern';
 import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  ENABLE_EMAIL_SIGNATURES,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX_OVERRIDE,
@@ -11,6 +12,7 @@ import GmailIcon from '@icon/mcp-gmail.svg';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import {
   type BackfillJob,
   BackfillJobStatus,
@@ -30,14 +32,16 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import {
-  AddInboxDialog,
-  openAddInboxDialog,
-  useAddInboxGate,
-} from '../AddInboxDialog';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 import { ConnectAction, StatusDot } from './integration-ui';
+import {
+  clearSignatureState,
+  isSignatureExpanded,
+  SignatureSection,
+  toggleSignatureExpanded,
+} from './SignatureSection';
 
 /**
  * Gmail integration as a single Connected-accounts card: a header row with the
@@ -51,7 +55,6 @@ export function EmailCard() {
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
-  const guardAddInbox = useAddInboxGate();
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -77,7 +80,10 @@ export function EmailCard() {
     latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
 
   const removeInboxMutation = useRemoveInboxMutation({
-    onSuccess: () => toast.success('Inbox removed'),
+    onSuccess: (_data, linkId) => {
+      clearSignatureState(linkId);
+      toast.success('Inbox removed');
+    },
     onError: () => toast.failure('Failed to remove inbox. Please try again.'),
   });
   const [removeTarget, setRemoveTarget] = createSignal<{
@@ -218,7 +224,7 @@ export function EmailCard() {
                   size="icon-sm"
                   depth={3}
                   aria-label="Add inbox"
-                  onClick={() => guardAddInbox(openAddInboxDialog)}
+                  onClick={openAddInboxDialog}
                 >
                   <PlusIcon class="size-4" />
                 </Button>
@@ -379,107 +385,132 @@ function InboxRow(props: {
   onReconnect: () => void;
   onRemove: () => void;
 }) {
+  const showSignature = () => isSignatureExpanded(props.link.id);
+  const signatureSectionId = `signature-section-${props.link.id}`;
   return (
-    <div class="bg-surface flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
-      <div class="min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="ph-no-capture text-sm truncate">
-            {props.link.email_address}
-          </span>
-          <Show when={props.isPrimary}>
-            <Chip label="Primary" />
-          </Show>
-          <Show when={!props.isPrimary && !props.isOwn}>
-            <Chip label="Shared" />
-          </Show>
-        </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
-          <Switch
-            fallback={
-              <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
-                <span
-                  class="flex items-center gap-1 text-xs"
-                  classList={{
-                    'text-failure':
-                      props.link.sync_status === SyncStatus.ERROR ||
-                      props.link.sync_status === SyncStatus.NEEDS_REAUTH,
-                    'text-ink-muted':
-                      props.link.sync_status !== SyncStatus.ERROR &&
-                      props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
-                  }}
-                >
-                  <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-                    <ArrowsClockwiseIcon class="size-3 animate-spin" />
-                  </Show>
-                  {syncStatusLabel(props.link.sync_status)}
-                </span>
-              </Show>
-            }
-          >
-            {/* Live backfill progress (connection gateway) wins over the coarse
-                sync_status while a backfill is actively running. */}
-            <Match when={getBackfillProgress(props.link.id)}>
-              {(progress) => <BackfillProgressBar progress={progress()} />}
-            </Match>
-            {/* Settled inbox with a completed backfill from the BE list. */}
-            <Match
-              when={
-                props.link.sync_status === SyncStatus.UP_TO_DATE &&
-                props.hasCompletedBackfill
+    <div class="bg-surface flex flex-col">
+      <div class="flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
+        <div class="min-w-0 flex flex-col gap-0.5">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="ph-no-capture text-sm truncate">
+              {props.link.email_address}
+            </span>
+            <Show when={props.isPrimary}>
+              <Chip label="Primary" />
+            </Show>
+            <Show when={!props.isPrimary && !props.isOwn}>
+              <Chip label="Shared" />
+            </Show>
+          </div>
+          <Show when={ENABLE_INBOX_SYNC_STATUS}>
+            <Switch
+              fallback={
+                <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                  <span
+                    class="flex items-center gap-1 text-xs"
+                    classList={{
+                      'text-failure':
+                        props.link.sync_status === SyncStatus.ERROR ||
+                        props.link.sync_status === SyncStatus.NEEDS_REAUTH,
+                      'text-ink-muted':
+                        props.link.sync_status !== SyncStatus.ERROR &&
+                        props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
+                    }}
+                  >
+                    <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+                      <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                    </Show>
+                    {syncStatusLabel(props.link.sync_status)}
+                  </span>
+                </Show>
               }
             >
-              <span class="text-xs text-ink-muted">Initial sync complete</span>
-            </Match>
-          </Switch>
-        </Show>
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <Show
-          when={
-            ENABLE_INBOX_SYNC_STATUS &&
-            props.link.sync_status === SyncStatus.NEEDS_REAUTH
-          }
-        >
-          <Button
-            variant="active"
-            size="sm"
-            depth={3}
-            onClick={props.onReconnect}
-            aria-label={`Reconnect ${props.link.email_address}`}
+              {/* Live backfill progress (connection gateway) wins over the coarse
+                  sync_status while a backfill is actively running. */}
+              <Match when={getBackfillProgress(props.link.id)}>
+                {(progress) => <BackfillProgressBar progress={progress()} />}
+              </Match>
+              {/* Settled inbox with a completed backfill from the BE list. */}
+              <Match
+                when={
+                  props.link.sync_status === SyncStatus.UP_TO_DATE &&
+                  props.hasCompletedBackfill
+                }
+              >
+                <span class="text-xs text-ink-muted">Initial sync complete</span>
+              </Match>
+            </Switch>
+          </Show>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn}>
+            <Tooltip label="Edit signature">
+              <Button
+                variant="base"
+                size="icon-sm"
+                depth={3}
+                onClick={() => toggleSignatureExpanded(props.link.id)}
+                aria-label={`Edit signature for ${props.link.email_address}`}
+                aria-expanded={showSignature()}
+                aria-controls={signatureSectionId}
+              >
+                <SignatureIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
+          <Show
+            when={
+              ENABLE_INBOX_SYNC_STATUS &&
+              props.link.sync_status === SyncStatus.NEEDS_REAUTH
+            }
           >
-            Reconnect
-          </Button>
-        </Show>
-        <Show when={ENABLE_INBOX_RESYNC}>
-          <Tooltip label="Force sync">
+            <Button
+              variant="active"
+              size="sm"
+              depth={3}
+              onClick={props.onReconnect}
+              aria-label={`Reconnect ${props.link.email_address}`}
+            >
+              Reconnect
+            </Button>
+          </Show>
+          <Show when={ENABLE_INBOX_RESYNC}>
+            <Tooltip label="Force sync">
+              <Button
+                variant="base"
+                size="icon-sm"
+                depth={3}
+                disabled={
+                  props.resyncing ||
+                  (ENABLE_INBOX_SYNC_STATUS &&
+                    props.link.sync_status === SyncStatus.SYNCING)
+                }
+                onClick={props.onResync}
+                aria-label={`Force sync ${props.link.email_address}`}
+              >
+                <ArrowsClockwiseIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
+          <Tooltip label="Remove inbox">
             <Button
               variant="base"
               size="icon-sm"
               depth={3}
-              disabled={
-                props.resyncing ||
-                (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === SyncStatus.SYNCING)
-              }
-              onClick={props.onResync}
-              aria-label={`Force sync ${props.link.email_address}`}
+              onClick={props.onRemove}
+              aria-label={`Remove ${props.link.email_address}`}
             >
-              <ArrowsClockwiseIcon class="size-4" />
+              <XIcon class="size-4" />
             </Button>
           </Tooltip>
-        </Show>
-        <Tooltip label="Remove inbox">
-          <Button
-            variant="base"
-            size="icon-sm"
-            depth={3}
-            onClick={props.onRemove}
-            aria-label={`Remove ${props.link.email_address}`}
-          >
-            <XIcon class="size-4" />
-          </Button>
-        </Tooltip>
+        </div>
       </div>
+      <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn && showSignature()}>
+        <div id={signatureSectionId} class="px-6 pb-4">
+          <SignatureSection link={props.link} />
+        </div>
+      </Show>
     </div>
   );
 }
+

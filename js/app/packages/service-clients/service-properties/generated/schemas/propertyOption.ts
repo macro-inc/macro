@@ -4,12 +4,14 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PropertyOptionColor } from './propertyOptionColor';
 import type { PropertyOptionValue } from './propertyOptionValue';
 
 /**
  * A selectable option for select-type properties (service representation).
  */
 export interface PropertyOption {
+  color?: PropertyOptionColor;
   created_at: string;
   display_order: number;
   id: string;

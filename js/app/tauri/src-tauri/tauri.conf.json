@@ -52,8 +52,7 @@
       "icons/icon.ico"
     ],
     "iOS": {
-      "minimumSystemVersion": "14.0",
-      "bundleVersion": "100"
+      "minimumSystemVersion": "14.0"
     }
   },
   "plugins": {

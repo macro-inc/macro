@@ -1,21 +1,31 @@
-use std::{fs, path::Path};
+use std::{path::Path, process::Command};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 pub(crate) fn run(output_path: &Path) -> Result<()> {
-    let schema = graphql_soup::build_schema().sdl();
+    let workspace_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .context("xtask manifest dir has no workspace root two levels up")?;
 
-    if let Some(parent) = output_path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("creating parent directory {}", parent.display()))?;
+    let status = Command::new("cargo")
+        .current_dir(workspace_dir)
+        .arg("run")
+        .arg("--config")
+        .arg("env.SQLX_OFFLINE=\"true\"")
+        .arg("--quiet")
+        .arg("-p")
+        .arg("graphql_soup")
+        .arg("--bin")
+        .arg("graphql_soup_schema")
+        .arg("--")
+        .arg(output_path)
+        .status()
+        .with_context(|| format!("exporting GraphQL Soup schema to {}", output_path.display()))?;
+
+    if !status.success() {
+        bail!("GraphQL Soup schema export failed with status {status}");
     }
 
-    fs::write(output_path, format!("{schema}\n"))
-        .with_context(|| format!("writing GraphQL Soup schema to {}", output_path.display()))?;
-
-    println!("wrote GraphQL Soup schema to {}", output_path.display());
     Ok(())
 }

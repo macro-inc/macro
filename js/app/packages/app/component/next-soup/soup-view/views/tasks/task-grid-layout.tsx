@@ -75,8 +75,12 @@ export function TaskGridLayout(props: LayoutProps) {
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
     for (const sp of entity().properties ?? []) {
-      const property = soupPropertyToProperty(sp);
-      map.set(property.propertyDefinitionId, property);
+      try {
+        const property = soupPropertyToProperty(sp);
+        map.set(property.propertyDefinitionId, property);
+      } catch (error) {
+        console.warn('Skipping property with unsupported type', error);
+      }
     }
     return map;
   });

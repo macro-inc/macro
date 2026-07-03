@@ -129,22 +129,43 @@ pub async fn add_property_option(
         return Err(AddPropertyOptionErr::InvalidRequest(err.to_string()));
     }
 
-    let (display_order, option_value) = match &request {
+    let (display_order, option_value, color) = match &request {
         AddPropertyOptionRequest::SelectString { option } => (
             option.display_order,
             PropertyOptionValue::String(option.value.clone()),
+            option.color.clone(),
         ),
         AddPropertyOptionRequest::SelectNumber { option } => (
             option.display_order,
             PropertyOptionValue::Number(option.value),
+            None,
         ),
     };
+
+    if color.is_some() && property_definition.data_type != models_properties::DataType::Tag {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "color is only supported on tag options".to_string(),
+        ));
+    }
+    if let Some(color) = &color
+        && !models_properties::api::is_valid_hex_color(color)
+    {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "color must be a hex string like #RRGGBB".to_string(),
+        ));
+    }
+    if property_definition.data_type == models_properties::DataType::Tag && color.is_none() {
+        return Err(AddPropertyOptionErr::InvalidRequest(
+            "tag options require a color".to_string(),
+        ));
+    }
 
     let option = property_options_insert::create_property_option(
         &state.db,
         property_uuid,
         display_order,
         option_value,
+        color,
     )
     .await
     .inspect_err(|e| {

@@ -175,6 +175,61 @@ pub async fn get_property_definition_with_owner(
     Ok(result)
 }
 
+/// Display name used for the auto-provisioned tag definition.
+pub const TAG_DEFINITION_DISPLAY_NAME: &str = "Tags";
+
+/// Gets the single tag definition owned by the given team or user, if it exists.
+/// Exactly one of `team_id` / `user_id` is expected to be set.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_tag_definition(
+    db: &Pool<Postgres>,
+    team_id: Option<Uuid>,
+    user_id: Option<&str>,
+) -> Result<Option<PropertyDefinition>> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            id,
+            team_id,
+            user_id,
+            display_name,
+            data_type as "data_type: DataType",
+            is_multi_select,
+            specific_entity_type as "specific_entity_type: Option<EntityType>",
+            created_at,
+            updated_at,
+            is_system
+        FROM property_definitions
+        WHERE data_type = $3
+          AND (
+            ($1::uuid IS NOT NULL AND team_id = $1)
+            OR ($2::text IS NOT NULL AND user_id = $2)
+          )
+        LIMIT 1
+        "#,
+        team_id,
+        user_id,
+        DataType::Tag as DataType
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(row.map(|row| {
+        PropertyDefinition::from(db::PropertyDefinition {
+            id: row.id,
+            team_id: row.team_id,
+            user_id: row.user_id,
+            display_name: row.display_name,
+            data_type: row.data_type,
+            is_multi_select: row.is_multi_select,
+            specific_entity_type: row.specific_entity_type.flatten(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            is_system: row.is_system,
+        })
+    }))
+}
+
 /// Gets property definitions with options based on team and optional user access.
 /// Set `include_system` to true to also include system properties.
 #[tracing::instrument(skip(db))]
@@ -201,6 +256,7 @@ pub async fn get_properties_with_options(
             po.display_order as "option_display_order?",
             po.number_value as option_number_value,
             po.string_value as option_string_value,
+            po.color as option_color,
             po.created_at as "option_created_at?",
             po.updated_at as "option_updated_at?"
         FROM property_definitions pd
@@ -252,7 +308,9 @@ pub async fn get_properties_with_options(
         // Only process options if option_id is present (from LEFT JOIN)
         if let Some(option_id) = row.option_id
             && (row.option_number_value.is_some() || row.option_string_value.is_some())
-            && (row.data_type == DataType::SelectNumber || row.data_type == DataType::SelectString)
+            && (row.data_type == DataType::SelectNumber
+                || row.data_type == DataType::SelectString
+                || row.data_type == DataType::Tag)
         {
             let value = match (row.option_number_value, &row.option_string_value) {
                 (Some(num), None) => PropertyOptionValue::Number(num),
@@ -280,6 +338,7 @@ pub async fn get_properties_with_options(
                 property_definition_id: row.id,
                 display_order: row.option_display_order.unwrap_or(0),
                 value,
+                color: row.option_color,
                 created_at: row.option_created_at.unwrap_or(row.created_at),
                 updated_at: row.option_updated_at.unwrap_or(row.updated_at),
             };

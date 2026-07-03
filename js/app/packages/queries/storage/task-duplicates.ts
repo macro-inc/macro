@@ -72,7 +72,6 @@ export function useDismissTaskDuplicatesMutation(documentId: Accessor<string>) {
 type TaskSimilaritySearchInput = {
   title: string;
   markdown: string;
-  shareWithTeam: boolean;
 };
 
 async function searchSimilarTasks(
@@ -84,7 +83,6 @@ async function searchSimilarTasks(
     // compact embedding format up front rather than round-tripping through
     // lexical-service on a latency-sensitive as-you-type search.
     markdown: markdownToEmbeddingText(input.markdown),
-    shareWithTeam: input.shareWithTeam,
   });
   if (result.isErr()) {
     throw new Error('Failed to search for similar tasks');

@@ -15,7 +15,9 @@ export function ParticipantsListItem(props: {
   onRemove: () => void;
 }) {
   const canRemove =
-    props.editable && props.currentUserId !== props.participant.user_id;
+    props.editable &&
+    props.currentUserId !== props.participant.user_id &&
+    props.participant.role !== 'owner';
 
   const navigationHandlers = useSplitNavigationHandler<HTMLButtonElement>(
     async (event) => {

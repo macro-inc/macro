@@ -7,20 +7,36 @@
 import type { Expiry } from './expiry';
 import type { RefreshCadence } from './refreshCadence';
 import type { TargetType } from './targetType';
+import type { UpsertProjectionRequestModel } from './upsertProjectionRequestModel';
+import type { UpsertProjectionRequestOutputSchema } from './upsertProjectionRequestOutputSchema';
 
 /**
  * Request body for getting or creating an ai projection. The concrete target
 id is resolved from the authenticated user, so only the target type is sent.
  */
 export interface UpsertProjectionRequest {
+  /** When `true` and generation is needed (cold instance or `regenerate`),
+the server generates inline and responds with the finished result
+instead of returning immediately and pushing an update through the
+connection gateway. */
+  await?: boolean;
   /** How long the projection remains active without being requested. */
   expiry: Expiry;
   /** The frontend-defined projection id (e.g. `notification_important_widget`). */
   id: string;
+  /** Optional `provider/model` id used for generation (e.g.
+`cerebras/llama-3.3-70b`). The default model is used when absent. */
+  model?: UpsertProjectionRequestModel;
+  /** Optional JSON schema the generated result must conform to. When set,
+`data` holds the JSON serialization of a conforming value. Enforcement
+is prompted (non-strict), so it works across providers. */
+  output_schema?: UpsertProjectionRequestOutputSchema;
   /** The prompt used to materialize the projection. */
   prompt: string;
   /** How frequently the projection should be regenerated. */
   refresh_cadence: RefreshCadence;
+  /** When `true`, regenerate even if a cached result exists. */
+  regenerate?: boolean;
   /** Whether the projection is materialized for the requesting user or their team. */
   target_type: TargetType;
 }

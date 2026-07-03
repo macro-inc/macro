@@ -6,7 +6,9 @@ use super::util::chat_permissions;
 use crate::api::context::ApiContext;
 use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
-use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
+use crate::model::stream::{
+    AgentStreamFailure, ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet,
+};
 use crate::service::ai_stream_registry::CancellationSubscription;
 use crate::service::chat_renamer::spawn_initial_chat_rename;
 use crate::service::get_chat::get_chat;
@@ -532,9 +534,11 @@ fn stream_and_save_message(
             Ok(stream) => stream,
             Err(e) => {
                 tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "failed to create AI stream");
-                let stream_error = StreamError::InternalError {
-                    stream_id: stream_id.clone(),
-                };
+                let stream_error = StreamError::from(AgentStreamFailure {
+                    error: &e,
+                    stream_id: &stream_id,
+                    model: &model,
+                });
                 if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                     yield json;
                 }
@@ -609,9 +613,11 @@ fn stream_and_save_message(
                         break;
                     }
                     tracing::error!(error=?e, chat_id = %chat_id, user_id = %user_id, stream_id = %stream_id, "error in AI stream");
-                    let stream_error = StreamError::InternalError {
-                        stream_id: stream_id.clone(),
-                    };
+                    let stream_error = StreamError::from(AgentStreamFailure {
+                        error: &e,
+                        stream_id: &stream_id,
+                        model: &model,
+                    });
                     if let Ok(json) = serde_json::to_value(ChatStream::Error(stream_error)) {
                         yield json;
                     }

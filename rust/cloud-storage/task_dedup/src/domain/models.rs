@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 
 use embedding::entity::Task;
+use lexical_client::parse_markdown::EmbeddingMarkdown;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,10 +18,10 @@ pub struct NewTask {
     pub team_id: Option<Uuid>,
     /// Task title.
     pub title: String,
-    /// Task body, ideally as embedding-format markdown (lexical-service's
-    /// `embedding` markdown target): the body is embedded as-is, so mention
-    /// tags left in other formats skew similarity toward their serialization.
-    pub markdown: String,
+    /// Task body as [embedding-format markdown](EmbeddingMarkdown). The body is
+    /// embedded as-is; the newtype guarantees it was rendered in the embedding
+    /// target, so mention tags in other formats can't silently skew similarity.
+    pub markdown: EmbeddingMarkdown,
 }
 
 impl NewTask {
@@ -29,7 +30,7 @@ impl NewTask {
     pub fn as_embeddable(&self) -> Task<'_> {
         Task {
             title: Cow::Borrowed(self.title.as_str()),
-            body: Cow::Borrowed(self.markdown.as_str()),
+            body: Cow::Borrowed(self.markdown.as_ref()),
         }
     }
 }

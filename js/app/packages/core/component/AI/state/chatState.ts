@@ -34,7 +34,12 @@ export type ChatEvent =
     };
 
 export type SideEffect =
-  | { type: 'toast'; message: string }
+  | {
+      type: 'toast';
+      message: string;
+      /** When set, the toast offers a "Switch model" action button. */
+      offerModelSwitch?: boolean;
+    }
   | { type: 'show_paywall' };
 
 // --- Transition result ---
@@ -46,6 +51,26 @@ type TransitionResult = {
   ) => ChatMessageWithAttachments[];
   effects: SideEffect[];
 };
+
+/** Build the toast effect for a `stream_error`, keyed off the typed reason. */
+function streamErrorToast(streamError: string | undefined): SideEffect {
+  switch (streamError) {
+    case 'provider_error':
+      return {
+        type: 'toast',
+        message:
+          'The AI provider may be down. Try switching to a different model.',
+        offerModelSwitch: true,
+      };
+    case 'model_context_overflow':
+      return {
+        type: 'toast',
+        message: 'Too much context. Remove attachments or start a new chat',
+      };
+    default:
+      return { type: 'toast', message: 'Failed to respond to message' };
+  }
+}
 
 const rejected = (phase: ChatPhase, event: string): TransitionResult => {
   console.warn(`chat transition: ${event} from ${phase.type}`);
@@ -125,15 +150,7 @@ export function transition(
       [{ type: P.union('streaming', 'sending') }, { type: 'stream_error' }],
       ([, e]) => ({
         phase: { type: 'idle' as const },
-        effects: [
-          {
-            type: 'toast' as const,
-            message:
-              e.streamError === 'model_context_overflow'
-                ? 'Too much context. Remove attachments or start a new chat'
-                : 'Failed to respond to message',
-          },
-        ],
+        effects: [streamErrorToast(e.streamError)],
       })
     )
     .otherwise(([p, e]) => rejected(p, e.type));

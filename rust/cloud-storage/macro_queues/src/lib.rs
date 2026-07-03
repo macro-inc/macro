@@ -591,6 +591,12 @@ queue! {
             dev: "bulk-upload-queue-dev",
             prod: "bulk-upload-queue-prod",
         },
+        /// Queue for document upload finalization events.
+        pub DocumentUploadFinalizerQueue {
+            local: "document-upload-finalizer-queue",
+            dev: "document-upload-finalizer-queue-dev",
+            prod: "document-upload-finalizer-queue-prod",
+        },
         /// Queue for the organization retention handler
         /// (organization_retention_trigger `ORGANIZATION_RETENTION_QUEUE`).
         pub OrganizationRetentionQueue {

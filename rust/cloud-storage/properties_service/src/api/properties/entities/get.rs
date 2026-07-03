@@ -8,7 +8,9 @@ use thiserror::Error;
 
 use crate::api::{
     context::PropertiesHandlerState,
-    properties::entities::types::{EntityPropertiesResponse, EntityQueryParams},
+    properties::entities::types::{
+        EntityPropertiesResponse, EntityQueryParams, retain_caller_visible_tags,
+    },
 };
 use model::user::UserContext;
 use models_properties::EntityType;
@@ -168,6 +170,8 @@ pub async fn get_entity_properties(
 
     let mut all_properties = user_properties;
     all_properties.extend(metadata_properties);
+
+    retain_caller_visible_tags(&mut all_properties, &user_context.user_id);
 
     let response = EntityPropertiesResponse {
         entity_id: entity_id.to_string(),

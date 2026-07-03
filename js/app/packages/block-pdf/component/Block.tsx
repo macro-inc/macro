@@ -1,6 +1,7 @@
 import './block.css';
 
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { SidePanel } from '@app/component/side-panel';
 import {
   type LocationBlockParams,
   locationChangedSignal,
@@ -45,6 +46,7 @@ import {
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
 import { ModalsProvider } from './ModalsProvider';
+import { PdfSidePanelSections } from './sidepanel/PdfSidePanelSections';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
 
@@ -189,24 +191,39 @@ export default function BlockPdf() {
         data-tut="App"
       >
         <ModalsProvider>
-          <Show when={!isNestedBlock}>
-            <TopBar />
-            <Show when={showTabBar()}>
-              <div class="flex px-2 justify-between min-h-11 items-center gap-2">
-                <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">
-                  <Tabs />
+          <Show
+            when={!isNestedBlock}
+            fallback={
+              <div
+                class="flex size-full relative justify-end overflow-visible z-main-view-layout"
+                id="main-view"
+              >
+                <Document />
+              </div>
+            }
+          >
+            <SidePanel.Layout>
+              <PdfSidePanelSections />
+              <div class="flex size-full min-w-0 flex-col overflow-hidden">
+                <TopBar />
+                <Show when={showTabBar()}>
+                  <div class="flex px-2 justify-between min-h-11 items-center gap-2">
+                    <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">
+                      <Tabs />
+                    </div>
+                  </div>
+                </Show>
+                <div
+                  class="flex size-full relative justify-end overflow-visible z-main-view-layout"
+                  id="main-view"
+                >
+                  {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}
+                  <Document />
+                  {/* <CustomCursor /> */}
                 </div>
               </div>
-            </Show>
+            </SidePanel.Layout>
           </Show>
-          <div
-            class="flex size-full relative justify-end overflow-visible z-main-view-layout"
-            id="main-view"
-          >
-            {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}
-            <Document />
-            {/* <CustomCursor /> */}
-          </div>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

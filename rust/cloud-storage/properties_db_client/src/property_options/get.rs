@@ -24,6 +24,7 @@ pub async fn get_property_option_by_id(
             display_order,
             number_value,
             string_value,
+            color,
             created_at,
             updated_at
         FROM property_options 
@@ -52,6 +53,7 @@ pub async fn get_property_options(
             display_order,
             number_value,
             string_value,
+            color,
             created_at,
             updated_at
         FROM property_options 
@@ -112,6 +114,7 @@ pub async fn get_property_options_batch(
             display_order,
             number_value,
             string_value,
+            color,
             created_at,
             updated_at
         FROM property_options 

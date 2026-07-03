@@ -33,6 +33,7 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
   active: 'border border-accent  ',
   success: 'border border-success  ',
   ghost: '                          ',
+  contrast: 'border border-transparent',
   cta: 'border border-transparent ',
 };
 
@@ -42,6 +43,7 @@ const dividerVariantStyles: Record<ButtonVariant, string> = {
   active: 'bg-accent',
   success: 'bg-success',
   ghost: 'bg-edge-muted',
+  contrast: 'bg-surface/50',
   cta: 'bg-surface/50',
 };
 

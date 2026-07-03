@@ -1,5 +1,6 @@
 export * from './actions';
 export * from './await';
+export * from './blame-tooltip';
 export * from './checklist';
 export * from './code';
 export * from './comments';

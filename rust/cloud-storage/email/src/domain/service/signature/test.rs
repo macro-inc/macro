@@ -9,6 +9,15 @@ fn appends_to_body_after_message_when_no_quote() {
 }
 
 #[test]
+fn separates_signature_from_message_with_blank_line() {
+    let out = inject_signature("<body><p>Hi there</p></body>", "<p>Regards</p>");
+    assert!(
+        out.contains(r#"<div class="macro-email-signature"><div><br></div><p>Regards</p></div>"#),
+        "got: {out}"
+    );
+}
+
+#[test]
 fn inserts_above_quote_for_replies_and_forwards() {
     let body = r#"<body><p>My reply</p><div class="macro_quote"><p>Quoted</p></div></body>"#;
     let out = inject_signature(body, "<p>Regards</p>");
@@ -35,6 +44,17 @@ fn is_idempotent_when_signature_already_present() {
         r#"<body><div class="macro-email-signature">x</div></body>"#
     ));
     assert!(!has_signature("<body><p>no signature here</p></body>"));
+}
+
+#[test]
+fn ignores_signature_inside_quoted_thread() {
+    // Replying to a previously-signed message: the quote carries that message's
+    // signature, which must not count as "already signed" for this reply.
+    let reply = r#"<body><p>My reply</p><div class="macro_quote"><p>Old</p><div class="macro-email-signature">Ryan</div></div></body>"#;
+    assert!(!has_signature(reply));
+    // A signature in the reply's own content (above the quote) still counts.
+    let signed = r#"<body><div class="macro-email-signature">Me</div><div class="macro_quote"><p>Old</p></div></body>"#;
+    assert!(has_signature(signed));
 }
 
 #[test]

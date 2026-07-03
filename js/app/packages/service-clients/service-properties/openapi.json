@@ -274,6 +274,71 @@
             "description": "Internal server error"
           }
         }
+      },
+      "patch": {
+        "tags": ["Properties"],
+        "summary": "Update a property option in place (rename / recolor / reorder).",
+        "description": "The option id is preserved, so the change is reflected on every entity that references it.",
+        "operationId": "update_property_option",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Property option ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePropertyOptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Property option updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyOption"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Cannot modify system properties"
+          },
+          "404": {
+            "description": "Property or option not found"
+          },
+          "409": {
+            "description": "An option with that value already exists"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/properties/entities/bulk": {
@@ -442,6 +507,125 @@
         }
       }
     },
+    "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}": {
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Add a single option to an entity's multi-select property value.",
+        "description": "Atomic delta: the option is appended to the current stored value (deduped,\nattaching the property if needed), so concurrent edits to the same value\nmerge rather than overwrite each other. Prefer this over the full-value PUT\nwhen adding one option.",
+        "operationId": "add_entity_property_option",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Property ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Option ID to add",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Option added successfully"
+          },
+          "400": {
+            "description": "Invalid request, property is not multi-select, or option does not belong to the property"
+          },
+          "403": {
+            "description": "No edit access to the entity"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Properties"],
+        "summary": "Remove a single option from an entity's multi-select property value.",
+        "description": "Atomic delta: the option is stripped from the current stored value (a no-op\nif absent), so concurrent edits to the same value merge rather than overwrite\neach other.",
+        "operationId": "remove_entity_property_option",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EntityType"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Property ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Option ID to remove",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Option removed successfully"
+          },
+          "403": {
+            "description": "No edit access to the entity"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/properties/entity_properties/{entity_property_id}": {
       "delete": {
         "tags": ["Properties"],
@@ -468,6 +652,64 @@
           },
           "404": {
             "description": "Entity property not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/properties/tags": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "List the caller's tag sets: their personal set, plus their team's set when on a team.\nPure read - a scope with no provisioned definition yet returns an empty set.",
+        "operationId": "list_tags",
+        "responses": {
+          "200": {
+            "description": "Tag sets retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagSetResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Provision (get-or-create) the caller's tag set for a scope and return it. Called when\nthe caller creates their first label for that scope, so the read path stays side-effect free.",
+        "operationId": "ensure_tag_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnsureTagSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tag set provisioned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagSetResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Team membership required for team scope"
           },
           "500": {
             "description": "Internal server error"
@@ -531,6 +773,9 @@
         "description": "Type-safe request to add a string option to a SelectString property.",
         "required": ["display_order", "value"],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "display_order": {
             "type": "integer",
             "format": "int32"
@@ -593,9 +838,20 @@
           "STRING",
           "SELECT_NUMBER",
           "SELECT_STRING",
+          "TAG",
           "ENTITY",
           "LINK"
         ]
+      },
+      "EnsureTagSetRequest": {
+        "type": "object",
+        "description": "Request to provision (get-or-create) the caller's tag set for a scope.",
+        "required": ["scope"],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/TagScope"
+          }
+        }
       },
       "EntityPropertiesResponse": {
         "type": "object",
@@ -713,7 +969,7 @@
         "required": ["property", "definition"],
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+            "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
           },
           "options": {
             "type": ["array", "null"],
@@ -990,6 +1246,66 @@
           }
         }
       },
+      "PropertyDefinitionDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PropertyOwner"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "displayName",
+              "dataType",
+              "isMultiSelect",
+              "isSystem",
+              "isMetadata"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "dataType": {
+                "$ref": "#/components/schemas/DataType"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "isMetadata": {
+                "type": "boolean",
+                "description": "Flag to indicate if this is a system-generated metadata property"
+              },
+              "isMultiSelect": {
+                "type": "boolean"
+              },
+              "isSystem": {
+                "type": "boolean",
+                "description": "Flag to indicate if this is a system property (managed by the system)"
+              },
+              "specificEntityType": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityType"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            }
+          }
+        ],
+        "description": "Property definition response (API representation)."
+      },
       "PropertyDefinitionResponse": {
         "oneOf": [
           {
@@ -1023,7 +1339,7 @@
         "required": ["definition", "propertyOptions"],
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+            "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
           },
           "propertyOptions": {
             "type": "array",
@@ -1045,6 +1361,9 @@
           "updated_at"
         ],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1075,6 +1394,9 @@
         "description": "Property option response (API representation).",
         "required": ["id", "propertyDefinitionId", "displayOrder", "value"],
         "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
           "displayOrder": {
             "type": "integer",
             "format": "int32"
@@ -1503,6 +1825,56 @@
           }
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
+      },
+      "TagScope": {
+        "type": "string",
+        "description": "Which owner a tag set belongs to.",
+        "enum": ["user", "team"]
+      },
+      "TagSetResponse": {
+        "type": "object",
+        "description": "A tag set the caller can use. `definition` is absent until the set is provisioned\n(on first label create), in which case `options` is empty.",
+        "required": ["scope", "options"],
+        "properties": {
+          "definition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyDefinitionDetailResponse"
+              }
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyOptionResponse"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/TagScope"
+          }
+        }
+      },
+      "UpdatePropertyOptionRequest": {
+        "type": "object",
+        "description": "Request to update a property option in place. Omitted fields keep their current value.\nThe option id is preserved, so the change propagates to every entity referencing it.",
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "New color as a hex string like `#RRGGBB`."
+          },
+          "display_order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "New display order."
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "New string value (label text). Only valid for SelectString and Tag properties."
+          }
+        }
       }
     }
   },

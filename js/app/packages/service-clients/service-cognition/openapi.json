@@ -115,7 +115,7 @@
     "/ai-projections": {
       "post": {
         "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
-        "summary": "Gets or creates an ai projection and the requesting user's cold instance.",
+        "summary": "Gets or creates an ai projection and the requesting user's instance,\ntriggering (or awaiting) materialization when needed.",
         "operationId": "upsert_ai_projection",
         "requestBody": {
           "content": {
@@ -3159,7 +3159,11 @@
         "properties": {
           "data": {
             "type": ["string", "null"],
-            "description": "The cached result, if any."
+            "description": "The cached result, if any. JSON-encoded when the projection defines an\n`output_schema`."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "The most recent materialization error, if any."
           },
           "generated_at": {
             "type": ["string", "null"],
@@ -3661,6 +3665,10 @@
           "expiry"
         ],
         "properties": {
+          "await": {
+            "type": "boolean",
+            "description": "When `true` and generation is needed (cold instance or `regenerate`),\nthe server generates inline and responds with the finished result\ninstead of returning immediately and pushing an update through the\nconnection gateway."
+          },
           "expiry": {
             "$ref": "#/components/schemas/Expiry",
             "description": "How long the projection remains active without being requested."
@@ -3669,6 +3677,14 @@
             "type": "string",
             "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
           },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Optional `provider/model` id used for generation (e.g.\n`cerebras/llama-3.3-70b`). The default model is used when absent."
+          },
+          "output_schema": {
+            "type": ["object", "null"],
+            "description": "Optional JSON schema the generated result must conform to. When set,\n`data` holds the JSON serialization of a conforming value. Enforcement\nis prompted (non-strict), so it works across providers."
+          },
           "prompt": {
             "type": "string",
             "description": "The prompt used to materialize the projection."
@@ -3676,6 +3692,10 @@
           "refresh_cadence": {
             "$ref": "#/components/schemas/RefreshCadence",
             "description": "How frequently the projection should be regenerated."
+          },
+          "regenerate": {
+            "type": "boolean",
+            "description": "When `true`, regenerate even if a cached result exists."
           },
           "target_type": {
             "$ref": "#/components/schemas/TargetType",

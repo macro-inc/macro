@@ -27,7 +27,11 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { type SplitFileMenuAction, SplitPanelContext } from '../context';
+import {
+  getSplitFileMenuActionSections,
+  type SplitFileMenuAction,
+  SplitPanelContext,
+} from '../context';
 import { useSplitLayout } from '../layout';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
@@ -73,8 +77,12 @@ type SplitFileMenuRenderProps = {
 };
 
 function DesktopRender(props: SplitFileMenuRenderProps) {
-  const primaryOps = () => props.ops.filter((op) => op.group !== 'delete');
-  const deleteOps = () => props.ops.filter((op) => op.group === 'delete');
+  const sections = () =>
+    getSplitFileMenuActionSections({
+      tools: props.tools,
+      primaryOps: props.ops.filter((op) => op.group !== 'delete'),
+      deleteOps: props.ops.filter((op) => op.group === 'delete'),
+    });
 
   const item = (action: SplitFileMenuAction) => (
     <Dropdown.Item
@@ -96,22 +104,14 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       >
         <DotsThree />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-fit">
-        <Show when={props.tools.length > 0}>
-          <Dropdown.Group>
-            <For each={props.tools}>{item}</For>
-          </Dropdown.Group>
-        </Show>
-        <Show when={primaryOps().length > 0}>
-          <Dropdown.Group>
-            <For each={primaryOps()}>{item}</For>
-          </Dropdown.Group>
-        </Show>
-        <Show when={deleteOps().length > 0}>
-          <Dropdown.Group>
-            <For each={deleteOps()}>{item}</For>
-          </Dropdown.Group>
-        </Show>
+      <Dropdown.Content class="w-fit shadow-menu">
+        <For each={sections()}>
+          {(section) => (
+            <Dropdown.Group>
+              <For each={section.actions}>{item}</For>
+            </Dropdown.Group>
+          )}
+        </For>
       </Dropdown.Content>
     </Dropdown>
   );
@@ -316,8 +316,8 @@ export function SplitFileMenu(props: {
   );
 
   const actionGroups = createMemo(() => ({
-    primaryOps: ops().filter((op) => op.group !== 'delete'),
     tools: tools(),
+    primaryOps: ops().filter((op) => op.group !== 'delete'),
     deleteOps: ops().filter((op) => op.group === 'delete'),
   }));
 

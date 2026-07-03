@@ -1,13 +1,7 @@
-use anyhow::Context;
-use aws_sdk_sesv2::{
-    self as ses,
-    types::{Body, Content, Destination, EmailContent, Message},
-};
-
-static INVITE_USER_SUBJECT: &str = "Invitation to Macro";
+pub(crate) static INVITE_USER_SUBJECT: &str = "Invitation to Macro";
 
 /// Builds the user invite message
-fn build_user_invite_message(org_name: &str, environment: &str) -> String {
+pub(crate) fn build_user_invite_message(org_name: &str, environment: &str) -> String {
     let prefix = match environment {
         "prod" => "".to_string(),
         _ => format!("{}.", environment),
@@ -152,50 +146,6 @@ fn build_user_invite_message(org_name: &str, environment: &str) -> String {
 
     let result = result.replace("{PREFIX}", prefix.as_str());
     result.replace("{ORG_NAME}", org_name)
-}
-
-/// Sends an invitation email to the user
-#[tracing::instrument(skip(client))]
-pub async fn invite_user(
-    client: &ses::Client,
-    org_name: &str,
-    environment: &str,
-    from_email: &str,
-    to_email: &str,
-) -> anyhow::Result<()> {
-    let mut dest: Destination = Destination::builder().build();
-    dest.to_addresses = Some(vec![to_email.to_string()]);
-
-    let subject_content = Content::builder()
-        .data(INVITE_USER_SUBJECT)
-        .charset("UTF-8")
-        .build()
-        .context("building Content")?;
-
-    let body_content = Content::builder()
-        .data(build_user_invite_message(org_name, environment))
-        .charset("UTF-8")
-        .build()
-        .context("building Content")?;
-
-    let body = Body::builder().html(body_content).build();
-
-    let msg = Message::builder()
-        .subject(subject_content)
-        .body(body)
-        .build();
-
-    let email_content = EmailContent::builder().simple(msg).build();
-
-    client
-        .send_email()
-        .from_email_address(from_email)
-        .destination(dest)
-        .content(email_content)
-        .send()
-        .await?;
-
-    Ok(())
 }
 
 #[cfg(test)]

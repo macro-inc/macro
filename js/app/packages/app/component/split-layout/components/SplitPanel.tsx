@@ -218,7 +218,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 !props.handle.isSpotLight()
               }
               class="rounded-xl mobile:rounded-none mobile:after:hidden mobile:border-0!"
-              depth={1}
+              depth={isMobile() ? 0 : 1}
             >
               <Panel.Header
                 class={cn(
@@ -234,7 +234,7 @@ export function SplitPanel(props: SplitPanelProps) {
 
               <Panel.Toolbar
                 class={cn(
-                  'items-start py-2 overflow-visible',
+                  'items-start overflow-visible',
                   !hasToolbarContent() && 'hidden',
                   isMobile() && 'hidden',
                   (!previewState() ||

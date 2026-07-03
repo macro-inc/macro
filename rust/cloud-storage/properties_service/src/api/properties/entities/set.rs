@@ -113,6 +113,7 @@ mod tests {
             property_definition_id: property_id,
             display_order: 1,
             value,
+            color: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

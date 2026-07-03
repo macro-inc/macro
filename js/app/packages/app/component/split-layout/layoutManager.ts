@@ -151,6 +151,7 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  insertIndex?: number;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
@@ -166,7 +167,16 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  insertIndex?: number;
   handle?: SplitHandle;
+  /**
+   * Ask the block to land on its latest content via the `goToLatest` block
+   * method. Covers content that is already mounted (e.g. a channel open in
+   * another split parked at an old scroll position), which would otherwise
+   * just be activated as-is. Omit when navigating to a specific location
+   * within the block.
+   */
+  reopen?: 'latest';
 };
 
 /**
@@ -989,8 +999,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
-      options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      initialHistory,
+      insertIndex,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -1014,7 +1030,17 @@ export function createSplitLayout(
       initialHistory,
     });
 
-    setState('splits', (previousSplits) => [...previousSplits, split]);
+    setState('splits', (previousSplits) => {
+      if (insertIndex === undefined) return [...previousSplits, split];
+
+      const nextSplits = [...previousSplits];
+      nextSplits.splice(
+        Math.max(0, Math.min(insertIndex, nextSplits.length)),
+        0,
+        split
+      );
+      return nextSplits;
+    });
 
     const handle = getSplit(split.id)!;
 
@@ -1230,6 +1256,16 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    if (options.reopen === 'latest') {
+      // Fire-and-forget so it covers every open path (fresh mount, duplicate
+      // activation, interceptor-consumed navigation). The block-handle proxy
+      // waits for the block and method to register before invoking.
+      void orchestrator
+        .getBlockHandle(content.id)
+        .then((handle) => handle?.goToLatest())
+        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
+    }
+
     if (navigationInterceptor) {
       const result = navigationInterceptor(content, options);
       if (result.handled) return undefined;
@@ -1276,6 +1312,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
+        insertIndex: options.insertIndex,
       });
     }
   }

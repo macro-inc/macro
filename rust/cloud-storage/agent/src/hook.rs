@@ -1,8 +1,5 @@
 /// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
 /// [`StreamPart`] items sent through a channel.
-#[cfg(test)]
-mod test;
-
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
@@ -76,6 +73,15 @@ impl StreamBridge {
             },
             rx,
         )
+    }
+
+    /// Clone the sending half of the bridge's channel.
+    ///
+    /// Lets the stream driver push parts derived from rig stream items
+    /// (buffered thinking, usage, errors) into the same ordered channel the
+    /// lifecycle hooks send through, so all parts share one FIFO order.
+    pub(crate) fn sender(&self) -> mpsc::UnboundedSender<Result<StreamPart, AgentError>> {
+        self.tx.clone()
     }
 }
 
