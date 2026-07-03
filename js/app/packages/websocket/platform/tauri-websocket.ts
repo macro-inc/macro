@@ -7,6 +7,26 @@ import { match } from 'ts-pattern';
 import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 
 /**
+ * Envelope emitted by our fork of the websocket plugin
+ * (seanaye/feat/ws-replay-buffer). Every incoming message carries a
+ * per-connection sequence number so missed messages can be recovered after
+ * the webview was suspended.
+ */
+interface ReplayEnvelope {
+  seq: number;
+  message: TauriMessage;
+}
+
+interface RecoverResponse {
+  messages: ReplayEnvelope[];
+  /**
+   * True when messages newer than `after` were already evicted from the
+   * Rust-side replay buffer; the connection must be resynced.
+   */
+  gap: boolean;
+}
+
+/**
  * Tauri WebSocket wrapper that implements MinimalWebSocket interface
  */
 class TauriWebSocketWrapper implements MinimalWebSocket {
@@ -26,6 +46,13 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
 
   private eventListeners: Map<string, Set<EventListener>> = new Map();
   private removeListener?: () => void;
+
+  // Replay/recovery state (see seanaye/feat/ws-replay-buffer)
+  private lastSeq = 0;
+  private recovering = false;
+  private queued: ReplayEnvelope[] = [];
+  private deliver?: (envelope: ReplayEnvelope) => void;
+  private visibilityHandler?: () => void;
 
   // WebSocket state constants
   readonly CONNECTING: 0 = 0;
@@ -90,11 +117,28 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       // is dispatched to our handler rather than dropped into an empty Set.
       listeners.add(handleMessage);
 
-      const onMessage = new Channel<TauriMessage>();
-      onMessage.onmessage = (message: TauriMessage) => {
+      // Unwrap the { seq, message } replay envelope, deduplicating messages
+      // that are delivered both live and via recover().
+      const deliver = (envelope: ReplayEnvelope) => {
+        if (envelope.seq > 0) {
+          if (envelope.seq <= this.lastSeq) {
+            return;
+          }
+          this.lastSeq = envelope.seq;
+        }
         listeners.forEach((l) => {
-          l(message);
+          l(envelope.message);
         });
+      };
+      this.deliver = deliver;
+
+      const onMessage = new Channel<ReplayEnvelope>();
+      onMessage.onmessage = (envelope: ReplayEnvelope) => {
+        if (this.recovering) {
+          this.queued.push(envelope);
+        } else {
+          deliver(envelope);
+        }
       };
 
       const id = await invoke<number>('plugin:websocket|connect', {
@@ -116,6 +160,16 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       };
 
       this._readyState = this.OPEN;
+
+      // Recover messages received by the Rust side while the webview was
+      // suspended (e.g. iOS backgrounding) whenever we become visible again.
+      this.visibilityHandler = () => {
+        if (document.visibilityState === 'visible') {
+          void this.recover();
+        }
+      };
+      document.addEventListener('visibilitychange', this.visibilityHandler);
+
       console.log(`initialized tauri websocket for ${url}`);
       // Trigger open event
       const openEvent = new Event('open');
@@ -152,10 +206,68 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
   }
 
   private handleClose(event: CloseEvent) {
+    this.teardownVisibilityListener();
     if (this.onclose) {
       this.onclose.call(this as any, event);
     }
     this.dispatchToEventListeners('close', event);
+  }
+
+  private teardownVisibilityListener() {
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = undefined;
+    }
+  }
+
+  /**
+   * Requests redelivery of messages that were received by the Rust side but
+   * did not reach this webview. If the replay buffer no longer covers the
+   * missed range (gap), the connection is force-closed so the upper layer
+   * reconnects and resyncs.
+   */
+  private async recover(): Promise<void> {
+    if (!this.ws || this._readyState !== this.OPEN || this.recovering) {
+      return;
+    }
+    this.recovering = true;
+    let gap = false;
+    try {
+      const res = await invoke<RecoverResponse>('plugin:websocket|recover', {
+        id: this.ws.id,
+        after: this.lastSeq,
+      });
+      for (const envelope of res.messages) {
+        this.deliver?.(envelope);
+      }
+      gap = res.gap;
+    } catch (error) {
+      console.error(`Tauri WebSocket recover failed for ${this._url}:`, error);
+    } finally {
+      // flush messages that arrived live while we were recovering
+      const queued = this.queued;
+      this.queued = [];
+      this.recovering = false;
+      for (const envelope of queued) {
+        this.deliver?.(envelope);
+      }
+    }
+    if (gap) {
+      console.warn(
+        `Tauri WebSocket ${this._url}: replay gap detected, forcing reconnect`
+      );
+      this.ws.disconnect().catch(() => {});
+      this._readyState = this.CLOSED;
+      this.removeListener?.();
+      this.handleError(new Event('error'));
+      this.handleClose(
+        new CloseEvent('close', {
+          code: 1006,
+          reason: 'Replay gap detected',
+          wasClean: false,
+        })
+      );
+    }
   }
 
   private handleError(event: Event) {
