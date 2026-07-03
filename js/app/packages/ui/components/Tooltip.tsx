@@ -5,8 +5,8 @@ import { Surface } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { Hotkey } from '../../ui/components/Hotkey';
-import { cn } from '../utils/classname';
 import { tooltipsEnabled } from '../signals/signals';
+import { cn } from '../utils/classname';
 
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
