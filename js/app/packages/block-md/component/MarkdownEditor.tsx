@@ -33,6 +33,7 @@ import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc
 import { TableDeleteButtons } from '@core/component/LexicalMarkdown/component/misc/TableDeleteButtons';
 import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
 import { TableMobileControls } from '@core/component/LexicalMarkdown/component/misc/TableMobileControls';
+import { TableMoveHandle } from '@core/component/LexicalMarkdown/component/misc/TableMoveHandle';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -1079,6 +1080,7 @@ export function MarkdownEditor(props: {
 
         <Show when={canEdit()}>
           <TableCellResizer />
+          <TableMoveHandle />
           <Show
             when={isMobile()}
             fallback={

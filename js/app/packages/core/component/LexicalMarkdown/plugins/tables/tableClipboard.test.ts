@@ -40,6 +40,7 @@ vi.mock('../../utils', () => ({
 import { nodeIdPlugin } from '@lexical-core/plugins/nodeIdPlugin';
 import { markdownPastePlugin } from '../markdown-paste/markdownPastePlugin';
 import { tableClipboardPlugin } from './tableClipboardPlugin';
+import { $moveCellRange } from './tableMove';
 import { tablePlugin } from './tablePlugin';
 
 // jsdom implements neither ClipboardEvent nor DataTransfer; the paste
@@ -309,6 +310,99 @@ describe('table cell range copy/paste', () => {
       ['01', '02', '03'],
       ['04', '01', '02'],
       ['07', '08', '09'],
+    ]);
+  });
+});
+
+describe('table cell range move', () => {
+  async function moveCells(
+    editor: LexicalEditor,
+    from: [number, number],
+    to: [number, number],
+    target: [number, number]
+  ): Promise<boolean> {
+    let moved = false;
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          moved = $moveCellRange(
+            editor,
+            $getCell(...from),
+            $getCell(...to),
+            $getCell(...target)
+          );
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+    return moved;
+  }
+
+  it('moves a single cell, emptying the source', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, GRID);
+
+    const moved = await moveCells(editor, [0, 0], [0, 0], [2, 2]);
+
+    expect(moved).toBe(true);
+    expect(readCellTexts(editor)).toEqual([
+      ['', '02', '03'],
+      ['04', '05', '06'],
+      ['07', '08', '01'],
+    ]);
+  });
+
+  it('moves a multi-cell range anchored at the drop cell', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, GRID);
+
+    const moved = await moveCells(editor, [0, 0], [0, 1], [1, 1]);
+
+    expect(moved).toBe(true);
+    expect(readCellTexts(editor)).toEqual([
+      ['', '', '03'],
+      ['04', '01', '02'],
+      ['07', '08', '09'],
+    ]);
+  });
+
+  it('handles overlapping source and destination ranges', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, GRID);
+
+    // Move 01,02 one cell to the right: 02's slot is both source and dest.
+    const moved = await moveCells(editor, [0, 0], [0, 1], [0, 1]);
+
+    expect(moved).toBe(false);
+    expect(readCellTexts(editor)).toEqual(GRID);
+  });
+
+  it('shifts a range that does not include the target', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, GRID);
+
+    // Move 01,02 to start at 03: 02→03 overlap is dest-only, allowed.
+    const moved = await moveCells(editor, [0, 0], [0, 1], [0, 2]);
+
+    expect(moved).toBe(true);
+    expect(readCellTexts(editor)).toEqual([
+      ['', '', '01'],
+      ['04', '05', '06'],
+      ['07', '08', '09'],
+    ]);
+  });
+
+  it('clips a moved range at the right edge instead of adding columns', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, GRID);
+
+    const moved = await moveCells(editor, [1, 0], [1, 1], [2, 2]);
+
+    expect(moved).toBe(true);
+    expect(readCellTexts(editor)).toEqual([
+      ['01', '02', '03'],
+      ['', '', '06'],
+      ['07', '08', '04'],
     ]);
   });
 });
