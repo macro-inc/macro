@@ -18,7 +18,6 @@ import {
 } from '@queries/mcp-servers';
 import {
   FEATURED_MCP_SERVERS,
-  QUICK_CONNECT_SERVERS,
   QUICK_CONNECT_ICON_MAP,
   type FeaturedMcpServer,
   type SvgIcon,
@@ -38,7 +37,6 @@ function hostFromUrl(url: string): string {
 function AddServerForm(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  existingUrls: Set<string>;
 }) {
   const [name, setName] = createSignal('');
   const [url, setUrl] = createSignal('');
@@ -84,21 +82,6 @@ function AddServerForm(props: {
     );
   };
 
-  const handleQuickConnect = (server: { server_name: string; url: string }) => {
-    addMutation.mutate(
-      { server_name: server.server_name, url: server.url },
-      {
-        onSuccess: () => {
-          startAuth(server.server_name, server.url);
-          props.onOpenChange(false);
-        },
-        onError: () => {
-          toast.failure(`Failed to add ${server.server_name}`);
-        },
-      }
-    );
-  };
-
   return (
     <Dialog
       open={props.open}
@@ -111,38 +94,7 @@ function AddServerForm(props: {
           <span class="text-ink text-sm font-semibold">Add MCP Server</span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">
-          <div class="flex flex-col gap-2">
-            <span class="text-xs text-ink-muted">Quick Connect</span>
-            <div class="grid grid-cols-2 gap-2">
-              <For each={QUICK_CONNECT_SERVERS}>
-                {(server) => {
-                  const added = () => props.existingUrls.has(server.url);
-                  return (
-                    <button
-                      class="flex items-center justify-between px-3 py-2 rounded-lg border border-edge-muted text-sm transition-colors"
-                      classList={{
-                        'text-ink hover:bg-ink/4 cursor-pointer': !added(),
-                        'text-ink-muted cursor-default': added(),
-                      }}
-                      disabled={added() || addMutation.isPending}
-                      onClick={() => handleQuickConnect(server)}
-                    >
-                      <span class="flex items-center gap-2 text-accent">
-                        <server.icon class="size-4" />
-                        <span class="text-ink">{server.server_name}</span>
-                      </span>
-                      <Show when={added()}>
-                        <span class="text-xs text-ink-muted">Added</span>
-                      </Show>
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-
           <div class="flex flex-col gap-4">
-            <span class="text-xs text-ink-muted">Custom Server</span>
             <label class="flex flex-col gap-1.5">
               <span class="text-xs text-ink-muted">Name</span>
               <input
@@ -440,8 +392,8 @@ function FeaturedServerRow(props: { server: FeaturedMcpServer }) {
 
 /**
  * The "MCP integrations" section of the Connections page: MCP servers the
- * user has connected, followed by featured suggestions they haven't, with the
- * full catalog (and custom servers) behind the "Add server" dialog.
+ * user has connected, followed by the preset suggestions they haven't, with
+ * custom servers behind the "Add server" dialog.
  */
 export function IntegrationsSection() {
   const serversQuery = useMcpServersQuery();
@@ -494,11 +446,7 @@ export function IntegrationsSection() {
         </SettingsCard>
       </Show>
 
-      <AddServerForm
-        open={showAddDialog()}
-        onOpenChange={setShowAddDialog}
-        existingUrls={existingUrls()}
-      />
+      <AddServerForm open={showAddDialog()} onOpenChange={setShowAddDialog} />
     </SettingsSection>
   );
 }
