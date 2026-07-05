@@ -1,6 +1,7 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import IconDatadog from '@icon/mcp-datadog.svg';
 import IconGithub from '@icon/mcp-github.svg';
+import IconHermes from '@icon/mcp-hermes.svg';
 import IconGrafana from '@icon/mcp-grafana.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import IconNotion from '@icon/mcp-notion.svg';
@@ -15,6 +16,11 @@ export const QUICK_CONNECT_SERVERS = [
     server_name: 'GitHub',
     url: 'https://api.githubcopilot.com/mcp',
     icon: IconGithub as SvgIcon,
+  },
+  {
+    server_name: 'Hermes',
+    url: import.meta.env.VITE_HERMES_MCP_URL || 'http://127.0.0.1:13444/mcp',
+    icon: IconHermes,
   },
   {
     server_name: 'Linear',
