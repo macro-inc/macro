@@ -57,6 +57,9 @@ SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
 CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
 AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
 
+[env.prod]
+name = "ai-editing-worker"
+
 [env.prod.vars]
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage.macro.com"
