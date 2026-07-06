@@ -133,6 +133,44 @@ pub async fn update_thread_provider_id(
     Ok(())
 }
 
+/// Recomputes the denormalized `email_threads.has_calendar_attachment` flag
+/// from the thread's current attachment set. Mirrors the CalendarOnly
+/// predicate in the email crate's dynamic query builder.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "column added by pending migration; switch to query! once prepared"
+)]
+#[tracing::instrument(skip(tx), err)]
+pub async fn sync_thread_calendar_flag(
+    tx: &mut sqlx::PgConnection,
+    thread_db_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE email_threads t
+        SET has_calendar_attachment = calc.has_cal
+        FROM (
+            SELECT EXISTS (
+                SELECT 1
+                FROM email_messages m
+                JOIN email_attachments a ON a.message_id = m.id
+                WHERE m.thread_id = $1
+                  AND (a.filename ILIKE '%.ics'
+                       OR a.mime_type = 'text/calendar'
+                       OR a.mime_type = 'application/ics')
+            ) AS has_cal
+        ) calc
+        WHERE t.id = $1
+          AND t.has_calendar_attachment IS DISTINCT FROM calc.has_cal
+        "#,
+    )
+    .bind(thread_db_id)
+    .execute(tx)
+    .await?;
+
+    Ok(())
+}
+
 // Updates a thread's metadata (archived status, latest_timestamps)
 #[tracing::instrument(skip(tx), err)]
 pub async fn update_thread_metadata(
