@@ -3,6 +3,10 @@ use sqlx::types::Uuid;
 /// Flags every thread on one of the user's links that has at least one
 /// calendar attachment. One statement per link keeps transactions small and
 /// the progress output per-mailbox. Returns the number of threads flagged.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "queries touch a column added by a pending migration; no query! cache entry"
+)]
 pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Result<u64> {
     let link_ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM email_links WHERE macro_id = $1")
         .bind(macro_id)
@@ -51,6 +55,10 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
 /// Every macro ID that owns at least one email link. Connected secondary
 /// mailboxes carry their own macro_id row in email_links, so iterating these
 /// covers every link exactly once.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "queries touch a column added by a pending migration; no query! cache entry"
+)]
 pub async fn fetch_all_macro_ids(pool: &sqlx::PgPool) -> anyhow::Result<Vec<String>> {
     Ok(
         sqlx::query_scalar("SELECT DISTINCT macro_id FROM email_links ORDER BY macro_id")
