@@ -16,6 +16,7 @@ mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod check_generated;
 mod check_node_modules_nix;
+mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_infra;
 mod deploy_preview;
@@ -109,6 +110,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "cleanup_preview",
+        file_name: "cleanup_preview.yml",
+        render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
     },
     WorkflowFile {
         slug: "code_check_cloud_storage",
