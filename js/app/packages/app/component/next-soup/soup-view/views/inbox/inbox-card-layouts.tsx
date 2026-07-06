@@ -499,7 +499,7 @@ function BaseCard(props: {
         <div class="col-start-2 row-start-2 flex min-w-0 flex-col">
           <Show when={props.preview?.trim()}>
             {(value) => (
-              <InboxCard.Content class="truncate text-sm text-ink/60">
+              <InboxCard.Content class="truncate text-sm">
                 <StaticMarkdown
                   markdown={value()}
                   singleLine
@@ -617,23 +617,21 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </InboxCard.Title>
         </InboxCard.Header>
 
-        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-sm text-ink/60">
-          <Show when={!isDM()}>
-            <span class="flex gap-1 items-center whitespace-nowrap text-ink/80">
-              {senderLabel()}:
-            </span>
-          </Show>
-          <Show when={text().content?.trim()}>
-            {(value) => (
-              <InboxCard.Content class="truncate">
+        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1 text-sm">
+          <InboxCard.Content class="truncate">
+            <Show when={!isDM()}>
+              <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
+            </Show>
+            <Show when={text().content?.trim()}>
+              {(value) => (
                 <StaticMarkdown
                   markdown={value()}
                   singleLine
                   theme={unifiedListMarkdownTheme}
                 />
-              </InboxCard.Content>
-            )}
-          </Show>
+              )}
+            </Show>
+          </InboxCard.Content>
         </div>
       </InboxCard.Body>
       <InboxTimestamp
@@ -815,7 +813,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
           <div class="flex min-w-0 items-center gap-1">
             <Show when={!isDM()}>
-              <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink/80">
+              <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
                 {senderLabel()}:
               </span>
             </Show>
@@ -1088,7 +1086,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
         <Show when={text().subject?.trim()}>
           {(subject) => (
-            <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm text-ink/80">
+            <InboxCard.Content class="col-start-2 row-start-2 truncate text-sm">
               {subject()}
             </InboxCard.Content>
           )}
@@ -1096,7 +1094,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
         <Show when={text().content?.trim()}>
           {(value) => (
-            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm text-ink/60">
+            <InboxCard.Content class="col-start-2 row-start-3 truncate text-sm">
               <StaticMarkdown
                 markdown={value()}
                 singleLine

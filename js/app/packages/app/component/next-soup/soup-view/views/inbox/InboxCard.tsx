@@ -47,10 +47,10 @@ function Root(props: RootProps): JSX.Element {
             props.highlighted && !props.selected && !isTouchDevice(),
           'hover:bg-hover/50':
             !props.highlighted && !props.selected && !isTouchDevice(),
-          'opacity-80': props.dimmed,
         },
         props.class
       )}
+      data-unread={props.dimmed ? undefined : true}
       role={interactive() ? 'button' : undefined}
       tabIndex={interactive() ? 0 : undefined}
       onClick={props.onClick}
@@ -77,7 +77,7 @@ function Icon(props: IconProps): JSX.Element {
       )}
     >
       <Layer depth={3}>
-        <span class="grid size-full place-items-center overflow-hidden rounded-lg bg-surface ring ring-inset ring-ink-extra-muted/8 text-ink-extra-muted">
+        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface text-ink-extra-muted">
           <Show when={props.src} fallback={props.fallback}>
             {(src) => <img src={src()} alt="" class="size-full object-cover" />}
           </Show>
@@ -104,14 +104,28 @@ function Header(props: SlotProps): JSX.Element {
 
 function Title(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('min-w-0 flex-1 truncate text-sm font-medium', props.class)}>
+    <div
+      class={cn(
+        'min-w-0 flex-1 truncate text-sm font-normal text-ink-extra-muted group-data-unread/inbox-item:text-ink group-data-unread/inbox-item:font-medium',
+        props.class
+      )}
+    >
       {props.children}
     </div>
   );
 }
 
 function Content(props: SlotProps): JSX.Element {
-  return <div class={cn('min-w-0', props.class)}>{props.children}</div>;
+  return (
+    <div
+      class={cn(
+        'min-w-0 text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
 }
 
 function Attachments(props: {
