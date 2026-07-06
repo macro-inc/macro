@@ -2259,7 +2259,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.57.0",
+ "windows-core 0.58.0",
 ]
 
 [[package]]
@@ -5475,7 +5475,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-fs"
 version = "2.5.1"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fws-replay-buffer#65794e6229a3e109c14d81d678d86c7802ada304"
+source = "git+https://github.com/seanaye/plugins-workspace?rev=65794e6229a3e109c14d81d678d86c7802ada304#65794e6229a3e109c14d81d678d86c7802ada304"
 dependencies = [
  "anyhow",
  "dunce",
@@ -5512,7 +5512,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-http"
 version = "2.5.9"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fws-replay-buffer#65794e6229a3e109c14d81d678d86c7802ada304"
+source = "git+https://github.com/seanaye/plugins-workspace?rev=65794e6229a3e109c14d81d678d86c7802ada304#65794e6229a3e109c14d81d678d86c7802ada304"
 dependencies = [
  "bytes",
  "cookie_store",
@@ -5695,7 +5695,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-websocket"
 version = "2.4.2"
-source = "git+https://github.com/seanaye/plugins-workspace?branch=seanaye%2Ffeat%2Fws-replay-buffer#65794e6229a3e109c14d81d678d86c7802ada304"
+source = "git+https://github.com/seanaye/plugins-workspace?rev=65794e6229a3e109c14d81d678d86c7802ada304#65794e6229a3e109c14d81d678d86c7802ada304"
 dependencies = [
  "futures-util",
  "http",

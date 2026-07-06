@@ -141,6 +141,13 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
 
       // Unwrap the { seq, message } replay envelope, deduplicating messages
       // that are delivered both live and via recover().
+      //
+      // Note: the live path can never present a forward gap (seq > lastSeq + 1
+      // with the hole unfilled). Tauri's Channel delivers messages strictly
+      // in-order (out-of-order arrivals are buffered internally), and
+      // recover() verifies contiguity Rust-side via the `gap` flag. Lost
+      // channel messages stall inside the Channel instead, which is exactly
+      // what recover() compensates for.
       const deliver = (envelope: ReplayEnvelope) => {
         if (envelope.seq > 0) {
           if (envelope.seq <= this.lastSeq) {
@@ -249,7 +256,10 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       return;
     }
     this.recovering = true;
-    let gap = false;
+    // Set when missed messages cannot be recovered: either the replay buffer
+    // no longer covers them (gap) or the recover call itself failed. In both
+    // cases we must not continue with a hole in the stream.
+    let needsResync = false;
     try {
       const res = await invoke<RecoverResponse>('plugin:websocket|recover', {
         id: this.socketId,
@@ -258,21 +268,26 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       for (const envelope of res.messages) {
         this.deliver?.(envelope);
       }
-      gap = res.gap;
+      needsResync = res.gap;
     } catch (error) {
       console.error(`Tauri WebSocket recover failed for ${this._url}:`, error);
+      needsResync = true;
     } finally {
-      // flush messages that arrived live while we were recovering
       const queued = this.queued;
       this.queued = [];
       this.recovering = false;
-      for (const envelope of queued) {
-        this.deliver?.(envelope);
+      if (!needsResync) {
+        // flush messages that arrived live while we were recovering
+        for (const envelope of queued) {
+          this.deliver?.(envelope);
+        }
       }
+      // when resyncing, the queued envelopes are dropped: the forced
+      // reconnect below triggers a full resync that covers them
     }
-    if (gap) {
+    if (needsResync) {
       console.warn(
-        `Tauri WebSocket ${this._url}: replay gap detected, forcing reconnect`
+        `Tauri WebSocket ${this._url}: unrecoverable missed messages, forcing reconnect`
       );
       this.disconnectSocket().catch(() => {});
       this._readyState = this.CLOSED;
