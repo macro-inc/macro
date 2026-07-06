@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
@@ -403,6 +404,19 @@ export const BulkMoveToProjectView = (props: {
           })),
           project: { id: projectId, name: projectName },
         });
+
+        const isBulk = props.entities.length > 1;
+        for (const entity of props.entities) {
+          analytics.track('update_entity', {
+            entityType: entity.type,
+            entityId: entity.id,
+            property: 'parent_project',
+            newProjectId: projectId,
+            isBulk,
+            bulkCount: props.entities.length,
+            source: 'bulk_move',
+          });
+        }
 
         props.onFinish();
       } catch (error) {

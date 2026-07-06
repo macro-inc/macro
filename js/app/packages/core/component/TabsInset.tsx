@@ -29,6 +29,13 @@ export const TabsInset = (props: TabsInsetProps) => {
     'depth',
   ]);
 
+  // The track sits at the control's depth (matching the panel it's on); the
+  // checked item is elevated two steps above it so the active pill still reads
+  // as raised regardless of the panel depth.
+  const trackDepth = () => local.depth ?? 0;
+  const itemDepth = () =>
+    Math.min(5, trackDepth() + 2) as 0 | 1 | 2 | 3 | 4 | 5;
+
   return (
     <KSegmentedControl
       value={local.value}
@@ -37,11 +44,11 @@ export const TabsInset = (props: TabsInsetProps) => {
       {...rootProps}
       class={cn('h-full flex items-center', local.class)}
     >
-      <Layer depth={local.depth ?? 0}>
+      <Layer depth={trackDepth()}>
         <div class="relative flex items-center bg-surface rounded-lg p-0.5 ring ring-edge-muted">
           <For each={local.list}>
             {(item) => (
-              <Layer depth={2}>
+              <Layer depth={itemDepth()}>
                 <KSegmentedControl.Item
                   value={item.value}
                   disabled={local.disabled}

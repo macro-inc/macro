@@ -1,9 +1,9 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
-import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
+import { semanticTokens, type ThemeV2, type ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
-import { DEFAULT_DARK_THEME } from '../constants';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
 
 export function exportTheme(themeId?: string){
   const id = themeId ?? currentThemeId();
@@ -56,6 +56,16 @@ export function applyTheme(id: string): void{
     theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
   }
   setCurrentThemeId(theme.id);
+
+  // Set theme overrides
+  for (const token of semanticTokens) {
+    const themeOverride = theme.overrides?.find((o) => o.token === token)
+    if (themeOverride) {
+      document.documentElement.style.setProperty(`--theme-${token}`, `oklch(${themeOverride.value.l} ${themeOverride.value.c} ${themeOverride.value.h})`)
+    } else {
+      document.documentElement.style.removeProperty(`--theme-${token}`)
+    }
+  }
 
   batch(() => {
     (Object.keys(theme!.tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {
@@ -179,12 +189,48 @@ export function saveTheme(name: string): void{
   setIsThemeSaved(true);
 }
 
+/** Save the live theme back onto an existing custom theme (same id), updating
+ *  its name, depth, and tokens in place. */
+export function updateTheme(id: string, name: string): void{
+  const tokens = getCurrentTokens();
+  setUserThemes(
+    userThemes().map((theme) =>
+      theme.id === id
+        ? { ...theme, name, depth: themeDepth(), tokens }
+        : theme
+    )
+  );
+  setCurrentThemeId(id);
+  setIsThemeSaved(true);
+}
+
 export function deleteTheme(id: string): void{
   setUserThemes(userThemes().filter((theme) => theme.id !== id));
+  // A deleted theme can no longer serve as a per-mode default; fall back to the
+  // built-in Macro light/dark themes.
+  if(lightModeTheme() === id){setLightModeTheme(DEFAULT_LIGHT_THEME)}
+  if(darkModeTheme() === id){setDarkModeTheme(DEFAULT_DARK_THEME)}
   if(currentThemeId() === id){
+    // Keep the live tokens in place so the picker still shows this theme's
+    // swatch, but mark it unsaved/unselected — it now reads as "Unsaved Theme"
+    // until the user saves it again.
     setIsThemeSaved(false);
     setCurrentThemeId('');
   }
+}
+
+/** A synthetic ThemeV2 snapshot of the live (in-editor) tokens. Lets the picker
+ *  render a swatch for the active theme even when it isn't a stored theme — e.g.
+ *  after the selected theme was deleted, leaving an unsaved live theme. Reading
+ *  it inside a reactive scope subscribes to the live token signals. */
+export function getLiveTheme(): ThemeV2{
+  return {
+    id: '',
+    name: 'Unsaved Theme',
+    version: 2,
+    depth: themeDepth(),
+    tokens: getCurrentTokens(),
+  };
 }
 
 /** Intrinsic darkness of a stored theme: dark when text is lighter than background. */

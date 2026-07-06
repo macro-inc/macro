@@ -1,4 +1,9 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import {
+  COMMAND_MENU_CATEGORY_LEADER_KEY,
+  COMMAND_MENU_CATEGORY_SCOPE,
+  CREATE_MENU_COMMAND_SCOPE,
+} from '@app/constants/hotkeys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -14,7 +19,9 @@ import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import {
   handleFolderSelect,
   openFilePicker,
@@ -39,10 +46,9 @@ import {
   themeShouldMatchSystem,
   themes,
 } from '../../theme/signals/themeSignals';
-
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
-import { CommandState } from './command';
+import { type CategoryFilter, CommandState } from './command';
 import {
   CREATABLE_BLOCKS,
   createMenuOpen,
@@ -50,6 +56,20 @@ import {
 } from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useSplitLayout } from './split-layout/layout';
+
+const COMMAND_MENU_CATEGORY_HOTKEYS: Array<{
+  category: CategoryFilter;
+  hotkey: ValidHotkey;
+  label: string;
+}> = [
+  { category: 'all', hotkey: 'l', label: 'All' },
+  { category: 'commands', hotkey: 'm', label: 'Command' },
+  { category: 'chats', hotkey: 'a', label: 'Agents' },
+  { category: 'documents', hotkey: 'f', label: 'Files' },
+  { category: 'tasks', hotkey: 't', label: 'Tasks' },
+  { category: 'channels', hotkey: 'c', label: 'Channels' },
+  { category: 'dms', hotkey: 'p', label: 'People' },
+];
 
 function useHotkeyAnalytics(): void {
   const analytics = useAnalytics();
@@ -124,7 +144,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -140,7 +160,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-    activateCommandScope: true,
+    activateCommandScopeId: CREATE_MENU_COMMAND_SCOPE,
     surfaceNestedCommands: true,
     keywords: ['new', 'make', 'add'],
     icon: Plus,
@@ -150,7 +170,7 @@ export default function GlobalShortcuts() {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
-      scopeId: createScope.commandScopeId,
+      scopeId: CREATE_MENU_COMMAND_SCOPE,
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
@@ -161,8 +181,19 @@ export default function GlobalShortcuts() {
       keywords: item.keywords,
       hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
       runWithInputFocused: true,
-      proxiedHotkey: true,
     });
+  });
+
+  registerHotkey({
+    hotkey: ['c', 'escape'],
+    scopeId: CREATE_MENU_COMMAND_SCOPE,
+    description: 'Close Create',
+    condition: createMenuOpen,
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({
@@ -181,6 +212,34 @@ export default function GlobalShortcuts() {
     hide: CommandState.isOpen,
     runWithInputFocused: true,
   });
+
+  registerHotkey({
+    hotkey: COMMAND_MENU_CATEGORY_LEADER_KEY,
+    scopeId: 'global',
+    description: 'Open category',
+    keyDownHandler: () => true,
+    activateCommandScopeId: COMMAND_MENU_CATEGORY_SCOPE,
+    surfaceNestedCommands: true,
+    keywords: ['command menu', 'palette', 'category'],
+  });
+
+  for (const item of COMMAND_MENU_CATEGORY_HOTKEYS) {
+    registerHotkey({
+      hotkey: item.hotkey,
+      scopeId: COMMAND_MENU_CATEGORY_SCOPE,
+      description: `Open ${item.label}`,
+      keyDownHandler: () => {
+        setActiveScope('global');
+        CommandState.setCategoryFilter(item.category);
+        CommandState.setQuery('');
+        CommandState.setSelectedIndex(0);
+        CommandState.open();
+        return true;
+      },
+      keywords: ['command menu', 'palette', 'category', item.label],
+      runWithInputFocused: true,
+    });
+  }
 
   const { openWithSplit } = useSplitLayout();
 

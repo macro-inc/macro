@@ -264,6 +264,7 @@ impl ChannelService for MockService {
             channel_id,
             thread_id: None,
             sender_id: "macro|user@example.com".to_string(),
+            triggered_by: None,
             bot_profile: None,
             content: "message context".to_string(),
             created_at: now,
@@ -744,7 +745,7 @@ async fn post_message_route_uses_entity_access_and_mutation_service() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert_eq!(posts[0].2.content, "hello");
 }
@@ -1055,6 +1056,7 @@ impl ChannelService for AroundHasItemsService {
             id: Uuid::new_v4(),
             channel_id,
             sender_id: "macro|user@example.com".to_string(),
+            triggered_by: None,
             bot_profile: None,
             content: "hello".to_string(),
             created_at: now,
@@ -1726,7 +1728,7 @@ impl ChannelService for ActivityService {
             .push((actor.clone(), channel_id, activity_type));
         Ok(Activity {
             id: Uuid::nil(),
-            user_id: actor.to_storage_string(),
+            user_id: actor.as_ref().to_string(),
             channel_id,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -1787,7 +1789,7 @@ async fn post_activity_records_and_returns_activity() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert!(matches!(posts[0].2, ActivityType::View));
 }

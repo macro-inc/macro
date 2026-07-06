@@ -8,13 +8,13 @@
 import type { EntityPropertyResponse } from './entityPropertyResponse';
 import type { EntityPropertyWithDefinitionResponseOptions } from './entityPropertyWithDefinitionResponseOptions';
 import type { EntityPropertyWithDefinitionResponseValue } from './entityPropertyWithDefinitionResponseValue';
-import type { PropertyDefinitionResponse } from './propertyDefinitionResponse';
+import type { PropertyDefinitionDetailResponse } from './propertyDefinitionDetailResponse';
 
 /**
  * Entity property with definition response (API representation).
  */
 export interface EntityPropertyWithDefinitionResponse {
-  definition: PropertyDefinitionResponse;
+  definition: PropertyDefinitionDetailResponse;
   options?: EntityPropertyWithDefinitionResponseOptions;
   property: EntityPropertyResponse;
   value?: EntityPropertyWithDefinitionResponseValue;

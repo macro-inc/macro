@@ -17,11 +17,6 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
@@ -65,11 +60,7 @@ const staticFileService = new StaticFileService(`${SERVICE_NAME}-${stack}`, {
     family: 'linux',
     architecture: 'amd64',
   },
-  secretKeyArns: [
-    jwtSecretKeyArn,
-    internalApiKeyArn,
-    MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
-  ],
+  secretKeyArns: [jwtSecretKeyArn, MACRO_API_TOKENS.macroApiTokenPublicKeyArn],
   healthCheckPath: '/api/health',
   serviceContainerPort: 8080,
   tags,

@@ -2,7 +2,10 @@ import type { NotificationType } from '@core/types';
 import { DisplayName } from '@entity/components/DisplayName';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
-import { getActionVerb } from '../../extractors-notification/notification-description-helpers';
+import {
+  getActionVerb,
+  getGithubSenderLogin,
+} from '../../extractors-notification/notification-description-helpers';
 import type { EntityData } from '../../types/entity';
 import type { Notification } from '../../types/notification';
 
@@ -16,7 +19,14 @@ export function TaskNarrowBody(props: {
       <Show when={props.notification}>
         {(notif) => (
           <span class="text-ink-extra-muted font-normal truncate">
-            <Show when={notif().sender_id}>
+            <Show
+              when={notif().sender_id}
+              fallback={
+                <Show when={getGithubSenderLogin(notif())}>
+                  {(login) => <>{login()} </>}
+                </Show>
+              }
+            >
               {(senderId) => (
                 <>
                   <DisplayName id={senderId()} format="firstName" />{' '}

@@ -291,7 +291,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 
   const mobileTabs = createMemo((): TabItem[] => {
     const tabs: TabItem[] = [{ value: 'share', label: 'Share' }];
-    if ((props.recipients?.length ?? 0) > 0 || !!props.owner)
+    if ((props.recipients?.length ?? 0) > 0 || props.owner)
       tabs.push({ value: 'people', label: 'People' });
     if (
       props.userPermissions === Permissions.OWNER &&
@@ -785,6 +785,13 @@ export function ShareModal(props: ShareModalProps) {
             subtext: accessLevelText(accessLevel),
           });
         }
+
+        analytics.track('share_entity', {
+          entityType: props.itemType,
+          entityId: props.id,
+          shareMethod: 'channel',
+          accessLevel,
+        });
       } else {
         toast.alert('Failed to change channel access', {
           subtext: 'Please try again',
@@ -828,6 +835,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'chat',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });
@@ -859,6 +868,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'document',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });
@@ -890,6 +901,8 @@ export function ShareModal(props: ShareModalProps) {
 
             analytics.track('share_entity', {
               entityType: 'project',
+              entityId: props.id,
+              shareMethod: 'public_link',
               accessLevel,
               isPublic: true,
             });
@@ -950,7 +963,7 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel active depth={2} class="rounded-xl">
+              <Panel depth={2} class="rounded-xl">
                 <Panel.Header class="px-4">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>

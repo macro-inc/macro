@@ -1,6 +1,8 @@
 use std::{borrow::Cow, sync::Mutex};
 
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector};
+use loro::{
+    Container, ContainerID, ExportMode, Frontiers, LoroDoc, LoroValue, ToJson, VersionVector,
+};
 use tracing::debug;
 use web_time::Instant;
 use worker::Result;
@@ -83,17 +85,75 @@ impl DocumentState {
             .unwrap_context("last_export mutex poisoned") = Some(Instant::now());
     }
 
-    /// Import a new update into the document state
-    pub fn import(&self, update: &[u8]) -> Result<()> {
+    /// Import an update into the document. Returns the set of Lexical node IDs
+    /// whose backing Loro containers were touched, deduplicated.
+    pub fn import(&self, update: &[u8]) -> Result<Vec<String>> {
+        let before = self.loro_doc.oplog_frontiers();
         self.loro_doc
             .import_with(update, FROM_CLIENT_TAG)
             .context("failed to import update")?;
+        let after = self.loro_doc.oplog_frontiers();
+
         *self
             .last_update
             .lock()
             .unwrap_context("last_update mutex poisoned") = Some(Instant::now());
 
-        Ok(())
+        Ok(self.touched_lexical_ids(&before, &after))
+    }
+
+    /// Diff the two frontiers and return the Lexical node IDs whose backing
+    /// containers were modified, deduplicated. Empty `Vec` on diff failure.
+    fn touched_lexical_ids(&self, before: &Frontiers, after: &Frontiers) -> Vec<String> {
+        let Ok(diff) = self.loro_doc.diff(before, after) else {
+            return Vec::new();
+        };
+        let mut touched: Vec<String> = diff
+            .iter()
+            .filter_map(|(cid, _)| self.find_lexical_id(cid))
+            .collect();
+        touched.sort();
+        touched.dedup();
+        touched
+    }
+
+    /// Walk from a changed container up to the nearest ancestor LoroMap whose
+    /// `$` submap has an `id` — that string is the Lexical node ID.
+    fn find_lexical_id(&self, container_id: &ContainerID) -> Option<String> {
+        // Real Lexical docs never nest this deep; cap as a safety net against
+        // unexpectedly large paths from Loro.
+        const MAX_DEPTH: usize = 100;
+
+        // Start with the container itself, then walk its ancestors.
+        let mut candidates: Vec<ContainerID> = vec![container_id.clone()];
+        if let Some(path) = self.loro_doc.get_path_to_container(container_id) {
+            for (cid, _) in path.into_iter().rev() {
+                candidates.push(cid);
+            }
+        }
+
+        for cid in candidates.into_iter().take(MAX_DEPTH) {
+            let Some(container) = self.loro_doc.get_container(cid) else {
+                continue;
+            };
+            let Container::Map(map) = container else {
+                continue;
+            };
+            let Some(meta_voc) = map.get("$") else {
+                continue;
+            };
+            let Some(Container::Map(meta_map)) = meta_voc.into_container().ok() else {
+                continue;
+            };
+            let Some(id_voc) = meta_map.get("id") else {
+                continue;
+            };
+            let Some(LoroValue::String(id)) = id_voc.into_value().ok() else {
+                continue;
+            };
+            return Some(id.to_string());
+        }
+        None
     }
 
     /// Export the document state as a snapshot

@@ -1,101 +1,101 @@
-use super::Model;
-use crate::error::AgentError;
-use regex::Regex;
+use std::sync::Arc;
+
+use crate::model::types::Model;
 use rig_core::{client::CompletionClient, providers::openai};
-use std::sync::{Arc, LazyLock};
 
-/// Matches the OpenAI model namespace.
+/// A model served over the OpenAI-compatible **Chat Completions** API.
 ///
-/// The frontend is authoritative over model selection, so we only need to
-/// decide which *provider* an id belongs to — not validate the exact id (the
-/// string is passed through to the API verbatim). Every OpenAI id falls under
-/// one of these prefixes:
-///
-/// - `gpt-…`      — `gpt-5*`, `gpt-4o`, `gpt-4.1`, `gpt-3.5-turbo`, …
-/// - `o[1-9]…`    — `o1`, `o3-mini`, `o4-mini`, `o3-pro`, …
-/// - `chatgpt-…`  — `chatgpt-4o-latest`
-/// - `chat-latest`
-///
-/// Anthropic ids (`claude-*`) never match.
-static OPENAI_MODEL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(?:gpt-|o[1-9]|chatgpt-|chat-latest)").expect("OpenAI model regex is valid")
-});
-
-/// Whether `model` names a known OpenAI model.
-pub(crate) fn is_openai_model(model: &str) -> bool {
-    OPENAI_MODEL_RE.is_match(model)
+/// OpenAI-compatible providers differ only by the
+/// [`CompletionsClient`](openai::CompletionsClient)'s base URL and key, never
+/// by Rust type, so routing can hold any number of them without new variants.
+/// Which provider serves an id is decided by routing (the `provider/…`
+/// segment), so there is no id classification here.
+pub struct OpenAiChatCompletionsModel<'a> {
+    model: Model<'a>,
+    client: Arc<openai::CompletionsClient>,
 }
 
-/// An api id validated as belonging to the OpenAI namespace.
-///
-/// The only constructor is [`TryFrom<String>`], which checks the id against
-/// [`is_openai_model`]. An `OpenAiModelId` therefore always names an OpenAI
-/// model, so routing one is infallible.
-#[derive(Debug, Clone)]
-pub struct OpenAiModelId(String);
-
-impl OpenAiModelId {
-    /// The underlying api id, passed verbatim to the OpenAI API.
-    pub(crate) fn as_str(&self) -> &str {
-        &self.0
+impl<'a> OpenAiChatCompletionsModel<'a> {
+    /// Bind `model` to the client that serves it.
+    pub fn new(model: Model<'a>, client: Arc<openai::CompletionsClient>) -> Self {
+        Self { model, client }
     }
-}
 
-impl TryFrom<String> for OpenAiModelId {
-    type Error = AgentError;
-
-    fn try_from(model: String) -> Result<Self, Self::Error> {
-        if is_openai_model(&model) {
-            Ok(Self(model))
-        } else {
-            Err(AgentError::UnknownModel(model))
-        }
-    }
-}
-
-pub struct OpenAiModel {
-    client: Arc<openai::Client>,
-    model: OpenAiModelId,
-}
-
-impl OpenAiModel {
-    /// Build a model bound to `model` served by `client`.
+    /// The rig completion model for this id.
     ///
-    /// Validation happens when the [`OpenAiModelId`] is constructed; the id is
-    /// passed through verbatim to the OpenAI API.
-    pub(super) fn new(client: Arc<openai::Client>, model: OpenAiModelId) -> Self {
-        Self { client, model }
+    /// Unlike the Responses API, the Chat Completions API does not coerce tools
+    /// into a strict subset, so tools are already sent verbatim.
+    pub fn completion(&self) -> openai::completion::CompletionModel {
+        self.client.completion_model(self.model.name().to_string())
+    }
+
+    /// Best-effort reasoning config, flattened into the request by rig, or
+    /// `None` if the model doesn't support it.
+    ///
+    /// The Chat Completions API takes a flat `reasoning_effort` field, accepted
+    /// only by reasoning models (the GPT-5 family and the `o`-series); anything
+    /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
+    /// variants get a lower effort. `temperature` is never set (reasoning models
+    /// reject it).
+    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+        let model = self.model.name().to_lowercase();
+
+        let is_reasoning = model.contains("gpt-5")
+            || model.starts_with("o1")
+            || model.starts_with("o3")
+            || model.starts_with("o4");
+        if !is_reasoning {
+            return None;
+        }
+
+        let effort = if model.contains("mini") || model.contains("nano") {
+            "low"
+        } else {
+            "high"
+        };
+
+        Some(serde_json::json!({ "reasoning_effort": effort }))
     }
 }
 
-impl Model for OpenAiModel {
-    type Completion = openai::responses_api::ResponsesCompletionModel;
+/// A model served over OpenAI's **Responses** API.
+///
+/// This is intentionally separate from OpenAI-compatible Chat Completions:
+/// OpenAI GPT reasoning models expect Responses-shaped request fields, while
+/// many compatible OSS endpoints only promise `/v1/chat/completions`.
+pub struct OpenAiResponsesModel<'a> {
+    model: Model<'a>,
+    client: Arc<openai::Client>,
+}
 
-    /// Tools are sent verbatim (`with_non_strict_tools`) rather than coerced
-    /// into OpenAI's strict subset, which would silently force every optional
-    /// tool parameter to `required`.
-    fn completion(&self) -> Self::Completion {
+impl<'a> OpenAiResponsesModel<'a> {
+    /// Bind `model` to the Responses API client that serves it.
+    pub fn new(model: Model<'a>, client: Arc<openai::Client>) -> Self {
+        Self { model, client }
+    }
+
+    /// The rig Responses API completion model for this id.
+    ///
+    /// Rig maps the generic `max_tokens` agent setting to the Responses API's
+    /// `max_output_tokens`, avoiding the Chat Completions `max_tokens` 400s on
+    /// GPT reasoning models. Tools are sent verbatim (`with_non_strict_tools`)
+    /// rather than coerced into OpenAI's strict subset.
+    pub fn completion(&self) -> openai::responses_api::ResponsesCompletionModel {
         self.client
-            .completion_model(self.model.as_str().to_string())
+            .completion_model(self.model.name().to_string())
             .with_non_strict_tools()
     }
 
-    /// Best-effort reasoning config for the configured model.
-    ///
-    /// Returned JSON is flattened into the Responses API request by rig and
-    /// parsed into its `reasoning` parameter (`effort` + `summary`).
-    ///
-    /// Reasoning is only valid on reasoning models — the GPT-5 family — so
-    /// anything else returns `None` (sending `reasoning` to a non-reasoning
-    /// model 400s). Within the family, the smaller `mini` / `nano` variants
-    /// get a lower effort than the full models.
-    ///
-    /// We never set `temperature`: reasoning models reject it, so we leave it
-    /// unset and let the API default apply.
-    fn thinking_params(&self) -> Option<serde_json::Value> {
-        let model = self.model.as_str().to_lowercase();
+    /// Best-effort reasoning config for OpenAI Responses models, or `None` if
+    /// the model doesn't support it.
+    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+        let model = self.model.name().to_lowercase();
 
-        if !model.contains("gpt-5") {
+        let is_reasoning = model.contains("gpt-5")
+            || model.starts_with("o1")
+            || model.starts_with("o3")
+            || model.starts_with("o4");
+        if !is_reasoning {
             return None;
         }
 
@@ -106,7 +106,10 @@ impl Model for OpenAiModel {
         };
 
         Some(serde_json::json!({
-            "reasoning": { "effort": effort, "summary": "auto" }
+            "reasoning": {
+                "effort": effort,
+                "summary": "auto"
+            }
         }))
     }
 }

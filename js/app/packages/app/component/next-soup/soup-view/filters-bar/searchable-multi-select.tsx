@@ -73,7 +73,7 @@ const SearchableMultiSelectItem = (itemProps: {
 }) => (
   <Combobox.Item
     item={itemProps.item}
-    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs data-highlighted:bg-ink/5 group cursor-default"
+    class="group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left text-sm font-normal data-highlighted:bg-ink/5 cursor-default"
   >
     <Show when={itemProps.item.rawValue.id !== ACTION_ID}>
       <span
@@ -95,7 +95,7 @@ const SearchableMultiSelectItem = (itemProps: {
         </span>
       )}
     </Show>
-    <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-selected:text-ink">
+    <Combobox.ItemLabel class="flex-1 truncate text-ink">
       {itemProps.item.rawValue.label}
     </Combobox.ItemLabel>
     <Show
@@ -279,7 +279,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
               <Combobox.Input
-                class="flex-1 min-w-0 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+                class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
                 placeholder={props.placeholder ?? 'Search...'}
               />
             </div>
@@ -400,7 +400,7 @@ export const SearchableMultiSelectInline = (
         <Combobox.Input
           ref={props.inputRef}
           onKeyDown={handleInputKeyDown}
-          class="flex-1 min-w-0 text-xs bg-transparent outline-none caret-accent placeholder:text-ink-faint"
+          class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-faint"
           placeholder={props.placeholder ?? 'Search...'}
         />
       </div>

@@ -8,24 +8,30 @@ import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
+import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Copy from '@phosphor/copy.svg';
-import ThreeDots from '@phosphor/list.svg';
 import Rename from '@phosphor/pencil-line.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { Button, Dropdown } from '@ui';
+import { cn, Dropdown } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
+  onCleanup,
   Show,
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { SplitPanelContext } from '../context';
+import {
+  getSplitFileMenuActionSections,
+  type SplitFileMenuAction,
+  SplitPanelContext,
+} from '../context';
 import { useSplitLayout } from '../layout';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
@@ -48,14 +54,9 @@ const isDefaultFileOperation = (
 
 export type FileOperation = DefaultFileOperation | CustomFileOperation;
 
-type SplitMenuAction = {
-  label: string | JSX.Element;
-  icon: Component;
-  action: (e?: MouseEvent) => void;
-  group?: 'delete';
-};
-
-function SplitMenuItemContent(props: Pick<SplitMenuAction, 'icon' | 'label'>) {
+function SplitMenuItemContent(
+  props: Pick<SplitFileMenuAction, 'icon' | 'label'>
+) {
   return (
     <>
       <Dynamic
@@ -71,15 +72,19 @@ type SplitFileMenuRenderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerClass?: string;
-  ops: SplitMenuAction[];
-  tools: SplitMenuAction[];
+  ops: SplitFileMenuAction[];
+  tools: SplitFileMenuAction[];
 };
 
 function DesktopRender(props: SplitFileMenuRenderProps) {
-  const primaryOps = () => props.ops.filter((op) => op.group !== 'delete');
-  const deleteOps = () => props.ops.filter((op) => op.group === 'delete');
+  const sections = () =>
+    getSplitFileMenuActionSections({
+      tools: props.tools,
+      primaryOps: props.ops.filter((op) => op.group !== 'delete'),
+      deleteOps: props.ops.filter((op) => op.group === 'delete'),
+    });
 
-  const item = (action: SplitMenuAction) => (
+  const item = (action: SplitFileMenuAction) => (
     <Dropdown.Item
       onSelect={() => {
         action.action();
@@ -93,35 +98,27 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
-        class={props.triggerClass}
+        class={cn(props.triggerClass)}
         size="icon-sm"
         variant="ghost"
       >
-        <ThreeDots />
+        <DotsThree />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-fit">
-        <Show when={primaryOps().length > 0}>
-          <Dropdown.Group>
-            <For each={primaryOps()}>{item}</For>
-          </Dropdown.Group>
-        </Show>
-        <Show when={props.tools.length > 0}>
-          <Dropdown.Group>
-            <For each={props.tools}>{item}</For>
-          </Dropdown.Group>
-        </Show>
-        <Show when={deleteOps().length > 0}>
-          <Dropdown.Group>
-            <For each={deleteOps()}>{item}</For>
-          </Dropdown.Group>
-        </Show>
+      <Dropdown.Content class="w-fit shadow-menu">
+        <For each={sections()}>
+          {(section) => (
+            <Dropdown.Group>
+              <For each={section.actions}>{item}</For>
+            </Dropdown.Group>
+          )}
+        </For>
       </Dropdown.Content>
     </Dropdown>
   );
 }
 
 function MobileRender(props: SplitFileMenuRenderProps) {
-  const item = (action: SplitMenuAction) => (
+  const item = (action: SplitFileMenuAction) => (
     <button
       type="button"
       class="w-full bg-surface flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px text-ink"
@@ -142,29 +139,21 @@ function MobileRender(props: SplitFileMenuRenderProps) {
       preventScroll={false}
       preventScrollbarShift={false}
     >
-      <MobileDrawer.Trigger
-        as={Button}
-        class={props.triggerClass}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <ThreeDots />
-      </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content aria-label="File actions">
           <MobileDrawer.Handle />
-          <Show when={props.ops.length > 0}>
+          <Show when={props.tools.length > 0}>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.ops}>{item}</For>
+              <For each={props.tools}>{item}</For>
             </MobileDrawer.Section>
           </Show>
-          <Show when={props.tools.length > 0}>
-            <Show when={props.ops.length > 0}>
+          <Show when={props.ops.length > 0}>
+            <Show when={props.tools.length > 0}>
               <div class="mt-3" />
             </Show>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.tools}>{item}</For>
+              <For each={props.ops}>{item}</For>
             </MobileDrawer.Section>
           </Show>
         </MobileDrawer.Content>
@@ -197,7 +186,13 @@ export function SplitFileMenu(props: {
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
 
-  const ops = createMemo<CustomFileOperation[]>(() => {
+  createEffect(() => {
+    const openMenu = () => setOpen(true);
+    ctx.setTitleFileMenuTrigger(() => openMenu);
+    onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
+  });
+
+  const ops = createMemo<SplitFileMenuAction[]>(() => {
     return props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
@@ -217,7 +212,7 @@ export function SplitFileMenu(props: {
                   }
                 },
                 icon: Trash,
-                group: 'delete',
+                group: 'delete' as const,
               };
 
             case 'rename':
@@ -303,7 +298,7 @@ export function SplitFileMenu(props: {
     (props.tools ?? []).filter((t) => !t.condition || t.condition())
   );
 
-  const tools = createMemo<SplitMenuAction[]>(() =>
+  const tools = createMemo<SplitFileMenuAction[]>(() =>
     filteredTools().map((tool) => ({
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
       icon: tool.icon,
@@ -319,6 +314,18 @@ export function SplitFileMenu(props: {
       },
     }))
   );
+
+  const actionGroups = createMemo(() => ({
+    tools: tools(),
+    primaryOps: ops().filter((op) => op.group !== 'delete'),
+    deleteOps: ops().filter((op) => op.group === 'delete'),
+  }));
+
+  createEffect(() => {
+    ctx.setTitleFileMenuActions(actionGroups());
+  });
+
+  onCleanup(() => ctx.setTitleFileMenuActions(undefined));
 
   return (
     <Show

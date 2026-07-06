@@ -31,6 +31,7 @@ import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
 import { InlineSearchNode } from './nodes/InlineSearchNode';
+import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
@@ -71,6 +72,7 @@ export const SupportedNodeTypes = [
   LineBreakNode,
   DocumentMentionNode,
   DocumentCardNode,
+  PasteNode,
   UserMentionNode,
   ContactMentionNode,
   DateMentionNode,

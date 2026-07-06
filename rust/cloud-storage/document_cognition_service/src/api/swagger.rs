@@ -30,10 +30,7 @@ use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryRe
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
-use chat::domain::models::{
-    ChatResponse, GetChatResponse, ModelAccess, ModelsResponse, WebCitation,
-};
-use chat::inbound::http::models as chat_models;
+use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
 use chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
@@ -78,7 +75,6 @@ use utoipa::OpenApi;
             chat_router::update_tool_response_handler,
             chat_router::call_tool_handler,
             chat_router::reject_tool_call_handler,
-            chat_models::list_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
@@ -101,8 +97,6 @@ use utoipa::OpenApi;
         components(
             schemas(
                 DocumentCognitionServiceApiVersion,
-                ModelAccess,
-                ModelsResponse,
                 // Generic
                 StringIDResponse,
                 GenericErrorResponse,

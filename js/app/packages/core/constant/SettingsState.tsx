@@ -7,6 +7,7 @@ import { createMemo, createSignal } from 'solid-js';
 
 export type SettingsTab =
   | 'Account'
+  | 'Billing'
   | 'Subscription'
   | 'Organization'
   | 'Appearance'
@@ -17,6 +18,7 @@ export type SettingsTab =
   | 'Mobile App'
   | 'Agent'
   | 'Team'
+  | 'Connected'
   | 'Email'
   | 'GitHub'
   | 'Admin';
@@ -28,10 +30,6 @@ const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Account');
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'settings',
 });
-
-export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
-export const [agentSettingsSubTab, setAgentSettingsSubTab] =
-  createSignal<AgentSettingsSubTab>('connectors');
 
 export const useSettingsState = () => {
   const { openWithSplit } = useSplitLayout();

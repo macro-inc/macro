@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -6,11 +7,14 @@ import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
+import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
+
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
 import { isPaymentError } from './handlePaymentError';
@@ -26,6 +30,8 @@ type CreateMarkdownFileArgs = {
   title?: string;
   content?: string;
   projectId?: string;
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 };
 
 /**
@@ -45,7 +51,13 @@ export async function createMarkdownFile(
 
   if (result.isErr()) return;
 
-  const { documentId } = result.value;
+  const { documentId, documentMetadata, token } = result.value;
+
+  seedDocumentLoadBundle(documentId, {
+    documentMetadata,
+    userAccessLevel: AccessLevel.owner,
+    token,
+  });
 
   setPreviewOnCreate({
     itemId: documentId,
@@ -54,6 +66,14 @@ export async function createMarkdownFile(
     fileType: 'md',
   });
   refetchSoupEntity(documentId, 'document');
+
+  analytics.track('create_entity', {
+    entityType: 'md',
+    entityId: documentId,
+    projectId: args?.projectId,
+    source: args?.source,
+  });
+
   return documentId;
 }
 
@@ -62,6 +82,8 @@ type CreateTaskArgs = {
   content?: string;
   projectId?: string;
   propertyValues?: PropertyInput[];
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 };
 
 /**
@@ -101,7 +123,13 @@ export async function createTask(
 
   if (result.isErr()) return;
 
-  const { documentId } = result.value;
+  const { documentId, documentMetadata, token } = result.value;
+
+  seedDocumentLoadBundle(documentId, {
+    documentMetadata,
+    userAccessLevel: AccessLevel.owner,
+    token,
+  });
 
   setPreviewOnCreate({
     itemId: documentId,
@@ -111,6 +139,26 @@ export async function createTask(
     subType: { type: 'task', is_completed: false },
   });
   refetchSoupEntity(documentId, 'document');
+
+  analytics.track('create_entity', {
+    entityType: 'task',
+    entityId: documentId,
+    projectId: args?.projectId,
+    source: args?.source,
+    hasAssignee: propertyValues.some(
+      (p) => p.propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+    ),
+    hasDueDate: propertyValues.some(
+      (p) => p.propertyId === SYSTEM_PROPERTY_IDS.DUE_DATE
+    ),
+    hasPriority: propertyValues.some(
+      (p) => p.propertyId === SYSTEM_PROPERTY_IDS.PRIORITY
+    ),
+    isSubtask: propertyValues.some(
+      (p) => p.propertyId === SYSTEM_PROPERTY_IDS.PARENT_TASK
+    ),
+  });
+
   return documentId;
 }
 
@@ -118,6 +166,8 @@ type CreateSnippetArgs = {
   title?: string;
   content?: string;
   projectId?: string;
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 };
 
 /**
@@ -148,6 +198,14 @@ export async function createSnippet(
     subType: { type: 'snippet' },
   });
   refetchSoupEntity(documentId, 'document');
+
+  analytics.track('create_entity', {
+    entityType: 'snippet',
+    entityId: documentId,
+    projectId: args?.projectId,
+    source: args?.source,
+  });
+
   return documentId;
 }
 
@@ -156,11 +214,14 @@ export async function createCodeFileFromText({
   extension,
   language,
   title,
+  source,
 }: {
   code: string;
   title?: string;
   extension?: CodeFileExtension;
   language?: string;
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 }) {
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
@@ -229,6 +290,14 @@ export async function createCodeFileFromText({
     fileType: finalExtension,
   });
   refetchSoupEntity(document.metadata.documentId, 'document');
+
+  analytics.track('create_entity', {
+    entityType: 'code',
+    entityId: document.metadata.documentId,
+    source,
+    extension: finalExtension,
+  });
+
   return ok({ documentId: document.metadata.documentId });
 }
 
@@ -236,8 +305,10 @@ export async function createCanvasFileFromJsonString(args: {
   json: string;
   title?: string;
   projectId?: string;
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 }) {
-  const { json, title, projectId } = args;
+  const { json, title, projectId, source } = args;
   const encoder = new TextEncoder();
   const buffer = encoder.encode(json);
   const sha = await contentHash(buffer);
@@ -269,10 +340,24 @@ export async function createCanvasFileFromJsonString(args: {
     fileType: 'canvas',
   });
   refetchSoupEntity(canvas.metadata.documentId, 'document');
+
+  analytics.track('create_entity', {
+    entityType: 'canvas',
+    entityId: canvas.metadata.documentId,
+    projectId,
+    source,
+  });
+
   return { documentId: canvas.metadata.documentId };
 }
 
-export async function createChat(args?: CreateChatRequest) {
+export async function createChat(
+  args?: CreateChatRequest,
+  opts?: {
+    /** UI surface the creation originated from, for analytics. */
+    source?: string;
+  }
+) {
   const { showPaywall } = usePaywallState();
 
   const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
@@ -292,6 +377,14 @@ export async function createChat(args?: CreateChatRequest) {
     name: args?.name ?? DEFAULT_CHAT_NAME,
   });
   refetchSoupEntity(chat.id, 'chat');
+
+  analytics.track('create_entity', {
+    entityType: 'chat',
+    entityId: chat.id,
+    projectId: args?.projectId,
+    source: opts?.source,
+  });
+
   return { chatId: chat.id };
 }
 

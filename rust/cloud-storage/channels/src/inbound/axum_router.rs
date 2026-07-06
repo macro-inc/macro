@@ -29,6 +29,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
@@ -119,7 +120,7 @@ fn actor_from_receipt<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<Sender, ChannelsHandlerErr> {
     match receipt.auth() {
-        EntityAccessAuth::Authenticated(user_id) => Ok(Sender::User(user_id.clone())),
+        EntityAccessAuth::Authenticated(user_id) => Ok(Sender::new_from_user(user_id.clone())),
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => Err(
             ChannelsHandlerErr::BadRequest("authenticated actor required"),
         ),
@@ -132,7 +133,7 @@ fn user_actor_from_receipt<T: RequiredPermission>(
     receipt
         .get_authenticated_user()
         .cloned()
-        .map(Sender::User)
+        .map(Sender::new_from_user)
         .map_err(|_| ChannelsHandlerErr::BadRequest("authenticated user required"))
 }
 
@@ -368,7 +369,7 @@ pub async fn create_channel_handler<S: ChannelService, Svc: EntityAccessService>
     let res = state
         .service
         .create_channel(
-            Sender::User(user.macro_user_id),
+            Sender::new_from_user(user.macro_user_id),
             user.user_context.organization_id.map(i64::from),
             req,
         )
@@ -399,7 +400,7 @@ pub async fn get_or_create_dm_handler<S: ChannelService, Svc: EntityAccessServic
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
         .service
-        .get_or_create_dm(Sender::User(user.macro_user_id), req)
+        .get_or_create_dm(Sender::new_from_user(user.macro_user_id), req)
         .await?;
     Ok((StatusCode::OK, Json(res)))
 }
@@ -427,7 +428,7 @@ pub async fn get_or_create_private_handler<S: ChannelService, Svc: EntityAccessS
 ) -> Result<(StatusCode, Json<GetOrCreateChannelResponse>), ChannelsHandlerErr> {
     let res = state
         .service
-        .get_or_create_private(Sender::User(user.macro_user_id), req)
+        .get_or_create_private(Sender::new_from_user(user.macro_user_id), req)
         .await?;
     Ok((StatusCode::OK, Json(res)))
 }
@@ -751,7 +752,7 @@ pub async fn join_channel_handler<S: ChannelService, Svc: EntityAccessService>(
     let channel_id = path.channel_id;
     state
         .service
-        .join_channel(Sender::User(user.macro_user_id), channel_id)
+        .join_channel(Sender::new_from_user(user.macro_user_id), channel_id)
         .await?;
     Ok(StatusCode::OK)
 }
@@ -1534,7 +1535,7 @@ pub async fn post_activity_handler<S: ChannelService, Svc: EntityAccessService>(
     let activity = state
         .service
         .post_activity(
-            Sender::User(user.macro_user_id),
+            Sender::new_from_user(user.macro_user_id),
             channel_id,
             req.activity_type,
         )
@@ -1609,6 +1610,9 @@ pub struct ApiMessageSender {
     /// Avatar URL for bot senders.
     #[serde(skip_serializing_if = "Option::is_none")]
     avatar_url: Option<String>,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    triggered_by: Option<String>,
 }
 
 /// Public sender type.
@@ -1623,36 +1627,57 @@ pub enum ApiMessageSenderType {
 
 impl ApiMessageSender {
     fn from_storage_string(sender_id: &str) -> Self {
-        match Sender::parse_storage_str(sender_id) {
-            Ok(Sender::Bot(bot_id)) => Self {
-                sender_type: ApiMessageSenderType::Bot,
-                id: bot_id.as_uuid().to_string(),
-                name: None,
-                avatar_url: None,
-            },
-            Ok(Sender::User(user_id)) => Self {
-                sender_type: ApiMessageSenderType::User,
-                id: user_id.to_string(),
-                name: None,
-                avatar_url: None,
-            },
-            Err(_) => Self {
+        let Ok(sender) = ChannelSender::parse_from_str(sender_id) else {
+            return Self {
                 sender_type: ApiMessageSenderType::User,
                 id: sender_id.to_string(),
                 name: None,
                 avatar_url: None,
-            },
+                triggered_by: None,
+            };
+        };
+
+        if let Some(bot_id) = sender.as_bot() {
+            Self {
+                sender_type: ApiMessageSenderType::Bot,
+                id: bot_id.as_uuid().to_string(),
+                name: None,
+                avatar_url: None,
+                triggered_by: None,
+            }
+        } else if let Some(user_id) = sender.as_user() {
+            Self {
+                sender_type: ApiMessageSenderType::User,
+                id: user_id.to_string(),
+                name: None,
+                avatar_url: None,
+                triggered_by: None,
+            }
+        } else {
+            Self {
+                sender_type: ApiMessageSenderType::User,
+                id: sender_id.to_string(),
+                name: None,
+                avatar_url: None,
+                triggered_by: None,
+            }
         }
     }
 
-    /// Build a sender identity, attaching the bot profile for bot senders.
-    fn from_message_sender(sender_id: &str, bot_profile: Option<BotSenderProfile>) -> Self {
+    /// Build a sender identity, attaching the bot profile and the triggering
+    /// user (for agent messages) to bot senders.
+    fn from_message_sender(
+        sender_id: &str,
+        triggered_by: Option<String>,
+        bot_profile: Option<BotSenderProfile>,
+    ) -> Self {
         let mut sender = Self::from_storage_string(sender_id);
-        if matches!(sender.sender_type, ApiMessageSenderType::Bot)
-            && let Some(profile) = bot_profile
-        {
-            sender.name = Some(profile.name);
-            sender.avatar_url = profile.avatar_url;
+        if matches!(sender.sender_type, ApiMessageSenderType::Bot) {
+            if let Some(profile) = bot_profile {
+                sender.name = Some(profile.name);
+                sender.avatar_url = profile.avatar_url;
+            }
+            sender.triggered_by = triggered_by;
         }
         sender
     }
@@ -1692,7 +1717,11 @@ impl From<ChannelMessage> for ApiChannelMessage {
         Self {
             id: m.id,
             channel_id: m.channel_id,
-            sender: ApiMessageSender::from_message_sender(&m.sender_id, m.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &m.sender_id,
+                m.triggered_by,
+                m.bot_profile,
+            ),
             sender_id: m.sender_id,
             content: m.content,
             created_at: m.created_at,
@@ -1752,7 +1781,11 @@ impl From<ChannelContextMessage> for ApiChannelContextMessage {
             id: message.id,
             channel_id: message.channel_id,
             thread_id: message.thread_id,
-            sender: ApiMessageSender::from_message_sender(&message.sender_id, message.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &message.sender_id,
+                message.triggered_by,
+                message.bot_profile,
+            ),
             sender_id: message.sender_id,
             content: message.content,
             created_at: message.created_at,
@@ -1907,7 +1940,11 @@ impl From<ThreadReply> for ApiThreadReply {
     fn from(r: ThreadReply) -> Self {
         Self {
             id: r.id,
-            sender: ApiMessageSender::from_message_sender(&r.sender_id, r.bot_profile),
+            sender: ApiMessageSender::from_message_sender(
+                &r.sender_id,
+                r.triggered_by,
+                r.bot_profile,
+            ),
             sender_id: r.sender_id,
             content: r.content,
             created_at: r.created_at,

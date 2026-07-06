@@ -132,7 +132,6 @@ if (stack !== 'local') {
     {
       envVars: {
         DYNAMODB_TABLE: pulumi.interpolate`${dynamoTableName}`,
-        UPLOAD_EXTRACTOR_QUEUE: pulumi.interpolate`${bulkUploadQueue.queue.name}`,
         ENVIRONMENT: stack,
         RUST_LOG: 'upload_extractor_lambda_trigger=trace',
       },

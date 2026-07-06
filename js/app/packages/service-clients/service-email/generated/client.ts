@@ -35,7 +35,6 @@ import type {
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
-  ListLinksParams,
   ListLinksResponse,
   ParsedMessage,
   PatchSettingsRequest,
@@ -46,6 +45,7 @@ import type {
   SendMessageResponse,
   SharedInboxConflictResponse,
   UnblockSenderRequest,
+  UnresolvedSignatureImagesError,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -1777,27 +1777,14 @@ export type listLinksResponse =
   | listLinksResponseSuccess
   | listLinksResponseError;
 
-export const getListLinksUrl = (params?: ListLinksParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/email/links?${stringifiedParams}`
-    : `/email/links`;
+export const getListLinksUrl = () => {
+  return `/email/links`;
 };
 
 export const listLinks = async (
-  params?: ListLinksParams,
   options?: RequestInit
 ): Promise<listLinksResponse> => {
-  const res = await fetch(getListLinksUrl(params), {
+  const res = await fetch(getListLinksUrl(), {
     ...options,
     method: 'GET',
   });
@@ -2293,6 +2280,11 @@ export type patchSettingsResponse401 = {
   status: 401;
 };
 
+export type patchSettingsResponse422 = {
+  data: UnresolvedSignatureImagesError;
+  status: 422;
+};
+
 export type patchSettingsResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -2304,6 +2296,7 @@ export type patchSettingsResponseSuccess = patchSettingsResponse200 & {
 export type patchSettingsResponseError = (
   | patchSettingsResponse400
   | patchSettingsResponse401
+  | patchSettingsResponse422
   | patchSettingsResponse500
 ) & {
   headers: Headers;

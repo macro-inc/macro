@@ -8,6 +8,7 @@ pub mod definitions;
 pub mod entities;
 pub mod metadata;
 pub mod options;
+pub mod tags;
 
 /// Creates the properties router. Works with any state type that implements `FromRef<PropertiesHandlerState>`.
 pub fn router() -> Router<PropertiesHandlerState> {
@@ -36,7 +37,15 @@ pub fn router() -> Router<PropertiesHandlerState> {
         )
         .route(
             "/definitions/{definition_id}/options/{option_id}",
-            delete(options::delete::delete_property_option).layer(ensure_user_exists.clone()),
+            delete(options::delete::delete_property_option)
+                .patch(options::update::update_property_option)
+                .layer(ensure_user_exists.clone()),
+        )
+        .route(
+            "/tags",
+            get(tags::list_tags)
+                .post(tags::ensure_tag_set)
+                .layer(ensure_user_exists.clone()),
         )
         // Entity Property Operations
         // GET allows anonymous access for public entities
@@ -53,6 +62,13 @@ pub fn router() -> Router<PropertiesHandlerState> {
         .route(
             "/entities/{entity_type}/{entity_id}/{property_id}",
             put(entities::set::set_entity_property).layer(ensure_user_exists.clone()),
+        )
+        // Atomic single-option delta on a multi-select value (merges concurrent edits)
+        .route(
+            "/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+            post(entities::option::add_entity_property_option)
+                .delete(entities::option::remove_entity_property_option)
+                .layer(ensure_user_exists.clone()),
         )
         .route(
             "/entity_properties/{entity_property_id}",

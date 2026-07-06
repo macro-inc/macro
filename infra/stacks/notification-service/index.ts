@@ -17,11 +17,6 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
-const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
-  .apply((secret) => secret.arn);
-
 const appleTeamId = config.require(`apple_team_id`);
 const APPLE_TEAM_ID = aws.secretsmanager
   .getSecretVersionOutput({ secretId: appleTeamId })
@@ -154,7 +149,6 @@ const notificationService = new NotificationService('notification-service', {
   cloudStorageClusterName,
   secretKeyArns: [
     jwtSecretKeyArn,
-    internalApiKeyArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     authenticationServiceInternalApiKeyArn,
     unsubscribeHmacSecretArn,

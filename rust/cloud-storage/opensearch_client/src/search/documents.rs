@@ -27,10 +27,11 @@ const CHILD_RELATION: &str = "chunk";
 const MIN_PREFIX_LEN: usize = 3;
 
 /// Cap on chunks returned per `has_child` clause inside `inner_hits`.
-/// OpenSearch's default is 3 which would silently drop matches on docs
-/// with many hits; pick a number well above any reasonable document's
-/// matching-chunk count for a single search.
-const INNER_HITS_PER_TERM: u32 = 100;
+/// Applied per term, so an N-term query can surface up to N times this many
+/// chunks per document. Highlight cost and response size scale with it (and
+/// with the term count), so it stays small. A grouped result row only previews
+/// a handful of matching passages per document.
+const INNER_HITS_PER_TERM: u32 = 10;
 
 /// Cap on terms a `match_phrase_prefix` may expand the last word to.
 /// OpenSearch's default of 50 is too aggressive — a prefix like `wo`
@@ -83,6 +84,7 @@ pub(crate) struct DocumentQueryBuilder {
     sub_types: Vec<String>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
+    tag_option_ids: Vec<String>,
 }
 
 impl DocumentQueryBuilder {
@@ -92,6 +94,7 @@ impl DocumentQueryBuilder {
             sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
+            tag_option_ids: Vec::new(),
         }
     }
 
@@ -118,6 +121,11 @@ impl DocumentQueryBuilder {
 
     pub fn property_filters(mut self, property_filters: Vec<PropertyFilterArg>) -> Self {
         self.property_filters = property_filters;
+        self
+    }
+
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
         self
     }
 
@@ -163,6 +171,13 @@ impl DocumentQueryBuilder {
             if let Some(nested) = build_property_filter(filter) {
                 bool_query.filter(nested);
             }
+        }
+
+        // Tag filter: a single nested clause matching any of the option ids in
+        // `properties.values`, with no definition_id constraint. Option ids are
+        // globally unique, so this ORs tags across definitions in one clause.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids) {
+            bool_query.filter(nested);
         }
 
         // Match clause(s) per mode: the parent `document_name` (Name), child
@@ -274,6 +289,25 @@ fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>
     )
 }
 
+/// Build a `nested` query over `properties` matching parents that have any
+/// nested entry whose `values` contains one of `option_ids`. Unlike
+/// [`build_property_filter`] there is no `definition_id` constraint: tag option
+/// ids are globally unique, so this matches a tag regardless of which
+/// definition owns it. Returns `None` when there are no option ids.
+fn build_tag_filter<'a>(option_ids: &[String]) -> Option<QueryType<'a>> {
+    if option_ids.is_empty() {
+        return None;
+    }
+    Some(
+        NestedQuery::new(
+            PROPERTIES_PATH,
+            QueryType::terms(format!("{PROPERTIES_PATH}.values"), option_ids.to_vec()),
+        )
+        .ignore_unmapped(true)
+        .into(),
+    )
+}
+
 /// Highlight config attached to each `has_child` inner_hits block.
 /// Matches the top-level documents highlight (plain highlighter,
 /// `<macro_em>` tags, single fragment) so chunk hits come back with
@@ -362,6 +396,7 @@ pub struct DocumentSearchArgs {
     pub sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
+    pub tag_option_ids: Vec<String>,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -377,6 +412,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .sub_types(args.sub_types)
             .mode(args.mode)
             .property_filters(args.property_filters)
+            .tag_option_ids(args.tag_option_ids)
     }
 }
 

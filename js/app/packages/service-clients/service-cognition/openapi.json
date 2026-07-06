@@ -115,7 +115,7 @@
     "/ai-projections": {
       "post": {
         "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
-        "summary": "Gets or creates an ai projection and the requesting user's cold instance.",
+        "summary": "Gets or creates an ai projection and the requesting user's instance,\ntriggering (or awaiting) materialization when needed.",
         "operationId": "upsert_ai_projection",
         "requestBody": {
           "content": {
@@ -514,35 +514,6 @@
           },
           "500": {
             "description": "Internal server error",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/chats/models": {
-      "get": {
-        "tags": ["chats"],
-        "summary": "List all chat models, each flagged with whether the requesting user has\naccess (free users get Haiku; professional users get everything).",
-        "operationId": "list_models",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelsResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2150,7 +2121,7 @@
           },
           "model": {
             "type": ["string", "null"],
-            "description": "The model used to generate the chat (provider api id)."
+            "description": "The model used to generate the chat (`provider/model` id)."
           },
           "name": {
             "type": "string",
@@ -3010,7 +2981,7 @@
           },
           "model": {
             "type": "string",
-            "description": "The model to respond with (provider api id)"
+            "description": "The model to respond with (`provider/model` id)"
           },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
@@ -3067,45 +3038,6 @@
           "date": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "ModelAccess": {
-        "type": "object",
-        "description": "A chat model paired with whether the requesting user may use it.",
-        "required": ["id", "provider", "contextWindow", "available"],
-        "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "Whether the requesting user has access to this model."
-          },
-          "contextWindow": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Context window size in tokens.",
-            "minimum": 0
-          },
-          "id": {
-            "type": "string",
-            "description": "Provider api id — the string sent when this model is selected."
-          },
-          "provider": {
-            "type": "string",
-            "description": "Provider serving the model (e.g. `anthropic`, `openai`)."
-          }
-        }
-      },
-      "ModelsResponse": {
-        "type": "object",
-        "description": "Response body for the models-access endpoint: every chat model, each\nflagged with the requesting user's access.",
-        "required": ["models"],
-        "properties": {
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelAccess"
-            },
-            "description": "All chat models, in display order."
           }
         }
       },
@@ -3227,7 +3159,11 @@
         "properties": {
           "data": {
             "type": ["string", "null"],
-            "description": "The cached result, if any."
+            "description": "The cached result, if any. JSON-encoded when the projection defines an\n`output_schema`."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "The most recent materialization error, if any."
           },
           "generated_at": {
             "type": ["string", "null"],
@@ -3309,7 +3245,7 @@
               },
               "model": {
                 "type": "string",
-                "description": "the chat model to respond with (provider api id)"
+                "description": "the chat model to respond with (`provider/model` id)"
               },
               "stream_id": {
                 "type": "string",
@@ -3729,6 +3665,10 @@
           "expiry"
         ],
         "properties": {
+          "await": {
+            "type": "boolean",
+            "description": "When `true` and generation is needed (cold instance or `regenerate`),\nthe server generates inline and responds with the finished result\ninstead of returning immediately and pushing an update through the\nconnection gateway."
+          },
           "expiry": {
             "$ref": "#/components/schemas/Expiry",
             "description": "How long the projection remains active without being requested."
@@ -3737,6 +3677,14 @@
             "type": "string",
             "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
           },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Optional `provider/model` id used for generation (e.g.\n`cerebras/llama-3.3-70b`). The default model is used when absent."
+          },
+          "output_schema": {
+            "type": ["object", "null"],
+            "description": "Optional JSON schema the generated result must conform to. When set,\n`data` holds the JSON serialization of a conforming value. Enforcement\nis prompted (non-strict), so it works across providers."
+          },
           "prompt": {
             "type": "string",
             "description": "The prompt used to materialize the projection."
@@ -3744,6 +3692,10 @@
           "refresh_cadence": {
             "$ref": "#/components/schemas/RefreshCadence",
             "description": "How frequently the projection should be regenerated."
+          },
+          "regenerate": {
+            "type": "boolean",
+            "description": "When `true`, regenerate even if a cached result exists."
           },
           "target_type": {
             "$ref": "#/components/schemas/TargetType",

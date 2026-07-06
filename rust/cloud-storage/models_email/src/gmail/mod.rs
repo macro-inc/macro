@@ -33,6 +33,21 @@ pub struct ThreadResource {
 
 // -- Messages objects --
 
+// response from the messages.list endpoint - we just care about the ids
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ListMessagesResponse {
+    pub messages: Option<Vec<MessageSummary>>,
+    pub next_page_token: Option<String>,
+}
+
+// a single message entry within a messages.list response
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageSummary {
+    pub id: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageResource {
@@ -225,11 +240,4 @@ pub struct GmailUserProfile {
     pub messages_total: i32,
     pub threads_total: i32,
     pub history_id: String,
-}
-
-/// Response structure for Gmail send-as settings
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EmailSignature {
-    pub signature: String,
 }

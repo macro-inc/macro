@@ -53,7 +53,10 @@ export function UserTooltip(props: UserTooltipProps) {
       const { channel_id } = await getOrCreateDmMutation.mutateAsync({
         recipient_id: props.id,
       });
-      openWithSplit({ type: 'channel', id: channel_id }, { preferNewSplit });
+      openWithSplit(
+        { type: 'channel', id: channel_id },
+        { preferNewSplit, reopen: 'latest' }
+      );
     } catch {
       // The mutation's onError callback handles the toast.
     } finally {
@@ -87,7 +90,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <Surface active depth={2} class="rounded-xl shadow-lg shadow-drop-shadow">
+    <Surface depth={2} class="rounded-xl shadow-lg shadow-drop-shadow">
       <div class="text-ink max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon

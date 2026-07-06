@@ -8,7 +8,9 @@
 pub mod about_macro;
 pub mod channel_mention;
 pub mod citations;
+pub mod connected_toolsets;
 pub mod do_not;
+pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
@@ -27,9 +29,11 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT);
 
-/// The tool-enabled prompt: [`BASE_PROMPT`] with the tool use instructions
-/// appended.
-pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&tool_usage::PROMPT);
+/// The tool-enabled prompt: [`BASE_PROMPT`] with the tool use instructions and
+/// email inbox behavior appended.
+pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+    .compose(&tool_usage::PROMPT)
+    .compose(&email::PROMPT);
 
 /// Citation, do-not, and Macro-terms rules surfaced to external MCP clients,
 /// composed together. These are static; the item-linking rules are not, because

@@ -39,6 +39,11 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       id: e.channelId,
       params: getChannelParams(e.messageId, e.threadId),
     }))
+    .with({ type: 'channel_thread' }, (e) => ({
+      type: 'channel' as const,
+      id: e.channelId,
+      params: getChannelParams(e.messageId, e.threadId),
+    }))
     .with({ type: 'call' }, (e) => ({
       type: 'call' as const,
       id: e.id,

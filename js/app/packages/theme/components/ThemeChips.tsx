@@ -1,9 +1,9 @@
 import type { ThemeV2 } from '@theme/types/themeTypes';
-import IconTextA from '@phosphor-icons/core/regular/text-a-underline.svg?component-solid';
+import IconTextA from '@phosphor-icons/core/regular/text-aa.svg?component-solid';
 import { cn } from '@ui';
 
 type Token = { l: number; c: number; h: number };
-type ThemeChipsSize = 'sm' | 'md';
+type ThemeChipsSize = 'inline' | 'sm' | 'md';
 
 const sizeStyles: Record<
   ThemeChipsSize,
@@ -14,14 +14,21 @@ const sizeStyles: Record<
   }
 > = {
   md: {
-    root: 'gap-2 p-2 rounded-sm',
-    accent: 'size-[13px]',
-    icon: 'size-[18px]',
+    root: 'gap-2 px-2 py-2.5 rounded-xl',
+    accent: 'size-[9px]',
+    icon: 'size-[21px]',
   },
   sm: {
-    root: 'gap-1 py-[3px] px-[5px] rounded-sm',
-    accent: 'size-[9px]',
-    icon: 'size-3',
+    root: 'gap-1 py-[5px] px-[5px] rounded-lg',
+    accent: 'size-[6px]',
+    icon: 'size-[15px]',
+  },
+  // Em-based so the chip scales with the surrounding font size (~1em tall),
+  // letting it baseline-align inline with text (e.g. the theme mention).
+  inline: {
+    root: 'gap-[0.15em] py-[0.15em] px-[0.15em] rounded-[0.3em]',
+    accent: 'size-[0.28em]',
+    icon: 'size-[0.62em]',
   },
 };
 
@@ -62,7 +69,7 @@ export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
       }}
     >
       <span
-        class={cn('inline-block rounded-xs', styles().accent)}
+        class={cn('inline-block rounded-sm', styles().accent)}
         style={{
           'background-color': accent(),
         }}

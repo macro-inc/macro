@@ -46,12 +46,6 @@ async function buildOpenApiBinaries(
 
 	const binArgs = crateNames.flatMap((crate) => ["--bin", `${crate}_openapi`]);
 
-	// Also build the DCS models + tools binaries if document_cognition_service is included
-	if (crateNames.includes("document_cognition_service")) {
-		binArgs.push("--bin", "document_cognition_service_models");
-		binArgs.push("--bin", "gen_tool_schemas");
-	}
-
 	console.log(`Building ${crateNames.length} OpenAPI binaries...`);
 	console.log(`cargo build args: ${binArgs.join(" ")}`);
 	await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build ${binArgs}`;
@@ -173,29 +167,13 @@ const processService = async (
 		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
-		// Special handling for document-cognition
+		// Special handling for document-cognition: generate AI tool schema types.
 		if (service.name === "document-cognition") {
 			stepStart = performance.now();
-			const rustCloudStorageDir = getRustCloudStorageDir();
-			const modelsJson = await runBinary(
-				"document_cognition_service_models",
-				rustCloudStorageDir,
-			);
-			console.log(
-				`[${service.name}] Models binary finished (${elapsed(stepStart)})`,
-			);
-			const modelsJsonPath = path.join(import.meta.dirname, ".models.json");
-			await write(modelsJsonPath, modelsJson);
-
-			stepStart = performance.now();
 			const appDir = path.resolve(import.meta.dirname, "..");
-			try {
-				await $`cd ${appDir} && MODELS_JSON=${modelsJsonPath} bun scripts/generate-dcs-types.ts`.quiet();
-			} finally {
-				await $`rm -f ${modelsJsonPath}`.quiet();
-			}
+			await $`cd ${appDir} && bun scripts/generate-dcs-tools.ts`.quiet();
 			console.log(
-				`[${service.name}] DCS types generation finished (${elapsed(stepStart)})`,
+				`[${service.name}] DCS tool types generation finished (${elapsed(stepStart)})`,
 			);
 		}
 
@@ -223,7 +201,9 @@ async function main() {
 	// Phase 1: Build all binaries (skipped when OPENAPI_BINS_DIR is set)
 	const buildStart = performance.now();
 	if (process.env.OPENAPI_BINS_DIR) {
-		console.log(`Phase 1 (cargo build) skipped — using OPENAPI_BINS_DIR=${process.env.OPENAPI_BINS_DIR}`);
+		console.log(
+			`Phase 1 (cargo build) skipped — using OPENAPI_BINS_DIR=${process.env.OPENAPI_BINS_DIR}`,
+		);
 	} else {
 		await buildOpenApiBinaries(crateNames);
 		console.log(`Phase 1 (cargo build) total: ${elapsed(buildStart)}`);

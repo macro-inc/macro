@@ -22,6 +22,7 @@ function isSoupEntityTag(
     .with(
       'email',
       'channel_message',
+      'channel_thread',
       'automation',
       'foreign',
       'crm_company',

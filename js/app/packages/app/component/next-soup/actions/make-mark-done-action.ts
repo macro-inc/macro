@@ -137,7 +137,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   }));
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'channel_message') return false;
+    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+      return false;
+    }
     if (
       entity.type === 'email' ||
       entity.type === 'channel' ||

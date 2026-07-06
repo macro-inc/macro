@@ -18,6 +18,7 @@ type TooltipProps = ParentProps<{
   as?: 'div' | 'span';
   class?: string;
   label: string;
+  disabled?: boolean;
 }>;
 
 /**
@@ -101,6 +102,7 @@ export function Tooltip(props: TooltipProps) {
       closeDelay={0}
       flip={true}
       gutter={4}
+      disabled={props.disabled}
     >
       <KobalteTooltip.Trigger
         ref={(ref) => {

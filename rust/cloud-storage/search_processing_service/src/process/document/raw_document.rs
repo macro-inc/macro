@@ -18,8 +18,10 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 
+#[cfg(feature = "pdf")]
+use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
-    parsers::{canvas::parse_canvas, markdown::parse_markdown_legacy, pdf::parse_pdf_pages},
+    parsers::{canvas::parse_canvas, markdown::parse_markdown_legacy},
     process::document::document_info::{DocumentInfo, get_document_info},
 };
 
@@ -222,23 +224,32 @@ pub async fn update_search_with_raw_document(
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
-            let pages_content = parse_pdf_pages(content).context("unable to parse pdf")?;
-            pages_content
-                .iter()
-                .enumerate()
-                .map(|(i, page_content)| UpsertDocumentArgs {
-                    document_id: search_extractor_message.document_id.clone(),
-                    node_id: i.to_string(), // page number
-                    raw_content: None,
-                    document_name: document_name.clone(),
-                    content: page_content.clone(),
-                    owner_id: search_extractor_message.user_id.clone(),
-                    file_type: file_type.to_string(),
-                    updated_at_seconds: updated_at,
-                    sub_type: sub_type.clone(),
-                    properties: vec![],
-                })
-                .collect()
+            #[cfg(feature = "pdf")]
+            {
+                let pages_content = parse_pdf_pages(content).context("unable to parse pdf")?;
+                pages_content
+                    .iter()
+                    .enumerate()
+                    .map(|(i, page_content)| UpsertDocumentArgs {
+                        document_id: search_extractor_message.document_id.clone(),
+                        node_id: i.to_string(), // page number
+                        raw_content: None,
+                        document_name: document_name.clone(),
+                        content: page_content.clone(),
+                        owner_id: search_extractor_message.user_id.clone(),
+                        file_type: file_type.to_string(),
+                        updated_at_seconds: updated_at,
+                        sub_type: sub_type.clone(),
+                        properties: vec![],
+                    })
+                    .collect()
+            }
+            #[cfg(not(feature = "pdf"))]
+            {
+                let _ = content;
+                tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
+                vec![]
+            }
         }
         FileType::Canvas => {
             let content =

@@ -150,6 +150,10 @@ pub enum ChannelThreadLiteral {
     ChannelId(Uuid),
     /// The sender of the root thread message must be the included user.
     RootSender(MacroUserIdStr<'static>),
+    /// The included user must be a participant of the thread: the root message sender,
+    /// anyone who replied in the thread, or anyone @-mentioned in the thread (group
+    /// mentions like @here count through their per-user expansion at send time).
+    Participant(MacroUserIdStr<'static>),
     /// this node value filters by notification done state for the thread notification.
     NotificationDone(bool),
     /// this node value filters by notification seen state for the thread notification.
@@ -166,6 +170,7 @@ impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {
             thread_ids,
             channel_ids,
             root_sender_ids,
+            participant_ids,
         } = filter_request;
 
         let thread_ids = thread_ids
@@ -183,7 +188,12 @@ impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChannelThreadLiteral::RootSender), Expr::or)?;
 
-        Ok([thread_ids, channel_ids, root_sender_ids]
+        let participant_ids = participant_ids
+            .iter()
+            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .try_expand(|r| r.map(ChannelThreadLiteral::Participant), Expr::or)?;
+
+        Ok([thread_ids, channel_ids, root_sender_ids, participant_ids]
             .into_iter()
             .fold_with(Expr::and))
     }

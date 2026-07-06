@@ -182,7 +182,10 @@ export const openEntityInNewTab = ({
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     entityPath = `/app/channel/${entity.channelId}`;
   } else {
     entityPath = `/app/${entity.type}/${entity.id}`;
@@ -191,7 +194,7 @@ export const openEntityInNewTab = ({
   // Add location params if present
   let entityUrl = new URL(entityPath, window.location.origin);
 
-  if (entity.type === 'channel_message') {
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
     entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
     if (entity.threadId) {
       entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
@@ -367,7 +370,10 @@ export const openEntityInSplitFromUnifiedList = async (
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     params = getChannelParams(entity.messageId, entity.threadId);
   } else if (entity.type === 'call' && location?.type === 'call_record') {
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
@@ -391,13 +397,17 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
+      reopen: entity.type === 'channel' && !location ? 'latest' : undefined,
     }
   );
 
   // Navigate to specific location if provided
   if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
       entity.channelId,
@@ -421,6 +431,9 @@ function getEntitySplitContent(entity: EntityData) {
       return { type: blockName, id };
     })
     .with({ type: 'channel_message' }, (entity) => {
+      return { type: 'channel' as const, id: entity.channelId };
+    })
+    .with({ type: 'channel_thread' }, (entity) => {
       return { type: 'channel' as const, id: entity.channelId };
     })
     .with({ type: 'foreign' }, (entity) => {

@@ -9,6 +9,7 @@ import type {
   MessageActions,
   MessageData,
 } from '../Message';
+import type { FocusRequest } from './focus-request';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -25,6 +26,7 @@ export type ThreadState = {
   setReplyInputEl?: Setter<HTMLElement | undefined>;
   replyInputHandle?: Accessor<InputHandle | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
+  replyInputFocusRequest: FocusRequest;
 };
 
 export type MessageEditState = {

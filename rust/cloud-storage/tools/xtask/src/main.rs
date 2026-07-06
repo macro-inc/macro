@@ -16,8 +16,12 @@
 //! the regenerate mode; CI runs `--check` and fails on drift.
 
 mod closures;
+mod doppler_bins;
+mod graphql_soup_schema;
 mod hakari_ops;
+mod local;
 mod nextest_filter;
+mod workflows;
 
 use std::path::Path;
 
@@ -34,11 +38,25 @@ fn main() -> Result<()> {
             let graph = build_graph(false)?;
             nextest_filter::run(&graph, Path::new(changed_files_path))
         }
-        _ => bail!(
-            "usage:\n  cargo run -p xtask -- deps [--check]\n  cargo run -p xtask -- nextest-filter <changed-files-path>"
-        ),
+        ["doppler-bins", changed_files_path] => {
+            let graph = build_graph(false)?;
+            doppler_bins::run(&graph, Path::new(changed_files_path))
+        }
+        ["graphql-soup-schema", output_path] => graphql_soup_schema::run(Path::new(output_path)),
+        ["workflows"] => workflows::generate(),
+        ["workflows", "--check"] => workflows::check(),
+        // Everything else is the local/dev orchestration surface. It has many
+        // subcommands each with several flags, so it uses a real (clap) parser
+        // rather than fixed-arity slice patterns. Unknown input falls through
+        // to a combined usage message inside `local::cli::dispatch`.
+        _ => local::cli::dispatch(&args, LEGACY_USAGE),
     }
 }
+
+/// Usage for the repo-automation verbs handled by the slice match above. The
+/// local orchestration parser appends its own usage and prints both on an
+/// unrecognized command.
+const LEGACY_USAGE: &str = "repo automation (from rust/cloud-storage):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x graphql-soup-schema <output-path>\n  cargo x workflows [--check]";
 
 fn run_deps(check: bool) -> Result<()> {
     let graph = build_graph(check)?;

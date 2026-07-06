@@ -31,18 +31,23 @@ pub async fn sqs_client() -> aws_sdk_sqs::Client {
 /// Otherwise we load normally.
 pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
     if let Some(local_aws_url) = LocalAwsUrl::new() {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .test_credentials()
-            .endpoint_url(local_aws_url.as_ref())
-            .load()
-            .await
+        local_aws_config(local_aws_url.as_ref()).await
     } else {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region("us-east-1")
             .load()
             .await
     }
+}
+
+/// Creates an AWS SDK config pointed at a LocalStack endpoint.
+pub async fn local_aws_config(local_aws_url: &str) -> aws_config::SdkConfig {
+    aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region("us-east-1")
+        .test_credentials()
+        .endpoint_url(local_aws_url)
+        .load()
+        .await
 }
 
 /// Returns if the aws config is local or not

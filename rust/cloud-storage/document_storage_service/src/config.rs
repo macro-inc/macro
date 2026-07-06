@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
+use macro_middleware::auth::internal_access::InternalApiKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
@@ -11,19 +12,15 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
-    pub struct DocumentDeleteQueue;
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct RedisUri;
-    pub struct NotificationQueue;
-    pub struct SearchEventQueue;
     pub struct BulkUploadRequestsTable;
     pub struct UploadStagingBucket;
     pub struct SyncServiceAuthKey;
     pub struct OpensearchUrl;
     pub struct OpensearchUsername;
     pub struct OpensearchPassword;
-    pub struct ContactsQueue;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
     pub struct LivekitServerUrl;
@@ -33,6 +30,9 @@ env_vars! {
     /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
     /// infra stack, the same way `document_cognition_service` consumes it.
     pub struct OpenaiApiKey;
+    /// Cohere API key used by the task-dedup reranker. Required — injected
+    /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
+    pub struct CohereApiKey;
     pub struct DocumentLimit;
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
@@ -47,7 +47,6 @@ env_vars! {
     pub struct MetaAccessToken;
     #[derive(Clone)]
     pub struct DocumentStorageServiceAuthKey;
-    pub struct InternalApiSecretKey;
 }
 
 maybe_env_vars! {
@@ -80,27 +79,24 @@ pub struct Config {
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
-    pub document_delete_queue: DocumentDeleteQueue,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
     pub redis_uri: RedisUri,
-    pub notification_queue: NotificationQueue,
-    pub search_event_queue: SearchEventQueue,
     pub bulk_upload_requests_table: BulkUploadRequestsTable,
     pub upload_staging_bucket: UploadStagingBucket,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
     pub opensearch_url: OpensearchUrl,
     pub opensearch_username: OpensearchUsername,
     pub opensearch_password: OpensearchPassword,
-    pub contacts_queue: ContactsQueue,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
     pub openai_api_key: OpenaiApiKey,
+    pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
     pub cal_webhook_secret_key: CalWebhookSecretKey,
@@ -108,8 +104,9 @@ pub struct Config {
     pub meta_pixel_id: MetaPixelId,
     pub meta_access_token: MetaAccessToken,
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
-    pub internal_api_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
-    // pub vars: EnvVars,
+    /// The internal api key
+    pub internal_api_key: InternalApiKey,
+
     /// The port to listen for HTTP requests on.
     #[macro_config_default(8080)]
     pub port: usize,

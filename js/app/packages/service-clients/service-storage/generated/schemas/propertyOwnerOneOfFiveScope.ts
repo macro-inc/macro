@@ -10,5 +10,5 @@ export type PropertyOwnerOneOfFiveScope =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyOwnerOneOfFiveScope = {
-  user_and_organization: 'user_and_organization',
+  system: 'system',
 } as const;

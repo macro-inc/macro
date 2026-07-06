@@ -166,6 +166,14 @@ export const createAppViteConfig = (): UserConfigFn => {
           // 'solid-devtools/setup',
           'libheif-js/wasm-bundle',
         ],
+        // loro-crdt is a wasm singleton. The app imports it directly (esbuild
+        // pre-bundles a copy) while the linked `@loro-mirror/.../src` workspace
+        // source imports it through vite-plugin-wasm — two module evaluations,
+        // two wasm memories. A LoroDoc from one instance handed to a Mirror on
+        // the other yields cross-instance container handles → `index out of
+        // bounds` panics in dev only. Excluding it from pre-bundling collapses
+        // everyone onto the single plugin-handled instance.
+        exclude: ['loro-crdt'],
         esbuildOptions: {
           target: 'esnext',
         },

@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
 import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
@@ -72,7 +73,7 @@ export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -86,6 +87,77 @@ function resolvePortalMount(
 function installKeyboardNavigation(el: HTMLElement) {
   const cleanup = addCtrlJKMenuNavigation(el);
   onCleanup(cleanup);
+}
+
+// Kobalte's dismissable layer deliberately defers "outside interaction"
+// dismissal on touch devices until a `click` event fires, so that a
+// scroll/swipe passing over the trigger isn't mistaken for a tap (see
+// createInteractOutside in @kobalte/core). A tap outside naturally produces
+// that click, so it still closes the menu. But a swipe (e.g. scrolling a
+// list behind the dropdown, or a swipe gesture that passes near it) never
+// produces a click, so it's left open — anywhere a tap dismisses the menu,
+// a swipe should too.
+//
+// We detect a swipe as touch movement past a small threshold that starts
+// outside the menu content, then dispatch a synthetic Escape keydown — the
+// same signal Kobalte's DismissableLayer already uses to close the
+// top-most open layer — rather than synthesizing a `click`, which could
+// wrongly activate whatever element the swipe happened to pass over.
+const SWIPE_DISMISS_THRESHOLD_PX = 10;
+
+function installSwipeToDismiss(contentEl: HTMLElement) {
+  if (!isTouchDevice()) return;
+
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+
+  function onTouchStart(e: TouchEvent) {
+    const touch = e.touches[0];
+    const target = e.target as Node | null;
+    if (!touch || !target || contentEl.contains(target)) {
+      tracking = false;
+      return;
+    }
+    startX = touch.clientX;
+    startY = touch.clientY;
+    tracking = true;
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!tracking) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    if (Math.hypot(dx, dy) < SWIPE_DISMISS_THRESHOLD_PX) return;
+
+    tracking = false;
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  }
+
+  function stopTracking() {
+    tracking = false;
+  }
+
+  document.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('touchmove', onTouchMove, { passive: true });
+  document.addEventListener('touchend', stopTracking, { passive: true });
+  document.addEventListener('touchcancel', stopTracking, { passive: true });
+
+  onCleanup(() => {
+    document.removeEventListener('touchstart', onTouchStart);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', stopTracking);
+    document.removeEventListener('touchcancel', stopTracking);
+  });
 }
 
 function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
@@ -104,6 +176,7 @@ function DropdownContent(props: DropdownContentProps) {
   ]);
   const setContentRef = (el: HTMLElement) => {
     installKeyboardNavigation(el);
+    installSwipeToDismiss(el);
     callRef(local.ref, el);
   };
 
@@ -114,9 +187,13 @@ function DropdownContent(props: DropdownContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.Content
-          class={cn('rounded-xl size-auto z-action-menu', local.class)}
+          class={cn(
+            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu',
+            local.class
+          )}
           depth={local.depth ?? 2}
           as={Surface}
+          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >
@@ -141,6 +218,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
   ]);
   const setContentRef = (el: HTMLElement) => {
     installKeyboardNavigation(el);
+    installSwipeToDismiss(el);
     callRef(local.ref, el);
   };
 
@@ -151,9 +229,13 @@ function DropdownSubContent(props: DropdownSubContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.SubContent
-          class={cn('rounded-xl size-auto z-action-menu', local.class)}
+          class={cn(
+            'rounded-xl size-auto z-action-menu menu-open-animation',
+            local.class
+          )}
           depth={local.depth ?? 2}
           as={Surface}
+          bgToken="menu"
           {...rest}
           ref={setContentRef}
         >
@@ -170,7 +252,7 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5 gap-0.5 bg-surface', local.class)}
+      class={cn('flex flex-col p-1.5 bg-menu', local.class)}
       {...rest}
     />
   );

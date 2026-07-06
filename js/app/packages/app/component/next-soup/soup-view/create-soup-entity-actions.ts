@@ -129,7 +129,9 @@ export function createSoupEntityActions(): {
       // TODO(dev-rb/github): Allow GitHub PRs once they map to /pr.
       if (entity.type === 'foreign') return false;
       const contentId =
-        entity.type === 'channel_message' ? entity.channelId : entity.id;
+        entity.type === 'channel_message' || entity.type === 'channel_thread'
+          ? entity.channelId
+          : entity.id;
       const contentType = itemToBlockName(entity);
       return !splitManager.getSplitByContent(contentType, contentId);
     };
@@ -155,7 +157,10 @@ export function createSoupEntityActions(): {
             },
             referredFrom: 'entity-actions-menu',
           });
-        } else if (entity.type === 'channel_message') {
+        } else if (
+          entity.type === 'channel_message' ||
+          entity.type === 'channel_thread'
+        ) {
           splitManager.createNewSplit({
             content: {
               type: 'channel',
@@ -193,7 +198,7 @@ export function createSoupEntityActions(): {
         } else if (entity.type !== 'foreign') {
           splitManager.createNewSplit({
             content: {
-              type: entity.type,
+              type: itemToBlockName(entity),
               id: entity.id,
             },
             referredFrom: 'entity-actions-menu',

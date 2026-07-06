@@ -3,14 +3,16 @@ import { match } from 'ts-pattern';
 import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  ENABLE_EMAIL_SIGNATURES,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
-import WideEmailIcon from '@icon/wide-email.svg';
+import GmailIcon from '@icon/mcp-gmail.svg';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import {
   type BackfillJob,
   BackfillJobStatus,
@@ -30,31 +32,31 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import {
-  AddInboxDialog,
-  openAddInboxDialog,
-  useAddInboxGate,
-} from '../AddInboxDialog';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
+import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
+import { ConnectAction, StatusDot } from './integration-ui';
 import {
-  ConnectionHero,
-  IntegrationPanelShell,
-  StatusPill,
-} from './integration-ui';
+  clearSignatureState,
+  isSignatureExpanded,
+  SignatureSection,
+  toggleSignatureExpanded,
+} from './SignatureSection';
 
-export function Email() {
+/**
+ * Gmail integration as a single Connected-accounts card: a header row with the
+ * connection state/action, and — once connected — a row per inbox plus add /
+ * disconnect controls. All the inbox + backfill logic is unchanged; only the
+ * surrounding chrome moved from a standalone panel to a shared card.
+ */
+export function EmailCard() {
   const email = useEmail();
   const userId = useUserId();
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
-  const guardAddInbox = useAddInboxGate();
 
-  const {
-    query: emailLinksQuery,
-    disconnect: disconnectEmail,
-    resyncInbox,
-  } = useEmailLinks();
+  const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
 
@@ -78,7 +80,10 @@ export function Email() {
     latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
 
   const removeInboxMutation = useRemoveInboxMutation({
-    onSuccess: () => toast.success('Inbox removed'),
+    onSuccess: (_data, linkId) => {
+      clearSignatureState(linkId);
+      toast.success('Inbox removed');
+    },
     onError: () => toast.failure('Failed to remove inbox. Please try again.'),
   });
   const [removeTarget, setRemoveTarget] = createSignal<{
@@ -89,7 +94,6 @@ export function Email() {
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  const [showDisableDialog, setShowDisableDialog] = createSignal(false);
   const [isEmailActionPending, setIsEmailActionPending] = createSignal(false);
 
   // The primary inbox is the user's own is_primary link; it sorts to the top
@@ -104,11 +108,6 @@ export function Email() {
     return { primary, others };
   });
 
-  const hasAdditionalInboxes = createMemo(() => inboxes().others.length > 0);
-  const hasConnectedInboxes = createMemo(
-    () => inboxes().primary != null || inboxes().others.length > 0
-  );
-
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
     setIsEmailActionPending(true);
@@ -117,19 +116,6 @@ export function Email() {
     } finally {
       setIsEmailActionPending(false);
     }
-  };
-
-  const onDisconnectEmail = async () => {
-    if (isEmailActionPending()) return;
-    setIsEmailActionPending(true);
-    await disconnectEmail().match(
-      () => {
-        setShowDisableDialog(false);
-        toast.success('Email disabled — clearing your data.');
-      },
-      () => toast.failure('Failed to disable email. Please try again.')
-    );
-    setIsEmailActionPending(false);
   };
 
   const handleResyncInbox = async (linkId: string) => {
@@ -159,155 +145,94 @@ export function Email() {
   };
 
   return (
-    <IntegrationPanelShell title="Email">
-      <Show
-        when={multiInboxFlag().enabled || hasAdditionalInboxes()}
-        fallback={
-          <ConnectionHero
-            icon={WideEmailIcon}
-            title="Email"
-            description="Connect your Gmail account so Macro can read, organize, and act on your email."
-            status={
-              <StatusPill
-                state={emailActive() ? 'connected' : 'disconnected'}
-                label={emailActive() ? 'Connected' : 'Not connected'}
-              />
-            }
-          >
-            <Show
-              when={emailActive()}
-              fallback={
-                <Button
-                  variant="cta"
-                  size="md"
-                  depth={3}
-                  disabled={isEmailActionPending()}
-                  onClick={onConnectEmail}
-                >
-                  Connect Gmail
-                </Button>
-              }
-            >
-              <Button
-                variant="base"
-                size="md"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={() => setShowDisableDialog(true)}
-              >
-                Disconnect
-              </Button>
+    <>
+      <SettingsCard>
+        <IntegrationRow
+          icon={<GmailIcon />}
+          title="Gmail"
+          description="Read, organize, and act on your email."
+          status={
+            <Show when={emailActive()}>
+              <StatusDot state="connected" label="Connected" />
             </Show>
-          </ConnectionHero>
-        }
-      >
-        <Show
-          when={emailActive()}
-          fallback={
-            <ConnectionHero
-              icon={WideEmailIcon}
-              title="Email"
-              description="Connect your Gmail accounts so Macro can read, organize, and act on your email."
-              status={<StatusPill state="disconnected" label="Not connected" />}
-            >
-              <Button
-                variant="cta"
-                size="md"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={onConnectEmail}
-              >
-                Connect Gmail
-              </Button>
-            </ConnectionHero>
           }
         >
-          <Show when={!hasConnectedInboxes()}>
-            <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
-              <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
-                <WideEmailIcon class="size-5 text-ink" />
-              </div>
-              <div class="flex flex-1 flex-col gap-1 min-w-0">
-                <div class="text-base font-semibold text-ink">
-                  Connected inboxes
-                </div>
-                <p class="text-sm text-ink-muted">
-                  Gmail accounts Macro can read and act on.
-                </p>
-              </div>
-            </div>
+          <Show when={!emailActive()}>
+            <ConnectAction
+              label="Connect"
+              onClick={onConnectEmail}
+              disabled={isEmailActionPending()}
+            />
           </Show>
+        </IntegrationRow>
 
-          <div class="grid settings-row-dividers">
-            <Show when={inboxes().primary}>
-              {(primary) => (
-                <InboxRow
-                  link={primary()}
-                  isPrimary
-                  isOwn={primary().macro_id === userId()}
-                  hasCompletedBackfill={hasCompletedBackfill(primary().id)}
-                  resyncing={resyncingIds().has(primary().id)}
-                  onResync={() => handleResyncInbox(primary().id)}
-                  onReconnect={() => void startAddInbox()}
-                  onRemove={() =>
-                    setRemoveTarget({
-                      id: primary().id,
-                      email: primary().email_address,
-                      isOwn: primary().macro_id === userId(),
-                    })
-                  }
-                />
-              )}
-            </Show>
-            <Show when={!inboxes().primary && email()}>
-              <DisabledPrimaryRow
-                email={email() ?? ''}
-                onEnable={onConnectEmail}
+        <Show when={emailActive()}>
+          <Show when={inboxes().primary}>
+            {(primary) => (
+              <InboxRow
+                link={primary()}
+                isPrimary
+                isOwn={primary().macro_id === userId()}
+                hasCompletedBackfill={hasCompletedBackfill(primary().id)}
+                resyncing={resyncingIds().has(primary().id)}
+                onResync={() => handleResyncInbox(primary().id)}
+                onReconnect={() => void startAddInbox()}
+                onRemove={() =>
+                  setRemoveTarget({
+                    id: primary().id,
+                    email: primary().email_address,
+                    isOwn: primary().macro_id === userId(),
+                  })
+                }
               />
-            </Show>
-            <For each={inboxes().others}>
-              {(link) => (
-                <InboxRow
-                  link={link}
-                  isPrimary={false}
-                  isOwn={link.macro_id === userId()}
-                  hasCompletedBackfill={hasCompletedBackfill(link.id)}
-                  resyncing={resyncingIds().has(link.id)}
-                  onResync={() => handleResyncInbox(link.id)}
-                  onReconnect={() => void startAddInbox()}
-                  onRemove={() =>
-                    setRemoveTarget({
-                      id: link.id,
-                      email: link.email_address,
-                      isOwn: link.macro_id === userId(),
-                    })
-                  }
-                />
-              )}
-            </For>
-            <Show when={multiInboxFlag().enabled}>
-              <div class="px-6 py-4 flex justify-center">
-                <Show
-                  when={!emailLinksQuery.isLoading}
-                  fallback={
-                    <span class="text-sm text-ink-muted">Loading…</span>
-                  }
+            )}
+          </Show>
+          <Show when={!inboxes().primary && email()}>
+            <DisabledPrimaryRow
+              email={email() ?? ''}
+              onEnable={onConnectEmail}
+            />
+          </Show>
+          <For each={inboxes().others}>
+            {(link) => (
+              <InboxRow
+                link={link}
+                isPrimary={false}
+                isOwn={link.macro_id === userId()}
+                hasCompletedBackfill={hasCompletedBackfill(link.id)}
+                resyncing={resyncingIds().has(link.id)}
+                onResync={() => handleResyncInbox(link.id)}
+                onReconnect={() => void startAddInbox()}
+                onRemove={() =>
+                  setRemoveTarget({
+                    id: link.id,
+                    email: link.email_address,
+                    isOwn: link.macro_id === userId(),
+                  })
+                }
+              />
+            )}
+          </For>
+          <Show when={multiInboxFlag().enabled}>
+            <SettingsRow
+              label="Add another inbox"
+              description="Connect more Gmail accounts."
+            >
+              <Tooltip label="Add inbox">
+                <Button
+                  variant="base"
+                  size="icon-sm"
+                  depth={3}
+                  aria-label="Add inbox"
+                  onClick={openAddInboxDialog}
                 >
-                  <Button
-                    variant="active"
-                    size="sm"
-                    depth={3}
-                    onClick={() => guardAddInbox(openAddInboxDialog)}
-                  >
-                    <PlusIcon class="size-4" />
-                    Add inbox
-                  </Button>
-                </Show>
-              </div>
-            </Show>
-          </div>
+                  <PlusIcon class="size-4" />
+                </Button>
+              </Tooltip>
+            </SettingsRow>
+          </Show>
         </Show>
-      </Show>
+      </SettingsCard>
 
       <AddInboxDialog />
 
@@ -319,7 +244,7 @@ export function Email() {
         position="center"
         class="w-120"
       >
-        <Panel active depth={2} class="rounded-xl">
+        <Panel depth={2} class="rounded-xl">
           <Panel.Header class="px-6">
             <Dialog.Title class="text-ink text-sm font-semibold">
               Remove inbox
@@ -357,46 +282,7 @@ export function Email() {
           </Panel.Body>
         </Panel>
       </Dialog>
-
-      <Dialog
-        open={showDisableDialog()}
-        onOpenChange={setShowDisableDialog}
-        position="center"
-        class="w-120"
-      >
-        <Panel active depth={2} class="rounded-xl">
-          <Panel.Header class="px-6">
-            <Dialog.Title class="text-ink text-sm font-semibold">
-              Disconnect email
-            </Dialog.Title>
-          </Panel.Header>
-          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-              Disconnecting will clear all email data from Macro. This cannot be
-              undone.
-            </Dialog.Description>
-            <div class="pt-3 justify-end items-center gap-3 inline-flex">
-              <Button
-                variant="base"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={() => setShowDisableDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                depth={3}
-                disabled={isEmailActionPending()}
-                onClick={onDisconnectEmail}
-              >
-                Disconnect
-              </Button>
-            </div>
-          </Panel.Body>
-        </Panel>
-      </Dialog>
-    </IntegrationPanelShell>
+    </>
   );
 }
 
@@ -499,107 +385,132 @@ function InboxRow(props: {
   onReconnect: () => void;
   onRemove: () => void;
 }) {
+  const showSignature = () => isSignatureExpanded(props.link.id);
+  const signatureSectionId = `signature-section-${props.link.id}`;
   return (
-    <div class="bg-surface flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
-      <div class="min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="ph-no-capture text-sm truncate">
-            {props.link.email_address}
-          </span>
-          <Show when={props.isPrimary}>
-            <Chip label="Primary" />
-          </Show>
-          <Show when={!props.isPrimary && !props.isOwn}>
-            <Chip label="Shared" />
+    <div class="bg-surface flex flex-col">
+      <div class="flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
+        <div class="min-w-0 flex flex-col gap-0.5">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="ph-no-capture text-sm truncate">
+              {props.link.email_address}
+            </span>
+            <Show when={props.isPrimary}>
+              <Chip label="Primary" />
+            </Show>
+            <Show when={!props.isPrimary && !props.isOwn}>
+              <Chip label="Shared" />
+            </Show>
+          </div>
+          <Show when={ENABLE_INBOX_SYNC_STATUS}>
+            <Switch
+              fallback={
+                <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                  <span
+                    class="flex items-center gap-1 text-xs"
+                    classList={{
+                      'text-failure':
+                        props.link.sync_status === SyncStatus.ERROR ||
+                        props.link.sync_status === SyncStatus.NEEDS_REAUTH,
+                      'text-ink-muted':
+                        props.link.sync_status !== SyncStatus.ERROR &&
+                        props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
+                    }}
+                  >
+                    <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+                      <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                    </Show>
+                    {syncStatusLabel(props.link.sync_status)}
+                  </span>
+                </Show>
+              }
+            >
+              {/* Live backfill progress (connection gateway) wins over the coarse
+                  sync_status while a backfill is actively running. */}
+              <Match when={getBackfillProgress(props.link.id)}>
+                {(progress) => <BackfillProgressBar progress={progress()} />}
+              </Match>
+              {/* Settled inbox with a completed backfill from the BE list. */}
+              <Match
+                when={
+                  props.link.sync_status === SyncStatus.UP_TO_DATE &&
+                  props.hasCompletedBackfill
+                }
+              >
+                <span class="text-xs text-ink-muted">Initial sync complete</span>
+              </Match>
+            </Switch>
           </Show>
         </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
-          <Switch
-            fallback={
-              <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
-                <span
-                  class="flex items-center gap-1 text-xs"
-                  classList={{
-                    'text-failure':
-                      props.link.sync_status === SyncStatus.ERROR ||
-                      props.link.sync_status === SyncStatus.NEEDS_REAUTH,
-                    'text-ink-muted':
-                      props.link.sync_status !== SyncStatus.ERROR &&
-                      props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
-                  }}
-                >
-                  <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-                    <ArrowsClockwiseIcon class="size-3 animate-spin" />
-                  </Show>
-                  {syncStatusLabel(props.link.sync_status)}
-                </span>
-              </Show>
+        <div class="flex items-center gap-2 shrink-0">
+          <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn}>
+            <Tooltip label="Edit signature">
+              <Button
+                variant="base"
+                size="icon-sm"
+                depth={3}
+                onClick={() => toggleSignatureExpanded(props.link.id)}
+                aria-label={`Edit signature for ${props.link.email_address}`}
+                aria-expanded={showSignature()}
+                aria-controls={signatureSectionId}
+              >
+                <SignatureIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
+          <Show
+            when={
+              ENABLE_INBOX_SYNC_STATUS &&
+              props.link.sync_status === SyncStatus.NEEDS_REAUTH
             }
           >
-            {/* Live backfill progress (connection gateway) wins over the coarse
-                sync_status while a backfill is actively running. */}
-            <Match when={getBackfillProgress(props.link.id)}>
-              {(progress) => <BackfillProgressBar progress={progress()} />}
-            </Match>
-            {/* Settled inbox with a completed backfill from the BE list. */}
-            <Match
-              when={
-                props.link.sync_status === SyncStatus.UP_TO_DATE &&
-                props.hasCompletedBackfill
-              }
-            >
-              <span class="text-xs text-ink-muted">Initial sync complete</span>
-            </Match>
-          </Switch>
-        </Show>
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <Show
-          when={
-            ENABLE_INBOX_SYNC_STATUS &&
-            props.link.sync_status === SyncStatus.NEEDS_REAUTH
-          }
-        >
-          <Button
-            variant="active"
-            size="sm"
-            depth={3}
-            onClick={props.onReconnect}
-            aria-label={`Reconnect ${props.link.email_address}`}
-          >
-            Reconnect
-          </Button>
-        </Show>
-        <Show when={ENABLE_INBOX_RESYNC}>
-          <Tooltip label="Force sync">
             <Button
-              variant="base"
+              variant="active"
               size="sm"
               depth={3}
-              disabled={
-                props.resyncing ||
-                (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === SyncStatus.SYNCING)
-              }
-              onClick={props.onResync}
-              aria-label={`Force sync ${props.link.email_address}`}
+              onClick={props.onReconnect}
+              aria-label={`Reconnect ${props.link.email_address}`}
             >
-              <ArrowsClockwiseIcon class="size-4" />
+              Reconnect
+            </Button>
+          </Show>
+          <Show when={ENABLE_INBOX_RESYNC}>
+            <Tooltip label="Force sync">
+              <Button
+                variant="base"
+                size="icon-sm"
+                depth={3}
+                disabled={
+                  props.resyncing ||
+                  (ENABLE_INBOX_SYNC_STATUS &&
+                    props.link.sync_status === SyncStatus.SYNCING)
+                }
+                onClick={props.onResync}
+                aria-label={`Force sync ${props.link.email_address}`}
+              >
+                <ArrowsClockwiseIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
+          <Tooltip label="Remove inbox">
+            <Button
+              variant="base"
+              size="icon-sm"
+              depth={3}
+              onClick={props.onRemove}
+              aria-label={`Remove ${props.link.email_address}`}
+            >
+              <XIcon class="size-4" />
             </Button>
           </Tooltip>
-        </Show>
-        <Tooltip label="Remove inbox">
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            onClick={props.onRemove}
-            aria-label={`Remove ${props.link.email_address}`}
-          >
-            <XIcon class="size-4" />
-          </Button>
-        </Tooltip>
+        </div>
       </div>
+      <Show when={ENABLE_EMAIL_SIGNATURES && props.isOwn && showSignature()}>
+        <div id={signatureSectionId} class="px-6 pb-4">
+          <SignatureSection link={props.link} />
+        </div>
+      </Show>
     </div>
   );
 }
+

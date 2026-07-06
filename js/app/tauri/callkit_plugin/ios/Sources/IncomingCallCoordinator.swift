@@ -320,7 +320,10 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: channelName ?? channelId)
-        update.localizedCallerName = callerName
+        // CallKit renders localizedCallerName as the headline of the incoming
+        // call UI; show the channel so a group call isn't mistaken for a
+        // personal call from whoever started it.
+        update.localizedCallerName = channelName ?? callerName
         update.hasVideo = true
 
         // Must happen from the PushKit delegate; otherwise iOS can terminate us.

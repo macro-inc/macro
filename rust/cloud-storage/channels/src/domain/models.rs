@@ -1,3 +1,4 @@
+pub use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
 use item_filters::ast::{
@@ -8,98 +9,14 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
-use serde::{Deserialize, Serialize, Serializer};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 pub use bot_id::BotId;
 
-/// Error returned when a sender storage string is not a user or bot id.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("invalid sender id: {value}")]
-pub struct SenderParseError {
-    value: String,
-}
-
-impl SenderParseError {
-    fn invalid(value: &str) -> Self {
-        Self {
-            value: value.to_string(),
-        }
-    }
-}
-
 /// Actor identity for channel mutations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Sender {
-    /// A first-party Macro user.
-    User(MacroUserIdStr<'static>),
-    /// A channel-scoped or system bot.
-    Bot(BotId),
-}
-
-impl Sender {
-    /// Parse a sender id from the existing TEXT storage representation.
-    pub fn parse_storage_str(value: &str) -> Result<Self, SenderParseError> {
-        if let Ok(bot_id) = BotId::parse_storage_str(value) {
-            return Ok(Self::Bot(bot_id));
-        }
-
-        MacroUserIdStr::try_from(value.to_string())
-            .map(Self::User)
-            .map_err(|_| SenderParseError::invalid(value))
-    }
-
-    /// Canonical storage representation for existing TEXT sender/participant columns.
-    pub fn to_storage_string(&self) -> String {
-        match self {
-            Self::User(user_id) => user_id.as_ref().to_string(),
-            Self::Bot(bot_id) => bot_id.to_storage_string(),
-        }
-    }
-
-    /// Return the authenticated user id when the sender is a user.
-    pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
-        match self {
-            Self::User(user_id) => Some(user_id),
-            Self::Bot(_) => None,
-        }
-    }
-
-    /// Whether this sender is a bot.
-    pub const fn is_bot(&self) -> bool {
-        matches!(self, Self::Bot(_))
-    }
-}
-
-impl From<MacroUserIdStr<'static>> for Sender {
-    fn from(user_id: MacroUserIdStr<'static>) -> Self {
-        Self::User(user_id)
-    }
-}
-
-impl std::str::FromStr for Sender {
-    type Err = SenderParseError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::parse_storage_str(value)
-    }
-}
-
-impl std::fmt::Display for Sender {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.to_storage_string())
-    }
-}
-
-impl Serialize for Sender {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_storage_string())
-    }
-}
+pub type Sender = ChannelSender<'static>;
 
 /// Public bot profile attached to bot-authored messages.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -225,6 +142,8 @@ pub struct ChannelMessage {
     pub channel_id: Uuid,
     /// User who sent the message.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Message body.
@@ -301,6 +220,8 @@ pub struct ThreadReply {
     pub id: Uuid,
     /// User who sent the reply.
     pub sender_id: String,
+    /// For an agent (bot) reply, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Reply body.
@@ -440,6 +361,8 @@ pub struct ChannelContextMessage {
     pub thread_id: Option<Uuid>,
     /// User who sent the message.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Bot profile when the sender is a bot.
     pub bot_profile: Option<BotSenderProfile>,
     /// Message content.
@@ -510,6 +433,8 @@ pub struct TopLevelMessageRow {
     pub channel_id: Uuid,
     /// Sender user id.
     pub sender_id: String,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Message content.
     pub content: String,
     /// Created timestamp.
@@ -542,6 +467,8 @@ pub struct ThreadReplyRow {
     pub thread_id: Uuid,
     /// Sender user id.
     pub sender_id: String,
+    /// For an agent (bot) reply, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Reply content.
     pub content: String,
     /// Created timestamp.
@@ -772,7 +699,8 @@ pub struct CreateChannelRequest {
     /// Team id for team channels.
     pub team_id: Option<Uuid>,
     /// Participants to add, excluding the owner.
-    pub participants: Vec<String>,
+    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Response returned after creating a channel.
@@ -788,7 +716,8 @@ pub struct CreateChannelResponse {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct GetOrCreateDmRequest {
     /// Recipient user id.
-    pub recipient_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub recipient_id: MacroUserIdStr<'static>,
 }
 
 /// Request to get or create a private channel.
@@ -796,7 +725,8 @@ pub struct GetOrCreateDmRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct GetOrCreatePrivateRequest {
     /// Recipient user ids.
-    pub recipients: Vec<String>,
+    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    pub recipients: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Response for get-or-create channel operations.
@@ -916,6 +846,26 @@ impl ReferencedShareItem {
     }
 }
 
+/// Internal notification behavior for a posted channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PostMessageNotificationPolicy {
+    /// Apply the normal channel notification rules.
+    #[default]
+    Default,
+    /// Do not send notifications for this post. Realtime/search side effects still run.
+    Silent,
+}
+
+/// Internal notification behavior for a patched channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PatchMessageNotificationPolicy {
+    /// Apply the normal edit behavior: realtime/search only, no notifications.
+    #[default]
+    Default,
+    /// Notify as though the patched message content had just been posted.
+    NotifyAsPostedMessage,
+}
+
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -930,6 +880,15 @@ pub struct PostMessageRequest {
     pub attachments: Vec<NewChannelAttachment>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this post.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PostMessageNotificationPolicy,
+    /// For an agent (bot) post, the id of the user who triggered it. `None`
+    /// for ordinary human posts. Set internally, never from the wire.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub triggered_by: Option<String>,
 }
 
 /// Response returned after sending a message.
@@ -956,6 +915,10 @@ pub struct PatchMessageRequest {
     pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
+    /// Internal notification policy for this patch.
+    #[serde(skip)]
+    #[cfg_attr(feature = "inbound", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
 }
 
 /// Query parameters for deleting a message.
@@ -997,7 +960,8 @@ pub struct PostTypingRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct AddParticipantsRequest {
     /// User ids to add.
-    pub participants: Vec<String>,
+    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Request to remove participants.
@@ -1027,7 +991,9 @@ pub struct MutatedMessage {
     /// Thread parent id.
     pub thread_id: Option<Uuid>,
     /// Sender actor id.
-    pub sender_id: Sender,
+    pub sender_id: ChannelSender<'static>,
+    /// For an agent (bot) message, the id of the user who triggered it.
+    pub triggered_by: Option<String>,
     /// Message body.
     pub content: String,
     /// Created timestamp.
@@ -1406,34 +1372,4 @@ pub struct CreateEntityMentionResponse {
 pub struct DeleteEntityMentionResponse {
     /// Whether the mention was deleted.
     pub deleted: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sender_round_trips_user_storage_string() {
-        let sender = Sender::parse_storage_str("macro|alice@example.com").unwrap();
-
-        assert_eq!(sender.to_storage_string(), "macro|alice@example.com");
-        assert!(matches!(sender, Sender::User(_)));
-    }
-
-    #[test]
-    fn sender_round_trips_bot_storage_string() {
-        let id = Uuid::new_v4();
-        let storage = format!("bot|{id}");
-        let sender = Sender::parse_storage_str(&storage).unwrap();
-
-        assert_eq!(sender.to_storage_string(), storage);
-        assert_eq!(serde_json::to_value(&sender).unwrap(), storage);
-    }
-
-    #[test]
-    fn fallback_user_name_uses_email_local_part() {
-        let user_id = MacroUserIdStr::parse_from_str("macro|shepherd.hatton@gmail.com").unwrap();
-
-        assert_eq!(fallback_user_name(&user_id), "shepherd.hatton");
-    }
 }

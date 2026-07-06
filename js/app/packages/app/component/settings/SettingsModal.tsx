@@ -16,10 +16,10 @@ export function SettingsModal() {
       onOpenChange={(open) => {
         if (!open) closeModal();
       }}
-      position="center"
-      class="w-260 h-216 max-h-[88vh] rounded-xl border border-edge bg-surface shadow-lg shadow-drop-shadow"
+      fullscreen
+      class="bg-surface"
     >
-      <Layer depth={2}>
+      <Layer depth={0}>
         <SettingsPanel variant="modal" />
       </Layer>
     </Dialog>

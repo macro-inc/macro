@@ -1,9 +1,11 @@
+import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
 } from '@property/api/converters';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type {
   Property,
   PropertyApiValues,
@@ -50,7 +52,14 @@ export function useEntityPropertiesQuery(
                 query: { include_metadata: includeMetadata },
               })
           );
-          return data.properties.map(entityPropertyFromApi);
+          return data.properties.flatMap((property) => {
+            try {
+              return [entityPropertyFromApi(property)];
+            } catch (error) {
+              console.warn('Skipping property with unsupported type', error);
+              return [];
+            }
+          });
         },
         staleTime: 0,
       };
@@ -283,6 +292,177 @@ export function useAddEntityPropertyMutation(
   }));
 }
 
+type EntityPropertyOptionParams = {
+  entityId: string;
+  entityType: EntityType;
+  property: Property | PropertyDefinitionDomain;
+  optionId: string;
+  /**
+   * Full option-id array to show optimistically (current value ± optionId). The
+   * server applies the single-option delta atomically under a row lock; this
+   * array only drives the local cache so the UI updates instantly.
+   */
+  optimisticOptionIds: string[];
+};
+
+type EntityPropertyOptionContext = {
+  soupTxn?: SoupTransaction;
+};
+
+function entityPropertyOptionCallbacks(
+  failureMessage: string,
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return withCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >(
+    {
+      onMutate: (vars): EntityPropertyOptionContext => {
+        const value: SoupPropertyValue =
+          vars.optimisticOptionIds.length > 0
+            ? { type: 'SelectOption', value: vars.optimisticOptionIds }
+            : null;
+        const soupTxn = optimisticUpdateSoupEntityProperty(
+          vars.entityId,
+          vars.property,
+          value
+        );
+        return { soupTxn };
+      },
+      onError: (error, _vars, context) => {
+        context?.soupTxn?.rollback();
+        console.error(failureMessage, error);
+        toast.failure(failureMessage);
+      },
+      onSettled: (_data, _error, variables) => {
+        invalidatePropertiesForEntity(variables.entityType, variables.entityId);
+        invalidateSoupEntity(variables.entityId);
+      },
+    },
+    callbacks
+  );
+}
+
+/**
+ * Adds a single option to a multi-select value via the atomic delta endpoint.
+ * Unlike the full-value save, concurrent edits to the same value merge instead
+ * of clobbering each other.
+ */
+export function useAddEntityPropertyOptionMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: EntityPropertyOptionParams) => {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.addEntityPropertyOption({
+            entity_type: vars.entityType,
+            entity_id: vars.entityId,
+            property_id: getPropertyDefinitionId(vars.property),
+            option_id: vars.optionId,
+          })
+      );
+    },
+    ...entityPropertyOptionCallbacks('Failed to add tag', callbacks),
+  }));
+}
+
+/**
+ * Removes a single option from a multi-select value via the atomic delta
+ * endpoint. A no-op server-side if the option is already gone.
+ */
+export function useRemoveEntityPropertyOptionMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    EntityPropertyOptionParams,
+    EntityPropertyOptionContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: EntityPropertyOptionParams) => {
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.removeEntityPropertyOption({
+            entity_type: vars.entityType,
+            entity_id: vars.entityId,
+            property_id: getPropertyDefinitionId(vars.property),
+            option_id: vars.optionId,
+          })
+      );
+    },
+    ...entityPropertyOptionCallbacks('Failed to remove tag', callbacks),
+  }));
+}
+
+/**
+ * Task system property ids → the `property` name reported on `update_entity`.
+ * Non-task properties (custom properties, tags, ...) are not tracked here.
+ */
+const TRACKED_TASK_PROPERTIES: Record<string, string> = {
+  [SYSTEM_PROPERTY_IDS.STATUS]: 'status',
+  [SYSTEM_PROPERTY_IDS.PRIORITY]: 'priority',
+  [SYSTEM_PROPERTY_IDS.ASSIGNEES]: 'assignees',
+  [SYSTEM_PROPERTY_IDS.DUE_DATE]: 'due_date',
+};
+
+/**
+ * Emits a generic `update_entity` event for a saved task system property.
+ * Gated on the property being one of the task system properties, so saves on
+ * other entities/properties never fire. Call only on save success.
+ */
+function trackTaskPropertySave(
+  entityId: string,
+  propertyId: string,
+  apiValues: PropertyApiValues
+) {
+  const property = TRACKED_TASK_PROPERTIES[propertyId];
+  if (!property) return;
+
+  const detail: Record<string, unknown> = {};
+  if (property === 'status') {
+    const newStatus =
+      apiValues.valueType === 'SELECT_STRING'
+        ? (apiValues.values?.[0] ?? undefined)
+        : undefined;
+    if (!newStatus) return;
+    detail.newStatus = newStatus;
+    detail.completed = newStatus === PROPERTY_OPTION_IDS.STATUS.COMPLETED;
+  } else if (property === 'priority') {
+    detail.newPriority =
+      apiValues.valueType === 'SELECT_STRING'
+        ? (apiValues.values?.[0] ?? undefined)
+        : undefined;
+  } else if (property === 'assignees') {
+    detail.assigneeCount =
+      apiValues.valueType === 'ENTITY' ? (apiValues.refs?.length ?? 0) : 0;
+  } else if (property === 'due_date') {
+    detail.hasDueDate =
+      apiValues.valueType === 'DATE' && apiValues.value != null;
+  }
+
+  analytics.track('update_entity', {
+    entityType: 'task',
+    entityId,
+    property,
+    source: 'property_editor',
+    ...detail,
+  });
+}
+
 type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
@@ -380,6 +560,15 @@ export function useBulkSaveEntityPropertiesMutation(
               invalidateSoupEntity(p.entityId);
             }
           });
+          if (!error) {
+            for (const p of variables.properties) {
+              trackTaskPropertySave(
+                p.entityId,
+                getPropertyDefinitionId(p.property),
+                p.apiValues
+              );
+            }
+          }
         },
       },
       callbacks

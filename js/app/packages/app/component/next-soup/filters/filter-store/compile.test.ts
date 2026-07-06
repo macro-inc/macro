@@ -120,4 +120,32 @@ describe('compileToAst', () => {
       '&': [{ l: { fes: 'github_pull_request' } }, { l: { nd: false } }],
     });
   });
+
+  it('compiles channel message thread ids onto regular channel filters', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          channelMessageThreadId: ['00000000-0000-0000-0000-000000000001'],
+        },
+      })
+    );
+
+    expect(ast.chanf).toEqual({
+      l: { ThreadId: '00000000-0000-0000-0000-000000000001' },
+    });
+  });
+
+  it('compiles channel-thread root sender excludes onto channel-thread filters', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        exclude: {
+          channelThreadRootSenderId: ['macro|me@example.com'],
+        },
+      })
+    );
+
+    expect(ast.cthf).toEqual({
+      '!': { l: { RootSender: 'macro|me@example.com' } },
+    });
+  });
 });

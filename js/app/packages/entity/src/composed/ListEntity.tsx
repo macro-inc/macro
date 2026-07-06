@@ -60,7 +60,7 @@ interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
 }
 
-function MaybeEntityRow(props: {
+export function MaybeEntityRow(props: {
   entityId: string;
   children: JSX.Element;
   config?: EntityRowConfig;

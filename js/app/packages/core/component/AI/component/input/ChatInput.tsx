@@ -1,8 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { useHasPaidAccess } from '@core/auth/license';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
+import {
+  defaultModelForPlan,
+  Model,
+  modelsForPlan,
+} from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import type { Model, ToolSet } from '@core/component/AI/types';
+import type { ToolSet } from '@core/component/AI/types';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -14,8 +20,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import { useModelsQuery } from '@queries/chat';
-import { queryReadyGate } from '@queries/gate';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
@@ -50,27 +54,29 @@ export function ChatInput(props: ChatInputComponentProps) {
   const model = input.model;
   const generating = input.isGenerating;
   const { showPaywall } = usePaywallState();
+  const hasPaidAccess = useHasPaidAccess();
 
-  // Which models this user may use (free → Haiku; professional → all).
-  // Gate on the query so reading `.data` doesn't trip Suspense while loading;
-  // an empty list until ready is fine (the effect below no-ops on `[]`).
-  const modelsQuery = useModelsQuery();
+  // Every model is shown to every user; availability is per-plan. Free users
+  // see the premium models locked (dimmed + lock icon), and clicking one opens
+  // the paywall via `onLocked` rather than sending and being rejected by the
+  // backend. Listing only the free model would mean free users never see the
+  // upsell at all.
   const modelOptions = createMemo(() => {
-    if (!queryReadyGate(modelsQuery)) return [];
-    return modelsQuery.data.models.map((m) => ({
-      id: m.id as Model,
-      available: m.available,
+    const allowed = modelsForPlan(hasPaidAccess());
+    return Object.values(Model).map((id) => ({
+      id,
+      available: allowed.includes(id),
     }));
   });
 
-  // If the selected model isn't available to this user, fall back to the
-  // first available one so we never send a model that would 403.
+  // Keep the selected model valid for the current plan: if it isn't a known id
+  // (e.g. a stale persisted value) or isn't available to this user (e.g. a free
+  // user defaulted to Opus), fall back to the plan default so we never send
+  // something unroutable or something the backend rejects.
   createEffect(() => {
     const options = modelOptions();
-    if (options.length === 0) return;
     if (options.some((o) => o.id === model() && o.available)) return;
-    const firstAvailable = options.find((o) => o.available);
-    if (firstAvailable) input.setModel(firstAvailable.id);
+    input.setModel(defaultModelForPlan(hasPaidAccess()));
   });
 
   let containerRef!: HTMLDivElement;
@@ -111,7 +117,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
     createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
-  const [isFocused, setIsFocused] = createSignal(false);
+  const [_isFocused, setIsFocused] = createSignal(false);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -269,7 +275,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
-      <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
+      <Surface class="rounded-xl" depth={2} solid>
         <div
           onFocusOut={(e) => {
             const next = e.relatedTarget as Node | null;

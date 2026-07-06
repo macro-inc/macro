@@ -6,6 +6,7 @@ import {
   type Transformer,
   UNORDERED_LIST,
 } from '@lexical/markdown';
+import { $isListNode } from '@lexical/list';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
 
@@ -26,6 +27,18 @@ const customTransformer = (
         $isHeadingNode(parentNode)
       ) {
         return false;
+      }
+      if (original === ORDERED_LIST) {
+        const nextNode = parentNode.getNextSibling();
+        const start = Number(match[2]);
+
+        if (
+          Number.isFinite(start) &&
+          $isListNode(nextNode) &&
+          nextNode.getListType() === 'number'
+        ) {
+          nextNode.setStart(start);
+        }
       }
       original.replace(parentNode, children, match, isImport);
     },

@@ -59,13 +59,10 @@ fn is_allowed_origin(origin: &str) -> bool {
         return true;
     }
 
-    // Check for localhost:3xxx pattern
-    if origin.starts_with("http://localhost:3")
-        && origin.len() == 21
-        && let Some(port_str) = origin.strip_prefix("http://localhost:")
+    if let Some(port_str) = origin.strip_prefix("http://localhost:")
         && let Ok(port) = port_str.parse::<u16>()
     {
-        return (3000..=3999).contains(&port);
+        return (3000..=3999).contains(&port) || (20000..=60000).contains(&port);
     }
 
     false

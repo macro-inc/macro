@@ -1,8 +1,7 @@
 use crate::config::Config;
 use axum::extract::FromRef;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use secretsmanager_client::LocalOrRemoteSecret;
+use macro_middleware::auth::internal_access::InternalApiKey;
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -12,5 +11,5 @@ pub struct ApiContext {
     pub sns_client: Arc<sns_client::SNS>,
     pub config: Arc<Config>,
     pub jwt_args: JwtValidationArgs,
-    pub internal_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub internal_api_key: InternalApiKey,
 }
