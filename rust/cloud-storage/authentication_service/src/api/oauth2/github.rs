@@ -32,10 +32,6 @@ pub enum GithubLinkError {
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
         let (status_code, message): (StatusCode, &str) = match &self {
-            GithubLinkError::GithubServiceError(GithubError::AccountAlreadyLinked) => (
-                StatusCode::CONFLICT,
-                "github account is already linked with another Macro account",
-            ),
             GithubLinkError::GithubServiceError(GithubError::NoLinkFound) => {
                 (StatusCode::NOT_FOUND, "no github link found")
             }

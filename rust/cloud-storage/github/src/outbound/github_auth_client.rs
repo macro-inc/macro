@@ -65,7 +65,8 @@ impl Auth for GithubAuthImpl {
         username: &str,
         access_token: &str,
     ) -> Result<(), Self::Err> {
-        self.fusionauth_client
+        match self
+            .fusionauth_client
             .link_user(LinkUserRequest {
                 identity_provider_link: IdentityProviderLink {
                     display_name: username.into(),
@@ -75,7 +76,17 @@ impl Auth for GithubAuthImpl {
                     token: access_token.into(),
                 },
             })
-            .await?;
+            .await
+        {
+            Ok(()) => {}
+            Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
+                tracing::info!(
+                    fusionauth_user_id=%fusionauth_user_id,
+                    "github idp link already exists, proceeding with existing grant"
+                );
+            }
+            Err(e) => return Err(e.into()),
+        }
 
         self.clear_access_token_cache(fusionauth_user_id).await?;
 
@@ -108,7 +119,7 @@ impl Auth for GithubAuthImpl {
             anyhow::bail!("user does not have a github link")
         }
 
-        // SAFETY: at the moment, we only support 1 github link per user
+        // SAFETY: each Macro user links at most one GitHub account, and many users can share one GitHub account. For shared accounts, every github_links row stores the owner's fusionauth_user_id, so this lookup resolves to the owner's single shared FusionAuth grant (and its cached token).
         let link = links.first().context("links should not be empty")?;
 
         conn.set_ex::<&str, &str, ()>(&key, &link.token, TTL_SECONDS)

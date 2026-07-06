@@ -160,22 +160,35 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_macro_id_by_github_user_id(
+    async fn get_macro_ids_by_github_user_ids(
         &self,
-        github_user_id: &str,
-    ) -> Result<Option<String>, Self::Err> {
-        let macro_id = sqlx::query_scalar!(
+        github_user_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, Self::Err> {
+        if github_user_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let rows = sqlx::query!(
             r#"
-            SELECT macro_id
+            SELECT github_user_id, macro_id
             FROM github_links
-            WHERE github_user_id = $1
+            WHERE github_user_id = ANY($1::text[])
             "#,
-            github_user_id,
+            github_user_ids,
         )
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
 
-        Ok(macro_id)
+        let mut links: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for row in rows {
+            links
+                .entry(row.github_user_id)
+                .or_default()
+                .push(row.macro_id);
+        }
+
+        Ok(links)
     }
 
     #[tracing::instrument(skip(self), err)]

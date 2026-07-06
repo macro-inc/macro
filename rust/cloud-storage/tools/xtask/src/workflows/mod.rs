@@ -17,7 +17,10 @@ mod build_dmg_on_tag;
 mod check_generated;
 mod check_node_modules_nix;
 mod code_check_cloud_storage;
+mod code_check_infra;
 mod deploy_preview;
+mod pulumi_preview_pr;
+mod reusable_preview_service;
 mod runners;
 mod steps;
 mod vars;
@@ -44,6 +47,35 @@ struct WorkflowFile {
 /// Render a `gh_workflow::Workflow` to YAML. Used by most workflow modules.
 fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
     move || build().to_string().map_err(|e| anyhow::anyhow!("{e:?}"))
+}
+
+/// Render a `gh_workflow::Workflow`, then apply a structural patch to the YAML
+/// for constructs gh-workflow 0.8 cannot express: reusable-workflow caller
+/// `with:` / `secrets: inherit`, and `workflow_call`/`workflow_dispatch` input
+/// blocks (the crate models those as unordered `HashMap`s, which would
+/// serialize in nondeterministic order and trip the drift guard).
+fn render_patched(
+    build: fn() -> Workflow,
+    patch: fn(&mut serde_yaml::Value) -> Result<()>,
+) -> Result<String> {
+    let yaml = render_gh_workflow(build)()?;
+    let mut root: serde_yaml::Value =
+        serde_yaml::from_str(&yaml).context("re-parsing generated workflow YAML")?;
+    patch(&mut root)?;
+    serde_yaml::to_string(&root).context("serializing patched workflow YAML")
+}
+
+/// Parse a YAML fragment (used by workflow `patch` fns to build ordered blocks).
+fn yaml_fragment(s: &str) -> Result<serde_yaml::Value> {
+    serde_yaml::from_str(s).context("parsing YAML fragment")
+}
+
+/// Look up `jobs.<id>` in a rendered workflow as a mutable mapping.
+fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serde_yaml::Mapping> {
+    root.get_mut("jobs")
+        .and_then(|jobs| jobs.get_mut(id))
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .with_context(|| format!("job `{id}` not found in rendered workflow"))
 }
 
 /// Every workflow we generate. Add new workflows here.
@@ -74,6 +106,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
     },
     WorkflowFile {
+        slug: "code_check_infra",
+        file_name: "code_check_infra.yml",
+        render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
@@ -82,6 +119,26 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
+    },
+    WorkflowFile {
+        slug: "pulumi_preview_pr",
+        file_name: "pulumi_preview_pr.yml",
+        render_yaml: || {
+            render_patched(
+                pulumi_preview_pr::pulumi_preview_pr,
+                pulumi_preview_pr::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "reusable_preview_service",
+        file_name: "reusable_preview_service.yml",
+        render_yaml: || {
+            render_patched(
+                reusable_preview_service::reusable_preview_service,
+                reusable_preview_service::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "check_node_modules_nix",
