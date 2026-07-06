@@ -24,8 +24,6 @@ const kafkaCluster = new KafkaCluster(`${stack}-macro-event-kafka-cluster`, {
 });
 
 export const clusterArn = kafkaCluster.cluster.arn;
-export const zookeeperConnectString =
-  kafkaCluster.cluster.zookeeperConnectString;
 // IAM clients use this endpoint (not bootstrapBrokersTls / not the VpcConnectivity one).
 export const bootstrapBrokersSaslIam =
   kafkaCluster.cluster.bootstrapBrokersSaslIam;
