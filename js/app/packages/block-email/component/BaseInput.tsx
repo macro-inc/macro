@@ -1937,7 +1937,13 @@ export function BaseInput(props: {
               !!form().sendTime()
             }
             pending={sendMutation.isPending}
-            hidden={isMobile() && !hasBodyText()}
+            hidden={
+              isMobile() &&
+              !hasBodyText() &&
+              // Forwards carry the quoted thread as content, so send is
+              // available without typing anything.
+              effectiveReplyType() !== 'forward'
+            }
             onClick={() => sendEmail()}
           />
         </div>
