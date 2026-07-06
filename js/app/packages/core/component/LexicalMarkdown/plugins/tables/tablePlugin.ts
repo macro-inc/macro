@@ -47,9 +47,17 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
       });
     })(),
 
-    // Only allow paragraph nodes within Table Cells
+    // Restrict table cells to block content that renders sanely inside them
+    // (notably: no nested tables).
     (() => {
-      const allowedNodesInTableCellNode = ['paragraph'];
+      const allowedNodesInTableCellNode = [
+        'paragraph',
+        'heading',
+        'list',
+        'quote',
+        'code',
+        'custom-code',
+      ];
       return editor.registerNodeTransform(TableCellNode, (node) => {
         const children = node.getChildren();
 

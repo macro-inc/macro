@@ -15,7 +15,9 @@ import {
   $getNodeByKey,
   $getSelection,
   $isRangeSelection,
+  BLUR_COMMAND,
   COMMAND_PRIORITY_LOW,
+  FOCUS_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
@@ -51,6 +53,11 @@ export function TableMoveHandle() {
 
   const [dragging, setDragging] = createSignal(false);
   const [dropTarget, setDropTarget] = createSignal<DropTarget>();
+
+  const initialRootElement = editor()?.getRootElement();
+  const [editorFocused, setEditorFocused] = createSignal(
+    !!initialRootElement && initialRootElement.contains(document.activeElement)
+  );
 
   const trackSelection = createCallback(() => {
     // Keep the handle (and the selection it represents) frozen mid-drag.
@@ -96,6 +103,26 @@ export function TableMoveHandle() {
     bumpLayout();
   });
 
+  // Escape (via @lexical/rich-text) and clicking elsewhere blur the editor
+  // without clearing its selection, which would otherwise leave the handle
+  // floating over a selection that is no longer visible.
+  const removeFocusListener = editor()?.registerCommand(
+    FOCUS_COMMAND,
+    () => {
+      setEditorFocused(true);
+      return false;
+    },
+    COMMAND_PRIORITY_LOW
+  );
+  const removeBlurListener = editor()?.registerCommand(
+    BLUR_COMMAND,
+    () => {
+      setEditorFocused(false);
+      return false;
+    },
+    COMMAND_PRIORITY_LOW
+  );
+
   document.addEventListener('scroll', bumpLayout, {
     capture: true,
     passive: true,
@@ -105,6 +132,8 @@ export function TableMoveHandle() {
   onCleanup(() => {
     removeSelectionListener?.();
     removeUpdateListener?.();
+    removeFocusListener?.();
+    removeBlurListener?.();
     document.removeEventListener('scroll', bumpLayout, { capture: true });
     window.removeEventListener('resize', bumpLayout);
   });
@@ -113,6 +142,7 @@ export function TableMoveHandle() {
   // corners of a table selection; the same cell for a caret selection).
   const handlePosition = createMemo(() => {
     layoutTick();
+    if (!editorFocused() && !dragging()) return;
     const currentEditor = editor();
     const aKey = anchorCellKey();
     const fKey = focusCellKey();

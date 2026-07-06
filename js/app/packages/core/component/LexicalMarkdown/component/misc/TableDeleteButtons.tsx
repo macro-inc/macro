@@ -5,11 +5,12 @@ import {
   $deleteTableRowAtSelection,
   $getTableNodeFromLexicalNodeOrThrow,
   $isTableCellNode,
+  $isTableSelection,
   getDOMCellFromTarget,
 } from '@lexical/table';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { $getNearestNodeFromDOMNode, isHTMLElement } from 'lexical';
+import { $getNearestNodeFromDOMNode, $getSelection, isHTMLElement } from 'lexical';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
 type DeleteTarget = {
@@ -78,7 +79,8 @@ export function TableDeleteButtons() {
       if (!$isTableCellNode(cellNode) || !cellNode.isAttached()) return;
 
       if (type === 'table') {
-        $getTableNodeFromLexicalNodeOrThrow(cellNode).remove();
+        const tableNode = $getTableNodeFromLexicalNodeOrThrow(cellNode);
+        tableNode.remove();
         return;
       }
 
@@ -128,7 +130,9 @@ export function TableDeleteButtons() {
                 class="fixed z-10 pointer-events-none bg-failure/15"
                 style={{
                   left:
-                    h() === 'column' ? `${t().cellLeft}px` : `${t().tableLeft}px`,
+                    h() === 'column'
+                      ? `${t().cellLeft}px`
+                      : `${t().tableLeft}px`,
                   width:
                     h() === 'column'
                       ? `${t().cellRight - t().cellLeft}px`
