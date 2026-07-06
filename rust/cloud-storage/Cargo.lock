@@ -5006,7 +5006,6 @@ dependencies = [
  "entity_access",
  "macro_db_migrator",
  "macro_user_id",
- "macro_uuid",
  "mockall",
  "model-entity",
  "model-error-response",
