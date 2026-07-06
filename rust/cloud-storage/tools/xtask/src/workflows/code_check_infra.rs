@@ -15,10 +15,12 @@ use crate::workflows::{
 };
 
 /// The infra checks need the same cache content as the web checks (Nix
-/// dev-shell closure + bun cache), so they share the `web-ci` volume — infra
-/// PRs are far rarer than js/app PRs, so the added churn is negligible.
+/// dev-shell closure + bun cache), so they share the `web-ci` volume — cache
+/// volumes are keyed workspace-wide by tag, so `small` mounts the exact same
+/// volume the web checks keep warm on `mid`. biome + tsc over infra/ are
+/// light; they don't need a mid-size machine.
 fn infra_runner() -> String {
-    runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
+    runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
 /// Build the workflow.

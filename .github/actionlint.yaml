@@ -5,6 +5,7 @@ self-hosted-runner:
     - namespace-profile-linux-mid
     - namespace-profile-linux-mid;overrides.cache-tag=web-ci
     - namespace-profile-linux-small
+    - namespace-profile-linux-small;overrides.cache-tag=web-ci
     - namespace-profile-linux-tiny-no-cache
     - namespace-profile-linux-rust-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
