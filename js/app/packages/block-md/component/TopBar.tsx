@@ -56,7 +56,10 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { DispatchAgentButton } from './DispatchAgentMenu';
+import {
+  DispatchAgentButton,
+  useDispatchAgentSplitFileActions,
+} from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID } from './History';
 
 export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
@@ -76,6 +79,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
+  const dispatchAgentActions = useDispatchAgentSplitFileActions();
 
   const copyLink = () => {
     const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
@@ -237,6 +241,16 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
           fileType: 'md',
         }),
     },
+    ...(isTask
+      ? ([
+          {
+            label: 'Code Actions',
+            icon: TerminalWindowIcon,
+            action: () => {},
+            children: dispatchAgentActions,
+          },
+        ] satisfies BlockTool[])
+      : []),
   ];
 
   return (

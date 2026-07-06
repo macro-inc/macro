@@ -18,11 +18,13 @@ import {
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitFileMenuAction } from './split-layout/context';
 
 export type BlockTool = {
   label: string | (() => string);
   icon: Component;
   action: () => void;
+  children?: SplitFileMenuAction[];
   condition?: () => boolean;
   isActive?: () => boolean;
   buttonComponent?: () => JSX.Element;

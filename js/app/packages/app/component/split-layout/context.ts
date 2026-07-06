@@ -49,7 +49,8 @@ export type SplitBottomPanelRegistration = {
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
   icon: Component;
-  action: (e?: MouseEvent) => void;
+  action?: (e?: MouseEvent) => void;
+  children?: SplitFileMenuAction[];
   group?: 'delete';
 };
 
