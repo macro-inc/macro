@@ -913,7 +913,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    if (previewVisible() && soup.previewEntity() && type === 'entity') {
+    if (
+      previewPlaceholderVisible() ||
+      (previewVisible() && soup.previewEntity() && type === 'entity')
+    ) {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
       return;
@@ -1114,7 +1117,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (force) return;
 
     restored = true;
-    registerFocusEffects();
+    // The new inbox opens with the preview pane showing a placeholder, so don't
+    // auto-focus (and thus auto-select/open) the first row on initial load.
+    registerFocusEffects(!isNewInboxEnabled());
   };
 
   const registerVirtualizerHandler = (
@@ -1136,6 +1141,27 @@ export const SoupViewList = (props: SoupViewListProps) => {
       isWideSplitPanel() &&
       (!!soup.previewEntity() || panel.previewState[0]()) &&
       !!soup.focus.item()
+  );
+
+  const [hasEverSelected, setHasEverSelected] = createSignal(false);
+  createEffect(() => {
+    if (soup.focus.item()) setHasEverSelected(true);
+  });
+
+  // On first load the new inbox doesn't auto-select a row, so reserve the
+  // preview pane with a placeholder until the user picks something. Only for
+  // that initial state — after the first selection, an empty selection
+  // collapses the pane as before.
+  const previewPlaceholderVisible = createMemo(
+    () =>
+      isWideSplitPanel() &&
+      isNewInboxEnabled() &&
+      !soup.focus.item() &&
+      !hasEverSelected()
+  );
+
+  const previewPaneVisible = createMemo(
+    () => previewVisible() || previewPlaceholderVisible()
   );
 
   createEffect(() => {
@@ -1171,7 +1197,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           <Resize.Panel
             id="soup-list"
             minSize={200}
-            maxSize={previewVisible() ? 840 : undefined}
+            maxSize={previewPaneVisible() ? 840 : undefined}
           >
             <div
               class={cn(
@@ -1398,7 +1424,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         highlighted={row.isFocused()}
                                         onMouseMove={() => {
                                           if (isKeypressActive()) return;
-                                          if (soup.previewEntity()) return;
+                                          if (
+                                            soup.previewEntity() ||
+                                            isNewInboxEnabled()
+                                          )
+                                            return;
                                           soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
@@ -1503,7 +1533,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </StaticMarkdownContext>
             </div>
           </Resize.Panel>
-          <Show when={previewVisible()}>
+          <Show when={previewPaneVisible()}>
             <Resize.Panel
               id="soup-preview"
               minSize={500}
@@ -1518,14 +1548,23 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   !isWideSplitPanel() && 'border-t border-t-edge-muted'
                 )}
               >
-                <PreviewPanel
-                  selectedEntity={soup.focus.item()}
-                  orchestrator={orchestrator}
-                  splitPanelContext={panel}
-                  onFocusOut={() => {
-                    soupViewRef()?.focus();
-                  }}
-                />
+                <Show
+                  when={soup.focus.item()}
+                  fallback={
+                    <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                      Select an item to preview
+                    </div>
+                  }
+                >
+                  <PreviewPanel
+                    selectedEntity={soup.focus.item()}
+                    orchestrator={orchestrator}
+                    splitPanelContext={panel}
+                    onFocusOut={() => {
+                      soupViewRef()?.focus();
+                    }}
+                  />
+                </Show>
               </div>
             </Resize.Panel>
           </Show>
