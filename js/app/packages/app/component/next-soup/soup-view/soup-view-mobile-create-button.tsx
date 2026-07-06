@@ -43,38 +43,24 @@ export function SoupViewMobileCreateButton(props: {
   const analytics = useAnalytics();
   const [animating, setAnimating] = createSignal(false);
 
+  // Entity creation analytics fire at the data-layer chokepoints (create.ts
+  // etc.) once the entity actually exists; the dock only attributes `source`.
   const VIEW_CREATE_ACTIONS: Partial<Record<ListView, () => void>> = {
     agents: () => {
-      analytics.track('create_entity', {
-        entityType: 'chat',
-        source: 'mobile_dock',
-      });
-      runCreateAction('chat');
+      runCreateAction('chat', { source: 'mobile_dock' });
     },
     mail: () => {
-      analytics.track('create_entity', {
-        entityType: 'email',
-        source: 'mobile_dock',
-      });
-      runCreateAction('email');
+      runCreateAction('email', { source: 'mobile_dock' });
     },
     documents: () => {
       analytics.track('create_menu_open', { from: 'mobile_dock' });
       setCreateMenuOpen(true);
     },
     tasks: () => {
-      analytics.track('create_entity', {
-        entityType: 'task',
-        source: 'mobile_dock',
-      });
-      runCreateAction('task');
+      runCreateAction('task', { source: 'mobile_dock' });
     },
     channels: () => {
-      analytics.track('create_entity', {
-        entityType: 'channel',
-        source: 'mobile_dock',
-      });
-      runCreateAction('channel');
+      runCreateAction('channel', { source: 'mobile_dock' });
     },
   };
 

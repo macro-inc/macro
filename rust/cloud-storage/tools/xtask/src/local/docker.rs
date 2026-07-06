@@ -7,6 +7,7 @@
 use anyhow::{Context, Result};
 use bollard::models::{NetworkCreateRequest, VolumeCreateRequest};
 use bollard::Docker;
+use macro_env_var::maybe_env_var;
 
 /// Run a future to completion on a throwaway current-thread runtime (xtask's
 /// flow is synchronous).
@@ -18,8 +19,17 @@ fn block_on<T>(fut: impl std::future::Future<Output = Result<T>>) -> Result<T> {
         .block_on(fut)
 }
 
+maybe_env_var! {
+    struct UsePodman;
+}
 fn connect() -> Result<Docker> {
-    Docker::connect_with_local_defaults().context("connecting to the Docker daemon")
+    match UsePodman::new()
+        .map(|p| p.parse::<bool>().unwrap())
+        .unwrap_or(false)
+    {
+        true => Docker::connect_with_podman_defaults().context("connecting to the Docker daemon"),
+        false => Docker::connect_with_local_defaults().context("connecting to the Docker daemon"),
+    }
 }
 
 /// Whether an image with `tag` exists locally.

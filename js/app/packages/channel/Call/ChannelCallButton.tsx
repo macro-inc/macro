@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@icon/wide-call.svg';
@@ -28,8 +29,22 @@ export function ChannelCallButton(props: { channelId: string }) {
 
   const handleClick = async () => {
     if (call.isJoining()) return;
+    const wasExistingCall = isCallInProgress();
+    analytics.track('call_action', {
+      action: 'join_clicked',
+      channelId: props.channelId,
+      isExistingCall: wasExistingCall,
+    });
     try {
       await call.joinCall();
+      // A successful join with no call previously in progress means this user
+      // started the call. Fires once, from the starter's client.
+      if (!wasExistingCall) {
+        analytics.track('call_action', {
+          action: 'started',
+          channelId: props.channelId,
+        });
+      }
     } catch (e) {
       console.error('Call action failed', e);
     }

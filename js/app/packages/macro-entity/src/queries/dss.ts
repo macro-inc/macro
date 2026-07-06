@@ -12,6 +12,7 @@ import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
   invalidateSoupEntity,
+  invalidateSoupQueriesReferencing,
   optimisticUpdateSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
@@ -91,6 +92,7 @@ export function createBulkDeleteDssItemsMutation() {
 
 function invalidateAfterMove(
   entityIds: string[],
+  destinationProjectId: string,
   hasProjects: boolean,
   failed?: boolean
 ) {
@@ -98,9 +100,12 @@ function invalidateAfterMove(
     toast.failure('Failed to move item');
   }
 
+  // Covers queries already containing the entities (including the source folder's list)
   for (const id of entityIds) {
     invalidateSoupEntity(id);
   }
+  // Destination folder's list queries don't contain the entities yet, so match by project id in the key
+  invalidateSoupQueriesReferencing([destinationProjectId]);
   queryClient.invalidateQueries({ queryKey: ['entity'] });
   // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
   if (hasProjects) {
@@ -143,14 +148,14 @@ export function createMoveToProjectDssEntityMutation() {
         });
       }
     },
-    onSettled: (data, error, { entity: { id, type } }, context) => {
+    onSettled: (data, error, { entity: { id, type }, project }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
         context?.rollback();
         console.error(`Failed to move dss item ${id}`, data, error);
       }
 
-      invalidateAfterMove([id], type === 'project', failed);
+      invalidateAfterMove([id], project.id, type === 'project', failed);
     },
   }));
 }
@@ -281,7 +286,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       });
     },
 
-    onSettled: (data, error, { entities }, context) => {
+    onSettled: (data, error, { entities, project }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
         context?.forEach((txn) => txn.rollback());
@@ -290,6 +295,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       invalidateAfterMove(
         entities.map((e) => e.id),
+        project.id,
         entities.some((e) => e.type === 'project'),
         failed
       );

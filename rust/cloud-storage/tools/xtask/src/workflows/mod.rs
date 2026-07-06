@@ -17,6 +17,8 @@ mod build_dmg_on_tag;
 mod check_generated;
 mod check_node_modules_nix;
 mod code_check_cloud_storage;
+mod code_check_infra;
+mod deploy_preview;
 mod runners;
 mod steps;
 mod vars;
@@ -73,9 +75,19 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
     },
     WorkflowFile {
+        slug: "code_check_infra",
+        file_name: "code_check_infra.yml",
+        render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
+    },
+    WorkflowFile {
+        slug: "deploy_preview",
+        file_name: "deploy_preview.yml",
+        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

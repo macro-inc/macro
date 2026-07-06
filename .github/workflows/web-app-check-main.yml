@@ -52,36 +52,35 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-extra-beefy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun,rust
+        path: |-
+          /home/runner/.cache/sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-    - name: Cache Rust
-      if: needs.path-check.outputs.api_changed == 'true'
-      uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-      with:
-        workspaces: rust/cloud-storage
-        shared-key: cloud-storage-gen-api
-        cache-on-failure: 'true'
-        cache-targets: 'true'
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: Generate API Types
       if: needs.path-check.outputs.api_changed == 'true'
       run: bun run gen-api -- --check
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       working-directory: js/app
     - name: show sccache stats
       if: always() && needs.path-check.outputs.api_changed == 'true'
       run: sccache --show-stats || true
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Check Types
       run: bun run --bun --silent tsc --project ./packages/app/tsconfig.json
       working-directory: js/app
@@ -90,18 +89,24 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         fetch-depth: '0'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-cachix'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
         dev-shell: 'true'
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: js/app
@@ -110,17 +115,24 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         fetch-depth: '0'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
     - name: Check Tailwind Classes
       run: just check-tailwind
       working-directory: js/app
@@ -129,15 +141,22 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
         playwright: 'true'
     - name: Test
       run: bunx vitest
@@ -147,16 +166,22 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-cachix'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
         dev-shell: 'true'
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
     - name: Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: js/app
@@ -165,15 +190,22 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
     - name: Build
       run: bun run build
       working-directory: js/app

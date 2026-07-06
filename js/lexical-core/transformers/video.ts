@@ -1,10 +1,14 @@
 import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import { $createVideoNode, $isVideoNode, VideoNode } from '../nodes/VideoNode';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal transformer — always uses <m-video> for unambiguous round-tripping.
 export const I_VIDEO: ElementTransformer = {
-  dependencies: [VideoNode],
+  dependencies: [VideoNode, UnknownMentionNode],
   type: 'element',
   regExp: /<m-video>(.*?)<\/m-video>/,
   export: (node: LexicalNode) => {
@@ -56,6 +60,7 @@ export const I_VIDEO: ElementTransformer = {
       parent.append(videoNode);
     } catch (e) {
       console.error('Failed to parse m-video:', e);
+      replaceElementWithUnknownMention(parent, 'Unknown Video');
     }
   },
 };

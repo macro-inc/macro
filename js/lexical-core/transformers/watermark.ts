@@ -5,10 +5,14 @@ import {
   $isWatermarkNode,
   WatermarkNode,
 } from '../nodes/WatermarkNode';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal Watermark
 export const I_WATERMARK: ElementTransformer = {
-  dependencies: [WatermarkNode],
+  dependencies: [WatermarkNode, UnknownMentionNode],
   type: 'element',
   regExp: /<m-watermark>(.*?)<\/m-watermark>/,
   export: (node) => {
@@ -30,7 +34,8 @@ export const I_WATERMARK: ElementTransformer = {
       const watermarkNode = $createWatermarkNode({ content: data.content });
       parent.append(watermarkNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_WATERMARK replace:', e);
+      replaceElementWithUnknownMention(parent, 'Unknown Watermark');
     }
   },
 };
