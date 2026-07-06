@@ -4,6 +4,5 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MacroUserIdStr } from './macroUserIdStr';
 
-export type DocumentPermissionsTokenUserId = null | MacroUserIdStr;
+export type MacroUserIdStr = string;

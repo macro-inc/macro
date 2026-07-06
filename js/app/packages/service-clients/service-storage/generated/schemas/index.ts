@@ -637,6 +637,7 @@ export * from './locationResponseV3OneOfFiveType';
 export * from './locationResponseV3OneOfThree';
 export * from './locationResponseV3OneOfThreeType';
 export * from './locationResponseV3OneOfType';
+export * from './macroUserIdStr';
 export * from './mentions';
 export * from './newChannelAttachment';
 export * from './newChannelAttachmentHeight';

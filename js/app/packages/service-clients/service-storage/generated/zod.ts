@@ -4215,7 +4215,7 @@ export const validateDocumentPermissionsTokenResponse = zod.object({
     .min(validateDocumentPermissionsTokenResponseExpMin)
     .describe('The expiration time of the token'),
   iss: zod.string().describe('The issuer of the token'),
-  user_id: zod.string().nullish().describe('The users id if present'),
+  user_id: zod.union([zod.null(), zod.string()]).optional(),
 });
 
 /**

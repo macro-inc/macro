@@ -13154,8 +13154,15 @@
             "description": "The issuer of the token"
           },
           "user_id": {
-            "type": ["string", "null"],
-            "description": "The users id if present"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The users id if present"
+              }
+            ]
           }
         }
       },
@@ -15749,6 +15756,9 @@
           }
         ],
         "description": "Location response with content lifecycle metadata."
+      },
+      "MacroUserIdStr": {
+        "type": "string"
       },
       "Mentions": {
         "type": "object",
