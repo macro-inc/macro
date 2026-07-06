@@ -363,29 +363,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     const selectedRow = soup?.items.get(thread.db_id);
 
-    if (selectedRow) {
-      if (soup) {
-        markAsDoneAction.executeWithSoup(
-          [selectedRow.original],
-          soup,
-          (nextEntity) => {
-            const splitHandle = splitPanel?.handle;
-            if (!splitHandle) return;
-            void openEntityInSplitFromUnifiedList(nextEntity, {
-              splitHandle,
-              mergeHistory: true,
-              referredFrom: splitHandle.referredFrom(),
-            });
-          },
-          markDoneOpts
-        );
-      } else {
-        markAsDoneAction.execute(
-          [selectedRow.original],
-          undefined,
-          markDoneOpts
-        );
-      }
+    if (soup && selectedRow) {
+      markAsDoneAction.executeWithSoup(
+        [selectedRow.original],
+        soup,
+        (nextEntity) => {
+          const splitHandle = splitPanel?.handle;
+          if (!splitHandle) return;
+          void openEntityInSplitFromUnifiedList(nextEntity, {
+            splitHandle,
+            mergeHistory: true,
+            referredFrom: splitHandle.referredFrom(),
+          });
+        },
+        markDoneOpts
+      );
     } else {
       // Not rendered inside a soup list (e.g. thread opened in a split): no
       // row to drive the action from, so mark done via the cached soup entity

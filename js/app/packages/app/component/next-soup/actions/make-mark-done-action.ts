@@ -51,6 +51,8 @@ type MarkDoneVariables = {
   onUndoHandle?: (handle: UndoHandle) => void;
 };
 
+type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
+
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const { notificationSource, hotkeyGroup } = options;
@@ -165,7 +167,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const execute = async (
     entities: EntityData[],
     restoreFocus?: () => void,
-    opts?: { silent?: boolean; onUndoHandle?: (handle: UndoHandle) => void }
+    opts?: MarkDoneExecuteOpts
   ) => {
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
       entities,
@@ -185,7 +187,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     entities: EntityData[],
     soup: SoupState,
     onNavigate?: (entity: EntityData) => void,
-    opts?: { silent?: boolean; onUndoHandle?: (handle: UndoHandle) => void }
+    opts?: MarkDoneExecuteOpts
   ) => {
     const currentIndex = soup.focus.index();
     const focusedIdBeforeMarkDone = soup.focus.id();
