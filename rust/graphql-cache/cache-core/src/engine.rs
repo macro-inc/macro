@@ -41,9 +41,21 @@ pub struct WriteResult {
     /// Records whose contents changed.
     pub changed: BTreeSet<EntityKey>,
     /// Active operations depending on changed records (host re-executes
-    /// these). Excludes the operation that performed the write.
+    /// these). Excludes the operation that performed the write. After a
+    /// `reset` this is *every* active operation except the origin.
     pub affected_ops: BTreeSet<OpId>,
+    /// True when the identity witness observed a different user than the one
+    /// bound to this cache: all previous state was wiped (silent restart)
+    /// before this response was written. Hosts must broadcast this to other
+    /// engine instances sharing the same storage.
+    pub reset: bool,
 }
+
+/// Reserved storage key holding the identity bound to this cache. The
+/// `__meta:` prefix can never collide with entity keys (typenames can't
+/// contain `:`).
+const IDENTITY_META_KEY: &str = "__meta:identity";
+const IDENTITY_FIELD: &str = "userId";
 
 /// Default hot-tier capacity (records, not bytes — byte budgets are a
 /// hardening-phase refinement).
@@ -54,6 +66,8 @@ pub struct Engine<S: Storage> {
     hot: LruCache<EntityKey, Record>,
     docs: HashMap<String, Document>,
     deps: DepIndex,
+    /// Memoized identity binding (`None` = not yet loaded from storage).
+    bound_identity: Option<Option<String>>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -67,7 +81,55 @@ impl<S: Storage> Engine<S> {
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: HashMap::new(),
             deps: DepIndex::new(),
+            bound_identity: None,
         }
+    }
+
+    /// The identity currently bound to this cache, loading it from storage
+    /// on first use.
+    async fn bound_identity(&mut self) -> Result<Option<String>, EngineError<S::Error>> {
+        if let Some(memo) = &self.bound_identity {
+            return Ok(memo.clone());
+        }
+        let key = EntityKey(IDENTITY_META_KEY.to_string());
+        let fetched = self
+            .storage
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .map_err(EngineError::Storage)?;
+        let bound = fetched.into_iter().next().flatten().and_then(|record| {
+            match record.fields.get(IDENTITY_FIELD) {
+                Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
+                _ => None,
+            }
+        });
+        self.bound_identity = Some(bound.clone());
+        Ok(bound)
+    }
+
+    async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
+        let mut record = Record::default();
+        record.fields.insert(
+            IDENTITY_FIELD.to_string(),
+            crate::value::CacheValue::String(user_id.to_string()),
+        );
+        self.storage
+            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
+            .await
+            .map_err(EngineError::Storage)?;
+        self.bound_identity = Some(Some(user_id.to_string()));
+        Ok(())
+    }
+
+    /// Scans record updates for the identity-witness type and returns the
+    /// observed user id, if any.
+    fn observed_identity(updates: &crate::normalize::RecordUpdates) -> Option<String> {
+        let witness = crate::meta::IDENTITY_WITNESS?;
+        let prefix_len = witness.len() + 1;
+        updates.keys().find_map(|key| {
+            (key.0.starts_with(witness) && key.0.as_bytes().get(witness.len()) == Some(&b':'))
+                .then(|| key.0[prefix_len..].to_string())
+        })
     }
 
     /// Attempts to answer a query from cache. When `op_id` is given the
@@ -152,6 +214,24 @@ impl<S: Storage> Engine<S> {
         let op = doc.operation(operation_name)?;
         let updates = normalize(op, variables, data)?;
 
+        // Identity witnessing: a response for a different user than the one
+        // bound to this cache wipes everything before the write proceeds
+        // (silent restart). See key_config.toml `identity_witness`.
+        let mut reset = false;
+        if let Some(observed) = Self::observed_identity(&updates) {
+            match self.bound_identity().await? {
+                None => self.bind_identity(&observed).await?,
+                Some(bound) if bound == observed => {}
+                Some(_) => {
+                    self.hot.clear();
+                    self.storage.clear().await.map_err(EngineError::Storage)?;
+                    self.bound_identity = Some(None);
+                    self.bind_identity(&observed).await?;
+                    reset = true;
+                }
+            }
+        }
+
         // Load current values (hot tier, then storage) so merges detect real
         // changes.
         let keys: Vec<EntityKey> = updates.keys().cloned().collect();
@@ -201,14 +281,30 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
 
-        let mut affected_ops = self.deps.ops_for_keys(changed.iter());
+        let mut affected_ops = if reset {
+            // Everything anyone had cached is gone: re-execute all ops.
+            self.deps.all_ops()
+        } else {
+            self.deps.ops_for_keys(changed.iter())
+        };
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
         Ok(WriteResult {
             changed,
             affected_ops,
+            reset,
         })
+    }
+
+    /// Reacts to a reset performed by *another* engine instance sharing the
+    /// same storage (cross-tab broadcast): drops all local in-memory state
+    /// and returns every local active operation for re-execution.
+    pub fn external_reset(&mut self) -> BTreeSet<OpId> {
+        self.hot.clear();
+        self.docs.clear();
+        self.bound_identity = None;
+        self.deps.all_ops()
     }
 
     /// Unregisters an active operation (urql teardown).
@@ -236,6 +332,7 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.deps = DepIndex::new();
+        self.bound_identity = None;
         self.storage.clear().await.map_err(EngineError::Storage)
     }
 

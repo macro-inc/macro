@@ -93,7 +93,13 @@ mod tests {
         let root = type_meta(QUERY_ROOT_TYPE).expect("query root type");
         assert_eq!(root.kind, TypeKind::Object);
         assert!(root.key_fields.is_none());
-        assert!(root.fields.iter().any(|f| f.name == "soup"));
+        assert!(root.fields.iter().any(|f| f.name == "user"));
+
+        // The viewer object is keyed and doubles as the identity witness.
+        let user = type_meta("GraphqlUser").expect("user type");
+        assert_eq!(user.key_fields, Some(&["id"][..]));
+        assert!(user.fields.iter().any(|f| f.name == "soup"));
+        assert_eq!(IDENTITY_WITNESS, Some("GraphqlUser"));
     }
 
     #[test]

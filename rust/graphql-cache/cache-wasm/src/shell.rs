@@ -55,6 +55,7 @@ enum JsReadResult {
 struct JsWriteResult {
     changed: Vec<String>,
     affected_ops: Vec<String>,
+    reset: bool,
 }
 
 #[wasm_bindgen]
@@ -170,6 +171,7 @@ impl CacheEngine {
             to_js(&JsWriteResult {
                 changed: result.changed.into_iter().map(|k| k.0).collect(),
                 affected_ops: ops.borrow().names(result.affected_ops),
+                reset: result.reset,
             })
         })
     }
@@ -185,6 +187,19 @@ impl CacheEngine {
             let keys: Vec<EntityKey> = keys.into_iter().map(EntityKey).collect();
             let mut engine = engine.lock().await;
             let affected = engine.invalidate_keys(keys.iter());
+            to_js(&ops.borrow().names(affected))
+        })
+    }
+
+    /// Reacts to a cache reset performed by another engine instance sharing
+    /// the same storage (cross-tab broadcast). Drops local in-memory state
+    /// and resolves to every local operation id (all must re-execute).
+    #[wasm_bindgen(js_name = externalReset)]
+    pub fn external_reset(&self) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let affected = engine.lock().await.external_reset();
             to_js(&ops.borrow().names(affected))
         })
     }

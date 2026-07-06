@@ -655,6 +655,17 @@ type GraphqlSoupPropertyValue {
 	links: [String!]!
 }
 
+type GraphqlUser {
+	"""
+	Stable id of the authenticated user.
+	"""
+	id: ID!
+	"""
+	Fetch a page of Soup items using the existing Soup filter AST format.
+	"""
+	soup(input: SoupInput!): SoupPage!
+}
+
 """
 A scalar that can represent any JSON value.
 """
@@ -711,9 +722,9 @@ type SoupPage {
 
 type SoupQueryRoot {
 	"""
-	Fetch a page of Soup items using the existing Soup filter AST format.
+	The authenticated user.
 	"""
-	soup(input: SoupInput!): SoupPage!
+	user: GraphqlUser!
 }
 
 """

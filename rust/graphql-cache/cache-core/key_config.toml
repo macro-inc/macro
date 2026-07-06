@@ -15,6 +15,11 @@
 #     counter-example: `id` is the property *definition* id, but `value` is
 #     per-entity — keying it would merge property values across entities.
 
+# The identity witness: when a record of this type is written, its key id is
+# compared against the identity bound to this cache. A mismatch means the
+# session user changed → the engine wipes and rebinds (silent restart).
+identity_witness = "GraphqlUser"
+
 embedded = [
   # Participant rows have no id of their own.
   "GraphqlSoupCallParticipant",
@@ -45,3 +50,4 @@ GraphqlSoupForeignEntity = ["id"]
 GraphqlSoupItem = ["id"]
 GraphqlSoupNotification = ["id"]
 GraphqlSoupProject = ["id"]
+GraphqlUser = ["id"]

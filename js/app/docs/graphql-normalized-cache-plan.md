@@ -52,9 +52,19 @@ entire cache in browser memory. With 10s of thousands of cached objects
 10. **Eviction & GC** — active operations pin their dependencies; memory tier
     is LRU with a byte budget; disk tier has a byte budget with orphan sweep
     (records unreachable from any persisted operation root).
-11. **Cache identity & lifecycle** — namespace by `userId + schemaHash +
-    cacheFormatVersion`; discard on mismatch (cache is disposable, rebuild
-    from network); clear on logout.
+11. **Cache identity & lifecycle** — namespace by `scope + schemaHash +
+    cacheFormatVersion`, where **scope is an anonymous client-generated
+    uuid** (localStorage), *not* user identity: construction is synchronous
+    and offline-capable (no identity waterfall), and no PII appears in
+    enumerable storage metadata (IDB database names / SQLite filenames).
+    User↔cache consistency is enforced by the **identity witness**: the
+    schema exposes `QueryRoot → user: GraphqlUser!` (viewer pattern) and
+    every response's `GraphqlUser:{id}` record is compared against the
+    identity bound inside the cache (`__meta:identity`). A mismatch wipes
+    and rebinds (“silent restart”) before the new user's write proceeds,
+    and all active operations re-execute; other engine instances get a
+    `reset` broadcast. Eager path: clear on logout. Discard on schema/format
+    mismatch (cache is disposable, rebuild from network).
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
 13. **Future** — mutations don't exist in the schema yet; design leaves room

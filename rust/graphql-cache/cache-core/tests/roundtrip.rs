@@ -11,7 +11,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const SOUP_QUERY: &str = r#"
 query Soup($input: SoupInput!) {
-  soup(input: $input) {
+  user {
+    id
+    soup(input: $input) {
     items {
       id
       entityType
@@ -42,8 +44,9 @@ query Soup($input: SoupInput!) {
         }
       }
     }
-    nextCursor
-    hasMore
+      nextCursor
+      hasMore
+    }
   }
 }
 
@@ -86,7 +89,9 @@ fn variables() -> serde_json::Map<String, Json> {
 
 fn response_data() -> Json {
     json!({
-        "soup": {
+        "user": {
+            "id": "user-1",
+            "soup": {
             "items": [
                 {
                     "id": "doc-1",
@@ -141,8 +146,9 @@ fn response_data() -> Json {
                     }
                 }
             ],
-            "nextCursor": "cursor-2",
-            "hasMore": true
+                "nextCursor": "cursor-2",
+                "hasMore": true
+            }
         }
     })
 }
@@ -170,6 +176,7 @@ fn normalizes_expected_records() {
             "GraphqlSoupDocument:doc-1",
             "GraphqlSoupItem:ch-1",
             "GraphqlSoupItem:doc-1",
+            "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]
     );
@@ -193,11 +200,16 @@ fn normalizes_expected_records() {
         Some(CacheValue::Ref(k)) if k.0 == "GraphqlSoupChannelMessage:msg-1"
     ));
 
-    // Root field key embeds canonical args.
+    // The root links to the viewer; the args-keyed soup page lives on it.
     let root = &records[&EntityKey::root()];
-    let root_field = root.fields.keys().find(|k| k.starts_with("soup(")).unwrap();
+    assert!(matches!(
+        root.fields.get("user"),
+        Some(CacheValue::Ref(k)) if k.0 == "GraphqlUser:user-1"
+    ));
+    let user = &records[&EntityKey("GraphqlUser:user-1".into())];
+    let soup_field = user.fields.keys().find(|k| k.starts_with("soup(")).unwrap();
     assert_eq!(
-        root_field,
+        soup_field,
         r#"soup({"input":{"cursor":null,"limit":2,"sortMethod":"UPDATED_AT"}})"#
     );
 }
@@ -226,6 +238,7 @@ fn round_trip_reproduces_response() {
             "GraphqlSoupDocument:doc-1",
             "GraphqlSoupItem:ch-1",
             "GraphqlSoupItem:doc-1",
+            "GraphqlUser:user-1",
             "ROOT_QUERY",
         ]
     );
@@ -240,16 +253,21 @@ fn entity_update_visible_through_other_query() {
     // A different document writes just the entity with a new name.
     let rename_doc = Document::parse(
         r#"query Doc($input: SoupInput!) {
-             soup(input: $input) {
-               items { id entity { __typename ... on GraphqlSoupDocument { id documentName: name } } }
-               nextCursor
-               hasMore
+             user {
+               id
+               soup(input: $input) {
+                 items { id entity { __typename ... on GraphqlSoupDocument { id documentName: name } } }
+                 nextCursor
+                 hasMore
+               }
              }
            }"#,
     )
     .unwrap();
     let rename_data = json!({
-        "soup": {
+        "user": {
+            "id": "user-1",
+            "soup": {
             "items": [{
                 "id": "doc-1",
                 "entity": {
@@ -260,6 +278,7 @@ fn entity_update_visible_through_other_query() {
             }],
             "nextCursor": null,
             "hasMore": false
+            }
         }
     });
     let op = rename_doc.operation(Some("Doc")).unwrap();
@@ -282,7 +301,7 @@ fn entity_update_visible_through_other_query() {
         panic!("expected complete read");
     };
     assert_eq!(
-        data["soup"]["items"][0]["entity"]["documentName"],
+        data["user"]["soup"]["items"][0]["entity"]["documentName"],
         json!("Renamed")
     );
 }
@@ -301,7 +320,7 @@ fn different_args_are_a_miss() {
     let outcome = denormalize(op, &other_vars, &records, &mut deps).unwrap();
     assert!(
         matches!(&outcome, ReadOutcome::Miss { entity, field }
-            if entity.is_root() && field == r#"soup({"input":{"limit":50}})"#),
+            if entity.0 == "GraphqlUser:user-1" && field == r#"soup({"input":{"limit":50}})"#),
         "got {outcome:?}"
     );
 }

@@ -25,6 +25,7 @@ export interface CacheEngine {
     data: unknown
   ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
+  externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
 }

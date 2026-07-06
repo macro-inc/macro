@@ -21,6 +21,12 @@ export type WriteResult = {
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
   affectedOps: string[];
+  /**
+   * True when the identity witness observed a different user and the cache
+   * silently restarted (wiped + rebound) before this write. `affectedOps`
+   * then contains every registered operation except the origin.
+   */
+  reset: boolean;
 };
 
 export type CacheRequest = { id: number } & (
@@ -65,12 +71,18 @@ export type CachePush = {
 export type WorkerMessage = CacheResponse | CachePush;
 
 /** Cross-tab broadcast (fallback topology), channel `graphql-cache:{scope}`. */
-export type CacheBroadcast = {
-  kind: 'changed';
-  keys: string[];
-  /** Random id of the emitting worker, to ignore own broadcasts. */
-  source: string;
-};
+export type CacheBroadcast =
+  | {
+      kind: 'changed';
+      keys: string[];
+      /** Random id of the emitting worker, to ignore own broadcasts. */
+      source: string;
+    }
+  | {
+      /** The shared storage was wiped (identity change silent restart). */
+      kind: 'reset';
+      source: string;
+    };
 
 export function broadcastChannelName(scope: string): string {
   return `graphql-cache:${scope}`;

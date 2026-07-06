@@ -11,7 +11,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    soup(input: $input) { nextCursor hasMore items { id } }
+    user { id soup(input: $input) { nextCursor hasMore items { id } } }
 }"#;
 
 fn js(json: serde_json::Value) -> JsValue {
@@ -27,7 +27,7 @@ async fn write_then_read_through_js_boundary() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let data = serde_json::json!({
-        "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] }
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
     });
 
     // Miss first.

@@ -8,16 +8,19 @@ use serde_json::{json, Value as Json};
 
 const QUERY: &str = r#"
 query Soup($input: SoupInput!) {
-  soup(input: $input) {
-    items {
-      id
-      entity {
-        __typename
-        ... on GraphqlSoupDocument { id documentName: name ownerId }
+  user {
+    id
+    soup(input: $input) {
+      items {
+        id
+        entity {
+          __typename
+          ... on GraphqlSoupDocument { id documentName: name ownerId }
+        }
       }
+      nextCursor
+      hasMore
     }
-    nextCursor
-    hasMore
   }
 }
 "#;
@@ -30,19 +33,26 @@ fn vars(limit: u64) -> serde_json::Map<String, Json> {
 }
 
 fn page(names: &[(&str, &str)]) -> Json {
+    page_for_user("user-1", names)
+}
+
+fn page_for_user(user: &str, names: &[(&str, &str)]) -> Json {
     json!({
-        "soup": {
-            "items": names.iter().map(|(id, name)| json!({
-                "id": id,
-                "entity": {
-                    "__typename": "GraphqlSoupDocument",
+        "user": {
+            "id": user,
+            "soup": {
+                "items": names.iter().map(|(id, name)| json!({
                     "id": id,
-                    "documentName": name,
-                    "ownerId": "user-1"
-                }
-            })).collect::<Vec<_>>(),
-            "nextCursor": null,
-            "hasMore": false
+                    "entity": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "documentName": name,
+                        "ownerId": user
+                    }
+                })).collect::<Vec<_>>(),
+                "nextCursor": null,
+                "hasMore": false
+            }
         }
     })
 }
@@ -122,7 +132,7 @@ fn cross_operation_invalidation() {
             panic!("expected hit");
         };
         assert_eq!(
-            data["soup"]["items"][0]["entity"]["documentName"],
+            data["user"]["soup"]["items"][0]["entity"]["documentName"],
             json!("B")
         );
 
@@ -201,5 +211,76 @@ fn clear_wipes_everything() {
             .await
             .unwrap();
         assert!(matches!(read, ReadResult::Miss));
+    });
+}
+
+#[test]
+fn identity_witness_wipes_on_user_change() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+
+        // User A populates the cache; op 1 is active.
+        engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &vars(10),
+                &page(&[("doc-1", "A")]),
+            )
+            .await
+            .unwrap();
+        engine
+            .read_query(Some(1), QUERY, Some("Soup"), &vars(10))
+            .await
+            .unwrap();
+
+        // Same user again: no reset.
+        let write = engine
+            .write_query(
+                Some(2),
+                QUERY,
+                Some("Soup"),
+                &vars(20),
+                &page(&[("doc-2", "B")]),
+            )
+            .await
+            .unwrap();
+        assert!(!write.reset);
+
+        // A response for a different user wipes everything (silent restart).
+        let write = engine
+            .write_query(
+                Some(2),
+                QUERY,
+                Some("Soup"),
+                &vars(20),
+                &page_for_user("user-2", &[("doc-9", "Z")]),
+            )
+            .await
+            .unwrap();
+        assert!(write.reset);
+        // Every active op except the origin re-executes.
+        assert!(write.affected_ops.contains(&1));
+        assert!(!write.affected_ops.contains(&2));
+
+        // Old user's data is gone; new user's write landed.
+        let read = engine
+            .read_query(Some(1), QUERY, Some("Soup"), &vars(10))
+            .await
+            .unwrap();
+        assert!(matches!(read, ReadResult::Miss));
+        let read = engine
+            .read_query(Some(2), QUERY, Some("Soup"), &vars(20))
+            .await
+            .unwrap();
+        let ReadResult::Hit { data } = read else {
+            panic!("expected hit for new user");
+        };
+        assert_eq!(data["user"]["id"], serde_json::json!("user-2"));
+
+        // external_reset drops local state and reports all local ops.
+        let ops = engine.external_reset();
+        assert!(ops.contains(&1) && ops.contains(&2));
     });
 }

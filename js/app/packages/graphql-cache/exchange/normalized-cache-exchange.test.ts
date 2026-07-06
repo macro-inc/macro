@@ -52,7 +52,7 @@ function makeFakeHost(): FakeHost {
     },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({ opKey: args.opKey, data: args.data });
-      return { changed: [], affectedOps: [] };
+      return { changed: [], affectedOps: [], reset: false };
     },
     async invalidate() {
       return [];
