@@ -703,7 +703,7 @@ const PROMOTED_SETTINGS_TABS: SettingsTab[] = [
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
-  const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
+  const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const callCtx = useCallContextOptional();
 
@@ -767,7 +767,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
-      setActiveTabId(tab);
+      selectTab(tab);
       return;
     }
     openSettings(tab);

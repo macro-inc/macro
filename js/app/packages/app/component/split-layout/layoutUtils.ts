@@ -29,7 +29,13 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const id = segments[i + 1];
     if (!type || !id) break;
 
-    if (type === 'component') {
+    if (type === 'settings') {
+      // `settings/<tab>` is the URL form of the docked settings panel; it's
+      // stored internally as the `component/settings` content with the tab
+      // carried as a param so the panel can restore it on mount. See
+      // `contentUrlSegments` in layoutManager.
+      pairs.push({ type: 'component', id: 'settings', params: { tab: id } });
+    } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {
       const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);

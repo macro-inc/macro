@@ -7,7 +7,11 @@ import {
   Suspense,
 } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import {
+  settingsSlugToTab,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
+import { setActiveTabId } from '@core/signal/settingsTab';
 import { useLogout } from '@core/auth/logout';
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileApp } from './MobileApp';
@@ -45,10 +49,12 @@ export type SettingsVariant = 'split' | 'modal';
 const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
-export function SettingsPanelComponentWrapper() {
-  return (
-      <SettingsPanel />
-  )
+export function SettingsPanelComponentWrapper(props: { tab?: string }) {
+  // Restore the active page from the docked split's URL (`settings/<slug>`) on
+  // mount. Set synchronously so the correct tab renders on first paint.
+  const tab = settingsSlugToTab(props.tab);
+  if (tab) setActiveTabId(tab);
+  return <SettingsPanel />;
 }
 
 type SettingsPanelProps = {
@@ -63,7 +69,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     moveSettingsToSplit,
     moveSettingsToModal,
     activeTabId,
-    setActiveTabId,
+    selectTab,
   } = useSettingsState();
   const { groups, flatTabs, isAvailable } = useSettingsTabs();
   const logout = useLogout();
@@ -116,7 +122,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        setActiveTabId(tab.tab);
+        selectTab(tab.tab);
         return true;
       }
     }
@@ -174,7 +180,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      setActiveTabId(value as SettingsTab);
+      selectTab(value as SettingsTab);
     }
   };
 
@@ -249,12 +255,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </div>
           </Show>
         </SplitHeaderLeft>
-        {/* Pop the split back out into the modal (desktop only). */}
+        {/* Pop the split back out into the full-page settings route (desktop only). */}
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
               class="p-1 rounded-lg"
-              label="Open in modal"
+              label="Open fullscreen"
               onClick={() => moveSettingsToModal()}
             >
               <ArrowsOut class="size-4" />

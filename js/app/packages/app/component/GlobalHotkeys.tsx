@@ -128,7 +128,7 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
+  const { openSettings, settingsOpen, selectTab, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
@@ -278,7 +278,7 @@ export default function GlobalShortcuts() {
   // settings are already open.
   const openSettingsModal = (tab?: SettingsTab) => {
     if (settingsOpen()) {
-      if (tab) setActiveTabId(tab);
+      if (tab) selectTab(tab);
       return;
     }
     openSettings(tab);
