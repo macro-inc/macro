@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, macro_id, fusionauth_user_id as \"fusionauth_user_id: Uuid\", github_username, github_user_id, created_at, updated_at\n        FROM github_links\n        WHERE github_user_id = $1\n        ",
+  "query": "\n        SELECT id, macro_id, fusionauth_user_id as \"fusionauth_user_id: Uuid\", github_username, github_user_id, created_at, updated_at\n        FROM github_links\n        WHERE github_user_id = $1\n        ORDER BY created_at ASC\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       false
     ]
   },
-  "hash": "594849eb57f03099052b5415a963968dd31da940638917a96ab12dfc5a98bfa4"
+  "hash": "1757adf4eb7840d4177782445045960361098f82ee97ef628eb3fcd1c1e9db99"
 }
