@@ -14,7 +14,7 @@ import {
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import {
-  useFavoritesQuery,
+  useFavoritesData,
   useRemoveFavoriteMutation,
   useReorderFavoritesMutation,
 } from '@queries/favorites/favorites';
@@ -48,9 +48,11 @@ export type FavoriteDragData = {
  * no favorites.
  */
 export const FavoritesSection = (props: { sidebarState: SidebarState }) => {
-  const favoritesQuery = useFavoritesQuery();
+  // Non-suspending accessor: a pending or failed favorites query must not
+  // suspend or crash the sidebar; the section just stays hidden until loaded.
+  const favoritesData = useFavoritesData();
 
-  const favorites = () => favoritesQuery.data?.favorites ?? [];
+  const favorites = () => favoritesData()?.favorites ?? [];
 
   return (
     <Show when={props.sidebarState === 'expanded' && favorites().length > 0}>

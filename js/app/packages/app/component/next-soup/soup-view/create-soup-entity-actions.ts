@@ -9,7 +9,6 @@ import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
-import Star from '@phosphor-icons/core/regular/star.svg?component-solid';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
@@ -235,10 +234,10 @@ export function createSoupEntityActions(): {
       const allFavorited = entities.every((entity) =>
         favoriteAction.isFavorited(entity)
       );
+      // No icon: the other items in this menu don't have one.
       middleItems.push({
         id: 'favorite',
         label: allFavorited ? 'Unfavorite' : 'Favorite',
-        icon: Star,
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
       });

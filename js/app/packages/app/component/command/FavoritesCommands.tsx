@@ -6,11 +6,8 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
-import { queryClient } from '@queries/client';
-import { useFavoritesQuery } from '@queries/favorites/favorites';
-import { favoriteKeys } from '@queries/favorites/keys';
+import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import { createHotkeyGroup, registerHotkey } from 'core/hotkey/hotkeys';
 import { createEffect, onCleanup } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
@@ -33,19 +30,11 @@ const FAVORITES_KEYWORDS = ['favorites', 'favorite', 'starred', 'pinned'];
  * nothing.
  */
 export function FavoritesCommands() {
-  const favorites = useFavoritesQuery();
+  // Non-suspending accessor: command `condition()`s are evaluated during the
+  // command menu's setup under a Suspense boundary, where a pending or failed
+  // favorites query must not suspend or throw.
+  const favoritesData = useFavoritesData();
   const { openWithSplit } = useSplitLayout();
-
-  // The command menu evaluates command `condition()`s (and mounts) under a
-  // Suspense boundary. Reading `favorites.data` off the solid-query proxy while
-  // the query is pending suspends that boundary, blanking the menu and killing
-  // its keyboard navigation until the request settles. Read the cache
-  // imperatively instead, using `dataUpdatedAt` only as a non-suspending
-  // reactive trigger so registrations still refresh when favorites change.
-  const favoritesData = (): FavoritesList | undefined => {
-    void favorites.dataUpdatedAt;
-    return queryClient.getQueryData<FavoritesList>(favoriteKeys.list.queryKey);
-  };
 
   const openFavorite = (favorite: Favorite) => {
     openWithSplit(favoriteSplitContent(favorite), {
@@ -84,6 +73,9 @@ export function FavoritesCommands() {
     // Registered without a hotkey: bare digits would fight type-to-filter in
     // the sub-view's search input. The entries are still listed and openable
     // via arrow/enter or click (the handler runs with `e` undefined).
+    // `runWithInputFocused` is required even without a hotkey: entering the
+    // sub-view captures its commands while the menu's search input has focus,
+    // and the capture filter drops commands without this flag.
     list.forEach((favorite) => {
       dynamicGroup.add(
         registerHotkey({
@@ -99,6 +91,7 @@ export function FavoritesCommands() {
               class={props.class}
             />
           ),
+          runWithInputFocused: true,
         })
       );
     });

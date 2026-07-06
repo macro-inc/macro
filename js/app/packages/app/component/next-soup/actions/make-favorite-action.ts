@@ -3,7 +3,7 @@ import type { EntityData } from '@entity';
 import {
   favoriteEntityType,
   useAddFavoriteMutation,
-  useFavoritesQuery,
+  useFavoritesData,
   useRemoveFavoriteMutation,
 } from '@queries/favorites/favorites';
 import type { SoupState } from '../create-soup-state';
@@ -15,7 +15,10 @@ import type { SoupState } from '../create-soup-state';
  * already are, it unfavorites them instead.
  */
 export const makeFavoriteAction = () => {
-  const favoritesQuery = useFavoritesQuery();
+  // Non-suspending accessor: isFavorited runs inside command-menu
+  // description()/condition() callbacks, where a pending or failed favorites
+  // query must not suspend or throw.
+  const favoritesData = useFavoritesData();
   const addMutation = useAddFavoriteMutation();
   const removeMutation = useRemoveFavoriteMutation();
 
@@ -25,7 +28,7 @@ export const makeFavoriteAction = () => {
   const isFavorited = (entity: EntityData): boolean => {
     const type = favoriteEntityType(entity.type);
     if (!type) return false;
-    const favorites = favoritesQuery.data?.favorites;
+    const favorites = favoritesData()?.favorites;
     if (!favorites) return false;
     return favorites.some(
       (favorite) =>
