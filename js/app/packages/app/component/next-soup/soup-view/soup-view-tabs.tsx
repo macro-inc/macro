@@ -177,6 +177,16 @@ export const useApplyPreset = () => {
         mergedFilters = mergeQuery(mergedFilters, query);
       }
 
+      // Tags are a query-only refinement with no backing predicate, so the
+      // predicate-driven reconstruction above never carries them. Preserve the
+      // active selection explicitly like any other refinement.
+      const activeTagFilters = queryFilters.state.include.tagFilters;
+      if (activeTagFilters?.length) {
+        mergedFilters = mergeQuery(mergedFilters, {
+          include: { tagFilters: activeTagFilters.map((t) => ({ ...t })) },
+        });
+      }
+
       nextFilters = mergedFilters;
 
       nextClientFilters = {
