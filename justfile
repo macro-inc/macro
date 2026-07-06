@@ -11,6 +11,7 @@ create_networks:
   docker volume create macro_postgres_data 2>/dev/null || true
   docker volume create macro_redis_data 2>/dev/null || true
   docker volume create macro_opensearch_data 2>/dev/null || true
+  docker volume create macro_kafka_data 2>/dev/null || true
   docker volume create fusionauth_db_data 2>/dev/null || true
   docker volume create fusionauth_config 2>/dev/null || true
   echo "docker networks and volumes created"
