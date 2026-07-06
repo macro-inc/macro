@@ -295,14 +295,14 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// Returns the team invites created.
     fn invite_users_to_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Remove user from a team.
     fn remove_user_from_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
 
@@ -316,7 +316,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// Deletes a team invite from a team.
     fn delete_team_invite(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         team_invite_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RemoveTeamInviteError>> + Send;
 
