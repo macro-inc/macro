@@ -5,6 +5,7 @@ import type { AddFavoriteRequest } from '@service-storage/generated/schemas/addF
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -62,6 +63,22 @@ export function useFavoritesQuery() {
       await throwOnErr(() => storageServiceClient.favorites.getFavorites()),
     staleTime: 60_000,
   }));
+}
+
+/**
+ * Non-suspending, non-throwing view of the favorites list.
+ *
+ * Reading `query.data` off the solid-query proxy suspends the nearest
+ * Suspense boundary while the query is pending and throws once it errors.
+ * Favorites are read from broad surfaces (command menu conditions and
+ * descriptions, the sidebar, context menus) where a slow or failing
+ * favorites request must never take the surface down. Gating on `isSuccess`
+ * keeps the read reactive without either behavior; callers see `undefined`
+ * until the list has loaded.
+ */
+export function useFavoritesData(): Accessor<FavoritesList | undefined> {
+  const query = useFavoritesQuery();
+  return () => (query.isSuccess ? query.data : undefined);
 }
 
 function readList(): FavoritesList | undefined {
