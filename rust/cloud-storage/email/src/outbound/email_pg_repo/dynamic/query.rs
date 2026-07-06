@@ -95,6 +95,26 @@ fn push_thread_candidate_select(
 ) {
     let defer_uh = !sort_uses_view_history(&params.sort_method_str);
 
+    // Multi-inbox owned scans fan out one ordered, LIMITed subscan per link:
+    // `link_id = ANY(...)` index scans can't return ordered output (pre-PG17),
+    // forcing a fetch-and-sort of every candidate thread across all inboxes.
+    // Per-link scans walk the index in order and stop at LIMIT.
+    let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
+        && params.team_id.is_none()
+        && params.link_ids.len() > 1;
+
+    if per_link_fanout {
+        builder.push(
+            r#"
+                SELECT per_link.* FROM unnest("#,
+        );
+        builder.push_bind(params.link_ids.clone());
+        builder.push(
+            r#") AS links(link_id)
+                CROSS JOIN LATERAL ("#,
+        );
+    }
+
     builder.push(
         r#"
                 SELECT
@@ -187,9 +207,13 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Owned => match params.team_id {
             // Normal per-mailbox query.
             None => {
-                builder.push("t.link_id = ANY(");
-                builder.push_bind(params.link_ids.clone());
-                builder.push(")");
+                if per_link_fanout {
+                    builder.push("t.link_id = links.link_id");
+                } else {
+                    builder.push("t.link_id = ANY(");
+                    builder.push_bind(params.link_ids.clone());
+                    builder.push(")");
+                }
             }
             // CRM-scoped query: expand to every primary email_link owned by
             // any member of the team. Non-primary links (connected secondary
@@ -278,38 +302,52 @@ fn push_thread_candidate_select(
         // Three closes: right row operand, the grouped row-comparison, the
         // outer AND-group opened by `AND ((`.
         builder.push("::uuid)))");
-        return;
-    }
-
-    builder.push(
-        r#"
+    } else {
+        builder.push(
+            r#"
                   -- Cursor logic
                   AND (("#,
-    );
+        );
 
-    builder.push_bind(params.cursor_timestamp);
+        builder.push_bind(params.cursor_timestamp);
 
-    builder.push(
-        r#"::timestamptz IS NULL) OR (
+        builder.push(
+            r#"::timestamptz IS NULL) OR (
                       CASE "#,
-    );
+        );
 
-    builder.push_bind(params.sort_method_str.clone());
+        builder.push_bind(params.sort_method_str.clone());
 
-    builder.push(format!(
-        r#"
+        builder.push(format!(
+            r#"
                           WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
                           WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
                           ELSE {}
                       END, t.id
                   ) < ("#,
-        sort_ts_field, sort_ts_field
-    ));
+            sort_ts_field, sort_ts_field
+        ));
 
-    builder.push_bind(params.cursor_timestamp);
-    builder.push("::timestamptz, ");
-    builder.push_bind(params.cursor_id_str.clone());
-    builder.push("::uuid))");
+        builder.push_bind(params.cursor_timestamp);
+        builder.push("::timestamptz, ");
+        builder.push_bind(params.cursor_id_str.clone());
+        builder.push("::uuid))");
+    }
+
+    if per_link_fanout {
+        // Per-link top-N: the outer candidate sort only ever needs the best
+        // `query_limit` rows from each inbox.
+        builder.push(
+            r#"
+                ORDER BY effective_ts DESC, id DESC
+                LIMIT "#,
+        );
+        builder.push_bind(params.query_limit);
+        builder.push(
+            r#"
+                ) AS per_link"#,
+        );
+    }
 }
 
 /// Builds a dynamic email thread query with filters applied.
@@ -615,9 +653,43 @@ pub(super) fn debug_build_query_sql_team_scoped(
 }
 
 #[cfg(test)]
+pub(super) fn debug_build_query_sql_multi_link(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+) -> String {
+    debug_build_query_sql_full(
+        view,
+        email_filter,
+        vec![Uuid::nil(), Uuid::from_u128(1)],
+        ResolvedFilters::empty(),
+        None,
+        SimpleSortMethod::UpdatedAt,
+    )
+}
+
+#[cfg(test)]
 fn debug_build_query_sql_inner(
     view: &PreviewView,
     email_filter: &Expr<EmailLiteral>,
+    resolved: ResolvedFilters,
+    team_id: Option<Uuid>,
+    sort_method: SimpleSortMethod,
+) -> String {
+    debug_build_query_sql_full(
+        view,
+        email_filter,
+        vec![Uuid::nil()],
+        resolved,
+        team_id,
+        sort_method,
+    )
+}
+
+#[cfg(test)]
+fn debug_build_query_sql_full(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    link_ids: Vec<Uuid>,
     resolved: ResolvedFilters,
     team_id: Option<Uuid>,
     sort_method: SimpleSortMethod,
@@ -634,7 +706,7 @@ fn debug_build_query_sql_inner(
         view,
         email_filter,
         QueryParams {
-            link_ids: vec![Uuid::nil()],
+            link_ids,
             sort_method_str: sort_method.to_string(),
             query_limit: 50,
             cursor_timestamp: None,
