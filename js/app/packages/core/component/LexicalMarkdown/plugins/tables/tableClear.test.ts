@@ -18,8 +18,8 @@ import {
   $getRoot,
   $isParagraphNode,
   $setSelection,
-  createEditor,
   CUT_COMMAND,
+  createEditor,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   type LexicalCommand,
@@ -229,7 +229,7 @@ describe('table cell clearing', () => {
       const children = $getCell(0, 0).getChildren();
       expect(children).toHaveLength(1);
       const paragraph = children[0];
-      expect($isParagraphNode(paragraph)).toBe(true);
+      if (!$isParagraphNode(paragraph)) throw new Error('not a paragraph');
       // The crash we're guarding against comes from an empty TextNode that the
       // text normalizer tries to remove — so there must be none here.
       expect(paragraph.getChildrenSize()).toBe(0);

@@ -245,8 +245,10 @@ function getTableColumnsSize(table: TableNode): number {
 
 function createTableCell(cellContent: string): TableCellNode {
   const cellNode = new TableCellNode();
+  // Export escapes cell newlines as `\n` so rows stay on one line; restore
+  // them so multi-line content (lists, multiple blocks) survives the trip.
   $convertFromMarkdownString(
-    cellContent,
+    cellContent.replace(/\\n/g, '\n'),
     externalTransformersWithinTables,
     cellNode,
     true

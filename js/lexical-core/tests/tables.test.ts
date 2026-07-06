@@ -1,3 +1,4 @@
+import { $isListItemNode, $isListNode, type ListNode } from '@lexical/list';
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -198,6 +199,96 @@ describe('m-table internal transformer', () => {
       expect(cell.getColSpan()).toBe(1);
       expect(cell.getRowSpan()).toBe(1);
       expect(cell.__headerState).toBe(TableCellHeaderStates.NO_STATUS);
+    });
+  });
+});
+
+describe('lists inside table cells', () => {
+  function $getFirstCellList(): ListNode {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const list = cell.getChildren().find($isListNode);
+    expect(list).toBeDefined();
+    return list as ListNode;
+  }
+
+  it('round-trips a bullet list in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>- one\\n- two</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toBe(
+      '<m-table><m-table-row><m-table-cell>- one\\n- two</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const items = $getFirstCellList().getChildren().filter($isListItemNode);
+      expect(items).toHaveLength(2);
+      expect(items[0].getTextContent()).toBe('one');
+      expect(items[1].getTextContent()).toBe('two');
+    });
+  });
+
+  it('round-trips a nested list in a cell', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>- one\\n    - nested\\n- two</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, exportMarkdown(editor));
+    editor.getEditorState().read(() => {
+      const list = $getFirstCellList();
+      expect(list.getTextContent()).toContain('nested');
+      // The nested item lives in a child list, one level down
+      const wrapper = list
+        .getChildren()
+        .filter($isListItemNode)
+        .find((item) => item.getChildren().some($isListNode));
+      expect(wrapper).toBeDefined();
+    });
+  });
+
+  it('round-trips a checklist in a cell', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>- [ ] todo\\n- [x] done</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, exportMarkdown(editor));
+    editor.getEditorState().read(() => {
+      const list = $getFirstCellList();
+      expect(list.getListType()).toBe('check');
+      const items = list.getChildren().filter($isListItemNode);
+      expect(items).toHaveLength(2);
+      expect(items[0].getChecked()).toBeFalsy();
+      expect(items[1].getChecked()).toBe(true);
+    });
+  });
+
+  it('round-trips a list in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>- one\\n- two</m-table-cell><m-table-cell>plain</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toBe('| - one\\n- two | plain |');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const items = $getFirstCellList().getChildren().filter($isListItemNode);
+      expect(items).toHaveLength(2);
     });
   });
 });

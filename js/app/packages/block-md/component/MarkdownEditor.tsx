@@ -58,6 +58,7 @@ import {
   generatePlugin,
   horizontalRulePlugin,
   keyboardShortcutsPlugin,
+  listToTablePlugin,
   markdownPastePlugin,
   mentionsPlugin,
   pinnedPropertiesPlugin,
@@ -646,6 +647,12 @@ export function MarkdownEditor(props: {
   }
   plugins.use(
     codePlugin({
+      accessories: accessoryStore,
+      setAccessories: setAccessoryStore,
+    })
+  );
+  plugins.use(
+    listToTablePlugin({
       accessories: accessoryStore,
       setAccessories: setAccessoryStore,
     })
