@@ -64,7 +64,7 @@ const AUTH_URLS = [
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'slim' : 'hidden'),
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
