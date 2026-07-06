@@ -15050,6 +15050,7 @@ dependencies = [
  "indoc",
  "libc",
  "macro_aws_config",
+ "macro_env_var",
  "macro_queues",
  "serde",
  "serde_json",
