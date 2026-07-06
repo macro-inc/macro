@@ -1,6 +1,6 @@
 import {
   ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_CACHE_OVERRIDE,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
@@ -69,7 +69,7 @@ const graphqlSoupClient = createClient({
  * Browser only for now — Tauri will use a native host (see design doc).
  */
 function graphqlCacheEnabled(): boolean {
-  return ENABLE_GRAPHQL_CACHE_OVERRIDE === true && !isTauri();
+  return ENABLE_GRAPHQL_SOUP_OVERRIDE === true && !isTauri();
 }
 
 let cachedClientPromise: Promise<Client> | undefined;
