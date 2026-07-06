@@ -147,13 +147,25 @@ impl FavoritesRepo for PgFavoritesRepo {
                 ch.channel_type::text as "channel_type?",
                 cm.channel_id::text as "channel_id?"
             FROM favorite f
+            -- The comms/email tables key on uuid while favorite.entity_id is
+            -- text. Compare in uuid (casting the favorite side) so their
+            -- primary-key indexes are usable; casting the table side to text
+            -- forced a full scan of each table on every listing. The regex
+            -- guard keeps non-uuid entity_ids from failing the cast: they
+            -- yield NULL and simply don't hydrate.
+            CROSS JOIN LATERAL (
+                SELECT CASE
+                    WHEN f.entity_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                        THEN f.entity_id::uuid
+                END AS entity_uuid
+            ) fid
             LEFT JOIN "Document" d ON f.entity_type = 'document' AND d.id = f.entity_id
             LEFT JOIN document_sub_type dt ON f.entity_type = 'document' AND dt.document_id = f.entity_id
             LEFT JOIN "Chat" c ON f.entity_type = 'chat' AND c.id = f.entity_id
             LEFT JOIN "Project" p ON f.entity_type = 'project' AND p.id = f.entity_id
-            LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id::text = f.entity_id
-            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id::text = f.entity_id
-            LEFT JOIN email_threads et ON f.entity_type = 'email_thread' AND et.id::text = f.entity_id
+            LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
+            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
+            LEFT JOIN email_threads et ON f.entity_type = 'email_thread' AND et.id = fid.entity_uuid
             LEFT JOIN LATERAL (
                 SELECT m.subject
                 FROM email_messages m

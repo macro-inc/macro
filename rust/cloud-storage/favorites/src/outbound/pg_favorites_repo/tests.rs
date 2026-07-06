@@ -156,6 +156,49 @@ async fn list_favorites_hydrates_names_and_skips_deleted(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_favorites_hydrates_uuid_keyed_entities(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let channel_id = Uuid::now_v7().to_string();
+    sqlx::query(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES ($1::uuid, 'Eng', 'public', $2)"#,
+    )
+    .bind(&channel_id)
+    .bind(USER_A)
+    .execute(&pool)
+    .await
+    .expect("channel should insert");
+
+    let repo = PgFavoritesRepo::new(pool);
+    repo.add_favorite(
+        &user(USER_A),
+        &EntityType::Channel.with_entity_str(&channel_id),
+    )
+    .await
+    .expect("channel favorite should insert");
+    // A favorite whose entity_id is not a valid uuid must not break the
+    // listing (the uuid tables are joined on a casted entity_id); it lists
+    // unhydrated.
+    repo.add_favorite(
+        &user(USER_A),
+        &EntityType::Channel.with_entity_str("not-a-uuid"),
+    )
+    .await
+    .expect("non-uuid channel favorite should insert");
+
+    let favorites = repo
+        .list_favorites(&user(USER_A))
+        .await
+        .expect("favorites should list");
+    assert_eq!(favorites.len(), 2);
+    assert_eq!(favorites[0].entity_id, channel_id);
+    assert_eq!(favorites[0].name.as_deref(), Some("Eng"));
+    assert_eq!(favorites[0].channel_type.as_deref(), Some("public"));
+    assert_eq!(favorites[1].entity_id, "not-a-uuid");
+    assert_eq!(favorites[1].name, None);
+    assert_eq!(favorites[1].channel_type, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn remove_favorite_by_entity_scopes_to_user(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
