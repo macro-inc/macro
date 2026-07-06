@@ -152,6 +152,7 @@ fn run(cli: Cli) -> Result<()> {
             super::validate::local_env(&instance, mode, a.env.no_doppler, a.env.env_file.as_deref())
         }
         Cmd::KafkaProvision(a) => {
+            super::kafka::ensure_available("kafka-provision")?;
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::kafka::provision(&instance)
         }

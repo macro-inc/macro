@@ -34,8 +34,11 @@ tokio = { workspace = true }
 # .github/kafka-cluster-topics.json from the crate's declared topics, and for
 # the local-stack topic provisioning (local::kafka).
 macro_event_topics = { path = "../../macro_event_topics" }
-# AdminClient for creating the declared topics on the local broker.
-rdkafka = { workspace = true }
+# AdminClient for creating the declared topics on the local broker. Optional
+# (behind `local-stack`): the workspace links librdkafka dynamically, and the
+# CI jobs that build xtask on bare runners (path filters, generated-file
+# checks) have no system librdkafka to link against.
+rdkafka = { workspace = true, optional = true }
 # Typed docker-compose model (build the override as structs, not strings) +
 # Docker Engine API client for the discrete container/image ops.
 bollard = "0.21"
@@ -52,3 +55,9 @@ strum = { workspace = true, features = ["derive"] }
 # the Vite child it spawns, not just bun).
 libc = "0.2"
 macro_env_var = { path = "../../macro_env_var" }
+
+[features]
+# Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
+# default so plain `cargo run -p xtask` builds without a system librdkafka;
+# the just recipes (just/xtask.just) enable it.
+local-stack = ["dep:rdkafka"]

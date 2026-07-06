@@ -164,6 +164,11 @@ const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexi
 
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
+    if mode.spec().runs_local_infra {
+        // This mode will provision Kafka topics mid-bring-up; reject a build
+        // that can't do that before any containers start.
+        kafka::ensure_available(&format!("run-{}", mode.label()))?;
+    }
     let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     stage.section(&format!(
