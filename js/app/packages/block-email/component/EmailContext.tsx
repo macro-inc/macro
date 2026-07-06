@@ -31,6 +31,9 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { getSoupEntityById } from '@queries/soup/cache';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import type { UndoHandle } from '@queries/undo';
 import type {
   ApiMessage,
   ApiThread,
@@ -107,7 +110,10 @@ type EmailContextValues = {
     refetch: () => void;
   };
 
-  archiveThread: () => boolean;
+  archiveThread: (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => boolean;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -336,8 +342,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
-  const archiveThread = () => {
+  const archiveThread = (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => {
     const thread = threadQuery.data;
+    // `=== true` because callers may pass this straight to an event handler.
+    const silent = opts?.silent === true;
+    const markDoneOpts = { silent, onUndoHandle: opts?.onUndoHandle };
 
     if (!thread?.db_id) return false;
 
@@ -364,17 +376,29 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
               mergeHistory: true,
               referredFrom: splitHandle.referredFrom(),
             });
-          }
+          },
+          markDoneOpts
         );
       } else {
-        markAsDoneAction.execute([selectedRow.original]);
+        markAsDoneAction.execute(
+          [selectedRow.original],
+          undefined,
+          markDoneOpts
+        );
       }
     } else {
-      archiveMutation.mutate({
-        threadId: thread.db_id,
-        archive: thread.inbox_visible,
-        linkId: toHeaderLinkId(thread.link_id),
-      });
+      // Not rendered inside a soup list (e.g. thread opened in a split): no
+      // row to drive the action from, so mark done via the cached soup entity
+      // so soup views drop the thread and its notifications settle. The
+      // archive itself already ran above.
+      const cachedItem = getSoupEntityById(thread.db_id);
+      if (cachedItem && cachedItem.tag !== 'channelThread') {
+        void markAsDoneAction.execute(
+          [mapApiSoupItemToEntity(cachedItem)],
+          undefined,
+          markDoneOpts
+        );
+      }
     }
 
     return true;
