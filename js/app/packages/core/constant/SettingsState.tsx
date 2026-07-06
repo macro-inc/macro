@@ -164,10 +164,6 @@ export const useSettingsState = () => {
     removeSettingsSplit();
   };
 
-  // "Back to app" is the only close affordance on the full-page route, so it and
-  // closeSettings are the same thing.
-  const closeModal = closeSettings;
-
   // Promote the route into the split layout: rebuild the layout we came from and
   // dock settings into it as a `settings/<tab>` pair. Navigating straight to the
   // composed path avoids racing the split manager's mount.
@@ -184,7 +180,7 @@ export const useSettingsState = () => {
 
   // Pop the docked split back out into the full-page route. The return layout is
   // the current path minus the settings split, so "Back to app" lands correctly.
-  const moveSettingsToModal = (tab?: SettingsTab) => {
+  const moveSettingsToFullscreen = (tab?: SettingsTab) => {
     if (tab) setActiveTabId(tab);
     setSettingsReturnTo(stripSettingsSplit(toBaseRelative(location.pathname)));
     navigate(settingsPathFor(tab ?? activeTabId()));
@@ -224,9 +220,8 @@ export const useSettingsState = () => {
     openSettingsInSplit,
     selectTab,
     closeSettings,
-    closeModal,
     moveSettingsToSplit,
-    moveSettingsToModal,
+    moveSettingsToFullscreen,
     activeTabId,
     setActiveTabId,
     toggleSettings,

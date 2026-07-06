@@ -13,7 +13,7 @@ import { createSignal, lazy, Show, Suspense } from 'solid-js';
 const SignatureEditor = lazy(() => import('./SignatureEditor'));
 
 // Unsaved signature drafts and per-inbox expanded state, keyed by link id and
-// held at module scope. The settings modal unmounts the Connected Accounts tab
+// held at module scope. The settings panel unmounts the Connected Accounts tab
 // when you switch away (and the links query can recreate an inbox row on
 // refetch); keeping this outside that subtree means tabbing away and back no
 // longer closes the editor or discards unsaved edits.

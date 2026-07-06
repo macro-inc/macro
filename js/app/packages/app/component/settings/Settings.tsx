@@ -40,9 +40,9 @@ import {
 import { Billing } from '@app/component/settings/Billing';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
-export type SettingsVariant = 'split' | 'modal';
+export type SettingsVariant = 'split' | 'fullscreen';
 
-// Panel-width breakpoints (the panel can be a full-screen modal or a resizable
+// Panel-width breakpoints (the panel can be a full-screen page or a resizable
 // split, so we measure the panel itself rather than the viewport). Below
 // `COMPACT` the sidebar collapses into a horizontal tab bar; between `COMPACT`
 // and `NARROW` the gutter around the content card tightens.
@@ -67,7 +67,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const {
     closeSettings,
     moveSettingsToSplit,
-    moveSettingsToModal,
+    moveSettingsToFullscreen,
     activeTabId,
     selectTab,
   } = useSettingsState();
@@ -202,7 +202,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     );
   }
 
-  // "Back to app" — the modal's only close affordance. Laid out like a nav row.
+  // "Back to app" — the full-page route's only close affordance. Laid out like a nav row.
   const backToApp = () => (
     <button
       type="button"
@@ -261,7 +261,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Button
               class="p-1 rounded-lg"
               label="Open fullscreen"
-              onClick={() => moveSettingsToModal()}
+              onClick={() => moveSettingsToFullscreen()}
             >
               <ArrowsOut class="size-4" />
             </Button>
@@ -278,9 +278,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
               narrow() ? 'pr-1' : 'pr-2'
             )}
           >
-            {/* The full-screen modal has no surrounding chrome, so the sidebar
+            {/* The full-screen page has no surrounding chrome, so the sidebar
                 carries the "back" and "move to split" affordances itself. */}
-            <Show when={variant() === 'modal'}>
+            <Show when={variant() === 'fullscreen'}>
               <div class="flex items-center justify-between gap-1">
                 {backToApp()}
                 {moveToSplitButton()}
@@ -330,11 +330,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         >
           <Layer depth={1}>
             <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
-              {/* Compact modal chrome: no split header to host the tabs, so
-                  the sidebar collapses into a top bar here — back / tab
+              {/* Compact full-screen chrome: no split header to host the tabs,
+                  so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its
                   header.) */}
-              <Show when={variant() === 'modal' && compact()}>
+              <Show when={variant() === 'fullscreen' && compact()}>
                 <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
                   {backToApp()}
                   <TabsInsetDropdown

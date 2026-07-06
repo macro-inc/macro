@@ -7,14 +7,14 @@ import { SettingsPanel } from './Settings';
 
 /**
  * Settings as a full-page route (`/settings/:tab`). This replaces the old
- * signal-driven fullscreen modal: the URL is now the source of truth for
+ * signal-driven fullscreen overlay: the URL is now the source of truth for
  * whether settings is open and which page is showing, so it's linkable and
  * survives reload — without leaking the workspace layout that a query param on
  * the split path would have carried.
  *
  * The app sidebar is hidden on this route (see Layout's `sidebarVisible`), so
- * the panel fills the window exactly as the modal did. "Move to split" still
- * docks settings into the layout as a `component/settings` split.
+ * the panel fills the window. "Move to split" still docks settings into the
+ * layout as a `settings/<tab>` split.
  */
 export function SettingsRoute() {
   const params = useParams<{ tab?: string }>();
@@ -35,7 +35,7 @@ export function SettingsRoute() {
     <Show when={tab()} fallback={<Navigate href="/settings/account" />}>
       <div class="h-full w-full bg-surface">
         <Layer depth={0}>
-          <SettingsPanel variant="modal" />
+          <SettingsPanel variant="fullscreen" />
         </Layer>
       </div>
     </Show>
