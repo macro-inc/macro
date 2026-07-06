@@ -85,6 +85,7 @@ import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import {
   type EntityData,
   ListEntity,
@@ -92,7 +93,6 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
-import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -711,6 +711,25 @@ export const SoupView = (props: SoupViewProps) => {
   );
 };
 
+export const useIsNewInboxEnabled = () => {
+  const panel = useSplitPanelOrThrow();
+
+  const currentView = () => {
+    const { type, id } = panel.handle.content();
+    if (type !== 'component') return;
+    return isListViewID(id) ? id : undefined;
+  };
+
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+
+  const isNewInboxEnabled = () =>
+    currentView() === 'inbox' && newInboxFlag().enabled;
+
+  return isNewInboxEnabled;
+};
+
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
@@ -745,14 +764,24 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
 
+  const currentView = createMemo(() => {
+    const { type, id } = panel.handle.content();
+    if (type !== 'component') return;
+    return isListViewID(id) ? id : undefined;
+  });
+
   const focusFirstEntity = () => {
     const allRows = rows();
     const firstEntityIndex = allRows.findIndex(
       (row) => !row.getIsGrouped() && !row.getIsLoadMore()
     );
+
     if (firstEntityIndex === -1) return;
 
     const result = soup.navigate.toIndex(firstEntityIndex);
+
+    soup.setPreviewEntity(result?.row.id);
+
     if (result) {
       virtualizerHandle()?.scrollToIndex(result.index, { align: 'nearest' });
     }
@@ -772,6 +801,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     on([rows, focusEffectsEnabled, moveInitialFocus], () => {
       if (!focusEffectsEnabled() || !moveInitialFocus()) return;
       if (!initialLoad || source.isLoading()) return;
+
+      if (isNewInboxEnabled()) return;
+
       focusFirstEntity();
       initialLoad = false;
     })
@@ -783,6 +815,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
       () => [soup.predicates.activeIds(), searchText(), featuredIds()] as const,
       () => {
         if (!focusEffectsEnabled()) return;
+
+        if (isNewInboxEnabled()) return;
+
         focusFirstEntity();
       },
       { defer: true }
@@ -838,17 +873,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
-  const currentView = () => {
-    const { type, id } = panel.handle.content();
-    if (type !== 'component') return;
-    return isListViewID(id) ? id : undefined;
-  };
 
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-  const isNewInboxEnabled = () =>
-    currentView() === 'inbox' && newInboxFlag().enabled;
+  const isNewInboxEnabled = useIsNewInboxEnabled();
 
   // The per-row component depends on the active view (and the inbox flag).
   const listEntityComponent = () => {
@@ -920,6 +946,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     ) {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
+
+      soup.setPreviewEntity(entity.id);
       return;
     }
 
@@ -1050,20 +1078,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(previewCaptorTeardown);
 
-  // The new inbox opens with the preview pane active by default. Wait for the
-  // flag to resolve and a row to focus, then open the preview once — after that
-  // the user controls it (including closing it) freely.
-  if (persistedPreview === undefined) {
-    let previewDefaulted = false;
-    createEffect(() => {
-      if (previewDefaulted || !isNewInboxEnabled()) return;
-      const focused = soup.focus.id();
-      if (!focused) return;
-      previewDefaulted = true;
-      soup.setPreviewEntity(focused);
-    });
-  }
-
   // Which groups are collapsed is also per-entry state: captured on nav-away
   // and restored on back/forward.
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
@@ -1144,22 +1158,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       !!soup.focus.item()
   );
 
-  const [hasEverSelected, setHasEverSelected] = createSignal(false);
-  createEffect(() => {
-    if (soup.focus.item()) setHasEverSelected(true);
-  });
-
   // On first load the new inbox doesn't auto-select a row, so reserve the
   // preview pane with a placeholder until the user picks something. Only for
   // that initial state — after the first selection, an empty selection
   // collapses the pane as before.
-  const previewPlaceholderVisible = createMemo(
-    () =>
-      isWideSplitPanel() &&
-      isNewInboxEnabled() &&
-      !soup.focus.item() &&
-      !hasEverSelected()
-  );
+  const previewPlaceholderVisible = createMemo(() => {
+    return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
+  });
 
   const previewPaneVisible = createMemo(
     () => previewVisible() || previewPlaceholderVisible()
