@@ -185,6 +185,31 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .await
         .inspect_err(|e| tracing::error!(error=?e, "unable to mark user as just signed up"));
 
+    // Authoritative product-analytics signup event: fired here so every
+    // creation path (SSO, passwordless, iOS) counts exactly once, even if the
+    // user never returns to the app. The browser fires the ad-platform
+    // conversions instead — it holds the click-id cookies. Uses the same
+    // distinct id ("macro|{email}") the app identifies with. Fire-and-forget.
+    tokio::spawn({
+        let analytics_client = ctx.analytics_client.clone();
+        let user_id = user_id.clone();
+        let verified = req.event.user.verified;
+        let has_organization = organization_id.is_some();
+        async move {
+            let _ = analytics_client
+                .track_posthog(
+                    &user_id,
+                    "sign_up",
+                    serde_json::json!({
+                        "verified": verified,
+                        "hasOrganization": has_organization,
+                    }),
+                )
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
+        }
+    });
+
     // add user to all active experiments
     tokio::spawn({
         let db = ctx.db.clone();

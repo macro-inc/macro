@@ -21,10 +21,11 @@ export type EntityEventPayload = {
 export type AppEvents = {
   // --- Acquisition & auth -------------------------------------------------
   /**
-   * Account creation. Fired once post-auth when the backend flags the session
-   * as belonging to a freshly created account (`signed_up=true` redirect
-   * param), so it captures signups regardless of which page initiated the
-   * SSO/passwordless flow. See signupCompletion.ts.
+   * Account creation, browser side (GA only). The authoritative PostHog
+   * `sign_up` is emitted server-side from the create-user webhook; the
+   * browser fires this GA event plus the ad conversions when the backend
+   * flags the session via the `signed_up=true` redirect param. See
+   * signupCompletion.ts.
    */
   sign_up: Record<string, unknown>;
   /** Signup intent: user clicked a sign-up CTA (pre-redirect, may not convert). */

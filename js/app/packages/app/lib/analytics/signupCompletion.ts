@@ -7,11 +7,14 @@
  * sends people). The ad-platform conversions were even further off: they fired
  * when the (now optional) interactive tutorial modal closed.
  *
- * The authoritative signal now comes from the backend: when the auth service
- * completes an OAuth/passwordless flow for an account that was just created,
- * it appends `signed_up=true` to the redirect back into the app. This module
- * consumes that param once and fires `sign_up` plus the Meta/Google signup
- * conversions, regardless of which page or device started the flow.
+ * The authoritative product-analytics `sign_up` (PostHog) is emitted
+ * server-side from the create-user webhook, so every creation path counts
+ * exactly once even if the user never returns to the app. What remains here
+ * is the browser-only half: the ad-platform conversions (Meta pixel, Google
+ * Ads) plus the GA sign_up event, which need the click-id cookies and consent
+ * context that only exist in the browser. The auth service appends
+ * `signed_up=true` to the post-auth redirect; this module consumes that param
+ * once and fires them, regardless of which page or device started the flow.
  */
 import type { AnalyticsInterface } from './analytics';
 import {
@@ -79,10 +82,12 @@ function markTracked(userId: string) {
 }
 
 /**
- * Fires `sign_up` and the ad-platform signup conversions exactly once for a
- * freshly created account. Call once the authenticated user is known (so the
- * events can be attributed and deduped by user id). No-ops unless the URL
- * carries the backend's `signed_up=true` marker.
+ * Fires the browser-side signup conversions (GA sign_up, Meta
+ * CompleteRegistration, Google Ads signup) exactly once for a freshly created
+ * account. The PostHog `sign_up` product event is NOT fired here — it comes
+ * from the create-user webhook on the backend. Call once the authenticated
+ * user is known (so the events can be attributed and deduped by user id).
+ * No-ops unless the URL carries the backend's `signed_up=true` marker.
  */
 export function trackSignupCompletion(
   analytics: AnalyticsInterface,
@@ -92,7 +97,8 @@ export function trackSignupCompletion(
   if (alreadyTracked(user.id)) return;
   markTracked(user.id);
 
-  analytics.track('sign_up', {}, ['ga', 'meta-pixel', 'posthog']);
+  // GA4 recommended-event name; browser GA has the client id for attribution.
+  analytics.track('sign_up', {}, ['ga']);
 
   // Paid signups return from Stripe with a `type` param; plain signups have
   // no tier yet and count at the free-signup lead value. Purchase value is
