@@ -19,10 +19,8 @@ macro_rules! macro_passwordless_login_code {
 }
 
 /// Generates the "account was just created" marker key for a given email
-macro_rules! macro_just_signed_up {
-    ($email:expr) => {
-        format!("just_signed_up:{}", $email)
-    };
+fn just_signed_up_key(email: &str) -> String {
+    format!("just_signed_up:{}", email.to_lowercase())
 }
 
 impl MacroCache {
@@ -89,7 +87,7 @@ impl MacroCache {
     /// Marks an account as just created so the auth callback that completes the
     /// same flow can attribute the login as a signup.
     pub async fn mark_user_just_signed_up(&self, email: &str) -> anyhow::Result<()> {
-        let key = macro_just_signed_up!(email.to_lowercase());
+        let key = just_signed_up_key(email);
         macro_redis::set::set_with_expiry(&self.inner, &key, 1, MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS)
             .await
     }
@@ -97,7 +95,7 @@ impl MacroCache {
     /// Consumes the just-signed-up marker for an email. Returns true exactly
     /// once per marker: GETDEL is atomic, so the first caller wins.
     pub async fn take_user_just_signed_up(&self, email: &str) -> anyhow::Result<bool> {
-        let key = macro_just_signed_up!(email.to_lowercase());
+        let key = just_signed_up_key(email);
         let value = macro_redis::get::get_del_optional::<u8>(&self.inner, &key).await?;
         Ok(value.is_some())
     }
