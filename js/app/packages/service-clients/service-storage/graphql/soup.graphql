@@ -188,7 +188,7 @@ query Soup($input: SoupInput!) {
 }
 
 fragment SoupPropertyFields on GraphqlSoupProperty {
-  id
+  propertyDefinitionId
   displayName
   dataType
   isMultiSelect
@@ -212,7 +212,7 @@ fragment SoupPropertyFields on GraphqlSoupProperty {
 }
 
 fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
-  messageId
+  id
   threadId
   senderId
   content

@@ -80,7 +80,7 @@ async fn engine_over_idb() {
     });
 
     engine
-        .write_query(None, query, Some("Soup"), &vars, &data)
+        .write_query(None, query, Some("Soup"), &vars, &data, None)
         .await
         .unwrap();
     let ReadResult::Hit { data: cached } = engine

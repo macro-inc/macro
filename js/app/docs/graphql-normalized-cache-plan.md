@@ -57,14 +57,25 @@ entire cache in browser memory. With 10s of thousands of cached objects
     uuid** (localStorage), *not* user identity: construction is synchronous
     and offline-capable (no identity waterfall), and no PII appears in
     enumerable storage metadata (IDB database names / SQLite filenames).
-    User↔cache consistency is enforced by the **identity witness**: the
-    schema exposes `QueryRoot → user: GraphqlUser!` (viewer pattern) and
-    every response's `GraphqlUser:{id}` record is compared against the
-    identity bound inside the cache (`__meta:identity`). A mismatch wipes
-    and rebinds (“silent restart”) before the new user's write proceeds,
-    and all active operations re-execute; other engine instances get a
-    `reset` broadcast. Eager path: clear on logout. Discard on schema/format
-    mismatch (cache is disposable, rebuild from network).
+    User↔cache consistency is enforced by **identity witnessing**, split
+    into two halves: *extraction* lives in the urql exchange
+    (`extractIdentity: (data) => data.user.id` — the schema exposes
+    `QueryRoot → user: GraphqlUser!`, viewer pattern), and *enforcement*
+    lives in the engine as a schema-agnostic mechanism — writes carry an
+    opaque session tag compared against the binding stored in the same
+    database (`__meta:identity`), so compare-and-wipe is atomic with the
+    triggering write (no stale-in-flight-write races). A mismatch wipes and
+    rebinds (“silent restart”), all active operations re-execute, and other
+    engine instances get a `reset` broadcast. Eager path: clear on logout.
+    Discard on schema/format mismatch (cache is disposable, rebuild from
+    network).
+
+    **Key policy — presence-of-id convention**: no client-side key config.
+    An output object type with `id: ID!` is keyed by `__typename:id`; no
+    `id` field → embedded. The SDL is the policy (schema authors must only
+    name a field `id` when it is a global identity — hence
+    `GraphqlSoupProperty.propertyDefinitionId` and
+    `GraphqlSoupChannelMessage.id`); the build fails on malformed shapes.
 12. **Native-testable core** — the Rust engine is a pure crate (`cargo test`,
     no wasm) with storage/clock behind traits.
 13. **Future** — mutations don't exist in the schema yet; design leaves room
@@ -249,7 +260,8 @@ js/app/packages/graphql-cache/ # JS glue
 
 **Phase 1 — cache-core (native, no wasm)** *(done — `rust/graphql-cache/cache-core`)*
 - Schema metadata codegen from `rust/cloud-storage/schema.graphql`
-  (`build.rs` + `key_config.toml`, build fails on drift).
+  (`build.rs`; key policy derived via the presence-of-id convention, build
+  fails on malformed shapes).
 - Normalize/denormalize for the real `Soup` query shape, union + fragment
   handling, alias-aware storage, canonical-args field keys.
 - Dependency index, LRU hot tier, in-memory Storage impl, engine with

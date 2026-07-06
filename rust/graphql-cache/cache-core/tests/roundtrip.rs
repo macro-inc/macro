@@ -51,7 +51,7 @@ query Soup($input: SoupInput!) {
 }
 
 fragment SoupPropertyFields on GraphqlSoupProperty {
-  id
+  propertyDefinitionId
   displayName
   dataType
   isMultiSelect
@@ -70,7 +70,7 @@ fragment SoupPropertyFields on GraphqlSoupProperty {
 }
 
 fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
-  messageId
+  id
   threadId
   senderId
   content
@@ -105,7 +105,7 @@ fn response_data() -> Json {
                         "updatedAt": "2026-07-01T00:00:00Z",
                         "properties": [
                             {
-                                "id": "prop-1",
+                                "propertyDefinitionId": "prop-1",
                                 "displayName": "Status",
                                 "dataType": "select",
                                 "isMultiSelect": false,
@@ -134,7 +134,7 @@ fn response_data() -> Json {
                         "channelName": "general",
                         "channelType": "PUBLIC",
                         "latestMessage": {
-                            "messageId": "msg-1",
+                            "id": "msg-1",
                             "threadId": null,
                             "senderId": "user-2",
                             "content": "hello",

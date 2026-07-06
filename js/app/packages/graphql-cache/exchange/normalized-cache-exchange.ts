@@ -82,6 +82,15 @@ function cacheResult(
 export interface NormalizedCacheExchangeOptions {
   /** Called when a cache read/write fails (diagnostics; flow already degraded to network). */
   onCacheError?: (error: unknown, op: Operation) => void;
+  /**
+   * Extracts the session identity (e.g. viewer id, `data.user.id`) from a
+   * response. The extracted value is passed to the cache as an opaque tag;
+   * a write tagged with a different identity than the one bound to the
+   * cache wipes and rebinds it atomically (silent restart), and every
+   * active operation re-executes. Schema knowledge lives here — the cache
+   * layer itself is identity-agnostic.
+   */
+  extractIdentity?: (data: unknown) => string | undefined;
 }
 
 export function normalizedCacheExchange(
@@ -156,6 +165,7 @@ export function normalizedCacheExchange(
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
               data: result.data,
+              identity: options.extractIdentity?.(result.data),
             });
           } catch (error) {
             options.onCacheError?.(error, op);

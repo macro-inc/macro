@@ -89,7 +89,16 @@ function getGraphqlSoupClient(): Client {
       const host = createWorkerCacheHost({ scope: getOrCreateCacheScope() });
       return createClient({
         url: `${dssHost}/items/soup/graphql`,
-        exchanges: [normalizedCacheExchange(host), fetchExchange],
+        exchanges: [
+          normalizedCacheExchange(host, {
+            // Session identity witness: the viewer id present on every soup
+            // response. A response for a different user silently wipes and
+            // rebinds the cache (see @graphql-cache/scope).
+            extractIdentity: (data) =>
+              (data as Partial<SoupQuery> | undefined)?.user?.id,
+          }),
+          fetchExchange,
+        ],
         fetch: dssGraphqlFetch,
       });
     } catch (error) {
@@ -182,7 +191,7 @@ function mapGraphqlPropertyValue(
 function mapGraphqlProperties(properties: GraphqlSoupProperty[]) {
   return properties.map((property) => ({
     definition: {
-      id: property.id,
+      id: property.propertyDefinitionId,
       display_name: property.displayName,
       data_type: property.dataType,
       is_multi_select: property.isMultiSelect,
@@ -215,7 +224,7 @@ function mapChannelMessage(
 ) {
   if (!message) return message;
   return {
-    message_id: message.messageId,
+    message_id: message.id,
     thread_id: message.threadId ?? undefined,
     sender_id: message.senderId,
     content: message.content,

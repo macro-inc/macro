@@ -146,8 +146,11 @@ impl CacheEngine {
     }
 
     /// Normalizes and stores a network response. Resolves to
-    /// `{changed: string[], affectedOps: string[]}` — `affectedOps` are the
-    /// registered operation ids (excluding `originOpId`) whose data changed.
+    /// `{changed: string[], affectedOps: string[], reset: boolean}` —
+    /// `affectedOps` are the registered operation ids (excluding
+    /// `originOpId`) whose data changed. `identity` is an opaque session tag
+    /// (extracted by the exchange from the response); a tag mismatching the
+    /// cache's bound identity wipes and rebinds atomically with this write.
     #[wasm_bindgen(js_name = writeQuery)]
     pub fn write_query(
         &self,
@@ -156,6 +159,7 @@ impl CacheEngine {
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
+        identity: Option<String>,
     ) -> js_sys::Promise {
         let engine = self.engine.clone();
         let ops = self.ops.clone();
@@ -165,7 +169,14 @@ impl CacheEngine {
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let mut engine = engine.lock().await;
             let result = engine
-                .write_query(origin, &query, operation_name.as_deref(), &vars, &data)
+                .write_query(
+                    origin,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    identity.as_deref(),
+                )
                 .await
                 .map_err(err_js)?;
             to_js(&JsWriteResult {

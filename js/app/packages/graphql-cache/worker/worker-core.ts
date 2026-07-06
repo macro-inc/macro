@@ -95,7 +95,8 @@ export class CacheWorkerCore {
             request.query,
             request.operationName,
             request.variables,
-            request.data
+            request.data,
+            request.identity
           );
         const result =
           this.options.multiEngine && this.scope

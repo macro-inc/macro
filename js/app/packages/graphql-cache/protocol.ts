@@ -45,6 +45,12 @@ export type CacheRequest = { id: number } & (
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      /**
+       * Opaque session tag (e.g. viewer id extracted from the response). A
+       * write tagged with a different identity than the cache's bound one
+       * wipes and rebinds the cache atomically (silent restart).
+       */
+      identity?: string;
     }
   | { kind: 'teardown'; opId: string }
   /** External invalidation (e.g. websocket push): evict + report ops. */

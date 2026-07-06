@@ -95,11 +95,10 @@ mod tests {
         assert!(root.key_fields.is_none());
         assert!(root.fields.iter().any(|f| f.name == "user"));
 
-        // The viewer object is keyed and doubles as the identity witness.
+        // The viewer object is keyed by presence-of-id.
         let user = type_meta("GraphqlUser").expect("user type");
         assert_eq!(user.key_fields, Some(&["id"][..]));
         assert!(user.fields.iter().any(|f| f.name == "soup"));
-        assert_eq!(IDENTITY_WITNESS, Some("GraphqlUser"));
     }
 
     #[test]
@@ -114,19 +113,28 @@ mod tests {
     }
 
     #[test]
-    fn key_config_applied() {
+    fn presence_of_id_convention_applied() {
         assert_eq!(
             type_meta("GraphqlSoupDocument").unwrap().key_fields,
             Some(&["id"][..])
         );
+        // Renamed from `messageId` so the convention keys it.
         assert_eq!(
             type_meta("GraphqlSoupChannelMessage").unwrap().key_fields,
-            Some(&["messageId"][..])
+            Some(&["id"][..])
         );
-        // Property values are per-entity even though properties carry the
-        // definition id — must stay embedded.
+        // Property values are per-entity; the schema exposes the definition
+        // id as `propertyDefinitionId` (not `id`) so properties embed.
         assert_eq!(type_meta("GraphqlSoupProperty").unwrap().key_fields, None);
+        assert!(field_meta("GraphqlSoupProperty", "propertyDefinitionId").is_some());
+        // No id field → embedded.
         assert_eq!(type_meta("SoupPage").unwrap().key_fields, None);
+        assert_eq!(
+            type_meta("GraphqlSoupChannelParticipant")
+                .unwrap()
+                .key_fields,
+            None
+        );
     }
 
     #[test]

@@ -70,7 +70,7 @@ fn miss_then_write_then_hit() {
 
         let data = page(&[("doc-1", "Design doc")]);
         let write = engine
-            .write_query(Some(1), QUERY, Some("Soup"), &vars(10), &data)
+            .write_query(Some(1), QUERY, Some("Soup"), &vars(10), &data, None)
             .await
             .unwrap();
         assert!(!write.changed.is_empty());
@@ -102,6 +102,7 @@ fn cross_operation_invalidation() {
                 Some("Soup"),
                 &vars(10),
                 &page(&[("doc-1", "A")]),
+                None,
             )
             .await
             .unwrap();
@@ -118,6 +119,7 @@ fn cross_operation_invalidation() {
                 Some("Soup"),
                 &vars(20),
                 &page(&[("doc-1", "B")]),
+                None,
             )
             .await
             .unwrap();
@@ -144,6 +146,7 @@ fn cross_operation_invalidation() {
                 Some("Soup"),
                 &vars(20),
                 &page(&[("doc-1", "B")]),
+                None,
             )
             .await
             .unwrap();
@@ -159,6 +162,7 @@ fn cross_operation_invalidation() {
                 Some("Soup"),
                 &vars(20),
                 &page(&[("doc-1", "C")]),
+                None,
             )
             .await
             .unwrap();
@@ -176,7 +180,7 @@ fn hot_tier_eviction_falls_back_to_storage() {
 
         let data = page(&[("doc-1", "A"), ("doc-2", "B"), ("doc-3", "C")]);
         engine
-            .write_query(None, QUERY, Some("Soup"), &vars(10), &data)
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
             .await
             .unwrap();
 
@@ -202,6 +206,7 @@ fn clear_wipes_everything() {
                 Some("Soup"),
                 &vars(10),
                 &page(&[("doc-1", "A")]),
+                None,
             )
             .await
             .unwrap();
@@ -227,6 +232,7 @@ fn identity_witness_wipes_on_user_change() {
                 Some("Soup"),
                 &vars(10),
                 &page(&[("doc-1", "A")]),
+                None,
             )
             .await
             .unwrap();
@@ -235,7 +241,7 @@ fn identity_witness_wipes_on_user_change() {
             .await
             .unwrap();
 
-        // Same user again: no reset.
+        // Same user again: no reset. Untagged writes never reset either.
         let write = engine
             .write_query(
                 Some(2),
@@ -243,6 +249,19 @@ fn identity_witness_wipes_on_user_change() {
                 Some("Soup"),
                 &vars(20),
                 &page(&[("doc-2", "B")]),
+                Some("user-1"),
+            )
+            .await
+            .unwrap();
+        assert!(!write.reset);
+        let write = engine
+            .write_query(
+                Some(2),
+                QUERY,
+                Some("Soup"),
+                &vars(20),
+                &page(&[("doc-2", "B2")]),
+                None,
             )
             .await
             .unwrap();
@@ -256,6 +275,7 @@ fn identity_witness_wipes_on_user_change() {
                 Some("Soup"),
                 &vars(20),
                 &page_for_user("user-2", &[("doc-9", "Z")]),
+                Some("user-2"),
             )
             .await
             .unwrap();

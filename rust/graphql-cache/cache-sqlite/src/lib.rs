@@ -222,7 +222,7 @@ mod tests {
                 "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
             });
             engine
-                .write_query(None, query, Some("Soup"), &vars, &data)
+                .write_query(None, query, Some("Soup"), &vars, &data, None)
                 .await
                 .unwrap();
             let ReadResult::Hit { data: cached } = engine

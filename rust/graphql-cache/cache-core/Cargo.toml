@@ -16,9 +16,7 @@ sha2 = { workspace = true }
 
 [build-dependencies]
 apollo-compiler = { workspace = true }
-serde = { workspace = true }
 sha2 = { workspace = true }
-toml = { workspace = true }
 
 [dev-dependencies]
 pollster = "0.4"

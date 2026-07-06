@@ -121,17 +121,6 @@ impl<S: Storage> Engine<S> {
         Ok(())
     }
 
-    /// Scans record updates for the identity-witness type and returns the
-    /// observed user id, if any.
-    fn observed_identity(updates: &crate::normalize::RecordUpdates) -> Option<String> {
-        let witness = crate::meta::IDENTITY_WITNESS?;
-        let prefix_len = witness.len() + 1;
-        updates.keys().find_map(|key| {
-            (key.0.starts_with(witness) && key.0.as_bytes().get(witness.len()) == Some(&b':'))
-                .then(|| key.0[prefix_len..].to_string())
-        })
-    }
-
     /// Attempts to answer a query from cache. When `op_id` is given the
     /// operation is registered as active with the dependencies it touched
     /// (hit *or* miss — a miss still re-executes when its records change).
@@ -202,6 +191,12 @@ impl<S: Storage> Engine<S> {
 
     /// Normalizes and stores a network response. Returns changed records and
     /// the affected active operations (excluding `origin_op`).
+    ///
+    /// `identity` is an opaque session tag extracted by the host (e.g. the
+    /// viewer id from the response). The engine knows nothing about its
+    /// meaning — only that a write tagged with a different identity than the
+    /// one bound to this cache wipes everything before the write proceeds
+    /// (silent restart), atomically with this write.
     pub async fn write_query(
         &mut self,
         origin_op: Option<OpId>,
@@ -209,24 +204,22 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
         data: &Json,
+        identity: Option<&str>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let updates = normalize(op, variables, data)?;
 
-        // Identity witnessing: a response for a different user than the one
-        // bound to this cache wipes everything before the write proceeds
-        // (silent restart). See key_config.toml `identity_witness`.
         let mut reset = false;
-        if let Some(observed) = Self::observed_identity(&updates) {
+        if let Some(observed) = identity {
             match self.bound_identity().await? {
-                None => self.bind_identity(&observed).await?,
+                None => self.bind_identity(observed).await?,
                 Some(bound) if bound == observed => {}
                 Some(_) => {
                     self.hot.clear();
                     self.storage.clear().await.map_err(EngineError::Storage)?;
                     self.bound_identity = Some(None);
-                    self.bind_identity(&observed).await?;
+                    self.bind_identity(observed).await?;
                     reset = true;
                 }
             }
