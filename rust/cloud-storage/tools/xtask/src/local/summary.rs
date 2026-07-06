@@ -75,6 +75,7 @@ pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {
             "redis",
             format!("redis://localhost:{}", instance.port(Port::Redis)),
         );
+        row("kafka", format!("localhost:{}", instance.port(Port::Kafka)));
     }
 
     row(

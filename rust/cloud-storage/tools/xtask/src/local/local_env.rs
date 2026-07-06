@@ -70,6 +70,7 @@ struct InfraEnv {
     redis_uri: String,
     opensearch_url: String,
     local_aws_url: String,
+    kafka_brokers: String,
 }
 
 impl InfraEnv {
@@ -79,6 +80,9 @@ impl InfraEnv {
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
+            // The broker's in-network listener (see docker-compose-databases.yml);
+            // host processes use localhost:9092 instead.
+            kafka_brokers: "kafka:29092".into(),
         }
     }
 
@@ -93,6 +97,7 @@ impl InfraEnv {
         env.insert("LAST_ONLINE_REDIS_URI".into(), self.redis_uri.clone());
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
+        env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());

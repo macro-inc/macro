@@ -222,6 +222,22 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
                 format!("{}:9600", instance.port(Port::OpenSearchPa)),
             ])),
         );
+        // Kafka also needs its host-facing ADVERTISED listener to carry the
+        // remapped port — clients redial the advertised address, not the
+        // bootstrap one, so the base compose's `localhost:9092` would send a
+        // named instance's clients to the default instance's broker.
+        let kafka_port = instance.port(Port::Kafka);
+        services.insert(
+            "kafka".to_string(),
+            Some(dct::Service {
+                ports: dct::Ports::Short(vec![format!("{kafka_port}:9092")]),
+                environment: kv(&[(
+                    "KAFKA_ADVERTISED_LISTENERS",
+                    &format!("PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:{kafka_port}"),
+                )]),
+                ..Default::default()
+            }),
+        );
         // The auxiliary services' host-port bindings are dropped in `apply_tags`
         // (an empty `ports:` can't be expressed in the typed model — it needs the
         // `!override []` merge tag).
@@ -266,7 +282,7 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
         }
         if !instance.is_default() {
             // Remapped infra ports REPLACE the inherited `ports:`.
-            for infra in ["postgres", "redis", "search"] {
+            for infra in ["postgres", "redis", "search", "kafka"] {
                 if let Some(s) = services.get_mut(infra).and_then(Value::as_mapping_mut) {
                     override_in_place(s, "ports");
                 }
@@ -316,6 +332,7 @@ fn set_external_networks_and_volumes(value: &mut Value, instance: &Instance) {
                 ("db", instance.volume_postgres()),
                 ("cache", instance.volume_redis()),
                 ("opensearch_data", instance.volume_opensearch()),
+                ("kafka_data", instance.volume_kafka()),
                 ("db_data", instance.volume_fusionauth_db()),
                 ("fusionauth_config", instance.volume_fusionauth_config()),
             ]

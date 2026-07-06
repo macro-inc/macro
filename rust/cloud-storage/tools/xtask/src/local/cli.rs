@@ -32,6 +32,8 @@ enum Cmd {
     ValidateLocalCompose(InstanceArgs),
     /// Resolve env layers and assert mode-appropriate invariants.
     ValidateLocalEnv(ValidateEnvArgs),
+    /// Create the declared Kafka event topics on the instance's local broker.
+    KafkaProvision(InstanceArgs),
     /// Preflight checks (docker, toolchain, ports, env sources, images).
     DoctorLocal(InstanceArgs),
     /// Stop an instance's containers (keep volumes).
@@ -148,6 +150,10 @@ fn run(cli: Cli) -> Result<()> {
             )?;
             let mode = if a.dev { Mode::Dev } else { Mode::Local };
             super::validate::local_env(&instance, mode, a.env.no_doppler, a.env.env_file.as_deref())
+        }
+        Cmd::KafkaProvision(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::kafka::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StopLocal(a) => super::stop(&a),
