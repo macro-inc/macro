@@ -1,17 +1,21 @@
 import {
+  createRenderEffect,
   createSignal,
   For,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
-import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
+import { useLocation } from '@solidjs/router';
 import {
-  settingsSlugToTab,
-  useSettingsTabs,
-} from '@core/constant/settingsTabsConfig';
-import { setActiveTabId } from '@core/signal/settingsTab';
+  type SettingsTab,
+  settingsTabFromSplitPath,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLogout } from '@core/auth/logout';
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileApp } from './MobileApp';
@@ -49,11 +53,20 @@ export type SettingsVariant = 'split' | 'fullscreen';
 const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
-export function SettingsPanelComponentWrapper(props: { tab?: string }) {
-  // Restore the active page from the docked split's URL (`settings/<slug>`) on
-  // mount. Set synchronously so the correct tab renders on first paint.
-  const tab = settingsSlugToTab(props.tab);
-  if (tab) setActiveTabId(tab);
+export function SettingsPanelComponentWrapper() {
+  const location = useLocation();
+  // Sync the active page from the docked split's URL (`settings/<slug>`). Read
+  // the live URL reactively — not static mount props — so browser back/forward
+  // and direct navigation stay in sync: reconcile reuses this component on
+  // same-key changes, so it never remounts to pick up a new tab. Using
+  // createRenderEffect (runs during render) matches the previous synchronous set
+  // so the layout URL-sync never observes a stale tab on first paint, and the
+  // activeTabId read is untracked so a tab click (which sets it, then updates
+  // the URL) isn't reverted by this effect firing before the URL catches up.
+  createRenderEffect(() => {
+    const tab = settingsTabFromSplitPath(location.pathname);
+    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+  });
   return <SettingsPanel />;
 }
 

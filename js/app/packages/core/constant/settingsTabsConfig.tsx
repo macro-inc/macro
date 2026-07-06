@@ -72,9 +72,10 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
 const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
 
 /**
- * URL slugs for each settings tab, used to reflect the open settings page in
- * the `?settings=` search param. Kept separate from labels so we can rename a
- * tab's UI label without breaking existing/bookmarked URLs.
+ * URL slugs for each settings tab, used to build the settings page path
+ * (`/settings/<slug>`, and the `settings/<slug>` pair when docked in a split).
+ * Kept separate from labels so we can rename a tab's UI label without breaking
+ * existing/bookmarked URLs.
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',

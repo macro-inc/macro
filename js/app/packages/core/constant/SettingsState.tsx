@@ -6,7 +6,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
-import { settingsTabToSlug } from './settingsTabsConfig';
+import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
   | 'Account'
@@ -75,6 +75,22 @@ const stripSettingsSplit = (pathname: string) => {
     }
   }
   return segments.length ? `/${segments.join('/')}` : DEFAULT_ROUTE;
+};
+
+/**
+ * Extract the active settings tab from a docked-split path
+ * (`.../settings/<slug>`), or undefined if the path has no settings split.
+ * Scans type positions (even indices, base stripped) so a block id that happens
+ * to be "settings" isn't mistaken for one — mirrors {@link stripSettingsSplit}.
+ */
+export const settingsTabFromSplitPath = (
+  pathname: string
+): SettingsTab | undefined => {
+  const segments = toBaseRelative(pathname).split('/').filter(Boolean);
+  for (let i = 0; i + 1 < segments.length; i += 2) {
+    if (segments[i] === 'settings') return settingsSlugToTab(segments[i + 1]);
+  }
+  return undefined;
 };
 
 export const useSettingsState = () => {

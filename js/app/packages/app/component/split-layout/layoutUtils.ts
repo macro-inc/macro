@@ -30,11 +30,12 @@ export function decodePairs(segments: string[]): SplitContent[] {
     if (!type || !id) break;
 
     if (type === 'settings') {
-      // `settings/<tab>` is the URL form of the docked settings panel; it's
-      // stored internally as the `component/settings` content with the tab
-      // carried as a param so the panel can restore it on mount. See
-      // `contentUrlSegments` in layoutManager.
-      pairs.push({ type: 'component', id: 'settings', params: { tab: id } });
+      // `settings/<tab>` is the URL form of the docked settings panel; it maps
+      // to the internal `component/settings` content. The active tab is read
+      // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
+      // threaded through content params. See `contentUrlSegments` in
+      // layoutManager for the matching encode.
+      pairs.push({ type: 'component', id: 'settings' });
     } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {

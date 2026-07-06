@@ -357,9 +357,7 @@ registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
-registerComponent('settings', (params) => (
-  <SettingsPanelComponentWrapper tab={params?.tab} />
-));
+registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 
 if (LOCAL_ONLY) {
   registerComponent(
