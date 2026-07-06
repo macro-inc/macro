@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::messages::get::fetch_messages_metadata;
 
 use chrono::{DateTime, Utc};
@@ -136,16 +139,12 @@ pub async fn update_thread_provider_id(
 /// Recomputes the denormalized `email_threads.has_calendar_attachment` flag
 /// from the thread's current attachment set. Mirrors the CalendarOnly
 /// predicate in the email crate's dynamic query builder.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "column added by pending migration; switch to query! once prepared"
-)]
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_calendar_flag(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE email_threads t
         SET has_calendar_attachment = calc.has_cal
@@ -163,8 +162,8 @@ pub async fn sync_thread_calendar_flag(
         WHERE t.id = $1
           AND t.has_calendar_attachment IS DISTINCT FROM calc.has_cal
         "#,
+        thread_db_id
     )
-    .bind(thread_db_id)
     .execute(tx)
     .await?;
 

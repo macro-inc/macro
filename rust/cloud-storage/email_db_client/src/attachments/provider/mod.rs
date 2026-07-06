@@ -163,19 +163,16 @@ fn is_calendar_attachment(filename: Option<&str>, mime_type: Option<&str>) -> bo
 
 /// Resolves the message's thread and recomputes its denormalized
 /// `has_calendar_attachment` flag.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "plain scalar lookup; avoids a query! cache entry"
-)]
 async fn sync_thread_calendar_flag(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
 ) -> anyhow::Result<()> {
-    let thread_id: Option<Uuid> =
-        sqlx::query_scalar("SELECT thread_id FROM email_messages WHERE id = $1")
-            .bind(message_id)
-            .fetch_optional(&mut *tx)
-            .await?;
+    let thread_id: Option<Uuid> = sqlx::query_scalar!(
+        "SELECT thread_id FROM email_messages WHERE id = $1",
+        message_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
 
     if let Some(thread_id) = thread_id {
         crate::threads::update::sync_thread_calendar_flag(tx, thread_id).await?;

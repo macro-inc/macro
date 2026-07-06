@@ -7,7 +7,8 @@ pub struct Config {
     /// email link is processed.
     pub macro_ids: Option<String>,
     pub database_url: String,
-    /// Number of users processed concurrently. Defaults to 10.
+    /// Number of users processed concurrently. Defaults to 10, capped at 50
+    /// to bound DB connection usage.
     pub concurrency: usize,
 }
 
@@ -25,7 +26,7 @@ impl Config {
             Some(v) => v
                 .parse::<usize>()
                 .context("CONCURRENCY is not a number")?
-                .max(1),
+                .clamp(1, 50),
             None => 10,
         };
 

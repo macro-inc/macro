@@ -3,15 +3,11 @@ use sqlx::types::Uuid;
 /// Flags every thread on one of the user's links that has at least one
 /// calendar attachment. One statement per link keeps transactions small and
 /// the progress output per-mailbox. Returns the number of threads flagged.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "queries touch a column added by a pending migration; no query! cache entry"
-)]
 pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Result<u64> {
-    let link_ids: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM email_links WHERE macro_id = $1")
-        .bind(macro_id)
-        .fetch_all(pool)
-        .await?;
+    let link_ids: Vec<Uuid> =
+        sqlx::query_scalar!("SELECT id FROM email_links WHERE macro_id = $1", macro_id)
+            .fetch_all(pool)
+            .await?;
 
     if link_ids.is_empty() {
         println!("No email links found for {macro_id}.");
@@ -22,7 +18,7 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
     for link_id in link_ids {
         // Mirrors the CalendarOnly predicate in the email crate's dynamic
         // query builder and email_db_client::threads::update::sync_thread_calendar_flag.
-        let flagged = sqlx::query(
+        let flagged = sqlx::query!(
             r#"
             UPDATE email_threads t
             SET has_calendar_attachment = true
@@ -38,8 +34,8 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
             WHERE t.id = cal.thread_id
               AND NOT t.has_calendar_attachment
             "#,
+            link_id
         )
-        .bind(link_id)
         .execute(pool)
         .await?
         .rows_affected();
@@ -55,13 +51,9 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
 /// Every macro ID that owns at least one email link. Connected secondary
 /// mailboxes carry their own macro_id row in email_links, so iterating these
 /// covers every link exactly once.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "queries touch a column added by a pending migration; no query! cache entry"
-)]
 pub async fn fetch_all_macro_ids(pool: &sqlx::PgPool) -> anyhow::Result<Vec<String>> {
     Ok(
-        sqlx::query_scalar("SELECT DISTINCT macro_id FROM email_links ORDER BY macro_id")
+        sqlx::query_scalar!("SELECT DISTINCT macro_id FROM email_links ORDER BY macro_id")
             .fetch_all(pool)
             .await?,
     )
