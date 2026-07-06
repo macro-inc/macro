@@ -14,9 +14,9 @@ const vpc = get_coparse_api_vpc();
 
 const kafkaCluster = new KafkaCluster(`${stack}-macro-event-kafka-cluster`, {
   vpc,
-  instanceType: stack === 'prod' ? 'kafka.m7g.large' : 'kafka.t3.small',
+  instanceType: 'kafka.m7g.large', // smallest instance size kraft version supports (more expensive but futureproof)
   numberOfBrokerNodes: 3,
-  volumeSize: stack === 'prod' ? 100 : 50,
+  volumeSize: stack === 'prod' ? 100 : 25,
   protect: stack === 'prod',
   kafkaVersion: '3.9.x.kraft',
   topics: getKafkaClusterTopics(),
