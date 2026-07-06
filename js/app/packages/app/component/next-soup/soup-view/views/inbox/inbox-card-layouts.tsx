@@ -454,11 +454,15 @@ const githubAction = (notification?: Notification): string => {
   return match(metadata)
     .with(
       { tag: 'github_pr_status_changed', content: { status: 'merged' } },
-      () => ''
+      () => 'merged'
     )
     .with(
       { tag: 'github_pr_status_changed', content: { status: 'closed' } },
-      () => ''
+      () => 'closed'
+    )
+    .with(
+      { tag: 'github_pr_status_changed', content: { status: 'open' } },
+      () => 'opened'
     )
     .with({ tag: 'github_review_requested' }, () => 'requested your review on')
     .with({ tag: 'github_pr_comment' }, () => 'commented on')
