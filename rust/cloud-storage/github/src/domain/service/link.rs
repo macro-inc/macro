@@ -342,8 +342,8 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
             }
         };
 
-        if let Some(existing) = &this_user_link {
-            if existing.github_user_id == gh_id {
+        if let Some(existing) = &this_user_link
+            && existing.github_user_id == gh_id {
                 // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
                 // insert (avoids violating the new (macro_id, github_user_id) unique). Still
                 // clean up the in-progress link, then return the existing link.
@@ -359,7 +359,6 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
             // else: user previously linked a DIFFERENT github account; fall through and link
             // the new one (frontend is single-valued; not enforced here — matches prior
             // behavior).
-        }
 
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
         let account_owner = match self.repo.get_github_link_by_github_user_id(&gh_id).await {
