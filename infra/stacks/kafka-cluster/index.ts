@@ -2,6 +2,7 @@ import { stack } from '../../packages/shared';
 import * as pulumi from '@pulumi/pulumi';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { KafkaCluster } from '../../packages/resources';
+import { getKafkaClusterTopics } from './topics';
 
 const tags = {
   environment: stack,
@@ -17,6 +18,8 @@ const kafkaCluster = new KafkaCluster(`${stack}-macro-event-kafka-cluster`, {
   numberOfBrokerNodes: 3,
   volumeSize: stack === 'prod' ? 100 : 50,
   protect: stack === 'prod',
+  kafkaVersion: '3.9.x.kraft',
+  topics: getKafkaClusterTopics(),
   tags,
 });
 

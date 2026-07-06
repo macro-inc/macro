@@ -7,6 +7,16 @@ const KAFKA_IAM_PORT = 9098;
 const JMX_EXPORTER_PORT = 11001;
 const NODE_EXPORTER_PORT = 11002;
 
+export type TopicArgs = {
+  // Name of topic
+  name: string;
+  // The number of partitions
+  partitionCount: number;
+  replicationFactor: number;
+  // Stringified json of topic config
+  configs: string;
+};
+
 type Args = {
   vpc: {
     vpcId: string;
@@ -24,6 +34,9 @@ type Args = {
   // Defaults to 168h (7 days), which is Kafka's own default.
   retentionHours?: number;
   protect: boolean;
+  // Topics to add to cluster
+  topics: TopicArgs[];
+  kafkaVersion: string;
   tags: { [key: string]: string };
 };
 
@@ -36,6 +49,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
   public securityGroup: aws.ec2.SecurityGroup;
   public logGroup: aws.cloudwatch.LogGroup;
   public cluster: aws.msk.Cluster;
+  public topics: aws.msk.Topic[];
 
   constructor(
     name: string,
@@ -46,6 +60,8 @@ export class KafkaCluster extends pulumi.ComponentResource {
       volumeSize,
       retentionHours = 168,
       protect,
+      topics,
+      kafkaVersion,
       tags,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
@@ -66,7 +82,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
       {
         namePrefix: name,
         vpcId: vpc.vpcId,
-        description: 'MSK Kafka cluster — broker access restricted to the VPC',
+        description: 'MSK Kafka cluster broker access restricted to the VPC',
         egress: [
           {
             protocol: '-1',
@@ -82,7 +98,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
             fromPort: KAFKA_IAM_PORT,
             toPort: KAFKA_IAM_PORT,
             cidrBlocks: [vpcCidr],
-            description: 'Kafka IAM (SASL_SSL) clients within the VPC',
+            description: 'Kafka IAM SASL_SSL clients within the VPC',
           },
           {
             // Inter-broker replication/coordination. Brokers share this SG, so a
@@ -92,7 +108,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
             fromPort: 0,
             toPort: 0,
             self: true,
-            description: 'Inter-broker traffic',
+            description: 'Interbroker traffic',
           },
           {
             protocol: 'tcp',
@@ -100,7 +116,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
             toPort: NODE_EXPORTER_PORT,
             cidrBlocks: [vpcCidr],
             description:
-              'Prometheus scraping (JMX + node exporter) within the VPC',
+              'Prometheus scraping JMX + node exporter within the VPC',
           },
         ],
         tags,
@@ -134,7 +150,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
       `cluster`,
       {
         clusterName: name,
-        kafkaVersion: '4.1.x.kraft',
+        kafkaVersion,
         numberOfBrokerNodes,
         configurationInfo: {
           arn: configuration.arn,
@@ -188,5 +204,20 @@ export class KafkaCluster extends pulumi.ComponentResource {
       },
       { protect, parent: this }
     );
+
+    this.topics = [];
+    for (const topic of topics) {
+      new aws.msk.Topic(
+        `${topic.name}-topic`,
+        {
+          name: topic.name,
+          clusterArn: this.cluster.arn,
+          partitionCount: topic.partitionCount,
+          replicationFactor: topic.replicationFactor,
+          configs: topic.configs,
+        },
+        { parent: this, dependsOn: [this.cluster] }
+      );
+    }
   }
 }
