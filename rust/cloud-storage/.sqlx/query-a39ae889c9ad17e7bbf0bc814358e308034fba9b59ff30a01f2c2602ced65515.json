@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM favorite WHERE id = $1 AND owner_user_id = $2",
+  "query": "DELETE FROM favorite WHERE id = $1 AND user_id = $2",
   "describe": {
     "columns": [],
     "parameters": {
@@ -11,5 +11,5 @@
     },
     "nullable": []
   },
-  "hash": "89cd06d5f498131388d6b074b9b85b7e6a00db17f2784139902ac983c2b397b2"
+  "hash": "a39ae889c9ad17e7bbf0bc814358e308034fba9b59ff30a01f2c2602ced65515"
 }

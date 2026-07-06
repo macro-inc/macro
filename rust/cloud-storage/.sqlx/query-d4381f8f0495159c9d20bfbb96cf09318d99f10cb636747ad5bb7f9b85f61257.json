@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO favorite (owner_user_id, entity_type, entity_id, sort_order)\n            VALUES (\n                $1, $2, $3,\n                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE owner_user_id = $1), 0)\n            )\n            ON CONFLICT (owner_user_id, entity_type, entity_id)\n                DO UPDATE SET updated_at = now()\n            RETURNING\n                id as \"id!\",\n                entity_type as \"entity_type!\",\n                entity_id as \"entity_id!\",\n                sort_order as \"sort_order!\",\n                created_at as \"created_at!\",\n                NULL::text as \"name?\",\n                NULL::text as \"file_type?\",\n                NULL::text as \"document_sub_type?\",\n                NULL::text as \"channel_type?\",\n                NULL::text as \"channel_id?\"\n            ",
+  "query": "\n            INSERT INTO favorite (id, user_id, entity_type, entity_id, sort_order)\n            VALUES (\n                $1, $2, $3, $4,\n                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE user_id = $2), 0)\n            )\n            ON CONFLICT (user_id, entity_type, entity_id)\n                DO UPDATE SET updated_at = now()\n            RETURNING\n                id as \"id!\",\n                entity_type as \"entity_type!\",\n                entity_id as \"entity_id!\",\n                sort_order as \"sort_order!\",\n                created_at as \"created_at!\",\n                NULL::text as \"name?\",\n                NULL::text as \"file_type?\",\n                NULL::text as \"document_sub_type?\",\n                NULL::text as \"channel_type?\",\n                NULL::text as \"channel_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -56,6 +56,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Text",
         "Text",
         "Text"
@@ -74,5 +75,5 @@
       null
     ]
   },
-  "hash": "073100dd7cbd4b3d968b25438ef5c241122ad9c48f3c4c730a68c7985d95046b"
+  "hash": "d4381f8f0495159c9d20bfbb96cf09318d99f10cb636747ad5bb7f9b85f61257"
 }

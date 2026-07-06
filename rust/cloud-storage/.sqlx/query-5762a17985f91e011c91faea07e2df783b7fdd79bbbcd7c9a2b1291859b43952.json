@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE favorite f\n            SET sort_order = x.ord::float8 - 1, updated_at = now()\n            FROM UNNEST($2::uuid[]) WITH ORDINALITY AS x(id, ord)\n            WHERE f.id = x.id AND f.user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5762a17985f91e011c91faea07e2df783b7fdd79bbbcd7c9a2b1291859b43952"
+}

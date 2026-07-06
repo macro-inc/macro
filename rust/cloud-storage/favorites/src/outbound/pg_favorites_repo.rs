@@ -82,15 +82,18 @@ impl FavoritesRepo for PgFavoritesRepo {
         entity: &Entity<'_>,
     ) -> Result<Favorite, Self::Err> {
         let entity_type: &str = entity.entity_type.into();
+        // Ids are UUID v7, generated here rather than by the database. On
+        // conflict the existing row keeps its id and the generated one is
+        // discarded (the upsert returns the existing record).
         let row = sqlx::query_as!(
             FavoriteRow,
             r#"
-            INSERT INTO favorite (owner_user_id, entity_type, entity_id, sort_order)
+            INSERT INTO favorite (id, user_id, entity_type, entity_id, sort_order)
             VALUES (
-                $1, $2, $3,
-                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE owner_user_id = $1), 0)
+                $1, $2, $3, $4,
+                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE user_id = $2), 0)
             )
-            ON CONFLICT (owner_user_id, entity_type, entity_id)
+            ON CONFLICT (user_id, entity_type, entity_id)
                 DO UPDATE SET updated_at = now()
             RETURNING
                 id as "id!",
@@ -104,6 +107,7 @@ impl FavoritesRepo for PgFavoritesRepo {
                 NULL::text as "channel_type?",
                 NULL::text as "channel_id?"
             "#,
+            macro_uuid::generate_uuid_v7(),
             user_id.as_ref(),
             entity_type,
             entity.entity_id.as_ref(),
@@ -116,7 +120,7 @@ impl FavoritesRepo for PgFavoritesRepo {
     #[tracing::instrument(err, skip(self))]
     async fn count_favorites(&self, user_id: &MacroUserIdStr<'_>) -> Result<i64, Self::Err> {
         let count = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!" FROM favorite WHERE owner_user_id = $1"#,
+            r#"SELECT COUNT(*) as "count!" FROM favorite WHERE user_id = $1"#,
             user_id.as_ref(),
         )
         .fetch_one(&self.pool)
@@ -166,7 +170,7 @@ impl FavoritesRepo for PgFavoritesRepo {
                 ORDER BY m.internal_date_ts DESC NULLS LAST
                 LIMIT 1
             ) em ON f.entity_type = 'email_thread'
-            WHERE f.owner_user_id = $1
+            WHERE f.user_id = $1
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))
                 AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c."deletedAt" IS NULL))
                 AND (f.entity_type <> 'project' OR (p.id IS NOT NULL AND p."deletedAt" IS NULL))
@@ -186,7 +190,7 @@ impl FavoritesRepo for PgFavoritesRepo {
         id: Uuid,
     ) -> Result<bool, Self::Err> {
         let res = sqlx::query!(
-            r#"DELETE FROM favorite WHERE id = $1 AND owner_user_id = $2"#,
+            r#"DELETE FROM favorite WHERE id = $1 AND user_id = $2"#,
             id,
             user_id.as_ref(),
         )
@@ -205,7 +209,7 @@ impl FavoritesRepo for PgFavoritesRepo {
         let res = sqlx::query!(
             r#"
             DELETE FROM favorite
-            WHERE owner_user_id = $1 AND entity_type = $2 AND entity_id = $3
+            WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
             "#,
             user_id.as_ref(),
             entity_type,
@@ -227,7 +231,7 @@ impl FavoritesRepo for PgFavoritesRepo {
             UPDATE favorite f
             SET sort_order = x.ord::float8 - 1, updated_at = now()
             FROM UNNEST($2::uuid[]) WITH ORDINALITY AS x(id, ord)
-            WHERE f.id = x.id AND f.owner_user_id = $1
+            WHERE f.id = x.id AND f.user_id = $1
             "#,
             user_id.as_ref(),
             ordered_ids,
@@ -259,7 +263,7 @@ impl FavoritesRepo for PgFavoritesRepo {
             FROM favorite f
             JOIN UNNEST($2::text[], $3::text[]) AS w(entity_type, entity_id)
               ON w.entity_type = f.entity_type AND w.entity_id = f.entity_id
-            WHERE f.owner_user_id = $1
+            WHERE f.user_id = $1
             "#,
             user_id.as_ref(),
             &entity_types,
