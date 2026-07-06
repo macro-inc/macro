@@ -2,8 +2,8 @@ use crate::api::{
     context::ApiContext,
     login::sso::SsoState,
     utils::{
-        create_access_token_cookie, create_refresh_token_cookie, default_redirect_url,
-        generate_session_code,
+        append_signed_up_param_if_new_user, create_access_token_cookie,
+        create_refresh_token_cookie, default_redirect_url, generate_session_code,
     },
 };
 use axum::{
@@ -134,25 +134,13 @@ pub async fn handler(
             .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
     }
 
-    // If this account was created during this auth flow (create-user webhook
-    // marks it), flag the redirect so the app can attribute the session as a
-    // signup for analytics. Best-effort: never fails the login.
     if let Ok(user_id) = decoded_user_id.as_ref() {
-        match ctx
-            .macro_cache_client
-            .take_user_just_signed_up(user_id.email_str())
-            .await
-        {
-            Ok(true) => {
-                redirect_url
-                    .query_pairs_mut()
-                    .append_pair("signed_up", "true");
-            }
-            Ok(false) => {}
-            Err(e) => {
-                tracing::error!(error=?e, "unable to check just-signed-up marker");
-            }
-        }
+        append_signed_up_param_if_new_user(
+            &ctx.macro_cache_client,
+            user_id.email_str(),
+            &mut redirect_url,
+        )
+        .await;
     }
 
     // Set cookies

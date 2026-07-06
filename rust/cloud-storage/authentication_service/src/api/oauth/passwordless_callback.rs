@@ -9,7 +9,9 @@ use tower_cookies::Cookies;
 
 use crate::api::{
     context::ApiContext,
-    utils::{create_access_token_cookie, create_refresh_token_cookie},
+    utils::{
+        append_signed_up_param_if_new_user, create_access_token_cookie, create_refresh_token_cookie,
+    },
 };
 use fusionauth::error::FusionAuthClientError;
 
@@ -156,27 +158,19 @@ pub async fn handler(
             .into_response());
     }
 
-    // If this account was created during this auth flow (create-user webhook
-    // marks it), flag the redirect so the app can attribute the session as a
-    // signup for analytics. Best-effort: never fails the login.
     let mut redirect_uri = passwordless_response.state.redirect_uri.clone();
-    match ctx
-        .macro_cache_client
-        .take_user_just_signed_up(&passwordless_response.user.email.to_lowercase())
-        .await
-    {
-        Ok(true) => match url::Url::parse(&redirect_uri) {
-            Ok(mut url) => {
-                url.query_pairs_mut().append_pair("signed_up", "true");
-                redirect_uri = url.to_string();
-            }
-            Err(e) => {
-                tracing::error!(error=?e, "unable to parse redirect uri for signup attribution");
-            }
-        },
-        Ok(false) => {}
+    match url::Url::parse(&redirect_uri) {
+        Ok(mut url) => {
+            append_signed_up_param_if_new_user(
+                &ctx.macro_cache_client,
+                &passwordless_response.user.email.to_lowercase(),
+                &mut url,
+            )
+            .await;
+            redirect_uri = url.to_string();
+        }
         Err(e) => {
-            tracing::error!(error=?e, "unable to check just-signed-up marker");
+            tracing::error!(error=?e, "unable to parse redirect uri for signup attribution");
         }
     }
 
