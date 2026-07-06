@@ -4,6 +4,7 @@ use crate::domain::models::{
     ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, MutatedAttachment,
     MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention, TypingAction,
 };
+use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -28,7 +29,7 @@ pub enum ChannelEvent {
         /// Created channel id.
         channel_id: Uuid,
         /// Actor that created the channel.
-        actor: Sender,
+        actor: ChannelSender<'static>,
         /// Type of channel that was created.
         channel_type: ChannelType,
         /// Active participants after creation.
@@ -39,7 +40,7 @@ pub enum ChannelEvent {
         /// Deleted channel id.
         channel_id: Uuid,
         /// Actor that deleted the channel.
-        actor: Sender,
+        actor: ChannelSender<'static>,
     },
     /// A message was posted.
     MessagePosted {

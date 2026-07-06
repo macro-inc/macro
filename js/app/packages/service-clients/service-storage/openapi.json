@@ -9298,7 +9298,8 @@
             "items": {
               "type": "string"
             },
-            "description": "User ids to add."
+            "description": "User ids to add.",
+            "uniqueItems": true
           }
         }
       },
@@ -11765,7 +11766,8 @@
             "items": {
               "type": "string"
             },
-            "description": "Participants to add, excluding the owner."
+            "description": "Participants to add, excluding the owner.",
+            "uniqueItems": true
           },
           "team_id": {
             "type": ["string", "null"],
@@ -15091,7 +15093,8 @@
             "items": {
               "type": "string"
             },
-            "description": "Recipient user ids."
+            "description": "Recipient user ids.",
+            "uniqueItems": true
           }
         }
       },

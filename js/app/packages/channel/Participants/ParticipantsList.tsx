@@ -33,7 +33,7 @@ export function ParticipantsList(props: {
       <div ref={setListWrapperRef} class="relative h-full min-h-0">
         <VList
           data={props.participants()}
-          class="h-full scrollbar-hidden"
+          class="h-full scrollbar-hidden pb-(--safe-bottom)"
           style={{
             height: '100%',
             width: '100%',

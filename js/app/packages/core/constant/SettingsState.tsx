@@ -31,10 +31,6 @@ const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'settings',
 });
 
-export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
-export const [agentSettingsSubTab, setAgentSettingsSubTab] =
-  createSignal<AgentSettingsSubTab>('connectors');
-
 export const useSettingsState = () => {
   const { openWithSplit } = useSplitLayout();
 

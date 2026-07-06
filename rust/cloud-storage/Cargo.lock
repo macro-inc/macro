@@ -2023,6 +2023,8 @@ dependencies = [
 name = "bot_id"
 version = "0.1.0"
 dependencies = [
+ "cowlike",
+ "nom 8.0.0",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
@@ -2398,6 +2400,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_sender"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "either",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -2407,6 +2422,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "channel_sender",
  "chrono",
  "connection_gateway_client",
  "contacts",
@@ -2605,9 +2621,9 @@ dependencies = [
 
 [[package]]
 name = "cmov"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f88a43d011fc4a6876cb7344703e297c71dda42494fee094d5f7c76bf13f746"
+checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
 name = "color_quant"
@@ -3028,6 +3044,9 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
+ "either",
+ "macro_user_id",
  "workspace-hack",
 ]
 
@@ -7988,7 +8007,10 @@ dependencies = [
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
+ "channel_sender",
  "cool_asserts",
+ "either",
+ "macro_user_id",
  "nom 8.0.0",
  "serde",
  "serde_json",

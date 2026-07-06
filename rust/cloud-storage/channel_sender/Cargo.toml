@@ -1,18 +1,16 @@
 [package]
 edition = "2024"
-name = "mention_utils"
+name = "channel_sender"
 publish = false
 version = "0.1.0"
 
 [dependencies]
-channel_sender = { path = "../channel_sender" }
+bot_id = { path = "../bot_id" }
 either = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
-nom = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-cool_asserts = { version = "2" }
+serde_json = { workspace = true }
+uuid = { workspace = true }
