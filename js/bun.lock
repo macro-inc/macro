@@ -82,7 +82,6 @@
         "@tauri-apps/plugin-http": "~2.5.8",
         "@tauri-apps/plugin-notification": "~2",
         "@tauri-apps/plugin-os": "~2",
-        "@tauri-apps/plugin-websocket": "~2",
         "@thisbeyond/solid-dnd": "^0.7.5",
         "@urql/core": "^6.0.3",
         "@vitest/ui": "^4.0.17",
@@ -386,13 +385,12 @@
     "esbuild",
   ],
   "patchedDependencies": {
-    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
-    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
     "@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
     "virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
-    "@tauri-apps/plugin-websocket@2.4.2": "app/patches/@tauri-apps%2Fplugin-websocket@2.4.2.patch",
+    "@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
     "@lexical/markdown@0.45.0": "app/patches/@lexical%2Fmarkdown@0.45.0.patch",
     "@thisbeyond/solid-dnd@0.7.5": "app/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
+    "solid-gesture@0.0.3": "app/patches/solid-gesture@0.0.3.patch",
   },
   "overrides": {
     "@lexical/clipboard": "0.45.0",
@@ -1593,8 +1591,6 @@
     "@tauri-apps/plugin-notification": ["@tauri-apps/plugin-notification@2.3.3", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-Zw+ZH18RJb41G4NrfHgIuofJiymusqN+q8fGUIIV7vyCH+5sSn5coqRv/MWB9qETsUs97vmU045q7OyseCV3Qg=="],
 
     "@tauri-apps/plugin-os": ["@tauri-apps/plugin-os@2.3.2", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-n+nXWeuSeF9wcEsSPmRnBEGrRgOy6jjkSU+UVCOV8YUGKb2erhDOxis7IqRXiRVHhY8XMKks00BJ0OAdkpf6+A=="],
-
-    "@tauri-apps/plugin-websocket": ["@tauri-apps/plugin-websocket@2.4.2", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-B1/csKPwJH9kLduNoqWFUdCsTgCvLM84T5ZZYK35jeBc9m2cm2m2G/hbSr28ZpVOZrl0x24fCWFe/9rpp7WETw=="],
 
     "@testing-library/dom": ["@testing-library/dom@10.4.1", "", { "dependencies": { "@babel/code-frame": "^7.10.4", "@babel/runtime": "^7.12.5", "@types/aria-query": "^5.0.1", "aria-query": "5.3.0", "dom-accessibility-api": "^0.5.9", "lz-string": "^1.5.0", "picocolors": "1.1.1", "pretty-format": "^27.0.2" } }, "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg=="],
 
