@@ -2,7 +2,6 @@ import { runCreateAction } from '@app/component/Launcher';
 import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import type { BlockAlias, BlockName } from '@core/block';
-import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiIcon from '@design/empty-state-ai.svg';
 import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
@@ -60,7 +59,6 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
     ),
     documentationUrl: `${DOCS_BASE}/product/calls`,
   },
-  search: { plural: 'items' },
 };
 
 export function EmptyState(props: {
@@ -103,7 +101,7 @@ export function EmptyState(props: {
         >
           {props.onClearFilters && (
             <FilteredHiddenBanner
-              hasHiddenItems={props.hasHiddenItems}
+              hasHiddenItems={false}
               onClearFilters={props.onClearFilters}
             />
           )}
@@ -181,7 +179,6 @@ export function EmptyState(props: {
       <Match when={props.listView === 'tasks'}>
         <EmptyStatePanel
           graphic={EmptyStateTasksIcon}
-          graphicClass="h-36 w-36"
           title="Nothing to do"
           description="Tasks you create or that get assigned to you will show up here."
           primaryAction={{
@@ -210,7 +207,17 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'agents'}>
-        <AgentsEmptyState />
+        <EmptyStatePanel
+          graphic={EmptyStateAiIcon}
+          title="Get started with agents"
+          description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
+          primaryAction={{
+            label: 'New agent',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('chat'),
+          }}
+          documentationUrl={`${DOCS_BASE}/product/agents`}
+        />
       </Match>
 
       <Match when={props.listView === 'companies'}>
@@ -235,6 +242,16 @@ export function EmptyState(props: {
         >
           <FolderDropZone />
         </EmptyStatePanel>
+      </Match>
+
+      <Match when={props.listView === 'search'}>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoSearchMatchIcon}
+          title="No items to show"
+          description="Search across messages, documents, tasks, and more."
+          documentationUrl={`${DOCS_BASE}/product/search`}
+        />
       </Match>
 
       <Match when={true}>
@@ -264,26 +281,5 @@ export function EmptyState(props: {
         })()}
       </Match>
     </Switch>
-  );
-}
-
-function AgentsEmptyState() {
-  // The MCP setup cards render below the actions as panel children.
-  return (
-    <div class="size-full" data-soup-empty-state>
-      <EmptyStatePanel
-        graphic={EmptyStateAiIcon}
-        title="Get started with agents"
-        description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
-        primaryAction={{
-          label: 'New agent',
-          icon: PlusIcon,
-          onClick: () => runCreateAction('chat'),
-        }}
-        documentationUrl={`${DOCS_BASE}/product/agents`}
-      >
-        <McpSetupCards />
-      </EmptyStatePanel>
-    </div>
   );
 }
