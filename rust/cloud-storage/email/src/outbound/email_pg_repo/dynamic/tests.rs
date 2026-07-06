@@ -550,7 +550,7 @@ fn test_build_query_single_link_keeps_any_scan() {
 fn test_build_query_team_scoped_multi_link_does_not_fan_out() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
-    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+    let sql = super::query::debug_build_query_sql_team_scoped_multi_link(&view, &expr);
 
     // Team-scoped candidates dedupe across links before the cursor; a
     // per-link LIMIT could starve the dedupe of duplicate copies.

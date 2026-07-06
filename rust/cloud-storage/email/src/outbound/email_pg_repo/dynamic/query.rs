@@ -668,6 +668,21 @@ pub(super) fn debug_build_query_sql_multi_link(
 }
 
 #[cfg(test)]
+pub(super) fn debug_build_query_sql_team_scoped_multi_link(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+) -> String {
+    debug_build_query_sql_full(
+        view,
+        email_filter,
+        vec![Uuid::nil(), Uuid::from_u128(1)],
+        ResolvedFilters::empty(),
+        Some(Uuid::nil()),
+        SimpleSortMethod::UpdatedAt,
+    )
+}
+
+#[cfg(test)]
 fn debug_build_query_sql_inner(
     view: &PreviewView,
     email_filter: &Expr<EmailLiteral>,
