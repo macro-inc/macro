@@ -65,18 +65,26 @@ jobs:
 
   deploy:
     name: Deploy Web App
-    runs-on: linux-extra-beefy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     needs: [build, deploy-cloud-storage]
     env:
       CI: "true"
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+      # See the build job's mount/setup-nix notes.
+      - name: Mount Namespace cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: bun
+          path: /nix
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:
@@ -113,7 +121,8 @@ jobs:
 
   upload:
     name: Upload Release Artifacts
-    runs-on: ubuntu-latest
+    # Checkout + artifact download + tar + gh-release upload; no build.
+    runs-on: namespace-profile-linux-tiny-no-cache
     needs: [build, deploy]
     steps:
       - name: Checkout Repo
