@@ -726,6 +726,15 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
+  // The root/original thread message sender (who a reply is replying to).
+  const originalSenderId = () =>
+    props.item.entity.type === 'channel_thread'
+      ? props.item.entity.senderId
+      : undefined;
+  const originalSenderName = createSenderDisplayName(originalSenderId);
+  const originalSenderLabel = () =>
+    originalSenderId() === currentUserId() ? 'You' : originalSenderName();
+
   const attachments = createMemo(() => {
     if (
       isLatestNotificationReply() ||
@@ -814,6 +823,25 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
               {text().title}
             </InboxCard.Title>
           </InboxCard.Header>
+
+          {/* For replies, show the original message being replied to first,
+              with a left bar marking it as the quoted original. */}
+          <Show when={isLatestNotificationReply() && text().context?.trim()}>
+            {(context) => (
+              <div class="flex min-w-0 items-center gap-1 border-l-2 border-edge-muted pl-2">
+                <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
+                  {originalSenderLabel()}:
+                </span>
+                <InboxCard.Content class="truncate text-sm text-ink/60">
+                  <StaticMarkdown
+                    markdown={context()}
+                    singleLine
+                    theme={unifiedListMarkdownTheme}
+                  />
+                </InboxCard.Content>
+              </div>
+            )}
+          </Show>
 
           <div class="flex min-w-0 items-center gap-1">
             <Show when={!isDM()}>
