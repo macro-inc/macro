@@ -1,22 +1,42 @@
-import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
+import type { MinimalWebSocket, WebSocketFactory } from '../minimal-websocket';
+import { intoFrames, Reassembler } from './frames';
 
 class FramedWebSocket implements MinimalWebSocket {
   /** 'message' listeners, routed through us so reassembly can interpose. */
   private readonly messageListeners = new Set<EventListener>();
+
+  /** Per-connection inbound reassembly (frames arrive in order over one socket). */
+  private readonly reassembler = new Reassembler();
 
   constructor(private readonly inner: MinimalWebSocket) {
     this.inner.addEventListener('message', this.handleInnerMessage);
   }
 
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-    // TODO(chunking): split binary `data` into framed chunks before sending.
-    this.inner.send(data);
+    // Strings (heartbeat ping/pong) ride the text channel — never framed.
+    if (typeof data === 'string') {
+      this.inner.send(data);
+      return;
+    }
+    for (const frame of intoFrames(toBytes(data))) {
+      this.inner.send(frame);
+    }
   }
 
   private handleInnerMessage = (event: MessageEvent): void => {
-    // TODO(chunking): buffer frames and dispatch only once a message is whole.
-    this.messageListeners.forEach((listener) => listener(event));
+    // Strings (heartbeat pong) pass straight through.
+    if (typeof event.data === 'string') {
+      this.dispatchMessage(event);
+      return;
+    }
+    const message = this.reassembler.push(new Uint8Array(event.data));
+    if (message === null) return; // partial — waiting for more frames
+    this.dispatchMessage(new MessageEvent('message', { data: message.buffer }));
   };
+
+  private dispatchMessage(event: MessageEvent): void {
+    this.messageListeners.forEach((listener) => listener(event));
+  }
 
   addEventListener<K extends keyof WebSocketEventMap>(
     type: K,
@@ -123,3 +143,13 @@ export const framedWebSocketFactory =
   (base: WebSocketFactory): WebSocketFactory =>
   (url, protocols) =>
     new FramedWebSocket(base(url, protocols));
+
+/** Normalizes a binary payload to a `Uint8Array` view for framing. */
+function toBytes(data: ArrayBufferLike | Blob | ArrayBufferView): Uint8Array {
+  if (data instanceof Uint8Array) return data;
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  }
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  throw new Error('FramedWebSocket: unsupported binary payload type');
+}

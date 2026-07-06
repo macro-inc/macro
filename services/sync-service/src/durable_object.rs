@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
     sync::{Arc, LazyLock},
 };
@@ -35,7 +35,7 @@ use crate::{
     },
     tags::{get_ws_id_from_tags, new_ws_id},
     timeit,
-    socket::{Socket, protocol},
+    socket::{InboundBuffers, Socket, protocol},
 };
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
@@ -137,6 +137,8 @@ pub struct DocumentSyncSession {
     awareness: EphemeralStore,
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
+    /// Partial inbound messages, isolated by connection.
+    inbound: InboundBuffers,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
     /// Distinct editors since the last snapshot notification.
@@ -324,11 +326,11 @@ fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentA
 
 impl DocumentSyncSession {
     pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
-        Socket::new(ws.clone())
+        Socket::new(ws.clone(), self.inbound.clone())
     }
 
     pub(crate) fn get_sockets(&self) -> Vec<Socket> {
-        self.active_websockets().into_iter().map(Socket::new).collect()
+        self.active_websockets().into_iter().map(|ws| self.socket_for(&ws)).collect()
     }
 
     pub fn get_websockets(&self) -> Vec<WebSocket> {
@@ -347,6 +349,7 @@ impl DocumentSyncSession {
         let Ok(ws_id) = get_ws_id(&self.state, ws) else {
             return;
         };
+        self.socket_for(ws).forget(&ws_id);
         self.ws_meta_map
             .lock("DocumentSyncSession::forget_websocket_metadata")
             .remove(&ws_id);
@@ -997,6 +1000,7 @@ impl DurableObject for DocumentSyncSession {
             session_storage: Mutex::new(None),
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
+            inbound: Arc::new(Mutex::new(HashMap::new())),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
             pending_editors: Arc::new(Mutex::new(Default::default())),
             surface_lifecycle: Mutex::new(None),
@@ -1077,6 +1081,11 @@ impl DurableObject for DocumentSyncSession {
                 return Ok(());
             }
             WebSocketIncomingMessage::Binary(bm) => bm,
+        };
+        let socket = self.socket_for(&ws);
+        let ws_id = get_ws_id(&self.state, &ws)?;
+        let Some(binary_message) = socket.receive(&ws_id, &binary_message)? else {
+            return Ok(());
         };
         worker_rs_otel::scope(&self.env, &self.state, async {
             let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
