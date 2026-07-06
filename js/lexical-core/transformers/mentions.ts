@@ -11,7 +11,7 @@ import { GroupMentionNode } from '../nodes/GroupMentionNode';
 import { PullRequestMentionNode } from '../nodes/PullRequestMentionNode';
 import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
-import { UnknownMentionNode } from '../nodes/UnknownMentionNode';
+import { $createUnknownMentionNode, UnknownMentionNode } from '../nodes/UnknownMentionNode';
 
 // NOTE: If you are changing this file, you may need to update the `mention_utils` crate in `macro-api` as well. Please notify @hutch should you update this file.
 
@@ -33,14 +33,13 @@ export const I_USER_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       for (const field of ['userId', 'email']) {
-        const unknown = new UnknownMentionNode('Unknown User');
-        node.replace(unknown)
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const userMentionNode = new UserMentionNode(data.userId, data.email);
       node.replace(userMentionNode);
     } catch (e) {
       console.error('Error in I_USER_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown User'}));
     }
   },
 };
@@ -90,8 +89,6 @@ export const I_CONTACT_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       for (const field of ['contactId', 'name', 'emailOrDomain', 'isCompany']) {
-        const unknown = new UnknownMentionNode('Unknown Contact');
-        node.replace(unknown);
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const contactMentionNode = new ContactMentionNode(
@@ -102,7 +99,8 @@ export const I_CONTACT_MENTION: TextMatchTransformer = {
       );
       node.replace(contactMentionNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_CONTACT_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Contact'}));
     }
   },
 };
@@ -154,8 +152,6 @@ export const I_DATE_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       for (const field of ['date', 'displayFormat']) {
-        const unknown = new UnknownMentionNode('Unknown Date');
-        node.replace(unknown);
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const dateMentionNode = new DateMentionNode(
@@ -165,7 +161,8 @@ export const I_DATE_MENTION: TextMatchTransformer = {
       );
       node.replace(dateMentionNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_DATE_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Date'}));
     }
   },
 };
@@ -218,8 +215,6 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       for (const field of ['documentId', 'documentName']) {
-        const unknown = new UnknownMentionNode('Unknown Item');
-        node.replace(unknown);
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const documentMentionNode = new DocumentMentionNode(
@@ -233,6 +228,7 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
       node.replace(documentMentionNode);
     } catch (e) {
       console.error('Error in I_DOCUMENT_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Item'}));
     }
   },
 };
@@ -307,8 +303,6 @@ export const I_PR_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       if (!('id' in data) || typeof data.id !== 'string') {
-        const unknown = new UnknownMentionNode('Unknown Pull Request');
-        node.replace(unknown);
         throw new Error('Missing field id');
       }
       const prMentionNode = new PullRequestMentionNode(
@@ -319,6 +313,7 @@ export const I_PR_MENTION: TextMatchTransformer = {
       node.replace(prMentionNode);
     } catch (e) {
       console.error('Error in I_PR_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Pull Request'}));
     }
   },
 };
@@ -369,14 +364,13 @@ export const I_GROUP_MENTION: TextMatchTransformer = {
     try {
       const data = JSON.parse(match[1]);
       if (!('groupAlias' in data)) {
-        const unknown = new UnknownMentionNode('Unknown Group');
-        node.replace(unknown);
         throw new Error('Missing field groupAlias');
       }
       const groupMentionNode = new GroupMentionNode(data.groupAlias);
       node.replace(groupMentionNode);
     } catch (e) {
       console.error('Error in I_GROUP_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Group'}));
     }
   },
 };
@@ -433,8 +427,6 @@ export const I_DOCUMENT_CARD: ElementTransformer = {
     try {
       const data = JSON.parse(match[1]);
       for (const field of ['documentId', 'documentName', 'blockName']) {
-        const unknown = new UnknownMentionNode('Unknown Item');
-        parentNode.replace(unknown);
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
       const documentCardNode = new DocumentCardNode(
@@ -449,6 +441,7 @@ export const I_DOCUMENT_CARD: ElementTransformer = {
       parentNode.replace(documentCardNode);
     } catch (e) {
       console.error('Error in I_DOCUMENT_CARD replace:', e);
+      parentNode.replace($createUnknownMentionNode({name: 'Unknown Item'}));
     }
   },
 };
@@ -475,14 +468,13 @@ export const I_THEME_MENTION: TextMatchTransformer = {
         parsed === null ||
         typeof parsed.name !== 'string'
       ) {
-        const unknown = new UnknownMentionNode('Unknown Theme');
-        node.replace(unknown);
         throw new Error('Invalid theme mention JSON');
       }
       const themeMentionNode = new ThemeMentionNode(parsed.name, parsed.data);
       node.replace(themeMentionNode);
     } catch (e) {
       console.error('Error in I_THEME_MENTION replace:', e);
+      node.replace($createUnknownMentionNode({name: 'Unknown Theme'}));
     }
   },
 };
