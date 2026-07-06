@@ -108,5 +108,5 @@ jobs:
         path: js/app/packages/app/dist
         overwrite: 'true'
 concurrency:
-  group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
+  group: deploy-web-app-${{ inputs.environment }}
   cancel-in-progress: false

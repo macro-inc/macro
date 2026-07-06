@@ -20,12 +20,15 @@ pub fn deploy_web_app() -> Workflow {
             .workflow_dispatch(WorkflowDispatch::default())
             .workflow_call(WorkflowCall::default()))
         .concurrency(
-            // Never cancel an in-progress deployment — that could leave the
-            // stack half-applied.
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-web-app-${{ inputs.environment }}",
-            ))
-            .cancel_in_progress(false),
+            // Serialize deploys per *environment*, with a literal prefix: for
+            // workflow_call runs `github.workflow` expands to the caller's
+            // name, so the hand-written `${{ github.workflow }}-web-app-…`
+            // group split push-triggered and manually dispatched deploys into
+            // different groups and let them race the same pulumi stack (same
+            // fix as deploy-all-services). Never cancel in-progress — that
+            // could leave the stack half-applied.
+            Concurrency::new(Expression::new("deploy-web-app-${{ inputs.environment }}"))
+                .cancel_in_progress(false),
         )
         .add_job("build-deploy", build_deploy())
 }
