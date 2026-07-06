@@ -119,7 +119,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
               'Prometheus scraping JMX + node exporter within the VPC',
           },
         ],
-        tags,
+        tags: this.tags,
       },
       { parent: this }
     );
@@ -129,7 +129,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
       {
         namePrefix: name,
         retentionInDays: 7,
-        tags,
+        tags: this.tags,
       },
       { parent: this }
     );
