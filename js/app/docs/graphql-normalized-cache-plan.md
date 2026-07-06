@@ -225,16 +225,17 @@ js/app/packages/graphql-cache/ # JS glue
 ## 6. Phases
 
 **Phase 0 — spike** *(closed)*
-- Browser probe harness built (`js/app/spikes/graphql-cache-probe/`);
-  Chromium results in Appendix A. **Decision made: IDB-backed persistence
-  via the `idb` crate, SharedWorker preferred with dedicated-worker
-  fallback (§4.2).** Safari/Firefox probe runs and the Tauri IPC benchmark
-  were deliberately skipped — the IDB + worker approach is the lowest
-  common denominator and doesn't depend on their results.
-- Soup payload measurement script available
-  (`js/app/scripts/measure-soup-payloads.ts`, needs credentials) — optional,
-  run when tuning tier budgets.
-- Remaining deliverable: wire protocol sketch (`CacheHost` RPC).
+- Browser probe harness built; Chromium results in Appendix A. **Decision
+  made: IDB-backed persistence via the `idb` crate, SharedWorker preferred
+  with dedicated-worker fallback (§4.2).** Safari/Firefox probe runs and
+  the Tauri IPC benchmark were deliberately skipped — the IDB + worker
+  approach is the lowest common denominator and doesn't depend on their
+  results.
+- Wire protocol delivered in Phase 3 (`packages/graphql-cache/protocol.ts`).
+- The probe harness (`spikes/graphql-cache-probe/`) and the soup payload
+  measurement script (`scripts/measure-soup-payloads.ts`) were removed
+  after the decisions landed — recover them from history (`jj`/git) if
+  re-measurement is ever needed; the results live in Appendix A.
 
 **Phase 1 — cache-core (native, no wasm)** *(done — `rust/graphql-cache/cache-core`)*
 - Schema metadata codegen from `rust/cloud-storage/schema.graphql`
@@ -278,7 +279,7 @@ js/app/packages/graphql-cache/ # JS glue
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
-- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_CACHE` override
+- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
   (browser only, `isTauri` → plain client): lazily builds the cached client
   scoped to the current `userId`; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
@@ -289,7 +290,7 @@ js/app/packages/graphql-cache/ # JS glue
   wasm-pack JS as an opaque asset, so its internal relative wasm URL had to
   be resolved at the caller).
 - **Manual smoke test pending**: dev-server run with the override enabled
-  (localStorage `ENABLE_GRAPHQL_CACHE=true`), verify hit/miss + offline
+  (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
   behavior in the browser.
 
 **Phase 5 — write path & coexistence**
@@ -323,7 +324,8 @@ js/app/packages/graphql-cache/ # JS glue
 
 ## Appendix A — Phase 0 probe results
 
-Harness: `js/app/spikes/graphql-cache-probe/` (see its README).
+Harness: `spikes/graphql-cache-probe/` — removed after the §4.2 decision
+landed; recover from history if needed.
 
 ### Chromium 149 (headless, Linux) — 2026-07-03
 
