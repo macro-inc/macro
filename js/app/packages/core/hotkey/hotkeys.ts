@@ -301,18 +301,30 @@ export function registerHotkey(
 
       // Remove this specific command from scope's hotkey handlers
       const scope = hotkeyScopeTree.get(scopeId);
-      if (scope && hotkeys) {
-        hotkeys.forEach((h) => {
-          const existingHandlers = scope.hotkeyCommands.get(h);
-          if (existingHandlers) {
-            const newHandlers = existingHandlers.filter((c) => c !== command);
-            if (newHandlers.length > 0) {
-              scope.hotkeyCommands.set(h, newHandlers);
-            } else {
-              scope.hotkeyCommands.delete(h);
+      if (scope) {
+        if (hotkeys) {
+          hotkeys.forEach((h) => {
+            const existingHandlers = scope.hotkeyCommands.get(h);
+            if (existingHandlers) {
+              const newHandlers = existingHandlers.filter((c) => c !== command);
+              if (newHandlers.length > 0) {
+                scope.hotkeyCommands.set(h, newHandlers);
+              } else {
+                scope.hotkeyCommands.delete(h);
+              }
             }
+          });
+        } else {
+          // Unkeyed commands are pushed onto `unkeyedCommands` at registration
+          // (see above). Without this branch they leaked until the whole scope
+          // was removed — re-registering unkeyed commands (e.g. per-favorite
+          // command-menu entries) grew the list unboundedly and left ghost
+          // rows for removed/renamed entries.
+          const idx = scope.unkeyedCommands.indexOf(command);
+          if (idx !== -1) {
+            scope.unkeyedCommands.splice(idx, 1);
           }
-        });
+        }
       }
 
       // Remove command scope only if we created it (not if we're using a shared one)

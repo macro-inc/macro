@@ -17,7 +17,7 @@ VALUES
 -- Insert test link
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro1', 'user1', 'user1@test.com', 'GMAIL', true, NOW(), NOW());
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user1@test.com', 'user1', 'user1@test.com', 'GMAIL', true, NOW(), NOW());
 
 -- Insert test contacts
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)

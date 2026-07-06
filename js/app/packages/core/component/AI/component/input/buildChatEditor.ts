@@ -19,6 +19,7 @@ export function buildChatEditor() {
     .withCode()
     .withRestoreFocus()
     .withSelectionData()
+    .withFloatingFormatMenu()
     .use(
       tablePlugin({
         hasCellMerge: true,

@@ -31,6 +31,7 @@ import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { CommandMenu } from './command';
+import { FavoritesCommands } from './command/FavoritesCommands';
 import { DevStatusBar } from './DevStatusBar';
 import { GithubReauthenticationPrompt } from './GithubReauthenticationPrompt';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -139,6 +140,7 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShortcuts />
           <Show when={!isMobile()}>
             <Suspense>
+              <FavoritesCommands />
               <CommandMenu />
             </Suspense>
           </Show>
@@ -168,21 +170,23 @@ function LayoutInner(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow flex">
-        <Show when={isSidebarVisible()}>
-          <AppSidebar
-            sidebarState={sidebarState()}
-            onOpenChange={(open) => {
-              if (!open) {
-                setSidebarState(isMobile() ? 'hidden' : 'slim');
-                return;
-              }
-
-              setSidebarState('expanded');
-            }}
-          />
-        </Show>
-
+        {/* The provider spans the sidebar too so its favorites can register
+            sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
+          <Show when={isSidebarVisible()}>
+            <AppSidebar
+              sidebarState={sidebarState()}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setSidebarState(isMobile() ? 'hidden' : 'slim');
+                  return;
+                }
+
+                setSidebarState('expanded');
+              }}
+            />
+          </Show>
+
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
             {props.children}
           </div>

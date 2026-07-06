@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                f.entity_type as \"entity_type!\",\n                f.entity_id as \"entity_id!\",\n                f.sort_order as \"sort_order!\",\n                f.created_at as \"created_at!\",\n                CASE f.entity_type\n                    WHEN 'document' THEN d.name\n                    WHEN 'chat' THEN c.name\n                    WHEN 'project' THEN p.name\n                    WHEN 'channel' THEN ch.name::text\n                    WHEN 'email_thread' THEN em.subject\n                END as \"name?\",\n                d.\"fileType\" as \"file_type?\",\n                dt.sub_type::text as \"document_sub_type?\",\n                ch.channel_type::text as \"channel_type?\",\n                cm.channel_id::text as \"channel_id?\"\n            FROM favorite f\n            LEFT JOIN \"Document\" d ON f.entity_type = 'document' AND d.id = f.entity_id\n            LEFT JOIN document_sub_type dt ON f.entity_type = 'document' AND dt.document_id = f.entity_id\n            LEFT JOIN \"Chat\" c ON f.entity_type = 'chat' AND c.id = f.entity_id\n            LEFT JOIN \"Project\" p ON f.entity_type = 'project' AND p.id = f.entity_id\n            LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id::text = f.entity_id\n            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id::text = f.entity_id\n            LEFT JOIN email_threads et ON f.entity_type = 'email_thread' AND et.id::text = f.entity_id\n            LEFT JOIN LATERAL (\n                SELECT m.subject\n                FROM email_messages m\n                WHERE m.thread_id = et.id AND m.is_draft = false\n                ORDER BY m.internal_date_ts DESC NULLS LAST\n                LIMIT 1\n            ) em ON f.entity_type = 'email_thread'\n            WHERE f.user_id = $1\n                AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d.\"deletedAt\" IS NULL))\n                AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c.\"deletedAt\" IS NULL))\n                AND (f.entity_type <> 'project' OR (p.id IS NOT NULL AND p.\"deletedAt\" IS NULL))\n            ORDER BY f.sort_order ASC, f.created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sort_order!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "file_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "document_sub_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "channel_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "36a185a68b67c421880ace1b043b023106f3890102b5a71a5172d8fd401fba9c"
+}

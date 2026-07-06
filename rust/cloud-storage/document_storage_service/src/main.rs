@@ -55,6 +55,10 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use favorites::{
+    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    outbound::pg_favorites_repo::PgFavoritesRepo,
+};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -671,11 +675,20 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
     ));
 
+    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
             email_service,
+            entity_access_service.clone(),
+        )
+        .with_favorites_reader(Arc::new(
+            service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
+        )),
+        favorites_state: FavoritesRouterState::new(
+            favorites_service,
             entity_access_service.clone(),
         ),
         #[cfg(feature = "graphql")]
