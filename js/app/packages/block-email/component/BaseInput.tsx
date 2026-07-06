@@ -379,6 +379,7 @@ type UndoReplySnapshot = {
   draftId: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
+  includeSignature: boolean;
 };
 // Set on send, persists across navigation, only consumed by undoSend.
 let undoSendSnapshot: UndoReplySnapshot | null = null;
@@ -521,6 +522,7 @@ export function BaseInput(props: {
       for (const attachment of restoredSnapshot.attachments) {
         form().attachments.add(attachment);
       }
+      setIncludeSignature(restoredSnapshot.includeSignature);
     });
   }
 
@@ -535,6 +537,7 @@ export function BaseInput(props: {
     for (const attachment of snapshot.attachments) {
       form().attachments.add(attachment);
     }
+    setIncludeSignature(snapshot.includeSignature);
   };
   onCleanup(() => {
     restoreUndoCallback = null;
@@ -576,11 +579,10 @@ export function BaseInput(props: {
             };
           }
         );
-        // Mark stale so next navigation fetches fresh data
-        queryClient.invalidateQueries({
-          queryKey: emailKeys.threadMessages(threadId).queryKey,
-          refetchType: 'none',
-        });
+        // Wipe the thread cache on unmount so the next visit fetches fresh
+        // data (with the restored draft). Deferred to avoid Suspense DOM
+        // detach while the thread is open.
+        markThreadDraftSaved(threadId);
       }
 
       const snapshot = undoSendSnapshot;
@@ -1024,6 +1026,7 @@ export function BaseInput(props: {
           draftId: snapshotDraftId,
           bodyHtml: snapshotHtml,
           attachments: [...form().attachments.list()],
+          includeSignature: includeSignature(),
         };
       }
     }
