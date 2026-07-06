@@ -20,6 +20,7 @@ import {
 } from '@app/component/next-soup/filters/filter-store/query-store';
 import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
+import { dateBucket } from '@app/component/next-soup/soup-view/group-by-date';
 import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
@@ -298,10 +299,17 @@ export const SoupViewContextProvider: FlowComponent<
     { default: 'unread' }
   );
 
+  // Date grouping is done client-side (see the date branch in `rows()`): the
+  // backend date grouping is unreliable, and we'd rather keep paginating the
+  // single flat list and regenerate buckets from whatever's loaded.
+  const isClientDateGroup = createMemo(
+    () => soup.grouping.activeGroupId() === 'date'
+  );
+
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
     if (!id) return undefined;
-    if (id === 'date') return { type: 'date' };
+    if (id === 'date') return undefined;
     if (id === 'entity_type') return { type: 'entity_type' };
     if (id === 'project') return { type: 'project' };
     if (id.startsWith('property:')) {
@@ -640,6 +648,66 @@ export const SoupViewContextProvider: FlowComponent<
   const rows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsQuery.data?.groups;
+
+    // Client-side date grouping: reuse the single flat (paginated) list and
+    // regenerate date buckets from whatever's loaded — no per-group fetching.
+    if (enabled() && isClientDateGroup() && !search.isSearching()) {
+      const all = entities();
+      const buckets = new Map<
+        string,
+        { label: string; entities: SoupEntity[] }
+      >();
+      const order: string[] = [];
+      const now = new Date();
+
+      for (const entity of all) {
+        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const bucket = dateBucket(ts, now);
+        let group = buckets.get(bucket.key);
+
+        if (!group) {
+          group = { label: bucket.label, entities: [] };
+          buckets.set(bucket.key, group);
+          order.push(bucket.key);
+        }
+
+        group.entities.push(entity);
+      }
+
+      const dateRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of order) {
+        const group = buckets.get(key)!;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: group.label,
+          count: group.entities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        dateRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: group.entities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of group.entities) {
+          dateRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return dateRows;
+    }
 
     if (!enabled() || !field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>

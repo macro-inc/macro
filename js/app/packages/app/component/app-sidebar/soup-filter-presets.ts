@@ -127,10 +127,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
+        groupBy: 'date',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
+        groupBy: 'date',
       }),
       all: () => ({
         filters: {
@@ -155,6 +157,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
+        groupBy: 'date',
       }),
     },
   },
