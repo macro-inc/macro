@@ -1589,7 +1589,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .fetch_all(db)
         .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }
@@ -1936,7 +1936,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .into_iter()
         .unzip();
 
-    populate_properties(db, &mut soup_items).await?;
+    populate_properties(db, user_id.copied(), &mut soup_items).await?;
 
     let items = soup_items
         .into_iter()

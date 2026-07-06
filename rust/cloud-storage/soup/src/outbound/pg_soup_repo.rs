@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use either::Either;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
@@ -125,11 +126,12 @@ impl SoupRepo for PgSoupRepo {
         unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
-    fn populate_properties(
+    fn populate_properties<'a>(
         &self,
-        items: &mut [SoupItem],
+        user_id: MacroUserIdStr<'a>,
+        items: &'a mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
-        populate_properties(&self.pool.0, items)
+        populate_properties(&self.pool.0, user_id, items)
     }
 
     fn expanded_grouped_cursor_soup<'a>(
@@ -166,11 +168,13 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 /// Fetches and populates properties for a slice of SoupItems.
 ///
 /// This helper collects entity references from items that support properties,
-/// fetches their properties in bulk, and assigns them to each item.
+/// fetches their properties in bulk, and assigns them to each item. System
+/// properties are always included, plus the caller's own and team tag properties.
 /// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &sqlx::PgPool,
+    user_id: MacroUserIdStr<'_>,
     items: &mut [SoupItem],
 ) -> Result<(), sqlx::Error> {
     let entity_refs = items
@@ -188,6 +192,7 @@ pub(crate) async fn populate_properties(
             db,
             &entity_refs,
             property_ids,
+            Some(user_id.as_ref()),
         )
         .await
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;

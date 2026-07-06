@@ -2,6 +2,7 @@ import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { CallStatusBadge, SharedBadge } from '../../components/Badges';
@@ -31,12 +32,16 @@ import {
 } from './foreign';
 import type { LayoutProps } from './shared';
 
-function DocumentRowTags(props: { entityId: string }) {
+function DocumentRowTags(props: {
+  entityId: string;
+  properties: SoupProperty[] | undefined;
+}) {
   const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
       entityType={EntityType.DOCUMENT}
+      properties={props.properties}
       onFilterByTag={filterByTag}
     />
   );
@@ -181,7 +186,18 @@ export function WideLayout(props: LayoutProps) {
           {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
         <Show when={isDocumentEntity(props.entity) && props.entity}>
-          {(entity) => <DocumentRowTags entityId={entity().id} />}
+          {(entity) => {
+            const properties = () => {
+              const doc = entity();
+              return 'properties' in doc ? doc.properties : undefined;
+            };
+            return (
+              <DocumentRowTags
+                entityId={entity().id}
+                properties={properties()}
+              />
+            );
+          }}
         </Show>
       </Entity.Slot>
       <Entity.Slot

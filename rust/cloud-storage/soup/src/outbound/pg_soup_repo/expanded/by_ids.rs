@@ -162,7 +162,7 @@ pub async fn expanded_soup_by_ids<'a>(
     .fetch_all(db)
     .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }

@@ -192,6 +192,7 @@ export function TaskGridLayout(props: LayoutProps) {
           <EntityRowTags
             entityId={props.entity.id}
             entityType={EntityType.TASK}
+            properties={entity().properties}
             onFilterByTag={filterByTag}
             class="ml-auto"
           />

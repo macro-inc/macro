@@ -1,12 +1,13 @@
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn, HoverCard, Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { TagDot } from './TagDot';
 import { TagPicker } from './TagPicker';
-import { type ResolvedTag, useDocTags } from './useDocTags';
+import { type ResolvedTag, useSoupDocTags } from './useDocTags';
 
-type DocTags = ReturnType<typeof useDocTags>;
+type DocTags = ReturnType<typeof useSoupDocTags>;
 
 const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
@@ -135,7 +136,8 @@ function TagOverflow(props: {
 }
 
 /**
- * Compact tag display for list rows. Shows up to `maxVisible` chips then a
+ * Compact tag display for list rows, rendered from the entity's already-loaded
+ * soup properties (no per-row fetch). Shows up to `maxVisible` chips then a
  * "+N tags" chip. Clicking a chip opens the TagPicker to edit the entity's
  * tags. Hovering a chip surfaces a "Filter by" link and hovering the overflow
  * lists the hidden tags. onFilterByTag applies a tag filter to the list.
@@ -143,11 +145,16 @@ function TagOverflow(props: {
 export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
+  properties: SoupProperty[] | undefined;
   maxVisible?: number;
   class?: string;
   onFilterByTag?: (optionId: string) => void;
 }) {
-  const docTags = useDocTags(props.entityId, props.entityType);
+  const docTags = useSoupDocTags(
+    props.entityId,
+    props.entityType,
+    () => props.properties
+  );
   const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
   const visible = () => docTags.appliedTags().slice(0, maxVisible());
   const hidden = () => docTags.appliedTags().slice(maxVisible());
