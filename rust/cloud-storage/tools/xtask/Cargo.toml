@@ -30,6 +30,9 @@ macro_aws_config = { path = "../../macro_aws_config" }
 macro_queues = { path = "../../macro_queues" }
 serde = { workspace = true }
 tokio = { workspace = true }
+# Source of truth for `cargo x kafka-topics`, which generates
+# .github/kafka-cluster-topics.json from the crate's declared topics.
+macro_event_topics = { path = "../../macro_event_topics" }
 # Typed docker-compose model (build the override as structs, not strings) +
 # Docker Engine API client for the discrete container/image ops.
 bollard = "0.21"

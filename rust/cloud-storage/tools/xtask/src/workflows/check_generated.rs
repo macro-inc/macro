@@ -1,7 +1,8 @@
 //! `check generated workflows` — fails a PR if the committed `.github/workflows`
-//! YAML has drifted from this Rust source. Generated into
-//! `check-generated-workflows.yml`. This is what makes "workflows are defined in
-//! Rust" enforceable rather than aspirational.
+//! YAML or `.github/kafka-cluster-topics.json` has drifted from its Rust source.
+//! Generated into `check-generated-workflows.yml`. This is what makes "workflows
+//! (and the kafka topics file) are defined in Rust" enforceable rather than
+//! aspirational.
 
 use gh_workflow::{Event, Job, PullRequest, Step, Workflow};
 
@@ -14,7 +15,9 @@ pub fn check_generated_workflows() -> Workflow {
             PullRequest::default()
                 .add_branch("main")
                 .add_path("rust/cloud-storage/tools/xtask/**")
-                .add_path(".github/workflows/**"),
+                .add_path("rust/cloud-storage/macro_event_topics/**")
+                .add_path(".github/workflows/**")
+                .add_path(".github/kafka-cluster-topics.json"),
         ))
         .add_job("check-workflows", check_workflows())
 }
@@ -28,6 +31,11 @@ fn check_workflows() -> Job {
         .add_step(
             Step::new("verify workflows are up to date").run(
                 "cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- workflows --check",
+            ),
+        )
+        .add_step(
+            Step::new("verify kafka cluster topics are up to date").run(
+                "cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- kafka-topics --check",
             ),
         )
 }

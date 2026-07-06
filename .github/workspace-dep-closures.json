@@ -4670,6 +4670,7 @@
       "macro_aws_config",
       "macro_env",
       "macro_env_var",
+      "macro_event_topics",
       "macro_queues",
       "tools/xtask",
       "workspace-hack"

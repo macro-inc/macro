@@ -15074,6 +15074,7 @@ dependencies = [
  "libc",
  "macro_aws_config",
  "macro_env_var",
+ "macro_event_topics",
  "macro_queues",
  "serde",
  "serde_json",
