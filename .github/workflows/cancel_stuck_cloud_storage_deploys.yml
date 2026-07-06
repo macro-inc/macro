@@ -24,7 +24,7 @@ jobs:
     name: Cancel runs stuck queued or in_progress past threshold
     runs-on: namespace-profile-linux-tiny-no-cache
     env:
-      WORKFLOW_FILE: deploy-cloud-storage-on-push.yml
+      WORKFLOW_FILE: deploy_cloud_storage_on_push.yml
       MAX_AGE_MINUTES: ${{ inputs.max-age-minutes || '90' }}
       DRY_RUN: ${{ inputs.dry-run || 'false' }}
       GH_TOKEN: ${{ github.token }}

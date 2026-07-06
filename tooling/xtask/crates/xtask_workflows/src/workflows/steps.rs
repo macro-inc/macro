@@ -4,7 +4,7 @@
 //! Third-party actions are pinned to a SHA with the human-readable version in a
 //! trailing comment, matching the rest of the repo's workflows.
 
-use gh_workflow::{Expression, Job, Run, Step, Use};
+use gh_workflow::{Env, Expression, Job, Run, Step, Use};
 use xtask_paths::{RepoDir, RuntimePath};
 
 use crate::workflows::vars;
@@ -209,6 +209,94 @@ pub fn gated_job() -> Job {
         .cond(Expression::new(
         "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
     ))
+}
+
+// ---------------------------------------------------------------------------
+// Deploy family (deploy_all_services / reusable_deploy_service) shared steps
+// ---------------------------------------------------------------------------
+
+/// `actions/checkout` pinned to the v4 SHA the deploy pipelines use. Compose
+/// options at the call site (`clean: false` on jobs reusing a mounted /nix
+/// volume, `sparse-checkout` for action-only jobs).
+pub fn checkout_v4() -> Step<Use> {
+    Step::new("Checkout Repo")
+        .uses(
+            "actions",
+            "checkout",
+            "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+        ) // v4
+        .add_with(("persist-credentials", false))
+}
+
+/// Wrap a shell fragment in the standard Cachix watch-store lifecycle.
+///
+/// The watcher is optional and always cleaned up, so Nix builds still succeed
+/// when Cachix is unavailable while every deploy-family caller shares the same
+/// process and trap semantics.
+pub fn with_cachix_watch(inner: &str) -> String {
+    indoc::formatdoc! {r#"
+        set -euo pipefail
+        cachix_pid=
+        if command -v cachix >/dev/null 2>&1 && [ -n "${{CACHIX_CACHE_NAME:-}}" ]; then
+          cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+          cachix_pid=$!
+          trap 'if [ -n "${{cachix_pid:-}}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+        fi
+        {inner}
+    "#}
+}
+
+/// `nix build` wrapped in `cachix watch-store`, so realised store paths are
+/// pushed to Cachix as they build — the consistency backstop when the /nix
+/// volume is cold or evicted.
+pub fn nix_build_watched(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
+    let script = with_cachix_watch(&format!(
+        "nix build --print-build-logs {targets}\necho \"{done_msg}\""
+    ));
+    Step::new(name).run(script).shell("bash")
+}
+
+/// Upload a build's handoff tarball to Namespace artifact storage: strongly
+/// consistent object storage that rides Namespace's network rather than the
+/// GitHub artifacts API. Attempt-scoped path so re-runs never collide with
+/// stale uploads; the deploy job logs the same hash on read.
+pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
+    Step::new("Upload handoff artifact")
+        .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
+        .shell("bash")
+        .add_env(Env::new(
+            "DEST",
+            format!("handoff/${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}/{service_expr}/{file}"),
+        ))
+}
+
+/// Mount Pulumi's provider-plugin dir on a Namespace cache volume. Plugins are
+/// version-pinned by infra/ and identical across services; a cold volume just
+/// re-downloads (~45s). Requires the job to pin `PULUMI_HOME: /pulumi`.
+pub fn cache_pulumi_plugins() -> Step<Use> {
+    Step::new("Cache Pulumi plugins")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("path", "/pulumi/plugins"))
+        .continue_on_error(true)
+}
+
+/// Make PULUMI_HOME (/pulumi) and its mounted plugins subdir writable so
+/// pulumi can write credentials + plugins as the runner (no-op when already
+/// root). `mkdir -p` first: the plugin cache mount is continue-on-error, so on
+/// a mount failure /pulumi may not exist yet — create it so the cold-cache
+/// fallback works instead of the chown hard-failing the deploy.
+pub fn ensure_pulumi_home_writable() -> Step<Run> {
+    Step::new("Ensure Pulumi home is writable")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            sudo mkdir -p /pulumi
+            if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
+        "#})
+        .shell("bash")
 }
 
 // ---------------------------------------------------------------------------
