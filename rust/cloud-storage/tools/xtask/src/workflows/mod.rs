@@ -80,7 +80,7 @@ const WORKFLOWS: &[WorkflowFile] = &[
     },
     WorkflowFile {
         slug: "deploy_preview",
-        file_name: "deploy-preview.yml",
+        file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
     },
     WorkflowFile {

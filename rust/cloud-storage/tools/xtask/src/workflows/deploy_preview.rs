@@ -1,5 +1,7 @@
 //! `Deploy Preview` — frontend feature-branch preview deployments.
-//! Generated into `deploy-preview.yml`.
+//! Generated into `deploy_preview.yml` (replaces the hand-written
+//! `deploy-preview.yml`; safe to rename since this is deliberately not a
+//! required status check).
 //!
 //! Deploys a preview build to `<branch>-<nanoid>-preview.macro.com`, built
 //! identically to dev.macro.com (MODE=development, points at dev services).
