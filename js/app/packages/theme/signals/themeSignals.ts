@@ -30,7 +30,10 @@ export const [currentThemeId, setCurrentThemeId] = makePersisted(
   {name: 'macro-selected-theme'}
 );
 
-export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
+export const themes = createMemo<ThemeV2[]>(() => [
+  ...(DEFAULT_THEMES as readonly ThemeV2[]),
+  ...userThemes(),
+]);
 
 // Per-mode theme preferences, persisted to localStorage. Applied by
 // systemThemeEffect (themeUtils.ts) when themeShouldMatchSystem is on and the OS

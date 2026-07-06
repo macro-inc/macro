@@ -52,6 +52,11 @@ export type ArrayFieldFilters = {
   foreignEntitySource?: string[];
   crmCompanyId?: string[];
   properties?: PropertyFilter[];
+  // Selected tags. Kept separate from `properties` because tags combine as a
+  // single OR across all tag definitions (personal + team), whereas `properties`
+  // AND across distinct definitions. Each entry carries its owning definition id
+  // (needed for the soup literal) and option id.
+  tagFilters?: PropertyFilter[];
 };
 
 export type ScalarFieldFilters = {

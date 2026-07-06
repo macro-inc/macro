@@ -1,12 +1,12 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
-import { ThemeChipPill } from '@theme/components/ThemeChipPill';
+import { ThemeChips } from '@theme/components/ThemeChips';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { isThemeV2 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
-import { useContext } from 'solid-js';
+import { Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
@@ -39,15 +39,24 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   };
 
   return (
-    <ThemeChipPill
-      type="button"
-      onClick={handleClick}
+    <span
+      data-theme-mention="true"
       class={cn(
-        'pointer-events-auto mx-0.5 align-baseline',
-        isSelectedAsNode() && 'bg-active'
+        'pointer-events-auto p-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
+        isSelectedAsNode() && 'bg-active text-ink'
       )}
-      theme={theme()}
-      name={props.name}
-    />
+      onClick={handleClick}
+    >
+      <Show when={theme()}>
+        {(t) => (
+          <span class="relative inline-flex -top-0.75 mr-1">
+            <ThemeChips theme={t()} size="inline" />
+          </span>
+        )}
+      </Show>
+      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        {props.name}
+      </span>
+    </span>
   );
 }

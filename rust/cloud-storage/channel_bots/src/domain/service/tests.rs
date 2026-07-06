@@ -328,7 +328,7 @@ fn mention_event(
             id: trigger_id,
             channel_id,
             thread_id,
-            sender_id: Sender::User(user_id(sender_email)),
+            sender_id: Sender::new_from_user(user_id(sender_email)),
             content: content.to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use embedding::embedding_provider::openai::DIMS;
-use embedding::{Content, Embeddable, EmbeddingModel, LabeledEmbedding};
+use embedding::{
+    Content, Embeddable, EmbeddingModel, LabeledEmbedding, RerankModel, Reranked, SearchResults,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
@@ -11,7 +13,6 @@ use crate::domain::models::NewTask;
 use crate::domain::ports::TaskDedupNotifier;
 use crate::domain::service::TaskDedupService;
 use crate::outbound::judge::LocalDuplicateJudge;
-use crate::outbound::reranker::NoOpReranker;
 
 const OWNER: &str = "macro|user@user.com";
 const TEAM_ID: Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
@@ -20,6 +21,35 @@ const TASK_TWO: &str = "d1000000-0000-0000-0000-000000000002";
 const TASK_THREE: &str = "d1000000-0000-0000-0000-000000000003";
 
 type TestService = TaskDedupService<DIMS, LocalEmbedder, PgTaskVectorDb, NoOpReranker>;
+
+/// Test-only reranker that preserves the upstream vector-similarity ordering,
+/// carrying each candidate's best vector score through unchanged, so these
+/// tests exercise the store rather than a reranking model.
+#[derive(Clone, Copy)]
+struct NoOpReranker;
+
+impl<const D: usize> RerankModel<D> for NoOpReranker {
+    async fn rerank<'a, T: Send>(
+        &self,
+        _query: Content<'a>,
+        candidates: Vec<SearchResults<T, D>>,
+    ) -> anyhow::Result<Vec<Reranked<T>>> {
+        Ok(candidates
+            .into_iter()
+            .map(|result| {
+                let score = result
+                    .matches
+                    .iter()
+                    .map(|matched| matched.score)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                Reranked {
+                    item: result.metadata,
+                    score,
+                }
+            })
+            .collect())
+    }
+}
 
 struct NoopNotifier;
 
@@ -155,6 +185,30 @@ async fn insert_task_embedding(pool: &PgPool, document_id: &str, title: &str, bo
         .await
         .unwrap();
     }
+}
+
+/// Sets a task's Status system property the way the properties service stores
+/// it: a single-element SelectOption array holding the option id.
+async fn set_task_status(pool: &PgPool, document_id: &str, status: StatusOption) {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            $1,
+            $2,
+            'TASK',
+            $3,
+            jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($4::text))
+        )
+        "#,
+        Uuid::new_v4(),
+        document_id,
+        SystemPropertyKey::STATUS_UUID,
+        status.uuid().to_string(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn insert_match(pool: &PgPool, task_id: &str, duplicate_task_id: &str) -> Uuid {
@@ -396,6 +450,107 @@ async fn deleted_duplicate_tasks_are_hidden(pool: PgPool) {
 
     let duplicates = service.active_duplicates(TASK_ONE).await.unwrap();
     assert!(duplicates.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn closed_duplicate_tasks_are_hidden(pool: PgPool) {
+    setup_tasks(&pool).await;
+    insert_match(&pool, TASK_ONE, TASK_TWO).await;
+    insert_match(&pool, TASK_ONE, TASK_THREE).await;
+    set_task_status(&pool, TASK_TWO, StatusOption::Completed).await;
+    set_task_status(&pool, TASK_THREE, StatusOption::Canceled).await;
+
+    let service = service(pool.clone());
+    let duplicates = service.active_duplicates(TASK_ONE).await.unwrap();
+    assert!(
+        duplicates.is_empty(),
+        "completed/canceled tasks should not be listed as duplicates"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn open_duplicate_tasks_stay_visible(pool: PgPool) {
+    setup_tasks(&pool).await;
+    insert_match(&pool, TASK_ONE, TASK_TWO).await;
+    set_task_status(&pool, TASK_TWO, StatusOption::InProgress).await;
+
+    let service = service(pool.clone());
+    let duplicates = service.active_duplicates(TASK_ONE).await.unwrap();
+    assert_eq!(duplicates.len(), 1);
+    assert_eq!(duplicates[0].task_id, TASK_TWO);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn similarity_search_excludes_closed_tasks(pool: PgPool) {
+    setup_tasks(&pool).await;
+    // Both tasks carry the identical searched-for text; only status differs.
+    insert_task_embedding(&pool, TASK_ONE, DETECTION_TITLE, DETECTION_BODY).await;
+    insert_task_embedding(&pool, TASK_TWO, DETECTION_TITLE, DETECTION_BODY).await;
+    set_task_status(&pool, TASK_ONE, StatusOption::Completed).await;
+    set_task_status(&pool, TASK_TWO, StatusOption::InProgress).await;
+
+    let service = service(pool.clone());
+    let results = service
+        .similarity_search(
+            OWNER,
+            Some(TEAM_ID),
+            DETECTION_TITLE,
+            &EmbeddingMarkdown::from_client_trusted(DETECTION_BODY.to_string()),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        results
+            .iter()
+            .map(|r| r.task_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![TASK_TWO],
+        "the completed task should be excluded from similarity candidates"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn detection_skips_closed_tasks(pool: PgPool) {
+    setup_tasks(&pool).await;
+    insert_task_embedding(&pool, TASK_TWO, DETECTION_TITLE, DETECTION_BODY).await;
+    set_task_status(&pool, TASK_TWO, StatusOption::Canceled).await;
+
+    let service = service(pool.clone());
+    service
+        .detect_new_task(detection_task(TASK_ONE))
+        .await
+        .unwrap();
+
+    let duplicates = service.active_duplicates(TASK_ONE).await.unwrap();
+    assert!(
+        duplicates.is_empty(),
+        "a canceled task should not be matched as a duplicate of a new task"
+    );
 }
 
 #[sqlx::test(

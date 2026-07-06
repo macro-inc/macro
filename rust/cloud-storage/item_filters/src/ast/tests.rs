@@ -344,6 +344,7 @@ fn it_expands_channel_thread_filters() {
             thread_ids: vec![thread_id.to_string()],
             channel_ids: vec![channel_id.to_string()],
             root_sender_ids: vec!["macro|hello@test.com".to_string()],
+            participant_ids: vec!["macro|participant@test.com".to_string()],
         },
         ..Default::default()
     };
@@ -385,6 +386,35 @@ fn it_expands_single_channel_thread_id() {
     let exp = json!({
         "l": {
             "ThreadId": thread_id
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_single_channel_thread_participant() {
+    let f = EntityFilters {
+        channel_thread_filters: crate::ChannelThreadFilters {
+            participant_ids: vec!["macro|participant@test.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .channel_thread_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "Participant": "macro|participant@test.com"
         }
     });
 

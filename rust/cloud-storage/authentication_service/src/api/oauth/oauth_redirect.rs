@@ -2,8 +2,8 @@ use crate::api::{
     context::ApiContext,
     login::sso::SsoState,
     utils::{
-        create_access_token_cookie, create_refresh_token_cookie, default_redirect_url,
-        generate_session_code,
+        append_signed_up_param_if_new_user, create_access_token_cookie,
+        create_refresh_token_cookie, default_redirect_url, generate_session_code,
     },
 };
 use axum::{
@@ -112,23 +112,35 @@ pub async fn handler(
         None
     };
 
-    let redirect_url = get_redirect_url(&state, write_db)
+    let mut redirect_url = get_redirect_url(&state, write_db)
         .await
         .map_err(IntoResponse::into_response)?;
 
     tracing::trace!("redirect url {redirect_url}");
 
+    let decoded_user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args);
+
     if let Some(state) = state.as_ref()
         && let Some(referral_code) = state.referral_code.as_ref()
     {
-        let user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args)
+        let user_id = decoded_user_id
+            .as_ref()
             .map_err(|_| InnerErr::InvalidJwtError.into_response())?;
 
         let _ = ctx
             .referral_service
-            .track_referral(&user_id, &ReferralCode(referral_code.clone()))
+            .track_referral(user_id, &ReferralCode(referral_code.clone()))
             .await
             .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
+    }
+
+    if let Ok(user_id) = decoded_user_id.as_ref() {
+        append_signed_up_param_if_new_user(
+            &ctx.macro_cache_client,
+            user_id.email_str(),
+            &mut redirect_url,
+        )
+        .await;
     }
 
     // Set cookies

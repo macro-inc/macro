@@ -5,4 +5,9 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+either = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+bot_id = { path = "../bot_id" }
+macro_user_id = { path = "../macro_user_id" }

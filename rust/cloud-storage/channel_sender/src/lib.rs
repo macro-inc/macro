@@ -1,0 +1,99 @@
+#![deny(missing_docs)]
+//! This crate defines the [ChannelSender] which is a wrapper type which denotes either a first party macro user, OR, a bot user
+
+use bot_id::{BotId, BotIdStr, cowlike::CowLike};
+use either::Either;
+use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
+use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+mod test;
+
+type InnerVal<'a> = Either<BotIdStr<'a>, MacroUserIdStr<'a>>;
+
+/// Actor identity for channel mutations.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct ChannelSender<'a>(pub InnerVal<'a>);
+
+impl<'a> TryFrom<&'a str> for ChannelSender<'a> {
+    type Error = ParseErr;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::parse_from_str(value)
+    }
+}
+
+impl TryFrom<String> for ChannelSender<'static> {
+    type Error = ParseErr;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ChannelSender::parse_from_str(&value).map(CowLike::into_owned)
+    }
+}
+
+impl From<ChannelSender<'_>> for String {
+    fn from(value: ChannelSender<'_>) -> Self {
+        value.as_ref().to_string()
+    }
+}
+
+impl<'a> CowLike<'a> for ChannelSender<'a> {
+    type Owned<'b> = ChannelSender<'b>;
+
+    fn into_owned(self) -> Self::Owned<'static> {
+        ChannelSender(self.0.into_owned())
+    }
+
+    fn copied(&'a self) -> Self {
+        ChannelSender(self.0.copied())
+    }
+}
+
+impl<'a> ChannelSender<'a> {
+    /// attempt to return the user id str if this value contains a user
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'a>> {
+        self.0.as_ref().right()
+    }
+    /// attempt to return the bot id str if this value contains a bot
+    pub fn as_bot(&self) -> Option<&BotIdStr<'a>> {
+        self.0.as_ref().left()
+    }
+    /// attempt to return the user id str if this value contains a user
+    pub fn into_user(self) -> Option<MacroUserIdStr<'a>> {
+        self.0.right()
+    }
+    /// attempt to return the bot id str if this value contains a bot
+    pub fn into_bot(self) -> Option<BotIdStr<'a>> {
+        self.0.left()
+    }
+
+    /// attempt to parse a value of self from an input str
+    pub fn parse_from_str(value: &'a str) -> Result<Self, ParseErr> {
+        match BotIdStr::try_from(value) {
+            Ok(bot_id) => Ok(ChannelSender(Either::Left(bot_id))),
+            Err(_) => MacroUserIdStr::try_from(value)
+                .map(Either::Right)
+                .map(ChannelSender),
+        }
+    }
+
+    /// create a new instance of self containing a [MacroUserIdStr]
+    pub fn new_from_user(user: MacroUserIdStr<'a>) -> Self {
+        Self(InnerVal::Right(user))
+    }
+
+    /// create a new instance of self containing a [BotIdStr] derived from the given [BotId]
+    pub fn new_from_bot(bot_id: BotId) -> ChannelSender<'static> {
+        ChannelSender(Either::Left(bot_id.into_storage_id()))
+    }
+}
+
+impl<'a> AsRef<str> for ChannelSender<'a> {
+    fn as_ref(&self) -> &str {
+        match &self.0 {
+            Either::Left(l) => l.as_ref(),
+            Either::Right(r) => r.as_ref(),
+        }
+    }
+}

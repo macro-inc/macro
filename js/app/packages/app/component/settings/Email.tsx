@@ -32,11 +32,7 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
-import {
-  AddInboxDialog,
-  openAddInboxDialog,
-  useAddInboxGate,
-} from '../AddInboxDialog';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 import { ConnectAction, StatusDot } from './integration-ui';
@@ -59,7 +55,6 @@ export function EmailCard() {
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
-  const guardAddInbox = useAddInboxGate();
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -229,7 +224,7 @@ export function EmailCard() {
                   size="icon-sm"
                   depth={3}
                   aria-label="Add inbox"
-                  onClick={() => guardAddInbox(openAddInboxDialog)}
+                  onClick={openAddInboxDialog}
                 >
                   <PlusIcon class="size-4" />
                 </Button>

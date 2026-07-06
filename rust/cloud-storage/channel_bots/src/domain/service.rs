@@ -38,8 +38,8 @@ const CHANNEL_CONTEXT_INSTRUCTION: &str = "Recent messages in the channel around
 
 /// Human-readable label for a message sender storage id.
 fn sender_label(sender_id: &str) -> String {
-    if let Ok(bot) = bot_id::BotId::parse_storage_str(sender_id) {
-        return if bot == bot_id::MACRO_AI_BOT_ID {
+    if let Ok(bot) = bot_id::BotIdStr::parse_from_str(sender_id) {
+        return if bot.bot_id() == bot_id::MACRO_AI_BOT_ID {
             bot_id::MACRO_AI_NAME.to_string()
         } else {
             "Bot".to_string()
@@ -253,7 +253,7 @@ where
     /// React to a Macro AI mention.
     #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
     pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
-        let actor = Sender::Bot(bot_id::MACRO_AI_BOT_ID);
+        let actor = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
 
         // 1. Gather conversational context (before posting, so our own
         //    "thinking" message is not included).

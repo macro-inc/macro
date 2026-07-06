@@ -109,6 +109,37 @@ pub fn pin_sccache_dir() -> Step<Run> {
     ))
 }
 
+/// Mount the web-app cache volume: bun's install cache plus the Nix store
+/// (dev shell closure). `with_rust` additionally persists the cargo
+/// registry/git and the sccache dir for the `gen-api` OpenAPI-binary build.
+/// `continue-on-error` for the same reason as [`mount_cache_volume`].
+pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
+    Step::new("Mount Namespace cache volume")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("cache", if with_rust { "bun,rust" } else { "bun" }))
+        .map(|step| {
+            if with_rust {
+                step.add_with(("path", format!("{}\n/nix", vars::SCCACHE_VOLUME_DIR)))
+            } else {
+                step.add_with(("path", "/nix"))
+            }
+        })
+        .continue_on_error(true)
+}
+
+/// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
+/// We pass NO `sccache-bucket`, so the gen-api build's sccache stays on the
+/// cache volume. Requires [`setup_nix`] first.
+pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
+    uses_local(name, "./.github/actions/setup-reqs-web")
+        .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
+        .when(playwright, |step| step.add_with(("playwright", "true")))
+}
+
 /// `sccache --show-stats` at the end of a job (never fails the job).
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")

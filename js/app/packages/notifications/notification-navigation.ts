@@ -11,6 +11,7 @@ import {
   itemToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import type { NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
@@ -251,8 +252,12 @@ function getSupportedHandler(
       ) {
         return null;
       }
-      return async () => {
-        // TODO(dev-rb/github): Route GitHub PR notifications to /pr.
+      return async (lm: SplitManager, newSplit: boolean = false) => {
+        if (USE_MACRO_PR_SUMMARY_BLOCK) {
+          openSplitIfNotOpen(lm, 'pr', notification.entity_id, { newSplit });
+          return;
+        }
+
         let url = meta.content.url;
         if (meta.tag === 'github_pr_check_run') {
           url = meta.content.checkUrl || meta.content.url;

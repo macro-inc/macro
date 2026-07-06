@@ -196,7 +196,8 @@ pub struct AiProjection {
     pub id: String,
     /// The prompt used to materialize the projection.
     pub prompt: String,
-    /// A hash of the prompt, used to version cached instances.
+    /// A hash of the generation recipe (prompt, model, and output schema), used
+    /// to version cached instances.
     pub prompt_hash: String,
     /// Whether this projection is materialized per user or per team.
     pub target_type: TargetType,
@@ -204,6 +205,12 @@ pub struct AiProjection {
     pub refresh_cadence: RefreshCadence,
     /// How long the projection remains active without being requested.
     pub expiry: Expiry,
+    /// Optional `provider/model` id used for generation (e.g.
+    /// `cerebras/llama-3.3-70b`). Falls back to the default model when absent.
+    pub model: Option<String>,
+    /// Optional JSON schema the generated result must conform to. When set the
+    /// result is the JSON serialization of a value matching this schema.
+    pub output_schema: Option<serde_json::Value>,
     /// When the definition was created.
     pub created_at: DateTime<Utc>,
     /// When the definition was last updated.
@@ -248,6 +255,15 @@ pub struct UpsertProjectionParams {
     pub refresh_cadence: RefreshCadence,
     /// How long the projection remains active without being requested.
     pub expiry: Expiry,
+    /// Optional `provider/model` id used for generation.
+    pub model: Option<String>,
+    /// Optional JSON schema the generated result must conform to.
+    pub output_schema: Option<serde_json::Value>,
+    /// When `true` and the instance needs generation, materialize inline and
+    /// return the finished state instead of enqueueing and returning early.
+    pub await_generation: bool,
+    /// When `true`, regenerate even if a cached result already exists.
+    pub regenerate: bool,
 }
 
 /// Errors for ai projection storage operations.

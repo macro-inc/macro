@@ -44,7 +44,16 @@ interface CollapsibleListProps<T> {
   children: (item: T, index?: number, count?: number) => JSX.Element;
   expandText?: (count: number) => string;
   togglePosition?: 'top' | 'bottom';
+  /**
+   * When set, the expanded/collapsed choice is kept under this key outside the
+   * component instance. A consumer living inside a list row that virtua remounts
+   * on data refetch (e.g. notification stacks) would otherwise reset to collapsed
+   * on every remount. The new instance re-seeds from the user's last toggle.
+   */
+  persistKey?: string;
 }
+
+const persistedExpandState = new Map<string, boolean>();
 
 /**
  * Generic collapsible list component
@@ -58,7 +67,11 @@ interface CollapsibleListProps<T> {
  * in the parent component using reconcile() or proper memoization.
  */
 export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
-  const [showAll, setShowAll] = createSignal(false);
+  const [showAll, setShowAll] = createSignal(
+    props.persistKey !== undefined
+      ? (persistedExpandState.get(props.persistKey) ?? false)
+      : false
+  );
 
   const visibleCount = () => props.visibleCount ?? 3;
 
@@ -82,7 +95,13 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   // drift across expand/collapse cycles.
   const toggle = (e: MouseEvent) => {
     e.stopPropagation();
-    setShowAll((prev) => !prev);
+    setShowAll((prev) => {
+      const next = !prev;
+      if (props.persistKey !== undefined) {
+        persistedExpandState.set(props.persistKey, next);
+      }
+      return next;
+    });
   };
 
   const toggleButtonProps = () => ({

@@ -385,7 +385,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let team_id =
@@ -483,7 +483,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn remove_user_from_team(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), RemoveUserFromTeamError> {
         let team_id =
@@ -647,7 +647,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_team_invite(
         &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
         team_invite_id: &uuid::Uuid,
     ) -> Result<(), RemoveTeamInviteError> {
         let team_id =

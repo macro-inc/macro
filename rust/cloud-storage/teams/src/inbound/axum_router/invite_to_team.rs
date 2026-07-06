@@ -1,6 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode};
 use entity_access::{
-    domain::{models::OwnerTeamRole, ports::EntityAccessService},
+    domain::{models::AdminTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase};
@@ -89,7 +89,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<OwnerTeamRole, Eas>,
+    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
     State(state): State<TeamRouterState<T, Eas>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {

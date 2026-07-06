@@ -696,7 +696,11 @@ const DASHBOARD_LINK: SidebarItem = {
  * widget. Label/icon come from the settings tab config (see
  * `getSettingsTabItem`); this list only decides which tabs to promote.
  */
-const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
+const PROMOTED_SETTINGS_TABS: SettingsTab[] = [
+  'Mobile App',
+  'Connected',
+  'Team',
+];
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();

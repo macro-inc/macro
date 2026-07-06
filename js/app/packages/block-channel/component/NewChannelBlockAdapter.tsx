@@ -301,6 +301,15 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     };
   };
 
+  // The Messages tab may not have mounted yet (e.g. right after the split
+  // opens). Wait for its handle via the orchestrator's availability primitive.
+  const awaitMessagesHandle = async () => {
+    await awaitCondition(() => messagesHandle() !== undefined, 10_000).catch(
+      () => {}
+    );
+    return messagesHandle();
+  };
+
   // Register on the block always — `goToLocationFromParams` used to live only
   // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
   createMethodRegistration(blockHandle, {
@@ -315,20 +324,19 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
       if (targetMessageId) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        // The Messages tab may not have mounted yet (e.g. right after the split
-        // opens). Wait for its handle via the orchestrator's availability
-        // primitive, then navigate.
-        await awaitCondition(
-          () => messagesHandle() !== undefined,
-          10_000
-        ).catch(() => {});
-        messagesHandle()?.goToMessage(targetMessageId, targetMessageReplyId);
+        const handle = await awaitMessagesHandle();
+        handle?.goToMessage(targetMessageId, targetMessageReplyId);
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
         setActiveTab(getCallJoinTab());
         setPendingJoinCall(true);
       }
+    },
+    goToLatest: async () => {
+      setActiveTab(DEFAULT_CHANNEL_TAB);
+      const handle = await awaitMessagesHandle();
+      handle?.goToLatest();
     },
   });
 

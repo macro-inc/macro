@@ -34,6 +34,7 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import type { SearchableOption } from './searchable-multi-select';
+import { useTagFilter } from './tag-filter';
 import {
   TASK_STATUS_FILTER_IDS,
   useTaskStatusFilter,
@@ -77,6 +78,7 @@ export function useFilterRefinements() {
   const contacts = useContacts();
   const currentUserId = useUserId();
   const taskStatus = useTaskStatusFilter();
+  const tagFilter = useTagFilter();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -543,8 +545,54 @@ export function useFilterRefinements() {
       );
     };
 
+    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    const pushTagsConsolidatedChip = () => {
+      if (view !== 'tasks' && view !== 'documents') return;
+      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+
+      const key = 'tags';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      if (tagFilter.activeIds().length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        tagFilter.activeIds().map((id) => {
+          const opt = tagFilter.optionsById().get(id);
+          return { id, label: opt?.label ?? id, icon: opt?.icon };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Tags',
+            values: getValues,
+            searchableOptions: tagFilter.options,
+            activeSearchableIds: tagFilter.activeIds,
+            onSearchableChange: tagFilter.onChange,
+            searchPlaceholder: 'Filter by tag...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => tagFilter.onChange([]),
+          };
+        })
+      );
+    };
+
     pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
+    pushTagsConsolidatedChip();
 
     // Evict stale chips
     for (const key of consolidatedChipCache.keys()) {

@@ -9,6 +9,15 @@ fn appends_to_body_after_message_when_no_quote() {
 }
 
 #[test]
+fn separates_signature_from_message_with_blank_line() {
+    let out = inject_signature("<body><p>Hi there</p></body>", "<p>Regards</p>");
+    assert!(
+        out.contains(r#"<div class="macro-email-signature"><div><br></div><p>Regards</p></div>"#),
+        "got: {out}"
+    );
+}
+
+#[test]
 fn inserts_above_quote_for_replies_and_forwards() {
     let body = r#"<body><p>My reply</p><div class="macro_quote"><p>Quoted</p></div></body>"#;
     let out = inject_signature(body, "<p>Regards</p>");

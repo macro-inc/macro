@@ -2,8 +2,7 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use,
-    Workflow,
+    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
 use crate::workflows::{
@@ -12,11 +11,12 @@ use crate::workflows::{
     vars,
 };
 
-const WEB_TYPESCRIPT_RUNNER: &str = "linux-extra-beefy";
-const WEB_DEFAULT_RUNNER: &str = "linux-latest-middy";
-const SCCACHE_BUCKET: &str = "${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}";
-const AWS_ACCESS_KEY_ID: &str = "${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}";
-const AWS_SECRET_ACCESS_KEY: &str = "${{ secrets.AWS_SECRET_ACCESS_KEY }}";
+/// All the real web jobs share one mid-size Namespace profile with a dedicated
+/// cache tag, so the frontend caches (Nix store, bun cache, gen-api sccache)
+/// live on their own volume — see [`vars::WEB_CI_CACHE_TAG`].
+fn web_runner() -> String {
+    runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
+}
 
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
@@ -61,10 +61,12 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'",
         ))
         .name("Typecheck")
-        .runs_on(WEB_TYPESCRIPT_RUNNER)
+        .runs_on(web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(setup_reqs_web("Setup Prereqs", false))
-        .add_step(rust_cache())
+        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
+        .add_step(steps::pin_sccache_dir())
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
         .add_step(check_types())
@@ -73,35 +75,45 @@ fn typescript() -> Job {
 fn biome_check() -> Job {
     gated_web_job("Biome Check")
         .add_step(checkout("Checkout Repo", true))
-        .add_step(setup_cachix_dev_shell())
+        .add_step(steps::mount_nix_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
 }
 
 fn tailwind() -> Job {
     gated_web_job("Theme Hygiene Inspector")
         .add_step(checkout("Checkout Repo", true))
-        .add_step(setup_reqs_web("Setup Prereqs", false))
+        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_tailwind_classes())
 }
 
 fn test() -> Job {
     gated_web_job("Test")
         .add_step(checkout("Checkout Repo", false))
-        .add_step(setup_reqs_web("Setup", true))
+        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
 }
 
 fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
         .add_step(checkout("Checkout", false))
-        .add_step(setup_cachix_dev_shell())
+        .add_step(steps::mount_nix_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
 }
 
 fn build() -> Job {
     gated_web_job("Build")
         .add_step(checkout("Checkout Repo", false))
-        .add_step(setup_reqs_web("Setup", false))
+        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(run_build())
 }
 
@@ -131,7 +143,7 @@ fn gated_web_job(name: &str) -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name(name)
-        .runs_on(WEB_DEFAULT_RUNNER)
+        .runs_on(web_runner())
 }
 
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
@@ -182,60 +194,21 @@ fn paths_filter() -> Step<Use> {
         ))
 }
 
-fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
-    steps::uses_local(name, "./.github/actions/setup-reqs-web")
-        .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
-        .add_with(("sccache-bucket", SCCACHE_BUCKET))
-        .when(playwright, |step| step.add_with(("playwright", "true")))
-}
-
-fn setup_cachix_dev_shell() -> Step<Use> {
-    steps::uses_local("Setup Nix dev shell", "./.github/actions/setup-cachix")
-        .add_with(("cachix-auth-token", vars::CACHIX_AUTH_TOKEN))
-        .add_with(("dev-shell", "true"))
-        .add_with(("sccache-bucket", SCCACHE_BUCKET))
-}
-
-fn rust_cache() -> Step<Use> {
-    Step::new("Cache Rust")
-        .uses(
-            "Swatinem",
-            "rust-cache",
-            "9d47c6ad4b02e050fd481d890b2ea34778fd09d6",
-        )
+fn generate_api_types() -> Step<Run> {
+    Step::new("Generate API Types")
+        .run("bun run gen-api -- --check")
         .if_condition(Expression::new(
             "needs.path-check.outputs.api_changed == 'true'",
         ))
-        .add_with(("workspaces", "rust/cloud-storage"))
-        .add_with(("shared-key", "cloud-storage-gen-api"))
-        .add_with(("cache-on-failure", "true"))
-        .add_with(("cache-targets", "true"))
-}
-
-fn generate_api_types() -> Step<Run> {
-    with_aws_env(
-        Step::new("Generate API Types")
-            .run("bun run gen-api -- --check")
-            .if_condition(Expression::new(
-                "needs.path-check.outputs.api_changed == 'true'",
-            ))
-            .working_directory("js/app"),
-    )
+        .working_directory("js/app")
 }
 
 fn show_sccache_stats() -> Step<Run> {
-    with_aws_env(
-        Step::new("show sccache stats")
-            .run("sccache --show-stats || true")
-            .if_condition(Expression::new(
-                "always() && needs.path-check.outputs.api_changed == 'true'",
-            )),
-    )
-}
-
-fn with_aws_env(step: Step<Run>) -> Step<Run> {
-    step.add_env(Env::new("AWS_ACCESS_KEY_ID", AWS_ACCESS_KEY_ID))
-        .add_env(Env::new("AWS_SECRET_ACCESS_KEY", AWS_SECRET_ACCESS_KEY))
+    Step::new("show sccache stats")
+        .run("sccache --show-stats || true")
+        .if_condition(Expression::new(
+            "always() && needs.path-check.outputs.api_changed == 'true'",
+        ))
 }
 
 fn check_types() -> Step<Run> {
