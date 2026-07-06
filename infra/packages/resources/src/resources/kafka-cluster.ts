@@ -49,7 +49,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
   public securityGroup: aws.ec2.SecurityGroup;
   public logGroup: aws.cloudwatch.LogGroup;
   public cluster: aws.msk.Cluster;
-  public topics: aws.msk.Topic[];
+  public topics: Map<string, aws.msk.Topic>;
 
   constructor(
     name: string,
@@ -205,18 +205,21 @@ export class KafkaCluster extends pulumi.ComponentResource {
       { protect, parent: this }
     );
 
-    this.topics = [];
+    this.topics = new Map();
     for (const topic of topics) {
-      new aws.msk.Topic(
-        `${topic.name}-topic`,
-        {
-          name: topic.name,
-          clusterArn: this.cluster.arn,
-          partitionCount: topic.partitionCount,
-          replicationFactor: topic.replicationFactor,
-          configs: topic.configs,
-        },
-        { parent: this, dependsOn: [this.cluster] }
+      this.topics.set(
+        topic.name,
+        new aws.msk.Topic(
+          `${topic.name}-topic`,
+          {
+            name: topic.name,
+            clusterArn: this.cluster.arn,
+            partitionCount: topic.partitionCount,
+            replicationFactor: topic.replicationFactor,
+            configs: topic.configs,
+          },
+          { parent: this, dependsOn: [this.cluster] }
+        )
       );
     }
   }
