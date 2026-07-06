@@ -1,3 +1,7 @@
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
+import { useTagFilter } from '@app/component/next-soup/soup-view/filters-bar/tag-filter';
+import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useApplyPreset } from '@app/component/next-soup/soup-view/soup-view-tabs';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import {
@@ -62,8 +66,27 @@ function buildStubProperty(col: TaskGridColumn): Property {
   return soupPropertyToProperty(stubSoup);
 }
 
+/**
+ * Clicking a row tag filters the tasks list to that tag: switch to the All tab
+ * then apply the tag filter alone. Only available inside a soup view (task rows
+ * also render in embeds like duplicate-task lists, where there is nothing to
+ * filter).
+ */
+function useTaskTagFilter(): ((optionId: string) => void) | undefined {
+  const soupView = useMaybeSoupView();
+  const soup = useMaybeSoup();
+  if (!soupView || !soup) return undefined;
+  const { applyTabPreset } = useApplyPreset();
+  const tagFilter = useTagFilter();
+  return (optionId: string) => {
+    applyTabPreset('tasks', 'all');
+    tagFilter.onChange([optionId]);
+  };
+}
+
 export function TaskGridLayout(props: LayoutProps) {
   const currentId = useUserId();
+  const filterByTag = useTaskTagFilter();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
   const isShared = () => props.entity.ownerId !== currentId();
 
@@ -190,6 +213,7 @@ export function TaskGridLayout(props: LayoutProps) {
           <EntityRowTags
             entityId={props.entity.id}
             entityType={EntityType.TASK}
+            onFilterByTag={filterByTag}
             class="ml-auto"
           />
         </Entity.Slot>
