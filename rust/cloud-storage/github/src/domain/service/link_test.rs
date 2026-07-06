@@ -93,7 +93,10 @@ impl StubGithubRepo {
     }
 
     fn delete_in_progress_user_link_calls(&self) -> u32 {
-        self.state.lock().unwrap().delete_in_progress_user_link_calls
+        self.state
+            .lock()
+            .unwrap()
+            .delete_in_progress_user_link_calls
     }
 }
 
@@ -144,7 +147,10 @@ impl GithubRepo for StubGithubRepo {
         &self,
         _in_progress_link_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
-        self.state.lock().unwrap().delete_in_progress_user_link_calls += 1;
+        self.state
+            .lock()
+            .unwrap()
+            .delete_in_progress_user_link_calls += 1;
         Ok(())
     }
 

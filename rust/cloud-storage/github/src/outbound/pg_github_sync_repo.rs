@@ -182,7 +182,10 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         let mut links: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
         for row in rows {
-            links.entry(row.github_user_id).or_default().push(row.macro_id);
+            links
+                .entry(row.github_user_id)
+                .or_default()
+                .push(row.macro_id);
         }
 
         Ok(links)

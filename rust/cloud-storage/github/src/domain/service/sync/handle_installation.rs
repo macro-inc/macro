@@ -43,7 +43,10 @@ impl<
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
-        let macro_ids = links.get(&sender_github_user_id).cloned().unwrap_or_default();
+        let macro_ids = links
+            .get(&sender_github_user_id)
+            .cloned()
+            .unwrap_or_default();
         if macro_ids.is_empty() {
             tracing::warn!(
                 installation_id,

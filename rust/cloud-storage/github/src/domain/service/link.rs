@@ -351,9 +351,9 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
                     .repo
                     .delete_in_progress_user_link(in_progess_link_id)
                     .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "unable to delete in progress link id")
-                    });
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to delete in progress link id"),
+                    );
                 return Ok(existing.clone());
             }
             // else: user previously linked a DIFFERENT github account; fall through and link
