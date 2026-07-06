@@ -91,6 +91,7 @@ export function InboxSelector() {
       size="sm"
       depth={2}
       aria-label={buttonProps.hideLabel ? 'Connect another email' : undefined}
+      tooltip={buttonProps.hideLabel ? 'Connect another email' : undefined}
       class={cn('bg-surface gap-1', buttonProps.hideLabel && 'px-1')}
       onClick={startAddInboxFlow}
     >
