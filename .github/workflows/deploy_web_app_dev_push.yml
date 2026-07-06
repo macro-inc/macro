@@ -1,0 +1,43 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/deploy_web_app_dev_push.rs
+name: Deploy web app dev on push to main
+on:
+  push:
+    branches:
+    - main
+jobs:
+  check-to-deploy:
+    runs-on: namespace-profile-linux-tiny-no-cache
+    outputs:
+      web-app: ${{ steps.changes.outputs.web-app }}
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - id: changes
+      name: Check changed paths
+      uses: whutchinson98/diff-checker-action@d25a22ee8f84f5e44abda3027c80c2e6d71f68a6
+      with:
+        token: ${{ github.token }}
+        diff: |
+          web-app: ./infra/stacks/web-app/** ./js/app/packages/** ./js/app/package.json ./js/package.json ./js/lexical-core/**
+  deploy_web_app:
+    needs:
+    - check-to-deploy
+    if: ${{ needs.check-to-deploy.outputs.web-app == 'true' }}
+    uses: ./.github/workflows/deploy_web_app.yml
+    with:
+      notify: false
+      environment: dev
+    secrets:
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+      DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
