@@ -5,8 +5,8 @@
 
 use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
-    Workflow,
+    Concurrency, Env, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy,
+    Use, Workflow,
 };
 
 use crate::workflows::runners;
@@ -142,8 +142,10 @@ fn detect_affected_services() -> Step<Run> {
               stack_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].stack_path // ""')
               additional_paths=$(echo "$config" | jq -r --arg s "$service" '.services[$s].additional_paths[]? // ""')
 
-              # Check if any changed files match service paths
-              for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+              # Check if any changed files match service paths. CHANGED_FILES is a
+              # space-separated list passed via env — never inlined into the script
+              # body, so a crafted filename can't inject shell syntax.
+              for file in $CHANGED_FILES; do
                 if [[ -n "$source_path" && "$file" == $source_path ]]; then
                   service_changed=true
                 elif [[ -n "$stack_path" && "$file" == $stack_path ]]; then
@@ -174,6 +176,10 @@ fn detect_affected_services() -> Step<Run> {
             fi
         "#})
         .id("detect")
+        .add_env(Env::new(
+            "CHANGED_FILES",
+            "${{ steps.changed-files.outputs.all_changed_files }}",
+        ))
 }
 
 fn summary() -> Step<Run> {

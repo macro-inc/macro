@@ -49,8 +49,10 @@ jobs:
           stack_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].stack_path // ""')
           additional_paths=$(echo "$config" | jq -r --arg s "$service" '.services[$s].additional_paths[]? // ""')
 
-          # Check if any changed files match service paths
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+          # Check if any changed files match service paths. CHANGED_FILES is a
+          # space-separated list passed via env — never inlined into the script
+          # body, so a crafted filename can't inject shell syntax.
+          for file in $CHANGED_FILES; do
             if [[ -n "$source_path" && "$file" == $source_path ]]; then
               service_changed=true
             elif [[ -n "$stack_path" && "$file" == $stack_path ]]; then
@@ -79,6 +81,8 @@ jobs:
           echo "services=${services_json}" >> $GITHUB_OUTPUT
           echo "Services to preview: ${services[@]}"
         fi
+      env:
+        CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
   preview-services:
     needs:
     - detect-changes
