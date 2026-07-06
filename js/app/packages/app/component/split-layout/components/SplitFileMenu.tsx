@@ -1,17 +1,22 @@
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { makeFavoriteAction } from '@app/component/next-soup/actions';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
+import { useQuickAccess } from '@core/context/quickAccess';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useIsDocumentOwner } from '@core/signal/permissions';
-import { buildEntityData } from '@entity';
+import { buildEntityData, type EntityData } from '@entity';
 import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CaretDown from '@phosphor/caret-down.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import Copy from '@phosphor/copy.svg';
 import Rename from '@phosphor/pencil-line.svg';
+import Star from '@phosphor/star.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { cn, Dropdown } from '@ui';
@@ -43,7 +48,8 @@ export type DefaultFileOperation = {
 export type CustomFileOperation = {
   label: string;
   icon: Component;
-  action: () => void;
+  action?: () => void;
+  children?: SplitFileMenuAction[];
 };
 
 const isDefaultFileOperation = (
@@ -84,16 +90,37 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       deleteOps: props.ops.filter((op) => op.group === 'delete'),
     });
 
-  const item = (action: SplitFileMenuAction) => (
-    <Dropdown.Item
-      onSelect={() => {
-        action.action();
-        props.onOpenChange(false);
-      }}
-    >
-      <SplitMenuItemContent icon={action.icon} label={action.label} />
-    </Dropdown.Item>
-  );
+  const item = (action: SplitFileMenuAction) => {
+    const children = () => action.children?.filter(Boolean) ?? [];
+
+    return (
+      <Show
+        when={children().length > 0}
+        fallback={
+          <Dropdown.Item
+            onSelect={() => {
+              action.action?.();
+              props.onOpenChange(false);
+            }}
+          >
+            <SplitMenuItemContent icon={action.icon} label={action.label} />
+          </Dropdown.Item>
+        }
+      >
+        <Dropdown.Sub>
+          <Dropdown.SubTrigger>
+            <SplitMenuItemContent icon={action.icon} label={action.label} />
+            <CaretRight class="size-3.5 shrink-0" />
+          </Dropdown.SubTrigger>
+          <Dropdown.SubContent>
+            <Dropdown.Group>
+              <For each={children()}>{item}</For>
+            </Dropdown.Group>
+          </Dropdown.SubContent>
+        </Dropdown.Sub>
+      </Show>
+    );
+  };
 
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
@@ -118,18 +145,58 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
 }
 
 function MobileRender(props: SplitFileMenuRenderProps) {
-  const item = (action: SplitFileMenuAction) => (
-    <button
-      type="button"
-      class="w-full bg-surface flex items-center gap-3 px-4 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px text-ink"
-      onClick={(e) => {
-        action.action(e);
-        props.onOpenChange(false);
-      }}
-    >
-      <SplitMenuItemContent icon={action.icon} label={action.label} />
-    </button>
-  );
+  const [expandedSubmenu, setExpandedSubmenu] =
+    createSignal<SplitFileMenuAction>();
+
+  const item = (action: SplitFileMenuAction, nested = false) => {
+    const children = () => action.children?.filter(Boolean) ?? [];
+    const expanded = () => expandedSubmenu() === action;
+
+    return (
+      <Show
+        when={children().length > 0}
+        fallback={
+          <button
+            type="button"
+            class={cn(
+              'w-full bg-surface flex items-center gap-3 py-3 text-sm hover:bg-hover hover-transition-bg text-left not-last:mb-px text-ink',
+              nested ? 'pl-9 pr-4' : 'px-4'
+            )}
+            onClick={(e) => {
+              action.action?.(e);
+              props.onOpenChange(false);
+            }}
+          >
+            <SplitMenuItemContent icon={action.icon} label={action.label} />
+          </button>
+        }
+      >
+        <div class="w-full bg-surface">
+          <button
+            type="button"
+            class={cn(
+              'w-full flex items-center gap-3 py-3 text-sm hover:bg-hover hover-transition-bg text-left text-ink',
+              nested ? 'pl-9 pr-4' : 'px-4'
+            )}
+            onClick={() => {
+              setExpandedSubmenu(expanded() ? undefined : action);
+            }}
+          >
+            <SplitMenuItemContent icon={action.icon} label={action.label} />
+            <Dynamic
+              component={expanded() ? CaretDown : CaretRight}
+              class="size-3.5 shrink-0"
+            />
+          </button>
+          <Show when={expanded()}>
+            <div class="border-t border-edge-muted/60">
+              <For each={children()}>{(child) => item(child, true)}</For>
+            </div>
+          </Show>
+        </div>
+      </Show>
+    );
+  };
 
   return (
     <MobileDrawer
@@ -145,7 +212,7 @@ function MobileRender(props: SplitFileMenuRenderProps) {
           <MobileDrawer.Handle />
           <Show when={props.tools.length > 0}>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.tools}>{item}</For>
+              <For each={props.tools}>{(action) => item(action)}</For>
             </MobileDrawer.Section>
           </Show>
           <Show when={props.ops.length > 0}>
@@ -153,7 +220,7 @@ function MobileRender(props: SplitFileMenuRenderProps) {
               <div class="mt-3" />
             </Show>
             <MobileDrawer.Section class="flex flex-col shrink-0">
-              <For each={props.ops}>{item}</For>
+              <For each={props.ops}>{(action) => item(action)}</For>
             </MobileDrawer.Section>
           </Show>
         </MobileDrawer.Content>
@@ -183,8 +250,35 @@ export function SplitFileMenu(props: {
 
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
+  const quickAccess = useQuickAccess();
+  const favoriteAction = makeFavoriteAction();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
+
+  // The entity this menu operates on: prefer the quick-access cache (richer
+  // data, covers channels/calls), fall back to building it from the block's
+  // id/name/blockName like the rename/move ops do.
+  const menuEntity = createMemo<EntityData | undefined>(() => {
+    const item = quickAccess.getById(props.id);
+    if (item?.kind === 'entity') return item.data;
+    return buildEntityData({
+      id: props.id,
+      name: props.name,
+      blockName: aliasedBlockName,
+    });
+  });
+
+  const favoriteOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !favoriteAction.canExecute(entity)) return undefined;
+    return {
+      label: favoriteAction.isFavorited(entity) ? 'Unfavorite' : 'Favorite',
+      icon: Star,
+      action: () => {
+        void favoriteAction.execute([entity]);
+      },
+    };
+  };
 
   createEffect(() => {
     const openMenu = () => setOpen(true);
@@ -193,7 +287,8 @@ export function SplitFileMenu(props: {
   });
 
   const ops = createMemo<SplitFileMenuAction[]>(() => {
-    return props.ops
+    const favorite = favoriteOp();
+    const mapped = props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
           switch (op.op) {
@@ -292,6 +387,7 @@ export function SplitFileMenu(props: {
         }
       })
       .filter((op) => !!op);
+    return favorite ? [favorite, ...mapped] : mapped;
   });
 
   const filteredTools = createMemo(() =>
@@ -302,6 +398,7 @@ export function SplitFileMenu(props: {
     filteredTools().map((tool) => ({
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
       icon: tool.icon,
+      children: tool.children,
       action: (e?: MouseEvent) => {
         tool.action();
         if (tool.focusTarget) {

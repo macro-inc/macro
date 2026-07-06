@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { SidebarActiveCallWidget } from '@app/component/app-sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import { FavoritesSection } from '@app/component/app-sidebar/favorites-section';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -854,6 +855,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class="px-2">
         <hr class="border-transparent my-2" />
       </div>
+
+      <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />

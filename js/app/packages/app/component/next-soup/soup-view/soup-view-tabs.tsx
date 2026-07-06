@@ -120,7 +120,6 @@ export const useApplyPreset = () => {
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
-    email: user.email(),
     isTeamAdmin: isTeamAdmin(),
   });
 

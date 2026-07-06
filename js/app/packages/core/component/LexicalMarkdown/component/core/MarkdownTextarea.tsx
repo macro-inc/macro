@@ -59,6 +59,7 @@ import {
 } from '../../utils';
 import type { UserMentionRecord } from '../../utils/mentionsUtils';
 import { EmojiMenu } from '../menu/EmojiMenu';
+import { FloatingFormatMenu } from '../menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { SnippetsMenu } from '../menu/SnippetsMenu';
@@ -109,6 +110,11 @@ interface MarkdownTextareaProps {
     directories: FileSystemDirectoryEntry[]
   ) => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
+  /**
+   * Show a floating format toolbar (headings, lists, inline styles, links)
+   * over the current text selection, like the markdown block's popup.
+   */
+  floatingFormatMenu?: boolean;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -382,6 +388,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         />
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode={props.autoLinkMatchMode} />
+          <Show when={props.floatingFormatMenu}>
+            <FloatingFormatMenu portalScope={props.portalScope} />
+          </Show>
         </FloatingMenuGroup>
       </div>
     </LexicalWrapperContext.Provider>

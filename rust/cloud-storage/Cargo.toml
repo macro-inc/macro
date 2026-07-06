@@ -32,6 +32,7 @@ members = [
   "email_sfs_delete_handler",
   "email_suppression_handler",
   "embedding",
+  "favorites",
   "foreign_entity",
   "graphql_soup",
   "image_optimizer",

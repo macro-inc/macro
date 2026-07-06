@@ -6219,6 +6219,231 @@ export const getEntityPermissionResponse = zod
   .describe('API response envelope for entity permissions.');
 
 /**
+ * @summary List the caller's favorites.
+ */
+export const listFavoritesResponse = zod
+  .object({
+    favorites: zod
+      .array(
+        zod
+          .object({
+            channelId: zod
+              .string()
+              .nullish()
+              .describe(
+                'Owning channel id of the favorited channel message, when applicable.'
+              ),
+            channelType: zod
+              .string()
+              .nullish()
+              .describe(
+                'Channel type (e.g. `public`, `direct_message`) of the favorited channel, when applicable.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the favorite was created.'),
+            documentSubType: zod
+              .string()
+              .nullish()
+              .describe(
+                'Document sub type (e.g. `task`) of the favorited document, when applicable.'
+              ),
+            entityId: zod.string().describe('The id of the favorited entity.'),
+            entityType: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'channel_message',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+                'call',
+                'foreign_entity',
+                'static_file',
+                'crm_company',
+                'crm_contact',
+              ])
+              .describe('The type of an entity in Macro')
+              .describe('The type of the favorited entity.'),
+            fileType: zod
+              .string()
+              .nullish()
+              .describe(
+                'File type of the favorited document, when applicable.'
+              ),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                'Display name of the favorited entity, when it could be resolved.'
+              ),
+            sortOrder: zod
+              .number()
+              .describe('Manual ordering value; lower sorts first.'),
+          })
+          .describe(
+            "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
+          )
+      )
+      .describe("The requesting user's favorites, in manual order."),
+  })
+  .describe("The user's favorites, in manual order.");
+
+/**
+ * @summary Favorite an entity in the caller's collection.
+ */
+export const addFavoriteBody = zod
+  .object({
+    entityId: zod.string().describe('The id of the entity to favorite.'),
+    entityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('The type of the entity to favorite.'),
+  })
+  .describe('Request body for favoriting an entity.');
+
+export const addFavoriteResponse = zod
+  .object({
+    channelId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Owning channel id of the favorited channel message, when applicable.'
+      ),
+    channelType: zod
+      .string()
+      .nullish()
+      .describe(
+        'Channel type (e.g. `public`, `direct_message`) of the favorited channel, when applicable.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the favorite was created.'),
+    documentSubType: zod
+      .string()
+      .nullish()
+      .describe(
+        'Document sub type (e.g. `task`) of the favorited document, when applicable.'
+      ),
+    entityId: zod.string().describe('The id of the favorited entity.'),
+    entityType: zod
+      .enum([
+        'user',
+        'chat',
+        'channel',
+        'channel_message',
+        'document',
+        'project',
+        'email_thread',
+        'team',
+        'call',
+        'foreign_entity',
+        'static_file',
+        'crm_company',
+        'crm_contact',
+      ])
+      .describe('The type of an entity in Macro')
+      .describe('The type of the favorited entity.'),
+    fileType: zod
+      .string()
+      .nullish()
+      .describe('File type of the favorited document, when applicable.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of the favorited entity, when it could be resolved.'
+      ),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value; lower sorts first.'),
+  })
+  .describe(
+    "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
+  );
+
+/**
+ * @summary Persist a manual order for the caller's favorites.
+ */
+export const reorderFavoritesBody = zod
+  .object({
+    favorites: zod
+      .array(
+        zod
+          .object({
+            entityId: zod.string().describe('The id of the favorited entity.'),
+            entityType: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'channel_message',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+                'call',
+                'foreign_entity',
+                'static_file',
+                'crm_company',
+                'crm_contact',
+              ])
+              .describe('The type of an entity in Macro')
+              .describe('The type of the favorited entity.'),
+          })
+          .describe('A reference to a favorited entity.')
+      )
+      .describe("The user's favorited entities in the desired order."),
+  })
+  .describe('Request body for reordering favorites.');
+
+export const reorderFavoritesResponseDefault = null;
+
+export const reorderFavoritesResponse = zod.unknown();
+
+/**
+ * @summary Remove a favorite by entity.
+ */
+export const removeFavoriteByEntityParams = zod.object({
+  entity_type: zod
+    .enum([
+      'user',
+      'chat',
+      'channel',
+      'channel_message',
+      'document',
+      'project',
+      'email_thread',
+      'team',
+      'call',
+      'foreign_entity',
+      'static_file',
+      'crm_company',
+      'crm_contact',
+    ])
+    .describe('The type of the favorited entity.'),
+  entity_id: zod.string().describe('The id of the favorited entity.'),
+});
+
+export const removeFavoriteByEntityResponseDefault = null;
+
+export const removeFavoriteByEntityResponse = zod.unknown();
+
+/**
  * @summary Get a visible foreign entity by its internal ID.
  */
 export const getForeignEntityParams = zod.object({
@@ -8217,6 +8442,11 @@ export const getItemsSoupResponse = zod
         .and(
           zod.object({
             frecency_score: zod.number(),
+            is_favorited: zod
+              .boolean()
+              .describe(
+                'Whether the requesting user has favorited this entity.'
+              ),
           })
         )
         .describe('API representation of a soup item with its frecency score.')
@@ -10558,6 +10788,11 @@ export const postItemsSoupResponse = zod
         .and(
           zod.object({
             frecency_score: zod.number(),
+            is_favorited: zod
+              .boolean()
+              .describe(
+                'Whether the requesting user has favorited this entity.'
+              ),
           })
         )
         .describe('API representation of a soup item with its frecency score.')
@@ -12431,6 +12666,11 @@ export const postItemsSoupAstResponse = zod
         .and(
           zod.object({
             frecency_score: zod.number(),
+            is_favorited: zod
+              .boolean()
+              .describe(
+                'Whether the requesting user has favorited this entity.'
+              ),
           })
         )
         .describe('API representation of a soup item with its frecency score.')
@@ -14634,6 +14874,11 @@ export const postItemsSoupAstGroupedResponse = zod
               .and(
                 zod.object({
                   frecency_score: zod.number(),
+                  is_favorited: zod
+                    .boolean()
+                    .describe(
+                      'Whether the requesting user has favorited this entity.'
+                    ),
                 })
               )
               .describe(
@@ -16509,6 +16754,11 @@ export const postItemsSoupAstGroupedResponse = zod
               .and(
                 zod.object({
                   frecency_score: zod.number(),
+                  is_favorited: zod
+                    .boolean()
+                    .describe(
+                      'Whether the requesting user has favorited this entity.'
+                    ),
                 })
               )
               .describe(

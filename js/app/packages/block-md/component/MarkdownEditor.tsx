@@ -414,10 +414,13 @@ export function MarkdownEditor(props: {
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
+    // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragEnd(event);
   });
 
   onDragMove((event: EntityDragEvent) => {
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragMove(event);
   });
 

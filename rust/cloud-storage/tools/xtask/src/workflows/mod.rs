@@ -17,9 +17,12 @@ mod build_dmg_on_tag;
 mod cancel_stuck_cloud_storage_deploys;
 mod check_generated;
 mod check_node_modules_nix;
+mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_infra;
 mod deploy_preview;
+mod deploy_web_app;
+mod deploy_web_app_dev_push;
 mod pulumi_preview_pr;
 mod reusable_preview_service;
 mod runners;
@@ -122,6 +125,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
+        slug: "cleanup_preview",
+        file_name: "cleanup_preview.yml",
+        render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
+    },
+    WorkflowFile {
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
@@ -130,6 +138,21 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_preview",
         file_name: "deploy_preview.yml",
         render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
+    },
+    WorkflowFile {
+        slug: "deploy_web_app",
+        file_name: "deploy_web_app.yml",
+        render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "deploy_web_app_dev_push",
+        file_name: "deploy_web_app_dev_push.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_web_app_dev_push::deploy_web_app_dev_push,
+                deploy_web_app_dev_push::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

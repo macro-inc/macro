@@ -189,6 +189,9 @@ function normalizeChannelType(channelType: string) {
 
 function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
   const frecency = item.frecencyScore;
+  // `is_favorited: false` below: the GraphQL soup surface has no favorites
+  // data; the REST `SoupApiItem` shape requires the flag, and nothing
+  // consumes it on this path yet.
 
   return match(item.entity)
     .with(
@@ -197,6 +200,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'document',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             name: entity.documentName,
@@ -219,6 +223,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'chat',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             name: entity.chatName,
@@ -239,6 +244,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'project',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             name: entity.projectName,
@@ -258,6 +264,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'emailThread',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             providerId: entity.providerId ?? undefined,
@@ -314,6 +321,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'channel',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             channel: {
               id: entity.id,
@@ -347,6 +355,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'channelThread',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             attachments: [],
@@ -374,6 +383,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'call',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             callId: entity.id,
             channelId: entity.channelId,
@@ -401,6 +411,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'crmCompany',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             teamId: entity.crmTeamId,
@@ -426,6 +437,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
         ({
           tag: 'foreignEntity',
           frecency_score: frecency,
+          is_favorited: false,
           data: {
             id: entity.id,
             foreignEntityId: entity.foreignEntityId,

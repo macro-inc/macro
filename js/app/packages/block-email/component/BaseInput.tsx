@@ -1712,6 +1712,7 @@ export function BaseInput(props: {
           </div>
           <MarkdownTextarea
             autoLinkMatchMode="common-tlds"
+            floatingFormatMenu
             captureEditor={(editor) => {
               setEditor(editor);
               form().setCapturedEditor(editor);

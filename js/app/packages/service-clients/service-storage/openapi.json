@@ -6690,6 +6690,256 @@
         }
       }
     },
+    "/favorites": {
+      "get": {
+        "tags": ["favorites"],
+        "summary": "List the caller's favorites.",
+        "operationId": "list_favorites",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoritesList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["favorites"],
+        "summary": "Favorite an entity in the caller's collection.",
+        "operationId": "add_favorite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFavoriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Favorite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favorites/reorder": {
+      "patch": {
+        "tags": ["favorites"],
+        "summary": "Persist a manual order for the caller's favorites.",
+        "operationId": "reorder_favorites",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderFavoritesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favorites/{entity_type}/{entity_id}": {
+      "delete": {
+        "tags": ["favorites"],
+        "summary": "Remove a favorite by entity.",
+        "operationId": "remove_favorite_by_entity",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "The type of the favorited entity.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The type of an entity in Macro",
+              "enum": [
+                "user",
+                "chat",
+                "channel",
+                "channel_message",
+                "document",
+                "project",
+                "email_thread",
+                "team",
+                "call",
+                "foreign_entity",
+                "static_file",
+                "crm_company",
+                "crm_contact"
+              ]
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "The id of the favorited entity.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/foreign_entity/{id}": {
       "get": {
         "tags": ["foreign_entity"],
@@ -9287,6 +9537,41 @@
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
+      },
+      "AddFavoriteRequest": {
+        "type": "object",
+        "description": "Request body for favoriting an entity.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The id of the entity to favorite."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the entity to favorite."
+          }
+        }
       },
       "AddParticipantsRequest": {
         "type": "object",
@@ -14046,6 +14331,120 @@
           }
         }
       },
+      "Favorite": {
+        "type": "object",
+        "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
+        "required": ["entityType", "entityId", "sortOrder", "createdAt"],
+        "properties": {
+          "channelId": {
+            "type": ["string", "null"],
+            "description": "Owning channel id of the favorited channel message, when applicable."
+          },
+          "channelType": {
+            "type": ["string", "null"],
+            "description": "Channel type (e.g. `public`, `direct_message`) of the favorited channel, when applicable."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the favorite was created."
+          },
+          "documentSubType": {
+            "type": ["string", "null"],
+            "description": "Document sub type (e.g. `task`) of the favorited document, when applicable."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The id of the favorited entity."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the favorited entity."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "File type of the favorited document, when applicable."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name of the favorited entity, when it could be resolved."
+          },
+          "sortOrder": {
+            "type": "number",
+            "format": "double",
+            "description": "Manual ordering value; lower sorts first."
+          }
+        }
+      },
+      "FavoriteEntityRef": {
+        "type": "object",
+        "description": "A reference to a favorited entity.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The id of the favorited entity."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact"
+                ]
+              }
+            ],
+            "description": "The type of the favorited entity."
+          }
+        }
+      },
+      "FavoritesList": {
+        "type": "object",
+        "description": "The user's favorites, in manual order.",
+        "required": ["favorites"],
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Favorite"
+            },
+            "description": "The requesting user's favorites, in manual order."
+          }
+        }
+      },
       "FileSystemNodeWithIds": {
         "oneOf": [
           {
@@ -17223,6 +17622,20 @@
           }
         }
       },
+      "ReorderFavoritesRequest": {
+        "type": "object",
+        "description": "Request body for reordering favorites.",
+        "required": ["favorites"],
+        "properties": {
+          "favorites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FavoriteEntityRef"
+            },
+            "description": "The user's favorited entities in the desired order."
+          }
+        }
+      },
       "ReorderPinRequest": {
         "type": "object",
         "required": ["pinnedItemId", "pinnedItemType", "pinIndex"],
@@ -17607,11 +18020,15 @@
           },
           {
             "type": "object",
-            "required": ["frecency_score"],
+            "required": ["frecency_score", "is_favorited"],
             "properties": {
               "frecency_score": {
                 "type": "number",
                 "format": "double"
+              },
+              "is_favorited": {
+                "type": "boolean",
+                "description": "Whether the requesting user has favorited this entity."
               }
             }
           }

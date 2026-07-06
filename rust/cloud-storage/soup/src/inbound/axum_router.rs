@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::{either::Either, extract::Cached};
+use cowlike::CowLike;
 use email::{
     domain::{
         models::{EmailErr, PreviewView},
@@ -44,6 +45,7 @@ use item_filters::{
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_grouping::{GroupByField, GroupingConfig};
@@ -56,7 +58,8 @@ use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
@@ -353,11 +356,38 @@ struct ApiGroupedSoupParts {
     groups: Vec<ApiGroupMeta>,
 }
 
+/// Reader used to flag soup items that the requesting user (or their team)
+/// has favorited. Object-safe so the router state can hold it without an
+/// extra generic; the concrete impl is provided by the mounting service.
+pub trait SoupFavoritesReader: Send + Sync + 'static {
+    /// Of the given entities, return the subset favorited by the user or
+    /// the user's team.
+    fn favorited_entities<'a>(
+        &'a self,
+        user_id: &'a str,
+        entities: Vec<Entity<'static>>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<HashSet<Entity<'static>>>> + Send + 'a>>;
+}
+
+/// Default [SoupFavoritesReader] that marks nothing as favorited.
+pub struct NoFavoritesReader;
+
+impl SoupFavoritesReader for NoFavoritesReader {
+    fn favorited_entities<'a>(
+        &'a self,
+        _user_id: &'a str,
+        _entities: Vec<Entity<'static>>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<HashSet<Entity<'static>>>> + Send + 'a>> {
+        Box::pin(async { Ok(HashSet::new()) })
+    }
+}
+
 /// Shared state for soup API routes.
 pub struct SoupRouterState<T, U, EAS> {
     service: Arc<T>,
     email: EmailRouterState<U>,
     entity_access_service: Arc<EAS>,
+    favorites: Arc<dyn SoupFavoritesReader>,
 }
 
 impl<T, U, EAS> Clone for SoupRouterState<T, U, EAS> {
@@ -366,6 +396,7 @@ impl<T, U, EAS> Clone for SoupRouterState<T, U, EAS> {
             service: self.service.clone(),
             email: self.email.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            favorites: self.favorites.clone(),
         }
     }
 }
@@ -399,7 +430,15 @@ where
             service,
             email: EmailRouterState::new(email),
             entity_access_service,
+            favorites: Arc::new(NoFavoritesReader),
         }
+    }
+
+    /// Attach a [SoupFavoritesReader] used to populate `is_favorited` on
+    /// returned soup items.
+    pub fn with_favorites_reader(mut self, favorites: Arc<dyn SoupFavoritesReader>) -> Self {
+        self.favorites = favorites;
+        self
     }
 
     /// Returns an `Arc` to the inner soup service.
@@ -428,6 +467,7 @@ where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send + RequestsCrmScope + RequestsCrmAdmin,
     {
+        let user_for_favorites = macro_user_id.copied().into_owned();
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
                 .sort_method
@@ -477,9 +517,10 @@ where
             )
             .await?;
 
-        Ok(Json(
-            res.type_erase().map(SoupApiItem::from_frecency_soup_item),
-        ))
+        let mut page = res.type_erase().map(SoupApiItem::from_frecency_soup_item);
+        mark_favorited(&*self.favorites, &user_for_favorites, page.items.iter_mut()).await;
+
+        Ok(Json(page))
     }
 
     async fn handle_grouped(
@@ -489,6 +530,7 @@ where
         params: GroupedParams,
         cursor: Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, EntityFilterAst>>,
     ) -> Result<ApiGroupedSoupParts, SoupHandlerErr> {
+        let user_for_favorites = macro_user_id.copied().into_owned();
         let limit = params.limit.unwrap_or(20).clamp(20, 500);
         let sort_method = params
             .sort_method
@@ -525,12 +567,15 @@ where
             filters,
         );
 
+        let mut items: HashMap<Uuid, SoupApiItem> = response
+            .items
+            .into_iter()
+            .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
+            .collect();
+        mark_favorited(&*self.favorites, &user_for_favorites, items.values_mut()).await;
+
         Ok(ApiGroupedSoupParts {
-            items: response
-                .items
-                .into_iter()
-                .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
-                .collect(),
+            items,
             groups: response
                 .groups
                 .into_iter()
@@ -625,6 +670,8 @@ pub struct SoupApiItem {
     #[serde(flatten)]
     item: SoupItem,
     frecency_score: f64,
+    /// Whether the requesting user has favorited this entity.
+    is_favorited: bool,
 }
 
 impl SoupApiItem {
@@ -638,6 +685,35 @@ impl SoupApiItem {
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
+            is_favorited: false,
+        }
+    }
+}
+
+/// Populate `is_favorited` on the given items from one batched favorites
+/// lookup. A lookup failure leaves every flag `false` rather than failing
+/// the soup query.
+async fn mark_favorited<'a>(
+    favorites: &dyn SoupFavoritesReader,
+    user_id: &MacroUserIdStr<'_>,
+    items: impl Iterator<Item = &'a mut SoupApiItem>,
+) {
+    let items: Vec<&mut SoupApiItem> = items.collect();
+    if items.is_empty() {
+        return;
+    }
+    let entities = items.iter().map(|i| i.item.entity()).collect();
+    match favorites
+        .favorited_entities(user_id.as_ref(), entities)
+        .await
+    {
+        Ok(favorited) => {
+            for item in items {
+                item.is_favorited = favorited.contains(&item.item.entity());
+            }
+        }
+        Err(error) => {
+            tracing::error!(error=?error, "failed to resolve favorited soup items");
         }
     }
 }

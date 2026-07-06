@@ -159,7 +159,6 @@ registerComponent(
     const user = useUserContext();
     const preset = getViewPreset('agents', undefined, {
       userId: user.userId(),
-      email: user.email(),
       isTeamAdmin: false,
     });
     const automationEntities = useAutomationEntities();
@@ -198,7 +197,6 @@ registerComponent(
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
-      email: user.email(),
       isTeamAdmin: false,
     });
     const initialFilters =
@@ -227,7 +225,6 @@ registerComponent(
     const user = useUserContext();
     const preset = getViewPreset('tasks', undefined, {
       userId: user.userId(),
-      email: user.email(),
       isTeamAdmin: false,
     });
     return (
@@ -301,7 +298,6 @@ registerComponent(
     const user = useUserContext();
     const preset = getViewPreset('folders', undefined, {
       userId: user.userId(),
-      email: user.email(),
       isTeamAdmin: false,
     });
     return (

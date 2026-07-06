@@ -510,6 +510,54 @@ fn test_build_query_projects_real_updated_at_for_candidate_threads() {
 }
 
 #[test]
+fn test_build_query_multi_link_fans_out_per_link() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    // Each link gets its own ordered, LIMITed candidate scan...
+    assert!(
+        sql.contains("FROM unnest(") && sql.contains("CROSS JOIN LATERAL"),
+        "multi-link candidates must fan out per link: {sql}"
+    );
+    assert!(
+        sql.contains("t.link_id = links.link_id"),
+        "per-link branch must scope to a single link: {sql}"
+    );
+    assert!(
+        !sql.contains("t.link_id = ANY("),
+        "multi-link owned scan must not use = ANY: {sql}"
+    );
+    // ...with a per-branch LIMIT feeding the outer sort.
+    assert_eq!(
+        sql.matches("ORDER BY effective_ts DESC, id DESC").count(),
+        2,
+        "expected per-link and outer candidate ordering: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_single_link_keeps_any_scan() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.link_id = ANY("));
+    assert!(!sql.contains("FROM unnest("));
+}
+
+#[test]
+fn test_build_query_team_scoped_multi_link_does_not_fan_out() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_team_scoped_multi_link(&view, &expr);
+
+    // Team-scoped candidates dedupe across links before the cursor; a
+    // per-link LIMIT could starve the dedupe of duplicate copies.
+    assert!(!sql.contains("FROM unnest("));
+}
+
+#[test]
 fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let expr = Expr::Literal(EmailLiteral::Shared(

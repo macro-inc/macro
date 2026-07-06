@@ -28,7 +28,6 @@ type SoupFiltersPreset = {
 // Tab preset configuration types
 export type PresetContext = {
   userId: string | undefined;
-  email: string | undefined;
   /** True iff the current user has admin/owner team role. Drives
    * visibility of admin-only tabs (e.g. companies → hidden). */
   isTeamAdmin: boolean;
@@ -238,16 +237,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['email-drafts'] },
       }),
-      sent: (ctx) => {
-        if (!ctx.email) return undefined;
-        return {
-          filters: defineQueryFilters({
-            include: { emailSender: [ctx.email] },
-            emailView: 'sent',
-          }),
-          clientFilters: { and: ['email', 'no-drafts'] },
-        };
-      },
+      // No sender filter: the 'sent' view already scopes to messages with
+      // is_sent = TRUE per linked inbox, which covers multi-inbox correctly
+      // (a single sender address would drop secondary inboxes' sent mail).
+      sent: () => ({
+        filters: defineQueryFilters({
+          emailView: 'sent',
+        }),
+        clientFilters: { and: ['email', 'no-drafts'] },
+      }),
       shared: () => ({
         filters: defineQueryFilters({
           include: { emailShared: 'only' },
@@ -527,7 +525,6 @@ export function getViewPreset(
 
   const presetCtx: PresetContext = ctx ?? {
     userId: undefined,
-    email: undefined,
     isTeamAdmin: false,
   };
   const resolved = resolver(presetCtx);
