@@ -37,6 +37,17 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
   );
 }
 
+// Bring a newly expanded row fully into view once it mounts so the bottom
+// row's action buttons are never clipped below the scroll viewport. Deferred a
+// frame so it runs after the expanded layout settles.
+function scrollExpandedRowIntoView(el: HTMLElement) {
+  requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }));
+}
+
+function focusWithoutScroll(el: HTMLInputElement) {
+  requestAnimationFrame(() => el.focus({ preventScroll: true }));
+}
+
 const SCOPE_LABEL: Record<TagScope, string> = {
   user: 'My labels',
   team: 'Team labels',
@@ -152,7 +163,7 @@ export function TagPicker(props: {
               />
             </div>
 
-            <div class="max-h-72 overflow-y-auto p-1.5">
+            <div class="max-h-72 scroll-pb-1.5 overflow-y-auto p-1.5">
               <For each={['user', 'team'] as const}>
                 {(scope) => (
                   <Show when={scope === 'user' || hasTeamSet()}>
@@ -258,13 +269,16 @@ function TagPickerRow(props: {
   return (
     <Switch>
       <Match when={props.editing}>
-        <div class="flex flex-col gap-2 rounded-lg bg-hover p-2">
+        <div
+          class="flex flex-col gap-2 rounded-lg bg-hover p-2"
+          ref={scrollExpandedRowIntoView}
+        >
           <div class="flex items-center gap-2">
             <TagDot color={draftColor()} />
             <input
               class="w-full bg-transparent caret-accent outline-none"
               value={draftLabel()}
-              autofocus
+              ref={focusWithoutScroll}
               onInput={(event) => setDraftLabel(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -353,7 +367,10 @@ function CreateRow(props: {
   onCancel: () => void;
 }) {
   return (
-    <div class="mt-1 flex flex-col gap-2 rounded-lg border border-edge-muted p-2">
+    <div
+      class="mt-1 flex flex-col gap-2 rounded-lg border border-edge-muted p-2"
+      ref={scrollExpandedRowIntoView}
+    >
       <div class="flex items-center gap-2">
         <TagDot color={props.color} />
         <span class="min-w-0 flex-1 truncate">New label "{props.label}"</span>

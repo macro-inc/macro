@@ -30,6 +30,9 @@ env_vars! {
     /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
     /// infra stack, the same way `document_cognition_service` consumes it.
     pub struct OpenaiApiKey;
+    /// Cohere API key used by the task-dedup reranker. Required — injected
+    /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
+    pub struct CohereApiKey;
     pub struct DocumentLimit;
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
@@ -93,6 +96,7 @@ pub struct Config {
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
     pub openai_api_key: OpenaiApiKey,
+    pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
     pub cal_webhook_secret_key: CalWebhookSecretKey,

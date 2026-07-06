@@ -262,7 +262,7 @@ export function CallOverlay(props: { onLeave: () => void }) {
   };
 
   return (
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full mobile:pb-(--mobile-content-inset-bottom)">
       {/* Screen share area */}
       <Show when={hasAnyScreenShare()}>
         <div class="flex-1 min-h-0 pt-2">

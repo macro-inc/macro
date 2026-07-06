@@ -114,10 +114,12 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "connection_gateway_client",
  "futures",
  "http-body-util",
  "macro_db_migrator",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_user",
  "models_ai_projection",
@@ -991,6 +993,17 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
+
+[[package]]
+name = "automod"
+version = "1.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a273e731a7fb8c2268fd2932c9e9a3469f4fd171d85d070d2687190229653bd3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "av-scenechange"
@@ -2009,6 +2022,8 @@ dependencies = [
 name = "bot_id"
 version = "0.1.0"
 dependencies = [
+ "cowlike",
+ "nom 8.0.0",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
@@ -2384,6 +2399,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_sender"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "either",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -2393,6 +2421,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "channel_sender",
  "chrono",
  "connection_gateway_client",
  "contacts",
@@ -2591,9 +2620,9 @@ dependencies = [
 
 [[package]]
 name = "cmov"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f88a43d011fc4a6876cb7344703e297c71dda42494fee094d5f7c76bf13f746"
+checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
 name = "color_quant"
@@ -3005,6 +3034,9 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
+ "either",
+ "macro_user_id",
  "workspace-hack",
 ]
 
@@ -3815,6 +3847,7 @@ dependencies = [
  "chat",
  "chrono",
  "connection_gateway",
+ "connection_gateway_client",
  "cookie",
  "crm",
  "document_storage_service_client",
@@ -4855,7 +4888,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7978,7 +8011,10 @@ dependencies = [
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
+ "channel_sender",
  "cool_asserts",
+ "either",
+ "macro_user_id",
  "nom 8.0.0",
  "serde",
  "serde_json",
@@ -8827,7 +8863,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11124,7 +11160,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11195,7 +11231,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12948,6 +12984,7 @@ dependencies = [
  "ai_usage",
  "anyhow",
  "async-trait",
+ "automod",
  "aws-sdk-secretsmanager",
  "clap",
  "connection_gateway_client",
@@ -12962,10 +12999,12 @@ dependencies = [
  "macro_middleware",
  "macro_service_urls",
  "model-entity",
+ "reqwest 0.13.4",
  "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -13021,7 +13060,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -14447,7 +14486,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

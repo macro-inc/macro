@@ -28,6 +28,7 @@ function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
   onMount(() => {
     analytics.pageView(pageTitle);
+    analytics.track('open_view', { viewId: pageTitle });
   });
 }
 
@@ -456,6 +457,11 @@ if (DEV_MODE_ENV) {
         () => import('@app/component/next-soup/debug/DocumentWherePlayground')
       )
     )
+  );
+
+  registerComponent(
+    'projection-playground',
+    withAuth(lazy(() => import('@app/component/debug/ProjectionPlayground')))
   );
 
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan

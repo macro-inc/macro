@@ -117,6 +117,13 @@ impl StorageEnv {
         for table in resources::TABLES {
             env.insert(table.env_key.into(), table.name.into());
         }
+        // search_processing_service self-creates this DynamoDB table on startup
+        // in Local (BackfillJobs::ensure_table), so it is not in the provisioned
+        // catalog above — it only needs the name wired here.
+        env.insert(
+            "BACKFILL_JOBS_TABLE".into(),
+            "search-processing-backfill-jobs".into(),
+        );
     }
 }
 

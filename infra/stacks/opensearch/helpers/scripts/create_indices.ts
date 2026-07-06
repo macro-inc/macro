@@ -1,13 +1,18 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
+  CALL_RECORDS_ALIAS,
+  CALL_RECORDS_INDEX,
   CHANNELS_ALIAS,
   CHANNELS_INDEX,
+  CHATS_ALIAS,
+  CHATS_INDEX,
   DOCUMENTS_ALIAS,
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
   EMAILS_INDEX,
   SHARD_SETTINGS,
+  SLOWLOG_SETTINGS,
 } from '../constants';
 
 type CreateIndexArgs = {
@@ -411,6 +416,105 @@ const EMAIL_BODY = {
   },
 };
 
+// chats and call_records use parent/child join mappings for multi-term AND
+// search. Their bodies live here (single entrypoint); the join relation names
+// are the only structural difference from the flat indices above.
+const CHATS_RELATION_PARENT = 'chat';
+const CHATS_RELATION_CHILD = 'message';
+
+const CHATS_V2_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      entity_id: { type: 'keyword' },
+      // Parent-only metadata
+      title: {
+        type: 'text',
+        fields: { keyword: { type: 'keyword', ignore_above: 50 } },
+      },
+      user_id: { type: 'keyword', index: true, doc_values: true },
+      updated_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Child-only fields
+      chat_message_id: { type: 'keyword', index: false, doc_values: true },
+      content: { type: 'text', analyzer: 'standard' },
+      role: { type: 'keyword', index: false, doc_values: true },
+      created_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Join relationship
+      chat_relation: {
+        type: 'join',
+        relations: { [CHATS_RELATION_PARENT]: CHATS_RELATION_CHILD },
+      },
+    },
+  },
+};
+
+const CALL_RECORDS_RELATION_PARENT = 'call';
+const CALL_RECORDS_RELATION_CHILD = 'segment';
+
+const CALL_RECORDS_V2_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '2s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      entity_id: { type: 'keyword' },
+      // Parent-only metadata
+      channel_id: { type: 'keyword', index: true, doc_values: true },
+      channel_name: {
+        type: 'text',
+        fields: { keyword: { type: 'keyword', ignore_above: 128 } },
+      },
+      participant_ids: { type: 'keyword', index: true, doc_values: true },
+      started_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      ended_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Child-only fields
+      transcript_id: { type: 'keyword', index: false, doc_values: true },
+      speaker_id: { type: 'keyword', index: true, doc_values: true },
+      sequence_num: { type: 'integer', index: false, doc_values: true },
+      content: { type: 'text', analyzer: 'standard' },
+      // Aliases preserved for any reader that still expects them; both map
+      // to the parent's call-start timestamp.
+      created_at_seconds: { type: 'alias', path: 'started_at_seconds' },
+      updated_at_seconds: { type: 'alias', path: 'started_at_seconds' },
+      // Join relationship
+      call_relation: {
+        type: 'join',
+        relations: {
+          [CALL_RECORDS_RELATION_PARENT]: CALL_RECORDS_RELATION_CHILD,
+        },
+      },
+    },
+  },
+};
+
 async function createIndices() {
   const opensearchClient = client();
   console.log('Creating indices...');
@@ -421,8 +525,6 @@ async function createIndices() {
       aliasName: DOCUMENTS_ALIAS,
       body: DOCUMENT_BODY,
     });
-    // chats and call_records use parent/child join mappings and are
-    // created by create_chats_v2.ts / create_call_records_v2.ts.
     await createIndexWithAlias(opensearchClient, {
       indexName: EMAILS_INDEX,
       aliasName: EMAILS_ALIAS,
@@ -432,6 +534,19 @@ async function createIndices() {
       indexName: CHANNELS_INDEX,
       aliasName: CHANNELS_ALIAS,
       body: CHANNEL_BODY,
+    });
+    // chats and call_records use parent/child join mappings (bodies inlined
+    // above as CHATS_V2_BODY / CALL_RECORDS_V2_BODY). Idempotent — no-ops where
+    // they already exist.
+    await createIndexWithAlias(opensearchClient, {
+      indexName: CHATS_INDEX,
+      aliasName: CHATS_ALIAS,
+      body: CHATS_V2_BODY,
+    });
+    await createIndexWithAlias(opensearchClient, {
+      indexName: CALL_RECORDS_INDEX,
+      aliasName: CALL_RECORDS_ALIAS,
+      body: CALL_RECORDS_V2_BODY,
     });
     console.log('done');
   } catch (error) {

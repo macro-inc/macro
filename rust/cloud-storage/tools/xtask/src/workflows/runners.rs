@@ -16,6 +16,10 @@ pub enum Runner {
     TinyNoCache,
     /// Small profile for light jobs (path filtering, status aggregation).
     Small,
+    /// Mid-size profile, shared with the deploy workflows. Its *default* cache
+    /// volume is churned by deploys, so always pair it with
+    /// [`Runner::with_cache_tag`] to give a workload its own volume.
+    Mid,
     /// Dedicated CI profile for the heavy compile + test jobs. Has its own
     /// cache volume, isolated from the deploy profiles so deploy's churn can't
     /// evict the CI sccache/cargo caches.
@@ -27,6 +31,7 @@ impl fmt::Display for Runner {
         f.write_str(match self {
             Runner::TinyNoCache => "namespace-profile-linux-tiny-no-cache",
             Runner::Small => "namespace-profile-linux-small",
+            Runner::Mid => "namespace-profile-linux-mid",
             Runner::RustCi => "namespace-profile-linux-rust-ci",
         })
     }

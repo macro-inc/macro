@@ -62,6 +62,10 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             .arg("--no-default-features")
             .arg("--bin")
             .arg(svc.cargo_bin);
+        let features = svc.build_features();
+        if !features.is_empty() {
+            cmd.arg("--features").arg(features.join(","));
+        }
         stage.run(
             &format!("Building {} (no default features)", svc.cargo_bin),
             &mut cmd,

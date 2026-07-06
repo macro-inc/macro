@@ -152,10 +152,16 @@ impl TryFrom<String> for MacroUserIdStr<'static> {
     type Error = ParseErr;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        MacroUserId::parse_from_str(&value)
-            .map(CowLike::into_owned)
-            .map(|i| i.lowercase())
-            .map(MacroUserIdStr)
+        let s = value.as_str();
+        MacroUserIdStr::try_from(s).map(CowLike::into_owned)
+    }
+}
+
+impl<'a> TryFrom<&'a str> for MacroUserIdStr<'a> {
+    type Error = ParseErr;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        MacroUserIdStr::parse_from_str(value)
     }
 }
 

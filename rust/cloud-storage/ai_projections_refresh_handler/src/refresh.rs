@@ -1,11 +1,12 @@
 //! The refresh sweep: for a single cadence, decide per `user_ai_projection`
 //! instance whether to delete it, refresh it, or leave it untouched.
 //!
-//! Decision rules (see `ai_projections.md`):
+//! Decision rules:
 //! - **Delete** when an instance has not been requested within its expiry window
 //!   (`now() - last_requested_at > expiry`). A future request recreates it.
 //! - **Refresh** when an instance is still active but its cached result is stale
-//!   (`now() > stale_at`) and it is not already in flight.
+//!   (`now() > stale_at`) — or errored without ever producing a result — and it
+//!   is not already in flight.
 //! - **Leave** everything else ("hot") alone.
 //!
 //! All queries live here in the lambda crate. The `expiry` window is expressed
@@ -106,6 +107,11 @@ async fn delete_inactive(db: &Pool<Postgres>, cadence: RefreshCadence) -> anyhow
 /// `refreshing` for more than 15 minutes (e.g. a previous sweep that failed to
 /// enqueue) are reclaimed, mirroring the `processing_ai_projections` lease
 /// reclaim convention used by the worker.
+///
+/// Claimed instances are also moved onto the definition's current
+/// `prompt_hash`: the worker's writes are scoped to the message's hash, so a
+/// refresh enqueued for an instance still on an older prompt version would
+/// otherwise be discarded on completion.
 #[tracing::instrument(skip(db), err)]
 async fn claim_stale(
     db: &Pool<Postgres>,
@@ -114,12 +120,14 @@ async fn claim_stale(
     let rows = sqlx::query!(
         r#"
         UPDATE user_ai_projection u
-        SET status = 'refreshing', updated_at = NOW()
+        SET status = 'refreshing', prompt_hash = p.prompt_hash, updated_at = NOW()
         FROM ai_projection p
         WHERE u.ai_projection_id = p.id
           AND p.refresh_cadence = $1
-          AND u.stale_at IS NOT NULL
-          AND u.stale_at < NOW()
+          AND (
+                (u.stale_at IS NOT NULL AND u.stale_at < NOW())
+                OR (u.status = 'error' AND u.stale_at IS NULL)
+              )
           AND u.last_requested_at >= NOW() - (
                 CASE p.expiry
                     WHEN 'day'   THEN INTERVAL '1 day'

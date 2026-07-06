@@ -21,12 +21,12 @@ pub use domain::service::{TaskDedupConfig, TaskDedupService};
 /// this crate. Its only constructors are the lexical fetch and an explicit
 /// client-trusted wrapper, so wrong-format bodies cannot reach the embedder.
 pub use lexical_client::parse_markdown::EmbeddingMarkdown;
+use outbound::cohere::CohereReranker;
 use outbound::postgres::PgTaskVectorDb;
-use outbound::reranker::NoOpReranker;
 
 /// The production task-dedup service: OpenAI `text-embedding-3-small` embeddings,
-/// a Postgres/pgvector store, and the no-op reranker. Consumers depend on this
+/// a Postgres/pgvector store, and the Cohere reranker. Consumers depend on this
 /// concrete type so the generic [`TaskDedupService`] parameters do not leak into
 /// axum state and handler signatures.
 pub type PgTaskDedupService =
-    TaskDedupService<DIMS, TextEmbedding3Small, PgTaskVectorDb, NoOpReranker>;
+    TaskDedupService<DIMS, TextEmbedding3Small, PgTaskVectorDb, CohereReranker>;

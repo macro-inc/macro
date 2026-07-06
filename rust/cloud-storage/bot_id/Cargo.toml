@@ -9,6 +9,8 @@ schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]
 
 [dependencies]
+cowlike = { path = "../cowlike" }
+nom = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }

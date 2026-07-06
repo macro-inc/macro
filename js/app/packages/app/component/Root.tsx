@@ -6,6 +6,7 @@ import { GlobalShareInboxConflictDialog } from '@app/component/ShareInboxConflic
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallKitSync } from '@channel/Call';
@@ -94,6 +95,8 @@ import {
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
 import { Login } from './auth/Login';
+import { MobileAuthWelcome } from './auth/mobile-onboarding/MobileAuthWelcome';
+import { MobileOnboarding } from './auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
@@ -356,7 +359,21 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/welcome',
-    component: () => <Navigate href="/login" />,
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileAuthWelcome />
+      ) : (
+        <Navigate href="/login" />
+      ),
+  },
+  {
+    path: '/onboarding',
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileOnboarding />
+      ) : (
+        <Navigate href="/login" />
+      ),
   },
   {
     path: '/team-invite',
@@ -444,19 +461,21 @@ function UserInfoSideEffects() {
 
       if (!user || !user.authenticated) return;
 
-      if (posthog.instance._isIdentified() || identified) {
-        return;
+      if (!posthog.instance._isIdentified() && !identified) {
+        identified = true;
+
+        const platform = detect(navigator.userAgent);
+        const os = platform?.os?.replaceAll(' ', '');
+
+        analytics.identify(user.id, {
+          email: user.email,
+          os,
+        });
       }
 
-      identified = true;
-
-      const platform = detect(navigator.userAgent);
-      const os = platform?.os?.replaceAll(' ', '');
-
-      analytics.identify(user.id, {
-        email: user.email,
-        os,
-      });
+      // Fires sign_up + ad conversions once when the auth service flagged this
+      // session as a freshly created account (signed_up=true redirect param).
+      trackSignupCompletion(analytics, { id: user.id });
     })
   );
 
@@ -481,6 +500,7 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
 

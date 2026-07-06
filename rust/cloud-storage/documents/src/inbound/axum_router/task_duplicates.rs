@@ -58,10 +58,6 @@ pub struct TaskSimilaritySearchRequest {
     /// this latency-sensitive endpoint embeds the text as-is without a
     /// lexical-service round trip.
     pub markdown: Option<String>,
-    /// Whether the task will be shared with the user's team, which widens the
-    /// search scope to team tasks.
-    #[serde(default)]
-    pub share_with_team: bool,
 }
 
 /// Response for searching tasks similar to an unsaved draft.
@@ -111,13 +107,12 @@ pub async fn task_similarity_search_handler<T: DocumentService, Svc: EntityAcces
     optional_team: OptionalMacroUserTeamExtractor<MemberTeamRole, Svc>,
     Json(request): Json<TaskSimilaritySearchRequest>,
 ) -> Result<Json<TaskSimilaritySearchResponse>, DocumentError> {
-    let team_id = if request.share_with_team {
-        optional_team
-            .entity_access_receipt
-            .map(|team| macro_uuid::string_to_uuid(&team.entity().entity_id).unwrap())
-    } else {
-        None
-    };
+    // Search the user's whole team, not just their own tasks: a duplicate is a
+    // duplicate no matter which teammate filed it. Users without a team fall
+    // back to owner-only scope.
+    let team_id = optional_team
+        .entity_access_receipt
+        .map(|team| macro_uuid::string_to_uuid(&team.entity().entity_id).unwrap());
     // The composer renders the draft body with lexical-core's
     // `markdownToEmbeddingText`, so we trust it as embedding-format here rather
     // than round-tripping through lexical-service on this latency-sensitive path.
