@@ -49,17 +49,26 @@ async fn add_favorite_appends_and_is_idempotent(pool: PgPool) {
     let repo = PgFavoritesRepo::new(pool);
 
     let first = repo
-        .add_favorite(&user(USER_A), &EntityType::Document.with_entity_str("doc-1"))
+        .add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str("doc-1"),
+        )
         .await
         .expect("first favorite should insert");
     let second = repo
-        .add_favorite(&user(USER_A), &EntityType::Channel.with_entity_str("chan-1"))
+        .add_favorite(
+            &user(USER_A),
+            &EntityType::Channel.with_entity_str("chan-1"),
+        )
         .await
         .expect("second favorite should insert");
     assert!(second.sort_order > first.sort_order);
 
     let duplicate = repo
-        .add_favorite(&user(USER_A), &EntityType::Document.with_entity_str("doc-1"))
+        .add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str("doc-1"),
+        )
         .await
         .expect("duplicate favorite should be a no-op");
     assert_eq!(duplicate.id, first.id);
@@ -78,14 +87,20 @@ async fn count_favorites_counts_user_collection(pool: PgPool) {
     );
 
     for entity_id in ["doc-1", "doc-2", "doc-3"] {
-        repo.add_favorite(&user(USER_A), &EntityType::Document.with_entity_str(entity_id))
-            .await
-            .expect("favorite should insert");
+        repo.add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str(entity_id),
+        )
+        .await
+        .expect("favorite should insert");
     }
     // Re-adding an existing entity is a no-op and must not inflate the count.
-    repo.add_favorite(&user(USER_A), &EntityType::Document.with_entity_str("doc-1"))
-        .await
-        .expect("duplicate favorite should be a no-op");
+    repo.add_favorite(
+        &user(USER_A),
+        &EntityType::Document.with_entity_str("doc-1"),
+    )
+    .await
+    .expect("duplicate favorite should be a no-op");
 
     assert_eq!(
         repo.count_favorites(&user(USER_A))
@@ -107,9 +122,12 @@ async fn list_favorites_hydrates_names_and_skips_deleted(pool: PgPool) {
 
     let repo = PgFavoritesRepo::new(pool);
     for entity_id in ["doc-live", "doc-gone"] {
-        repo.add_favorite(&user(USER_A), &EntityType::Document.with_entity_str(entity_id))
-            .await
-            .expect("favorite should insert");
+        repo.add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str(entity_id),
+        )
+        .await
+        .expect("favorite should insert");
     }
     // An entity with no local table (e.g. a foreign id) still lists, unhydrated.
     repo.add_favorite(
@@ -137,7 +155,10 @@ async fn remove_favorite_by_id_checks_ownership(pool: PgPool) {
     let repo = PgFavoritesRepo::new(pool);
 
     let favorite = repo
-        .add_favorite(&user(USER_A), &EntityType::Document.with_entity_str("doc-1"))
+        .add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str("doc-1"),
+        )
         .await
         .expect("favorite should insert");
 
@@ -194,7 +215,10 @@ async fn reorder_favorites_sets_manual_order(pool: PgPool) {
     let mut ids = Vec::new();
     for entity_id in ["a", "b", "c"] {
         let favorite = repo
-            .add_favorite(&user(USER_A), &EntityType::Document.with_entity_str(entity_id))
+            .add_favorite(
+                &user(USER_A),
+                &EntityType::Document.with_entity_str(entity_id),
+            )
             .await
             .expect("favorite should insert");
         ids.push(favorite.id);
@@ -227,7 +251,10 @@ async fn favorited_entities_returns_user_favorites(pool: PgPool) {
         .expect("user favorite should insert");
 
     let favorited = repo
-        .favorited_entities(&user(USER_A), &[user_entity.copied(), other_entity.copied()])
+        .favorited_entities(
+            &user(USER_A),
+            &[user_entity.copied(), other_entity.copied()],
+        )
         .await
         .expect("favorited lookup should run");
 
