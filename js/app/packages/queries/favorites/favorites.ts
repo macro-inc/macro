@@ -119,7 +119,6 @@ export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
           });
           const previous = readList();
           const optimistic: Favorite = {
-            id: `optimistic-${args.entityType}-${args.entityId}`,
             entityType: args.entityType,
             entityId: args.entityId,
             sortOrder: Number.MAX_SAFE_INTEGER,
@@ -200,7 +199,8 @@ export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
 }
 
 type ReorderFavoritesArgs = {
-  favoriteIds: string[];
+  /** The user's favorited entities in the desired order. */
+  favorites: { entityType: FavoriteEntityType; entityId: string }[];
 };
 type ReorderFavoritesCallbacks = MutationCallbacks<
   void,
@@ -214,16 +214,13 @@ export function useReorderFavoritesMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (args: ReorderFavoritesArgs) => {
-      // A reorder can race an in-flight add whose optimistic row carries a
-      // placeholder id the server has never seen. Sending it would fail the
-      // whole reorder (the backend expects real UUIDs); drop it and reorder
-      // the persisted ids only.
-      const favoriteIds = args.favoriteIds.filter(
-        (id) => !id.startsWith('optimistic-')
-      );
-      if (favoriteIds.length === 0) return;
+      // Entities the user has not favorited (e.g. an optimistic row whose add
+      // is still in flight) are ignored by the backend.
+      if (args.favorites.length === 0) return;
       await throwOnErr(() =>
-        storageServiceClient.favorites.reorderFavorites({ favoriteIds })
+        storageServiceClient.favorites.reorderFavorites({
+          favorites: args.favorites,
+        })
       );
     },
     ...withCallbacks<
@@ -239,12 +236,22 @@ export function useReorderFavoritesMutation(
           });
           const previous = readList();
           const reorder = (favorites: Favorite[]) => {
-            const byId = new Map(favorites.map((f) => [f.id, f]));
-            const ordered = args.favoriteIds
-              .map((id) => byId.get(id))
+            const byKey = new Map(
+              favorites.map((f) => [
+                favoriteEntityKey(f.entityType, f.entityId),
+                f,
+              ])
+            );
+            const orderedKeys = args.favorites.map((f) =>
+              favoriteEntityKey(f.entityType, f.entityId)
+            );
+            const ordered = orderedKeys
+              .map((key) => byKey.get(key))
               .filter((f): f is Favorite => !!f);
+            const orderedSet = new Set(orderedKeys);
             const leftover = favorites.filter(
-              (f) => !args.favoriteIds.includes(f.id)
+              (f) =>
+                !orderedSet.has(favoriteEntityKey(f.entityType, f.entityId))
             );
             return [...ordered, ...leftover];
           };

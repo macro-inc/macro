@@ -14,6 +14,7 @@ import {
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import {
+  favoriteEntityKey,
   useFavoritesData,
   useRemoveFavoriteMutation,
   useReorderFavoritesMutation,
@@ -77,7 +78,12 @@ const FavoritesGroup = (props: {
   });
   const reorderMutation = useReorderFavoritesMutation();
 
-  const ids = createMemo(() => props.favorites.map((favorite) => favorite.id));
+  // Rows are keyed by what they point at; favorites have no surrogate id.
+  const keys = createMemo(() =>
+    props.favorites.map((favorite) =>
+      favoriteEntityKey(favorite.entityType, favorite.entityId)
+    )
+  );
 
   // The sidebar lives inside the app-wide DragDropProvider (ItemDndProvider);
   // register on its events rather than mounting a nested provider.
@@ -90,13 +96,18 @@ const FavoritesGroup = (props: {
     if (!droppable) return;
     const dropData = droppable.data;
     if (dropData?.dragType !== 'favorite') return;
-    const current = ids();
+    const current = keys();
     const fromIndex = current.indexOf(String(draggable.id));
     const toIndex = current.indexOf(String(droppable.id));
     if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-    const next = current.slice();
-    next.splice(toIndex, 0, ...next.splice(fromIndex, 1));
-    reorderMutation.mutate({ favoriteIds: next });
+    const ordered = props.favorites.slice();
+    ordered.splice(toIndex, 0, ...ordered.splice(fromIndex, 1));
+    reorderMutation.mutate({
+      favorites: ordered.map((favorite) => ({
+        entityType: favorite.entityType,
+        entityId: favorite.entityId,
+      })),
+    });
   });
 
   return (
@@ -123,7 +134,7 @@ const FavoritesGroup = (props: {
         style={{ 'grid-template-rows': expanded() ? '1fr' : '0fr' }}
       >
         <ul class="min-h-0 overflow-hidden flex flex-col gap-0.5">
-          <SortableProvider ids={ids()}>
+          <SortableProvider ids={keys()}>
             <For each={props.favorites}>
               {(favorite, index) => (
                 <li
@@ -166,12 +177,15 @@ const FavoriteRow = (props: { favorite: Favorite; disabled: boolean }) => {
   // (clipped to 0 height for the expand/collapse animation), so without this
   // their stale layout rects would capture drops. Gating on `disabled` keeps
   // collapsed rows out of collision detection entirely.
-  const sortable = createSortable(props.favorite.id, {
-    dragType: 'favorite',
-    iconType: favoriteIconType(props.favorite),
-    name: favoriteDisplayName(props.favorite),
-    isDropTargetDisabled: () => props.disabled,
-  } satisfies FavoriteDragData);
+  const sortable = createSortable(
+    favoriteEntityKey(props.favorite.entityType, props.favorite.entityId),
+    {
+      dragType: 'favorite',
+      iconType: favoriteIconType(props.favorite),
+      name: favoriteDisplayName(props.favorite),
+      isDropTargetDisabled: () => props.disabled,
+    } satisfies FavoriteDragData
+  );
 
   const content = () => favoriteSplitContent(props.favorite);
 
@@ -217,7 +231,10 @@ const FavoriteRow = (props: { favorite: Favorite; disabled: boolean }) => {
           <NavRow
             draggable={false}
             disabled={props.disabled}
-            data-sidebar-favorite={props.favorite.id}
+            data-sidebar-favorite={favoriteEntityKey(
+              props.favorite.entityType,
+              props.favorite.entityId
+            )}
             data-active={isActive() ? '' : undefined}
             active={isActive()}
             class="h-8"

@@ -3,16 +3,16 @@
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// A single favorited entity, including display metadata hydrated from the
 /// favorited entity where available.
+///
+/// A favorite is identified by `(entity_type, entity_id)` within the user's
+/// collection; there is no surrogate id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Favorite {
-    /// Unique id of the favorite record.
-    pub id: Uuid,
     /// The type of the favorited entity.
     // Inlined so the shared `EntityType` component name is not claimed in
     // specs that also expose the properties `EntityType` enum.

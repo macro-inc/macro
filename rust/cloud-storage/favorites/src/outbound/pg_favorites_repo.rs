@@ -9,7 +9,6 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::domain::models::Favorite;
 use crate::domain::ports::FavoritesRepo;
@@ -39,7 +38,6 @@ pub enum FavoritesRepoErr {
 }
 
 struct FavoriteRow {
-    id: Uuid,
     entity_type: String,
     entity_id: String,
     sort_order: f64,
@@ -58,7 +56,6 @@ impl FavoriteRow {
             .parse()
             .map_err(|_| FavoritesRepoErr::InvalidEntityType(self.entity_type.clone()))?;
         Ok(Favorite {
-            id: self.id,
             entity_type,
             entity_id: self.entity_id,
             sort_order: self.sort_order,
@@ -82,21 +79,17 @@ impl FavoritesRepo for PgFavoritesRepo {
         entity: &Entity<'_>,
     ) -> Result<Favorite, Self::Err> {
         let entity_type: &str = entity.entity_type.into();
-        // Ids are UUID v7, generated here rather than by the database. On
-        // conflict the existing row keeps its id and the generated one is
-        // discarded (the upsert returns the existing record).
         let row = sqlx::query_as!(
             FavoriteRow,
             r#"
-            INSERT INTO favorite (id, user_id, entity_type, entity_id, sort_order)
+            INSERT INTO favorite (user_id, entity_type, entity_id, sort_order)
             VALUES (
-                $1, $2, $3, $4,
-                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE user_id = $2), 0)
+                $1, $2, $3,
+                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE user_id = $1), 0)
             )
             ON CONFLICT (user_id, entity_type, entity_id)
                 DO UPDATE SET updated_at = now()
             RETURNING
-                id as "id!",
                 entity_type as "entity_type!",
                 entity_id as "entity_id!",
                 sort_order as "sort_order!",
@@ -107,7 +100,6 @@ impl FavoritesRepo for PgFavoritesRepo {
                 NULL::text as "channel_type?",
                 NULL::text as "channel_id?"
             "#,
-            macro_uuid::generate_uuid_v7(),
             user_id.as_ref(),
             entity_type,
             entity.entity_id.as_ref(),
@@ -139,7 +131,6 @@ impl FavoritesRepo for PgFavoritesRepo {
             FavoriteRow,
             r#"
             SELECT
-                f.id as "id!",
                 f.entity_type as "entity_type!",
                 f.entity_id as "entity_id!",
                 f.sort_order as "sort_order!",
@@ -184,22 +175,6 @@ impl FavoritesRepo for PgFavoritesRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn remove_favorite_by_id(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
-    ) -> Result<bool, Self::Err> {
-        let res = sqlx::query!(
-            r#"DELETE FROM favorite WHERE id = $1 AND user_id = $2"#,
-            id,
-            user_id.as_ref(),
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(res.rows_affected() > 0)
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn remove_favorite_by_entity(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -220,21 +195,33 @@ impl FavoritesRepo for PgFavoritesRepo {
         Ok(res.rows_affected() > 0)
     }
 
-    #[tracing::instrument(err, skip(self, ordered_ids))]
+    #[tracing::instrument(err, skip(self, ordered))]
     async fn reorder_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ordered_ids: &[Uuid],
+        ordered: &[Entity<'_>],
     ) -> Result<(), Self::Err> {
+        let (entity_types, entity_ids): (Vec<String>, Vec<String>) = ordered
+            .iter()
+            .map(|e| {
+                (
+                    <&str>::from(e.entity_type).to_string(),
+                    e.entity_id.to_string(),
+                )
+            })
+            .unzip();
         sqlx::query!(
             r#"
             UPDATE favorite f
             SET sort_order = x.ord::float8 - 1, updated_at = now()
-            FROM UNNEST($2::uuid[]) WITH ORDINALITY AS x(id, ord)
-            WHERE f.id = x.id AND f.user_id = $1
+            FROM UNNEST($2::text[], $3::text[]) WITH ORDINALITY AS x(entity_type, entity_id, ord)
+            WHERE f.user_id = $1
+              AND f.entity_type = x.entity_type
+              AND f.entity_id = x.entity_id
             "#,
             user_id.as_ref(),
-            ordered_ids,
+            &entity_types,
+            &entity_ids,
         )
         .execute(&self.pool)
         .await?;

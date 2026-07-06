@@ -78,7 +78,9 @@ use documents_hex::inbound::axum_router::{
     get_short_id::ShortIdResponse,
 };
 use favorites::domain::models::{Favorite, FavoritesList};
-use favorites::inbound::axum_router::{AddFavoriteRequest, ReorderFavoritesRequest};
+use favorites::inbound::axum_router::{
+    AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
+};
 use foreign_entity::domain::models::ForeignEntity;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
@@ -290,7 +292,6 @@ use utoipa::OpenApi;
         // favorites
         favorites::inbound::axum_router::list_favorites_handler,
         favorites::inbound::axum_router::add_favorite_handler,
-        favorites::inbound::axum_router::remove_favorite_handler,
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
@@ -412,6 +413,7 @@ use utoipa::OpenApi;
             Favorite,
             FavoritesList,
             AddFavoriteRequest,
+            FavoriteEntityRef,
             ReorderFavoritesRequest,
             SoupApiSort,
             SoupPage,

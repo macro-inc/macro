@@ -71,7 +71,14 @@ async fn add_favorite_appends_and_is_idempotent(pool: PgPool) {
         )
         .await
         .expect("duplicate favorite should be a no-op");
-    assert_eq!(duplicate.id, first.id);
+    // The existing record is returned unchanged (same position).
+    assert_eq!(duplicate.sort_order, first.sort_order);
+    assert_eq!(
+        repo.count_favorites(&user(USER_A))
+            .await
+            .expect("count should run"),
+        2
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -149,33 +156,6 @@ async fn list_favorites_hydrates_names_and_skips_deleted(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn remove_favorite_by_id_checks_ownership(pool: PgPool) {
-    insert_user(&pool, USER_A).await;
-    insert_user(&pool, USER_B).await;
-    let repo = PgFavoritesRepo::new(pool);
-
-    let favorite = repo
-        .add_favorite(
-            &user(USER_A),
-            &EntityType::Document.with_entity_str("doc-1"),
-        )
-        .await
-        .expect("favorite should insert");
-
-    let removed_by_other = repo
-        .remove_favorite_by_id(&user(USER_B), favorite.id)
-        .await
-        .expect("delete by non-owner should run");
-    assert!(!removed_by_other);
-
-    let removed = repo
-        .remove_favorite_by_id(&user(USER_A), favorite.id)
-        .await
-        .expect("delete by owner should run");
-    assert!(removed);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn remove_favorite_by_entity_scopes_to_user(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
@@ -212,20 +192,18 @@ async fn reorder_favorites_sets_manual_order(pool: PgPool) {
     }
     let repo = PgFavoritesRepo::new(pool);
 
-    let mut ids = Vec::new();
     for entity_id in ["a", "b", "c"] {
-        let favorite = repo
-            .add_favorite(
-                &user(USER_A),
-                &EntityType::Document.with_entity_str(entity_id),
-            )
-            .await
-            .expect("favorite should insert");
-        ids.push(favorite.id);
+        repo.add_favorite(
+            &user(USER_A),
+            &EntityType::Document.with_entity_str(entity_id),
+        )
+        .await
+        .expect("favorite should insert");
     }
 
-    ids.reverse();
-    repo.reorder_favorites(&user(USER_A), &ids)
+    let reordered =
+        ["c", "b", "a"].map(|entity_id| EntityType::Document.with_entity_str(entity_id));
+    repo.reorder_favorites(&user(USER_A), &reordered)
         .await
         .expect("reorder should run");
 
@@ -233,8 +211,8 @@ async fn reorder_favorites_sets_manual_order(pool: PgPool) {
         .list_favorites(&user(USER_A))
         .await
         .expect("favorites should list");
-    let listed: Vec<Uuid> = favorites.iter().map(|f| f.id).collect();
-    assert_eq!(listed, ids);
+    let listed: Vec<&str> = favorites.iter().map(|f| f.entity_id.as_str()).collect();
+    assert_eq!(listed, ["c", "b", "a"]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

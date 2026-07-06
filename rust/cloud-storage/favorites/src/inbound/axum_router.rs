@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
@@ -14,7 +14,6 @@ use model_entity::EntityType;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use serde::Deserialize;
-use uuid::Uuid;
 
 use crate::domain::{
     models::{Favorite, FavoritesError, FavoritesList},
@@ -88,8 +87,7 @@ where
 /// Routes:
 /// - `GET /` — list the caller's favorites.
 /// - `POST /` — favorite an entity.
-/// - `DELETE /{id}` — remove a favorite by id.
-/// - `DELETE /` — remove a favorite by entity (query params).
+/// - `DELETE /{entity_type}/{entity_id}` — remove a favorite.
 /// - `PATCH /reorder` — persist a manual order.
 pub fn favorites_router<S, AccessSvc, T>(state: FavoritesRouterState<S, AccessSvc>) -> Router<T>
 where
@@ -101,10 +99,9 @@ where
         .route("/", get(list_favorites_handler::<S, AccessSvc>))
         .route("/", post(add_favorite_handler::<S, AccessSvc>))
         .route(
-            "/",
+            "/{entity_type}/{entity_id}",
             delete(remove_favorite_by_entity_handler::<S, AccessSvc>),
         )
-        .route("/{id}", delete(remove_favorite_handler::<S, AccessSvc>))
         .route("/reorder", patch(reorder_favorites_handler::<S, AccessSvc>))
         .with_state(state)
 }
@@ -122,12 +119,25 @@ pub struct AddFavoriteRequest {
     pub entity_id: String,
 }
 
-/// Query params for removing a favorite by entity.
+/// Path params for removing a favorite by entity.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
-#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Path)]
 pub struct RemoveFavoriteByEntityParams {
     /// The type of the favorited entity.
     #[param(inline)]
+    pub entity_type: EntityType,
+    /// The id of the favorited entity.
+    pub entity_id: String,
+}
+
+/// A reference to a favorited entity.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteEntityRef {
+    /// The type of the favorited entity.
+    // Inlined to avoid claiming the shared `EntityType` component name (see
+    // `Favorite::entity_type`).
+    #[schema(inline)]
     pub entity_type: EntityType,
     /// The id of the favorited entity.
     pub entity_id: String,
@@ -137,8 +147,8 @@ pub struct RemoveFavoriteByEntityParams {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReorderFavoritesRequest {
-    /// The favorite ids in the desired order.
-    pub favorite_ids: Vec<Uuid>,
+    /// The user's favorited entities in the desired order.
+    pub favorites: Vec<FavoriteEntityRef>,
 }
 
 /// List the caller's favorites.
@@ -209,43 +219,12 @@ where
     Ok(Json(favorite))
 }
 
-/// Remove a favorite by record id from the caller's collection.
-#[utoipa::path(
-    delete,
-    tag = "favorites",
-    operation_id = "remove_favorite",
-    path = "/favorites/{id}",
-    params(("id" = Uuid, Path, description = "Favorite record id")),
-    responses(
-        (status = 200, body = ()),
-        (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
-        (status = 500, body = ErrorResponse),
-    )
-)]
-#[tracing::instrument(err, skip_all)]
-pub async fn remove_favorite_handler<S, AccessSvc>(
-    State(state): State<FavoritesRouterState<S, AccessSvc>>,
-    user: MacroUserExtractor,
-    Path(id): Path<Uuid>,
-) -> Result<Json<()>, FavoritesApiError>
-where
-    S: FavoritesService,
-    AccessSvc: EntityAccessService,
-{
-    state
-        .service
-        .remove_favorite_by_id(&user.macro_user_id, id)
-        .await?;
-    Ok(Json(()))
-}
-
 /// Remove a favorite by entity.
 #[utoipa::path(
     delete,
     tag = "favorites",
     operation_id = "remove_favorite_by_entity",
-    path = "/favorites",
+    path = "/favorites/{entity_type}/{entity_id}",
     params(RemoveFavoriteByEntityParams),
     responses(
         (status = 200, body = ()),
@@ -258,7 +237,7 @@ where
 pub async fn remove_favorite_by_entity_handler<S, AccessSvc>(
     State(state): State<FavoritesRouterState<S, AccessSvc>>,
     user: MacroUserExtractor,
-    Query(params): Query<RemoveFavoriteByEntityParams>,
+    Path(params): Path<RemoveFavoriteByEntityParams>,
 ) -> Result<Json<()>, FavoritesApiError>
 where
     S: FavoritesService,
@@ -296,9 +275,14 @@ where
     S: FavoritesService,
     AccessSvc: EntityAccessService,
 {
+    let ordered: Vec<_> = req
+        .favorites
+        .iter()
+        .map(|r| r.entity_type.with_entity_str(&r.entity_id))
+        .collect();
     state
         .service
-        .reorder_favorites(&user.macro_user_id, &req.favorite_ids)
+        .reorder_favorites(&user.macro_user_id, &ordered)
         .await?;
     Ok(Json(()))
 }

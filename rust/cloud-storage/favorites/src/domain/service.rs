@@ -4,7 +4,6 @@ use std::collections::HashSet;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use uuid::Uuid;
 
 use crate::domain::models::{Favorite, FavoritesError};
 use crate::domain::ports::{FavoritesRepo, FavoritesService};
@@ -86,24 +85,6 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn remove_favorite_by_id(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
-    ) -> Result<(), FavoritesError> {
-        let removed = self
-            .repo
-            .remove_favorite_by_id(user_id, id)
-            .await
-            .map_err(anyhow::Error::from)?;
-        if removed {
-            Ok(())
-        } else {
-            Err(FavoritesError::NotFound)
-        }
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn remove_favorite_by_entity(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -122,29 +103,29 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self, ordered_ids))]
+    #[tracing::instrument(err, skip(self, ordered))]
     async fn reorder_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        ordered_ids: &[Uuid],
+        ordered: &[Entity<'_>],
     ) -> Result<(), FavoritesError> {
-        if ordered_ids.is_empty() {
+        if ordered.is_empty() {
             return Ok(());
         }
-        if ordered_ids.len() > MAX_FAVORITES_PER_COLLECTION {
+        if ordered.len() > MAX_FAVORITES_PER_COLLECTION {
             return Err(FavoritesError::BadRequest(format!(
                 "cannot reorder more than {MAX_FAVORITES_PER_COLLECTION} favorites"
             )));
         }
-        let unique: HashSet<&Uuid> = ordered_ids.iter().collect();
-        if unique.len() != ordered_ids.len() {
+        let unique: HashSet<&Entity<'_>> = ordered.iter().collect();
+        if unique.len() != ordered.len() {
             return Err(FavoritesError::BadRequest(
-                "ordered ids must not contain duplicates".to_string(),
+                "ordered entities must not contain duplicates".to_string(),
             ));
         }
         Ok(self
             .repo
-            .reorder_favorites(user_id, ordered_ids)
+            .reorder_favorites(user_id, ordered)
             .await
             .map_err(anyhow::Error::from)?)
     }

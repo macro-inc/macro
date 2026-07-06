@@ -26,7 +26,6 @@ chrono = { workspace = true, features = ["serde"] }
 cowlike = { path = "../cowlike" }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
@@ -37,10 +36,10 @@ thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
-uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid = { workspace = true, features = ["v7"] }

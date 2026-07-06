@@ -249,17 +249,12 @@ const FavoritesSvc = new Svc('Favorites Service')
     result: schemas.addFavoriteResponse.shape,
     throws: withFetchErrors(),
   })
-  .fn('removeFavorite', {
-    description: 'Remove a favorite by id',
-    args: {
-      favoriteId: z.string(),
-    },
-    modifies: true,
-    throws: withFetchErrors(),
-  })
   .fn('removeFavoriteByEntity', {
     description: 'Remove a favorite by entity',
-    args: schemas.removeFavoriteByEntityQueryParams.shape,
+    args: {
+      entityType: schemas.removeFavoriteByEntityParams.shape.entity_type,
+      entityId: schemas.removeFavoriteByEntityParams.shape.entity_id,
+    },
     modifies: true,
     throws: withFetchErrors(),
   })

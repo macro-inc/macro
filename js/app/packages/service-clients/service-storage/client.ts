@@ -2110,22 +2110,14 @@ export const storageServiceClient = {
         body: JSON.stringify(params),
       });
     },
-    async removeFavorite(params: { favoriteId: string }) {
-      return await dssFetch(`/favorites/${params.favoriteId}`, {
-        method: 'DELETE',
-      });
-    },
     async removeFavoriteByEntity(params: {
       entityType: AddFavoriteRequest['entityType'];
       entityId: string;
     }) {
-      const searchParams = new URLSearchParams({
-        entityType: params.entityType,
-        entityId: params.entityId,
-      });
-      return await dssFetch(`/favorites?${searchParams}`, {
-        method: 'DELETE',
-      });
+      return await dssFetch(
+        `/favorites/${params.entityType}/${encodeURIComponent(params.entityId)}`,
+        { method: 'DELETE' }
+      );
     },
     async reorderFavorites(params: ReorderFavoritesRequest) {
       return await dssFetch('/favorites/reorder', {

@@ -14,6 +14,9 @@ import type { FavoriteName } from './favoriteName';
 /**
  * A single favorited entity, including display metadata hydrated from the
 favorited entity where available.
+
+A favorite is identified by `(entity_type, entity_id)` within the user's
+collection; there is no surrogate id.
  */
 export interface Favorite {
   /** Owning channel id of the favorited channel message, when applicable. */
@@ -30,8 +33,6 @@ export interface Favorite {
   entityType: FavoriteEntityType;
   /** File type of the favorited document, when applicable. */
   fileType?: FavoriteFileType;
-  /** Unique id of the favorite record. */
-  id: string;
   /** Display name of the favorited entity, when it could be resolved. */
   name?: FavoriteName;
   /** Manual ordering value; lower sorts first. */

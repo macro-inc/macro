@@ -6273,7 +6273,6 @@ export const listFavoritesResponse = zod
               .describe(
                 'File type of the favorited document, when applicable.'
               ),
-            id: zod.uuid().describe('Unique id of the favorite record.'),
             name: zod
               .string()
               .nullish()
@@ -6285,7 +6284,7 @@ export const listFavoritesResponse = zod
               .describe('Manual ordering value; lower sorts first.'),
           })
           .describe(
-            'A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.'
+            "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
           )
       )
       .describe("The requesting user's favorites, in manual order."),
@@ -6363,7 +6362,6 @@ export const addFavoriteResponse = zod
       .string()
       .nullish()
       .describe('File type of the favorited document, when applicable.'),
-    id: zod.uuid().describe('Unique id of the favorite record.'),
     name: zod
       .string()
       .nullish()
@@ -6375,14 +6373,53 @@ export const addFavoriteResponse = zod
       .describe('Manual ordering value; lower sorts first.'),
   })
   .describe(
-    'A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.'
+    "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
   );
+
+/**
+ * @summary Persist a manual order for the caller's favorites.
+ */
+export const reorderFavoritesBody = zod
+  .object({
+    favorites: zod
+      .array(
+        zod
+          .object({
+            entityId: zod.string().describe('The id of the favorited entity.'),
+            entityType: zod
+              .enum([
+                'user',
+                'chat',
+                'channel',
+                'channel_message',
+                'document',
+                'project',
+                'email_thread',
+                'team',
+                'call',
+                'foreign_entity',
+                'static_file',
+                'crm_company',
+                'crm_contact',
+              ])
+              .describe('The type of an entity in Macro')
+              .describe('The type of the favorited entity.'),
+          })
+          .describe('A reference to a favorited entity.')
+      )
+      .describe("The user's favorited entities in the desired order."),
+  })
+  .describe('Request body for reordering favorites.');
+
+export const reorderFavoritesResponseDefault = null;
+
+export const reorderFavoritesResponse = zod.unknown();
 
 /**
  * @summary Remove a favorite by entity.
  */
-export const removeFavoriteByEntityQueryParams = zod.object({
-  entityType: zod
+export const removeFavoriteByEntityParams = zod.object({
+  entity_type: zod
     .enum([
       'user',
       'chat',
@@ -6399,38 +6436,12 @@ export const removeFavoriteByEntityQueryParams = zod.object({
       'crm_contact',
     ])
     .describe('The type of the favorited entity.'),
-  entityId: zod.string().describe('The id of the favorited entity.'),
+  entity_id: zod.string().describe('The id of the favorited entity.'),
 });
 
 export const removeFavoriteByEntityResponseDefault = null;
 
 export const removeFavoriteByEntityResponse = zod.unknown();
-
-/**
- * @summary Persist a manual order for the caller's favorites.
- */
-export const reorderFavoritesBody = zod
-  .object({
-    favoriteIds: zod
-      .array(zod.uuid())
-      .describe('The favorite ids in the desired order.'),
-  })
-  .describe('Request body for reordering favorites.');
-
-export const reorderFavoritesResponseDefault = null;
-
-export const reorderFavoritesResponse = zod.unknown();
-
-/**
- * @summary Remove a favorite by record id from the caller's collection.
- */
-export const removeFavoriteParams = zod.object({
-  id: zod.uuid().describe('Favorite record id'),
-});
-
-export const removeFavoriteResponseDefault = null;
-
-export const removeFavoriteResponse = zod.unknown();
 
 /**
  * @summary Get a visible foreign entity by its internal ID.
