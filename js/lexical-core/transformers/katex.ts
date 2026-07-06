@@ -8,6 +8,10 @@ import {
   $isEquationNode,
   EquationNode,
 } from '../nodes/EquationNode';
+import {
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal Equation Node
 
@@ -18,7 +22,7 @@ const REG_EXP_KATEX_EQUATION = new RegExp(
 );
 
 export const I_EQUATION_NODE: TextMatchTransformer = {
-  dependencies: [EquationNode],
+  dependencies: [EquationNode, UnknownMentionNode],
   type: 'text-match',
   regExp: REG_EXP_KATEX_EQUATION,
   importRegExp: REG_EXP_KATEX_EQUATION,
@@ -40,7 +44,8 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
       const equationNode = $createEquationNode(data.equation, data.inline);
       node.replace(equationNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_EQUATION_NODE replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Equation');
     }
   },
 };
