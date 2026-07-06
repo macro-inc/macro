@@ -92,6 +92,7 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -111,7 +112,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Layer, Tooltip } from '@ui';
+import { Button, cn, EmptyStatePanel, Layer, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -1551,9 +1552,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 <Show
                   when={soup.focus.item()}
                   fallback={
-                    <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                      Select an item to preview
-                    </div>
+                    <EmptyStatePanel
+                      align="center"
+                      graphic={EmptyStatePreviewIcon}
+                      title="Nothing selected"
+                      description="Select an item from your inbox to preview it here."
+                    />
                   }
                 >
                   <PreviewPanel
