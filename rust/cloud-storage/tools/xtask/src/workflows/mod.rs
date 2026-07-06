@@ -14,6 +14,8 @@ mod assign_labels;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
+mod cargo_deny;
+mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
 mod code_check_cloud_storage;
@@ -109,6 +111,18 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "cargo_deny",
+        file_name: "cargo_deny.yml",
+        render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
+    },
+    WorkflowFile {
+        slug: "cargo_workspace_dependency_check",
+        file_name: "cargo_workspace_dependency_check.yml",
+        render_yaml: || {
+            render_gh_workflow(cargo_workspace_dependency_check::cargo_workspace_dependency_check)()
+        },
     },
     WorkflowFile {
         slug: "code_check_cloud_storage",
