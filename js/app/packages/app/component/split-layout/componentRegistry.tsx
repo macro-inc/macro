@@ -28,6 +28,7 @@ function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
   onMount(() => {
     analytics.pageView(pageTitle);
+    analytics.track('open_view', { viewId: pageTitle });
   });
 }
 

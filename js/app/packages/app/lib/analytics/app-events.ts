@@ -83,8 +83,20 @@ export type AppEvents = {
 
   // --- Entity lifecycle ----------------------------------------------------
   // Fired at data-layer chokepoints (core/util/create.ts, FileList
-  // itemOperations, property-save mutations, share/forward flows) so every UI
-  // surface is covered without per-surface instrumentation.
+  // itemOperations, property-save mutations, share/forward flows, BlockLoader)
+  // so every UI surface is covered without per-surface instrumentation.
+  /**
+   * An entity was opened in a split (md, task, pdf, chat, email, channel,
+   * canvas, code, project, company, contact, ...). Fired from BlockLoader on
+   * successful load; nested blocks and preview-panel peeks are excluded.
+   */
+  open_entity: EntityEventPayload;
+  /**
+   * A top-level view was opened (soup list views like inbox/mail/documents/
+   * tasks/channels, plus home, search, and the compose views). Fired from the
+   * split-layout component registry.
+   */
+  open_view: { viewId: string } & Record<string, unknown>;
   create_entity: EntityEventPayload;
   update_entity: EntityEventPayload & {
     /** Which property changed: 'name' | 'parent_project' | 'status' | ... */
