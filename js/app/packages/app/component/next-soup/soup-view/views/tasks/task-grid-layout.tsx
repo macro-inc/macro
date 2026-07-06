@@ -20,6 +20,7 @@ import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
+import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -186,6 +187,11 @@ export function TaskGridLayout(props: LayoutProps) {
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
           </Show>
+          <EntityRowTags
+            entityId={props.entity.id}
+            entityType={EntityType.TASK}
+            class="ml-auto"
+          />
         </Entity.Slot>
 
         <For each={TASK_GRID_COLUMNS}>
