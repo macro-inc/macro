@@ -81,7 +81,8 @@ import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity } from '@queries/soup/cache';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftOutputDbId,
@@ -400,7 +401,10 @@ export function BaseInput(props: {
   preloadedBody?: string;
   preloadedHtml?: string;
   sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
-  onMarkDone?: () => void;
+  onMarkDone?: (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
@@ -546,6 +550,10 @@ export function BaseInput(props: {
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
     createSignal(false);
+  // Undo entry for the mark-done triggered by the latest send, so undo-send
+  // can reverse it. Cleared on each send: undo-send must only un-mark-done
+  // when this send did the marking.
+  let markDoneUndoHandle: UndoHandle | undefined;
 
   const undoSend = async (draftId: string) => {
     try {
@@ -600,6 +608,20 @@ export function BaseInput(props: {
         props.setShowReply?.(true);
       }
 
+      // Reverse the mark-done this send triggered (restores the soup rows,
+      // notification state, and unarchives), then refresh the thread's soup
+      // item the same way a send does so inbox views show the restored draft.
+      const doneHandle = markDoneUndoHandle;
+      markDoneUndoHandle = undefined;
+      if (doneHandle) {
+        await doneHandle.undo({
+          onError: () => toast.failure('Failed to restore thread to inbox'),
+        });
+      }
+      if (threadId) {
+        void refetchSoupEntity(threadId, 'emailThread');
+      }
+
       toast.success('Send cancelled');
       invalidateSoupEntity(draftId);
     } catch {
@@ -638,7 +660,14 @@ export function BaseInput(props: {
       refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
-        props.onMarkDone?.();
+        // Silent: the "Email sent" toast is already up and the mark-done
+        // toast would replace it.
+        props.onMarkDone?.({
+          silent: true,
+          onUndoHandle: (handle) => {
+            markDoneUndoHandle = handle;
+          },
+        });
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -1060,7 +1089,12 @@ export function BaseInput(props: {
     }
 
     pendingMentions = prepared.mentions;
-    setShouldMarkDoneOnSuccess(markDone);
+    // Sending a reply marks the thread done. Gated on inbox_visible because
+    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
+    // replying from search or the sent view) would be unarchived.
+    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
+    setShouldMarkDoneOnSuccess(willMarkDone);
+    markDoneUndoHandle = undefined;
 
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
@@ -1085,6 +1119,7 @@ export function BaseInput(props: {
         include_signature: includeSignature() ? undefined : false,
       },
       linkId: toHeaderLinkId(linkId),
+      skipSoupRefetch: willMarkDone,
     });
 
     // Block any save scheduled by reset side effects (form().reset() callDirty,

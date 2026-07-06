@@ -13,7 +13,7 @@ import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { useUndoableMutation } from '@queries/undo';
+import { type UndoHandle, useUndoableMutation } from '@queries/undo';
 import type { SoupState } from '../create-soup-state';
 
 // Valid list views where the mark done should be allowed to run
@@ -43,7 +43,15 @@ type MarkDoneVariables = {
   emailIds: string[];
   notificationIds: string[];
   restoreFocus?: () => void;
+  /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
+   *  where it would replace the "Email sent" toast. */
+  silent?: boolean;
+  /** Receives the undo handle once the mark-done is pushed onto the undo
+   *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
+  onUndoHandle?: (handle: UndoHandle) => void;
 };
+
+type MarkDoneExecuteOpts = Pick<MarkDoneVariables, 'silent' | 'onUndoHandle'>;
 
 /** Must be invoked inside a component tree that provides MutationUndoProvider. */
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
@@ -99,6 +107,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     },
     undoLabel: 'Mark Done',
     onPushed: (handle, variables) => {
+      variables.onUndoHandle?.(handle);
       const firstEntityId = variables.entities[0]?.id;
       const count = variables.entities.length;
       const message =
@@ -106,6 +115,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       let toastId: number | undefined;
 
       const showToast = () => {
+        if (variables.silent) return;
         toastId = toast.success(message, {
           actions: [
             {
@@ -154,7 +164,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     return false;
   };
 
-  const execute = async (entities: EntityData[], restoreFocus?: () => void) => {
+  const execute = async (
+    entities: EntityData[],
+    restoreFocus?: () => void,
+    opts?: MarkDoneExecuteOpts
+  ) => {
     const { emailIds, notificationIds } = resolveMarkEntitiesDoneVariables({
       entities,
       notificationSource: notificationSource(),
@@ -164,13 +178,16 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       emailIds,
       notificationIds,
       restoreFocus,
+      silent: opts?.silent,
+      onUndoHandle: opts?.onUndoHandle,
     });
   };
 
   const executeWithSoup = async (
     entities: EntityData[],
     soup: SoupState,
-    onNavigate?: (entity: EntityData) => void
+    onNavigate?: (entity: EntityData) => void,
+    opts?: MarkDoneExecuteOpts
   ) => {
     const currentIndex = soup.focus.index();
     const focusedIdBeforeMarkDone = soup.focus.id();
@@ -195,7 +212,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       onNavigate?.(nextRow.original);
     }
 
-    await execute(entities, restoreFocus);
+    await execute(entities, restoreFocus, opts);
   };
 
   return { canExecute, execute, executeWithSoup };
