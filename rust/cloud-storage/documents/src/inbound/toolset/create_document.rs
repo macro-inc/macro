@@ -82,11 +82,22 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
+        // gets the members team if exists so we can track the task number correctly
+        let maybe_team = service_context
+            .entity_access_service
+            .get_user_team(&user_id)
+            .await
+            .map(|t| t.map(|tt| tt.team_id))
+            .map_err(|e| ToolCallError {
+                description: "failed to get users team".to_string(),
+                internal_error: e.into(),
+            })?;
+
         let document =
             NewPlainTextDocument::builder(NewDocumentMetadata::new(self.document_name.clone()))
                 .file_type(parsed_file_type)
                 .text(self.file_content.clone())
-                .task_flag(self.is_task)
+                .task_flag(self.is_task, maybe_team)
                 .build()
                 .map_err(failed_to_create_document)?;
 
