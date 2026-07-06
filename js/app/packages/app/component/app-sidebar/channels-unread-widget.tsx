@@ -4,14 +4,19 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
-import { compareDateDesc } from '@core/util/date';
+import { compareDateDesc, formatDate } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { openNotification } from '@notifications';
+import { markdownToPlainText } from '@lexical-core';
+import {
+  getNotificationAction,
+  getNotificationContent,
+  openNotification,
+} from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Avatar, cn, NavRow, Tooltip } from '@ui';
+import { Avatar, cn, HoverCard, NavRow, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -111,6 +116,52 @@ function groupByChannel(
   }
 
   return groups;
+}
+
+const HOVER_PREVIEW_COUNT = 3;
+
+function NotificationPreviewRow(props: { notification: UnifiedNotification }) {
+  const senderName = useSenderName(props.notification.sender_id);
+  const preview = () => {
+    const content = getNotificationContent(props.notification);
+    return content
+      ? markdownToPlainText(content)
+      : getNotificationAction(props.notification);
+  };
+
+  return (
+    <div class="min-w-0 flex flex-col gap-0.5">
+      <div class="flex items-baseline gap-2">
+        <span class="min-w-0 truncate font-medium text-ink">
+          {senderName() ?? 'Someone'}
+        </span>
+        <span class="ml-auto shrink-0 text-ink-extra-muted">
+          {formatDate(props.notification.created_at)}
+        </span>
+      </div>
+      <p class="text-ink-muted wrap-break-word line-clamp-3">{preview()}</p>
+    </div>
+  );
+}
+
+function GroupHoverPreview(props: { group: ChannelGroup }) {
+  // Notifications arrive newest-first; show the latest few oldest → newest.
+  const visible = () =>
+    props.group.notifications.slice(0, HOVER_PREVIEW_COUNT).reverse();
+  const hiddenCount = () => props.group.notifications.length - visible().length;
+
+  return (
+    <div class="w-64 flex flex-col gap-2 text-xs">
+      <Show when={hiddenCount() > 0}>
+        <span class="text-ink-extra-muted">+{hiddenCount()} earlier</span>
+      </Show>
+      <For each={visible()}>
+        {(notification) => (
+          <NotificationPreviewRow notification={notification} />
+        )}
+      </For>
+    </div>
+  );
 }
 
 function ChannelGroupItem(props: {
@@ -239,8 +290,10 @@ function ChannelGroupItem(props: {
     </NavRow>
   );
 
+  const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setContextMenuOpen}>
       <ContextMenu.Trigger
         class={cn(isSlim() ? 'flex justify-center' : 'w-full')}
       >
@@ -252,7 +305,15 @@ function ChannelGroupItem(props: {
             </Tooltip>
           }
         >
-          <ButtonContent />
+          <HoverCard
+            placement="right"
+            triggerClass="w-full"
+            contentClass="items-stretch p-3"
+            content={<GroupHoverPreview group={props.group} />}
+            disabled={contextMenuOpen()}
+          >
+            <ButtonContent />
+          </HoverCard>
         </Show>
       </ContextMenu.Trigger>
 
