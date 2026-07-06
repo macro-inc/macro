@@ -233,7 +233,7 @@ async fn build_tool_context(
         lexical_client_for_tools,
         sync_service_client.clone(),
         ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
-        config.document_permission_jwt_secret_key.to_string(),
+        config.document_permission_jwt.to_string(),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
