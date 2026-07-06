@@ -1065,6 +1065,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
     return {
       sender: senderName(),
       subject,
+      content: '',
     };
   });
 
