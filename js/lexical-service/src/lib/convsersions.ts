@@ -143,7 +143,6 @@ export function toCognitionV2(raw: SerializedEditorState): NewMdNode[] {
     throw new Error('Error converting snapshot to cognition textv2');
   }
 }
-
 export type MarkdownTarget = 'internal' | 'external' | 'embedding';
 
 export function toMarkdownText(

@@ -55,6 +55,7 @@ prompt = { path = "../prompt" }
 models_properties = { path = "../models_properties" }
 models_search = { path = "../models_search" }
 rand.workspace = true
+reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 rootcause = { workspace = true }
 schemars.workspace = true

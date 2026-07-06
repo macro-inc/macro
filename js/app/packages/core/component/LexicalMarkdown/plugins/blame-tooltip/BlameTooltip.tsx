@@ -79,7 +79,7 @@ export function BlameTooltip(props: {
   onCleanup(hide);
 
   return (
-    <Show when={visible() && query.data?.userId ? query.data : null}>
+    <Show when={visible() && query.data?.userId ? query.data : undefined}>
       {(b) => (
         <div
           class="fixed z-50 text-xs text-ink-secondary/70 pointer-events-none"

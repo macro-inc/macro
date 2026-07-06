@@ -1,6 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -176,6 +177,17 @@ export function initAndStartEmailSync() {
 }
 
 /**
+ * The backend gates additional inboxes behind a paid subscription and answers
+ * `POST /link/gmail` with 402 when the user isn't entitled. The auth client maps
+ * that to a `PAYMENT_REQUIRED` error code; the add-inbox flow surfaces the
+ * paywall instead of a generic failure so the backend stays the source of truth
+ * on entitlement.
+ */
+function isPaymentRequired(errors: ReadonlyArray<{ code: string }>): boolean {
+  return errors.some((error) => error.code === 'PAYMENT_REQUIRED');
+}
+
+/**
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
@@ -189,6 +201,7 @@ export function initAndStartEmailSync() {
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
   const { query, initEmailLink } = useEmailLinks();
+  const { showPaywall } = usePaywallState();
 
   const completeNativeLink = async (linkId: string, forceShare: boolean) => {
     await initEmailLink({ linkId, forceShare }).match(
@@ -219,6 +232,10 @@ export function useAddInboxFlow() {
       'macro://inbox-link-callback'
     );
     if (result.isErr()) {
+      if (isPaymentRequired(result.error)) {
+        showPaywall(PaywallKey.MULTI_INBOX);
+        return;
+      }
       toast.failure('Failed to start Gmail link flow', { mobile: true });
       return;
     }
@@ -258,6 +275,8 @@ export function useAddInboxFlow() {
     const result = await initGmailLink.mutateAsync(callbackUrl);
     if (result.isOk()) {
       window.location.href = result.value.authorization_url;
+    } else if (isPaymentRequired(result.error)) {
+      showPaywall(PaywallKey.MULTI_INBOX);
     } else {
       toast.failure('Failed to start Gmail link flow');
     }

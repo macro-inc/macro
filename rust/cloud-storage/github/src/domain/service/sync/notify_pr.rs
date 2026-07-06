@@ -198,43 +198,49 @@ impl<
         &self,
         github_user_ids: &HashSet<String>,
     ) -> HashSet<MacroUserIdStr<'static>> {
+        if github_user_ids.is_empty() {
+            return HashSet::new();
+        }
+
+        let github_user_ids: Vec<String> = github_user_ids.iter().cloned().collect();
+        let links = match self
+            .repo
+            .get_macro_ids_by_github_user_ids(&github_user_ids)
+            .await
+        {
+            Ok(links) => links,
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    "failed to map GitHub PR participants"
+                );
+                return HashSet::new();
+            }
+        };
+
         let mut user_ids = HashSet::new();
+        for (github_user_id, macro_ids) in links {
+            if macro_ids.is_empty() {
+                tracing::trace!(
+                    participant_github_user_id=%github_user_id,
+                    "GitHub PR participant has no Macro user mapping"
+                );
+                continue;
+            }
 
-        for github_user_id in github_user_ids {
-            let macro_id = match self
-                .repo
-                .get_macro_id_by_github_user_id(github_user_id)
-                .await
-            {
-                Ok(Some(macro_id)) => macro_id,
-                Ok(None) => {
-                    tracing::trace!(
-                        participant_github_user_id=%github_user_id,
-                        "GitHub PR participant has no Macro user mapping"
-                    );
-                    continue;
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        participant_github_user_id=%github_user_id,
-                        "failed to map GitHub PR participant"
-                    );
-                    continue;
-                }
-            };
-
-            match MacroUserIdStr::try_from(macro_id.clone()) {
-                Ok(user_id) => {
-                    user_ids.insert(user_id);
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        macro_id=%macro_id,
-                        participant_github_user_id=%github_user_id,
-                        "GitHub PR participant mapping is not a valid Macro user ID"
-                    );
+            for macro_id in macro_ids {
+                match MacroUserIdStr::try_from(macro_id.clone()) {
+                    Ok(user_id) => {
+                        user_ids.insert(user_id);
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            macro_id=%macro_id,
+                            participant_github_user_id=%github_user_id,
+                            "GitHub PR participant mapping is not a valid Macro user ID"
+                        );
+                    }
                 }
             }
         }
@@ -299,13 +305,12 @@ impl<
         event: &ValidatedGithubWebhookEvent,
     ) -> Option<MacroUserIdStr<'static>> {
         let github_user_id = event.sender_github_user_id()?;
-        let macro_id = match self
+        let links = match self
             .repo
-            .get_macro_id_by_github_user_id(&github_user_id)
+            .get_macro_ids_by_github_user_ids(std::slice::from_ref(&github_user_id))
             .await
         {
-            Ok(Some(macro_id)) => macro_id,
-            Ok(None) => return None,
+            Ok(links) => links,
             Err(error) => {
                 tracing::warn!(
                     error=?error,
@@ -315,6 +320,10 @@ impl<
                 return None;
             }
         };
+
+        // A notification has a single sender; many Macro users may share one
+        // GitHub account, so pick the first mapped user.
+        let macro_id = links.get(&github_user_id).and_then(|ids| ids.first())?;
 
         match MacroUserIdStr::try_from(macro_id.clone()) {
             Ok(sender_id) => Some(sender_id),

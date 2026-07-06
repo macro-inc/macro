@@ -20,6 +20,7 @@ attachment = [
 ]
 ai_tools = [
   "dep:ai_toolset",
+  "dep:ai_usage",
   "dep:async-trait",
   "dep:model_file_type",
   "dep:schemars",
@@ -99,6 +100,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env_var = { path = "../macro_env_var" }
+macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
@@ -133,6 +135,7 @@ urlencoding = { workspace = true }
 
 # AI Tool dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }
+ai_usage = { path = "../ai_usage", optional = true }
 async-trait = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
 model_file_type = { path = "../model_file_type", optional = true }

@@ -1,0 +1,37 @@
+@keyframes mobile-touch-menu-show {
+  from {
+    width: 10rem;
+    height: 5rem;
+  }
+  to {
+    width: var(
+      --mobile-touch-menu-width,
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+    );
+    height: var(--mobile-touch-menu-height, 23.5rem);
+  }
+}
+
+@keyframes mobile-touch-menu-hide {
+  from {
+    width: var(
+      --mobile-touch-menu-width,
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+    );
+    height: var(--mobile-touch-menu-height, 23.5rem);
+    opacity: 1;
+  }
+  to {
+    width: 0rem;
+    height: 0rem;
+    opacity: 0;
+  }
+}
+
+.mobile-touch-menu-content {
+  animation: mobile-touch-menu-hide 120ms ease-in forwards;
+}
+
+.mobile-touch-menu-content[data-expanded] {
+  animation: mobile-touch-menu-show 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
+}

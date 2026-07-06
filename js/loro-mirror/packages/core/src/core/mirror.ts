@@ -237,10 +237,11 @@ export class Mirror<S extends SchemaType> {
     this.state = newState;
 
     // Register root containers
-    if (this.schema) {
-      for (const key in this.schema.definition) {
-        if (Object.prototype.hasOwnProperty.call(this.schema.definition, key)) {
-          const fieldSchema = this.schema.definition[key];
+    if (this.schema && this.schema.type === 'schema') {
+      const rootSchema = this.schema as RootSchemaType<Record<string, ContainerSchemaType>>;
+      for (const key in rootSchema.definition) {
+        if (Object.prototype.hasOwnProperty.call(rootSchema.definition, key)) {
+          const fieldSchema = rootSchema.definition[key];
 
           if (
             [
@@ -556,7 +557,7 @@ export class Mirror<S extends SchemaType> {
           this.applyContainerChanges(container, containerChanges);
         } else {
           throw new Error(
-            `Container not found for ID: ${containerId}. 
+            `Container not found for ID: ${containerId}.
                         This is likely due to a stale reference or a synchronization issue.`
           );
         }
@@ -727,7 +728,7 @@ export class Mirror<S extends SchemaType> {
         break;
       default:
         throw new Error(
-          `Unknown container kind for top-level update: ${kind}. 
+          `Unknown container kind for top-level update: ${kind}.
                     This is likely a programming error or unsupported container type.`
         );
     }
@@ -766,8 +767,9 @@ export class Mirror<S extends SchemaType> {
       }
 
       // Get the idSelector function from the schema
-      const idSelector = schema?.idSelector;
-      const itemSchema = schema?.itemSchema;
+      const listSchema = (schema != null && (isLoroListSchema(schema) || isLoroMovableListSchema(schema))) ? schema : undefined;
+      const idSelector = listSchema?.idSelector;
+      const itemSchema = listSchema?.itemSchema;
 
       if (this.options.debug) {
         console.log(

@@ -439,6 +439,12 @@ const extractQueryTargets = (query: Query): QueryTarget[] => {
     targets.add('df');
   }
 
+  // An email view scopes the query to emails even when no ef field is set,
+  // so don't stuff the match-nothing threadId filter onto the email target.
+  if (query.emailView) {
+    targets.add('ef');
+  }
+
   for (const field of Object.keys(query.include ?? {})) {
     if (field in FIELD_CONFIG) {
       targets.add(FIELD_CONFIG[field as CompiledFieldName].target);

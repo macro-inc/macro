@@ -1,6 +1,7 @@
 use anyhow::Context;
 use axum::{
     Json,
+    http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
@@ -10,6 +11,7 @@ use tower_cookies::Cookies;
 
 use crate::api::{
     context::ApiContext,
+    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
     oauth2::{
         OAuthState, format_redirect_uri,
         login::{self},
@@ -29,10 +31,31 @@ pub enum GithubLinkError {
 
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
-        Json(ErrorResponse {
-            message: self.to_string().into(),
-        })
-        .into_response()
+        let (status_code, message): (StatusCode, &str) = match &self {
+            GithubLinkError::GithubServiceError(GithubError::NoLinkFound) => {
+                (StatusCode::NOT_FOUND, "no github link found")
+            }
+            GithubLinkError::GithubServiceError(GithubError::ReauthenticationRequired) => (
+                StatusCode::PRECONDITION_REQUIRED,
+                REAUTHENTICATION_REQUIRED_MESSAGE,
+            ),
+            GithubLinkError::InternalError(error) => {
+                tracing::error!(error=?error, "internal error occurred while linking github account");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")
+            }
+            GithubLinkError::GithubServiceError(error) => {
+                tracing::error!(error=?error, "github service error occurred while linking github account");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")
+            }
+        };
+
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 

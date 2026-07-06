@@ -1,6 +1,6 @@
-import { Mirror, type InferType } from '../loro-mirror/packages/core/src';
-import { LoroDoc } from 'loro-crdt';
 import type { SerializedEditorState } from 'lexical';
+import { LoroDoc } from 'loro-crdt';
+import { type InferType, Mirror } from '../loro-mirror/packages/core/src';
 import { MARKDOWN_GOLDEN } from './markdown-golden.1';
 import { MARKDOWN_LORO_SCHEMA } from './markdown-loro-schema';
 import { markdownToSerializedEditorStateWithIds } from './utils/markdown-state';

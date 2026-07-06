@@ -93,6 +93,7 @@ pub enum Port {
     StaticFile = 8094,
     Unfurl = 8095,
     ImageProxy = 8097,
+    Kafka = 9092,
 }
 
 impl Port {
@@ -194,6 +195,10 @@ impl Instance {
 
     pub fn volume_opensearch(&self) -> String {
         self.suffixed_underscore("macro_opensearch_data")
+    }
+
+    pub fn volume_kafka(&self) -> String {
+        self.suffixed_underscore("macro_kafka_data")
     }
 
     pub fn volume_fusionauth_db(&self) -> String {

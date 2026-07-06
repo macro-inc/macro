@@ -15,8 +15,11 @@ import {
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 type TagName = keyof HTMLElementTagNameMap;
-
 const ALLOWED_TAGS = new Set<TagName>(['div', 'p', 'span', 'blockquote']);
+
+export const isAllowedTagName = (name: TagName | string): name is TagName => {
+  return ALLOWED_TAGS.has(name as TagName);
+}
 
 export type ClassedBlockData = {
   tag: TagName;

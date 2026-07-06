@@ -81,7 +81,8 @@ import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity } from '@queries/soup/cache';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftOutputDbId,
@@ -379,6 +380,7 @@ type UndoReplySnapshot = {
   draftId: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
+  includeSignature: boolean;
 };
 // Set on send, persists across navigation, only consumed by undoSend.
 let undoSendSnapshot: UndoReplySnapshot | null = null;
@@ -399,7 +401,10 @@ export function BaseInput(props: {
   preloadedBody?: string;
   preloadedHtml?: string;
   sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
-  onMarkDone?: () => void;
+  onMarkDone?: (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
@@ -521,6 +526,7 @@ export function BaseInput(props: {
       for (const attachment of restoredSnapshot.attachments) {
         form().attachments.add(attachment);
       }
+      setIncludeSignature(restoredSnapshot.includeSignature);
     });
   }
 
@@ -535,6 +541,7 @@ export function BaseInput(props: {
     for (const attachment of snapshot.attachments) {
       form().attachments.add(attachment);
     }
+    setIncludeSignature(snapshot.includeSignature);
   };
   onCleanup(() => {
     restoreUndoCallback = null;
@@ -543,6 +550,10 @@ export function BaseInput(props: {
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
     createSignal(false);
+  // Undo entry for the mark-done triggered by the latest send, so undo-send
+  // can reverse it. Cleared on each send: undo-send must only un-mark-done
+  // when this send did the marking.
+  let markDoneUndoHandle: UndoHandle | undefined;
 
   const undoSend = async (draftId: string) => {
     try {
@@ -576,11 +587,10 @@ export function BaseInput(props: {
             };
           }
         );
-        // Mark stale so next navigation fetches fresh data
-        queryClient.invalidateQueries({
-          queryKey: emailKeys.threadMessages(threadId).queryKey,
-          refetchType: 'none',
-        });
+        // Wipe the thread cache on unmount so the next visit fetches fresh
+        // data (with the restored draft). Deferred to avoid Suspense DOM
+        // detach while the thread is open.
+        markThreadDraftSaved(threadId);
       }
 
       const snapshot = undoSendSnapshot;
@@ -596,6 +606,20 @@ export function BaseInput(props: {
         // Stash for mount-time restore.
         undoReplySnapshot = snapshot;
         props.setShowReply?.(true);
+      }
+
+      // Reverse the mark-done this send triggered (restores the soup rows,
+      // notification state, and unarchives), then refresh the thread's soup
+      // item the same way a send does so inbox views show the restored draft.
+      const doneHandle = markDoneUndoHandle;
+      markDoneUndoHandle = undefined;
+      if (doneHandle) {
+        await doneHandle.undo({
+          onError: () => toast.failure('Failed to restore thread to inbox'),
+        });
+      }
+      if (threadId) {
+        void refetchSoupEntity(threadId, 'emailThread');
       }
 
       toast.success('Send cancelled');
@@ -636,7 +660,14 @@ export function BaseInput(props: {
       refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
-        props.onMarkDone?.();
+        // Silent: the "Email sent" toast is already up and the mark-done
+        // toast would replace it.
+        props.onMarkDone?.({
+          silent: true,
+          onUndoHandle: (handle) => {
+            markDoneUndoHandle = handle;
+          },
+        });
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -1024,6 +1055,7 @@ export function BaseInput(props: {
           draftId: snapshotDraftId,
           bodyHtml: snapshotHtml,
           attachments: [...form().attachments.list()],
+          includeSignature: includeSignature(),
         };
       }
     }
@@ -1057,7 +1089,12 @@ export function BaseInput(props: {
     }
 
     pendingMentions = prepared.mentions;
-    setShouldMarkDoneOnSuccess(markDone);
+    // Sending a reply marks the thread done. Gated on inbox_visible because
+    // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
+    // replying from search or the sent view) would be unarchived.
+    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
+    setShouldMarkDoneOnSuccess(willMarkDone);
+    markDoneUndoHandle = undefined;
 
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
@@ -1082,6 +1119,7 @@ export function BaseInput(props: {
         include_signature: includeSignature() ? undefined : false,
       },
       linkId: toHeaderLinkId(linkId),
+      skipSoupRefetch: willMarkDone,
     });
 
     // Block any save scheduled by reset side effects (form().reset() callDirty,
@@ -1709,6 +1747,7 @@ export function BaseInput(props: {
           </div>
           <MarkdownTextarea
             autoLinkMatchMode="common-tlds"
+            floatingFormatMenu
             captureEditor={(editor) => {
               setEditor(editor);
               form().setCapturedEditor(editor);
@@ -1898,7 +1937,13 @@ export function BaseInput(props: {
               !!form().sendTime()
             }
             pending={sendMutation.isPending}
-            hidden={isMobile() && !hasBodyText()}
+            hidden={
+              isMobile() &&
+              !hasBodyText() &&
+              // Forwards carry the quoted thread as content, so send is
+              // available without typing anything.
+              effectiveReplyType() !== 'forward'
+            }
             onClick={() => sendEmail()}
           />
         </div>

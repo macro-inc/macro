@@ -80,7 +80,7 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   },
   [PaywallKey.MULTI_INBOX]: {
     title: 'Connect more inboxes',
-    description: 'Upgrade to manage multiple email inboxes from one workspace.',
+    description: 'Upgrade your plan to connect more than two inboxes.',
     learnMoreUrl: 'https://docs.macro.com/product/inbox',
     learnMoreSubject: 'multiple inboxes',
   },

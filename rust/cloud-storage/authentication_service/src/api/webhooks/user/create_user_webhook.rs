@@ -114,54 +114,15 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     }
 
     // check if user exists
-    if let Ok((user_id, stripe_customer_id)) =
+    if let Ok((user_id, _stripe_customer_id)) =
         macro_db_client::user::get::get_user_id_and_stripe_customer_id_by_email(&ctx.db, &email)
             .await
     {
+        // The macro_user already exists for that email
+        // We do not allow a user to login through their secondary linked account for SSO so we shouldn't allow for passwordless either
         tracing::info!(user_id=?user_id, "user already exists");
 
-        // There are 2 reasons why the user profile already exists:
-        // 1. The user was not correctly updated to have a macro_user_id.
-        // 2. The user has performed an email link to another macro account.
-        // To check this, we can check if `macro_user_email_verification` exists for the email
-        // and if it does and is true, we do not need to create any new rows in macrodb.
-        // If not, we need to create a new macro_user and update their user profile.
-
-        let verification_status =
-            macro_db_client::macro_user_email_verification::get_macro_user_email_verification(
-                &ctx.db, &email,
-            )
-            .await
-            .context("failed to get macro user email verification")?;
-
-        if let Some(verification_status) = verification_status {
-            if !verification_status {
-                anyhow::bail!("user already exists and is not verified. cannot create user");
-            }
-
-            // We do nothing here, this allows the FusionAuth user to be created which will allow
-            // login through this email.
-
-            tracing::info!("user already exists and is verified. doing nothing");
-        } else {
-            // Need to backfill the user due to use case 1
-            tracing::warn!("user was not backfilled correctly. backfilling user");
-
-            let stripe_customer_id = stripe_customer_id.context("expected stripe_customer_id")?;
-
-            backfill_user(
-                ctx,
-                &fusionauth_user_id,
-                &user_id,
-                &username,
-                &email,
-                &stripe_customer_id,
-            )
-            .await
-            .context("failed to backfill user")?;
-        }
-
-        return Ok(());
+        anyhow::bail!("cannot login through secondary account link");
     }
 
     let start_time = std::time::Instant::now();
@@ -176,6 +137,39 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     .await?;
 
     tracing::trace!(user_id=?user_id, organization_id=?organization_id, "created user");
+
+    // Mark the account as freshly created so the auth callback completing this
+    // flow can attribute the login as a signup (analytics). Best-effort.
+    let _ = ctx
+        .macro_cache_client
+        .mark_user_just_signed_up(&email)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to mark user as just signed up"));
+
+    // Authoritative product-analytics signup event: fired here so every
+    // creation path (SSO, passwordless, iOS) counts exactly once, even if the
+    // user never returns to the app. The browser fires the ad-platform
+    // conversions instead — it holds the click-id cookies. Uses the same
+    // distinct id ("macro|{email}") the app identifies with. Fire-and-forget.
+    tokio::spawn({
+        let analytics_client = ctx.analytics_client.clone();
+        let user_id = user_id.clone();
+        let verified = req.event.user.verified;
+        let has_organization = organization_id.is_some();
+        async move {
+            let _ = analytics_client
+                .track_posthog(
+                    &user_id,
+                    "sign_up",
+                    serde_json::json!({
+                        "verified": verified,
+                        "hasOrganization": has_organization,
+                    }),
+                )
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
+        }
+    });
 
     // add user to all active experiments
     tokio::spawn({
@@ -196,48 +190,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .increment_create_user_hourly_rate_limit(&ip_address)
         .await
         .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
-
-    Ok(())
-}
-
-/// Used to handle updating an existing macro user to have a macro_user record.
-async fn backfill_user(
-    ctx: &ApiContext,
-    fusionauth_user_id: &str,
-    user_id: &str,
-    username: &str,
-    email: &str,
-    stripe_customer_id: &str,
-) -> anyhow::Result<()> {
-    let mut transaction = ctx.db.begin().await?;
-
-    // ensure macro user is created
-    macro_db_client::macro_user::create_macro_user(
-        &mut transaction,
-        fusionauth_user_id,
-        username,
-        stripe_customer_id,
-        email,
-    )
-    .await?;
-
-    // link the user to the correct fusionauth user
-    macro_db_client::user::update::upsert_macro_user_id(
-        &mut transaction,
-        user_id,
-        fusionauth_user_id,
-    )
-    .await?;
-
-    // move over their user profile
-    macro_db_client::user::update::migrate_macro_user_info(
-        &mut transaction,
-        fusionauth_user_id,
-        user_id,
-    )
-    .await?;
-
-    transaction.commit().await?;
 
     Ok(())
 }

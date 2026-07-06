@@ -1,9 +1,9 @@
 [package]
-name = "xtask"
-version = "0.1.0"
-edition = "2021"
-publish = false
 description = "Repo automation: regenerates workspace-hack and the deploy dep-closure map"
+edition = "2021"
+name = "xtask"
+publish = false
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -12,8 +12,8 @@ serde_json = { workspace = true }
 # Cargo.lock, so dev machines and CI always run the identical generator —
 # upgrading it is an explicit, reviewed lock change. guppy is pinned to the
 # version this hakari release is built against.
-hakari = { version = "0.17.9", features = ["cli-support"] }
 guppy = "0.17.24"
+hakari = { version = "0.17.9", features = ["cli-support"] }
 # Define GitHub Actions workflows in Rust (`cargo run -p xtask -- workflows`).
 # xtask is excluded from hakari traversal, so these stay out of workspace-hack.
 gh-workflow = "0.8"
@@ -22,22 +22,31 @@ indoc = "2"
 # hakari traversal, so these deps never enter workspace-hack. We reuse the
 # workspace-pinned versions so the orchestrator builds against the same crate
 # graph as the services it launches.
-clap = { workspace = true }
-serde = { workspace = true }
-tokio = { workspace = true }
-aws-sdk-sqs = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+clap = { workspace = true }
 macro_aws_config = { path = "../../macro_aws_config" }
 macro_queues = { path = "../../macro_queues" }
+serde = { workspace = true }
+tokio = { workspace = true }
+# Source of truth for `cargo x kafka-topics`, which generates
+# .github/kafka-cluster-topics.json from the crate's declared topics, and for
+# the local-stack topic provisioning (local::kafka).
+macro_event_topics = { path = "../../macro_event_topics" }
+# AdminClient for creating the declared topics on the local broker. Optional
+# (behind `local-stack`): the workspace links librdkafka dynamically, and the
+# CI jobs that build xtask on bare runners (path filters, generated-file
+# checks) have no system librdkafka to link against.
+rdkafka = { workspace = true, optional = true }
 # Typed docker-compose model (build the override as structs, not strings) +
 # Docker Engine API client for the discrete container/image ops.
-docker-compose-types = { version = "0.24", features = ["indexmap"] }
 bollard = "0.21"
-indexmap = { workspace = true }
-serde_yaml = "0.9"
-indicatif = "0.18"
 console = "0.15"
+docker-compose-types = { version = "0.24", features = ["indexmap"] }
+indexmap = { workspace = true }
+indicatif = "0.18"
+serde_yaml = "0.9"
 # Parse user-provided `--env-file` overlays (reading only; no crate emits the
 # docker-compose `env_file` format we generate). EnumIter derives the port list.
 dotenvy = { workspace = true }
@@ -45,3 +54,10 @@ strum = { workspace = true, features = ["derive"] }
 # Signal the frontend dev server's whole process group on shutdown (kill bun +
 # the Vite child it spawns, not just bun).
 libc = "0.2"
+macro_env_var = { path = "../../macro_env_var" }
+
+[features]
+# Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
+# default so plain `cargo run -p xtask` builds without a system librdkafka;
+# the just recipes (just/xtask.just) enable it.
+local-stack = ["dep:rdkafka"]

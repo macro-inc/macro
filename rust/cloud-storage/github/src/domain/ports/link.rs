@@ -29,6 +29,12 @@ pub trait GithubRepo: Send + Sync + 'static {
         github_user_id: &str,
     ) -> impl Future<Output = Result<GithubLink, Self::Err>> + Send;
 
+    /// Counts the number of github links for the given github user id
+    fn count_github_links_by_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
     /// Gets the github link by id
     fn get_github_link_by_id(
         &self,

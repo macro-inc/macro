@@ -8,7 +8,7 @@ use std::{
 };
 
 use entity_access::domain::models::{
-    AdminTeamRole, EntityAccessReceipt, EntityType, OwnerTeamRole, RequiredPermission,
+    AdminTeamRole, EntityAccessReceipt, EntityType, RequiredPermission,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use notification::domain::{
@@ -960,7 +960,7 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
-    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
     let result = service
         .invite_users_to_team(receipt, invites)
         .await
@@ -1002,7 +1002,7 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
-    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
     service
         .invite_users_to_team(receipt, invites)
         .await
@@ -1043,7 +1043,7 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
 
-    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &invited_by);
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &invited_by);
     service
         .invite_users_to_team(receipt, invites)
         .await
@@ -1293,7 +1293,7 @@ async fn test_invite_users_to_team_backfills_legacy_team_subscription() {
             .lowercase(),
     ];
     let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
-    let receipt = test_team_receipt::<OwnerTeamRole>(team_id, &owner_id);
+    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
 
     service
         .invite_users_to_team(receipt, invites)
@@ -1554,7 +1554,7 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
 
     service
         .remove_user_from_team(
-            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
             &member_id,
         )
         .await
@@ -1613,7 +1613,7 @@ async fn test_remove_user_from_team_rolls_back_remove_when_customer_decrement_fa
 
     let err = service
         .remove_user_from_team(
-            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
             &member_id,
         )
         .await
@@ -1725,7 +1725,7 @@ async fn test_remove_user_from_team_rolls_back_customer_and_remove_when_channel_
 
     let err = service
         .remove_user_from_team(
-            test_team_receipt::<OwnerTeamRole>(team_id, &owner_id),
+            test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
             &member_id,
         )
         .await

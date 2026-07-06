@@ -26,6 +26,7 @@ pub mod gen_compose;
 pub mod identity;
 pub mod instance;
 pub mod inventory;
+pub mod kafka;
 pub mod kickstart;
 pub mod local_env;
 pub mod localstack;
@@ -163,6 +164,11 @@ const AUX_SERVICE_IMAGES: &[&str] = &["websocket_service", "sync_service", "lexi
 
 /// Bring up a Local or Dev stack and (unless `--no-frontend`) the frontend.
 pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
+    if mode.spec().runs_local_infra {
+        // This mode will provision Kafka topics mid-bring-up; reject a build
+        // that can't do that before any containers start.
+        kafka::ensure_available(&format!("run-{}", mode.label()))?;
+    }
     let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     stage.section(&format!(
@@ -531,7 +537,7 @@ fn bring_up_infra(
     // is deliberately excluded — its healthcheck gives up (5 retries) long before
     // its ~minute kickstart finishes, so it's started + polled separately.
     let waited: &[&str] = if spec.runs_local_infra {
-        &["postgres", "redis", "search", "localstack"]
+        &["postgres", "redis", "search", "kafka", "localstack"]
     } else {
         &["redis", "localstack"]
     };
@@ -554,6 +560,12 @@ fn bring_up_infra(
         db::migrate(stage, instance)?;
     }
     if spec.runs_local_infra {
+        // Kafka is healthy (`--wait` gates on its broker healthcheck); create
+        // the event topics declared in `macro_event_topics` — the local
+        // equivalent of the MSK topic provisioning driven by the generated
+        // `.github/kafka-cluster-topics.json`.
+        stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+
         // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
         // poll it patiently until the kickstart has applied.
         let mut fa = compose_cmd(instance, env);
@@ -624,14 +636,15 @@ fn reload_services(
     stage.run(&format!("Reloading {names}"), &mut cmd)
 }
 
-/// Every Docker volume an instance owns: the app DB/cache/search plus the
+/// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
 /// FusionAuth DB/config. The single list `teardown`, `ensure_external_resources`,
 /// and `destroy` share.
-fn instance_volumes(instance: &Instance) -> [String; 5] {
+fn instance_volumes(instance: &Instance) -> [String; 6] {
     [
         instance.volume_postgres(),
         instance.volume_redis(),
         instance.volume_opensearch(),
+        instance.volume_kafka(),
         instance.volume_fusionauth_db(),
         instance.volume_fusionauth_config(),
     ]

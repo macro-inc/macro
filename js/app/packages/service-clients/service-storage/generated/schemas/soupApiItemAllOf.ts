@@ -7,4 +7,6 @@
 
 export type SoupApiItemAllOf = {
   frecency_score: number;
+  /** Whether the requesting user has favorited this entity. */
+  is_favorited: boolean;
 };

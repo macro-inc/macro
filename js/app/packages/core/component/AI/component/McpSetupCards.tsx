@@ -47,6 +47,9 @@ function CollapsibleCard(props: {
             <pre class="flex-1 min-w-0 overflow-x-auto text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
               <code>{props.copyValue}</code>
             </pre>
+            {/* TODO: migrate this copy button to the shared @ui PillButton
+                (borderless pill) once that refactor lands — deferred out of the
+                empty-states styling PR to keep it focused. */}
             <Button
               variant={isCopied() ? 'base' : 'ghost'}
               size="sm"

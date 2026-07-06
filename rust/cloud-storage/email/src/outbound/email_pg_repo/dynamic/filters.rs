@@ -761,19 +761,11 @@ pub(super) fn build_thread_email_filter(
             f
         }
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => SqlFragment::raw(
-            r#"EXISTS (
-                    SELECT 1
-                    FROM email_messages m_cal
-                    JOIN email_attachments a_cal ON a_cal.message_id = m_cal.id
-                    WHERE m_cal.thread_id = t.id
-                      AND (
-                        a_cal.filename ILIKE '%.ics'
-                        OR a_cal.mime_type = 'text/calendar'
-                        OR a_cal.mime_type = 'application/ics'
-                      )
-                )"#,
-        ),
+        // Denormalized flag maintained at attachment ingest — deriving this
+        // from email_attachments at query time is prohibitively slow.
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => {
+            SqlFragment::raw("t.has_calendar_attachment")
+        }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
             SqlFragment::raw("TRUE")

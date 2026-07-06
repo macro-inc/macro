@@ -1,0 +1,88 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/cargo_workspace_dependency_check.rs
+name: cargo workspace dependency check
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    branches:
+    - main
+    paths:
+    - rust/cloud-storage/Cargo.toml
+    - rust/cloud-storage/**/Cargo.toml
+    - rust/cloud-storage/Cargo.lock
+    - rust/cloud-storage/.config/hakari.toml
+    - rust/cloud-storage/workspace-hack/**
+    - rust/cloud-storage/tools/xtask/**
+    - '.github/workspace-dep-closures.json'
+    - '.github/workflows/cargo_workspace_dependency_check.yml'
+jobs:
+  dependency-check:
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |-
+          /home/runner/.cache/sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+    - name: install tool
+      run: cargo install cargo-workspace-dependency-checker@1.0.1
+    - name: check
+      run: |
+        cd rust/cloud-storage
+        # workspace-hack (generated, see xtask) re-declares third-party deps
+        # with explicit versions by design — that is how it pins union
+        # features. Drop it from the member list so this check only polices
+        # human-written crates for duplicate dependencies.
+        sed -i '/^  "workspace-hack",$/d' Cargo.toml
+        cargo-workspace-dependency-checker
+  hakari-and-dep-closures:
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: |-
+          /home/runner/.cache/sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+    - name: generated dependency artifacts are up to date
+      run: |
+        cd rust/cloud-storage
+        cargo run -p xtask --locked -- deps --check
+concurrency:
+  group: cargo-workspace-dependency-check-${{ github.ref }}
+  cancel-in-progress: true

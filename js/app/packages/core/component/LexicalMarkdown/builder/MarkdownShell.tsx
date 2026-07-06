@@ -22,6 +22,7 @@ import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
 import { ActionMenu } from '../component/menu/ActionsMenu';
 import { EmojiMenu } from '../component/menu/EmojiMenu';
+import { FloatingFormatMenu } from '../component/menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu';
 import { SnippetsMenu } from '../component/menu/SnippetsMenu';
@@ -315,12 +316,25 @@ export const MarkdownShell: Component<
           )}
         </Show>
 
-        {/* Floating Link Menu */}
-        <Show when={builderConfig.links?.floatingMenu}>
+        {/* Floating Link & Selection Format Menus */}
+        <Show
+          when={
+            builderConfig.links?.floatingMenu ||
+            builderConfig.floatingFormatMenu
+          }
+        >
           <FloatingMenuGroup>
-            <FloatingLinkMenu
-              autoLinkMatchMode={builderConfig.links?.autoLinkMatchMode}
-            />
+            <Show when={builderConfig.links?.floatingMenu}>
+              <FloatingLinkMenu
+                autoLinkMatchMode={builderConfig.links?.autoLinkMatchMode}
+              />
+            </Show>
+            <Show when={builderConfig.floatingFormatMenu}>
+              <FloatingFormatMenu
+                portalScope={props.portalScope}
+                showLinkButton={!!builderConfig.links?.floatingMenu}
+              />
+            </Show>
           </FloatingMenuGroup>
         </Show>
       </div>

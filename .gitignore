@@ -1,6 +1,7 @@
 .direnv/*
 .envrc
 **/.env
+**/.dev.vars
 .idea/
 **/.DS_Store
 .run/
@@ -9,6 +10,7 @@ temp/
 .env.local
 run-local.fish
 **/node_modules
+**/.wrangler
 **/result
 **/result-*
 .pi/plan/

@@ -177,6 +177,44 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 }
 
+export class InMemoryWALStore<T> implements WALStore<T> {
+  private entries: WALEntry<T>[] = [];
+  private seq = 0;
+
+  async append(update: T): Promise<void> {
+    this.entries.push({
+      id: ++this.seq,
+      update,
+      delivered: false,
+      createdAt: Date.now(),
+    });
+  }
+
+  async getAll(): Promise<WALEntry<T>[]> {
+    return [...this.entries];
+  }
+
+  async markDelivered(ids: number[]): Promise<void> {
+    const set = new Set(ids);
+    for (const e of this.entries) if (set.has(e.id)) e.delivered = true;
+  }
+
+  async pruneDelivered(): Promise<void> {
+    this.entries = this.entries.filter((e) => !e.delivered);
+  }
+
+  async pruneExpired(ttlMs: number): Promise<number> {
+    const cutoff = Date.now() - ttlMs;
+    const before = this.entries.length;
+    this.entries = this.entries.filter((e) => !hasExpired(e, cutoff));
+    return before - this.entries.length;
+  }
+
+  async count(): Promise<number> {
+    return this.entries.length;
+  }
+}
+
 /**
  * Append-only queue with retry semantics. Caller-supplied `push` does the
  * actual transport; the syncer handles persistence, batching, and dedupe.

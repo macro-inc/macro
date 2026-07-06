@@ -1,6 +1,8 @@
 //! ReadMetadata tool for reading document metadata.
 
-use crate::domain::ports::{DocumentService, create::DocumentCreationService};
+use crate::domain::ports::{
+    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
+};
 use crate::domain::response::DocumentMetadataWithContent;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -43,17 +45,18 @@ pub struct ReadMetadata {
 }
 
 #[async_trait]
-impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for ReadMetadata
+impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for ReadMetadata
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     type Output = ReadMetadataResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read metadata");

@@ -70,6 +70,7 @@ struct InfraEnv {
     redis_uri: String,
     opensearch_url: String,
     local_aws_url: String,
+    kafka_brokers: String,
 }
 
 impl InfraEnv {
@@ -79,6 +80,9 @@ impl InfraEnv {
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
+            // The broker's in-network listener (see docker-compose-databases.yml);
+            // host processes use localhost:9092 instead.
+            kafka_brokers: "kafka:29092".into(),
         }
     }
 
@@ -93,6 +97,7 @@ impl InfraEnv {
         env.insert("LAST_ONLINE_REDIS_URI".into(), self.redis_uri.clone());
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
+        env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -189,7 +194,10 @@ impl ServiceAuthEnv {
         ServiceAuthEnv {
             service_internal: identity::instance_secret("service-internal", name),
             dss_auth: identity::instance_secret("dss-auth", name),
-            doc_perm_jwt: identity::instance_secret("doc-perm-jwt", name),
+            // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
+            // ("local") so locally-minted tokens verify. This is ONLY for local
+            // dev use obv
+            doc_perm_jwt: "local".to_string(),
             internal_call: identity::instance_secret("internal-call", name),
             url_signing: identity::instance_secret("url-signing", name),
         }
@@ -217,10 +225,7 @@ impl ServiceAuthEnv {
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
             self.dss_auth.clone(),
         );
-        env.insert(
-            "DOCUMENT_PERMISSION_JWT_SECRET_KEY".into(),
-            self.doc_perm_jwt.clone(),
-        );
+        env.insert("DOCUMENT_PERMISSION_JWT".into(), self.doc_perm_jwt.clone());
         env.insert("INTERNAL_CALL_SECRET".into(), self.internal_call.clone());
         env.insert("URL_SIGNING_HMAC".into(), self.url_signing.clone());
     }

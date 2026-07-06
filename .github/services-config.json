@@ -264,6 +264,12 @@
       "deploy_binaries": [
         "mcp_service"
       ]
+    },
+    "kafka-cluster": {
+      "source_paths": [
+        "rust/cloud-storage/macro_event_topics/**"
+      ],
+      "stack_path": "infra/stacks/kafka-cluster/**"
     }
   }
 }

@@ -179,6 +179,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import {
@@ -413,10 +414,13 @@ export function MarkdownEditor(props: {
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
+    // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragEnd(event);
   });
 
   onDragMove((event: EntityDragEvent) => {
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragMove(event);
   });
 
@@ -509,7 +513,7 @@ export function MarkdownEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     return createPeerIdValidator(peerId, true);
   };
 
@@ -628,7 +632,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.getPeerIdStr();
+    const peerId = () => props.loroManager.peerIdStr;
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -1017,7 +1021,9 @@ export function MarkdownEditor(props: {
           </div>
         </Show>
         <Show when={ENABLE_GIT_BLAME()}>
-          <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          <Suspense>
+            <BlameTooltip state={blameTooltipStore} documentId={blockId} />
+          </Suspense>
         </Show>
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
@@ -1126,7 +1132,10 @@ export function MarkdownEditor(props: {
                 title="Lexical state debugger"
                 onClose={props.onLexicalStateDebuggerClose}
               >
-                <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+                <LexicalStateDebugger
+                  state={state()}
+                  editor={editor}
+                ></LexicalStateDebugger>
               </SplitBottomPanel>
             )}
           </Show>

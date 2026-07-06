@@ -130,9 +130,8 @@ export function floatWithSelection(
 
   const selectionChangeHandler = () => {
     let selection = document.getSelection();
-    let range = selection?.getRangeAt(0);
-    if (!range) return;
-    setCurrentAnchor(range);
+    if (!selection || selection.rangeCount === 0) return;
+    setCurrentAnchor(selection.getRangeAt(0));
     setInitialFloatingPosition(selection);
   };
 

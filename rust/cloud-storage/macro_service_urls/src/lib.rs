@@ -590,5 +590,11 @@ service_url! {
             dev: "https://sync-service-dev3.macroverse.workers.dev",
             prod: "https://sync-service-prod2.macroverse.workers.dev",
         },
+        /// AI editing worker API URL.
+        pub AiEditingWorkerUrl {
+            local: "http://localhost:8933",
+            dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
+            prod: "https://ai-editing-worker.macroverse.workers.dev",
+        },
     }
 }

@@ -11,10 +11,19 @@ macro_rules! secret {
     };
 }
 
+secret!(AWS_ACCESS_KEY);
+secret!(AWS_SECRET_ACCESS_KEY);
 secret!(CACHIX_AUTH_TOKEN);
+secret!(DD_API_KEY);
+secret!(DD_APP_KEY);
+secret!(DD_WEB_APP_TOKEN);
 secret!(DOPPLER_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(POSTHOG_API_KEY);
+secret!(PULUMI_ACCESS_TOKEN);
+secret!(SEGMENT_WRITE_KEY);
+secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is
@@ -25,6 +34,13 @@ pub const NEXTEST_TEST_THREADS: u32 = 32;
 /// fixed tag (instead of the default per-branch scoping) makes the cache volume
 /// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
 pub const CI_CACHE_TAG: &str = "sccache-ci";
+
+/// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
+/// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
+/// gives the frontend its own volume — isolated both from the Rust CI volume
+/// ([`CI_CACHE_TAG`]) and from the deploy workflows' heavily-churned default
+/// `linux-mid` volume.
+pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.

@@ -61,7 +61,8 @@ export function createConfiguredChannelMarkdownEditor(
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
-    .withSelectionData();
+    .withSelectionData()
+    .withFloatingFormatMenu();
 
   if (options.onAttachFromDisk) {
     const onAttachFromDisk = options.onAttachFromDisk;

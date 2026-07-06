@@ -8,7 +8,11 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { Layer } from '@ui';
-import { EntityIcon, getEntityIconType } from 'core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+  getEntityIconType,
+} from 'core/component/EntityIcon';
 import {
   type Accessor,
   createContext,
@@ -73,10 +77,15 @@ function ItemDragOverlay() {
     return state?.active.draggable;
   });
 
-  const iconType = createMemo(() => {
-    const data = activeDraggable()?.data as EntityDragData | undefined;
+  const iconType = createMemo((): EntityIconSelector => {
+    const data = activeDraggable()?.data;
     if (!data) return 'default';
-    return getEntityIconType(data);
+    // Favorite sortables carry a precomputed icon type (see FavoriteDragData
+    // in app-sidebar/favorites-section) instead of an entity shape.
+    if (data.dragType === 'favorite') {
+      return data.iconType as EntityIconSelector;
+    }
+    return getEntityIconType(data as EntityDragData);
   });
 
   const centeredOnPointerStyle = createMemo(() => {

@@ -566,8 +566,18 @@ export const authServiceClient = {
       ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
       : `${authHost}/link/gmail`;
     return (
-      await fetchWithAuth<InitGmailLinkResponse>(url, {
+      await fetchWithAuth<InitGmailLinkResponse, 'PAYMENT_REQUIRED'>(url, {
         method: 'POST',
+        // The backend returns 402 when the user isn't entitled to additional
+        // inboxes; surface it as a distinct code so the add-inbox flow can open
+        // the paywall instead of showing a generic failure.
+        errorResponseHandler: async (response) =>
+          response.status === 402
+            ? { code: 'PAYMENT_REQUIRED', message: 'Payment required' }
+            : {
+                code: 'HTTP_ERROR',
+                message: `HTTP error! status: ${response.status}`,
+              },
       })
     ).map((result) => result);
   },

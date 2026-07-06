@@ -142,7 +142,7 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
 
   static importDOM(): DOMConversionMap<HTMLElement> | null {
     return {
-      video: (domNode: HTMLVideoElement) => {
+      video: (domNode: HTMLElement) => {
         const src = domNode.getAttribute('src');
         const controls = domNode.hasAttribute('controls');
         const width = domNode.getAttribute('width');
@@ -180,7 +180,7 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
         }
         return null;
       },
-      div: (domNode: HTMLDivElement) => {
+      div: (domNode: HTMLElement) => {
         const video = domNode.querySelector('video');
         if (!video) return null;
 

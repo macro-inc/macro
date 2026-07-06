@@ -1,3 +1,4 @@
+mod ai_peer;
 mod auth;
 mod cf_worker;
 mod constants;

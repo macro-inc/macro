@@ -30,8 +30,8 @@ impl AiProjectionRepositoryImpl {
 }
 
 impl AiProjectionRepository for AiProjectionRepositoryImpl {
-    #[tracing::instrument(skip(self), err)]
-    async fn get_or_create_projection(
+    #[tracing::instrument(skip(self, prompt, output_schema), err)]
+    async fn upsert_projection_definition(
         &self,
         id: &str,
         prompt: &str,
@@ -39,14 +39,28 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         target_type: TargetType,
         refresh_cadence: RefreshCadence,
         expiry: Expiry,
+        model: Option<&str>,
+        output_schema: Option<&serde_json::Value>,
     ) -> Result<AiProjection, AiProjectionError> {
-        // Get-or-create: insert if absent, leave existing rows untouched, then
-        // read back the canonical row.
+        // Insert if absent; revise an existing definition only when something
+        // actually changed so routine requests don't churn the row.
         sqlx::query!(
             r#"
-            INSERT INTO ai_projection (id, prompt, prompt_hash, target_type, refresh_cadence, expiry)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (id) DO NOTHING
+            INSERT INTO ai_projection (id, prompt, prompt_hash, target_type, refresh_cadence, expiry, model, output_schema)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET
+                prompt = EXCLUDED.prompt,
+                prompt_hash = EXCLUDED.prompt_hash,
+                target_type = EXCLUDED.target_type,
+                refresh_cadence = EXCLUDED.refresh_cadence,
+                expiry = EXCLUDED.expiry,
+                model = EXCLUDED.model,
+                output_schema = EXCLUDED.output_schema,
+                updated_at = NOW()
+            WHERE ai_projection.prompt_hash IS DISTINCT FROM EXCLUDED.prompt_hash
+               OR ai_projection.target_type IS DISTINCT FROM EXCLUDED.target_type
+               OR ai_projection.refresh_cadence IS DISTINCT FROM EXCLUDED.refresh_cadence
+               OR ai_projection.expiry IS DISTINCT FROM EXCLUDED.expiry
             "#,
             id,
             prompt,
@@ -54,6 +68,8 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             target_type.to_string(),
             refresh_cadence.to_string(),
             expiry.to_string(),
+            model,
+            output_schema,
         )
         .execute(&self.pool)
         .await
@@ -61,7 +77,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
 
         let row = sqlx::query!(
             r#"
-            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, created_at, updated_at
+            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, model, output_schema, created_at, updated_at
             FROM ai_projection
             WHERE id = $1
             "#,
@@ -78,6 +94,8 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             target_type: row.target_type.parse()?,
             refresh_cadence: row.refresh_cadence.parse()?,
             expiry: row.expiry.parse()?,
+            model: row.model,
+            output_schema: row.output_schema,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -93,15 +111,23 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         // A request for a projection bumps `last_requested_at` so the background
         // refresh handler can tell active instances apart from abandoned ones
         // (which it eventually deletes once they fall outside their expiry
-        // window). The prompt and status are intentionally left untouched on
-        // conflict: the definition's prompt is immutable and the materialization
-        // lifecycle is owned by the worker.
+        // window). An instance created for an older prompt version is reset to
+        // cold — its previous result stays visible until regeneration
+        // overwrites it — while a same-version instance keeps its status.
         sqlx::query!(
             r#"
             INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (target_id, ai_projection_id)
-            DO UPDATE SET last_requested_at = NOW(), updated_at = NOW()
+            DO UPDATE SET
+                last_requested_at = NOW(),
+                updated_at = NOW(),
+                status = CASE
+                    WHEN user_ai_projection.prompt_hash IS DISTINCT FROM EXCLUDED.prompt_hash
+                    THEN 'cold'
+                    ELSE user_ai_projection.status
+                END,
+                prompt_hash = EXCLUDED.prompt_hash
             "#,
             ai_projection_id,
             target_id,
@@ -112,6 +138,16 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         .await
         .map_err(sqlx_err)?;
 
+        self.get_target_projection(ai_projection_id, target_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_target_projection(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
+    ) -> Result<UserAiProjection, AiProjectionError> {
         let row = sqlx::query!(
             r#"
             SELECT ai_projection_id, target_id, prompt_hash, status,
@@ -142,7 +178,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
     async fn get_projection(&self, id: &str) -> Result<AiProjection, AiProjectionError> {
         let row = sqlx::query!(
             r#"
-            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, created_at, updated_at
+            SELECT id, prompt, prompt_hash, target_type, refresh_cadence, expiry, model, output_schema, created_at, updated_at
             FROM ai_projection
             WHERE id = $1
             "#,
@@ -159,6 +195,8 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             target_type: row.target_type.parse()?,
             refresh_cadence: row.refresh_cadence.parse()?,
             expiry: row.expiry.parse()?,
+            model: row.model,
+            output_schema: row.output_schema,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -228,6 +266,31 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         &self,
         ai_projection_id: &str,
         target_id: &str,
+        prompt_hash: &str,
+    ) -> Result<(), AiProjectionError> {
+        sqlx::query!(
+            r#"
+            UPDATE user_ai_projection
+            SET status = $4, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2 AND prompt_hash = $3
+            "#,
+            ai_projection_id,
+            target_id,
+            prompt_hash,
+            ProjectionStatus::Loading.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(sqlx_err)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_projection_refreshing(
+        &self,
+        ai_projection_id: &str,
+        target_id: &str,
     ) -> Result<(), AiProjectionError> {
         sqlx::query!(
             r#"
@@ -237,7 +300,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
             "#,
             ai_projection_id,
             target_id,
-            ProjectionStatus::Loading.to_string(),
+            ProjectionStatus::Refreshing.to_string(),
         )
         .execute(&self.pool)
         .await
@@ -251,6 +314,7 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         &self,
         ai_projection_id: &str,
         target_id: &str,
+        prompt_hash: &str,
         result: &str,
         generated_at: chrono::DateTime<chrono::Utc>,
         stale_at: chrono::DateTime<chrono::Utc>,
@@ -258,12 +322,13 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         sqlx::query!(
             r#"
             UPDATE user_ai_projection
-            SET status = $3, result = $4, error = NULL,
-                generated_at = $5, stale_at = $6, updated_at = NOW()
-            WHERE ai_projection_id = $1 AND target_id = $2
+            SET status = $4, result = $5, error = NULL,
+                generated_at = $6, stale_at = $7, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2 AND prompt_hash = $3
             "#,
             ai_projection_id,
             target_id,
+            prompt_hash,
             ProjectionStatus::Ready.to_string(),
             result,
             generated_at,
@@ -281,16 +346,18 @@ impl AiProjectionRepository for AiProjectionRepositoryImpl {
         &self,
         ai_projection_id: &str,
         target_id: &str,
+        prompt_hash: &str,
         error: &str,
     ) -> Result<(), AiProjectionError> {
         sqlx::query!(
             r#"
             UPDATE user_ai_projection
-            SET status = $3, error = $4, updated_at = NOW()
-            WHERE ai_projection_id = $1 AND target_id = $2
+            SET status = $4, error = $5, updated_at = NOW()
+            WHERE ai_projection_id = $1 AND target_id = $2 AND prompt_hash = $3
             "#,
             ai_projection_id,
             target_id,
+            prompt_hash,
             ProjectionStatus::Error.to_string(),
             error,
         )

@@ -14,9 +14,19 @@ mod assign_labels;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
+mod cancel_stuck_cloud_storage_deploys;
+mod cargo_deny;
+mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
+mod cleanup_preview;
 mod code_check_cloud_storage;
+mod code_check_infra;
+mod deploy_preview;
+mod deploy_web_app;
+mod deploy_web_app_dev_push;
+mod pulumi_preview_pr;
+mod reusable_preview_service;
 mod runners;
 mod steps;
 mod vars;
@@ -43,6 +53,35 @@ struct WorkflowFile {
 /// Render a `gh_workflow::Workflow` to YAML. Used by most workflow modules.
 fn render_gh_workflow(build: fn() -> Workflow) -> impl Fn() -> Result<String> {
     move || build().to_string().map_err(|e| anyhow::anyhow!("{e:?}"))
+}
+
+/// Render a `gh_workflow::Workflow`, then apply a structural patch to the YAML
+/// for constructs gh-workflow 0.8 cannot express: reusable-workflow caller
+/// `with:` / `secrets: inherit`, and `workflow_call`/`workflow_dispatch` input
+/// blocks (the crate models those as unordered `HashMap`s, which would
+/// serialize in nondeterministic order and trip the drift guard).
+fn render_patched(
+    build: fn() -> Workflow,
+    patch: fn(&mut serde_yaml::Value) -> Result<()>,
+) -> Result<String> {
+    let yaml = render_gh_workflow(build)()?;
+    let mut root: serde_yaml::Value =
+        serde_yaml::from_str(&yaml).context("re-parsing generated workflow YAML")?;
+    patch(&mut root)?;
+    serde_yaml::to_string(&root).context("serializing patched workflow YAML")
+}
+
+/// Parse a YAML fragment (used by workflow `patch` fns to build ordered blocks).
+fn yaml_fragment(s: &str) -> Result<serde_yaml::Value> {
+    serde_yaml::from_str(s).context("parsing YAML fragment")
+}
+
+/// Look up `jobs.<id>` in a rendered workflow as a mutable mapping.
+fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serde_yaml::Mapping> {
+    root.get_mut("jobs")
+        .and_then(|jobs| jobs.get_mut(id))
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .with_context(|| format!("job `{id}` not found in rendered workflow"))
 }
 
 /// Every workflow we generate. Add new workflows here.
@@ -73,9 +112,81 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
     },
     WorkflowFile {
+        slug: "code_check_infra",
+        file_name: "code_check_infra.yml",
+        render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "cancel_stuck_cloud_storage_deploys",
+        file_name: "cancel_stuck_cloud_storage_deploys.yml",
+        render_yaml: || {
+            render_patched(
+                cancel_stuck_cloud_storage_deploys::cancel_stuck_cloud_storage_deploys,
+                cancel_stuck_cloud_storage_deploys::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "cargo_deny",
+        file_name: "cargo_deny.yml",
+        render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
+    },
+    WorkflowFile {
+        slug: "cargo_workspace_dependency_check",
+        file_name: "cargo_workspace_dependency_check.yml",
+        render_yaml: || {
+            render_gh_workflow(cargo_workspace_dependency_check::cargo_workspace_dependency_check)()
+        },
+    },
+    WorkflowFile {
+        slug: "cleanup_preview",
+        file_name: "cleanup_preview.yml",
+        render_yaml: || render_gh_workflow(cleanup_preview::cleanup_preview)(),
+    },
+    WorkflowFile {
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
+    },
+    WorkflowFile {
+        slug: "deploy_preview",
+        file_name: "deploy_preview.yml",
+        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
+    },
+    WorkflowFile {
+        slug: "deploy_web_app",
+        file_name: "deploy_web_app.yml",
+        render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
+    },
+    WorkflowFile {
+        slug: "deploy_web_app_dev_push",
+        file_name: "deploy_web_app_dev_push.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_web_app_dev_push::deploy_web_app_dev_push,
+                deploy_web_app_dev_push::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "pulumi_preview_pr",
+        file_name: "pulumi_preview_pr.yml",
+        render_yaml: || {
+            render_patched(
+                pulumi_preview_pr::pulumi_preview_pr,
+                pulumi_preview_pr::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "reusable_preview_service",
+        file_name: "reusable_preview_service.yml",
+        render_yaml: || {
+            render_patched(
+                reusable_preview_service::reusable_preview_service,
+                reusable_preview_service::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

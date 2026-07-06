@@ -56,7 +56,7 @@ function MobileDrawerContent(props: ComponentProps<typeof Drawer.Content>) {
   });
 
   return (
-    <Layer depth={1}>
+    <Layer depth={0}>
       <Drawer.Content
         onFocusIn={(e: FocusEvent) => {
           scrollToFocusedInput(e);

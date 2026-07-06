@@ -52,6 +52,6 @@ serde = { version = "1.0.219", features = ["derive"] }
 wasm-bindgen = "0.2.100"
 uuid = { version = "1.16.0", features = ["v4", "js"] }
 loro = "1.13"
-jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
+macro_sync_service_jwt = { path = "../cloud-storage/macro_sync_service_jwt" }
 matchit =  "0.8.4"
 

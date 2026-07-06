@@ -150,6 +150,7 @@ vi.mock(
         withFilePaste: () => builder,
         withRestoreFocus: () => builder,
         withSelectionData: () => builder,
+        withFloatingFormatMenu: () => builder,
         use: () => builder,
         onChange: () => builder,
         onEnter: () => builder,

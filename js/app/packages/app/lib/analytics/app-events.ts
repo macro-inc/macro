@@ -1,15 +1,50 @@
+/**
+ * Payload shared by the generic entity lifecycle events (`create_entity`,
+ * `update_entity`, `delete_entity`, `share_entity`).
+ *
+ * Only the identifying fields are structured; any event-specific context
+ * (e.g. `hasDueDate` on task creation, `newProjectId` on a move) rides along
+ * as unstructured extra properties instead of minting a new event type.
+ */
+export type EntityEventPayload = {
+  /**
+   * Coarse entity/block type: 'md' | 'task' | 'snippet' | 'code' | 'canvas' |
+   * 'chat' | 'project' | 'channel' | 'email' | 'document' | ... Open-ended on
+   * purpose — different layers know the entity at different granularities.
+   */
+  entityType: string;
+  entityId?: string;
+  /** UI surface the action originated from (e.g. 'launcher', 'mobile_dock'). */
+  source?: string;
+} & Record<string, unknown>;
+
 export type AppEvents = {
-  sign_up: Record<string, unknown>; // payload - include link status
-  sign_out: Record<string, unknown>;
+  // --- Acquisition & auth -------------------------------------------------
+  /**
+   * Account creation, browser side (GA only). The authoritative PostHog
+   * `sign_up` is emitted server-side from the create-user webhook; the
+   * browser fires this GA event plus the ad conversions when the backend
+   * flags the session via the `signed_up=true` redirect param. See
+   * signupCompletion.ts.
+   */
+  sign_up: Record<string, unknown>;
+  /** Signup intent: user clicked a sign-up CTA (pre-redirect, may not convert). */
+  sign_up_click: { method?: string } & Record<string, unknown>;
   login: Record<string, unknown>; // payload - include link status
-  onboarding_start: Record<string, unknown>;
-  onboarding_step: Record<string, unknown>; // payload -
-  onboarding_completed: Record<string, unknown>;
+  sign_out: Record<string, unknown>;
   login_from_onboarding: Record<string, unknown>;
   mobile_web_welcome_viewed: Record<string, unknown>;
   mobile_web_signup_sent_viewed: Record<string, unknown>;
-  onboarding_team_created: { teamId: string; inviteCount: number };
-  onboarding_team_skipped: Record<string, unknown>;
+
+  // --- Interactive tutorial (optional; decoupled from acquisition) ---------
+  tutorial_started: { isFirstTime: boolean };
+  tutorial_step: {
+    id: string;
+    index: number;
+    state: 'viewed' | 'completed' | 'skipped';
+  };
+  tutorial_completed: { isFirstTime: boolean };
+  tutorial_skipped: Record<string, unknown>;
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
@@ -18,9 +53,6 @@ export type AppEvents = {
   sidebar_click: Record<string, unknown>;
   notifications_toggled: Record<string, unknown>;
 
-  references_panel_open: { blockType: string };
-  notifications_panel_open: { blockType: string };
-  properties_panel_open: { blockType: string };
   share_menu_open: { blockType: string };
 
   copy_share_link: Record<string, unknown>;
@@ -46,24 +78,47 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   preview_panel_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
+  snippets_menu_use: Record<string, unknown>;
   split_created: { from: string };
 
-  share_entity: Record<string, unknown>; // payload - entity type, location
-  create_entity: Record<string, unknown>; // payload - entity type
-  delete_entity: Record<string, unknown>; // payload - entity type
-  update_entity: Record<string, unknown>; // payload - properties updated and entity type
+  // --- Entity lifecycle ----------------------------------------------------
+  // Fired at data-layer chokepoints (core/util/create.ts, FileList
+  // itemOperations, property-save mutations, share/forward flows, BlockLoader)
+  // so every UI surface is covered without per-surface instrumentation.
+  /**
+   * An entity was opened in a split (md, task, pdf, chat, email, channel,
+   * canvas, code, project, company, contact, ...). Fired from BlockLoader on
+   * successful load; nested blocks and preview-panel peeks are excluded.
+   */
+  open_entity: EntityEventPayload;
+  /**
+   * A top-level view was opened (soup list views like inbox/mail/documents/
+   * tasks/channels, plus home, search, and the compose views). Fired from the
+   * split-layout component registry.
+   */
+  open_view: { viewId: string } & Record<string, unknown>;
+  create_entity: EntityEventPayload;
+  update_entity: EntityEventPayload & {
+    /** Which property changed: 'name' | 'parent_project' | 'status' | ... */
+    property: string;
+  };
+  delete_entity: EntityEventPayload & { deleteType?: 'soft' | 'permanent' };
+  share_entity: EntityEventPayload & {
+    shareMethod?:
+      | 'public_link'
+      | 'channel'
+      | 'forward'
+      | 'attachment_public'
+      | (string & {});
+  };
 
   task_copy_branch_name: Record<string, unknown>;
-
-  search: Record<string, unknown>;
 
   theme_changed: { themeId: string };
 
   ai_message_sent: Record<string, unknown>;
   ai_attachment_add: Record<string, unknown>;
 
-  email_authorized: Record<string, unknown>;
-  email_unauthorized: Record<string, unknown>;
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
@@ -71,8 +126,20 @@ export type AppEvents = {
     emoji: string;
     action: 'add' | 'remove';
   };
-  channel_participant_add: Record<string, unknown>;
-  channel_participant_remove: Record<string, unknown>;
+
+  // --- Calls ---------------------------------------------------------------
+  // Frontend call interactions. Authoritative lifecycle (ended, recording,
+  // summary) is server-driven and tracked backend-side.
+  call_action: {
+    action:
+      | 'join_clicked'
+      | 'started'
+      | 'joined'
+      | 'left'
+      | 'screen_share_toggled';
+    channelId: string;
+    callId?: string;
+  } & Record<string, unknown>;
 
   block_pdf_definition_open: Record<string, unknown>;
   block_pdf_section_open: Record<string, unknown>;

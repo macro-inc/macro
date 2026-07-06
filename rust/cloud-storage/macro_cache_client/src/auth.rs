@@ -6,10 +6,22 @@ pub static MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS: u64 = 5 * 60;
 /// This is the length of time a passwordless login code is valid for within FusionAuth
 pub static MACRO_PASSWORDLESS_LOGIN_CODE_EXPIRY_SECONDS: u64 = 600;
 
+/// How long after account creation the first completed login is still
+/// attributed as a signup (the create-user webhook and the auth callback run
+/// within the same auth flow, so this only needs to cover slow IdP round trips).
+pub static MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS: u64 = 30 * 60;
+
 /// Generates the rate limit key for channel invites for a given ip
 macro_rules! macro_passwordless_login_code {
     ($email:expr) => {
         format!("pw_login_code:{}", $email)
+    };
+}
+
+/// Generates the "account was just created" marker key for a given email
+macro_rules! macro_just_signed_up {
+    ($email:expr) => {
+        format!("just_signed_up:{}", $email)
     };
 }
 
@@ -72,5 +84,21 @@ impl MacroCache {
     pub async fn get_passwordless_login_code(&self, email: &str) -> anyhow::Result<String> {
         let key = macro_passwordless_login_code!(email.to_lowercase());
         macro_redis::get::get::<String>(&self.inner, &key).await
+    }
+
+    /// Marks an account as just created so the auth callback that completes the
+    /// same flow can attribute the login as a signup.
+    pub async fn mark_user_just_signed_up(&self, email: &str) -> anyhow::Result<()> {
+        let key = macro_just_signed_up!(email.to_lowercase());
+        macro_redis::set::set_with_expiry(&self.inner, &key, 1, MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS)
+            .await
+    }
+
+    /// Consumes the just-signed-up marker for an email. Returns true exactly
+    /// once per marker: GETDEL is atomic, so the first caller wins.
+    pub async fn take_user_just_signed_up(&self, email: &str) -> anyhow::Result<bool> {
+        let key = macro_just_signed_up!(email.to_lowercase());
+        let value = macro_redis::get::get_del_optional::<u8>(&self.inner, &key).await?;
+        Ok(value.is_some())
     }
 }

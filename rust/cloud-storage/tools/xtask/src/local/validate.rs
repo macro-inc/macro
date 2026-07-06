@@ -13,7 +13,14 @@ use super::{arch, env_layer, gen_compose, instance::Instance, workspace_root, Mo
 
 /// Required non-Rust services that must be present in the rendered local
 /// compose.
-const REQUIRED_NON_RUST: &[&str] = &["postgres", "redis", "fusionauth", "localstack", "mailpit"];
+const REQUIRED_NON_RUST: &[&str] = &[
+    "postgres",
+    "redis",
+    "kafka",
+    "fusionauth",
+    "localstack",
+    "mailpit",
+];
 
 /// Render the merged compose config and assert every Rust service is a
 /// runtime-image container with no `build:` and an `/app/out` mount, and that

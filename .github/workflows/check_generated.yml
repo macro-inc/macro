@@ -7,7 +7,9 @@ name: check generated workflows
     - main
     paths:
     - rust/cloud-storage/tools/xtask/**
+    - rust/cloud-storage/macro_event_topics/**
     - '.github/workflows/**'
+    - '.github/kafka-cluster-topics.json'
 jobs:
   check-workflows:
     runs-on: namespace-profile-linux-small
@@ -24,3 +26,5 @@ jobs:
         rust-cache: 'false'
     - name: verify workflows are up to date
       run: cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- workflows --check
+    - name: verify kafka cluster topics are up to date
+      run: cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- kafka-topics --check

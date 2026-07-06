@@ -199,3 +199,63 @@ async fn fetch_db_attachments_in_bulk_returns_empty_for_nonexistent_messages(
 
     Ok(())
 }
+
+async fn fetch_calendar_flag(pool: &Pool<Postgres>, thread_id: Uuid) -> Result<bool> {
+    Ok(sqlx::query_scalar!(
+        "SELECT has_calendar_attachment FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+fn service_attachment(
+    filename: &str,
+    mime_type: &str,
+    provider_id: &str,
+) -> models_email::service::attachment::Attachment {
+    models_email::service::attachment::Attachment {
+        db_id: Uuid::new_v4(),
+        provider_id: Some(provider_id.to_string()),
+        data_url: None,
+        filename: Some(filename.to_string()),
+        mime_type: Some(mime_type.to_string()),
+        size_bytes: Some(1024),
+        sfs_id: None,
+        content_id: None,
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn insert_attachments_sets_then_clears_calendar_flag(pool: Pool<Postgres>) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b203")?;
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b504")?;
+    assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+
+    // Sync an .ics onto the message: the thread flag turns on.
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment(
+        "invite.ics",
+        "text/calendar",
+        "prov-ics-1",
+    )];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert!(fetch_calendar_flag(&pool, thread_id).await?);
+
+    // Re-sync with only a PDF: the .ics is orphan-deleted and the flag clears.
+    let mut tx = pool.begin().await?;
+    let mut attachments = vec![service_attachment(
+        "notes.pdf",
+        "application/pdf",
+        "prov-pdf-1",
+    )];
+    crate::attachments::provider::insert_attachments(&mut tx, message_id, &mut attachments).await?;
+    tx.commit().await?;
+    assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+
+    Ok(())
+}

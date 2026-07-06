@@ -29,6 +29,14 @@ pub struct TaskDedupConfig {
     pub duplicate_limit: i64,
     /// Minimum vector similarity for a candidate to be considered.
     pub min_vector_similarity: f64,
+    /// Minimum rerank score (a Cohere relevance score in production) for a
+    /// result to be returned from the draft similarity search. That path has no
+    /// LLM judge to weed out weak candidates, so the reranker's score is the
+    /// only relevance gate; it is tuned low (from the
+    /// `eval_similarity_rerank_floor` sweep, which scores with the production
+    /// Cohere reranker) so recall on the labeled corpus stays at 100%.
+    /// Detection is unaffected — its candidates are gated by the judge instead.
+    pub min_rerank_score: f64,
     /// Maximum candidates sent to the LLM judge per new task, in vector-score
     /// order. Bounds judge calls now that the cheap lexical pre-filter is gone.
     pub max_judge_candidates: usize,
@@ -45,6 +53,7 @@ impl Default for TaskDedupConfig {
             vector_candidate_limit: 24,
             duplicate_limit: 10,
             min_vector_similarity: 0.35,
+            min_rerank_score: 0.05,
             max_judge_candidates: 10,
             judge_concurrency: 4,
         }
@@ -244,11 +253,16 @@ where
             .await
             .map_err(|error| TaskDedupError::Dependency(error.into()))?;
 
+        // No judge runs on this path, so the rerank score is the only relevance
+        // gate; results below the floor are noise the composer shouldn't show.
+        // Reranked results are ordered by score, so the floor trims a suffix.
         let query_content = full_text(title, markdown);
         let ranked = self
             .rerank(&query_content, results)
             .await?
             .into_iter()
+            .filter(|(_, rerank_score)| f64::from(*rerank_score) >= self.config.min_rerank_score)
+            .map(|(candidate, _)| candidate)
             .take(self.config.duplicate_limit.max(0) as usize)
             .collect::<Vec<_>>();
 
@@ -316,6 +330,7 @@ where
             .rerank(&query_content, results)
             .await?
             .into_iter()
+            .map(|(candidate, _)| candidate)
             .take(self.config.max_judge_candidates)
             .collect();
 
@@ -412,15 +427,16 @@ where
     }
 
     /// Drops results below the similarity floor, reranks the survivors against
-    /// `query`, and returns them as [`Candidate`]s ordered by descending
-    /// relevance. The reranker only carries each result's `document_id` through,
-    /// so the collapsed content and vector score are looked back up afterwards.
-    /// An empty survivor set skips the reranker entirely.
+    /// `query`, and returns them as [`Candidate`]s (paired with their rerank
+    /// score) ordered by descending relevance. The reranker only carries each
+    /// result's `document_id` through, so the collapsed content and vector score
+    /// are looked back up afterwards. An empty survivor set skips the reranker
+    /// entirely.
     async fn rerank(
         &self,
         query: &str,
         results: Vec<SearchResults<String, DIMS>>,
-    ) -> Result<Vec<Candidate>, TaskDedupError> {
+    ) -> Result<Vec<(Candidate, f32)>, TaskDedupError> {
         let mut lookup: HashMap<String, Candidate> = HashMap::new();
         let mut survivors: Vec<SearchResults<String, DIMS>> = Vec::new();
         for result in results {
@@ -443,7 +459,11 @@ where
 
         Ok(reranked
             .into_iter()
-            .filter_map(|scored| lookup.remove(&scored.item))
+            .filter_map(|scored| {
+                lookup
+                    .remove(&scored.item)
+                    .map(|candidate| (candidate, scored.score))
+            })
             .collect())
     }
 

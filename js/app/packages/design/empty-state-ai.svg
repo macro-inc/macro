@@ -1,1 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 0 50 50" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="0.5"><g transform="translate(5.865 13.85)"><g fill="currentColor" stroke="none"><path d="M30.7.9c-10.48,6.05-12.91,5.88-18.76,2.5-.4-.23-1.05-.23-1.45,0s-.4.6,0,.84c5.85,3.37,6.15,4.78-4.33,10.83-.4.23-.4.6,0,.84s1.05.23,1.45,0c10.48-6.05,12.91-5.88,18.76-2.5.4.23,1.05.23,1.45,0s.4-.6,0-.84c-5.85-3.38-6.15-4.78,4.33-10.83.4-.23.4-.6,0-.84s-1.05-.23-1.45,0ZM21.69,9.86c-2.05.21-3.01.21-5.06,0-.36-1.18-.36-1.74,0-2.92,2.05-.21,3.01-.21,5.06,0,.36,1.18.36,1.74,0,2.92Z"/><path d="M19.88,7.98c.4.23.4.6,0,.84s-1.05.23-1.45,0-.4-.6,0-.84,1.05-.23,1.45,0Z"/></g><g opacity="0.5"><path d="M36.89,10.4l-19.05,11c-1.67.97-4.6.85-6.53-.27L1.85,15.67c-1.93-1.12-2.14-2.81-.47-3.77L20.43.9c1.67-.97,4.6-.85,6.53.27l9.45,5.46c1.93,1.12,2.14,2.81.47,3.77Z" stroke-dasharray="2.48 2.48" stroke-linecap="round" stroke-linejoin="round"/></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.17 -6.73 38.6 31.32" preserveAspectRatio="xMinYMid meet" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="0.25">
+  <style>
+    /* one-shot entrance: solid drops and fades in, platform fades to faint */
+    .esl { animation: esDrop .55s cubic-bezier(.25,.8,.4,1) both }
+    .esd { animation: esFd .5s ease-out both }
+    .es2 { animation-delay: .12s }
+    @keyframes esDrop { from { opacity: 0; transform: translateY(-3px) } to { opacity: 1; transform: translateY(0) } }
+    @keyframes esFd   { from { opacity: 0 } to { opacity: .5 } }
+    @media (prefers-reduced-motion: reduce) {
+      .esl, .esd { animation: none } .esl { opacity: 1 } .esd { opacity: .5 }
+    }
+  </style>
+
+  <!-- ground platform: drop shadow + dashed outline (fades to faint on appear) -->
+  <path d="M36.89,10.4l-19.05,11c-1.67.97-4.6.85-6.53-.27L1.85,15.67c-1.93-1.12-2.14-2.81-.47-3.77L20.43.9c1.67-.97,4.6-.85,6.53.27l9.45,5.46c1.93,1.12,2.14,2.81.47,3.77Z" stroke-linejoin="round" opacity=".12" transform="translate(0 2.1)"/>
+  <g class="esd">
+    <path d="M36.89,10.4l-19.05,11c-1.67.97-4.6.85-6.53-.27L1.85,15.67c-1.93-1.12-2.14-2.81-.47-3.77L20.43.9c1.67-.97,4.6-.85,6.53.27l9.45,5.46c1.93,1.12,2.14,2.81.47,3.77Z" stroke-dasharray="1.24 1.24" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- floating octahedron + depression (drops in on appear) -->
+  <g class="esl es2">
+
+    <!-- contact shadow on the platform (a circle lying on the ground plane) -->
+    <ellipse cx="19.13" cy="11.15" rx="2.49" ry="1.7" transform="rotate(-15.5 19.13 11.15)" stroke-opacity="0.16" stroke-linejoin="round"/>
+
+    <!-- octahedron: knockout fill (occludes platform), faint internal facets, beveled silhouette -->
+    <path d="M19.13,-5.85L28.66,-6.35L25.02,2.55L20.43,7.15L9.60,4.65L13.24,-4.25Z" fill="var(--color-surface)" stroke="none"/>
+    <path d="M10.30,4.56L24.33,2.64M18.66,-5.33L10.07,4.13M19.53,-5.28L24.62,1.98" stroke-opacity="0.15" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18.45,-5.67L19.83,-5.89L27.96,-6.31L28.39,-5.70L25.28,1.90L24.52,3.05L20.92,6.65L19.75,6.99L10.29,4.81L9.87,4.00L12.98,-3.60L13.92,-4.43Z" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- hemispherical depression, bored orthogonally into the front-right vertex.
+         rim = mouth, inner = bowl bottom (offset up-left into the solid). -->
+    <ellipse cx="23.25" cy="1.54" rx="3.43" ry="1.98" transform="rotate(-60.0 23.25 1.54)" fill="var(--color-surface)" stroke-opacity="0.5" stroke-linejoin="round"/>
+    <ellipse cx="22.39" cy="1.04" rx="1.89" ry="1.09" transform="rotate(-60.0 22.39 1.04)" fill="currentColor" fill-opacity="0.10" stroke-opacity="0.3" stroke-linejoin="round"/>
+
+    <!-- sphere: a filled orb emerging from the socket along the bore axis (+P).
+         move along the bore: cx += 0.87*t, cy += 0.5*t -->
+    <circle cx="25.24" cy="2.69" r="2.4" fill="var(--color-surface)"/>
+
+  </g>
+</svg>
