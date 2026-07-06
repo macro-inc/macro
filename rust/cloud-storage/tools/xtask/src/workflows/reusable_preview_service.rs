@@ -3,10 +3,10 @@
 //! `reusable_preview_service.yml` (replaces the hand-written
 //! `reusable-preview-service.yml`).
 //!
-//! The preview job builds Lambda artifacts with Nix when the service has them,
-//! so on Namespace it gets the deploy-family treatment: `linux-mid` with the
-//! profile's default `/nix` volume (the same crane/zigbuild layers the deploy
-//! pipeline keeps warm), `setup-nix` before use, `teardown-nix` after.
+//! The preview job is pulumi-preview + occasional Lambda Nix builds (warm runs
+//! are pure cache substitution), so `linux-small` suffices; it mounts the
+//! profile's default `/nix` volume, with `setup-nix` before use and
+//! `teardown-nix` after. Cold Lambda closures fall back to Cachix.
 
 use anyhow::Result;
 use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
@@ -82,7 +82,7 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
 
 fn preview() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Mid.to_string())
+        .runs_on(runners::Runner::Small.to_string())
         .add_step(checkout())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
