@@ -57,6 +57,18 @@ pub struct WriteResult {
 const IDENTITY_META_KEY: &str = "__meta:identity";
 const IDENTITY_FIELD: &str = "userId";
 
+/// Hydration/binding state of the session identity tag for this cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum IdentityState {
+    /// Not yet loaded from storage.
+    NotHydrated,
+    /// Hydrated: no identity has been bound to this cache yet.
+    Missing,
+    /// Hydrated: bound to this identity. (Named `Bound` rather than `Some`
+    /// to avoid shadowing/confusion with `Option::Some` in matches.)
+    Bound(String),
+}
+
 /// Default hot-tier capacity (records, not bytes — byte budgets are a
 /// hardening-phase refinement).
 pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
@@ -66,8 +78,7 @@ pub struct Engine<S: Storage> {
     hot: LruCache<EntityKey, Record>,
     docs: HashMap<String, Document>,
     deps: DepIndex,
-    /// Memoized identity binding (`None` = not yet loaded from storage).
-    bound_identity: Option<Option<String>>,
+    identity: IdentityState,
 }
 
 impl<S: Storage> Engine<S> {
@@ -81,30 +92,32 @@ impl<S: Storage> Engine<S> {
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: HashMap::new(),
             deps: DepIndex::new(),
-            bound_identity: None,
+            identity: IdentityState::NotHydrated,
         }
     }
 
-    /// The identity currently bound to this cache, loading it from storage
-    /// on first use.
-    async fn bound_identity(&mut self) -> Result<Option<String>, EngineError<S::Error>> {
-        if let Some(memo) = &self.bound_identity {
-            return Ok(memo.clone());
+    /// The identity binding of this cache, hydrating it from storage on
+    /// first use. Never returns [`IdentityState::NotHydrated`].
+    async fn bound_identity(&mut self) -> Result<IdentityState, EngineError<S::Error>> {
+        if self.identity == IdentityState::NotHydrated {
+            let key = EntityKey(IDENTITY_META_KEY.to_string());
+            let fetched = self
+                .storage
+                .get_batch(std::slice::from_ref(&key))
+                .await
+                .map_err(EngineError::Storage)?;
+            let stored = fetched.into_iter().next().flatten().and_then(|record| {
+                match record.fields.get(IDENTITY_FIELD) {
+                    Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
+                    _ => None,
+                }
+            });
+            self.identity = match stored {
+                Some(user_id) => IdentityState::Bound(user_id),
+                None => IdentityState::Missing,
+            };
         }
-        let key = EntityKey(IDENTITY_META_KEY.to_string());
-        let fetched = self
-            .storage
-            .get_batch(std::slice::from_ref(&key))
-            .await
-            .map_err(EngineError::Storage)?;
-        let bound = fetched.into_iter().next().flatten().and_then(|record| {
-            match record.fields.get(IDENTITY_FIELD) {
-                Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
-                _ => None,
-            }
-        });
-        self.bound_identity = Some(bound.clone());
-        Ok(bound)
+        Ok(self.identity.clone())
     }
 
     async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
@@ -117,7 +130,7 @@ impl<S: Storage> Engine<S> {
             .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
             .await
             .map_err(EngineError::Storage)?;
-        self.bound_identity = Some(Some(user_id.to_string()));
+        self.identity = IdentityState::Bound(user_id.to_string());
         Ok(())
     }
 
@@ -213,12 +226,12 @@ impl<S: Storage> Engine<S> {
         let mut reset = false;
         if let Some(observed) = identity {
             match self.bound_identity().await? {
-                None => self.bind_identity(observed).await?,
-                Some(bound) if bound == observed => {}
-                Some(_) => {
+                IdentityState::NotHydrated => unreachable!("bound_identity hydrates"),
+                IdentityState::Missing => self.bind_identity(observed).await?,
+                IdentityState::Bound(bound) if bound == observed => {}
+                IdentityState::Bound(_) => {
                     self.hot.clear();
                     self.storage.clear().await.map_err(EngineError::Storage)?;
-                    self.bound_identity = Some(None);
                     self.bind_identity(observed).await?;
                     reset = true;
                 }
@@ -296,7 +309,8 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> BTreeSet<OpId> {
         self.hot.clear();
         self.docs.clear();
-        self.bound_identity = None;
+        // Another engine may have rebound the shared storage → re-hydrate.
+        self.identity = IdentityState::NotHydrated;
         self.deps.all_ops()
     }
 
@@ -325,7 +339,8 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.deps = DepIndex::new();
-        self.bound_identity = None;
+        // The wipe below removes the binding record too.
+        self.identity = IdentityState::Missing;
         self.storage.clear().await.map_err(EngineError::Storage)
     }
 
