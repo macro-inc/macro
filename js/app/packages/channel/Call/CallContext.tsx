@@ -553,7 +553,15 @@ function createCallState() {
       setKrispFilter(krisp);
       await micTrack.setProcessor(krisp);
       if (room() !== r || !isLiveLocalTrack(micTrack)) {
-        await krisp.destroy();
+        // The room/track went away mid-attach. Destroying a processor that
+        // is still wired into the track's audio graph leaves a dead node in
+        // the pipeline — detach it via stopProcessor() instead (which
+        // destroys the processor internally).
+        if (micTrack.getProcessor() === krisp) {
+          await micTrack.stopProcessor();
+        } else {
+          await krisp.destroy();
+        }
         if (krispFilter() === krisp) setKrispFilter(null);
         return;
       }
