@@ -39,12 +39,6 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
-import {
-  CallsGalleryRow,
-  CallsLayoutToggle,
-  callsLayoutMode,
-  getCallsGalleryColumns,
-} from '@app/component/next-soup/soup-view/views/calls/CallsGallery';
 import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/component/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -372,14 +366,6 @@ const useSoupNotificationInvalidators = () => {
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 
-/**
- * One virtualizer item: a normal soup row, or (calls gallery mode) a chunk of
- * consecutive call rows rendered as one row of cards.
- */
-type DisplayRow =
-  | { kind: 'single'; row: SoupRow }
-  | { kind: 'cards'; rows: SoupRow[] };
-
 type SoupListEntryState = {
   focus: string | undefined;
   virtualCache?: CacheSnapshot;
@@ -682,9 +668,6 @@ export const SoupView = (props: SoupViewProps) => {
                     collapsed={() => <CollapsedSoupViewTabs />}
                     containerClass="h-full"
                   />
-                  <Show when={isComponentListView('calls')}>
-                    <CallsLayoutToggle />
-                  </Show>
                 </Show>
               </Show>
               <Show
@@ -899,100 +882,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const { paneVisible, placeholderVisible, previewVisible } =
     usePreviewPaneVisiblity();
-  // On desktop the calls view defaults to a gallery of call cards instead of
-  // list rows (toggleable from the header). The gallery only renders while
-  // the list column is wide enough for at least two card columns and while
-  // no search is active (hit snippets belong in the list) — otherwise the
-  // rows fall back to the normal list.
-  const [listColumnRef, setListColumnRef] = createSignal<HTMLElement>();
-  const listColumnSize = createElementSize(listColumnRef);
-
-  const galleryColumns = createMemo(() => {
-    if (isMobile() || currentView() !== 'calls') return 0;
-    if (callsLayoutMode() !== 'gallery') return 0;
-    if (searchText()) return 0;
-    return getCallsGalleryColumns(listColumnSize.width ?? 0);
-  });
-
-  // What the virtualizer actually renders: plain rows in list mode; in
-  // gallery mode consecutive call rows are chunked into card rows of
-  // `galleryColumns` while group headers and load-more rows stay full-width.
-  const displayRows = createMemo<DisplayRow[]>(() => {
-    const columns = galleryColumns();
-    const allRows = rows();
-
-    if (columns === 0) {
-      return allRows.map((row): DisplayRow => ({ kind: 'single', row }));
-    }
-
-    const out: DisplayRow[] = [];
-    let chunk: SoupRow[] = [];
-    const flush = () => {
-      if (chunk.length) {
-        out.push({ kind: 'cards', rows: chunk });
-        chunk = [];
-      }
-    };
-
-    for (const row of allRows) {
-      if (row.getIsGrouped() || row.getIsLoadMore()) {
-        flush();
-        out.push({ kind: 'single', row });
-        continue;
-      }
-      // Rows of collapsed groups render as empty items in list mode; skip
-      // them here so they don't leave blank cells in a card row.
-      if (row.group && !row.group.isExpanded()) continue;
-      if (row.original.type !== 'call') {
-        flush();
-        out.push({ kind: 'single', row });
-        continue;
-      }
-      chunk.push(row);
-      if (chunk.length === columns) flush();
-    }
-    flush();
-    return out;
-  });
-
-  const displayIndexByRowIndex = createMemo(() => {
-    const map = new Map<number, number>();
-    displayRows().forEach((displayRow, displayIndex) => {
-      if (displayRow.kind === 'single') {
-        map.set(displayRow.row.index, displayIndex);
-      } else {
-        for (const row of displayRow.rows) map.set(row.index, displayIndex);
-      }
-    });
-    return map;
-  });
-
-  // Navigation code scrolls by index into the full rows() array, but the
-  // virtualizer holds display rows (in gallery mode several calls share one
-  // card row) — remap so scroll targets stay aligned.
-  const adjustedVirtualizerHandle = createMemo<VirtualizerHandle | undefined>(
-    () => {
-      const handle = virtualizerHandle();
-      if (!handle) return handle;
-
-      return new Proxy(handle, {
-        get(target, prop) {
-          if (prop === 'scrollToIndex') {
-            return (
-              index: number,
-              opts?: Parameters<VirtualizerHandle['scrollToIndex']>[1]
-            ) =>
-              target.scrollToIndex(
-                displayIndexByRowIndex().get(index) ?? index,
-                opts
-              );
-          }
-          const value = Reflect.get(target, prop);
-          return typeof value === 'function' ? value.bind(target) : value;
-        },
-      });
-    }
-  );
 
   const focusFirstEntity = () => {
     const allRows = rows();
@@ -1004,16 +893,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     const result = soup.navigate.toIndex(firstEntityIndex);
 
-    // The calls view has no preview button in its chrome, so never auto-open
-    // the pane there — only keep an already-open pane (Space) in sync.
-    if (paneVisible() && (currentView() !== 'calls' || soup.previewEntity())) {
+    if (paneVisible()) {
       soup.setPreviewEntity(result?.row.id);
     }
 
     if (result) {
-      adjustedVirtualizerHandle()?.scrollToIndex(result.index, {
-        align: 'nearest',
-      });
+      virtualizerHandle()?.scrollToIndex(result.index, { align: 'nearest' });
     }
   };
 
@@ -1086,7 +971,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-    virtualizerHandle: adjustedVirtualizerHandle,
+    virtualizerHandle,
     hasNextPage: source.hasNextPage,
     isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
@@ -1119,7 +1004,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-    virtualizerHandle: adjustedVirtualizerHandle,
+    virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     currentView,
     activeTab,
@@ -1418,7 +1303,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={paneVisible() ? 840 : undefined}
           >
             <div
-              ref={setListColumnRef}
               class={cn(
                 '@container/u-list size-full unified-list-root flex flex-col relative',
                 paneVisible() && 'border-r border-edge-muted'
@@ -1509,42 +1393,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollBottom={debouncedFetchMore}
                           scrollBottomOffset={300}
-                          rows={displayRows()}
+                          rows={rows()}
                         >
-                          {(displayRow, i) => {
-                            if (displayRow.kind === 'cards') {
-                              return (
-                                <>
-                                  <CallsGalleryRow
-                                    rows={displayRow.rows}
-                                    columns={galleryColumns()}
-                                    onEntityClick={(row, event) => {
-                                      onEntityClick({
-                                        type: 'entity',
-                                        entity: row.original,
-                                        event,
-                                        location: undefined,
-                                        rowIndex: row.index,
-                                      });
-                                    }}
-                                    onEntityMouseMove={(row) => {
-                                      if (isKeypressActive()) return;
-                                      if (
-                                        soup.previewEntity() ||
-                                        isNewInboxEnabled()
-                                      )
-                                        return;
-                                      soup.focus.setIndex(row.index);
-                                    }}
-                                  />
-                                  <Show when={i() === displayRows().length - 1}>
-                                    <div class="h-15 mobile:hidden" />
-                                  </Show>
-                                </>
-                              );
-                            }
-
-                            const row = displayRow.row;
+                          {(row, i) => {
                             const timestamp = () => {
                               if (row.original.sortTs)
                                 return row.original.sortTs;
@@ -1694,7 +1545,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         ) =>
                                           handleMultiSelectChecked({
                                             entity: row.original,
-                                            entityIndex: row.index,
+                                            entityIndex: i(),
                                             next,
                                             shiftKey: shiftKey ?? false,
                                           })
@@ -1745,7 +1596,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 </Switch>
                                 <Show
                                   when={
-                                    i() === displayRows().length - 1 &&
+                                    i() === rows().length - 1 &&
                                     isSearchServiceLoading()
                                   }
                                 >
@@ -1754,7 +1605,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     Searching...
                                   </div>
                                 </Show>
-                                <Show when={i() === displayRows().length - 1}>
+                                <Show when={i() === rows().length - 1}>
                                   {/* Desktop-only: mobile clearance comes
                                       from the in-scroll trailing spacer. */}
                                   <div class="h-15 mobile:hidden" />
@@ -1845,11 +1696,11 @@ interface SoupListProps {
   virtualizerClass?: string;
   itemSize?: number;
   overscan?: number;
-  children: (row: DisplayRow, index: Accessor<number>) => JSX.Element;
+  children: (row: SoupRow, index: Accessor<number>) => JSX.Element;
   onScrollOffsetChange?: (offset: number) => void;
   onScrollBottom?: VoidFunction;
   scrollBottomOffset?: number;
-  rows: DisplayRow[];
+  rows: SoupRow[];
   cache?: CacheSnapshot;
 }
 
