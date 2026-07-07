@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use either::Either;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
