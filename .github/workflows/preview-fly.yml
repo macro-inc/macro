@@ -134,6 +134,12 @@ jobs:
           echo "DOPPLER_PREVIEW_TOKEN secret is not set (a Doppler service token scoped to the preview config)" >&2
           exit 1
         fi
+        if [ -z "$FLY_ORG" ]; then
+          echo "FLY_ORG is not set (repo variable or secret with the Fly org slug)" >&2
+          exit 1
+        fi
+        # `|| true`: the create fails once the app exists; real failures
+        # (auth, org) surface on the very next flyctl call.
         flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
         flyctl secrets set --app "$APP_NAME" --stage "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN"
         flyctl auth docker
@@ -145,7 +151,7 @@ jobs:
           --image "$image" \
           --yes
       env:
-        FLY_ORG: ${{ vars.FLY_ORG }}
+        FLY_ORG: ${{ vars.FLY_ORG || secrets.FLY_ORG }}
         DOPPLER_PREVIEW_TOKEN: ${{ secrets.DOPPLER_PREVIEW_TOKEN }}
     - name: Comment preview URL
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b

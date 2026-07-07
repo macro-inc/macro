@@ -239,6 +239,12 @@ fn deploy_to_fly() -> Step<Run> {
               echo "DOPPLER_PREVIEW_TOKEN secret is not set (a Doppler service token scoped to the preview config)" >&2
               exit 1
             fi
+            if [ -z "$FLY_ORG" ]; then
+              echo "FLY_ORG is not set (repo variable or secret with the Fly org slug)" >&2
+              exit 1
+            fi
+            # `|| true`: the create fails once the app exists; real failures
+            # (auth, org) surface on the very next flyctl call.
             flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
             flyctl secrets set --app "$APP_NAME" --stage "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN"
             flyctl auth docker
@@ -250,7 +256,9 @@ fn deploy_to_fly() -> Step<Run> {
               --image "$image" \
               --yes
         "#})
-        .add_env(("FLY_ORG", "${{ vars.FLY_ORG }}"))
+        // Accept the org slug from either a repo variable or a repo secret —
+        // it's not sensitive, but people reasonably reach for secrets first.
+        .add_env(("FLY_ORG", "${{ vars.FLY_ORG || secrets.FLY_ORG }}"))
         .add_env(("DOPPLER_PREVIEW_TOKEN", vars::DOPPLER_PREVIEW_TOKEN))
 }
 
