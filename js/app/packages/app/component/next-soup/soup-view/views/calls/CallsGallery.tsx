@@ -14,7 +14,7 @@ import { usePropertyEntityDisplay } from '@property/hooks';
 import { useCallRecordQuery } from '@queries/call/call';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn, Tooltip } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 
 export type CallsLayoutMode = 'gallery' | 'list';
 
@@ -95,12 +95,38 @@ function AttendeePill(props: { userId: string }) {
 }
 
 /**
+ * Don't fetch a card's record until it has stayed mounted this long —
+ * flinging the scrollbar through a large calls list mounts and unmounts
+ * hundreds of cards, and those fetches are heavy (full transcript) and
+ * uncancellable. Cards scrolled past never fetch.
+ */
+const CARD_FETCH_SETTLE_MS = 150;
+
+/**
+ * Treat a fetched record as fresh for this long so scrolling a card back
+ * into view reuses the cache instead of refetching. The preview image is a
+ * presigned URL with a 1h TTL, so a 10-minute window is comfortably safe;
+ * the opened call entity uses its own observer with the default staleTime
+ * and still refetches fresh data.
+ */
+const CARD_RECORD_STALE_MS = 10 * 60 * 1000;
+const CARD_RECORD_GC_MS = 30 * 60 * 1000;
+
+/**
  * The recording preview only exists on the full call record — the soup list
  * payload doesn't carry it — so each card fetches its record (shared with the
  * cache the opened call entity uses) and renders the presigned poster image.
  */
 function CallCardPreview(props: { entity: CallEntity }) {
-  const record = useCallRecordQuery(() => props.entity.id);
+  const [settled, setSettled] = createSignal(false);
+  const settleTimer = setTimeout(() => setSettled(true), CARD_FETCH_SETTLE_MS);
+  onCleanup(() => clearTimeout(settleTimer));
+
+  const record = useCallRecordQuery(() => props.entity.id, {
+    enabled: settled,
+    staleTime: CARD_RECORD_STALE_MS,
+    gcTime: CARD_RECORD_GC_MS,
+  });
   const [failed, setFailed] = createSignal(false);
   const previewUrl = () =>
     failed() ? undefined : record.data?.recordingPreviewUrl;
@@ -122,6 +148,7 @@ function CallCardPreview(props: { entity: CallEntity }) {
             src={url()}
             alt=""
             draggable={false}
+            loading="lazy"
             onError={() => setFailed(true)}
             class="size-full object-cover"
           />
