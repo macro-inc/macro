@@ -1,11 +1,9 @@
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useSplitLayout } from '../split-layout/layout';
-import { Show } from 'solid-js';
-import { Button } from '@ui';
-import { cn } from '@ui';
-
 import { TOKENS } from '@core/hotkey/tokens';
 import IconGear from '@icon/macro-gear.svg';
+import { Button, cn } from '@ui';
+import { Show } from 'solid-js';
+import { useSplitLayout } from '../split-layout/layout';
 
 export function SettingsButton() {
   const { settingsOpen, toggleSettings } = useSettingsState();

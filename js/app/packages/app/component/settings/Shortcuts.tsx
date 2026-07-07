@@ -1,11 +1,10 @@
-import { createSignal, For, Index, createMemo, type JSX } from 'solid-js';
 import { IS_MAC } from '@core/constant/isMac';
+import { cn, Hotkey, ToggleSwitch } from '@ui';
 import {
   enableScreencastHotkeys,
   setEnableScreencastHotkeys,
 } from '@ui/components/ScreencastHotkeys';
-import { Hotkey, ToggleSwitch } from '@ui';
-import { cn } from '@ui';
+import { createMemo, createSignal, For, Index, type JSX } from 'solid-js';
 import { SettingsCard, SettingsPage } from './primitives';
 
 interface ShortcutItem {

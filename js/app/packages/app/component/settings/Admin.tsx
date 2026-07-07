@@ -1,13 +1,13 @@
-import { For } from 'solid-js';
-import { Button, ToggleSwitch } from '@ui';
 import {
-  type DebugSettingDef,
-  DEBUG_SETTINGS,
   clearAllDebugSettings,
+  DEBUG_SETTINGS,
+  type DebugSettingDef,
   debugSettings,
   getDebugSetting,
   setDebugSetting,
 } from '@app/lib/debugSettings';
+import { Button, ToggleSwitch } from '@ui';
+import { For } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsRow } from './primitives';
 
 function DebugSettingRow(props: { setting: DebugSettingDef }) {

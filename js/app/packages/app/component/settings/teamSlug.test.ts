@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getTeamSlugError,
+  normalizeTeamSlugInput,
   TEAM_SLUG_ALLOWED_INPUT_REGEX,
   TEAM_SLUG_MAX_LENGTH,
   TEAM_SLUG_NORMALIZED_REGEX,
-  getTeamSlugError,
-  normalizeTeamSlugInput,
 } from './teamSlug.ts';
 
 describe('team slug validation', function () {

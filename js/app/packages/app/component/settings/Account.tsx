@@ -1,44 +1,50 @@
-import { UserIcon } from '@core/component/UserIcon';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useLogout } from '@core/auth/logout';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobile } from '@core/mobile/isMobile';
 import { toast } from '@core/component/Toast/Toast';
-import { staticFileIdEndpoint } from '@core/constant/servers';
-import { createStaticFile } from '@core/util/create';
-import { openFilePicker } from '@core/util/upload';
-import {
-  Dialog,
-  Button,
-  Panel,
-  Tooltip,
-  ToggleSwitch,
-  Dropdown,
-  cn,
-} from '@ui';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import { UserIcon } from '@core/component/UserIcon';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import { createStaticFile } from '@core/util/create';
+import { openFilePicker } from '@core/util/upload';
+import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
+import {
+  type SupportedNotificationSettings,
+  useNotificationSettings,
+} from '@notifications';
 import CheckIcon from '@phosphor/check.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
+import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
-import { useEmail, useUserId } from '@core/context/user';
+import { invoke } from '@tauri-apps/api/core';
+import {
+  Button,
+  cn,
+  Dialog,
+  Dropdown,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createEffect,
   createMemo,
@@ -50,15 +56,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  type SupportedNotificationSettings,
-  useNotificationSettings,
-} from '@notifications';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
-import { invoke } from '@tauri-apps/api/core';
 import { Transition } from 'solid-transition-group';
 import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
+import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;

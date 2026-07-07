@@ -1,3 +1,22 @@
+import { Billing } from '@app/component/settings/Billing';
+import { useLogout } from '@core/auth/logout';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
+import {
+  type SettingsTab,
+  settingsTabFromSplitPath,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { isMobile } from '@core/mobile/isMobile';
+import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
+import ArrowsIn from '@phosphor/arrows-in.svg';
+import ArrowsOut from '@phosphor/arrows-out.svg';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
+import SignOutIcon from '@phosphor/sign-out.svg';
+import { useLocation } from '@solidjs/router';
+import { Button, cn, Layer, SideNav } from '@ui';
 import {
   createRenderEffect,
   createSignal,
@@ -8,40 +27,21 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { useLocation } from '@solidjs/router';
-import {
-  type SettingsTab,
-  settingsTabFromSplitPath,
-  useSettingsState,
-} from '@core/constant/SettingsState';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
-import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
-import { useLogout } from '@core/auth/logout';
-import { isMobile } from '@core/mobile/isMobile';
-import { MobileApp } from './MobileApp';
-import { Agent } from './Agent';
-import { Admin } from './Admin';
-import { Appearance } from './Appearance';
-import { Account } from './Account';
-import { ConnectedAccounts } from './ConnectedAccounts';
-import { Shortcuts } from './Shortcuts';
-import { Team } from './Team';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { FloatRegion } from '../mobile/float-regions/FloatRegion';
 import { PillTabs } from '../mobile/PillTabs';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
-import { Button, cn, Layer, SideNav } from '@ui';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
-import { Billing } from '@app/component/settings/Billing';
+import { Account } from './Account';
+import { Admin } from './Admin';
+import { Agent } from './Agent';
+import { Appearance } from './Appearance';
+import { ConnectedAccounts } from './ConnectedAccounts';
+import { MobileApp } from './MobileApp';
+import { Shortcuts } from './Shortcuts';
+import { Team } from './Team';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';

@@ -1,7 +1,7 @@
-import { cn } from '@ui';
-import { Show } from 'solid-js';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import { cn } from '@ui';
+import { Show } from 'solid-js';
 
 /*
  * Shared bits for the Connected accounts integration cards: the trailing

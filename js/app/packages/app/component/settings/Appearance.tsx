@@ -1,22 +1,20 @@
-import {
-  monochromeIcons,
-  setMonochromeIcons,
-  setTooltipsEnabled,
-  tooltipsEnabled,
-} from '@ui/signals/signals';
+import { TabsInset } from '@core/component/TabsInset';
+import { toast } from '@core/component/Toast/Toast';
+import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
+import ClipboardIcon from '@phosphor/clipboard.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import ShuffleIcon from '@phosphor/shuffle.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import XIcon from '@phosphor/x.svg';
+import { ThemeChipPill } from '@theme/components/ThemeChipPill';
+import { ThemeChips } from '@theme/components/ThemeChips';
 import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
 import {
-  ThemeEditorBasic,
   randomizeTheme,
+  ThemeEditorBasic,
 } from '@theme/components/ThemeEditorBasic';
-import { createSignal, For, Show } from 'solid-js';
-import { TabsInset } from '@core/component/TabsInset';
-import XIcon from '@phosphor/x.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import ShuffleIcon from '@phosphor/shuffle.svg';
+import { DEFAULT_THEMES } from '@theme/constants';
 import {
   currentThemeId,
   darkModeTheme,
@@ -25,10 +23,11 @@ import {
   setIsThemeSaved,
   setLightModeTheme,
   setThemeShouldMatchSystem,
-  themes,
   themeShouldMatchSystem,
+  themes,
   userThemes,
 } from '@theme/signals/themeSignals';
+import type { ThemeV2 } from '@theme/types/themeTypes';
 import {
   applyTheme,
   deleteTheme,
@@ -38,13 +37,14 @@ import {
   saveTheme,
   updateTheme,
 } from '@theme/utils/themeUtils';
-import { toast } from '@core/component/Toast/Toast';
-import { DEFAULT_THEMES } from '@theme/constants';
-import { ThemeChips } from '@theme/components/ThemeChips';
-import { ThemeChipPill } from '@theme/components/ThemeChipPill';
-import type { ThemeV2 } from '@theme/types/themeTypes';
-import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, cn, Dropdown, Layer, ToggleSwitch } from '@ui';
+import {
+  monochromeIcons,
+  setMonochromeIcons,
+  setTooltipsEnabled,
+  tooltipsEnabled,
+} from '@ui/signals/signals';
+import { createSignal, For, Show } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,

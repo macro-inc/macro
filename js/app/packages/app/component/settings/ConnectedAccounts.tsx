@@ -1,9 +1,9 @@
-import { Show, Suspense } from 'solid-js';
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
-import { SettingsPage, SettingsSection } from './primitives';
+import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
 import { IntegrationsSection } from './Integrations';
+import { SettingsPage, SettingsSection } from './primitives';
 
 /**
  * Consolidated "Connections" page: one card per external account the user can
