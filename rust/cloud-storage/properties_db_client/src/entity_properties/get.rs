@@ -604,6 +604,51 @@ impl IndexedEntityProperty {
     }
 }
 
+/// Flatten one entity_properties row into the shape the search index stores.
+/// Null and unparseable values yield None so one bad value can't fail the
+/// whole index.
+fn flatten_property_for_index(
+    property_definition_id: Uuid,
+    values: Option<serde_json::Value>,
+) -> Option<IndexedEntityProperty> {
+    let value = values?;
+    if value.is_null() {
+        return None;
+    }
+    let parsed = match serde_json::from_value::<PropertyValue>(value) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            tracing::warn!(
+                error = ?e,
+                definition_id = %property_definition_id,
+                "skipping unparseable property value for index"
+            );
+            return None;
+        }
+    };
+    let mut property = IndexedEntityProperty {
+        definition_id: property_definition_id.to_string(),
+        ..Default::default()
+    };
+    match parsed {
+        PropertyValue::SelectOption(ids) => {
+            property.values = ids.into_iter().map(|id| id.to_string()).collect();
+        }
+        PropertyValue::EntityRef(refs) => {
+            property.values = refs.into_iter().map(|r| r.entity_id).collect();
+        }
+        PropertyValue::Link(urls) => property.values = urls,
+        PropertyValue::Str(s) => property.values = vec![s],
+        PropertyValue::Bool(b) => property.values = vec![b.to_string()],
+        PropertyValue::Num(n) => property.number_value = Some(n),
+        PropertyValue::Date(d) => property.date_value = Some(d.timestamp_millis()),
+    }
+    if property.is_empty() {
+        return None;
+    }
+    Some(property)
+}
+
 /// Fetch an entity's properties flattened for the search index. Each value
 /// lands under the field matching its type (equality-filterable values as
 /// strings, numbers, or epoch-millis dates); null and unparseable values are
@@ -629,46 +674,74 @@ pub async fn get_entity_properties_for_index(
     .fetch_all(db)
     .await?;
 
-    let mut result = Vec::with_capacity(rows.len());
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| flatten_property_for_index(row.property_definition_id, row.values))
+        .collect())
+}
+
+/// Page through the distinct entity ids that hold property rows of one
+/// entity type, ordered by entity id so offset pagination is stable. Used by
+/// the search properties backfill.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_entity_ids_with_properties(
+    db: &Pool<Postgres>,
+    entity_type: EntityType,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<String>> {
+    let rows = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT entity_id
+        FROM entity_properties
+        WHERE entity_type = $1
+        ORDER BY entity_id
+        LIMIT $2 OFFSET $3
+        "#,
+        entity_type as EntityType,
+        limit,
+        offset,
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+/// Batch variant of [`get_entity_properties_for_index`]: fetch the flattened
+/// properties of many entities of one type in a single query, keyed by
+/// entity id. Entities without properties are absent from the map.
+#[tracing::instrument(skip(db, entity_ids), err)]
+pub async fn get_entity_properties_for_index_batch(
+    db: &Pool<Postgres>,
+    entity_ids: &[String],
+    entity_type: EntityType,
+) -> Result<HashMap<String, Vec<IndexedEntityProperty>>> {
+    if entity_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            entity_id,
+            property_definition_id,
+            values as "values: serde_json::Value"
+        FROM entity_properties
+        WHERE entity_id = ANY($1)
+          AND entity_type = $2
+        "#,
+        entity_ids,
+        entity_type as EntityType,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut result: HashMap<String, Vec<IndexedEntityProperty>> = HashMap::new();
     for row in rows {
-        let Some(value) = row.values else {
+        let Some(property) = flatten_property_for_index(row.property_definition_id, row.values)
+        else {
             continue;
         };
-        if value.is_null() {
-            continue;
-        }
-        let parsed = match serde_json::from_value::<PropertyValue>(value) {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                tracing::warn!(
-                    error = ?e,
-                    definition_id = %row.property_definition_id,
-                    "skipping unparseable property value for index"
-                );
-                continue;
-            }
-        };
-        let mut property = IndexedEntityProperty {
-            definition_id: row.property_definition_id.to_string(),
-            ..Default::default()
-        };
-        match parsed {
-            PropertyValue::SelectOption(ids) => {
-                property.values = ids.into_iter().map(|id| id.to_string()).collect();
-            }
-            PropertyValue::EntityRef(refs) => {
-                property.values = refs.into_iter().map(|r| r.entity_id).collect();
-            }
-            PropertyValue::Link(urls) => property.values = urls,
-            PropertyValue::Str(s) => property.values = vec![s],
-            PropertyValue::Bool(b) => property.values = vec![b.to_string()],
-            PropertyValue::Num(n) => property.number_value = Some(n),
-            PropertyValue::Date(d) => property.date_value = Some(d.timestamp_millis()),
-        }
-        if property.is_empty() {
-            continue;
-        }
-        result.push(property);
+        result.entry(row.entity_id).or_default().push(property);
     }
 
     Ok(result)

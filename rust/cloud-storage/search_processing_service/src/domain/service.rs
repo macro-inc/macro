@@ -15,7 +15,8 @@ use tokio_util::sync::CancellationToken;
 use super::jobs::JobProgress;
 use super::models::{
     BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
-    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, SourcePage,
+    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, PropertiesBackfillRequest,
+    SourcePage,
 };
 use super::ports::{BackfillSource, SearchEventPublisher};
 
@@ -94,6 +95,12 @@ pub trait BackfillService: Send + Sync + 'static {
     fn backfill_emails(
         &self,
         req: EmailBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
+    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+    fn backfill_entity_properties(
+        &self,
+        req: PropertiesBackfillRequest,
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
@@ -215,6 +222,18 @@ where
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source(&self.publisher, &progress, &cancel, |offset| {
             self.source.fetch_emails(&req, offset)
+        })
+        .await
+    }
+
+    async fn backfill_entity_properties(
+        &self,
+        req: PropertiesBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
+    ) -> Result<BackfillReceipt, BackfillError> {
+        drain_source(&self.publisher, &progress, &cancel, |offset| {
+            self.source.fetch_entity_properties(&req, offset)
         })
         .await
     }

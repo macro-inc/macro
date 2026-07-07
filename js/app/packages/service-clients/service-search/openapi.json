@@ -1506,6 +1506,13 @@
               "is_read": {
                 "type": "boolean"
               },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the thread."
+              },
               "snippet": {
                 "type": ["string", "null"]
               },

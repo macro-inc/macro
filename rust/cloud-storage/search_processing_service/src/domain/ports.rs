@@ -19,7 +19,7 @@ use sqs_client::search::SearchQueueMessage;
 use super::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, SourcePage,
+    EmailBackfillRequest, PropertiesBackfillRequest, SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -82,6 +82,14 @@ pub trait BackfillSource: Send + Sync + 'static {
     fn fetch_emails(
         &self,
         req: &EmailBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+
+    /// Distinct entity ids holding property rows of the requested type,
+    /// paginated by plain offset over `entity_properties`.
+    fn fetch_entity_properties(
+        &self,
+        req: &PropertiesBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
 }

@@ -5,6 +5,7 @@ pub mod chats;
 pub mod documents;
 pub mod emails;
 pub mod model;
+mod properties;
 mod query;
 pub mod unified;
 mod utils;

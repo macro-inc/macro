@@ -1,21 +1,28 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use model::document::FileType;
+use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    email::EmailThreadBatchMessage,
+    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage,
 };
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, SourcePage,
+    EmailBackfillRequest, PropertiesBackfillRequest, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
 const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
+
+/// Page size for the properties backfill's distinct-entity-id scan. A fixed
+/// value rather than a config knob: property rows are few and one message is
+/// enqueued per entity.
+const PROPERTIES_PAGE_SIZE: usize = 5000;
 
 /// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
 /// struct, one DB pool, per-entity page sizes — collapses what used to be
@@ -318,6 +325,41 @@ impl BackfillSource for PgBackfillSource {
                         })
                     })
                     .collect::<Vec<_>>()
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_entity_properties(
+        &self,
+        req: &PropertiesBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let entity_type = EntityType::from_str(&req.entity_type)
+            .map_err(|e| BackfillError::Source(anyhow::Error::new(e)))?;
+
+        let entity_ids =
+            properties_db_client::entity_properties::get::get_entity_ids_with_properties(
+                &self.db,
+                entity_type,
+                PROPERTIES_PAGE_SIZE as i64,
+                offset as i64,
+            )
+            .await
+            .map_err(|e| BackfillError::Source(e.into()))?;
+
+        let rows_consumed = entity_ids.len();
+        let messages: Vec<SearchQueueMessage> = entity_ids
+            .into_iter()
+            .map(|entity_id| {
+                SearchQueueMessage::UpdateDocumentProperties(DocumentPropertiesUpdate {
+                    document_id: entity_id,
+                    entity_type: entity_type.to_string(),
+                })
             })
             .collect();
 

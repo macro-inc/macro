@@ -412,6 +412,18 @@ const EMAIL_BODY = {
         type: 'text',
         analyzer: 'standard',
       },
+      // Thread-level entity properties (e.g. tags), denormalized onto every
+      // message doc of the thread. Same nested shape as the documents index
+      // so the shared property/tag filters apply unchanged.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
     },
   },
 };
