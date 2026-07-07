@@ -15,6 +15,7 @@ fn emits_required_keys() {
     for key in [
         "ENVIRONMENT",
         "PORT",
+        "BASE_URL",
         "DATABASE_URL",
         "DATABASE_URL_READONLY",
         "REDIS_URI",
