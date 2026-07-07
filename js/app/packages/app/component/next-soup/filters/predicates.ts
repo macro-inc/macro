@@ -1,5 +1,7 @@
 import {
   type EntityData,
+  getCompanyOwnerId,
+  getCompanyStageOptionId,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isGithubPrEntity,
@@ -11,6 +13,7 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
+import { NO_ASSIGNEE } from './configs/base';
 
 /**
  * Unread filter - entity has unread content.
@@ -146,6 +149,39 @@ export function crmCompanyActiveFilter(entity: EntityData): boolean {
 
 export function crmCompanyHiddenFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company' && entity.hidden;
+}
+
+/** True when the company's Stage property matches the given option id. */
+export function hasCompanyStage(
+  entity: EntityData,
+  stageOptionId: string
+): boolean {
+  if (entity.type !== 'crm_company') return false;
+  return getCompanyStageOptionId(entity) === stageOptionId;
+}
+
+/** True when the company has no Stage set. */
+export function hasNoCompanyStage(entity: EntityData): boolean {
+  if (entity.type !== 'crm_company') return false;
+  return getCompanyStageOptionId(entity) === undefined;
+}
+
+/**
+ * Owner filter for companies, driven by the view's owner selection
+ * (`ctx.owners`). `NO_OWNER` matches companies without an Owner set.
+ */
+export function companyOwnedByUsersFilter(
+  ownerIds: () => string[] | undefined
+) {
+  return (entity: EntityData): boolean => {
+    const owners = ownerIds();
+    if (!owners?.length) return true;
+    if (entity.type !== 'crm_company') return false;
+    const ownerId = getCompanyOwnerId(entity);
+    return owners.some((id) =>
+      id === NO_ASSIGNEE ? ownerId === undefined : ownerId === id
+    );
+  };
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

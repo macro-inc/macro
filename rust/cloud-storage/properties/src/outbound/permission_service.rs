@@ -38,7 +38,10 @@ fn map_entity_type(entity_type: EntityType) -> Option<ModelEntityType> {
         EntityType::Thread => Some(ModelEntityType::EmailThread),
         EntityType::Channel => Some(ModelEntityType::Channel),
         EntityType::Task => Some(ModelEntityType::Document), // tasks use document permissions
-        EntityType::Company | EntityType::User => None,
+        // CRM company access is resolved from the owning team's membership
+        // (member → View, admin → Edit, owner → Owner).
+        EntityType::Company => Some(ModelEntityType::CrmCompany),
+        EntityType::User => None,
     }
 }
 

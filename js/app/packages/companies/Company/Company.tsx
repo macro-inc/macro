@@ -5,6 +5,7 @@ import { CompanyDiscussionSection } from './CompanyDiscussionSection';
 import { CompanyEmailsSection } from './CompanyEmailsSection';
 import { CompanyHeader } from './CompanyHeader';
 import { CompanyMetadataSection } from './CompanyMetadataSection';
+import { CompanyPropertiesSection } from './CompanyPropertiesSection';
 import { CompanySharingSection } from './CompanySharingSection';
 
 /**
@@ -33,6 +34,14 @@ export function Company(props: { companyId: string }) {
         defaultOpen
       >
         <CompanyMetadataSection company={company()} />
+      </SidePanel.Section>
+      <SidePanel.Section
+        id="company-properties"
+        title="Properties"
+        order={15}
+        defaultOpen
+      >
+        <CompanyPropertiesSection companyId={props.companyId} />
       </SidePanel.Section>
       <SidePanel.Section
         id="company-contacts"

@@ -187,7 +187,7 @@ const SIDEBAR_LINKS = [
     ? ([
         {
           id: 'companies',
-          label: 'Companies',
+          label: 'Customers',
           href: LIST_VIEW_PATHS.companies,
           icon: AnimatedCompanyIcon,
           hotkey: 'o',

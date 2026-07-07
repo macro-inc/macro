@@ -205,11 +205,11 @@ pub(crate) async fn populate_properties(
             SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
             SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
             SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
-            // Channels, calls, CRM companies, and foreign entities are not in entity_properties.
+            SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+            // Channels, calls, and foreign entities are not in entity_properties.
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
-            | SoupItem::CrmCompany(_)
             | SoupItem::ForeignEntity(_) => None,
         };
         if let Some(props) = props {
@@ -220,10 +220,10 @@ pub(crate) async fn populate_properties(
                 SoupItem::Project(x) => x.properties = soup_props,
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
+                SoupItem::CrmCompany(x) => x.properties = soup_props,
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::Call(_)
-                | SoupItem::CrmCompany(_)
                 | SoupItem::ForeignEntity(_) => {}
             }
         }

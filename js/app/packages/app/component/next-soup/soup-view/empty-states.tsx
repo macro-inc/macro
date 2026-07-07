@@ -223,8 +223,8 @@ export function EmptyState(props: {
       <Match when={props.listView === 'companies'}>
         <EmptyStatePanel
           graphic={EmptyStateCompaniesGraphic}
-          title="No companies"
-          description="Companies you add or sync into your CRM will appear here."
+          title="No customers"
+          description="Customers you add or sync into your CRM will appear here."
         />
       </Match>
 

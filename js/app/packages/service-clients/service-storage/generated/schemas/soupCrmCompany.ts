@@ -8,6 +8,7 @@ import type { SoupCrmCompanyDescription } from './soupCrmCompanyDescription';
 import type { SoupCrmCompanyName } from './soupCrmCompanyName';
 import type { SoupCrmCompanyViewedAt } from './soupCrmCompanyViewedAt';
 import type { SoupCrmDomain } from './soupCrmDomain';
+import type { SoupProperty } from './soupProperty';
 
 /**
  * A CRM company as displayed in Soup. Carries the core company
@@ -32,6 +33,9 @@ these out by default. */
   /** Display name from the primary domain's directory entry, or
 `None` when unresolved. */
   name?: SoupCrmCompanyName;
+  /** Properties attached to this company (system CRM properties like
+Stage / Owner / Revenue plus any custom ones). */
+  properties?: SoupProperty[];
   /** The id of the team that owns this company record. */
   teamId: string;
   /** When the company was last updated. */

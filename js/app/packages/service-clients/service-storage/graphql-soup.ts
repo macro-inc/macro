@@ -480,6 +480,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               domain,
               createdAt: entity.createdAt,
             })),
+            properties: mapGraphqlProperties(entity.properties),
           },
         }) as SoupApiItem
     )
