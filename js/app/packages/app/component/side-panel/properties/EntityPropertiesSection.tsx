@@ -50,12 +50,19 @@ export interface EntityPropertiesSectionProps {
   propertyFilter?: (property: Property) => boolean;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   showAddProperty?: boolean;
+  showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
 }
+
+const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'DOCUMENT',
+  'TASK',
+  'THREAD',
+]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
@@ -197,7 +204,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           <Show
             when={
               tagsFlag().enabled &&
-              (props.entityType === 'DOCUMENT' || props.entityType === 'TASK')
+              props.showTags !== false &&
+              TAGGABLE_ENTITY_TYPES.has(props.entityType)
             }
           >
             <div class="mb-2 flex items-center gap-3">

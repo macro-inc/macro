@@ -1,4 +1,5 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -43,16 +44,21 @@ export default function BlockCode() {
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
         <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col items-end relative">
           <ModalsProvider>
-            <TopBar
-              isHtmlFile={isHtmlFile()}
-              mode={mode()}
-              onModeChange={setMode}
-            />
-            <Show when={mode() === 'render'} fallback={<CodeMirror />}>
-              <Suspense>
-                <HtmlPreview />
-              </Suspense>
-            </Show>
+            <SidePanel.Layout>
+              <FileSidePanelSections />
+              <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
+                <TopBar
+                  isHtmlFile={isHtmlFile()}
+                  mode={mode()}
+                  onModeChange={setMode}
+                />
+                <Show when={mode() === 'render'} fallback={<CodeMirror />}>
+                  <Suspense>
+                    <HtmlPreview />
+                  </Suspense>
+                </Show>
+              </div>
+            </SidePanel.Layout>
           </ModalsProvider>
         </div>
       </Show>

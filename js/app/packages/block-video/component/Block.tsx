@@ -1,4 +1,5 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from 'core/component/Toast/Toast';
 import { createEffect, createSignal, Show } from 'solid-js';
@@ -12,12 +13,17 @@ export default function BlockVideo() {
     <DocumentBlockContainer>
       <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
-          <div class="relative">
-            <TopBar />
-          </div>
-          <div class="w-full grow relative overflow-hidden">
-            <Video />
-          </div>
+          <SidePanel.Layout>
+            <FileSidePanelSections />
+            <div class="flex size-full min-w-0 flex-col overflow-hidden">
+              <div class="relative">
+                <TopBar />
+              </div>
+              <div class="w-full grow relative overflow-hidden">
+                <Video />
+              </div>
+            </div>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>
