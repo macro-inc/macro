@@ -177,6 +177,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
             collapse: args.collapse,
             ids_only: args.project_search_args.ids_only,
             project_ids: args.project_search_args.project_ids,
+            tag_option_ids: args.project_search_args.tag_option_ids,
         }
     }
 }
@@ -241,6 +242,7 @@ pub struct UnifiedProjectSearchArgs {
     pub terms: Vec<String>,
     pub project_ids: Vec<String>,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 /// Possible search result indices for unified search

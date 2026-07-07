@@ -13,8 +13,8 @@ use crate::config::BackfillPageSizes;
 use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest,
-    PropertiesBackfillRequest, SourcePage,
+    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
+    SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 

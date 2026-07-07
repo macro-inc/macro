@@ -162,6 +162,7 @@ export * from './projectSearchResponseItem';
 export * from './projectSearchResponseItemWithMetadata';
 export * from './projectSearchResponseItemWithMetadataAllOf';
 export * from './projectSearchResponseItemWithMetadataAllOfMetadata';
+export * from './projectSearchResponseItemWithMetadataAllOfProperties';
 export * from './projectSearchResult';
 export * from './projectSearchResultScore';
 export * from './propertyDefinition';

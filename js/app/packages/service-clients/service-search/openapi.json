@@ -2380,6 +2380,13 @@
                     "description": "Metadata from the database. None if the project doesn't exist in the database."
                   }
                 ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the project."
               }
             }
           }

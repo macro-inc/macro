@@ -261,7 +261,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Chats stay live under a tag filter: both chat legs apply it (nested
     // clause on the chats index, entity_properties EXISTS on the name leg).
     let should_include_chats = search_filters.should_include_chats;
-    let should_include_projects = search_filters.should_include_projects && !tags_active;
+    let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
     let should_include_call_records = search_filters.should_include_call_records && !tags_active;
     let email_terms = search_terms.clone();
@@ -330,9 +330,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_chat_response.terms = search_terms.clone();
     filter_chat_response.tag_option_ids = tag_option_ids.clone();
     filter_email_response.terms = email_terms.clone();
-    filter_email_response.tag_option_ids = tag_option_ids;
+    filter_email_response.tag_option_ids = tag_option_ids.clone();
     filter_call_record_response.terms = search_terms.clone();
     filter_project_response.terms = search_terms.clone();
+    filter_project_response.tag_option_ids = tag_option_ids;
 
     // Widen the email access filter to every inbox the caller can reach (their
     // own plus delegated). Connected secondary inboxes share the owner's

@@ -1,6 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{self, project::UpsertProjectArgs},
+    upsert::{self, project::UpsertProjectArgs, properties::IndexedProperty},
 };
 
 impl OpensearchClient {
@@ -21,5 +21,15 @@ impl OpensearchClient {
         index_override: Option<&str>,
     ) -> Result<()> {
         delete::project::delete_project_by_id(&self.inner, project_id, index_override).await
+    }
+
+    /// Updates only the denormalized `properties` on an indexed project
+    #[tracing::instrument(skip(self, properties))]
+    pub async fn update_project_properties(
+        &self,
+        project_id: &str,
+        properties: &[IndexedProperty],
+    ) -> Result<()> {
+        upsert::project::update_project_properties(&self.inner, project_id, properties, None).await
     }
 }

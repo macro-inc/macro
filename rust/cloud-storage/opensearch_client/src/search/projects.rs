@@ -1,6 +1,9 @@
 use crate::{
     Result, delegate_methods,
-    search::builder::{SearchQueryBuilder, SearchQueryConfig},
+    search::{
+        builder::{SearchQueryBuilder, SearchQueryConfig},
+        properties::build_tag_filter,
+    },
 };
 
 use models_opensearch::OpenSearchEntityType;
@@ -21,13 +24,20 @@ impl SearchQueryConfig for ProjectSearchConfig {
 /// from Postgres at query time.
 pub(crate) struct ProjectQueryBuilder {
     inner: SearchQueryBuilder<ProjectSearchConfig>,
+    tag_option_ids: Vec<String>,
 }
 
 impl ProjectQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
+            tag_option_ids: Vec::new(),
         }
+    }
+
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
+        self
     }
 
     // Copy function signature from SearchQueryBuilder
@@ -55,6 +65,12 @@ impl ProjectQueryBuilder {
             self.inner
                 .build_filter_query(ProjectSearchConfig::USER_ID_KEY)?,
         );
+
+        // Tag filter: a single nested clause matching any of the option ids in
+        // `properties.values`, with no definition_id constraint.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids) {
+            bool_query.filter(nested);
+        }
 
         // Name match: every term must match the project name.
         bool_query.must(self.inner.build_title_term_query()?);
@@ -84,6 +100,7 @@ pub struct ProjectSearchArgs {
     pub match_type: String,
     pub collapse: bool,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 impl From<ProjectSearchArgs> for ProjectQueryBuilder {
@@ -96,5 +113,6 @@ impl From<ProjectSearchArgs> for ProjectQueryBuilder {
             .ids(args.project_ids)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .tag_option_ids(args.tag_option_ids)
     }
 }

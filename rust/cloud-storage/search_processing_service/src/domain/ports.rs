@@ -19,8 +19,8 @@ use sqs_client::search::SearchQueueMessage;
 use super::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest,
-    PropertiesBackfillRequest, SourcePage,
+    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
+    SourcePage,
 };
 
 /// Publishes batches of search-event messages.
