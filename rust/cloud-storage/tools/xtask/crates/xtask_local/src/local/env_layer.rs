@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::instance::Instance;
 use super::{Mode, local_env};
@@ -188,7 +188,7 @@ fn pull_doppler(config: &str, env: &mut BTreeMap<String, String>) -> Result<bool
         ),
         Err(e) if token_scoped => {
             return Err(anyhow::Error::from(e))
-                .context("running doppler with DOPPLER_TOKEN set (is the doppler CLI installed?)")
+                .context("running doppler with DOPPLER_TOKEN set (is the doppler CLI installed?)");
         }
         _ => return Ok(false),
     };

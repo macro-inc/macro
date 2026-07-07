@@ -17,7 +17,7 @@ use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -25,7 +25,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{arch, env_layer, frontend, mailpit, proxy, snapshot, summary, Mode};
+use super::{Mode, arch, env_layer, frontend, mailpit, proxy, snapshot, summary};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
