@@ -1,3 +1,4 @@
+import { useDealStages } from '@companies/crm/deal-stages';
 import {
   Entity,
   type EntityData,
@@ -11,6 +12,7 @@ import {
   soupPropertyToProperty,
 } from '@entity/extractors-property';
 import { Modals } from '@property/component/modal';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -37,6 +39,7 @@ import {
  */
 export function CompanyGridLayout(props: LayoutProps) {
   const isTeamAdmin = useIsTeamAdmin();
+  const dealStages = useDealStages();
 
   const primaryDomain = () => {
     const entity = props.entity as EntityData;
@@ -62,6 +65,31 @@ export function CompanyGridLayout(props: LayoutProps) {
       if (!map.has(stub.propertyDefinitionId)) {
         map.set(stub.propertyDefinitionId, stub);
       }
+    }
+
+    // The Stage column reads/writes the active stage definition (the
+    // team's own Stage set when customized). When the company has no value
+    // under the active definition but a legacy system-stage value maps
+    // onto it, surface the mapped id so the cell displays — and edits
+    // write to — the active definition.
+    const stageDefinitionId = dealStages.stageDefinitionId();
+    const existingStage = map.get(stageDefinitionId);
+    const hasStageValue =
+      existingStage?.valueType === 'SELECT_STRING' &&
+      (existingStage.value?.length ?? 0) > 0;
+    if (!hasStageValue) {
+      const stageStub = dealStages.stageProperty();
+      const resolvedId = dealStages.resolveStage(entity);
+      map.set(
+        stageDefinitionId,
+        stageStub.valueType === 'SELECT_STRING' && resolvedId
+          ? { ...stageStub, value: [resolvedId] }
+          : stageStub
+      );
+    }
+    // Once customized, the system Stage stub is superseded entirely.
+    if (stageDefinitionId !== SYSTEM_PROPERTY_IDS.STAGE) {
+      map.delete(SYSTEM_PROPERTY_IDS.STAGE);
     }
     return map;
   });
@@ -161,7 +189,13 @@ export function CompanyGridLayout(props: LayoutProps) {
               placement={col.id}
               class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
             >
-              <Show when={propertyMap().get(col.defId)}>
+              <Show
+                when={propertyMap().get(
+                  col.id === 'stage'
+                    ? dealStages.stageDefinitionId()
+                    : col.defId
+                )}
+              >
                 {(property) => <ListPropertyValue property={property()} />}
               </Show>
             </Entity.Slot>

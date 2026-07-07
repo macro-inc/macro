@@ -1,3 +1,4 @@
+import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
 import { useBlockId } from '@core/block';
 import { ENABLE_CREATE_PROPERTY } from '@core/constant/featureFlags';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
@@ -57,15 +58,21 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     const data = listPropertiesQuery.data;
 
     const properties = Array.isArray(data) ? data : [];
-    return properties.map((item) => {
-      if ('definition' in item) {
-        return toPropertyDefinitionDomain(
-          item.definition,
-          item.property_options || []
-        );
-      }
-      return toPropertyDefinitionDomain(item);
-    });
+    return properties
+      .map((item) => {
+        if ('definition' in item) {
+          return toPropertyDefinitionDomain(
+            item.definition,
+            item.property_options || []
+          );
+        }
+        return toPropertyDefinitionDomain(item);
+      })
+      .filter(
+        // Reserved internal definitions (`__macro:*` config carriers) must
+        // never surface in property pickers.
+        (property) => !isReservedPropertyDefinitionName(property.displayName)
+      );
   });
 
   let searchInputRef!: HTMLInputElement;

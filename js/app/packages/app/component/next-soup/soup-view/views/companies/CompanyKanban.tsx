@@ -4,25 +4,24 @@ import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
+import {
+  useClosedStageIds,
+  useCrmPermissions,
+} from '@companies/crm/team-crm-config';
 import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import {
-  COMPANY_STAGE_OPTIONS,
   Entity,
   type EntityData,
   formatTimestamp,
   getCompanyOwnerId,
-  getCompanyStageOptionId,
   isCrmCompanyEntity,
 } from '@entity';
-import { buildCompanyDefaultProperties } from '@entity/extractors-property';
 import CircleDashed from '@phosphor/circle-dashed.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import type { Property } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useIsTeamAdmin } from '@queries/team/teams';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn, EmptyStatePanel, Layer } from '@ui';
 import {
@@ -42,19 +41,13 @@ type StageColumn = {
   label: string;
 };
 
-const STAGE_COLUMNS: StageColumn[] = [
-  ...COMPANY_STAGE_OPTIONS.map((option) => ({
-    key: option.value as string,
-    label: option.label,
-  })),
-  { key: NO_STAGE_KEY, label: 'No stage' },
-];
-
 /**
- * Kanban board for the Customers view: one column per Stage option (plus
- * "No stage"), fed by the same filtered soup entities as the list. Cards
+ * Kanban board for the Customers view: one column per active deal stage
+ * (team-customized set when present, else the seeded system stages) plus
+ * "No stage", fed by the same filtered soup entities as the list. Cards
  * drag between columns to update the company's Stage property (team
- * admins/owners only, matching CRM edit access).
+ * admins/owners only, matching CRM edit access; moving deals out of a
+ * closed stage additionally requires the move-closed-deals permission).
  *
  * Like the list, the board supports the toggleable preview pane (Preview
  * button / space in the filters bar): while it's open, clicking a card
@@ -63,17 +56,17 @@ const STAGE_COLUMNS: StageColumn[] = [
 export function CompanyKanban() {
   const { source, soup } = useSoupView();
   const panel = useSplitPanelOrThrow();
-  const isTeamAdmin = useIsTeamAdmin();
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const orchestrator = useGlobalBlockOrchestrator();
 
-  const stageProperty = createMemo(
-    (): Property =>
-      buildCompanyDefaultProperties().find(
-        (property) =>
-          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STAGE
-      )!
-  );
+  const { stages, stageProperty, resolveStage } = useDealStages();
+  const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
+  const closedStageIds = useClosedStageIds(stages);
+
+  const stageColumns = createMemo((): StageColumn[] => [
+    ...stages().map((stage) => ({ key: stage.id, label: stage.label })),
+    { key: NO_STAGE_KEY, label: 'No stage' },
+  ]);
 
   // Preview-pane open state is per history entry, mirroring SoupViewList:
   // restored synchronously so the first render sees the pane, captured on
@@ -105,17 +98,25 @@ export function CompanyKanban() {
 
   const columns = createMemo(() => {
     const buckets = new Map<string, EntityData[]>(
-      STAGE_COLUMNS.map((column) => [column.key, []])
+      stageColumns().map((column) => [column.key, []])
     );
     for (const company of companies()) {
-      const key = getCompanyStageOptionId(company) ?? NO_STAGE_KEY;
+      const key = resolveStage(company) ?? NO_STAGE_KEY;
       (buckets.get(buckets.has(key) ? key : NO_STAGE_KEY) ?? []).push(company);
     }
-    return STAGE_COLUMNS.map((column) => ({
+    return stageColumns().map((column) => ({
       ...column,
       entities: buckets.get(column.key) ?? [],
     }));
   });
+
+  // A card can be dragged when the user can edit CRM data at all, and its
+  // current stage is either open or the user may move closed deals.
+  const canDragFrom = (stageKey: string) =>
+    canEditCrm() &&
+    (stageKey === NO_STAGE_KEY ||
+      !closedStageIds().has(stageKey) ||
+      canMoveClosedDeals());
 
   const [draggedId, setDraggedId] = createSignal<string>();
   const [dropTarget, setDropTarget] = createSignal<string>();
@@ -123,7 +124,7 @@ export function CompanyKanban() {
   const moveToStage = (entityId: string, stageKey: string) => {
     const entity = companies().find((company) => company.id === entityId);
     if (!entity) return;
-    const currentStage = getCompanyStageOptionId(entity) ?? NO_STAGE_KEY;
+    const currentStage = resolveStage(entity) ?? NO_STAGE_KEY;
     if (currentStage === stageKey) return;
 
     saveMutation.mutate({
@@ -169,7 +170,7 @@ export function CompanyKanban() {
         >
           <div class="flex h-full gap-3 p-3">
             <For each={columns()}>
-              {(column) => (
+              {(column, columnIndex) => (
                 <div
                   class={cn(
                     'flex h-full w-64 shrink-0 flex-col rounded-lg border border-edge-muted bg-surface',
@@ -207,8 +208,9 @@ export function CompanyKanban() {
                         <CircleDashed class="size-3.5 text-ink-extra-muted" />
                       }
                     >
-                      <PropertyValueIcon
+                      <CrmStageIcon
                         optionId={column.key}
+                        index={columnIndex()}
                         class="size-3.5"
                       />
                     </Show>
@@ -222,7 +224,7 @@ export function CompanyKanban() {
                       {(entity) => (
                         <CompanyKanbanCard
                           entity={entity}
-                          draggable={isTeamAdmin()}
+                          draggable={canDragFrom(column.key)}
                           dragging={draggedId() === entity.id}
                           onDragStart={(e) => {
                             e.dataTransfer?.setData('text/plain', entity.id);

@@ -72,6 +72,8 @@ import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -209,6 +211,24 @@ const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
   const { groupByField } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const dealStages = useDealStages();
+
+  // The Customers view groups by option ids from the team's deal-stage set
+  // (or other custom select options) that the static PropertyValueIcon
+  // table doesn't know — render those through CrmStageIcon instead.
+  const isCompaniesView = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'companies';
+  });
+
+  // Index into the active stage set so header dots match kanban columns.
+  const stageIndex = (optionId: string): number | undefined => {
+    const index = dealStages
+      .stages()
+      .findIndex((stage) => stage.id === optionId);
+    return index === -1 ? undefined : index;
+  };
   const assigneeId = createMemo(() => {
     const field = groupByField();
     if (
@@ -273,7 +293,18 @@ const DefaultGroupHeader = (
         >
           {(value) => (
             <>
-              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <Show
+                when={isCompaniesView()}
+                fallback={
+                  <PropertyValueIcon optionId={value()} class="size-3.5" />
+                }
+              >
+                <CrmStageIcon
+                  optionId={value()}
+                  index={stageIndex(value())}
+                  class="size-3.5"
+                />
+              </Show>
               <span class="truncate">{props.group.label}</span>
             </>
           )}

@@ -2,6 +2,7 @@ import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import {
   type FilterContext,
   NO_ASSIGNEE,
+  NO_STAGE,
 } from '@app/component/next-soup/filters/configs/';
 import {
   buildDocumentTypeQuery,
@@ -22,6 +23,8 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -299,48 +302,10 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
-const COMPANIES_FILTER_CATEGORIES: FilterCategory[] = [
-  {
-    id: 'stage',
-    label: 'Stage',
-    labelPlural: 'Stages',
-    options: [
-      ...(
-        [
-          ['company-stage-lead', 'Lead', PROPERTY_OPTION_IDS.STAGE.LEAD],
-          [
-            'company-stage-qualified',
-            'Qualified',
-            PROPERTY_OPTION_IDS.STAGE.QUALIFIED,
-          ],
-          ['company-stage-demo', 'Demo', PROPERTY_OPTION_IDS.STAGE.DEMO],
-          ['company-stage-trial', 'Trial', PROPERTY_OPTION_IDS.STAGE.TRIAL],
-          [
-            'company-stage-negotiation',
-            'Negotiation',
-            PROPERTY_OPTION_IDS.STAGE.NEGOTIATION,
-          ],
-          [
-            'company-stage-customer',
-            'Customer',
-            PROPERTY_OPTION_IDS.STAGE.CUSTOMER,
-          ],
-          [
-            'company-stage-churned',
-            'Churned',
-            PROPERTY_OPTION_IDS.STAGE.CHURNED,
-          ],
-        ] as const
-      ).map(([id, label, optionId]) => ({
-        id,
-        label,
-        icon: () => <PropertyValueIcon optionId={optionId} class="size-3.5" />,
-      })),
-      { id: 'company-no-stage', label: 'No Stage' },
-    ],
-    multiple: true,
-  },
-];
+// The Customers view's Stage filter is context-driven (team-customizable
+// stage set), rendered as a searchable submenu next to Owner — no static
+// categories here.
+const COMPANIES_FILTER_CATEGORIES: FilterCategory[] = [];
 
 const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   {
@@ -582,12 +547,15 @@ export const UnifiedFilterDropdown = (
     setAssigneeFilter,
     ownerFilter,
     setOwnerFilter,
+    stageFilter,
+    setStageFilter,
     activeTab,
     readFilter,
     setReadFilter,
   } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
+  const dealStages = useDealStages();
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -795,6 +763,34 @@ export const UnifiedFilterDropdown = (
     });
   };
 
+  // Stage options for the Customers view: the team's active deal-stage set
+  // plus a trailing "No stage" row.
+  const stageOptions = createMemo((): SearchableOption[] => [
+    ...dealStages.stages().map((stage, index) => ({
+      id: stage.id,
+      label: stage.label,
+      icon: () => (
+        <CrmStageIcon optionId={stage.id} index={index} class="size-3.5" />
+      ),
+    })),
+    {
+      id: NO_STAGE,
+      label: 'No stage',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    },
+  ]);
+
+  // Stage filtering is a client-side predicate, mirroring the owner filter.
+  const handleStageChange = (ids: string[]) => {
+    batch(() => {
+      setStageFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
+        soup.predicates.toggle({ and: ['company-stage'] });
+      }
+    });
+  };
+
   const isTasksView = () => currentView() === 'tasks';
   const isCompaniesView = () => currentView() === 'companies';
   const isDocumentsView = () => currentView() === 'documents';
@@ -846,6 +842,7 @@ export const UnifiedFilterDropdown = (
       when={
         categories().length > 0 ||
         isTasksView() ||
+        isCompaniesView() ||
         isNewInbox() ||
         showTagsFilter()
       }
@@ -943,8 +940,15 @@ export const UnifiedFilterDropdown = (
                     />
                   </Show>
 
-                  {/* Owner filter for the Customers view */}
+                  {/* Stage + Owner filters for the Customers view */}
                   <Show when={isCompaniesView()}>
+                    <SearchableFilterSubmenu
+                      label="Stage"
+                      options={stageOptions}
+                      activeIds={stageFilter}
+                      onChange={handleStageChange}
+                      placeholder="Filter stages..."
+                    />
                     <SearchableFilterSubmenu
                       label="Owner"
                       options={ownerOptions}
