@@ -11,7 +11,9 @@
 //! - `outbound` - Outbound adapters (e.g., PostgreSQL implementation)
 
 pub mod domain;
+#[cfg(feature = "ai_tools")]
 pub mod inbound;
+#[cfg(feature = "outbound")]
 pub mod outbound;
 
 pub use domain::error::PropertiesErr;
@@ -21,6 +23,9 @@ pub use domain::ports::{
 };
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;
+#[cfg(feature = "outbound")]
 pub use outbound::notification_service::NotificationServiceImpl;
+#[cfg(feature = "outbound")]
 pub use outbound::permission_service::PermissionServiceImpl;
+#[cfg(feature = "outbound")]
 pub use outbound::properties_pg_repo::PropertiesPgRepo;

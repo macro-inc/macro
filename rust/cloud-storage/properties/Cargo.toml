@@ -10,28 +10,45 @@ ai_tools = [
   "dep:async-trait",
   "dep:chrono",
   "dep:schemars",
+  "dep:serde",
+  "dep:serde_json",
+  "ports",
 ]
+default = ["ai_tools", "outbound", "ports"]
+outbound = [
+  "dep:entity_access",
+  "dep:entity_access_db_utils",
+  "dep:macro_uuid",
+  "dep:models_permissions",
+  "dep:properties_db_client",
+  "dep:serde_json",
+  "dep:sqlx",
+  "ports",
+]
+ports = []
 
 [dependencies]
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
-entity_access = { path = "../entity_access" }
-entity_access_db_utils = { path = "../entity_access_db_utils" }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "ports",
+], optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
 notification = { path = "../notification" }
 macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
+macro_uuid = { path = "../macro_uuid", optional = true }
 model_notifications = { path = "../model_notifications" }
 model-entity = { path = "../model-entity" }
-models_permissions = { path = "../models_permissions" }
+models_permissions = { path = "../models_permissions", optional = true }
 models_properties = { path = "../models_properties" }
-properties_db_client = { path = "../properties_db_client" }
+properties_db_client = { path = "../properties_db_client", optional = true }
 schemars = { workspace = true, optional = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sqlx = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
