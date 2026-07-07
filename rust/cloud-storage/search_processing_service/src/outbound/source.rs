@@ -6,14 +6,15 @@ use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage,
+    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage, project::UpsertProject,
 };
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, PropertiesBackfillRequest, SourcePage,
+    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest,
+    PropertiesBackfillRequest, SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
@@ -367,5 +368,50 @@ impl BackfillSource for PgBackfillSource {
             messages,
             rows_consumed,
         })
+    }
+
+    async fn fetch_projects(
+        &self,
+        req: &ProjectBackfillRequest,
+        cursor: Option<ProjectBackfillCursor>,
+    ) -> Result<(SourcePage, Option<ProjectBackfillCursor>), BackfillError> {
+        let db_cursor = cursor.map(|c| (c.updated_at, c.project_id));
+        let batch = macro_db_client::projects::get_projects_for_search_backfill(
+            &self.db,
+            self.page_sizes.projects as i64,
+            db_cursor,
+            req.updated_after,
+            req.updated_before,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        // `updated_at` is NOT NULL in the schema but sqlx types it as Option
+        // because of the timestamptz cast; if it ever came back None we'd
+        // rather stop pagination than build a bogus cursor.
+        let next_cursor = batch.last().and_then(|p| {
+            p.updated_at.map(|updated_at| ProjectBackfillCursor {
+                updated_at,
+                project_id: p.project_id.clone(),
+            })
+        });
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|p| {
+                SearchQueueMessage::UpsertProject(UpsertProject {
+                    project_id: p.project_id,
+                    index_override: req.index_override.clone(),
+                })
+            })
+            .collect();
+
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 }

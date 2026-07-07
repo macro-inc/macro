@@ -13,6 +13,7 @@ use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::SharePermissionV2;
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;
+use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 
 const ONBOARDING_FOLDER_NAME: &str = "ONBOARDING_DOCUMENTS";
 const PROJECT_NAME: &str = "Starter Docs";
@@ -244,6 +245,17 @@ pub async fn handler(
         )
             .into_response()
     })?;
+
+    let _ = state
+        .sqs_client
+        .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(UpsertProject {
+            project_id: project.id.clone(),
+            index_override: None,
+        }))
+        .await
+        .inspect_err(
+            |e| tracing::error!(error=?e, project_id=?project.id, "unable to enqueue project search upsert"),
+        );
 
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }

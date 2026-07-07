@@ -21,6 +21,8 @@ pub enum SearchIndex {
     Emails,
     /// The call records alias
     CallRecords,
+    /// The projects alias
+    Projects,
 }
 
 /// All searchable entity types — the tag on a unified `SearchHit`,

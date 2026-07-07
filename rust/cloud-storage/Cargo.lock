@@ -7886,6 +7886,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "sqlx",
+ "sqs_client",
  "tokio",
  "tracing",
  "workspace-hack",

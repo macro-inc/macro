@@ -11,6 +11,8 @@ import {
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
   EMAILS_INDEX,
+  PROJECTS_ALIAS,
+  PROJECTS_INDEX,
   SHARD_SETTINGS,
   SLOWLOG_SETTINGS,
 } from '../constants';
@@ -315,6 +317,68 @@ const DOCUMENT_BODY = {
   },
 };
 
+// `projects_v1` is flat: one doc per project, `_id` = project id. Projects
+// have no content to chunk, so no join field. Access control follows the
+// documents pattern — only `owner_id` is indexed; the caller's accessible
+// project ids are resolved from Postgres at query time.
+const PROJECTS_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      entity_id: {
+        type: 'keyword',
+      },
+      name: {
+        type: 'text',
+        fields: {
+          keyword: {
+            type: 'keyword',
+            ignore_above: 128,
+          },
+        },
+      },
+      owner_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      parent_project_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      created_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Entity properties (tags, custom). Same nested shape as the documents
+      // index so the shared property/tag query builders apply unchanged.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
+    },
+  },
+};
+
 const EMAIL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
@@ -571,6 +635,11 @@ async function createIndices() {
       indexName: CALL_RECORDS_INDEX,
       aliasName: CALL_RECORDS_ALIAS,
       body: CALL_RECORDS_V2_BODY,
+    });
+    await createIndexWithAlias(opensearchClient, {
+      indexName: PROJECTS_INDEX,
+      aliasName: PROJECTS_ALIAS,
+      body: PROJECTS_BODY,
     });
     console.log('done');
   } catch (error) {
