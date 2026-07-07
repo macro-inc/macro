@@ -43,9 +43,11 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { floatWithElement } from '../../directive/floatWithElement';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
 
 false && clickOutside;
+false && floatWithElement;
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -127,6 +129,7 @@ export function TableMoveHandle() {
   // Touch-only dropdown with insert/delete actions, opened by tapping the
   // handle without dragging it.
   const [menuOpen, setMenuOpen] = createSignal(false);
+  const [handleElem, setHandleElem] = createSignal<HTMLButtonElement>();
 
   const initialRootElement = editor()?.getRootElement();
   const [editorFocused, setEditorFocused] = createSignal(
@@ -490,6 +493,7 @@ export function TableMoveHandle() {
             )}
           </Show>
           <button
+            ref={setHandleElem}
             type="button"
             aria-label="Move cells"
             class="fixed z-20 flex size-6 -translate-x-[calc(100%-3px)] -translate-y-[3px] items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm touch-none"
@@ -525,15 +529,15 @@ export function TableMoveHandle() {
           </Show>
           <Show when={menuOpen()}>
             <div
-              class="fixed z-30 grid -translate-x-full grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
+              class="z-30 grid grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
               style={{
                 width: `${MENU_WIDTH_PX}px`,
                 'max-height': `${MENU_MAX_HEIGHT_PX}px`,
-                left: `${Math.max(pos().x, MENU_WIDTH_PX + 8)}px`,
-                top: `${Math.min(
-                  pos().y + 28,
-                  window.innerHeight - MENU_MAX_HEIGHT_PX - 8
-                )}px`,
+              }}
+              use:floatWithElement={{
+                element: handleElem,
+                floatingOptions: { placement: 'bottom-end' },
+                spacing: 4,
               }}
               use:clickOutside={() => setMenuOpen(false)}
               onPointerDown={(e) => e.preventDefault()}

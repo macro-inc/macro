@@ -82,7 +82,7 @@ function registerTableCellClear(editor: LexicalEditor) {
  * paragraph, and drops the selection. Returns false (leaving the command for
  * others) when the selection spans no cells.
  */
-function $clearSelectedCells(selection: TableSelection): boolean {
+export function $clearSelectedCells(selection: TableSelection): boolean {
   const cells = selection.getNodes().filter($isTableCellNode);
   if (cells.length === 0) return false;
   for (const cell of cells) {

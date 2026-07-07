@@ -3,6 +3,30 @@ type ExtractedEntries = {
   directoryEntries: FileSystemDirectoryEntry[];
 };
 
+/**
+ * Reads the system clipboard into a DataTransfer — rich text/html when the
+ * browser grants clipboard read access, plain text otherwise — so the
+ * content can be replayed through paste pipelines that expect paste-event
+ * data. Returns null when the clipboard is empty or unreadable. Must be
+ * called from a user gesture on mobile browsers.
+ */
+export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null> {
+  const dataTransfer = new DataTransfer();
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      for (const type of item.types) {
+        if (type !== 'text/html' && type !== 'text/plain') continue;
+        const blob = await item.getType(type);
+        dataTransfer.setData(type, await blob.text());
+      }
+    }
+  } catch {
+    const text = await navigator.clipboard.readText().catch(() => '');
+    if (text) dataTransfer.setData('text/plain', text);
+  }
+  return dataTransfer.types.length > 0 ? dataTransfer : null;
+}
+
 const EMPTY_RESULT: ExtractedEntries = {
   fileEntries: [],
   directoryEntries: [],

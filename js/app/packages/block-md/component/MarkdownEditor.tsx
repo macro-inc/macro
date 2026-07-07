@@ -34,6 +34,7 @@ import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc
 import { TableDeleteButtons } from '@core/component/LexicalMarkdown/component/misc/TableDeleteButtons';
 import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
 import { TableMoveHandle } from '@core/component/LexicalMarkdown/component/misc/TableMoveHandle';
+import { TableSelectionActionBar } from '@core/component/LexicalMarkdown/component/misc/TableSelectionActionBar';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -67,6 +68,7 @@ import {
   tableCellResizerPlugin,
   tableClipboardPlugin,
   tablePlugin,
+  tableTouchSelectionPlugin,
   textPastePlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
@@ -546,6 +548,7 @@ export function MarkdownEditor(props: {
     )
     .use(tableCellResizerPlugin())
     .use(tableClipboardPlugin())
+    .use(tableTouchSelectionPlugin())
     .use(
       filePastePlugin({
         onPasteFilesAndDirs: (fileEntries, directories) =>
@@ -1088,6 +1091,9 @@ export function MarkdownEditor(props: {
             <TableCellResizer />
             <TableInsertButton />
             <TableDeleteButtons />
+          </Show>
+          <Show when={isTouchDevice()}>
+            <TableSelectionActionBar />
           </Show>
           <TableMoveHandle />
         </Show>
