@@ -6,9 +6,9 @@ tag filters apply server-side on every leg of unified search, not just documents
 | Task | Scope | Branch | Status |
 |---|---|---|---|
 | macro-2208 | parent integration branch + this plan | `gbirman/macro-2208-searchtags-index-tags-for-non-document-entity-types-in-opensearch` | this doc |
-| macro-2209 | email threads — builds the generic pipeline | `gbirman/macro-2209-searchtags-index-tags-for-email` | not started |
-| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | not started |
-| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | not started |
+| macro-2209 | email threads — builds the generic pipeline | `gbirman/macro-2209-searchtags-index-tags-for-email` | **PR #4563 open → parent**; dev putMapping + THREAD backfill done |
+| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | chat-only pieces committed; holding PR for 2209's shared arms |
+| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | restore + read cutover committed; local e2e in progress |
 
 Subtasks branch off this parent and merge back into it; the parent merges to main.
 
@@ -287,7 +287,20 @@ leg is tag-capable and backfilled: `'email'` (2209), `'agent'` = AI chats
 (2210). Projects have no dedicated search type; they surface on `all` only, so
 2211 needs no FE type change beyond the leg itself.
 
-### 2.11 Visibility model — no change needed
+### 2.11 Search response `properties` field (addendum from 2209)
+
+#4537's rendered-row client guard re-checks tag filters against the row's
+properties, so a leg's response items must CARRY a `properties` field (like
+documents) or server-filtered rows get silently dropped client-side whenever a
+text query is active. 2209 added it for emails: `models_search` response
+field + enrichment + regen of the service-search client AND gen-tools. 2210
+and 2211 must mirror this for chats/projects in their read-side PRs.
+
+Known inconsistency to resolve as a shared follow-up (§7): search enrichment
+attaches properties via the UNFILTERED fetch (documents precedent), while soup
+uses `get_bulk_entity_properties_values_filtered(tag_viewer_user_id)`.
+
+### 2.12 Visibility model — no change needed
 
 Indexed docs carry no per-property owner info; visibility holds because
 (a) tag option ids are unguessable UUIDs disclosed only via `GET /properties/tags`
@@ -429,6 +442,12 @@ the release; backfills run after it).
 - **update_by_query conflict skips** (emails): healed by attach-on-upsert;
   residual risk is a stale properties array on one message copy until the next
   write on that thread.
+- **Enrichment tag visibility**: search response enrichment uses the
+  unfiltered property fetch while soup filters tags to the viewer
+  (`tag_viewer_user_id`) — a caller can be shown another user's personal tag on
+  a shared entity in search results but not in soup. Pre-existing for
+  documents, now inherited by every leg that adds response properties (§2.11).
+  Resolve once, centrally — file separately.
 - **sqlx**: the backfill's new query needs `.sqlx` regen — run per-crate
   `cargo sqlx prepare` (librdkafka breaks workspace-wide `just prepare_db`).
 - **Codegen**: no public API model changes are expected (`tag_option_ids`
