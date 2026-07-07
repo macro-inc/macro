@@ -9,13 +9,14 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType};
 use uuid::Uuid;
 
 use super::model::{
     EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome,
 };
 
 /// Repository trait for property operations.
@@ -86,6 +87,64 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a single property option by ID.
+    /// Returns `None` if the option doesn't exist.
+    fn get_property_option(
+        &self,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyOption>, Self::Err>> + Send;
+
+    /// Get all options for a property definition, ordered for display.
+    fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
+
+    /// Create a new property option.
+    fn create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
+
+    /// Update a property option's value, color, and display order in place.
+    /// The option id is preserved, so every entity referencing it reflects the
+    /// change with no per-entity rewrite.
+    fn update_property_option(
+        &self,
+        option_id: Uuid,
+        value: PropertyOptionValue,
+        color: Option<String>,
+        display_order: i32,
+    ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Delete a property option and strip its id from every entity value that
+    /// references it, atomically. Returns `true` if the option was deleted,
+    /// `false` if it didn't exist.
+    fn delete_property_option(
+        &self,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the single tag definition owned by the given owner, if it exists.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Return the owner's tag definition, creating it on first use.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_or_create_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(

@@ -2,8 +2,11 @@
 
 use std::collections::HashMap;
 
-use models_properties::api::CreatePropertyDefinitionRequest;
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::api::{
+    AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
+};
+use models_properties::service::property_option::PropertyOption;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -13,7 +16,7 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
-use super::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner};
+use super::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TagSet};
 
 /// Service trait for property operations.
 pub trait PropertiesService: Send + Sync + 'static {
@@ -173,4 +176,58 @@ pub trait PropertiesService: Send + Sync + 'static {
         user_id: &str,
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Get all options for a property definition (for dropdowns).
+    fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
+
+    /// Add a new option to a select property owned by the caller.
+    /// Validates the request against the property's data type, including the
+    /// tag color rules.
+    fn add_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Update a property option in place (rename / recolor / reorder) on a
+    /// property owned by the caller. The option id is preserved, so the change
+    /// is reflected on every entity that references it.
+    fn update_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+        request: &UpdatePropertyOptionRequest,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Delete a property option on a property owned by the caller, stripping
+    /// its id from every entity value that references it.
+    fn delete_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// List the caller's tag sets: their personal set, plus their team's set
+    /// when on a team. Pure read - a scope with no provisioned definition yet
+    /// returns an empty set.
+    fn list_tag_sets(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Vec<TagSet>, PropertiesErr>> + Send;
+
+    /// Provision (get-or-create) the owner's tag set and return it.
+    fn ensure_tag_set(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+    ) -> impl Future<Output = Result<TagSet, PropertiesErr>> + Send;
 }

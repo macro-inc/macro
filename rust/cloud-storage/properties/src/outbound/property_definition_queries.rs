@@ -415,6 +415,93 @@ pub(super) async fn create_property_option_tx(
     Ok(())
 }
 
+/// Display name used for the auto-provisioned tag definition.
+pub const TAG_DEFINITION_DISPLAY_NAME: &str = "Tags";
+
+/// Gets the single tag definition owned by the given owner, if it exists.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_tag_definition(
+    pool: &Pool<Postgres>,
+    owner: PropertyDefinitionOwner<'_>,
+) -> anyhow::Result<Option<PropertyDefinition>> {
+    let (team_id, user_id) = owner.into_ids();
+
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            id,
+            team_id,
+            user_id,
+            display_name,
+            data_type as "data_type: DataType",
+            is_multi_select,
+            specific_entity_type as "specific_entity_type: Option<EntityType>",
+            created_at,
+            updated_at,
+            is_system
+        FROM property_definitions
+        WHERE data_type = $3
+          AND (
+            ($1::uuid IS NOT NULL AND team_id = $1)
+            OR ($2::text IS NOT NULL AND user_id = $2)
+          )
+        LIMIT 1
+        "#,
+        team_id,
+        user_id,
+        DataType::Tag as DataType
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|row| {
+        PropertyDefinition::from(db::PropertyDefinition {
+            id: row.id,
+            team_id: row.team_id,
+            user_id: row.user_id,
+            display_name: row.display_name,
+            data_type: row.data_type,
+            is_multi_select: row.is_multi_select,
+            specific_entity_type: row.specific_entity_type.flatten(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            is_system: row.is_system,
+        })
+    }))
+}
+
+/// Returns the owner's tag definition, creating it on first use.
+///
+/// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
+/// unique index). A lost create race re-fetches the definition the winner just created.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_or_create_tag_definition(
+    pool: &Pool<Postgres>,
+    owner: PropertyDefinitionOwner<'_>,
+) -> anyhow::Result<PropertyDefinition> {
+    if let Some(existing) = get_tag_definition(pool, owner).await? {
+        return Ok(existing);
+    }
+
+    match create_property_definition(
+        pool,
+        owner,
+        TAG_DEFINITION_DISPLAY_NAME,
+        DataType::Tag,
+        true,
+        None,
+        Vec::new(),
+    )
+    .await
+    {
+        Ok(def) => Ok(def),
+        Err(create_err) => match get_tag_definition(pool, owner).await? {
+            Some(existing) => Ok(existing),
+            None => Err(create_err),
+        },
+    }
+}
+
 /// Deletes a property definition and all associated data (cascades).
 #[tracing::instrument(skip(pool))]
 pub async fn delete_property_definition(

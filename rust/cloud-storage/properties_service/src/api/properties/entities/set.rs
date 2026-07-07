@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::api::{
     context::PropertiesHandlerState, properties::entities::types::SetEntityPropertyRequest,
+    properties::properties_err_status,
 };
 use model::user::UserContext;
 use models_properties::EntityType;
@@ -23,16 +24,7 @@ pub enum SetEntityPropertyErr {
 impl IntoResponse for SetEntityPropertyErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            SetEntityPropertyErr::Properties(e) => match e {
-                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
-                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
-                    StatusCode::FORBIDDEN
-                }
-                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
-            },
+            SetEntityPropertyErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {

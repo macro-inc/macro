@@ -1,33 +1,27 @@
 use axum::{
     Json,
     extract::{Extension, Path, State},
-    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::api::context::PropertiesHandlerState;
+use crate::api::properties::properties_err_status;
 use model::user::UserContext;
 use models_properties::service::property_option::PropertyOption;
-use properties_db_client::{
-    error::PropertiesDatabaseError, property_options::get as property_options_get,
-};
-use sqlx::PgPool;
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum GetPropertyOptionsErr {
-    #[error("An internal error occurred")]
-    Internal(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    Database(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
 }
 
 impl IntoResponse for GetPropertyOptionsErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            GetPropertyOptionsErr::Internal(_) | GetPropertyOptionsErr::Database(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            GetPropertyOptionsErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {
@@ -56,22 +50,18 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(db, _user_context), err)]
+#[tracing::instrument(skip(state, _user_context), err)]
 pub async fn get_property_options(
     Path(property_uuid): Path<Uuid>,
-    State(db): State<PgPool>,
+    State(state): State<PropertiesHandlerState>,
     Extension(_user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
     tracing::info!("retrieving property options");
 
-    let options = property_options_get::get_property_options(&db, property_uuid)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "failed to retrieve property options"
-            );
-        })?;
+    let options = state
+        .properties_service
+        .get_property_options(property_uuid)
+        .await?;
 
     tracing::info!(
         options_count = options.len(),

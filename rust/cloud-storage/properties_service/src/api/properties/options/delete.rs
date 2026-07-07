@@ -7,36 +7,20 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
+use crate::api::properties::properties_err_status;
 use model::user::UserContext;
-use properties_db_client::{
-    error::PropertiesDatabaseError,
-    property_definitions::get as property_definitions_get,
-    property_options::{delete as property_options_delete, get as property_options_get},
-};
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum DeletePropertyOptionErr {
-    #[error("An internal error occurred")]
-    InternalError(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Property definition not found")]
-    PropertyNotFound,
-    #[error("Cannot modify system properties")]
-    SystemPropertyNotModifiable,
-    #[error("Property option not found")]
-    OptionNotFound,
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
 }
 
 impl IntoResponse for DeletePropertyOptionErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            DeletePropertyOptionErr::InternalError(_)
-            | DeletePropertyOptionErr::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            DeletePropertyOptionErr::PropertyNotFound | DeletePropertyOptionErr::OptionNotFound => {
-                StatusCode::NOT_FOUND
-            }
-            DeletePropertyOptionErr::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
+            DeletePropertyOptionErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {
@@ -77,64 +61,16 @@ pub async fn delete_property_option(
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     tracing::info!("deleting property option");
 
-    // First check if property exists and if it's a system property
-    let property = property_definitions_get::get_property_definition(&state.db, def_uuid)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "failed to fetch property definition"
-            );
-        })?
-        .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
+    state
+        .properties_service
+        .delete_property_option(
+            &user_context.user_id,
+            caller_team_id(&team),
+            def_uuid,
+            option_uuid,
+        )
+        .await?;
 
-    if property.is_system {
-        return Err(DeletePropertyOptionErr::SystemPropertyNotModifiable);
-    }
-
-    // Then verify ownership
-    let _property_definition = property_definitions_get::get_property_definition_with_owner(
-        &state.db,
-        def_uuid,
-        &user_context.user_id,
-        caller_team_id(&team),
-    )
-    .await
-    .inspect_err(|e| {
-        tracing::error!(
-            error = ?e,
-            "failed to fetch property definition with owner"
-        );
-    })?
-    .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
-
-    let option = property_options_get::get_property_option_by_id(&state.db, option_uuid)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "failed to fetch property option"
-            );
-        })?
-        .ok_or(DeletePropertyOptionErr::OptionNotFound)?;
-
-    if option.property_definition_id != def_uuid {
-        return Err(DeletePropertyOptionErr::OptionNotFound);
-    }
-
-    let deleted = property_options_delete::delete_property_option(&state.db, def_uuid, option_uuid)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "failed to delete property option"
-            );
-        })?;
-
-    if deleted {
-        tracing::info!("successfully deleted property option");
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(DeletePropertyOptionErr::OptionNotFound)
-    }
+    tracing::info!("successfully deleted property option");
+    Ok(StatusCode::NO_CONTENT)
 }

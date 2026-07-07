@@ -1,14 +1,31 @@
 use crate::api::context::PropertiesHandlerState;
 use axum::{
     Router,
+    http::StatusCode,
     routing::{delete, get, patch, post, put},
 };
+use properties::PropertiesErr;
 
 pub mod definitions;
 pub mod entities;
 pub mod metadata;
 pub mod options;
 pub mod tags;
+
+/// Map a domain [`PropertiesErr`] to the HTTP status code it represents.
+pub(crate) fn properties_err_status(e: &PropertiesErr) -> StatusCode {
+    match e {
+        PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
+        PropertiesErr::NotFound | PropertiesErr::OptionNotFound => StatusCode::NOT_FOUND,
+        PropertiesErr::DuplicateOptionValue => StatusCode::CONFLICT,
+        PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
+            StatusCode::FORBIDDEN
+        }
+        PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
 
 /// Creates the properties router. Works with any state type that implements `FromRef<PropertiesHandlerState>`.
 pub fn router() -> Router<PropertiesHandlerState> {

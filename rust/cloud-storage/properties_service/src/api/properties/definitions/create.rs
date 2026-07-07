@@ -6,6 +6,7 @@ use axum::{
 };
 use thiserror::Error;
 
+use crate::api::properties::properties_err_status;
 use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use models_properties::api::{CreatePropertyDefinitionRequest, CreatePropertyScope};
@@ -24,16 +25,7 @@ pub enum CreatePropertyDefinitionErr {
 impl IntoResponse for CreatePropertyDefinitionErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            CreatePropertyDefinitionErr::Properties(e) => match e {
-                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
-                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
-                    StatusCode::FORBIDDEN
-                }
-                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
-            },
+            CreatePropertyDefinitionErr::Properties(e) => properties_err_status(e),
             CreatePropertyDefinitionErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 

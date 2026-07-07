@@ -6,6 +6,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::api::properties::properties_err_status;
 use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use models_properties::EntityType;
@@ -20,16 +21,7 @@ pub enum EntityPropertyOptionErr {
 impl IntoResponse for EntityPropertyOptionErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            EntityPropertyOptionErr::Properties(e) => match e {
-                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
-                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
-                    StatusCode::FORBIDDEN
-                }
-                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
-            },
+            EntityPropertyOptionErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {

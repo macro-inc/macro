@@ -9,17 +9,11 @@ use thiserror::Error;
 use utoipa::ToSchema;
 
 use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
+use crate::api::properties::properties_err_status;
 use model::user::UserContext;
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
-use models_properties::service::property_definition::PropertyDefinition;
-use properties_db_client::{
-    error::PropertiesDatabaseError,
-    property_definitions::{
-        get as property_definitions_get,
-        insert::{self as property_definitions_insert, DefinitionOwner},
-    },
-    property_options::get as property_options_get,
-};
+use properties::domain::model::{self as properties_model, PropertyDefinitionOwner};
+use properties::{PropertiesErr, PropertiesService};
 
 /// Which owner a tag set belongs to.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]
@@ -29,6 +23,15 @@ pub enum TagScope {
     User,
     /// The caller's team tag set.
     Team,
+}
+
+impl From<properties_model::TagScope> for TagScope {
+    fn from(scope: properties_model::TagScope) -> Self {
+        match scope {
+            properties_model::TagScope::User => TagScope::User,
+            properties_model::TagScope::Team => TagScope::Team,
+        }
+    }
 }
 
 /// A tag set the caller can use. `definition` is absent until the set is provisioned
@@ -41,6 +44,16 @@ pub struct TagSetResponse {
     pub options: Vec<PropertyOptionResponse>,
 }
 
+impl From<properties_model::TagSet> for TagSetResponse {
+    fn from(set: properties_model::TagSet) -> Self {
+        TagSetResponse {
+            scope: set.scope.into(),
+            definition: set.definition.map(Into::into),
+            options: set.options.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 /// Request to provision (get-or-create) the caller's tag set for a scope.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EnsureTagSetRequest {
@@ -49,10 +62,8 @@ pub struct EnsureTagSetRequest {
 
 #[derive(Debug, Error)]
 pub enum TagsError {
-    #[error("An internal error occurred")]
-    Internal(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    Database(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
     #[error("You must be on a team to use team tags")]
     TeamMembershipRequired,
 }
@@ -60,7 +71,7 @@ pub enum TagsError {
 impl IntoResponse for TagsError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            TagsError::Internal(_) | TagsError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            TagsError::Properties(e) => properties_err_status(e),
             TagsError::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 
@@ -89,20 +100,12 @@ pub async fn list_tags(
     Extension(user_context): Extension<UserContext>,
     team: PropertyTeamExtractor,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
-    let mut sets = Vec::new();
+    let sets = state
+        .properties_service
+        .list_tag_sets(&user_context.user_id, caller_team_id(&team))
+        .await?;
 
-    let user_definition =
-        property_definitions_get::get_tag_definition(&state.db, None, Some(&user_context.user_id))
-            .await?;
-    sets.push(build_tag_set(&state.db, TagScope::User, user_definition).await?);
-
-    if let Some(team_id) = caller_team_id(&team) {
-        let team_definition =
-            property_definitions_get::get_tag_definition(&state.db, Some(team_id), None).await?;
-        sets.push(build_tag_set(&state.db, TagScope::Team, team_definition).await?);
-    }
-
-    Ok(Json(sets))
+    Ok(Json(sets.into_iter().map(Into::into).collect()))
 }
 
 /// Provision (get-or-create) the caller's tag set for a scope and return it. Called when
@@ -126,39 +129,14 @@ pub async fn ensure_tag_set(
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
     let owner = match request.scope {
-        TagScope::User => DefinitionOwner::User(user_context.user_id.as_str()),
+        TagScope::User => PropertyDefinitionOwner::User(user_context.user_id.as_str()),
         TagScope::Team => {
             let team_id = caller_team_id(&team).ok_or(TagsError::TeamMembershipRequired)?;
-            DefinitionOwner::Team(team_id)
+            PropertyDefinitionOwner::Team(team_id)
         }
     };
 
-    let definition =
-        property_definitions_insert::get_or_create_tag_definition(&state.db, owner).await?;
-    let set = build_tag_set(&state.db, request.scope, Some(definition)).await?;
+    let set = state.properties_service.ensure_tag_set(owner).await?;
 
-    Ok(Json(set))
-}
-
-/// Resolve a tag set's options into the response shape. A missing definition yields an empty set.
-async fn build_tag_set(
-    db: &sqlx::PgPool,
-    scope: TagScope,
-    definition: Option<PropertyDefinition>,
-) -> Result<TagSetResponse, PropertiesDatabaseError> {
-    match definition {
-        Some(definition) => {
-            let options = property_options_get::get_property_options(db, definition.id).await?;
-            Ok(TagSetResponse {
-                scope,
-                definition: Some(definition.into()),
-                options: options.into_iter().map(Into::into).collect(),
-            })
-        }
-        None => Ok(TagSetResponse {
-            scope,
-            definition: None,
-            options: Vec::new(),
-        }),
-    }
+    Ok(Json(set.into()))
 }

@@ -1,13 +1,13 @@
 use axum::{
     Json,
     extract::{Extension, Query, State},
-    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
+use crate::api::properties::properties_err_status;
 use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
 use models_properties::EntityType;
@@ -24,16 +24,7 @@ pub enum ListPropertiesErr {
 impl IntoResponse for ListPropertiesErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            ListPropertiesErr::Properties(e) => match e {
-                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
-                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
-                    StatusCode::FORBIDDEN
-                }
-                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
-            },
+            ListPropertiesErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {

@@ -5,8 +5,12 @@ mod task_properties;
 
 use std::collections::HashMap;
 
+use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
-use models_properties::api::{CreatePropertyDefinitionRequest, PropertyDataType};
+use models_properties::api::{
+    AddPropertyOptionRequest, CreatePropertyDefinitionRequest, PropertyDataType,
+    UpdatePropertyOptionRequest, is_valid_hex_color,
+};
 use models_properties::convert_set_property_value_to_property_value;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -20,7 +24,10 @@ use uuid::Uuid;
 use std::sync::Arc;
 
 use super::error::PropertiesErr;
-use super::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner};
+use super::model::{
+    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TagScope, TagSet,
+    UpdatePropertyOptionOutcome,
+};
 use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::PropertiesService;
 
@@ -95,6 +102,66 @@ where
             .await
         {
             tracing::warn!(error = ?error, entity_id = %entity_id, "failed to enqueue search reindex for property change");
+        }
+    }
+
+    /// Fetch a property definition, ensuring it exists, isn't a system
+    /// property, and is owned by the caller (their user property or a property
+    /// of their team).
+    async fn owned_modifiable_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> Result<PropertyDefinition, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let property = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        if property.is_system {
+            return Err(PropertiesErr::SystemPropertyNotModifiable);
+        }
+
+        self.repository
+            .get_property_definition_with_owner(property_definition_id, user_id, team_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)
+    }
+
+    /// Resolve a tag set's options. A missing definition yields an empty set.
+    async fn build_tag_set(
+        &self,
+        scope: TagScope,
+        definition: Option<PropertyDefinition>,
+    ) -> Result<TagSet, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        match definition {
+            Some(definition) => {
+                let options = self
+                    .repository
+                    .get_property_options(definition.id)
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                Ok(TagSet {
+                    scope,
+                    definition: Some(definition),
+                    options,
+                })
+            }
+            None => Ok(TagSet {
+                scope,
+                definition: None,
+                options: Vec::new(),
+            }),
         }
     }
 
@@ -615,6 +682,242 @@ where
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> Result<Vec<PropertyOption>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_property_options(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self, request), fields(request = ?request), err)]
+    async fn add_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let definition = self
+            .owned_modifiable_definition(property_definition_id, user_id, team_id)
+            .await?;
+
+        request
+            .validate()
+            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+        request
+            .validate_compatibility(&definition.data_type)
+            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+
+        let (display_order, option_value, color) = match request {
+            AddPropertyOptionRequest::SelectString { option } => (
+                option.display_order,
+                PropertyOptionValue::String(option.value.clone()),
+                option.color.clone(),
+            ),
+            AddPropertyOptionRequest::SelectNumber { option } => (
+                option.display_order,
+                PropertyOptionValue::Number(option.value),
+                None,
+            ),
+        };
+
+        validate_option_color(&definition.data_type, color.as_deref(), color.as_deref())?;
+
+        let option = self
+            .repository
+            .create_property_option(property_definition_id, display_order, option_value, color)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        tracing::info!(
+            option_id = %option.id,
+            display_order = option.display_order,
+            "successfully added property option"
+        );
+
+        Ok(option)
+    }
+
+    #[tracing::instrument(skip(self, request), fields(request = ?request), err)]
+    async fn update_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+        request: &UpdatePropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let definition = self
+            .owned_modifiable_definition(property_definition_id, user_id, team_id)
+            .await?;
+
+        let option = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        if option.property_definition_id != property_definition_id {
+            return Err(PropertiesErr::OptionNotFound);
+        }
+
+        let new_value = match &request.value {
+            Some(value) => match definition.data_type {
+                DataType::SelectString | DataType::Tag => {
+                    if value.trim().is_empty() {
+                        return Err(PropertiesErr::Validation(
+                            "value cannot be empty".to_string(),
+                        ));
+                    }
+                    PropertyOptionValue::String(value.clone())
+                }
+                _ => {
+                    return Err(PropertiesErr::Validation(
+                        "value updates are only supported for string and tag options".to_string(),
+                    ));
+                }
+            },
+            None => option.value.clone(),
+        };
+
+        let new_color = request.color.clone().or_else(|| option.color.clone());
+        validate_option_color(
+            &definition.data_type,
+            request.color.as_deref(),
+            new_color.as_deref(),
+        )?;
+
+        let new_display_order = request.display_order.unwrap_or(option.display_order);
+
+        match self
+            .repository
+            .update_property_option(option_id, new_value, new_color, new_display_order)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            UpdatePropertyOptionOutcome::Updated(updated) => Ok(updated),
+            UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
+            UpdatePropertyOptionOutcome::DuplicateValue => Err(PropertiesErr::DuplicateOptionValue),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_property_option(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<(), PropertiesErr> {
+        self.owned_modifiable_definition(property_definition_id, user_id, team_id)
+            .await?;
+
+        let option = self
+            .repository
+            .get_property_option(option_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
+
+        if option.property_definition_id != property_definition_id {
+            return Err(PropertiesErr::OptionNotFound);
+        }
+
+        let deleted = self
+            .repository
+            .delete_property_option(property_definition_id, option_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if deleted {
+            tracing::info!("successfully deleted property option");
+            Ok(())
+        } else {
+            Err(PropertiesErr::OptionNotFound)
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_tag_sets(
+        &self,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> Result<Vec<TagSet>, PropertiesErr> {
+        let mut sets = Vec::new();
+
+        let user_definition = self
+            .repository
+            .get_tag_definition(PropertyDefinitionOwner::User(user_id))
+            .await
+            .map_err(anyhow::Error::from)?;
+        sets.push(self.build_tag_set(TagScope::User, user_definition).await?);
+
+        if let Some(team_id) = team_id {
+            let team_definition = self
+                .repository
+                .get_tag_definition(PropertyDefinitionOwner::Team(team_id))
+                .await
+                .map_err(anyhow::Error::from)?;
+            sets.push(self.build_tag_set(TagScope::Team, team_definition).await?);
+        }
+
+        Ok(sets)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn ensure_tag_set(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+    ) -> Result<TagSet, PropertiesErr> {
+        let scope = match owner {
+            PropertyDefinitionOwner::User(_) => TagScope::User,
+            PropertyDefinitionOwner::Team(_) => TagScope::Team,
+        };
+
+        let definition = self
+            .repository
+            .get_or_create_tag_definition(owner)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        self.build_tag_set(scope, Some(definition)).await
+    }
+}
+
+/// Validate the color rules for a property option: colors are only supported
+/// on tag options (as hex strings), and tag options must end up with a color.
+/// `provided_color` is the color supplied in the request; `effective_color` is
+/// the color the option would have after the operation.
+fn validate_option_color(
+    data_type: &DataType,
+    provided_color: Option<&str>,
+    effective_color: Option<&str>,
+) -> Result<(), PropertiesErr> {
+    if provided_color.is_some() && *data_type != DataType::Tag {
+        return Err(PropertiesErr::Validation(
+            "color is only supported on tag options".to_string(),
+        ));
+    }
+    if let Some(color) = provided_color
+        && !is_valid_hex_color(color)
+    {
+        return Err(PropertiesErr::Validation(
+            "color must be a hex string like #RRGGBB".to_string(),
+        ));
+    }
+    if *data_type == DataType::Tag && effective_color.is_none() {
+        return Err(PropertiesErr::Validation(
+            "tag options require a color".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Build a [`PropertyOption`] for creation. IDs and timestamps are placeholders

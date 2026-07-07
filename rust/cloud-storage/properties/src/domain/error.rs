@@ -17,6 +17,14 @@ pub enum PropertiesErr {
     #[error("Property definition not found")]
     NotFound,
 
+    /// Property option not found - maps to 404
+    #[error("Property option not found")]
+    OptionNotFound,
+
+    /// An option with the requested value already exists - maps to 409
+    #[error("An option with that value already exists")]
+    DuplicateOptionValue,
+
     /// System properties cannot be modified - maps to 403
     #[error("Cannot modify system properties")]
     SystemPropertyNotModifiable,

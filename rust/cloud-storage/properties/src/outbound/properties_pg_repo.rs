@@ -9,14 +9,16 @@ use uuid::Uuid;
 
 use super::{
     entity_properties_get_query, entity_property_queries, property_definition_queries,
-    task_property_queries,
+    property_option_queries, task_property_queries,
 };
-use crate::domain::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner};
+use crate::domain::model::{
+    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
+};
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 
 /// PostgreSQL implementation of PropertiesRepo.
 #[derive(Debug, Clone)]
@@ -120,6 +122,88 @@ impl PropertiesRepo for PropertiesPgRepo {
     ) -> Result<(), Self::Err> {
         property_definition_queries::delete_property_definition(&self.pool, property_definition_id)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_property_option(
+        &self,
+        option_id: Uuid,
+    ) -> Result<Option<PropertyOption>, Self::Err> {
+        property_option_queries::get_property_option(&self.pool, option_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> Result<Vec<PropertyOption>, Self::Err> {
+        property_option_queries::get_property_options(&self.pool, property_definition_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> Result<PropertyOption, Self::Err> {
+        property_option_queries::create_property_option(
+            &self.pool,
+            property_definition_id,
+            display_order,
+            value,
+            color,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn update_property_option(
+        &self,
+        option_id: Uuid,
+        value: PropertyOptionValue,
+        color: Option<String>,
+        display_order: i32,
+    ) -> Result<UpdatePropertyOptionOutcome, Self::Err> {
+        property_option_queries::update_property_option(
+            &self.pool,
+            option_id,
+            value,
+            color,
+            display_order,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_property_option(
+        &self,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        property_option_queries::delete_property_option(
+            &self.pool,
+            property_definition_id,
+            option_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_tag_definition(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+    ) -> Result<Option<PropertyDefinition>, Self::Err> {
+        property_definition_queries::get_tag_definition(&self.pool, owner).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_or_create_tag_definition(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+    ) -> Result<PropertyDefinition, Self::Err> {
+        property_definition_queries::get_or_create_tag_definition(&self.pool, owner).await
     }
 
     #[tracing::instrument(skip(self))]

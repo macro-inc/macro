@@ -1,7 +1,8 @@
 //! Domain models for properties.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_option::PropertyOptionValue;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType};
 use uuid::Uuid;
@@ -71,6 +72,38 @@ impl<'a> PropertyDefinitionOwner<'a> {
             PropertyDefinitionOwner::Team(team_id) => (Some(team_id), None),
         }
     }
+}
+
+/// Which owner a tag set belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagScope {
+    /// The caller's personal tag set.
+    User,
+    /// The caller's team tag set.
+    Team,
+}
+
+/// A tag set the caller can use. `definition` is `None` until the set is
+/// provisioned (on first label create), in which case `options` is empty.
+#[derive(Debug, Clone)]
+pub struct TagSet {
+    /// The owner scope of the tag set.
+    pub scope: TagScope,
+    /// The tag property definition, if provisioned.
+    pub definition: Option<PropertyDefinition>,
+    /// The tag options (labels) in the set.
+    pub options: Vec<PropertyOption>,
+}
+
+/// Outcome of an in-place property option update.
+#[derive(Debug, Clone)]
+pub enum UpdatePropertyOptionOutcome {
+    /// The option was updated.
+    Updated(PropertyOption),
+    /// No option with the given id exists.
+    NotFound,
+    /// Another option on the same property already has the requested value.
+    DuplicateValue,
 }
 
 /// A task-assignment notification expressed in domain terms.
