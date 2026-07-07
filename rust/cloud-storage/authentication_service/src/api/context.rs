@@ -10,6 +10,7 @@ use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
+use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_cache_client::MacroCache;
 use macro_env::Environment;
@@ -83,6 +84,7 @@ pub(crate) struct ApiContext {
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
+    pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price id

@@ -17,6 +17,7 @@ use github::{
         pg_github_repo::PgGithubRepo,
     },
 };
+use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
@@ -242,6 +243,17 @@ async fn main() -> anyhow::Result<()> {
     });
     tracing::trace!("initialized analytics client");
 
+    // Initialize Loops client. When no API key is configured this is a no-op,
+    // so local/dev environments don't need Loops credentials.
+    let loops_client = match config.loops_api_key.value() {
+        Some(api_key) => {
+            tracing::info!("configuring Loops");
+            LoopsClient::new(api_key.to_string())
+        }
+        None => LoopsClient::noop(),
+    };
+    tracing::trace!("initialized loops client");
+
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
     let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
@@ -349,6 +361,7 @@ async fn main() -> anyhow::Result<()> {
                 },
             }),
             analytics_client: Arc::new(analytics_client),
+            loops_client: Arc::new(loops_client),
             stripe_price_id: config.stripe_price_id.to_string(),
         },
         config.port,

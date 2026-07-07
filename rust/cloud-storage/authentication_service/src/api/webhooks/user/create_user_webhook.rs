@@ -171,6 +171,19 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
     });
 
+    // Add the new sign-up to Loops (our email marketing audience / mailing
+    // list). Fire-and-forget: a Loops failure must never block user creation.
+    tokio::spawn({
+        let loops_client = ctx.loops_client.clone();
+        let email = email.clone();
+        async move {
+            let _ = loops_client
+                .add_contact(&email, "macro-signup")
+                .await
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to add contact to Loops"));
+        }
+    });
+
     // add user to all active experiments
     tokio::spawn({
         let db = ctx.db.clone();
