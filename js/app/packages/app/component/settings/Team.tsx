@@ -494,12 +494,7 @@ function UserInviteRow(props: {
           variant="active"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
-          tooltip={
-            props.requiresUpgrade
-              ? 'Joining a team requires a paid plan'
-              : undefined
-          }
-          onClick={props.requiresUpgrade ? props.onUpgrade : props.onAccept}
+          onClick={props.onAccept}
         >
           <Show when={props.isAccepting} fallback="Join">
             <SpinnerIcon class="size-4 animate-spin" />
