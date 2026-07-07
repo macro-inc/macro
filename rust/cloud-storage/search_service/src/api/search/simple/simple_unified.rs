@@ -230,17 +230,21 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     let match_type = req.match_type;
 
-    // CRM is opt-in: it only runs when the caller resolved a team receipt
-    // (set only when `include_crm` is true and the user has a qualifying
-    // membership). `crm_company_filters` scopes/selects within the team.
-    let crm_company_filters = req.filters.crm_company_filters.clone();
-    let should_include_crm = crm_access.is_some();
-
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
+    // Tags are only indexed for the documents index. With a tag filter
+    // active every other source is dropped, so response pages contain only
+    // rows the filter was actually applied to.
+    let tags_active = !tag_option_ids.is_empty();
+
+    // CRM is opt-in: it only runs when the caller resolved a team receipt
+    // (set only when `include_crm` is true and the user has a qualifying
+    // membership). `crm_company_filters` scopes/selects within the team.
+    let crm_company_filters = req.filters.crm_company_filters.clone();
+    let should_include_crm = crm_access.is_some() && !tags_active;
 
     let search_filters = SearchEntityFilters::from(req.filters);
     let channel_filters = search_filters.channel_filters;
@@ -251,11 +255,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     let call_filters = search_filters.call_filters;
 
     let should_include_documents = search_filters.should_include_documents;
-    let should_include_channels = search_filters.should_include_channels;
-    let should_include_chats = search_filters.should_include_chats;
-    let should_include_projects = search_filters.should_include_projects;
-    let should_include_emails = search_filters.should_include_emails;
-    let should_include_call_records = search_filters.should_include_call_records;
+    let should_include_channels = search_filters.should_include_channels && !tags_active;
+    let should_include_chats = search_filters.should_include_chats && !tags_active;
+    let should_include_projects = search_filters.should_include_projects && !tags_active;
+    let should_include_emails = search_filters.should_include_emails && !tags_active;
+    let should_include_call_records = search_filters.should_include_call_records && !tags_active;
     let email_terms = search_terms.clone();
 
     // Await all tasks in parallel

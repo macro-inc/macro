@@ -1467,3 +1467,66 @@ fn crm_scope_accepts_non_empty_variants_on_deserialize() {
     let addresses: CrmScope = serde_json::from_str(r#"{"Addresses":["a@acme.com"]}"#).unwrap();
     assert!(matches!(addresses, CrmScope::Addresses(a) if a == vec!["a@acme.com".to_string()]));
 }
+
+#[test]
+fn properties_filter_can_apply_to_respects_literal_entity_types() {
+    use properties::{
+        PropertiesLiteral, PropertyEntityType, PropertyMatchValue, properties_filter_can_apply_to,
+    };
+    let lit = |entity_type| {
+        Expr::Literal(PropertiesLiteral {
+            property_definition_id: Uuid::new_v4(),
+            entity_type,
+            value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+        })
+    };
+
+    let untyped = lit(None);
+    assert!(properties_filter_can_apply_to(
+        &untyped,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let task_only = lit(Some(PropertyEntityType::Task));
+    assert!(!properties_filter_can_apply_to(
+        &task_only,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let either = Expr::or(lit(Some(PropertyEntityType::Task)), lit(None));
+    assert!(properties_filter_can_apply_to(
+        &either,
+        &[PropertyEntityType::Thread]
+    ));
+
+    let negated = Expr::is_not(lit(Some(PropertyEntityType::Task)));
+    assert!(properties_filter_can_apply_to(
+        &negated,
+        &[PropertyEntityType::Thread]
+    ));
+}
+
+#[test]
+fn properties_filter_matches_propertyless_evaluates_literals_as_false() {
+    use properties::{
+        PropertiesLiteral, PropertyMatchValue, properties_filter_matches_propertyless,
+    };
+    let lit = || {
+        Expr::Literal(PropertiesLiteral {
+            property_definition_id: Uuid::new_v4(),
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+        })
+    };
+
+    assert!(!properties_filter_matches_propertyless(&lit()));
+    assert!(!properties_filter_matches_propertyless(&Expr::or(
+        lit(),
+        lit()
+    )));
+    assert!(properties_filter_matches_propertyless(&Expr::is_not(lit())));
+    assert!(!properties_filter_matches_propertyless(&Expr::and(
+        lit(),
+        Expr::is_not(lit())
+    )));
+}

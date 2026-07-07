@@ -3,7 +3,10 @@ use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{EmailFilters, SharedEmailFilter, ast::ExpandErr, ast::date::DateLiteral};
+use crate::{
+    EmailFilters, SharedEmailFilter, ast::ExpandErr, ast::date::DateLiteral,
+    ast::properties::PropertiesLiteral,
+};
 
 /// Possible email values in the ast
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +71,12 @@ pub enum EmailLiteral {
     /// Filter by thread updated_at timestamp (view-dependent field)
     #[serde(rename = "ua")]
     UpdatedAt(DateLiteral),
+    /// Thread-level entity-property condition, checked against
+    /// `entity_properties` keyed on the thread id. Injected by the soup
+    /// service when a request carries a properties filter; never produced
+    /// by client filter expansion.
+    #[serde(rename = "prop")]
+    Property(PropertiesLiteral),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {

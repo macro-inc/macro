@@ -2750,3 +2750,48 @@ async fn test_viewed_updated_sort_falls_back_to_view_timestamp(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_properties")
+    )
+)]
+async fn test_dynamic_query_thread_property_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
+
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let definition_id = Uuid::parse_str("bb111111-1111-1111-1111-111111111111")?;
+
+    let tagged = Arc::new(Expr::Literal(EmailLiteral::Property(PropertiesLiteral {
+        property_definition_id: definition_id,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::parse_str(
+            "0bb11111-1111-1111-1111-111111111111",
+        )?),
+    })));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, tagged);
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, query, "", None).await?;
+    assert_eq!(results.len(), 1, "only the tagged inbox thread matches");
+    assert_eq!(
+        results[0].id.to_string(),
+        "20000001-0000-0000-0000-000000000001"
+    );
+
+    let unknown_option = Arc::new(Expr::Literal(EmailLiteral::Property(PropertiesLiteral {
+        property_definition_id: definition_id,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::parse_str(
+            "0bb99999-9999-9999-9999-999999999999",
+        )?),
+    })));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, unknown_option);
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, query, "", None).await?;
+    assert!(results.is_empty(), "unknown tag option matches no threads");
+
+    Ok(())
+}
