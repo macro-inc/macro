@@ -1,14 +1,28 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import clickOutside from '@core/directive/clickOutside';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   $computeTableMap,
+  $deleteTableColumnAtSelection,
+  $deleteTableRowAtSelection,
   $getTableCellNodeFromLexicalNode,
   $getTableNodeFromLexicalNodeOrThrow,
+  $insertTableColumnAtSelection,
+  $insertTableRowAtSelection,
   $isTableCellNode,
   $isTableSelection,
   getDOMCellFromTarget,
+  type TableCellNode,
 } from '@lexical/table';
+import ColumnsIcon from '@phosphor/columns.svg';
+import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
+import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
 import DotsIcon from '@phosphor/dots-six-vertical.svg';
+import RowsIcon from '@phosphor/rows.svg';
+import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
+import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
+import TableIcon from '@phosphor/table.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   $getNearestNodeFromDOMNode,
@@ -20,10 +34,73 @@ import {
   FOCUS_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
 
+false && clickOutside;
+
 const DRAG_THRESHOLD_PX = 4;
+
+type MenuItem = {
+  label: string;
+  icon: Component<ComponentProps<'svg'>>;
+  action: (cell: TableCellNode) => void;
+  // Spans both grid columns.
+  wide?: boolean;
+};
+
+const INSERT_ITEMS: MenuItem[] = [
+  {
+    label: 'Column left',
+    icon: ColumnsPlusLeftIcon,
+    action: () => $insertTableColumnAtSelection(false),
+  },
+  {
+    label: 'Column right',
+    icon: ColumnsPlusRightIcon,
+    action: () => $insertTableColumnAtSelection(true),
+  },
+  {
+    label: 'Row above',
+    icon: RowsPlusTopIcon,
+    action: () => $insertTableRowAtSelection(false),
+  },
+  {
+    label: 'Row below',
+    icon: RowsPlusBottomIcon,
+    action: () => $insertTableRowAtSelection(true),
+  },
+];
+
+const DELETE_ITEMS: MenuItem[] = [
+  {
+    label: 'Delete row',
+    icon: RowsIcon,
+    action: () => $deleteTableRowAtSelection(),
+  },
+  {
+    label: 'Delete column',
+    icon: ColumnsIcon,
+    action: () => $deleteTableColumnAtSelection(),
+  },
+  {
+    label: 'Delete table',
+    icon: TableIcon,
+    wide: true,
+    action: (cell) => $getTableNodeFromLexicalNodeOrThrow(cell).remove(),
+  },
+];
+
+const MENU_WIDTH_PX = 232;
+const MENU_MAX_HEIGHT_PX = 200;
 
 type DropTarget = {
   cellElem: HTMLElement;
@@ -53,6 +130,9 @@ export function TableMoveHandle() {
 
   const [dragging, setDragging] = createSignal(false);
   const [dropTarget, setDropTarget] = createSignal<DropTarget>();
+  // Touch-only dropdown with insert/delete actions, opened by tapping the
+  // handle without dragging it.
+  const [menuOpen, setMenuOpen] = createSignal(false);
 
   const initialRootElement = editor()?.getRootElement();
   const [editorFocused, setEditorFocused] = createSignal(
@@ -142,7 +222,7 @@ export function TableMoveHandle() {
   // corners of a table selection; the same cell for a caret selection).
   const handlePosition = createMemo(() => {
     layoutTick();
-    if (!editorFocused() && !dragging()) return;
+    if (!editorFocused() && !dragging() && !menuOpen()) return;
     const currentEditor = editor();
     const aKey = anchorCellKey();
     const fKey = focusCellKey();
@@ -155,7 +235,7 @@ export function TableMoveHandle() {
     const a = anchorElem.getBoundingClientRect();
     const f = focusElem.getBoundingClientRect();
     return {
-      x: Math.max(a.right, f.right),
+      x: Math.min(Math.max(a.right, f.right), window.innerWidth),
       y: Math.min(a.top, f.top),
     };
   });
@@ -276,6 +356,42 @@ export function TableMoveHandle() {
     setDropTarget(undefined);
   };
 
+  const runMenuAction = createCallback(
+    (action: (cell: TableCellNode) => void) => {
+      setMenuOpen(false);
+      editor()?.update(() => {
+        // Prefer the live selection; re-anchor in the tracked cell if the tap
+        // blurred the editor. The insert/delete helpers act on the selection.
+        const selection = $getSelection();
+        let cell =
+          $isRangeSelection(selection) || $isTableSelection(selection)
+            ? $getTableCellNodeFromLexicalNode(selection.anchor.getNode())
+            : null;
+        if (!cell) {
+          const key = anchorCellKey();
+          const tracked = key ? $getNodeByKey(key) : null;
+          if ($isTableCellNode(tracked) && tracked.isAttached()) {
+            tracked.selectStart();
+            cell = tracked;
+          }
+        }
+        if (cell) action(cell);
+      });
+    }
+  );
+
+  const menuItemButton = (item: MenuItem, danger: boolean) => (
+    <button
+      type="button"
+      class="flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs ring-1 ring-edge active:bg-accent/10"
+      classList={{ 'text-failure': danger, 'col-span-2': item.wide }}
+      onClick={() => runMenuAction(item.action)}
+    >
+      <item.icon class="size-4 shrink-0" />
+      {item.label}
+    </button>
+  );
+
   const onHandlePointerDown = (downEvent: PointerEvent) => {
     downEvent.preventDefault();
     const handleElem = downEvent.currentTarget;
@@ -296,6 +412,7 @@ export function TableMoveHandle() {
         if (distance < DRAG_THRESHOLD_PX) return;
         started = true;
         setDragging(true);
+        setMenuOpen(false);
       }
       const under = document.elementFromPoint(
         moveEvent.clientX,
@@ -315,6 +432,9 @@ export function TableMoveHandle() {
     const onPointerUp = () => {
       const target = dropTarget();
       if (started && target) performMove(target.cellElem);
+      // A tap (no drag) opens the action menu on touch devices, where the
+      // hover-driven insert/delete buttons are unusable.
+      else if (!started && isTouchDevice()) setMenuOpen(true);
       cleanup();
     };
 
@@ -367,6 +487,30 @@ export function TableMoveHandle() {
           >
             <DotsIcon class="size-3.5" />
           </button>
+          <Show when={menuOpen()}>
+            <div
+              class="fixed z-30 grid -translate-x-full grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
+              style={{
+                width: `${MENU_WIDTH_PX}px`,
+                'max-height': `${MENU_MAX_HEIGHT_PX}px`,
+                left: `${Math.max(pos().x, MENU_WIDTH_PX + 8)}px`,
+                top: `${Math.min(
+                  pos().y + 28,
+                  window.innerHeight - MENU_MAX_HEIGHT_PX - 8
+                )}px`,
+              }}
+              use:clickOutside={() => setMenuOpen(false)}
+              onPointerDown={(e) => e.preventDefault()}
+            >
+              <For each={INSERT_ITEMS}>
+                {(item) => menuItemButton(item, false)}
+              </For>
+              <div class="col-span-2 my-0.5 h-px shrink-0 bg-edge" />
+              <For each={DELETE_ITEMS}>
+                {(item) => menuItemButton(item, true)}
+              </For>
+            </div>
+          </Show>
         </ScopedPortal>
       )}
     </Show>

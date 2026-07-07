@@ -223,7 +223,7 @@ describe('table cell range copy/paste', () => {
     ]);
   });
 
-  it('clips the pasted range instead of adding columns on horizontal overflow', async () => {
+  it('grows the table with new columns on horizontal overflow', async () => {
     const editor = createTableEditor();
     await buildTable(editor, GRID);
 
@@ -231,9 +231,9 @@ describe('table cell range copy/paste', () => {
     await pasteIntoCell(editor, copied, [2, 2]);
 
     expect(readCellTexts(editor)).toEqual([
-      ['01', '02', '03'],
-      ['04', '05', '06'],
-      ['07', '08', '01'],
+      ['01', '02', '03', ''],
+      ['04', '05', '06', ''],
+      ['07', '08', '01', '02'],
     ]);
   });
 
@@ -386,13 +386,13 @@ describe('table cell range move', () => {
 
     expect(moved).toBe(true);
     expect(readCellTexts(editor)).toEqual([
-      ['', '', '01'],
-      ['04', '05', '06'],
-      ['07', '08', '09'],
+      ['', '', '01', '02'],
+      ['04', '05', '06', ''],
+      ['07', '08', '09', ''],
     ]);
   });
 
-  it('clips a moved range at the right edge instead of adding columns', async () => {
+  it('grows the table with new columns when a moved range overflows the right edge', async () => {
     const editor = createTableEditor();
     await buildTable(editor, GRID);
 
@@ -400,9 +400,9 @@ describe('table cell range move', () => {
 
     expect(moved).toBe(true);
     expect(readCellTexts(editor)).toEqual([
-      ['01', '02', '03'],
-      ['', '', '06'],
-      ['07', '08', '04'],
+      ['01', '02', '03', ''],
+      ['', '', '06', ''],
+      ['07', '08', '04', '05'],
     ]);
   });
 });

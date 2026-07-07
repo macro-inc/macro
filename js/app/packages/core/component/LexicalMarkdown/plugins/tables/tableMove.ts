@@ -22,8 +22,8 @@ import {
  * Moves the contents of the cell range spanned by `anchorCell`..`focusCell`
  * onto the grid anchored at `targetCell`: the range is snapshotted, the
  * source cells are emptied, and the snapshot is dispatched through the same
- * grid-insert command as pasting a copied range — so overflow clipping and
- * node-id reassignment behave identically to paste.
+ * grid-insert command as pasting a copied range — so overflow growth (new
+ * rows/columns) and node-id reassignment behave identically to paste.
  *
  * Must be called inside an editor update. Returns true when a move happened.
  */

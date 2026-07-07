@@ -30,7 +30,9 @@ import {
 import {
   $createParagraphNode,
   $getNodeByKey,
+  $getSelection,
   $isElementNode,
+  $isRangeSelection,
   $isRootNode,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
@@ -149,6 +151,17 @@ export function $listToGrid(list: ListNode): ListGridColumn[] | null {
  */
 export function $canConvertListToTable(list: ListNode): boolean {
   return $isRootNode(list.getParent()) && $listToGrid(list) !== null;
+}
+
+/**
+ * The convertible list containing the current selection, if any. Must be
+ * called within a Lexical read/update context.
+ */
+export function $getConvertibleListFromSelection(): ListNode | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return null;
+  const list = selection.anchor.getNode().getTopLevelElement();
+  return $isListNode(list) && $canConvertListToTable(list) ? list : null;
 }
 
 /** Moves a cell's source content out of the list into a fresh table cell. */

@@ -16,6 +16,7 @@ import {
 } from '@lexical/table';
 import { SupportedNodeTypes } from '@lexical-core/node-list';
 import {
+  $createParagraphNode,
   $createTextNode,
   $getRoot,
   $isTextNode,
@@ -24,8 +25,12 @@ import {
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 
-import { $listToGrid, registerListToTableCommand } from './listToTable';
-import { LIST_TO_TABLE_COMMAND } from './listToTable';
+import {
+  $getConvertibleListFromSelection,
+  $listToGrid,
+  LIST_TO_TABLE_COMMAND,
+  registerListToTableCommand,
+} from './listToTable';
 import { tablePlugin } from './tablePlugin';
 
 function createTestEditor(): LexicalEditor {
@@ -302,6 +307,52 @@ describe('list to table conversion', () => {
       ['a1', 'b1'],
       ['a2', 'b2'],
     ]);
+  });
+
+  it('finds the convertible list from a selection inside it, but not elsewhere', async () => {
+    const editor = createTestEditor();
+    await mount(editor, () =>
+      $buildColumns([
+        ['column 1', ['a1']],
+        ['column 2', ['b1']],
+      ])
+    );
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode('outside'));
+          $getRoot().append(paragraph);
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    const $selectText = (content: string) => {
+      const text = $getRoot()
+        .getAllTextNodes()
+        .find((node) => node.getTextContent() === content);
+      if (!text) throw new Error(`no text node "${content}"`);
+      text.select(0, 0);
+    };
+
+    await new Promise<void>((resolve) => {
+      editor.update(() => $selectText('a1'), { onUpdate: () => resolve() });
+    });
+    editor.getEditorState().read(() => {
+      expect($getConvertibleListFromSelection()?.getKey()).toBe(
+        $getRoot().getFirstChild()?.getKey()
+      );
+    });
+
+    await new Promise<void>((resolve) => {
+      editor.update(() => $selectText('outside'), {
+        onUpdate: () => resolve(),
+      });
+    });
+    editor.getEditorState().read(() => {
+      expect($getConvertibleListFromSelection()).toBeNull();
+    });
   });
 
   it('reads the grid without mutating the list', async () => {

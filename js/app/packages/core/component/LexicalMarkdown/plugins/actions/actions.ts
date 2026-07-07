@@ -43,6 +43,7 @@ import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
+import { TRY_INSERT_TABLE_PICKER_COMMAND } from '../tables';
 import { type Action, ActionCategory, type ActionContext } from './types';
 
 async function trackSlashTaskMention(
@@ -292,11 +293,17 @@ export const ACTIONS: Action[] = [
     category: ActionCategory.MEDIA,
     action: (editor: LexicalEditor) => {
       queueMicrotask(() => {
-        editor.dispatchCommand(INSERT_TABLE_COMMAND, {
-          columns: '5',
-          rows: '3',
-          includeHeaders: false,
-        });
+        const pickerOpened = editor.dispatchCommand(
+          TRY_INSERT_TABLE_PICKER_COMMAND,
+          undefined
+        );
+        if (!pickerOpened) {
+          editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+            columns: '3',
+            rows: '3',
+            includeHeaders: false,
+          });
+        }
       });
     },
     dependencies: [TableNode],
