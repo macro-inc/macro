@@ -5,10 +5,11 @@
 //! `.github/kafka-cluster-topics.json`) — so a topic declared in the crate
 //! exists both locally and in the deployed cluster without a second list.
 //!
-//! Gated behind the `local-stack` feature: rdkafka links a system librdkafka,
-//! which the bare CI runners that build xtask don't have. The just recipes
-//! enable the feature; without it the provisioning entry points fail with
-//! instructions instead of the whole binary failing to build.
+//! Gated behind the `local-stack` feature: rdkafka builds and statically links
+//! bundled librdkafka, which is unnecessary for plain xtask builds. The just
+//! recipes enable the feature; without it the provisioning entry points fail
+//! with instructions instead of the whole binary spending time on native Kafka
+//! dependencies.
 
 #[cfg(feature = "local-stack")]
 use std::time::Duration;

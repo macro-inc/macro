@@ -4,4 +4,4 @@
 
 mod pg_access_repo;
 
-pub use pg_access_repo::PgAccessRepository;
+pub use pg_access_repo::{PgAccessRepository, SourceIds, get_user_source_ids};

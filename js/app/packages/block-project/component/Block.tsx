@@ -208,6 +208,8 @@ const ProjectEntityList = (props: {
             // Filter emails by project
             emailProjectId: [props.projectId],
           },
+          // Default 'inbox' view would hide archived/outbound-only threads
+          emailView: 'all',
         })}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />

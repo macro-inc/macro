@@ -28,20 +28,26 @@
         [
           openssl
           openssl.dev
-          rdkafka
-          rdkafka.dev
+          # librdkafka 2.12's cmake config header always defines
+          # WITH_OAUTHBEARER_OIDC (via #cmakedefine01), and rdkafka_conf.c
+          # guards its curl include with #ifdef instead of #if, so the bundled
+          # cmake-build needs curl headers even with WITH_CURL=0. Headers only;
+          # nothing links against libcurl.
+          curl.dev
           glib
           glib.dev
           libclang
           xz.out
         ]
-        ++ pkgs.lib.optionals isLinux [
-          glibc.dev
-          gcc
-        ]
         ++ pkgs.lib.optionals isDarwin [
           libiconv
         ];
+
+      # Do not add glibc.dev directly to buildInputs/libraries on Linux. The
+      # GCC wrapper already adds glibc headers as an -idirafter path; adding
+      # glibc.dev through the setup hook turns it into an early -isystem path,
+      # which breaks libstdc++'s #include_next <stdlib.h> while building C++
+      # sources such as bundled librdkafka.
 
       # Include Cargo sources plus the .sqlx offline query cache.
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
@@ -154,6 +160,7 @@
         nativeBuildInputs =
           with pkgs;
           [
+            cmake
             git
             pkg-config
           ]
@@ -769,7 +776,6 @@
           let
             pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
               pkgs.openssl.dev
-              pkgs.rdkafka.dev
             ];
           in
           pkgs.mkShell (
@@ -778,7 +784,8 @@
               PKG_CONFIG_PATH = pkgConfigPath;
               # Cargo build scripts use the Nix pkg-config wrapper, which prefers
               # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
-              # Keep librdkafka visible there so rdkafka-sys can find rdkafka.pc.
+              # librdkafka is built from the bundled sources via rdkafka's
+              # cmake-build feature, so no system librdkafka.pc is needed here.
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";

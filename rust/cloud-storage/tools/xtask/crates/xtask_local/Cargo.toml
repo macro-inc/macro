@@ -26,9 +26,8 @@ tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
 macro_event_topics = { path = "../../../../macro_event_topics" }
 # AdminClient for creating the declared topics on the local broker. Optional
-# (behind `local-stack`): the workspace links librdkafka dynamically, and the
-# CI jobs that build this on bare runners have no system librdkafka to link
-# against.
+# (behind `local-stack`) so plain xtask builds don't spend time compiling the
+# bundled static librdkafka dependency.
 rdkafka = { workspace = true, optional = true }
 # Typed docker-compose model (build the override as structs, not strings) +
 # Docker Engine API client for the discrete container/image ops.
@@ -48,6 +47,6 @@ xtask_paths = { path = "../xtask_paths" }
 
 [features]
 # Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
-# default so a plain build works without a system librdkafka; the just recipes
+# default so a plain build avoids compiling bundled librdkafka; the just recipes
 # enable it.
 local-stack = ["dep:rdkafka"]

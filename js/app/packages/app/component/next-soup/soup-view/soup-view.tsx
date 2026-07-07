@@ -45,6 +45,9 @@ import {
   callsLayoutMode,
   getCallsGalleryColumns,
 } from '@app/component/next-soup/soup-view/views/calls/CallsGallery';
+import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
+import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
+import { ResponsiveCompanyListHeader } from '@app/component/next-soup/soup-view/views/companies/CompanyListHeader';
 import { InboxListEntity } from '@app/component/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
@@ -63,6 +66,7 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
+import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
@@ -106,6 +110,8 @@ import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
+import KanbanIcon from '@phosphor/kanban.svg';
+import ListIcon from '@phosphor/list.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -214,7 +220,8 @@ const DefaultGroupHeader = (
     const field = groupByField();
     if (
       field?.type !== 'property' ||
-      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+      (field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES &&
+        field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.COMPANY_OWNER) ||
       props.group.key === ''
     ) {
       return;
@@ -400,6 +407,47 @@ interface SoupViewProps {
   additionalEntities?: Accessor<EntityData[]>;
 }
 
+type SoupViewMode = 'list' | 'board';
+
+/** Segmented list/board toggle shown in the topbar of the Customers view. */
+const SoupViewModeToggle = (props: {
+  mode: SoupViewMode;
+  onChange: (mode: SoupViewMode) => void;
+}) => {
+  return (
+    <div class="flex items-center gap-0.5 rounded-lg border border-edge-muted bg-surface p-0.5">
+      <Tooltip label="List">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label="List view"
+          class={cn(
+            'size-6 rounded-md p-1',
+            props.mode === 'list' && 'bg-active text-ink'
+          )}
+          onClick={() => props.onChange('list')}
+        >
+          <ListIcon class="size-3.5" />
+        </Button>
+      </Tooltip>
+      <Tooltip label="Board">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label="Board view"
+          class={cn(
+            'size-6 rounded-md p-1',
+            props.mode === 'board' && 'bg-active text-ink'
+          )}
+          onClick={() => props.onChange('board')}
+        >
+          <KanbanIcon class="size-3.5" />
+        </Button>
+      </Tooltip>
+    </div>
+  );
+};
+
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
@@ -544,6 +592,16 @@ export const SoupView = (props: SoupViewProps) => {
     return view ? LIST_VIEW_DOCS_URL[view] : undefined;
   });
 
+  // List/board display mode — currently only the Customers view offers a
+  // board (kanban grouped by Stage). Per-entry state so back/forward
+  // restores the mode the user left each entry with.
+  const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
+    default: 'list',
+  });
+  const isBoardMode = createMemo(
+    () => activeListView() === 'companies' && viewMode() === 'board'
+  );
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -566,6 +624,10 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
+  const { paneVisible } = usePreviewPaneVisiblity();
+
+  const isNewInboxEnabled = useIsNewInboxEnabled();
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -582,7 +644,7 @@ export const SoupView = (props: SoupViewProps) => {
             // In preview the separating border sits below this region, so it
             // ends up under the active-filters bar when shown, otherwise right
             // under the toolbar (the wrapper collapses to zero height).
-            'border-b border-edge-muted': !isMobile() && !!soup.previewEntity(),
+            'border-b border-edge-muted': !isMobile() && paneVisible(),
           })}
         >
           <SplitHeaderLeft>
@@ -638,6 +700,13 @@ export const SoupView = (props: SoupViewProps) => {
           </SplitHeaderLeft>
           <Show when={!isMobile()}>
             <SplitHeaderRight>
+              <Show
+                when={
+                  !narrowSearchExpanded() && isComponentListView('companies')
+                }
+              >
+                <SoupViewModeToggle mode={viewMode()} onChange={setViewMode} />
+              </Show>
               <Show
                 when={!narrowSearchExpanded() && !isComponentListView('search')}
               >
@@ -708,9 +777,11 @@ export const SoupView = (props: SoupViewProps) => {
         <SoupFiltersBar />
         <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
           <Suspense>
-            <SoupViewFileDropzone>
-              <SoupViewList />
-            </SoupViewFileDropzone>
+            <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
+              <SoupViewFileDropzone>
+                <SoupViewList />
+              </SoupViewFileDropzone>
+            </Show>
           </Suspense>
           <Show when={isMobile()}>
             <FloatRegion region="accessory">
@@ -720,7 +791,11 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
       </div>
       <Suspense>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+        <Show
+          when={
+            ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile() && !isNewInboxEnabled()
+          }
+        >
           <SoupChatInput />
         </Show>
       </Suspense>
@@ -728,7 +803,7 @@ export const SoupView = (props: SoupViewProps) => {
   );
 };
 
-export const useIsNewInboxEnabled = () => {
+export function useIsNewInboxEnabled() {
   const panel = useSplitPanelOrThrow();
 
   const currentView = () => {
@@ -745,7 +820,42 @@ export const useIsNewInboxEnabled = () => {
     currentView() === 'inbox' && newInboxFlag().enabled;
 
   return isNewInboxEnabled;
-};
+}
+
+export function usePreviewPaneVisiblity() {
+  const panel = useSplitPanelOrThrow();
+
+  const { soup, rows } = useSoupView();
+
+  const isNewInboxEnabled = useIsNewInboxEnabled();
+
+  const isWideSplitPanel = createMemo(() => {
+    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
+  });
+
+  const previewVisible = createMemo(
+    () =>
+      isWideSplitPanel() &&
+      (!!soup.previewEntity() || panel.previewState[0]()) &&
+      !!soup.focus.item()
+  );
+
+  // Placeholder display only for new inbox where the preview panel is open by default
+  // Only open while no items are focused
+  const previewPlaceholderVisible = createMemo(() => {
+    return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
+  });
+
+  const previewPaneVisible = createMemo(
+    () => rows().length > 0 && (previewVisible() || previewPlaceholderVisible())
+  );
+
+  return {
+    paneVisible: previewPaneVisible,
+    placeholderVisible: previewPlaceholderVisible,
+    previewVisible,
+  };
+}
 
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
@@ -787,6 +897,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
+  const { paneVisible, placeholderVisible, previewVisible } =
+    usePreviewPaneVisiblity();
   // On desktop the calls view defaults to a gallery of call cards instead of
   // list rows (toggleable from the header). The gallery only renders while
   // the list column is wide enough for at least two card columns and while
@@ -894,7 +1006,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     // The calls view has no preview button in its chrome, so never auto-open
     // the pane there — only keep an already-open pane (Space) in sync.
-    if (currentView() !== 'calls' || soup.previewEntity()) {
+    if (paneVisible() && (currentView() !== 'calls' || soup.previewEntity())) {
       soup.setPreviewEntity(result?.row.id);
     }
 
@@ -997,6 +1109,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // The per-row component depends on the active view (and the inbox flag).
   const listEntityComponent = () => {
     if (currentView() === 'tasks') return TaskListEntity;
+    if (currentView() === 'companies') return CompanyListEntity;
     if (isNewInboxEnabled()) return InboxListEntity;
     return ListEntity;
   };
@@ -1059,7 +1172,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     if (
-      previewPlaceholderVisible() ||
+      placeholderVisible() ||
       (previewVisible() && soup.previewEntity() && type === 'entity')
     ) {
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
@@ -1269,25 +1382,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
   });
 
-  const previewVisible = createMemo(
-    () =>
-      isWideSplitPanel() &&
-      (!!soup.previewEntity() || panel.previewState[0]()) &&
-      !!soup.focus.item()
-  );
-
-  // On first load the new inbox doesn't auto-select a row, so reserve the
-  // preview pane with a placeholder until the user picks something. Only for
-  // that initial state — after the first selection, an empty selection
-  // collapses the pane as before.
-  const previewPlaceholderVisible = createMemo(() => {
-    return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
-  });
-
-  const previewPaneVisible = createMemo(
-    () => previewVisible() || previewPlaceholderVisible()
-  );
-
   createEffect(() => {
     const hasPreviewEntity = !!soup.previewEntity();
     const [getPreview, setPreview] = panel.previewState;
@@ -1321,14 +1415,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
           <Resize.Panel
             id="soup-list"
             minSize={200}
-            maxSize={previewPaneVisible() ? 840 : undefined}
+            maxSize={paneVisible() ? 840 : undefined}
           >
             <div
               ref={setListColumnRef}
               class={cn(
                 '@container/u-list size-full unified-list-root flex flex-col relative',
-                soup.previewEntity() !== undefined &&
-                  'border-r border-edge-muted'
+                paneVisible() && 'border-r border-edge-muted'
               )}
             >
               <Show when={isMobile() && source.isPlaceholderData()}>
@@ -1375,6 +1468,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     <ListLayoutProvider ref={localEntityListRef}>
                       <Show when={currentView() === 'tasks' && !isMobile()}>
                         <ResponsiveTaskListHeader class="shrink-0" />
+                      </Show>
+                      <Show when={currentView() === 'companies' && !isMobile()}>
+                        <ResponsiveCompanyListHeader class="shrink-0" />
                       </Show>
                       <EntityRowProvider
                         container={localEntityListRef}
@@ -1688,7 +1784,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </StaticMarkdownContext>
             </div>
           </Resize.Panel>
-          <Show when={previewPaneVisible()}>
+          <Show when={paneVisible()}>
             <Resize.Panel
               id="soup-preview"
               minSize={500}
@@ -1707,11 +1803,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   when={soup.focus.item()}
                   fallback={
                     <EmptyStatePanel
-                      graphic={(iconProps) => (
-                        <EmptyStatePreviewIcon {...iconProps} />
-                      )}
+                      graphic={EmptyStatePreviewIcon}
                       title="Nothing selected"
                       description="Select an item from your inbox to preview it here."
+                      centered
                     />
                   }
                 >
@@ -1820,7 +1915,7 @@ const SoupList = (props: SoupListProps) => {
         <div
           ref={setTopSpacerRef}
           aria-hidden
-          class="h-0 mobile:h-(--mobile-content-inset-top)"
+          class="h-0 block sm:hidden mobile:h-(--mobile-content-inset-top)"
         />
         <Virtualizer
           cache={props.cache}

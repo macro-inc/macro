@@ -1,5 +1,6 @@
 import { GroupDropdown } from '@app/component/next-soup/soup-view/filters-bar/group-dropdown';
 import {
+  COMPANY_GROUP_OPTIONS,
   type GroupOptionId,
   TASK_GROUP_OPTIONS,
 } from '@app/component/next-soup/soup-view/group-options';
@@ -50,6 +51,15 @@ export const SoupViewContextGroup = () => {
           value={value}
           onChange={onChange}
           options={TASK_GROUP_OPTIONS}
+          open={groupOpen()}
+          onOpenChange={setGroupOpen}
+        />
+      </Show>
+      <Show when={isComponentListView('companies')}>
+        <GroupDropdown
+          value={value}
+          onChange={onChange}
+          options={COMPANY_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
         />

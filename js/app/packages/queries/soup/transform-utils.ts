@@ -774,6 +774,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
           domain: d.domain,
           createdAt: d.createdAt,
         })),
+        properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
     .exhaustive();
