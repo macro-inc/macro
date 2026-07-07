@@ -233,9 +233,9 @@ export function createSearchFiltersController() {
       }));
     });
 
-  // With the rollout flag off, strip tag filters restored from an earlier
-  // session out of the query state so tagFilters never reaches either data
-  // path (soup AST or search-service request).
+  // Restored state is already stripped at soup-view init. This covers the
+  // rollout flag turning off mid-session, so the hidden facet never leaves
+  // an invisible tag filter applied.
   createEffect(() => {
     if (!searchTags() && include().tagFilters?.length) {
       apply({ type: type(), tags: [], ...currentSections() });
