@@ -11,8 +11,8 @@ use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+use super::permission_queries;
 use crate::domain::ports::PermissionService;
-use email_db_client::threads::get::get_macro_id_from_thread_id;
 
 /// Permission service implementation using database.
 pub struct PermissionServiceImpl<Svc> {
@@ -83,7 +83,8 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         if access_level.is_none()
             && entity_type == EntityType::Thread
             && let Ok(thread_id) = Uuid::parse_str(entity_id)
-            && let Ok(Some(owner_id)) = get_macro_id_from_thread_id(&self.db, thread_id).await
+            && let Ok(Some(owner_id)) =
+                permission_queries::get_macro_id_from_thread_id(&self.db, thread_id).await
             && owner_id == user_id
         {
             tracing::debug!("user owns thread via link_id, granting owner access");
@@ -125,17 +126,6 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(String, bool), Self::Err> {
-        let item_type = match entity_type {
-            // The following entity types are either deleted immediately or simply unsupported
-            EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => {
-                anyhow::bail!("unsupported entity type")
-            }
-            EntityType::Chat => "chat",
-            EntityType::Document | EntityType::Task => "document",
-            EntityType::Project => "project",
-        };
-
-        macro_db_client::item_access::get::get_owner_and_deleted(&self.db, entity_id, item_type)
-            .await
+        permission_queries::get_owner_and_deleted(&self.db, entity_id, entity_type).await
     }
 }

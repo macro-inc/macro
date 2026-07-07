@@ -1,6 +1,8 @@
+pub mod entity_info_queries;
 pub mod entity_properties_get_query;
 pub mod entity_property_queries;
 pub mod notification_service;
+pub mod permission_queries;
 pub mod permission_service;
 pub mod properties_pg_repo;
 pub mod property_definition_queries;
