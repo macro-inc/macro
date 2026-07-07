@@ -5,6 +5,10 @@ import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useDealStages } from '@companies/crm/deal-stages';
+import {
+  type CrmDisplayOptions,
+  useCrmDisplayOptions,
+} from '@companies/crm/display-options';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import {
   useClosedStageIds,
@@ -62,6 +66,9 @@ export function CompanyKanban() {
   const { stages, stageProperty, resolveStage } = useDealStages();
   const { canEditCrm, canMoveClosedDeals } = useCrmPermissions();
   const closedStageIds = useClosedStageIds(stages);
+  // Personal display options gate which fields render on cards; read once
+  // here and passed down rather than per-card.
+  const displayOptions = useCrmDisplayOptions();
 
   const stageColumns = createMemo((): StageColumn[] => [
     ...stages().map((stage) => ({ key: stage.id, label: stage.label })),
@@ -224,6 +231,7 @@ export function CompanyKanban() {
                       {(entity) => (
                         <CompanyKanbanCard
                           entity={entity}
+                          fields={displayOptions.options().kanbanFields}
                           draggable={canDragFrom(column.key)}
                           dragging={draggedId() === entity.id}
                           onDragStart={(e) => {
@@ -279,6 +287,8 @@ export function CompanyKanban() {
 
 function CompanyKanbanCard(props: {
   entity: EntityData;
+  /** Which optional card fields render (personal display options). */
+  fields: CrmDisplayOptions['kanbanFields'];
   draggable: boolean;
   dragging: boolean;
   onDragStart: (e: DragEvent) => void;
@@ -314,7 +324,7 @@ function CompanyKanbanCard(props: {
           <span class="ph-no-capture truncate font-semibold min-w-0">
             <Entity.Title entity={props.entity} />
           </span>
-          <Show when={ownerId()}>
+          <Show when={props.fields.owner && ownerId()}>
             {(id) => (
               <span class="ml-auto shrink-0">
                 <UserIcon id={id()} size="sm" suppressClick />
@@ -322,17 +332,19 @@ function CompanyKanbanCard(props: {
             )}
           </Show>
         </div>
-        <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
-          <Show when={primaryDomain()}>
-            {(domain) => <span class="truncate min-w-0">{domain()}</span>}
-          </Show>
-          {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
-          <Show when={props.entity.updatedAt}>
-            {(ts) => (
-              <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
-            )}
-          </Show>
-        </div>
+        <Show when={props.fields.domain || props.fields.lastInteraction}>
+          <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
+            <Show when={props.fields.domain && primaryDomain()}>
+              {(domain) => <span class="truncate min-w-0">{domain()}</span>}
+            </Show>
+            {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
+            <Show when={props.fields.lastInteraction && props.entity.updatedAt}>
+              {(ts) => (
+                <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
+              )}
+            </Show>
+          </div>
+        </Show>
       </div>
     </Layer>
   );

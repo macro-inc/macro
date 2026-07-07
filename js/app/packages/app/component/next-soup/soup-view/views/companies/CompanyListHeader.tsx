@@ -1,5 +1,6 @@
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useCrmDisplayOptions } from '@companies/crm/display-options';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
 import { cn } from '@ui/utils/classname';
@@ -7,8 +8,8 @@ import { createMemo, For, Show } from 'solid-js';
 import '../tasks/list-property-value.css';
 import {
   COMPANY_GRID_COLUMNS,
-  COMPANY_GRID_TEMPLATE_AREAS,
-  COMPANY_GRID_TEMPLATE_COLUMNS,
+  companyGridTemplateAreas,
+  companyGridTemplateColumns,
 } from './company-grid-template';
 
 /**
@@ -34,6 +35,15 @@ export function ResponsiveCompanyListHeader(props: { class?: string }) {
  */
 function CompanyListHeader(props: { class?: string }) {
   const { soup } = useSoupView();
+  const displayOptions = useCrmDisplayOptions();
+
+  // Mirror the row grid: hidden display-option columns collapse here too so
+  // the header tracks stay aligned with CompanyGridLayout.
+  const visibleColumns = createMemo(() =>
+    COMPANY_GRID_COLUMNS.filter(
+      (col) => displayOptions.options().listColumns[col.id]
+    )
+  );
   const activeSort = createMemo(() => soup.sort.active()[0]);
   const setSort = (id: SystemSortOption) => {
     if (activeSort()?.id === id) {
@@ -55,15 +65,21 @@ function CompanyListHeader(props: { class?: string }) {
         props.class
       )}
       style={{
-        'grid-template-columns': COMPANY_GRID_TEMPLATE_COLUMNS,
-        'grid-template-areas': COMPANY_GRID_TEMPLATE_AREAS,
+        'grid-template-columns': companyGridTemplateColumns(
+          visibleColumns(),
+          false
+        ),
+        'grid-template-areas': companyGridTemplateAreas(
+          visibleColumns(),
+          false
+        ),
       }}
     >
       <div style={{ 'grid-area': 'indicator' }} />
       <div style={{ 'grid-area': 'content' }} class="truncate">
         Customer
       </div>
-      <For each={COMPANY_GRID_COLUMNS}>
+      <For each={visibleColumns()}>
         {(col) => (
           <div
             style={{ 'grid-area': col.id }}

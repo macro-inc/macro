@@ -13,6 +13,7 @@
 
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
+import { RESERVED_PROPERTY_DEFINITION_PREFIX } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -22,15 +23,13 @@ import type { PropertyDefinitionWithOptions } from '@service-properties/generate
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
-/** Prefix for internal, non-user-facing property definitions. */
-export const RESERVED_PROPERTY_DEFINITION_PREFIX = '__macro:';
+// Canonical home is `@property/constants`; re-exported for existing callers.
+export {
+  isReservedPropertyDefinitionName,
+  RESERVED_PROPERTY_DEFINITION_PREFIX,
+} from '@property/constants';
 
 const CRM_CONFIG_DEFINITION_NAME = `${RESERVED_PROPERTY_DEFINITION_PREFIX}crm-config`;
-
-/** True for internal definitions that must not appear in property UIs. */
-export function isReservedPropertyDefinitionName(displayName: string): boolean {
-  return displayName.startsWith(RESERVED_PROPERTY_DEFINITION_PREFIX);
-}
 
 /**
  * Minimum team role required for a CRM capability. Team members are

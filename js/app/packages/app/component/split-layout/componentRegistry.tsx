@@ -8,6 +8,11 @@ import type { Query } from '@app/component/next-soup/filters/filter-store/types'
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import {
+  CRM_VIEW_URL_PARAM,
+  type CrmViewConfig,
+  decodeCrmViewParam,
+} from '@companies/crm/saved-views';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
@@ -280,12 +285,21 @@ registerComponent(
     }
     usePageViewTracking('companies');
     const preset = getViewPreset('companies');
+    // Share links land here as `/companies?crmView=<encoded config>` — the
+    // param carries the full view state (never data), decoded client-side.
+    const crmViewParam = new URLSearchParams(window.location.search).get(
+      CRM_VIEW_URL_PARAM
+    );
+    const initialCrmView: CrmViewConfig | undefined = crmViewParam
+      ? decodeCrmViewParam(crmViewParam)
+      : undefined;
     return (
       <SoupView
         viewName="Customers"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
+        initialCrmView={initialCrmView}
       />
     );
   })

@@ -1,4 +1,5 @@
 import { useDealStages } from '@companies/crm/deal-stages';
+import { useCrmDisplayOptions } from '@companies/crm/display-options';
 import {
   Entity,
   type EntityData,
@@ -26,10 +27,8 @@ import { createMemo, For, Show, Suspense } from 'solid-js';
 import { ListPropertyValue } from '../tasks/list-property-value';
 import {
   COMPANY_GRID_COLUMNS,
-  COMPANY_GRID_TEMPLATE_AREAS,
-  COMPANY_GRID_TEMPLATE_AREAS_NO_INDICATOR,
-  COMPANY_GRID_TEMPLATE_COLUMNS,
-  COMPANY_GRID_TEMPLATE_COLUMNS_NO_INDICATOR,
+  companyGridTemplateAreas,
+  companyGridTemplateColumns,
 } from './company-grid-template';
 
 /**
@@ -40,6 +39,15 @@ import {
 export function CompanyGridLayout(props: LayoutProps) {
   const isTeamAdmin = useIsTeamAdmin();
   const dealStages = useDealStages();
+  const displayOptions = useCrmDisplayOptions();
+
+  // Only the columns toggled on in the personal display options render;
+  // hidden ones collapse out of the grid template entirely.
+  const visibleColumns = createMemo(() =>
+    COMPANY_GRID_COLUMNS.filter(
+      (col) => displayOptions.options().listColumns[col.id]
+    )
+  );
 
   const primaryDomain = () => {
     const entity = props.entity as EntityData;
@@ -132,12 +140,14 @@ export function CompanyGridLayout(props: LayoutProps) {
           'gap-2 grid grid-rows-[1fr]'
         )}
         style={{
-          'grid-template-columns': props.hideCheckbox
-            ? COMPANY_GRID_TEMPLATE_COLUMNS_NO_INDICATOR
-            : COMPANY_GRID_TEMPLATE_COLUMNS,
-          'grid-template-areas': props.hideCheckbox
-            ? COMPANY_GRID_TEMPLATE_AREAS_NO_INDICATOR
-            : COMPANY_GRID_TEMPLATE_AREAS,
+          'grid-template-columns': companyGridTemplateColumns(
+            visibleColumns(),
+            !!props.hideCheckbox
+          ),
+          'grid-template-areas': companyGridTemplateAreas(
+            visibleColumns(),
+            !!props.hideCheckbox
+          ),
         }}
       >
         <Show when={!props.hideCheckbox}>
@@ -183,7 +193,7 @@ export function CompanyGridLayout(props: LayoutProps) {
           </Show>
         </Entity.Slot>
 
-        <For each={COMPANY_GRID_COLUMNS}>
+        <For each={visibleColumns()}>
           {(col) => (
             <Entity.Slot
               placement={col.id}

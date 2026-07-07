@@ -1,9 +1,9 @@
-import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
 import { useBlockId } from '@core/block';
 import { ENABLE_CREATE_PROPERTY } from '@core/constant/featureFlags';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import PlusIcon from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
+import { isReservedPropertyDefinitionName } from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { cn, Dialog, Surface } from '@ui';
