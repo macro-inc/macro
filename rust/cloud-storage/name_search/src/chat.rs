@@ -1,5 +1,9 @@
 //! This module contains logic for searching chats by name
 
+// The `cached` macro drops fn-level lint attributes from its generated
+// wrapper, so the search functions' argument-count allow lives here.
+#![allow(clippy::too_many_arguments)]
+
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
@@ -16,6 +20,7 @@ async fn ids_search(
     chat_ids: &[Uuid],
     search_pattern: String,
     highlight_pattern: String,
+    tag_option_ids: &[String],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -52,6 +57,15 @@ async fn ids_search(
                     $4::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($4, $5)
                 )
+                AND (
+                    cardinality($7::text[]) = 0
+                    OR EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id
+                            AND ep.entity_type = 'CHAT'
+                            AND ep.values->'value' ?| $7::text[]
+                    )
+                )
             ORDER BY c."updatedAt" DESC, c.id DESC
             LIMIT $3
         "#,
@@ -64,6 +78,7 @@ async fn ids_search(
         cursor_updated_at,
         cursor_entity_id,
         highlight_pattern,
+        tag_option_ids,
     )
     .fetch_all(db)
     .await
@@ -89,6 +104,7 @@ async fn owner_search<'a>(
     chat_ids: &[Uuid],
     search_pattern: String,
     highlight_pattern: String,
+    tag_option_ids: &[String],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -121,6 +137,15 @@ async fn owner_search<'a>(
                     $5::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($5, $6)
                 )
+                AND (
+                    cardinality($8::text[]) = 0
+                    OR EXISTS (
+                        SELECT 1 FROM entity_properties ep
+                        WHERE ep.entity_id = c.id
+                            AND ep.entity_type = 'CHAT'
+                            AND ep.values->'value' ?| $8::text[]
+                    )
+                )
             ORDER BY c."updatedAt" DESC, c.id DESC
             LIMIT $4
         "#,
@@ -134,6 +159,7 @@ async fn owner_search<'a>(
         cursor_updated_at,
         cursor_entity_id,
         highlight_pattern,
+        tag_option_ids,
     )
     .fetch_all(db)
     .await
@@ -152,7 +178,8 @@ async fn owner_search<'a>(
     Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
-/// Searches over the user's chats by name
+/// Searches over the user's chats by name. A non-empty `tag_option_ids`
+/// restricts results to chats holding any of those property option ids.
 #[tracing::instrument(skip(db), err)]
 #[cfg_attr(
     not(test),
@@ -160,7 +187,7 @@ async fn owner_search<'a>(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{}-{:?}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, tag_option_ids, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
     )
 )]
 pub async fn search_chat_names<'a>(
@@ -169,6 +196,7 @@ pub async fn search_chat_names<'a>(
     chat_ids: &[Uuid],
     term: String,
     ids_only: bool,
+    tag_option_ids: &[String],
     limit: u32,
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
@@ -188,6 +216,7 @@ pub async fn search_chat_names<'a>(
             chat_ids,
             search_pattern,
             highlight_pattern,
+            tag_option_ids,
             limit,
             cursor,
         )
@@ -199,6 +228,7 @@ pub async fn search_chat_names<'a>(
             chat_ids,
             search_pattern,
             highlight_pattern,
+            tag_option_ids,
             limit,
             cursor,
         )

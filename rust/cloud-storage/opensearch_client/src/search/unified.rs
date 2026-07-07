@@ -15,7 +15,7 @@ use crate::{
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchMode, PropertyFilterArg,
+            DocumentSearchMode,
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
@@ -23,6 +23,7 @@ use crate::{
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
             inject_fragment_size, parse_highlight_hit,
         },
+        properties::PropertyFilterArg,
         query::Keys,
     },
 };
@@ -141,6 +142,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
+            tag_option_ids: args.chat_search_args.tag_option_ids,
         }
     }
 }
@@ -168,6 +170,7 @@ pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]

@@ -1,6 +1,10 @@
 use models_opensearch::SearchIndex;
 
+use crate::upsert::document::IndexedProperty;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
+
+#[cfg(test)]
+mod test;
 
 /// Relation name for parent docs in the chats join field.
 const PARENT_RELATION: &str = "chat";
@@ -28,6 +32,9 @@ pub struct UpsertChatMessageArgs {
     pub title: String,
     /// The content of the chat message
     pub content: String,
+    /// Denormalized parent entity properties (tags, custom) used for search
+    /// filtering. Empty for chats without properties.
+    pub properties: Vec<IndexedProperty>,
 }
 
 /// Resolve `index_override` to the physical/alias name we'll write to.
@@ -35,15 +42,23 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::Chats.as_ref())
 }
 
-/// Builds the JSON document body for the parent chat doc.
+/// Builds the JSON document body for the parent chat doc. Properties ride
+/// every parent write because the write is a full overwrite — omitting them
+/// would wipe values set by `update_chat_properties`.
 fn parent_doc_body(args: &UpsertChatMessageArgs) -> serde_json::Value {
-    serde_json::json!({
+    let mut doc = serde_json::json!({
         "entity_id": &args.chat_id,
         "title": &args.title,
         "user_id": &args.user_id,
         "updated_at_seconds": args.updated_at_seconds,
         "chat_relation": PARENT_RELATION,
-    })
+    });
+    if !args.properties.is_empty()
+        && let Ok(properties) = serde_json::to_value(&args.properties)
+    {
+        doc["properties"] = properties;
+    }
+    doc
 }
 
 /// Builds the JSON document body for a child (message) doc.
@@ -201,5 +216,80 @@ pub(crate) async fn update_chat_metadata(
     Err(OpensearchClientError::Unknown {
         details: body,
         method: Some("update_chat_metadata".to_string()),
+    })
+}
+
+/// Update only the denormalized `properties` on an existing parent chat doc,
+/// without touching messages. Used when a chat's properties change
+/// independently of its content. A missing doc (404) is treated as a no-op —
+/// the next message upsert will include the properties.
+pub(crate) async fn update_chat_properties(
+    client: &opensearch::OpenSearch,
+    chat_id: &str,
+    properties: &[IndexedProperty],
+) -> Result<()> {
+    use serde_json::json;
+
+    let properties_value =
+        serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
+            details: err.to_string(),
+            method: Some("update_chat_properties".to_string()),
+        })?;
+    let body = json!({ "doc": { "properties": properties_value } });
+
+    let response = client
+        .update(opensearch::UpdateParts::IndexId(
+            SearchIndex::Chats.as_ref(),
+            chat_id,
+        ))
+        .routing(chat_id)
+        .body(body)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            method: Some("update_chat_properties".to_string()),
+        })?;
+
+    let status_code = response.status_code();
+    if status_code.is_success() {
+        tracing::trace!(chat_id=%chat_id, "chat properties updated");
+        return Ok(());
+    }
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_chat_properties".to_string()),
+            })?;
+
+    // A *missing document* 404 is a no-op: the chat isn't indexed yet, so the
+    // next message upsert will include its properties. A *missing index* 404
+    // (`index_not_found_exception`) is a real outage and must propagate.
+    if status_code.as_u16() == 404 {
+        let error_type = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|value| value["error"]["type"].as_str().map(str::to_owned));
+        if error_type.as_deref() == Some("document_missing_exception") {
+            tracing::debug!(
+                chat_id=%chat_id,
+                "chat not indexed yet; skipping property update"
+            );
+            return Ok(());
+        }
+    }
+
+    tracing::error!(
+        status_code=?status_code,
+        body=?body,
+        chat_id=%chat_id,
+        "error updating chat properties",
+    );
+
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        method: Some("update_chat_properties".to_string()),
     })
 }

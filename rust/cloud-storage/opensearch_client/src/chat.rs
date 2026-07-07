@@ -1,6 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{self, chat_message::UpsertChatMessageArgs},
+    upsert::{self, chat_message::UpsertChatMessageArgs, document::IndexedProperty},
 };
 
 impl OpensearchClient {
@@ -45,6 +45,16 @@ impl OpensearchClient {
 
     pub async fn update_chat_metadata(&self, chat_id: &str, title: &str) -> Result<()> {
         upsert::chat_message::update_chat_metadata(&self.inner, chat_id, title).await
+    }
+
+    /// Refresh only the denormalized `properties` on an existing parent chat doc.
+    #[tracing::instrument(skip(self, properties))]
+    pub async fn update_chat_properties(
+        &self,
+        chat_id: &str,
+        properties: &[IndexedProperty],
+    ) -> Result<()> {
+        upsert::chat_message::update_chat_properties(&self.inner, chat_id, properties).await
     }
 
     pub async fn delete_chat_by_user_id(&self, user_id: &str) -> Result<()> {

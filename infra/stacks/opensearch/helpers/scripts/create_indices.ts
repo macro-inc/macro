@@ -456,6 +456,18 @@ const CHATS_V2_BODY = {
         index: false,
         doc_values: true,
       },
+      // Parent-only entity properties (tags, custom). Same nested shape as
+      // DOCUMENT_BODY so property filters match definition_id + value within
+      // the same entry rather than cross-matching across properties.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
       // Child-only fields
       chat_message_id: { type: 'keyword', index: false, doc_values: true },
       content: { type: 'text', analyzer: 'standard' },
