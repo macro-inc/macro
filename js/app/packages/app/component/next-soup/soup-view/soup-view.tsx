@@ -892,7 +892,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     const result = soup.navigate.toIndex(firstEntityIndex);
 
-    soup.setPreviewEntity(result?.row.id);
+    // The calls view has no preview button in its chrome, so never auto-open
+    // the pane there — only keep an already-open pane (Space) in sync.
+    if (currentView() !== 'calls' || soup.previewEntity()) {
+      soup.setPreviewEntity(result?.row.id);
+    }
 
     if (result) {
       adjustedVirtualizerHandle()?.scrollToIndex(result.index, {
