@@ -1,8 +1,8 @@
 [package]
+edition = "2024"
 name = "cache-idb"
-version = "0.1.0"
-edition = "2021"
 publish = false
+version = "0.1.0"
 
 # wasm32-only implementation; the crate compiles to an empty shell on other
 # targets so plain `cargo test` at the workspace root stays green.
@@ -15,8 +15,13 @@ thiserror = { workspace = true }
 idb = "0.6"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["console", "Event", "EventTarget", "IdbDatabase"] }
+web-sys = { version = "0.3", features = [
+  "Event",
+  "EventTarget",
+  "IdbDatabase",
+  "console",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
 serde_json = { workspace = true }
+wasm-bindgen-test = "0.3"
