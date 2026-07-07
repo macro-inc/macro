@@ -15,7 +15,6 @@ import { EditingWorkspace } from './editing-workspace';
 import { createWorkerSyncSource } from './sources';
 import {
   buildTraceSession,
-  renderTraceMarkdown,
   type TraceSession,
 } from './trace-log';
 
@@ -147,13 +146,6 @@ export async function runEditSession(
       },
       steps as any,
       usage
-    );
-
-    console.log(
-      JSON.stringify({
-        documentId: args.documentId,
-        debug: renderTraceMarkdown(session),
-      })
     );
 
     return {
