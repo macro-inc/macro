@@ -145,8 +145,8 @@ through a tunnel, or behind a preview hostname without a rebuild.
 `stack up` also caches the expensive infra init. The first cold run migrates
 the DB, waits out the FusionAuth kickstart, and creates the search indices,
 then saves those volumes as a content-addressed **init snapshot** (keyed by the
-migrations, kickstart, index mappings, and image pins — stored under
-`infra/local/generated/.snapshots`). Later runs whose inputs match restore the
+migrations, kickstart, index mappings, image pins, and container platform —
+stored under `infra/local/generated/.snapshots`). Later runs whose inputs match restore the
 snapshot and skip the init entirely; any input change is a cache miss and a
 normal full init. `just stack snapshot` shows the current key; `--no-snapshot`
 opts out. This is also what makes Fly previews boot fast — CI bakes the

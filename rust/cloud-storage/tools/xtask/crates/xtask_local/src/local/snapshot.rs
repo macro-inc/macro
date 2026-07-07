@@ -3,8 +3,9 @@
 //! A cold bring-up pays for the expensive one-time init — DB migrations, the
 //! FusionAuth kickstart (~a minute), OpenSearch index creation. That state is
 //! fully determined by a small set of inputs (the migrations, the generated
-//! kickstart, the index mappings, the infra image pins), so instead of
-//! re-running the init on every `stack up`, we key it: hash the inputs, and if
+//! kickstart, the index mappings, the infra image pins, the container
+//! platform), so instead of re-running the init on every `stack up`, we key
+//! it: hash the inputs, and if
 //! a snapshot of the four stateful volumes exists under that key, restore it
 //! and skip the init entirely. The full-delete/full-create idempotency
 //! guarantee survives because the key *is* the definition of "clean" — any
@@ -88,6 +89,16 @@ impl Plan {
     pub fn compute(instance: &Instance) -> Result<Plan> {
         let mut h = Sha256::new();
         h.update(FORMAT.to_le_bytes());
+
+        // The container platform. Volume bytes are written by arch-specific
+        // images (an Apple Silicon Postgres data dir is arm64-born), and while
+        // Postgres/Lucene data happens to be portable across amd64/arm64 in
+        // practice, that's unsupported territory — keying on the platform makes
+        // cross-arch restore a structural cache miss instead of a latent bug
+        // if snapshots are ever shared between machines (e.g. an S3 cache).
+        // Today each snapshot store is machine-local or CI-baked for
+        // same-arch Fly machines, so this is insurance, not a behavior change.
+        h.update(super::arch::detect()?.docker_platform.as_bytes());
 
         // Infra image pins + topology.
         for rel in [
