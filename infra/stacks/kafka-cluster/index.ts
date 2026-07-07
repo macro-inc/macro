@@ -28,3 +28,16 @@ export const clusterArn = kafkaCluster.cluster.arn;
 export const bootstrapBrokersSaslIam =
   kafkaCluster.cluster.bootstrapBrokersSaslIam;
 export const securityGroupId = kafkaCluster.securityGroup.id;
+// Producer + consumer access to the cluster and all its topics/groups. Attach
+// to the ECS task role of any service that publishes or consumes events:
+//
+//   const kafkaClusterStack = new pulumi.StackReference('kafka-cluster', {
+//     name: `macro-inc/kafka-cluster/${stack}`,
+//   });
+//   new aws.iam.RolePolicyAttachment('kafka-client-access', {
+//     role: taskRole.name,
+//     policyArn: kafkaClusterStack
+//       .getOutput('clientAccessPolicyArn')
+//       .apply((arn) => arn as string),
+//   });
+export const clientAccessPolicyArn = kafkaCluster.clientAccessPolicy.arn;

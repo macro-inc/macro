@@ -174,6 +174,16 @@ async fn process_events(mut events: mpsc::Receiver<ReceivedEvent>) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Surface tracing from macro_event_broker (e.g. MSK IAM token refreshes)
+    // and librdkafka's internal connection/auth logs (bridged from the `log`
+    // crate). Tune with RUST_LOG, e.g. RUST_LOG=debug for librdkafka detail.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     let env = ConsumerEnvVars::new().context("KAFKA_BROKERS must be set")?;
 
     let consumer = DocumentsConsumer::from_env(env.kafka_brokers.as_ref())?;

@@ -73,7 +73,12 @@ impl ClientContext for MskIamClientContext {
         let (token, expiration_time_ms) = signer
             .join()
             .map_err(|_| "MSK IAM token signer thread panicked")?
-            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+            .map_err(|e| -> Box<dyn std::error::Error> { e })
+            .inspect_err(|e| {
+                tracing::error!(error = %e, "failed to sign MSK IAM auth token");
+            })?;
+
+        tracing::info!(expiration_time_ms, "signed MSK IAM auth token");
 
         Ok(OAuthToken {
             token,
