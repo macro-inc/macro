@@ -750,10 +750,8 @@ export function usePreviewPaneVisiblity() {
       !!soup.focus.item()
   );
 
-  // On first load the new inbox doesn't auto-select a row, so reserve the
-  // preview pane with a placeholder until the user picks something. Only for
-  // that initial state — after the first selection, an empty selection
-  // collapses the pane as before.
+  // Placeholder display only for new inbox where the preview panel is open by default
+  // Only open while no items are focused
   const previewPlaceholderVisible = createMemo(() => {
     return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
   });
@@ -809,6 +807,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
+  const { paneVisible, placeholderVisible, previewVisible } =
+    usePreviewPaneVisiblity();
+
   const focusFirstEntity = () => {
     const allRows = rows();
     const firstEntityIndex = allRows.findIndex(
@@ -819,7 +820,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     const result = soup.navigate.toIndex(firstEntityIndex);
 
-    soup.setPreviewEntity(result?.row.id);
+    if (paneVisible()) {
+      soup.setPreviewEntity(result?.row.id);
+    }
 
     if (result) {
       virtualizerHandle()?.scrollToIndex(result.index, { align: 'nearest' });
@@ -914,9 +917,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const { applyTabPreset } = useApplyPreset();
 
   const isNewInboxEnabled = useIsNewInboxEnabled();
-
-  const { paneVisible, placeholderVisible, previewVisible } =
-    usePreviewPaneVisiblity();
 
   // The per-row component depends on the active view (and the inbox flag).
   const listEntityComponent = () => {
