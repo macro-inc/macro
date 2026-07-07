@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 //! Shared guppy [`PackageGraph`] construction for the graph-based xtask
 //! commands (`deps`, `nextest-filter`, `doppler-bins`).
 //!

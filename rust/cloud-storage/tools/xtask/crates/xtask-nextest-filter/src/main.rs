@@ -19,7 +19,8 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         [changed_files_path] => {
-            let graph = build_graph(false)?;
+            // Read-only: `--locked` so computing the filter never rewrites Cargo.lock.
+            let graph = build_graph(true)?;
             run(&graph, Path::new(changed_files_path))
         }
         _ => bail!("usage: cargo x nextest-filter <changed-files-path>"),

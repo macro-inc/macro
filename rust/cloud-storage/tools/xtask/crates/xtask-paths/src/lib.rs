@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 //! Shared path discovery for the xtask command crates.
 //!
 //! Every xtask command needs to locate the cloud-storage workspace root (to
