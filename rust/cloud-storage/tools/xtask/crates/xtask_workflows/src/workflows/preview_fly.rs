@@ -122,6 +122,7 @@ fn deploy() -> Job {
                 .add_env(("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")),
         )
         .add_step(bake_snapshot())
+        .add_step(dump_stack_diagnostics())
         .add_step(bake_preload_tar())
         .add_step(stage_context())
         .add_step(setup_flyctl())
@@ -139,6 +140,23 @@ fn bake_snapshot() -> Step<Run> {
         just stack up --no-frontend --no-doppler --no-build
         just stack snapshot --json
     "#})
+}
+
+/// When the bake dies (typically the backend health gate), the answer is in
+/// the service logs — dump container states and recent logs so a failed run is
+/// diagnosable from CI output alone.
+fn dump_stack_diagnostics() -> Step<Run> {
+    Step::new("Dump stack diagnostics")
+        .run(indoc::indoc! {r#"
+            docker compose -p macro ps --all || true
+            for svc in authentication-service proxy fusionauth postgres kafka \
+                       connection_gateway document_storage_service email_service \
+                       notification_service contacts_service; do
+              echo "==================== $svc ===================="
+              docker compose -p macro logs --no-color --tail 80 "$svc" 2>&1 || true
+            done
+        "#})
+        .if_condition(Expression::new("failure()"))
 }
 
 fn bake_preload_tar() -> Step<Run> {

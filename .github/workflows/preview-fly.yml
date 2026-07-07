@@ -65,6 +65,16 @@ jobs:
       run: |
         just stack up --no-frontend --no-doppler --no-build
         just stack snapshot --json
+    - name: Dump stack diagnostics
+      if: failure()
+      run: |
+        docker compose -p macro ps --all || true
+        for svc in authentication-service proxy fusionauth postgres kafka \
+                   connection_gateway document_storage_service email_service \
+                   notification_service contacts_service; do
+          echo "==================== $svc ===================="
+          docker compose -p macro logs --no-color --tail 80 "$svc" 2>&1 || true
+        done
     - name: Bake image preload tar
       run: |
         set -euo pipefail
