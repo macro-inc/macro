@@ -15,7 +15,8 @@ import {
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import {
   createFilesReadyHandler,
@@ -35,6 +36,7 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
 import { plural } from '@core/util/string';
@@ -88,6 +90,7 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
+import { isIOS } from '@solid-primitives/platform';
 import {
   Button,
   cn,
@@ -97,14 +100,9 @@ import {
   Surface,
   Tooltip,
 } from '@ui';
-import {
-  defaultSelectionData,
-  lazyRegister,
-  type NodeTransformType,
-  type SelectionData,
-} from 'core/component/LexicalMarkdown/plugins';
+import { iosCursorScrollPlugin } from 'core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
-import { $getRoot, type LexicalEditor } from 'lexical';
+import { $getRoot } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -121,7 +119,6 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -392,6 +389,54 @@ let restoreUndoCallback:
   | ((snapshot: UndoReplySnapshot, draftId: string) => void)
   | null = null;
 
+type CreateConfiguredEmailMarkdownEditorOptions = {
+  namespace: string;
+  onChange?: (markdown: string) => void;
+  onUserMention?: (mention: UserMentionRecord) => void;
+  onDocumentMention?: (item: { id: string }) => void;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
+  scrollContainer?: Accessor<HTMLElement | undefined>;
+};
+
+function createConfiguredEmailMarkdownEditor(
+  options: CreateConfiguredEmailMarkdownEditorOptions
+) {
+  const editor = buildConfig('markdown')
+    .namespace(options.namespace)
+    .withMentions({
+      onUserMention: options.onUserMention,
+      onDocumentMention: options.onDocumentMention,
+    })
+    .withEmojis()
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
+    .withHistory({ timeGap: 400 })
+    .withMedia()
+    .withCode()
+    .withCheckboxToTask()
+    .withRestoreFocus()
+    .withSelectionData()
+    .withFloatingFormatMenu()
+    .use((editor) => registerToggleAppendedThread(editor))
+    .onChange(options.onChange);
+
+  if (options.onPasteFilesAndDirs) {
+    editor.withFilePaste({
+      onPasteFilesAndDirs: options.onPasteFilesAndDirs,
+    });
+  }
+
+  if ((isIOS || isNativeMobilePlatform()) && options.scrollContainer) {
+    editor.use(
+      iosCursorScrollPlugin({ scrollContainer: options.scrollContainer })
+    );
+  }
+
+  return editor;
+}
+
 export function BaseInput(props: {
   replyingTo: Accessor<ApiMessage | undefined>;
   // TODO: Remove `newMessage` props. It's not used...
@@ -407,6 +452,7 @@ export function BaseInput(props: {
   }) => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  unframed?: boolean;
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() => {
@@ -483,17 +529,12 @@ export function BaseInput(props: {
       : undefined;
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
-  const [expandedRecipientsRef, setExpandedRecipientsRef] =
-    createSignal<HTMLDivElement>();
-  const [editor, setEditor] = createSignal<LexicalEditor>();
+  const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
-  );
-  const [formatState, setFormatState] = createStore<SelectionData>(
-    structuredClone(defaultSelectionData)
   );
   const [toRef, setToRef] = createSignal<HTMLInputElement>();
   const [ccRef, setCcRef] = createSignal<HTMLInputElement>();
@@ -513,6 +554,39 @@ export function BaseInput(props: {
         : undefined) ??
       undefined
   );
+
+  const editorConfig = createConfiguredEmailMarkdownEditor({
+    namespace: 'email-base-input-markdown',
+    scrollContainer,
+    onChange: (markdown) => handleChange(markdown),
+    onUserMention: (mention) => handleUserMention(mention),
+    onDocumentMention: (item) => {
+      makeAttachmentPublic(item.id);
+      scheduleDraftSave();
+    },
+    onPasteFilesAndDirs: (files, directories) => {
+      handleFileFolderDrop(
+        files,
+        directories,
+        createFilesReadyHandler(
+          editor(),
+          blockId,
+          'email',
+          undefined,
+          (uploadedItemIds) => {
+            uploadedItemIds.forEach((itemId) => {
+              makeAttachmentPublic(itemId);
+            });
+            scheduleDraftSave();
+          },
+          { width: 542, height: 542 }
+        )
+      );
+    },
+  });
+
+  const markdownHandle = editorConfig.buildHandle();
+  const editor = () => markdownHandle.lexical;
 
   // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
   // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
@@ -546,6 +620,16 @@ export function BaseInput(props: {
   onCleanup(() => {
     restoreUndoCallback = null;
   });
+
+  const initialHtml = () => restoredSnapshot?.bodyHtml ?? props.preloadedHtml;
+  const handleEditorConnect = () => {
+    const currentEditor = editor();
+    form().setCapturedEditor(currentEditor);
+    const html = initialHtml();
+    if (html) {
+      setEditorStateFromHtml(currentEditor, html);
+    }
+  };
 
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
@@ -723,10 +807,6 @@ export function BaseInput(props: {
         ? 'reply-all'
         : 'reply')
     );
-  });
-
-  lazyRegister(editor, (editor) => {
-    return registerToggleAppendedThread(editor);
   });
 
   let draftSaveTimer: number | undefined;
@@ -953,13 +1033,16 @@ export function BaseInput(props: {
     untrack(scheduleDraftSave);
   };
 
-  // Handles clicks outside of the expanded recipients area
+  // Keep expanded recipients open while composing; collapse only when leaving
+  // the composer or selecting outside its recipient popover.
   const expandedPointerDownHandler = (e: PointerEvent) => {
     if (showExpandedRecipients()) {
+      const target = e.target as Node | null;
+      if (!target) return;
       const combobox = document.querySelector('div[data-popper-positioner]');
       if (
-        !expandedRecipientsRef()?.contains(e.target as Node) &&
-        !combobox?.contains(e.target as Node)
+        !composeContainerRef?.contains(target) &&
+        !combobox?.contains(target)
       ) {
         setShowExpandedRecipients(false);
         setShowCc(form().recipients().cc.length > 0);
@@ -1289,10 +1372,9 @@ export function BaseInput(props: {
     }
   });
 
-  // Focus when external shouldFocus signal is set to true. Gated on
-  // editor() so the effect re-runs once the Lexical editor is captured —
-  // when the input is freshly mounted (e.g. opening from BottomReplyButtons),
-  // shouldFocusInput is true before captureEditor fires.
+  // Focus when external shouldFocus signal is set to true. The builder creates
+  // the Lexical editor immediately; requestAnimationFrame waits for the root to
+  // connect before focusing.
   createEffect(() => {
     if (!form().shouldFocusInput()) return;
     if (isMobile()) {
@@ -1447,9 +1529,61 @@ export function BaseInput(props: {
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
 
+  const ReplyTypeDropdown = () => (
+    <Dropdown>
+      <Dropdown.Trigger as={Button} size="md">
+        <Switch>
+          <Match when={effectiveReplyType() === 'reply'}>
+            <Reply class="size-4 shrink-0" />
+            <span>Reply</span>
+          </Match>
+
+          <Match when={effectiveReplyType() === 'reply-all'}>
+            <ReplyAll class="size-4 shrink-0" />
+            <span>Reply All</span>
+          </Match>
+          <Match when={effectiveReplyType() === 'forward'}>
+            <Forward class="size-4 shrink-0" />
+            <span>Forward</span>
+          </Match>
+        </Switch>
+        <ChevronDown class="size-3" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => form().setReplyType('reply')}>
+            <Reply class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Reply</span>
+          </Dropdown.Item>
+          <Show
+            when={
+              (props.replyingTo()?.to.length ?? 0) +
+                (props.replyingTo()?.cc.length ?? 0) >
+              1
+            }
+          >
+            <Dropdown.Item onSelect={() => form().setReplyType('reply-all')}>
+              <ReplyAll class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Reply All</span>
+            </Dropdown.Item>
+          </Show>
+          <Dropdown.Item onSelect={() => form().setReplyType('forward')}>
+            <Forward class="size-4 shrink-0" />
+            <span class="flex-1 truncate">Forward</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+
   return (
     <Surface
-      class="relative flex flex-col flex-1 rounded-xl max-w-full"
+      class={cn(
+        'relative flex flex-col flex-1 max-w-full',
+        props.unframed ? 'rounded-none' : 'rounded-xl'
+      )}
+      style={props.unframed ? { 'background-color': 'transparent' } : undefined}
+      hideBorder={props.unframed}
       onFocusOut={(e) => {
         const next = e.relatedTarget as Node | null;
         if (next && e.currentTarget.contains(next)) return;
@@ -1463,110 +1597,92 @@ export function BaseInput(props: {
       depth={2}
       solid
     >
-      {/* Top Bar */}
-      <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5 min-w-0">
-        <Dropdown>
-          <Dropdown.Trigger>
-            <Switch>
-              <Match when={effectiveReplyType() === 'reply'}>
-                <Reply class="size-4 shrink-0" />
-                <span>Reply</span>
-              </Match>
-
-              <Match when={effectiveReplyType() === 'reply-all'}>
-                <ReplyAll class="size-4 shrink-0" />
-                <span>Reply All</span>
-              </Match>
-              <Match when={effectiveReplyType() === 'forward'}>
-                <Forward class="size-4 shrink-0" />
-                <span>Forward</span>
-              </Match>
-            </Switch>
-            <ChevronDown class="size-3" />
-          </Dropdown.Trigger>
-          <Dropdown.Content>
-            <Dropdown.Group>
-              <Dropdown.Item onSelect={() => form().setReplyType('reply')}>
-                <Reply class="size-4 shrink-0" />
-                <span class="flex-1 truncate">Reply</span>
-              </Dropdown.Item>
-              <Show
-                when={
-                  (props.replyingTo()?.to.length ?? 0) +
-                    (props.replyingTo()?.cc.length ?? 0) >
-                  1
-                }
-              >
-                <Dropdown.Item
-                  onSelect={() => form().setReplyType('reply-all')}
-                >
-                  <ReplyAll class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Reply All</span>
-                </Dropdown.Item>
-              </Show>
-              <Dropdown.Item onSelect={() => form().setReplyType('forward')}>
-                <Forward class="size-4 shrink-0" />
-                <span class="flex-1 truncate">Forward</span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
+      <div
+        class={cn(
+          'relative min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap p-2 pt-4'
+        )}
+      >
         <Show
           when={showExpandedRecipients()}
           fallback={
-            <div
-              class="flex flex-1 items-center gap-1.5 min-w-0 mt-1 text-sm text-ink-muted"
-              onClick={() => setShowExpandedRecipients(true)}
-            >
-              <Show
-                when={!isMobile()}
-                fallback={
-                  <PencilSimple class="size-4 shrink-0 text-ink-muted ml-auto" />
-                }
+            <>
+              <ReplyTypeDropdown />
+              <div
+                class="flex flex-1 items-center gap-1.5 min-w-0 text-sm text-ink-muted"
+                onClick={() => setShowExpandedRecipients(true)}
               >
-                <TruncatedRecipientList
-                  toRecipients={form().recipients().to}
-                  ccRecipients={form().recipients().cc}
-                  bccRecipients={form().recipients().bcc}
-                  onClick={() => setShowExpandedRecipients(true)}
-                />
-                <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
-                  <span class="shrink-0 text-ink-extra-muted">·</span>
-                  <span class="min-w-0 shrink-[2] truncate">
-                    from {activeInboxEmail()}
-                  </span>
+                <Show
+                  when={!isMobile()}
+                  fallback={
+                    <PencilSimple class="size-4 shrink-0 text-ink-muted ml-auto" />
+                  }
+                >
+                  <TruncatedRecipientList
+                    toRecipients={form().recipients().to}
+                    ccRecipients={form().recipients().cc}
+                    bccRecipients={form().recipients().bcc}
+                    onClick={() => setShowExpandedRecipients(true)}
+                  />
+                  <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
+                    <span class="shrink-0 text-ink-extra-muted">·</span>
+                    <span class="min-w-0 shrink-2 truncate">
+                      from {activeInboxEmail()}
+                    </span>
+                  </Show>
+                  <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
                 </Show>
-                <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
-              </Show>
-            </div>
+              </div>
+            </>
           }
         >
-          <div
-            ref={setExpandedRecipientsRef}
-            class="flex-1 min-w-0 text-sm text-ink-muted"
-          >
-            {/* Expanded FROM */}
-            <div class="flex flex-row items-center py-0.5 min-w-0">
-              <div class="w-10 shrink-0">from</div>
-              <div class="pl-2 min-w-0 flex-1">
+          <div class="min-w-0 w-full">
+            <div class="flex items-center gap-2 min-w-0">
+              <ReplyTypeDropdown />
+              <div class="flex items-center gap-2 min-w-0 flex-1 py-1">
+                <div class="text-sm shrink-0 text-ink-placeholder">from</div>
                 <FromInboxSelector
                   links={emailLinksQuery.data?.links ?? []}
                   activeLinkId={activeLinkId()}
                   onSelect={persistDraftOnSenderSwitch}
                 />
               </div>
+              <div class="flex items-center ml-auto shrink-0">
+                <Show when={!showCc()}>
+                  <Button
+                    size="sm"
+                    class="rounded-lg"
+                    onClick={() => {
+                      setShowCc(true);
+                      queueMicrotask(() => ccRef()?.focus());
+                    }}
+                  >
+                    Cc
+                  </Button>
+                </Show>
+                <Show when={!showBcc()}>
+                  <Button
+                    size="sm"
+                    class="rounded-lg"
+                    onClick={() => {
+                      setShowBcc(true);
+                      queueMicrotask(() => bccRef()?.focus());
+                    }}
+                  >
+                    Bcc
+                  </Button>
+                </Show>
+              </div>
             </div>
-            {/* Expanded TO */}
 
             <RecipientDropRow
               field="to"
-              class="-mt-0.5"
+              class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
               dragState={recipientDragState}
               onDrop={handleRecipientDrop}
             >
-              <div class="w-10 shrink-0 pt-2">to</div>
+              <div class="w-14 shrink-0 text-sm text-ink-placeholder">To</div>
               <RecipientSelector<EmailRecipient['kind']>
-                class="min-w-0"
+                class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
                 selfEmail={activeInboxEmail()}
@@ -1576,6 +1692,7 @@ export function BaseInput(props: {
                 )}
                 triggerMode="input"
                 hideBorder
+                noPadding
                 onChipDragStart={(option, e) =>
                   handleChipDragStart('to', option, e)
                 }
@@ -1586,13 +1703,13 @@ export function BaseInput(props: {
             <Show when={showCc() || form().recipients().cc.length > 0}>
               <RecipientDropRow
                 field="cc"
-                class="-mt-1.5"
+                class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
                 dragState={recipientDragState}
                 onDrop={handleRecipientDrop}
               >
-                <div class="w-10 shrink-0 pt-2">cc</div>
+                <div class="w-14 shrink-0 text-sm text-ink-placeholder">Cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
-                  class="min-w-0"
+                  class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
                   selfEmail={activeInboxEmail()}
@@ -1602,6 +1719,7 @@ export function BaseInput(props: {
                   )}
                   triggerMode="input"
                   hideBorder
+                  noPadding
                   onChipDragStart={(option, e) =>
                     handleChipDragStart('cc', option, e)
                   }
@@ -1613,13 +1731,15 @@ export function BaseInput(props: {
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
               <RecipientDropRow
                 field="bcc"
-                class="-mt-1.5"
+                class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
                 dragState={recipientDragState}
                 onDrop={handleRecipientDrop}
               >
-                <div class="w-10 shrink-0 pt-2">bcc</div>
+                <div class="w-14 shrink-0 text-sm text-ink-placeholder">
+                  Bcc
+                </div>
                 <RecipientSelector<EmailRecipient['kind']>
-                  class="min-w-0"
+                  class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
                   selfEmail={activeInboxEmail()}
@@ -1629,6 +1749,7 @@ export function BaseInput(props: {
                   )}
                   triggerMode="input"
                   hideBorder
+                  noPadding
                   onChipDragStart={(option, e) =>
                     handleChipDragStart('bcc', option, e)
                   }
@@ -1636,35 +1757,6 @@ export function BaseInput(props: {
                 />
               </RecipientDropRow>
             </Show>
-            {/* Show to, cc, bcc buttons */}
-            <div class="flex flex-row justify-end space-x-2 pt-2">
-              <Show when={!showCc()}>
-                <Tooltip label="Add cc recipients">
-                  <div
-                    onclick={() => {
-                      setShowCc(true);
-                      ccRef()?.focus();
-                    }}
-                    class="text-xs hover:underline"
-                  >
-                    cc
-                  </div>
-                </Tooltip>
-              </Show>
-              <Show when={!showBcc()}>
-                <Tooltip label="Add bcc recipients">
-                  <div
-                    onclick={() => {
-                      setShowBcc(true);
-                      bccRef()?.focus();
-                    }}
-                    class="text-xs hover:underline"
-                  >
-                    bcc
-                  </div>
-                </Tooltip>
-              </Show>
-            </div>
           </div>
         </Show>
       </div>
@@ -1686,29 +1778,27 @@ export function BaseInput(props: {
           placeholder="Subject"
         />
       </div>
-      <div class="size-full flex flex-col">
+      <div
+        class={cn(
+          'size-full flex flex-col',
+          showExpandedRecipients() && 'mt-4'
+        )}
+      >
         <Show when={showFormatRibbon()}>
           <div class="flex flex-row w-full gap-2 items-center px-3 py-1.5">
             <FormatButtons
-              selectionState={() => formatState}
+              selectionState={() => editorConfig.selection}
               onInlineFormat={(format) => {
-                const editor_ = editor();
-                if (!editor_) return;
-                applyInlineFormat(editor_, format);
+                applyInlineFormat(editor(), format);
               }}
               onNodeFormat={(transform) => {
-                const editor_ = editor();
-                if (!editor_) return;
-                const isActive = formatState.elementsInRange.has(transform);
-                const targetTransform: NodeTransformType = isActive
-                  ? 'paragraph'
-                  : transform;
-                applyNodeFormat(editor_, targetTransform);
+                applyNodeFormat(editor(), transform);
               }}
             />
           </div>
         </Show>
         <div
+          ref={setScrollContainer}
           class="relative min-h-18 max-h-[calc(60*var(--dvh,1dvh))] mobile:max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1"
           onclick={() => {
             editor()?.focus();
@@ -1745,54 +1835,24 @@ export function BaseInput(props: {
           >
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
-          <MarkdownTextarea
-            autoLinkMatchMode="common-tlds"
-            floatingFormatMenu
-            captureEditor={(editor) => {
-              setEditor(editor);
-              form().setCapturedEditor(editor);
-            }}
+          <MarkdownShell
+            config={editorConfig}
             class={cn(
               'ph-no-capture cursor-text text-sm wrap-break-word text-ink h-auto overflow-visible',
               isDragging() && 'blur'
             )}
-            editable={() => !sendMutation.isPending}
-            initialValue={props.preloadedBody}
-            initialHtml={restoredSnapshot?.bodyHtml ?? props.preloadedHtml}
+            disabled={sendMutation.isPending}
+            initialValue={initialHtml() ? undefined : props.preloadedBody}
             placeholder="Reply — @mention to share or cc people"
-            watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
-            onChange={handleChange}
-            onDocumentMention={(item) => {
-              makeAttachmentPublic(item.id);
-              scheduleDraftSave();
-            }}
-            onUserMention={handleUserMention}
             portalScope="split"
-            formatState={formatState}
-            setFormatState={setFormatState}
-            domRef={props.markdownDomRef}
-            onPasteFilesAndDirs={(files, directories) => {
-              const editor_ = editor();
-              if (!editor_) return;
-              handleFileFolderDrop(
-                files,
-                directories,
-                createFilesReadyHandler(
-                  editor_,
-                  blockId,
-                  'email',
-                  undefined,
-                  (uploadedItemIds) => {
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                    scheduleDraftSave();
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            }}
+            refFn={(el) => props.markdownDomRef?.(el)}
+            onConnect={handleEditorConnect}
           />
+          <Show when={!hasPaidAccess()}>
+            <div class="text-ink/50 mt-[1lh]" data-watermark>
+              <MacroSignatureButton />
+            </div>
+          </Show>
           <div class="ph-no-capture flex gap-1 flex-wrap w-full py-2">
             <For each={form().attachments.list()}>
               {(attachment) => (
@@ -1870,6 +1930,7 @@ export function BaseInput(props: {
               onclick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
+              variant="ghost"
               tooltip="Show formatting toolbar"
               size="icon-sm"
             >
@@ -1909,6 +1970,17 @@ export function BaseInput(props: {
                 <Quotes />
               </KToggleButton>
             </Tooltip>
+            <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
+            <Button
+              onclick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              size="icon-sm"
+            >
+              <Trash />
+            </Button>
+          </div>
+
+          <div class="flex flex-row items-center gap-1">
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
@@ -1921,31 +1993,23 @@ export function BaseInput(props: {
                 disablePortal={isMobile()}
               />
             </Show>
-            <Button
-              onclick={deleteDraftAndReset}
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              size="icon-sm"
-            >
-              <Trash />
-            </Button>
+            <SendButton
+              disabled={
+                uploadAttachmentMutation.isPending ||
+                sendMutation.isPending ||
+                !!form().sendTime()
+              }
+              pending={sendMutation.isPending}
+              hidden={
+                isMobile() &&
+                !hasBodyText() &&
+                // Forwards carry the quoted thread as content, so send is
+                // available without typing anything.
+                effectiveReplyType() !== 'forward'
+              }
+              onClick={() => sendEmail()}
+            />
           </div>
-
-          <SendButton
-            disabled={
-              uploadAttachmentMutation.isPending ||
-              sendMutation.isPending ||
-              !!form().sendTime()
-            }
-            pending={sendMutation.isPending}
-            hidden={
-              isMobile() &&
-              !hasBodyText() &&
-              // Forwards carry the quoted thread as content, so send is
-              // available without typing anything.
-              effectiveReplyType() !== 'forward'
-            }
-            onClick={() => sendEmail()}
-          />
         </div>
       </div>
     </Surface>

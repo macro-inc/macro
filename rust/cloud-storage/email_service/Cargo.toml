@@ -94,6 +94,7 @@ doppler-config = { workspace = true }
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../entity_access_management" }
 email_db_client = { path = "../email_db_client" }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }

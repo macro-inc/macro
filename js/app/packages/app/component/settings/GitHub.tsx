@@ -7,8 +7,12 @@ import {
   useReauthenticateGithubMutation,
 } from '@queries/auth';
 import { Match, Show, Switch } from 'solid-js';
+import {
+  ConnectAction,
+  type ConnectionState,
+  StatusDot,
+} from './integration-ui';
 import { IntegrationRow, SettingsCard } from './primitives';
-import { ConnectAction, type ConnectionState, StatusDot } from './integration-ui';
 
 /** GitHub integration as a Connected-accounts card. */
 export function GitHubCard() {

@@ -53,6 +53,8 @@ use favorites::{
     domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -109,6 +111,7 @@ type DssEmailService = EmailServiceImpl<
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
     DssCrmService,
+    EntityAccessManagementService,
 >;
 
 /// CRM router state.
@@ -209,6 +212,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 /// Type alias for the documents router state.
@@ -338,6 +342,7 @@ pub(crate) struct ApiContext {
     #[cfg(feature = "graphql")]
     pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
     pub favorites_state: DssFavoritesState,
+    pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,

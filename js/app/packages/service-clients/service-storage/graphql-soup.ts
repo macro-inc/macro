@@ -1,9 +1,16 @@
-import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
+import {
+  ENABLE_BEARER_TOKEN_AUTH,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
+import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createWorkerCacheHost } from '@graphql-cache/index';
+import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { getMacroApiToken } from '@service-auth/fetch';
-import { createClient, fetchExchange } from '@urql/core';
+import { type Client, createClient, fetchExchange } from '@urql/core';
 import { match } from 'ts-pattern';
 import type { SoupApiItem, SoupPage } from './generated/schemas';
 import {
@@ -57,9 +64,54 @@ const graphqlSoupClient = createClient({
   fetch: dssGraphqlFetch,
 });
 
+/**
+ * Whether the normalized wasm cache is active for soup GraphQL queries.
+ * Browser only for now — Tauri will use a native host (see design doc).
+ */
+function graphqlCacheEnabled(): boolean {
+  return ENABLE_GRAPHQL_SOUP() && !isTauri();
+}
+
+let cachedClient: Client | undefined;
+
+/**
+ * Resolves the urql client, lazily assembling the cached client on first
+ * use. The cache scope is an anonymous client uuid — no identity lookup is
+ * needed (or wanted) here: user↔cache consistency is enforced inside the
+ * engine by the identity witness on `QueryRoot.user.id` (a response for a
+ * different user wipes and rebinds the cache). See @graphql-cache/scope.
+ * Any failure falls back to the plain fetch client for the session.
+ */
+function getGraphqlSoupClient(): Client {
+  if (!graphqlCacheEnabled()) return graphqlSoupClient;
+  cachedClient ??= (() => {
+    try {
+      const host = createWorkerCacheHost({ scope: getOrCreateCacheScope() });
+      return createClient({
+        url: `${dssHost}/items/soup/graphql`,
+        exchanges: [
+          normalizedCacheExchange(host, {
+            // Session identity witness: the viewer id present on every soup
+            // response. A response for a different user silently wipes and
+            // rebinds the cache (see @graphql-cache/scope).
+            extractIdentity: (data) =>
+              (data as Partial<SoupQuery> | undefined)?.user?.id,
+          }),
+          fetchExchange,
+        ],
+        fetch: dssGraphqlFetch,
+      });
+    } catch (error) {
+      console.warn('graphql cache init failed; using uncached client', error);
+      return graphqlSoupClient;
+    }
+  })();
+  return cachedClient;
+}
+
 export type GraphqlSoupInput = SoupInput;
 
-type GraphqlSoupItem = SoupQuery['soup']['items'][number];
+type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
 type GraphqlSoupEntity = GraphqlSoupItem['entity'];
 type GraphqlSoupProperty = Extract<
   GraphqlSoupEntity,
@@ -139,7 +191,7 @@ function mapGraphqlPropertyValue(
 function mapGraphqlProperties(properties: GraphqlSoupProperty[]) {
   return properties.map((property) => ({
     definition: {
-      id: property.id,
+      id: property.propertyDefinitionId,
       display_name: property.displayName,
       data_type: property.dataType,
       is_multi_select: property.isMultiSelect,
@@ -172,7 +224,7 @@ function mapChannelMessage(
 ) {
   if (!message) return message;
   return {
-    message_id: message.messageId,
+    message_id: message.id,
     thread_id: message.threadId ?? undefined,
     sender_id: message.senderId,
     content: message.content,
@@ -428,6 +480,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               domain,
               createdAt: entity.createdAt,
             })),
+            properties: mapGraphqlProperties(entity.properties),
           },
         }) as SoupApiItem
     )
@@ -456,11 +509,38 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
 export async function fetchGraphqlSoup(
   input: GraphqlSoupInput
 ): Promise<SoupPage> {
-  const result = await graphqlSoupClient
-    .query<SoupQuery, SoupQueryVariables>(SoupQueryDocument, { input })
+  const client = getGraphqlSoupClient();
+  const useCache = graphqlCacheEnabled();
+
+  // `cache-and-network` writes responses through the normalized cache;
+  // `.toPromise()` skips the stale cache emission, so callers keep
+  // network-fresh semantics. Reactive urql consumers will see the
+  // stale-then-fresh stream once components migrate.
+  const result = await client
+    .query<SoupQuery, SoupQueryVariables>(
+      SoupQueryDocument,
+      { input },
+      useCache ? { requestPolicy: 'cache-and-network' } : {}
+    )
     .toPromise();
 
   if (result.error) {
+    // Offline replay: a network failure falls back to the last cached page.
+    if (useCache && result.error.networkError) {
+      const cached = await client
+        .query<SoupQuery, SoupQueryVariables>(
+          SoupQueryDocument,
+          { input },
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (cached.data) {
+        return {
+          items: cached.data.user.soup.items.map(mapGraphqlSoupItem),
+          next_cursor: cached.data.user.soup.nextCursor ?? undefined,
+        };
+      }
+    }
     throw result.error;
   }
 
@@ -470,7 +550,7 @@ export async function fetchGraphqlSoup(
   }
 
   return {
-    items: data.soup.items.map(mapGraphqlSoupItem),
-    next_cursor: data.soup.nextCursor ?? undefined,
+    items: data.user.soup.items.map(mapGraphqlSoupItem),
+    next_cursor: data.user.soup.nextCursor ?? undefined,
   };
 }

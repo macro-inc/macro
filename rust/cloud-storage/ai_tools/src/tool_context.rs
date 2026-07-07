@@ -52,17 +52,29 @@ pub type ToolCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
 >;
 
+/// Type alias for the entity access management service implementation.
+pub type ToolEamService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
+
 /// Type alias for the email service implementation
 pub type ToolEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     email::domain::ports::NoOpEnqueuer,
     ToolCrmService,
+    ToolEamService,
 >;
 
 /// Type alias for the send-capable email service implementation used by user tools.
-pub type ToolUserEmailService =
-    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS, ToolCrmService>;
+pub type ToolUserEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    ToolFrecencyService,
+    sqs_client::SQS,
+    ToolCrmService,
+    ToolEamService,
+>;
 
 /// Type alias for the channel list service implementation.
 pub type ToolCommsService = ChannelListServiceImpl<
@@ -456,6 +468,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the entity access service implementation

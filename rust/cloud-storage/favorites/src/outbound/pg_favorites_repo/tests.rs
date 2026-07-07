@@ -118,7 +118,7 @@ async fn count_favorites_counts_user_collection(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn list_favorites_hydrates_names_and_skips_deleted(pool: PgPool) {
+async fn list_favorites_skips_deleted(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_document(&pool, "doc-live", "Launch plan", USER_A).await;
     insert_document(&pool, "doc-gone", "Old doc", USER_A).await;
@@ -150,9 +150,7 @@ async fn list_favorites_hydrates_names_and_skips_deleted(pool: PgPool) {
         .expect("favorites should list");
     assert_eq!(favorites.len(), 2);
     assert_eq!(favorites[0].entity_id, "doc-live");
-    assert_eq!(favorites[0].name.as_deref(), Some("Launch plan"));
     assert_eq!(favorites[1].entity_type, EntityType::EmailThread);
-    assert_eq!(favorites[1].name, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -191,10 +189,8 @@ async fn list_favorites_hydrates_uuid_keyed_entities(pool: PgPool) {
         .expect("favorites should list");
     assert_eq!(favorites.len(), 2);
     assert_eq!(favorites[0].entity_id, channel_id);
-    assert_eq!(favorites[0].name.as_deref(), Some("Eng"));
     assert_eq!(favorites[0].channel_type.as_deref(), Some("public"));
     assert_eq!(favorites[1].entity_id, "not-a-uuid");
-    assert_eq!(favorites[1].name, None);
     assert_eq!(favorites[1].channel_type, None);
 }
 

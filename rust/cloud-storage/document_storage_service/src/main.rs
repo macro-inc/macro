@@ -71,6 +71,7 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -257,6 +258,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
@@ -264,6 +268,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+        ),
         0,
     ));
     let system_properties_service =
@@ -375,6 +382,11 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -387,6 +399,7 @@ async fn main() -> anyhow::Result<()> {
         connection_service,
         entity_access_management_service.clone(),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker,
     ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
@@ -688,9 +701,10 @@ async fn main() -> anyhow::Result<()> {
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
         )),
         favorites_state: FavoritesRouterState::new(
-            favorites_service,
+            favorites_service.clone(),
             entity_access_service.clone(),
         ),
+        favorites_service,
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]

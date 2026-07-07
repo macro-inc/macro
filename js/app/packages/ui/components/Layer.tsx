@@ -69,6 +69,8 @@ export function Layer(props: LayerProps) {
         '--color-active': 'var(--theme-active, var(--b1))',
         '--color-hover': 'var(--theme-hover, var(--b2))',
         '--color-button': 'var(--theme-button, var(--b0))',
+        '--color-chrome':
+          'var(--theme-chrome, color-mix(in oklch, var(--color-menu) 85%, var(--color-active)))',
       }}
     >
       {props.children}

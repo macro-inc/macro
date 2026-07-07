@@ -614,6 +614,12 @@ fn build_task_include_cbm_atm_nc_clause() -> String {
     .to_string()
 }
 
+/// NULL-safe equality for nullable columns: FALSE (not UNKNOWN) on NULL, so
+/// `NOT` includes NULL rows — e.g. root projects under a negated `pid` filter.
+fn nullable_eq(col: &str, val: impl std::fmt::Display) -> String {
+    format!("({col} = '{val}' AND {col} IS NOT NULL)")
+}
+
 fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     match lit {
         DateLiteral::GreaterThan(dt) => format!("{col} > '{}'::timestamptz", dt.to_rfc3339()),
@@ -639,7 +645,7 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Id(i)) => format!("d.id = '{i}'"),
         filter_ast::ExprFrame::Literal(DocumentLiteral::ProjectId(p)) => {
-            format!(r#"d."projectId" = '{p}'"#)
+            nullable_eq(r#"d."projectId""#, p)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
         filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
@@ -721,7 +727,7 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ChatLiteral::ProjectId(p)) => {
-            format!(r#"c."projectId" = '{p}'"#)
+            nullable_eq(r#"c."projectId""#, p)
         }
         // todo? I'm not sure what a chat role filter looks like.
         // No-op literals render as TRUE, not an empty string — an empty
@@ -765,7 +771,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
-            format!(r#"p."parentId" = '{p}'"#)
+            nullable_eq(r#"p."parentId""#, p)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(p)) => {
             format!(r#"p.id = '{p}'"#)

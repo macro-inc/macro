@@ -2,7 +2,7 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';
 import { ComposeBody } from './ComposeBody';
@@ -222,28 +222,28 @@ export function ComposeLayout(props: {
             {props.header}
           </Show>
           <div
-            class="flex items-center gap-3 ml-auto shrink-0"
+            class="flex items-center ml-auto shrink-0"
             classList={{ hidden: isMobile() }}
           >
             <Show when={!isCcVisible()}>
-              <button
-                type="button"
-                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
+              <Button
+                size="sm"
+                class="rounded-lg"
                 onClick={() => setShowCc(true)}
                 disabled={ctx.disabled()}
               >
                 Cc
-              </button>
+              </Button>
             </Show>
             <Show when={!isBccVisible()}>
-              <button
-                type="button"
-                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
+              <Button
+                size="sm"
+                class="rounded-lg"
                 onClick={() => setShowBcc(true)}
                 disabled={ctx.disabled()}
               >
                 Bcc
-              </button>
+              </Button>
             </Show>
           </div>
         </div>

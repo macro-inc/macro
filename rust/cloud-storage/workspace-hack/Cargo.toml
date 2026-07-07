@@ -3,10 +3,10 @@
 #     cargo hakari generate
 
 [package]
+description = "workspace-hack package, managed by hakari"
+edition = "2024"
 name = "workspace-hack"
 version = "0.1.0"
-edition = "2021"
-description = "workspace-hack package, managed by hakari"
 # You can choose to publish this crate: see https://docs.rs/cargo-hakari/latest/cargo_hakari/publishing.
 publish = false
 
@@ -17,10 +17,11 @@ publish = false
 [dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-aws-credential-types = { version = "1", default-features = false, features = ["test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
+aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
-aws-smithy-async = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
 aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
 aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }
@@ -134,10 +135,11 @@ zeroize = { version = "1", features = ["derive"] }
 [build-dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-aws-credential-types = { version = "1", default-features = false, features = ["test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
+aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
-aws-smithy-async = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
 aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
 aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }

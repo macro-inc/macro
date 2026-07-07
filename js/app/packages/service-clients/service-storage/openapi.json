@@ -14333,7 +14333,7 @@
       },
       "Favorite": {
         "type": "object",
-        "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
+        "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
         "required": ["entityType", "entityId", "sortOrder", "createdAt"],
         "properties": {
           "channelId": {
@@ -14384,10 +14384,6 @@
           "fileType": {
             "type": ["string", "null"],
             "description": "File type of the favorited document, when applicable."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "Display name of the favorited entity, when it could be resolved."
           },
           "sortOrder": {
             "type": "number",
@@ -18448,6 +18444,13 @@
           "name": {
             "type": ["string", "null"],
             "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Properties attached to this company (system CRM properties like\nStage / Owner / Revenue plus any custom ones)."
           },
           "teamId": {
             "type": "string",

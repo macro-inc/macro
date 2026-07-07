@@ -52,11 +52,11 @@ where
 /// Ensure the caller has at least view access to the entity they are trying
 /// to favorite.
 ///
-/// Favorites hydrate display metadata (names, email subjects, channel types)
-/// on read, so without this check a caller could favorite an arbitrary id and
-/// use `GET /favorites` as an oracle for entities they cannot see. Entity
-/// types the access layer does not recognize (e.g. channel messages) resolve
-/// to "no access" and are rejected.
+/// Favorites hydrate display metadata (channel types, file types) on read,
+/// so without this check a caller could favorite an arbitrary id and use
+/// `GET /favorites` as an oracle for entities they cannot see. Entity types
+/// the access layer does not recognize (e.g. channel messages) resolve to
+/// "no access" and are rejected.
 async fn ensure_entity_access<AccessSvc>(
     access_service: &AccessSvc,
     user: &MacroUserExtractor,
@@ -202,7 +202,7 @@ where
     AccessSvc: EntityAccessService,
 {
     // Only let the caller favorite entities they can actually access, so a
-    // favorite can't be used as an oracle for entity metadata (name, subject,
+    // favorite can't be used as an oracle for entity metadata (file type,
     // private-channel type) they were never allowed to see.
     ensure_entity_access(
         state.access_service.as_ref(),

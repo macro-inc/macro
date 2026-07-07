@@ -1,20 +1,23 @@
-import { For } from 'solid-js';
-import { Button, ToggleSwitch } from '@ui';
 import {
-  type DebugSettingDef,
-  DEBUG_SETTINGS,
   clearAllDebugSettings,
+  DEBUG_SETTINGS,
+  type DebugSettingDef,
   debugSettings,
   getDebugSetting,
   setDebugSetting,
 } from '@app/lib/debugSettings';
+import { Button, ToggleSwitch } from '@ui';
+import { For } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsRow } from './primitives';
 
 function DebugSettingRow(props: { setting: DebugSettingDef }) {
   const checked = () => getDebugSetting(props.setting.key);
 
   return (
-    <SettingsRow label={props.setting.label} description={props.setting.description}>
+    <SettingsRow
+      label={props.setting.label}
+      description={props.setting.description}
+    >
       <ToggleSwitch
         size="md"
         checked={checked()}

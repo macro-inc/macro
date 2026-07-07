@@ -1,4 +1,5 @@
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
+import { UserIcon } from '@core/component/UserIcon';
 import type { EntityDragData } from '@entity';
 import {
   type CollisionDetector,
@@ -20,6 +21,7 @@ import {
   createSignal,
   type JSXElement,
   onCleanup,
+  Show,
   useContext,
 } from 'solid-js';
 
@@ -88,6 +90,14 @@ function ItemDragOverlay() {
     return getEntityIconType(data as EntityDragData);
   });
 
+  // DM channel favorites show the other participant's avatar instead of the
+  // entity icon, matching their sidebar row (see FavoriteIcon).
+  const dmRecipientId = createMemo((): string | undefined => {
+    const data = activeDraggable()?.data;
+    if (data?.dragType !== 'favorite') return undefined;
+    return data.dmRecipientId as string | undefined;
+  });
+
   const centeredOnPointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
     const sensor = state?.active.sensor;
@@ -105,7 +115,19 @@ function ItemDragOverlay() {
         style={centeredOnPointerStyle()}
       >
         <div class="flex flex-row items-center gap-2">
-          <EntityIcon size="xs" targetType={iconType()} />
+          <Show
+            when={dmRecipientId()}
+            fallback={<EntityIcon size="xs" targetType={iconType()} />}
+          >
+            {(recipientId) => (
+              <UserIcon
+                id={recipientId()}
+                size="sm"
+                suppressClick
+                showTooltip={false}
+              />
+            )}
+          </Show>
           <TruncatedText size="xs">
             {activeDraggable()?.data.name}
           </TruncatedText>

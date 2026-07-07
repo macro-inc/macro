@@ -108,12 +108,20 @@ export function EmptyState(props: {
         </EmptyStatePanel>
       </Match>
 
-      <Match
-        when={
-          (props.listView === 'inbox' || props.listView === 'mail') &&
-          !emailActive()
-        }
-      >
+      <Match when={props.listView === 'inbox' && !emailActive()}>
+        <EmptyStatePanel
+          graphic={EmptyStateInboxTrayGraphic}
+          title="Your inbox is empty"
+          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          primaryAction={{
+            label: 'Connect email',
+            onClick: onConnectEmail,
+          }}
+          documentationUrl={`${DOCS_BASE}/product/inbox`}
+        />
+      </Match>
+
+      <Match when={props.listView === 'mail' && !emailActive()}>
         <EmptyStatePanel
           graphic={EmptyStateEmailGraphic}
           title="Connect your email"
@@ -223,8 +231,8 @@ export function EmptyState(props: {
       <Match when={props.listView === 'companies'}>
         <EmptyStatePanel
           graphic={EmptyStateCompaniesGraphic}
-          title="No companies"
-          description="Companies you add or sync into your CRM will appear here."
+          title="No customers"
+          description="Customers you add or sync into your CRM will appear here."
         />
       </Match>
 

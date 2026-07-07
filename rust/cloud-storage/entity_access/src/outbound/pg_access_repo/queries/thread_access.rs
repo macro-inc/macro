@@ -71,9 +71,10 @@ pub async fn get_thread_access(
         return Ok(access_level.and_then(|level| AccessLevel::from_str(&level).ok()));
     }
 
-    // Owner is handled above and short-circuits. The remaining two sources —
-    // share-permission/entity_access and team-CRM — can only grant access, so
-    // run them concurrently and take the highest level across both.
+    // Owner is handled above and short-circuits. The remaining sources —
+    // share-permission/entity_access (including View via the thread's
+    // containing project) and team-CRM — can only grant access, so run them
+    // concurrently and take the highest level across both.
     let thread_id_str = thread_id.to_string();
 
     let share_fut = sqlx::query_scalar!(
@@ -96,6 +97,15 @@ pub async fn get_thread_access(
             AND id IN (
                 SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $3
             )
+
+            UNION ALL
+            -- Source 3: access to the thread's containing project grants View
+            SELECT 'view' AS access_level
+            FROM email_threads t
+            JOIN entity_access pea ON pea.entity_id::text = t.project_id
+                AND pea.entity_type = 'project'
+                AND pea.source_id = ANY($2)
+            WHERE t.id = $1::uuid
         ) AS combined_access
         "#,
         thread_id,

@@ -21,6 +21,7 @@ pub(in crate::api) mod get_document_views;
 pub(in crate::api) mod get_documents_metadata;
 pub(in crate::api) mod get_full_pdf_modification_data;
 pub(in crate::api) mod get_user_documents;
+pub(in crate::api) mod initialize_how_to_guide;
 pub(in crate::api) mod initialize_user_documents;
 pub(in crate::api) mod job_processing_result;
 pub(in crate::api) mod list_documents_with_access;

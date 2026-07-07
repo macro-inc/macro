@@ -20,6 +20,7 @@ import {
   requestInboxFilter,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
+import { setAllSidePanelsOpen } from '@app/component/side-panel/registry';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type {
   ReferredFrom,
@@ -89,6 +90,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -186,7 +188,7 @@ const SIDEBAR_LINKS = [
     ? ([
         {
           id: 'companies',
-          label: 'Companies',
+          label: 'Customers',
           href: LIST_VIEW_PATHS.companies,
           icon: AnimatedCompanyIcon,
           hotkey: 'o',
@@ -422,11 +424,13 @@ const registerSidebarHotkeys = ({
     hotkey: 'cmd+.',
     scopeId: 'global',
     hotkeyToken: TOKENS.global.toggleSidebar,
-    description: 'Toggle sidebar',
+    description: 'Toggle sidebar and side panels',
     runWithInputFocused: true,
     keyDownHandler: (e) => {
       e?.preventDefault();
-      onOpenChange(isSlim());
+      const show = isSlim();
+      onOpenChange(show);
+      setAllSidePanelsOpen(show);
       return true;
     },
   });
@@ -856,7 +860,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent my-2" />
       </div>
 
-      <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
+      <Suspense>
+        <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
+      </Suspense>
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />

@@ -48,7 +48,7 @@ pub mod outbound;
 pub use domain::model::PropertyRow;
 pub use domain::model::{
     EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption, SourceEntity,
-    StatusOption, SystemPropertyError, SystemPropertyKey,
+    StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
 };
 pub use domain::port::SystemPropertiesRepository;
 pub use domain::service::{SystemPropertiesService, SystemPropertiesServiceImpl};

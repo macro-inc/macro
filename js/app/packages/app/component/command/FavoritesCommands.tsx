@@ -1,9 +1,5 @@
-import {
-  favoriteDisplayName,
-  favoriteIconType,
-  favoriteSplitContent,
-} from '@app/util/favorites';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { FavoriteIcon } from '@app/component/FavoriteIcon';
+import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
@@ -80,16 +76,16 @@ export function FavoritesCommands() {
       dynamicGroup.add(
         registerHotkey({
           scopeId: FAVORITES_COMMAND_SCOPE,
-          description: favoriteDisplayName(favorite),
+          // A callback so each render re-reads the preview cache, where
+          // names resolve (and renames land), warmed by the sidebar's
+          // favorite rows.
+          description: () => favoriteDisplayName(favorite),
           keyDownHandler: () => {
             openFavorite(favorite);
             return true;
           },
           commandPaletteIcon: (props) => (
-            <EntityIcon
-              targetType={favoriteIconType(favorite)}
-              class={props.class}
-            />
+            <FavoriteIcon favorite={favorite} class={props.class} />
           ),
           runWithInputFocused: true,
         })

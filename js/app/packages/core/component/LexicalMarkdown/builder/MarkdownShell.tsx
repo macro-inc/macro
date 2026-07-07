@@ -256,6 +256,9 @@ export const MarkdownShell: Component<
               showOpenTabs={builderConfig.mentions?.showOpenTabs}
               entities={builderConfig.mentions?.entities}
               users={builderConfig.mentions?.users}
+              onUserMention={builderConfig.mentions?.onUserMention}
+              onDocumentMention={builderConfig.mentions?.onDocumentMention}
+              onEmailMention={builderConfig.mentions?.onEmailMention}
               disableMentionTracking={
                 builderConfig.mentions?.disableMentionTracking
               }
