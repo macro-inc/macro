@@ -166,11 +166,10 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 postcard = { version = "1", features = ["use-std"] }
 quote = "1"
 rand = "0.9.0"
-# uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
   "cmake-build",
   "libz-static",
-  "ssl-vendored",
+  "ssl",
   "tokio",
 ] }
 recursion = "0.5.4"
