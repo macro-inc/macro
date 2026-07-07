@@ -32,6 +32,7 @@ import {
   type SidePanelContextType,
   type SidePanelSectionEntry,
 } from './context';
+import { registerSidePanelInstance } from './registry';
 
 const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
@@ -72,6 +73,10 @@ function Layout(props: ParentProps) {
     setter(typeof next === 'function' ? next : () => next);
   };
   const toggle = () => setIsOpen((prev) => !prev);
+
+  // Let global chrome shortcuts (cmd+.) hide/show this panel alongside the
+  // app sidebar.
+  onCleanup(registerSidePanelInstance({ setIsOpen, isNarrow }));
 
   const register = (entry: SidePanelSectionEntry) => {
     setSections((prev) => {

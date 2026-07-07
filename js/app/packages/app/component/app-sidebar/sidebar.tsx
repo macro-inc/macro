@@ -20,6 +20,7 @@ import {
   requestInboxFilter,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
+import { setAllSidePanelsOpen } from '@app/component/side-panel/registry';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type {
   ReferredFrom,
@@ -422,11 +423,13 @@ const registerSidebarHotkeys = ({
     hotkey: 'cmd+.',
     scopeId: 'global',
     hotkeyToken: TOKENS.global.toggleSidebar,
-    description: 'Toggle sidebar',
+    description: 'Toggle sidebar and side panels',
     runWithInputFocused: true,
     keyDownHandler: (e) => {
       e?.preventDefault();
-      onOpenChange(isSlim());
+      const show = isSlim();
+      onOpenChange(show);
+      setAllSidePanelsOpen(show);
       return true;
     },
   });
