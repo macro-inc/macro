@@ -42,6 +42,24 @@ enum Cmd {
     ResetLocal(InstanceArgs),
     /// Remove an instance's containers, networks, and volumes.
     DestroyLocal(InstanceArgs),
+    /// Headless stack orchestration (previews, agents, CI) — no TTY, no
+    /// attached dev server; the proxy serves a static frontend bundle.
+    #[command(subcommand)]
+    Stack(StackCmd),
+}
+
+#[derive(Subcommand)]
+pub enum StackCmd {
+    /// Bring a full local stack up and return (only containers keep running).
+    Up(super::stack::UpArgs),
+    /// Rebuild binaries (and optionally the frontend) and reload what changed.
+    Update(super::stack::UpdateArgs),
+    /// Report the instance's containers, health, and URLs (`--json` for machines).
+    Status(super::stack::StatusArgs),
+    /// Publish the stack's single origin via a Cloudflare quick tunnel.
+    Expose(super::stack::ExposeArgs),
+    /// Tear the instance down: containers, volumes, tunnel, and state.
+    Down(super::stack::DownArgs),
 }
 
 #[derive(Args, Clone, Default)]
@@ -160,5 +178,12 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::StopLocal(a) => super::stop(&a),
         Cmd::ResetLocal(a) => super::reset(&a),
         Cmd::DestroyLocal(a) => super::destroy(&a),
+        Cmd::Stack(cmd) => match cmd {
+            StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
+            StackCmd::Update(a) => super::stack::update(&a),
+            StackCmd::Status(a) => super::stack::status(&a),
+            StackCmd::Expose(a) => super::stack::expose(&a),
+            StackCmd::Down(a) => super::stack::down(&a),
+        },
     }
 }

@@ -34,6 +34,7 @@ pub mod mailpit;
 pub mod opensearch;
 pub mod proxy;
 pub mod resources;
+pub mod stack;
 pub mod stage;
 pub mod summary;
 pub mod validate;
@@ -185,7 +186,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(&stage, mode, &instance, args)?;
+    let (env, target) = prepare(&stage, mode, &instance, args, false)?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -227,7 +228,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         frontend::start(&stage, &instance, mode)?
     };
 
-    summary::print(mode, &instance, &env);
+    summary::print(mode, &instance, &env, &frontend::url(&instance));
 
     match frontend {
         // Interactive terminal: stay attached with a hotkey loop.
@@ -432,12 +433,14 @@ fn interact(
 /// runtime image + service binaries, and generate the compose override /
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
-/// teardown removes them. Returns the resolved env + build target.
+/// teardown removes them. `static_frontend` wires the proxy to serve the staged
+/// app bundle (headless `stack up`). Returns the resolved env + build target.
 fn prepare(
     stage: &Stage,
     mode: Mode,
     instance: &Instance,
     args: &cli::RunArgs,
+    static_frontend: bool,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -463,8 +466,8 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    gen_compose::generate(mode, instance, &binaries)?;
-    proxy::write_caddyfile(instance, mode)?;
+    gen_compose::generate(mode, instance, &binaries, static_frontend)?;
+    proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode.spec().runs_local_infra {
         fusionauth::write_kickstart(instance)?;
     }
@@ -745,7 +748,7 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
     let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false)?;
     println!("{}", path.display());
     Ok(())
 }

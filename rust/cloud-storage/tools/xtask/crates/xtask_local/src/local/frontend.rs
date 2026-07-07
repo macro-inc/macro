@@ -4,6 +4,7 @@
 
 use std::io::Read;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -21,6 +22,69 @@ fn app_dir() -> std::path::PathBuf {
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
+}
+
+/// Frontend URL when the proxy serves the static bundle (headless stacks): the
+/// app lives on the single proxy origin, not a dev-server port.
+pub fn static_url(instance: &Instance) -> String {
+    format!("{}/app/", proxy::url(instance))
+}
+
+/// Where the instance's static frontend build is staged. Mounted read-only into
+/// the proxy container at `/srv/frontend` (see `gen_compose::add_proxy_service`).
+/// Staged per instance — not served from `dist/` directly — so concurrent
+/// instances in one checkout can't clobber each other's running frontend, and a
+/// later `bun run build` can't mutate a live stack out from under itself.
+pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
+    instance.artifact_dir().join("frontend")
+}
+
+/// Build the app bundle for headless serving and stage it into the instance
+/// dir. `prebuilt` skips the build and stages an existing dist (CI hands the
+/// binaries-style artifact straight in). The build mirrors `just build-dev`
+/// (dev-mode bundle, production optimizations), except the backend origin is
+/// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
+/// the one bundle works on localhost and through any tunnel/preview hostname.
+pub fn build_static(stage: &Stage, instance: &Instance, prebuilt: Option<&Path>) -> Result<()> {
+    let dist = match prebuilt {
+        Some(dir) => dir.to_owned(),
+        None => {
+            let mut cmd = Command::new("bun");
+            cmd.current_dir(app_dir())
+                .args(["run", "--bun", "build"])
+                .env("MODE", "development")
+                .env("NODE_ENV", "production")
+                .env("VITE_LOCAL_SERVERS", "ALL")
+                .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+            stage.run("Building frontend bundle", &mut cmd)?;
+            app_dir().join("dist")
+        }
+    };
+    if stage.is_dry_run() {
+        return Ok(());
+    }
+    if !dist.join("index.html").exists() {
+        anyhow::bail!(
+            "no index.html in {} — frontend build did not produce a bundle",
+            dist.display()
+        );
+    }
+    stage.run_step("Staging frontend bundle", || {
+        let staged = static_dir(instance);
+        if staged.exists() {
+            std::fs::remove_dir_all(&staged)
+                .with_context(|| format!("clearing {}", staged.display()))?;
+        }
+        instance.ensure_artifact_dir()?;
+        let status = Command::new("cp")
+            .arg("-a")
+            .arg(&dist)
+            .arg(&staged)
+            .status()
+            .context("running cp -a")?;
+        anyhow::ensure!(status.success(), "cp -a exited with {status}");
+        Ok(())
+    })
 }
 
 /// The env the dev server runs with. Both local and dev point the whole app at

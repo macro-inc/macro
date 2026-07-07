@@ -53,7 +53,14 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
 }
 
 /// Build the override (typed model), apply the merge tags, and write it.
-pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Result<PathBuf> {
+/// `static_frontend` mounts the staged app bundle into the proxy (headless
+/// stacks serve the frontend from Caddy instead of a dev server).
+pub fn generate(
+    mode: Mode,
+    instance: &Instance,
+    binaries: &BinariesDir,
+    static_frontend: bool,
+) -> Result<PathBuf> {
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -80,7 +87,7 @@ pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Resu
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
-    add_proxy_service(&mut services, instance);
+    add_proxy_service(&mut services, instance, static_frontend);
     add_localstack_service(&mut services, instance);
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
@@ -138,19 +145,32 @@ fn add_localstack_service(
 }
 
 /// The single-origin reverse proxy (Caddy). Added in every mode — it's how the
-/// frontend reaches the local service containers.
-fn add_proxy_service(services: &mut IndexMap<String, Option<dct::Service>>, instance: &Instance) {
+/// frontend reaches the local service containers. Headless stacks also mount
+/// the staged app bundle so Caddy serves the frontend itself (see
+/// `proxy::FRONTEND_STATIC`).
+fn add_proxy_service(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    instance: &Instance,
+    static_frontend: bool,
+) {
     let proxy_port = instance.port(Port::Proxy);
+    let mut volumes = vec![dct::Volumes::Simple(format!(
+        "{}:/etc/caddy/Caddyfile:ro",
+        caddyfile_path(instance).display()
+    ))];
+    if static_frontend {
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/srv/frontend:ro",
+            super::frontend::static_dir(instance).display()
+        )));
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
             ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
-            volumes: vec![dct::Volumes::Simple(format!(
-                "{}:/etc/caddy/Caddyfile:ro",
-                caddyfile_path(instance).display()
-            ))],
+            volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()
         }),

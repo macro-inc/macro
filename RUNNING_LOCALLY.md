@@ -120,6 +120,39 @@ pick up a change there.
 If you already started without `--build-aux-services` and suspect a stale
 sync/lexical image, press `q` and restart with the flag.
 
+## Headless Mode (previews, agents, CI)
+
+`just stack` is the same stack without a terminal attached: no hotkey loop, no
+dev server. The frontend is built once (a dev-mode bundle with production
+optimizations) and served statically by the instance's Caddy proxy, so the whole
+product lives behind **one origin** and a finished `up` leaves only Docker
+containers running — nothing to babysit.
+
+```bash
+just stack up                  # bring everything up, print URLs, return
+just stack status --json      # machine-readable state (containers, health, URLs)
+just stack update             # rebuild + reload only changed services (the `r` hotkey)
+just stack update --frontend  # also rebuild the frontend bundle
+just stack down               # containers + volumes + tunnel + state
+```
+
+All the `run_local` flags apply (`--instance`, `--no-doppler --env-file`,
+`--no-build`, `--binaries-dir`); CI can hand in a prebuilt bundle with
+`--frontend-dist`. The app is served at `<proxy>/app/` — the bundle resolves its
+backend from the origin it is served on, so the same stack works on localhost,
+through a tunnel, or behind a preview hostname without a rebuild.
+
+To share a running stack publicly (a preview link, a QA session):
+
+```bash
+just stack expose --detach    # prints a https://*.trycloudflare.com URL
+just stack expose --stop
+```
+
+`expose` uses a Cloudflare quick tunnel (requires `cloudflared` on PATH; no
+account needed). The URL is public and unauthenticated — anyone who has it
+reaches your stack. Share deliberately and stop the tunnel when done.
+
 ## Common Commands
 
 Run local binaries against shared dev resources instead of a fully local stack:

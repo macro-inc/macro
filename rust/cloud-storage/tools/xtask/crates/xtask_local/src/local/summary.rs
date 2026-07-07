@@ -4,10 +4,12 @@ use console::Style;
 
 use super::env_layer::ResolvedEnv;
 use super::instance::{Instance, Port};
-use super::{Mode, frontend, mailpit, proxy};
+use super::{Mode, mailpit, proxy};
 
 /// Print the mode/instance/endpoints block after a successful startup.
-pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {
+/// `frontend_url` differs by flow: the dev-server origin for `run_local`, the
+/// proxy-served bundle for headless `stack up`.
+pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv, frontend_url: &str) {
     let key = Style::new().dim();
     let link = Style::new().cyan();
     let row = |k: &str, v: String| {
@@ -51,7 +53,7 @@ pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {
             .unwrap_or_else(|| "(none)".into()),
     );
     row("generated env", env.generated_path.display().to_string());
-    row("frontend", frontend::url(instance));
+    row("frontend", frontend_url.to_string());
 
     if mode.spec().show_infra_in_summary {
         row("proxy", proxy::url(instance));
