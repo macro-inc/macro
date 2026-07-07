@@ -15494,63 +15494,63 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
-name = "xtask-cache-wasm"
+name = "xtask_cache_wasm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]
-name = "xtask-deps"
+name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
  "hakari",
  "serde_json",
- "xtask-graph",
+ "xtask_graph",
 ]
 
 [[package]]
-name = "xtask-doppler-bins"
+name = "xtask_doppler_bins"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
- "xtask-graph",
+ "xtask_graph",
 ]
 
 [[package]]
-name = "xtask-graph"
+name = "xtask_graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]
-name = "xtask-graphql-soup-schema"
+name = "xtask_graphql_soup_schema"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]
-name = "xtask-kafka-topics"
+name = "xtask_kafka_topics"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "macro_event_topics",
  "serde_json",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]
-name = "xtask-local"
+name = "xtask_local"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -15575,24 +15575,24 @@ dependencies = [
  "serde_yaml",
  "strum",
  "tokio",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]
-name = "xtask-nextest-filter"
+name = "xtask_nextest_filter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
- "xtask-graph",
+ "xtask_graph",
 ]
 
 [[package]]
-name = "xtask-paths"
+name = "xtask_paths"
 version = "0.1.0"
 
 [[package]]
-name = "xtask-workflows"
+name = "xtask_workflows"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -15600,7 +15600,7 @@ dependencies = [
  "indoc",
  "serde_json",
  "serde_yaml",
- "xtask-paths",
+ "xtask_paths",
 ]
 
 [[package]]

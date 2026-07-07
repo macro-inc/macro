@@ -1,15 +1,15 @@
 [package]
 description = "xtask doppler-bins: doppler config-validation bins affected by a set of changed files"
 edition = "2024"
-name = "xtask-doppler-bins"
+name = "xtask_doppler_bins"
 publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "xtask-doppler-bins"
+name = "xtask_doppler_bins"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 guppy = { workspace = true }
-xtask-graph = { path = "../xtask-graph" }
+xtask_graph = { path = "../xtask_graph" }

@@ -9,7 +9,7 @@
 //! anywhere in the repo.
 //!
 //! Centralizing the ancestor walk here means the hardcoded depth lives in one
-//! place: this crate sits at `<workspace>/tools/xtask/crates/xtask-paths`, so
+//! place: this crate sits at `<workspace>/tools/xtask/crates/xtask_paths`, so
 //! the workspace root is four levels up regardless of which command crate
 //! calls in.
 
@@ -20,11 +20,11 @@ use std::path::{Path, PathBuf};
 /// `env!("CARGO_MANIFEST_DIR")` expands to this crate's directory, which is a
 /// fixed location, so the depth here does not depend on the caller.
 pub fn workspace_root() -> PathBuf {
-    // <workspace>/tools/xtask/crates/xtask-paths -> nth(4) == <workspace>.
+    // <workspace>/tools/xtask/crates/xtask_paths -> nth(4) == <workspace>.
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(4)
-        .expect("xtask-paths manifest dir has no workspace root four levels up")
+        .expect("xtask_paths manifest dir has no workspace root four levels up")
         .to_owned()
 }
 

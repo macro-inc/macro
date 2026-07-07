@@ -8,7 +8,7 @@
 //! The cargo alias (`x = "run -p xtask --"`) is static, so it always builds one
 //! fixed package: this launcher. The launcher itself has no dependencies (it
 //! compiles in a blink and stays warm), maps the subcommand to its command
-//! crate, and re-invokes `cargo run -p xtask-<command>`. Only that crate then
+//! crate, and re-invokes `cargo run -p xtask_<command>`. Only that crate then
 //! compiles.
 //!
 //! The nested `cargo run` is pinned to the workspace via `--manifest-path`
@@ -20,7 +20,7 @@
 //! arguments still resolve against the caller's cwd.
 //!
 //! Repo-automation verbs each map to a dedicated crate; everything else is the
-//! local/dev orchestration surface, forwarded wholesale to `xtask-local`'s clap
+//! local/dev orchestration surface, forwarded wholesale to `xtask_local`'s clap
 //! parser (which also prints the combined usage on unrecognized input).
 
 use std::process::{Command, exit};
@@ -34,22 +34,22 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let package = match args.first().map(String::as_str) {
-        Some("deps") => "xtask-deps",
-        Some("nextest-filter") => "xtask-nextest-filter",
-        Some("doppler-bins") => "xtask-doppler-bins",
-        Some("graphql-soup-schema") => "xtask-graphql-soup-schema",
-        Some("cache-wasm") => "xtask-cache-wasm",
-        Some("kafka-topics") => "xtask-kafka-topics",
-        Some("workflows") => "xtask-workflows",
+        Some("deps") => "xtask_deps",
+        Some("nextest-filter") => "xtask_nextest_filter",
+        Some("doppler-bins") => "xtask_doppler_bins",
+        Some("graphql-soup-schema") => "xtask_graphql_soup_schema",
+        Some("cache-wasm") => "xtask_cache_wasm",
+        Some("kafka-topics") => "xtask_kafka_topics",
+        Some("workflows") => "xtask_workflows",
         // Everything else (including no args) is the local/dev orchestration
         // surface. Forward every arg — the subcommand is its clap parser's
         // first positional.
-        _ => "xtask-local",
+        _ => "xtask_local",
     };
 
     // Known verbs forward the args after the verb; the local fallthrough keeps
     // the subcommand as its first argument.
-    let forwarded: &[String] = if package == "xtask-local" {
+    let forwarded: &[String] = if package == "xtask_local" {
         &args
     } else {
         &args[1..]

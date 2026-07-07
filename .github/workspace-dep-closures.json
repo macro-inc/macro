@@ -4725,55 +4725,55 @@
     "xtask": [
       "tools/xtask"
     ],
-    "xtask-cache-wasm": [
-      "tools/xtask/crates/xtask-cache-wasm",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_cache_wasm": [
+      "tools/xtask/crates/xtask_cache_wasm",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-deps": [
-      "tools/xtask/crates/xtask-deps",
-      "tools/xtask/crates/xtask-graph",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_deps": [
+      "tools/xtask/crates/xtask_deps",
+      "tools/xtask/crates/xtask_graph",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-doppler-bins": [
-      "tools/xtask/crates/xtask-doppler-bins",
-      "tools/xtask/crates/xtask-graph",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_doppler_bins": [
+      "tools/xtask/crates/xtask_doppler_bins",
+      "tools/xtask/crates/xtask_graph",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-graph": [
-      "tools/xtask/crates/xtask-graph",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_graph": [
+      "tools/xtask/crates/xtask_graph",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-graphql-soup-schema": [
-      "tools/xtask/crates/xtask-graphql-soup-schema",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_graphql_soup_schema": [
+      "tools/xtask/crates/xtask_graphql_soup_schema",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-kafka-topics": [
+    "xtask_kafka_topics": [
       "macro_event_topics",
-      "tools/xtask/crates/xtask-kafka-topics",
-      "tools/xtask/crates/xtask-paths",
+      "tools/xtask/crates/xtask_kafka_topics",
+      "tools/xtask/crates/xtask_paths",
       "workspace-hack"
     ],
-    "xtask-local": [
+    "xtask_local": [
       "macro_aws_config",
       "macro_env",
       "macro_env_var",
       "macro_event_topics",
       "macro_queues",
-      "tools/xtask/crates/xtask-local",
-      "tools/xtask/crates/xtask-paths",
+      "tools/xtask/crates/xtask_local",
+      "tools/xtask/crates/xtask_paths",
       "workspace-hack"
     ],
-    "xtask-nextest-filter": [
-      "tools/xtask/crates/xtask-graph",
-      "tools/xtask/crates/xtask-nextest-filter",
-      "tools/xtask/crates/xtask-paths"
+    "xtask_nextest_filter": [
+      "tools/xtask/crates/xtask_graph",
+      "tools/xtask/crates/xtask_nextest_filter",
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-paths": [
-      "tools/xtask/crates/xtask-paths"
+    "xtask_paths": [
+      "tools/xtask/crates/xtask_paths"
     ],
-    "xtask-workflows": [
-      "tools/xtask/crates/xtask-paths",
-      "tools/xtask/crates/xtask-workflows"
+    "xtask_workflows": [
+      "tools/xtask/crates/xtask_paths",
+      "tools/xtask/crates/xtask_workflows"
     ]
   }
 }

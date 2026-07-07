@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask-workflows/src/workflows/build_dmg_on_tag.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/build_dmg_on_tag.rs
 name: Build macOS DMG
 'on':
   workflow_call:

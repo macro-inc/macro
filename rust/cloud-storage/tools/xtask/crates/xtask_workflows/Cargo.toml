@@ -1,12 +1,12 @@
 [package]
 description = "xtask workflows: generate/verify the repo's GitHub Actions workflows from Rust"
 edition = "2024"
-name = "xtask-workflows"
+name = "xtask_workflows"
 publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "xtask-workflows"
+name = "xtask_workflows"
 path = "src/main.rs"
 
 [dependencies]
@@ -16,4 +16,4 @@ serde_json = { workspace = true }
 gh-workflow = "0.8"
 indoc = "2"
 serde_yaml = { workspace = true }
-xtask-paths = { path = "../xtask-paths" }
+xtask_paths = { path = "../xtask_paths" }

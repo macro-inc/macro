@@ -1,7 +1,7 @@
 [package]
 description = "Shared path discovery for the xtask command crates (workspace + repo roots)"
 edition = "2024"
-name = "xtask-paths"
+name = "xtask_paths"
 publish = false
 version = "0.1.0"
 

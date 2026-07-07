@@ -1,12 +1,12 @@
 [package]
 description = "xtask local: Macro local & dev stack orchestration (infra + binaries + proxy + frontend)"
 edition = "2024"
-name = "xtask-local"
+name = "xtask_local"
 publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "xtask-local"
+name = "xtask_local"
 path = "src/main.rs"
 
 [dependencies]
@@ -44,7 +44,7 @@ strum = { workspace = true, features = ["derive"] }
 # Signal the frontend dev server's whole process group on shutdown.
 libc = "0.2"
 macro_env_var = { path = "../../../../macro_env_var" }
-xtask-paths = { path = "../xtask-paths" }
+xtask_paths = { path = "../xtask_paths" }
 
 [features]
 # Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by

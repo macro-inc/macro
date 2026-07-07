@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask-workflows/src/workflows/reusable_preview_service.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/reusable_preview_service.rs
 name: Reusable Preview Service
 on:
   workflow_call:

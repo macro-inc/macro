@@ -250,7 +250,7 @@ fn render(workflow: &WorkflowFile) -> Result<String> {
 fn disclaimer(source: &str) -> String {
     format!(
         "# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).\n\
-         # Source: rust/cloud-storage/tools/xtask/crates/xtask-workflows/src/workflows/{source}.rs\n",
+         # Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/{source}.rs\n",
     )
 }
 

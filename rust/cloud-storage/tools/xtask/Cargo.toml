@@ -6,7 +6,7 @@ publish = false
 version = "0.1.0"
 
 # Intentionally dependency-free: the launcher only maps a subcommand to its
-# command crate and re-invokes `cargo run -p xtask-<command>`. Keeping it free
+# command crate and re-invokes `cargo run -p xtask_<command>`. Keeping it free
 # of dependencies means `cargo x` never compiles guppy/hakari/aws-sdk/etc. just
 # to dispatch. The command crates live under `crates/*`.
 [dependencies]

@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/crates/xtask-workflows/src/workflows/web_app_check_main.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 'on':
   pull_request:

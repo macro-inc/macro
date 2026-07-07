@@ -1,12 +1,12 @@
 [package]
 description = "xtask deps: regenerate/verify workspace-hack and the deploy dep-closure map"
 edition = "2024"
-name = "xtask-deps"
+name = "xtask_deps"
 publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "xtask-deps"
+name = "xtask_deps"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,4 +17,4 @@ guppy = { workspace = true }
 # Cargo.lock, so dev machines and CI always run the identical generator —
 # upgrading it is an explicit, reviewed lock change.
 hakari = { version = "0.17.9", features = ["cli-support"] }
-xtask-graph = { path = "../xtask-graph" }
+xtask_graph = { path = "../xtask_graph" }
