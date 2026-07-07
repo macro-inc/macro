@@ -68,10 +68,11 @@ pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Resu
         // Named instances need their own host ports (replacing the base ports —
         // emitted as `!override` in apply_tags). Only the self-contained local
         // stacks remap; dev inherits the base-compose ports.
-        if mode.spec().runs_local_infra && !instance.is_default() {
-            if let Some(port) = svc.host_port {
-                s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
-            }
+        if mode.spec().runs_local_infra
+            && !instance.is_default()
+            && let Some(port) = svc.host_port
+        {
+            s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }

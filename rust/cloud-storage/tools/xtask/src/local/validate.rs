@@ -153,12 +153,13 @@ pub fn local_env(
                 ("DATABASE_URL", "postgres"),
                 ("REDIS_URI", "redis"),
             ] {
-                if let Some(v) = env.get(key) {
-                    if !v.contains(host) && !v.contains("localhost") {
-                        failures.push(format!(
-                            "{key}={v} is not a local endpoint (expected host '{host}')"
-                        ));
-                    }
+                if let Some(v) = env.get(key)
+                    && !v.contains(host)
+                    && !v.contains("localhost")
+                {
+                    failures.push(format!(
+                        "{key}={v} is not a local endpoint (expected host '{host}')"
+                    ));
                 }
             }
         }
