@@ -39,6 +39,7 @@ import { Admin } from './Admin';
 import { Agent } from './Agent';
 import { Appearance } from './Appearance';
 import { ConnectedAccounts } from './ConnectedAccounts';
+import { Crm } from './Crm';
 import { MobileApp } from './MobileApp';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
@@ -387,6 +388,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Team')}>
                   <Suspense>
                     <Team />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('CRM')}>
+                  <Suspense>
+                    <Crm />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Connected')}>

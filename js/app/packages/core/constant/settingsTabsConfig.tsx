@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
+import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
@@ -54,6 +55,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
         label: 'Connections',
@@ -90,6 +92,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
   Team: 'team',
+  CRM: 'crm',
   Connected: 'connections',
   Email: 'email',
   GitHub: 'github',
@@ -141,6 +144,7 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
+      case 'CRM':
         return teamsFlag().enabled;
       case 'Connected':
         return true;
