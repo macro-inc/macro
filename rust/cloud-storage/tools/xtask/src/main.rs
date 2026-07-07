@@ -1,114 +1,65 @@
-//! Repo automation tasks (the cargo-xtask pattern).
+//! `cargo x <command>` launcher.
 //!
-//! `cargo run -p xtask -- deps [--check]` regenerates (or, with `--check`,
-//! verifies) the two generated dependency artifacts:
+//! Each xtask command lives in its own crate under `tools/xtask/crates/` so
+//! that `cargo x <command>` compiles only that command's dependency set — e.g.
+//! `cargo x cache-wasm` (needs only anyhow) does not drag in guppy/hakari,
+//! aws-sdk, tokio, or bollard.
 //!
-//! - `workspace-hack/Cargo.toml` (via the hakari engine): pins every
-//!   third-party dep to its union feature set so a solo `cargo build -p X`
-//!   resolves the same features as the union-built crane dep layers, keeping
-//!   the warm dependency caches exact fingerprint matches.
-//! - `.github/workspace-dep-closures.json`: every workspace crate's
-//!   transitive workspace dependency closure, consumed by flake.nix to build
-//!   pruned per-artifact deploy sources.
+//! The cargo alias (`x = "run -p xtask --"`) is static, so it always builds one
+//! fixed package: this launcher. The launcher itself has no dependencies (it
+//! compiles in a blink and stays warm), maps the subcommand to its command
+//! crate, and re-invokes `cargo run -p xtask-<command>`. Only that crate then
+//! compiles. The launcher does not change the working directory, so relative
+//! path arguments and workspace resolution behave exactly as a direct
+//! `cargo run` would.
 //!
-//! Both run from the hakari/guppy versions pinned in Cargo.lock, so local
-//! runs and CI cannot disagree about generator versions. `just hakari` wraps
-//! the regenerate mode; CI runs `--check` and fails on drift.
+//! Repo-automation verbs each map to a dedicated crate; everything else is the
+//! local/dev orchestration surface, forwarded wholesale to `xtask-local`'s clap
+//! parser (which also prints the combined usage on unrecognized input).
 
-mod cache_wasm;
-mod closures;
-mod doppler_bins;
-mod graphql_soup_schema;
-mod hakari_ops;
-mod kafka_topics;
-mod local;
-mod nextest_filter;
-mod workflows;
+use std::process::{Command, exit};
 
-use std::path::Path;
-
-use anyhow::{Context, Result, bail};
-use guppy::MetadataCommand;
-use guppy::graph::PackageGraph;
-
-fn main() -> Result<()> {
+fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
-        ["deps"] => run_deps(false),
-        ["deps", "--check"] => run_deps(true),
-        ["nextest-filter", changed_files_path] => {
-            let graph = build_graph(false)?;
-            nextest_filter::run(&graph, Path::new(changed_files_path))
-        }
-        ["doppler-bins", changed_files_path] => {
-            let graph = build_graph(false)?;
-            doppler_bins::run(&graph, Path::new(changed_files_path))
-        }
-        ["graphql-soup-schema", output_path] => graphql_soup_schema::run(Path::new(output_path)),
-        ["cache-wasm"] => cache_wasm::run(false),
-        ["cache-wasm", "--force"] => cache_wasm::run(true),
-        ["kafka-topics"] => kafka_topics::run(false),
-        ["kafka-topics", "--check"] => kafka_topics::run(true),
-        ["workflows"] => workflows::generate(),
-        ["workflows", "--check"] => workflows::check(),
-        // Everything else is the local/dev orchestration surface. It has many
-        // subcommands each with several flags, so it uses a real (clap) parser
-        // rather than fixed-arity slice patterns. Unknown input falls through
-        // to a combined usage message inside `local::cli::dispatch`.
-        _ => local::cli::dispatch(&args, LEGACY_USAGE),
-    }
-}
 
-/// Usage for the repo-automation verbs handled by the slice match above. The
-/// local orchestration parser appends its own usage and prints both on an
-/// unrecognized command.
-const LEGACY_USAGE: &str = "repo automation (from rust/cloud-storage):\n  cargo x deps [--check]\n  cargo x nextest-filter <changed-files-path>\n  cargo x doppler-bins <changed-files-path>\n  cargo x graphql-soup-schema <output-path>\n  cargo x cache-wasm [--force]\n  cargo x kafka-topics [--check]\n  cargo x workflows [--check]";
-
-fn run_deps(check: bool) -> Result<()> {
-    let graph = build_graph(check)?;
-
-    let mut drift: Vec<String> = Vec::new();
-    let hakari_changed = hakari_ops::run(&graph, check, &mut drift)?;
-
-    // The hakari step may have edited manifests (hack contents or member dep
-    // lines); recompute the graph so the closure map sees the result. The
-    // fresh `cargo metadata` also refreshes Cargo.lock after those edits.
-    let graph = if hakari_changed {
-        build_graph(false)?
-    } else {
-        graph
+    let package = match args.first().map(String::as_str) {
+        Some("deps") => "xtask-deps",
+        Some("nextest-filter") => "xtask-nextest-filter",
+        Some("doppler-bins") => "xtask-doppler-bins",
+        Some("graphql-soup-schema") => "xtask-graphql-soup-schema",
+        Some("cache-wasm") => "xtask-cache-wasm",
+        Some("kafka-topics") => "xtask-kafka-topics",
+        Some("workflows") => "xtask-workflows",
+        // Everything else (including no args) is the local/dev orchestration
+        // surface. Forward every arg — the subcommand is its clap parser's
+        // first positional.
+        _ => "xtask-local",
     };
-    closures::run(&graph, check, &mut drift)?;
 
-    if !drift.is_empty() {
-        bail!(
-            "generated dependency artifacts are stale:\n  - {}\nrun `just hakari` (or `cargo run -p xtask -- deps`) from rust/cloud-storage and commit the result",
-            drift.join("\n  - ")
-        );
-    }
-    Ok(())
-}
+    // Known verbs forward the args after the verb; the local fallthrough keeps
+    // the subcommand as its first argument.
+    let forwarded: &[String] = if package == "xtask-local" {
+        &args
+    } else {
+        &args[1..]
+    };
 
-fn build_graph(locked: bool) -> Result<PackageGraph> {
-    // Anchor on the manifest dir, not the invocation cwd, so the task works
-    // from anywhere in the repo. The crate lives at <workspace>/tools/xtask.
-    let workspace_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .context("xtask manifest dir has no workspace root two levels up")?
-        .to_owned();
-    let mut cmd = MetadataCommand::new();
-    cmd.current_dir(&workspace_dir);
-    if locked {
-        // In check mode a stale lockfile is itself drift; surface it instead
-        // of silently rewriting it.
-        cmd.other_options(vec!["--locked".to_owned()]);
-    }
-    cmd.build_graph().with_context(|| {
-        if locked {
-            "running cargo metadata --locked (a stale Cargo.lock is drift: run `just hakari` and commit)"
-        } else {
-            "running cargo metadata"
+    // Cargo sets $CARGO to its own path when it runs the alias; fall back to
+    // the plain name otherwise.
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(cargo)
+        .arg("run")
+        .arg("-p")
+        .arg(package)
+        .arg("--")
+        .args(forwarded)
+        .status();
+
+    match status {
+        Ok(status) => exit(status.code().unwrap_or(1)),
+        Err(e) => {
+            eprintln!("xtask: failed to launch `cargo run -p {package}`: {e}");
+            exit(1);
         }
-    })
+    }
 }

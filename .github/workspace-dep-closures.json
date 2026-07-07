@@ -4723,13 +4723,57 @@
       "workspace-hack"
     ],
     "xtask": [
+      "tools/xtask"
+    ],
+    "xtask-cache-wasm": [
+      "tools/xtask/crates/xtask-cache-wasm",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-deps": [
+      "tools/xtask/crates/xtask-deps",
+      "tools/xtask/crates/xtask-graph",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-doppler-bins": [
+      "tools/xtask/crates/xtask-doppler-bins",
+      "tools/xtask/crates/xtask-graph",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-graph": [
+      "tools/xtask/crates/xtask-graph",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-graphql-soup-schema": [
+      "tools/xtask/crates/xtask-graphql-soup-schema",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-kafka-topics": [
+      "macro_event_topics",
+      "tools/xtask/crates/xtask-kafka-topics",
+      "tools/xtask/crates/xtask-paths",
+      "workspace-hack"
+    ],
+    "xtask-local": [
       "macro_aws_config",
       "macro_env",
       "macro_env_var",
       "macro_event_topics",
       "macro_queues",
-      "tools/xtask",
+      "tools/xtask/crates/xtask-local",
+      "tools/xtask/crates/xtask-paths",
       "workspace-hack"
+    ],
+    "xtask-nextest-filter": [
+      "tools/xtask/crates/xtask-graph",
+      "tools/xtask/crates/xtask-nextest-filter",
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-paths": [
+      "tools/xtask/crates/xtask-paths"
+    ],
+    "xtask-workflows": [
+      "tools/xtask/crates/xtask-paths",
+      "tools/xtask/crates/xtask-workflows"
     ]
   }
 }
