@@ -1,42 +1,58 @@
+//! Read-only metadata properties computed on-the-fly from entity data.
+//!
+//! These are never persisted in the properties tables: they surface fields of
+//! the entity itself (name, owner, timestamps, ...) in the property response
+//! shape. They share a special [`METADATA_PROPERTY_ID`] and are marked with
+//! `is_metadata = true`.
+
+use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::service::thread_metadata::ThreadMetadata;
 use models_properties::{EntityReference, EntityType};
-use properties_db_client::error::PropertiesDatabaseError;
-use sqlx::{Pool, Postgres};
-use thiserror::Error;
 use uuid::Uuid;
 
-use crate::constants::{METADATA_PROPERTY_ID, metadata};
+/// Special UUID used for system-generated metadata properties.
+/// This distinguishes metadata properties from user-created properties.
+pub const METADATA_PROPERTY_ID: Uuid = Uuid::from_u128(0xFFFFFFFF_FFFF_FFFF_FFFF_FFFFFFFFFFFF);
 
-#[derive(Debug, Error)]
-pub enum MetadataError {
-    #[error("Document not found")]
-    NotFound,
+/// Metadata property display names
+pub mod display_names {
+    // Common (shared across entity types)
+    pub const OWNER: &str = "Owner";
+    pub const CREATED_AT: &str = "Created At";
+    pub const LAST_UPDATED: &str = "Last Updated";
 
-    #[error("An internal error occurred")]
-    DatabaseError(#[from] PropertiesDatabaseError),
+    // Document metadata
+    pub const DOCUMENT_NAME: &str = "Document Name";
+    pub const DOCUMENT_PROJECT: &str = "Project";
+
+    // Thread metadata
+    pub const THREAD_SUBJECT: &str = "Subject";
+    pub const THREAD_STARTED: &str = "Thread Started";
+    pub const THREAD_LAST_RECEIVED: &str = "Last Received";
+    pub const THREAD_LAST_SENT: &str = "Last Sent";
+    pub const THREAD_MESSAGES: &str = "Messages";
+
+    // Project metadata
+    pub const PROJECT_NAME: &str = "Project Name";
+    pub const PROJECT_PARENT: &str = "Parent Project";
 }
 
-/// Get document metadata properties from macrodb
-#[tracing::instrument(skip(db), err)]
-pub async fn get_document_metadata_properties(
-    db: &Pool<Postgres>,
-    document_id: &str,
+/// Build the metadata properties for a document (or task, which is stored as a document).
+pub fn document_metadata_properties(
+    document_metadata: DocumentMetadata,
     entity_type: EntityType,
-) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    let document_metadata =
-        properties_db_client::document_metadata::get::get_document_metadata(db, document_id)
-            .await?
-            .ok_or(MetadataError::NotFound)?;
-
+) -> Vec<EntityPropertyWithDefinition> {
     let mut metadata_properties = Vec::new();
 
     // 1. Document name property
     let name = (!document_metadata.name.is_empty()).then_some(document_metadata.name);
     metadata_properties.push(create_metadata_property_str(
-        metadata::DOCUMENT_NAME,
+        display_names::DOCUMENT_NAME,
         models_properties::DataType::String,
         name,
         entity_type,
@@ -46,7 +62,7 @@ pub async fn get_document_metadata_properties(
     let owner = (!document_metadata.owner.is_empty())
         .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
-        metadata::OWNER,
+        display_names::OWNER,
         models_properties::DataType::Entity,
         owner,
         entity_type,
@@ -55,7 +71,7 @@ pub async fn get_document_metadata_properties(
 
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::CREATED_AT,
+        display_names::CREATED_AT,
         models_properties::DataType::Date,
         Some(document_metadata.created_at),
         entity_type,
@@ -63,7 +79,7 @@ pub async fn get_document_metadata_properties(
 
     // 4. Last updated time property
     metadata_properties.push(create_metadata_property_date(
-        metadata::LAST_UPDATED,
+        display_names::LAST_UPDATED,
         models_properties::DataType::Date,
         Some(document_metadata.updated_at),
         entity_type,
@@ -74,81 +90,65 @@ pub async fn get_document_metadata_properties(
         .project_id
         .map(|id| EntityReference::new(id, EntityType::Project));
     metadata_properties.push(create_metadata_property_entity_ref(
-        metadata::DOCUMENT_PROJECT,
+        display_names::DOCUMENT_PROJECT,
         models_properties::DataType::Entity,
         project,
         entity_type,
         Some(EntityType::Project),
     ));
 
-    Ok(metadata_properties)
+    metadata_properties
 }
 
-/// Get thread metadata properties from macrodb
-#[tracing::instrument(skip(db), err)]
-pub async fn get_thread_metadata_properties(
-    db: &Pool<Postgres>,
-    thread_id: Uuid,
-) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    let thread_metadata =
-        properties_db_client::thread_metadata::get::get_thread_metadata(db, thread_id)
-            .await?
-            .ok_or(MetadataError::NotFound)?;
-
+/// Build the metadata properties for an email thread.
+pub fn thread_metadata_properties(
+    thread_metadata: ThreadMetadata,
+) -> Vec<EntityPropertyWithDefinition> {
     let entity_type = EntityType::Thread;
 
-    let metadata_properties = vec![
+    vec![
         // 1. Subject property
         create_metadata_property_str(
-            metadata::THREAD_SUBJECT,
+            display_names::THREAD_SUBJECT,
             models_properties::DataType::String,
             thread_metadata.subject.clone(),
             entity_type,
         ),
         // 2. Thread Started property
         create_metadata_property_date(
-            metadata::THREAD_STARTED,
+            display_names::THREAD_STARTED,
             models_properties::DataType::Date,
             thread_metadata.thread_started,
             entity_type,
         ),
         // 3. Last Received property
         create_metadata_property_date(
-            metadata::THREAD_LAST_RECEIVED,
+            display_names::THREAD_LAST_RECEIVED,
             models_properties::DataType::Date,
             thread_metadata.last_received,
             entity_type,
         ),
         // 4. Last Sent property
         create_metadata_property_date(
-            metadata::THREAD_LAST_SENT,
+            display_names::THREAD_LAST_SENT,
             models_properties::DataType::Date,
             thread_metadata.last_sent,
             entity_type,
         ),
         // 5. Messages property (count)
         create_metadata_property_number(
-            metadata::THREAD_MESSAGES,
+            display_names::THREAD_MESSAGES,
             models_properties::DataType::Number,
             thread_metadata.message_count,
             entity_type,
         ),
-    ];
-
-    Ok(metadata_properties)
+    ]
 }
 
-/// Get project metadata properties from macrodb
-#[tracing::instrument(skip(db), err)]
-pub async fn get_project_metadata_properties(
-    db: &Pool<Postgres>,
-    project_id: &str,
-) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
-    let project_metadata =
-        properties_db_client::project_metadata::get::get_project_metadata(db, project_id)
-            .await?
-            .ok_or(MetadataError::NotFound)?;
-
+/// Build the metadata properties for a project.
+pub fn project_metadata_properties(
+    project_metadata: ProjectMetadata,
+) -> Vec<EntityPropertyWithDefinition> {
     let entity_type = EntityType::Project;
 
     // 1. Project name property
@@ -163,15 +163,15 @@ pub async fn get_project_metadata_properties(
         .parent_id
         .map(|id| EntityReference::new(id, EntityType::Project));
 
-    let metadata_properties = vec![
+    vec![
         create_metadata_property_str(
-            metadata::PROJECT_NAME,
+            display_names::PROJECT_NAME,
             models_properties::DataType::String,
             name,
             entity_type,
         ),
         create_metadata_property_entity_ref(
-            metadata::OWNER,
+            display_names::OWNER,
             models_properties::DataType::Entity,
             owner,
             entity_type,
@@ -179,35 +179,27 @@ pub async fn get_project_metadata_properties(
         ),
         // 3. Created time property
         create_metadata_property_date(
-            metadata::CREATED_AT,
+            display_names::CREATED_AT,
             models_properties::DataType::Date,
             Some(project_metadata.created_at),
             entity_type,
         ),
         // 4. Last updated time property
         create_metadata_property_date(
-            metadata::LAST_UPDATED,
+            display_names::LAST_UPDATED,
             models_properties::DataType::Date,
             Some(project_metadata.updated_at),
             entity_type,
         ),
         create_metadata_property_entity_ref(
-            metadata::PROJECT_PARENT,
+            display_names::PROJECT_PARENT,
             models_properties::DataType::Entity,
             parent,
             entity_type,
             Some(EntityType::Project),
         ),
-    ];
-
-    Ok(metadata_properties)
+    ]
 }
-
-// ===== Metadata Property Helpers =====
-//
-// These helpers create read-only metadata properties that are computed on-the-fly
-// from entity data (not stored in the properties tables). They share a special
-// METADATA_PROPERTY_ID and are marked with is_metadata=true.
 
 /// Create a metadata property with a string value (e.g., document name, subject)
 pub fn create_metadata_property_str(

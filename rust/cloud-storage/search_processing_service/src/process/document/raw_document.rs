@@ -10,7 +10,7 @@ use models_search::unified::is_searchable_association;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
 };
-use properties_db_client::entity_properties::get::get_entity_properties_for_index;
+use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,

@@ -8,7 +8,6 @@ use properties::PropertiesErr;
 
 pub mod definitions;
 pub mod entities;
-pub mod metadata;
 pub mod options;
 pub mod tags;
 
@@ -16,11 +15,13 @@ pub mod tags;
 pub(crate) fn properties_err_status(e: &PropertiesErr) -> StatusCode {
     match e {
         PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-        PropertiesErr::NotFound | PropertiesErr::OptionNotFound => StatusCode::NOT_FOUND,
+        PropertiesErr::NotFound
+        | PropertiesErr::OptionNotFound
+        | PropertiesErr::EntityPropertyNotFound => StatusCode::NOT_FOUND,
         PropertiesErr::DuplicateOptionValue => StatusCode::CONFLICT,
-        PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
-            StatusCode::FORBIDDEN
-        }
+        PropertiesErr::PermissionDenied
+        | PropertiesErr::SystemPropertyNotModifiable
+        | PropertiesErr::RequiredProperty => StatusCode::FORBIDDEN,
         PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
             StatusCode::INTERNAL_SERVER_ERROR
         }

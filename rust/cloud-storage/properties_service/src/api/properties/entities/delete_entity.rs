@@ -6,26 +6,20 @@ use axum::{
 use thiserror::Error;
 
 use crate::api::context::PropertiesHandlerState;
+use crate::api::properties::properties_err_status;
 use models_properties::{EntityReference, EntityType};
-use properties_db_client::{
-    entity_properties::delete as entity_properties_delete, error::PropertiesDatabaseError,
-};
+use properties::{PropertiesErr, PropertiesService};
 
-#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum DeleteEntityErr {
-    #[error("An internal error occurred")]
-    Internal(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    Database(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
 }
 
 impl IntoResponse for DeleteEntityErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            DeleteEntityErr::Internal(_) | DeleteEntityErr::Database(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            DeleteEntityErr::Properties(e) => properties_err_status(e),
         };
 
         if status_code.is_server_error() {
@@ -64,14 +58,10 @@ pub async fn delete_entity(
 
     let entity_reference = EntityReference::new(entity_id.clone(), entity_type);
 
-    entity_properties_delete::delete_entity(&state.db, &entity_reference)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "failed to delete entity properties"
-            );
-        })?;
+    state
+        .properties_service
+        .delete_entity_properties(&entity_reference)
+        .await?;
 
     tracing::info!("successfully deleted all properties for entity");
 

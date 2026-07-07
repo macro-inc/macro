@@ -188,14 +188,14 @@ pub(crate) async fn populate_properties(
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
     let properties_map =
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
             property_ids,
             Some(user_id.as_ref()),
         )
         .await
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        .map_err(|e| sqlx::Error::Decode(e.into()))?;
 
     // `items` may repeat an id (one row per group it belongs to), so use
     // `.get()` not `.remove()` — every occurrence needs the props.

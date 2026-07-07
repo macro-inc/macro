@@ -10,18 +10,15 @@ use thiserror::Error;
 use crate::api::{
     context::PropertiesHandlerState,
     properties::entities::types::{BulkEntityPropertiesRequest, EntityPropertiesResponse},
+    properties::properties_err_status,
 };
 use model::user::UserContext;
-use properties_db_client::{
-    entity_properties::get as entity_properties_get, error::PropertiesDatabaseError,
-};
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum GetBulkEntityPropertiesErr {
-    #[error("An internal error occurred")]
-    InternalError(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    DatabaseError(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
     #[error("Entities array cannot be empty")]
     InvalidRequest,
     #[error("Access denied")]
@@ -31,8 +28,7 @@ pub enum GetBulkEntityPropertiesErr {
 impl IntoResponse for GetBulkEntityPropertiesErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            GetBulkEntityPropertiesErr::InternalError(_)
-            | GetBulkEntityPropertiesErr::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            GetBulkEntityPropertiesErr::Properties(e) => properties_err_status(e),
             GetBulkEntityPropertiesErr::InvalidRequest => StatusCode::BAD_REQUEST,
             GetBulkEntityPropertiesErr::Permission(e) => e.status_code(),
         };
@@ -61,36 +57,24 @@ async fn get_bulk_entity_properties_impl(
 
     tracing::info!("retrieving bulk entity properties");
 
-    // Use filtered query if property_ids specified, otherwise fetch all.
+    // An empty property_ids fetches all properties for the given entities.
     // Note: the public endpoint requires property_ids, but internal callers can
     // pass an empty vec to fetch all properties for the given entities.
-    let bulk_properties = if request.property_ids.is_empty() {
-        entity_properties_get::get_bulk_entity_properties_values(&state.db, &request.entities).await
-    } else {
-        entity_properties_get::get_bulk_entity_properties_values_filtered(
-            &state.db,
-            &request.entities,
-            &request.property_ids,
-            None,
-        )
-        .await
-    }
-    .inspect_err(|e| {
-        tracing::error!(
-            error = ?e,
-            "failed to retrieve bulk entity properties"
+    let bulk_properties = state
+        .properties_service
+        .get_bulk_entity_properties(request.entities, request.property_ids)
+        .await?;
+
+    let mut result: HashMap<String, EntityPropertiesResponse> = HashMap::new();
+
+    for (key, properties_values) in bulk_properties {
+        result.insert(
+            key.entity_id.clone(),
+            EntityPropertiesResponse {
+                entity_id: key.entity_id,
+                properties: properties_values,
+            },
         );
-    })?;
-
-    let mut result = HashMap::new();
-
-    for (entity_id, properties_values) in bulk_properties {
-        let response = EntityPropertiesResponse {
-            entity_id: entity_id.clone(),
-            properties: properties_values,
-        };
-
-        result.insert(entity_id, response);
     }
 
     tracing::info!(

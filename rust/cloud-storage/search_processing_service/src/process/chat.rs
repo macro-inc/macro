@@ -3,7 +3,7 @@ use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::chat_message::UpsertChatMessageArgs,
 };
-use properties_db_client::entity_properties::get::get_entity_properties_for_index;
+use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqs_client::search::chat::{ChatMessage, RemoveChatMessage};
 
 use crate::process::properties::to_indexed_properties;

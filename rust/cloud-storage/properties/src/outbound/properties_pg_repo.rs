@@ -8,9 +8,13 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::{
-    entity_properties_get_query, entity_property_queries, property_definition_queries,
-    property_option_queries, task_property_queries,
+    entity_properties_get_query, entity_property_queries, metadata_queries,
+    property_definition_queries, property_option_queries, task_property_queries,
 };
+use models_properties::EntityPropertyReference;
+use models_properties::service::document_metadata::DocumentMetadata;
+use models_properties::service::project_metadata::ProjectMetadata;
+use models_properties::service::thread_metadata::ThreadMetadata;
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
 };
@@ -326,7 +330,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             .collect::<HashMap<_, _>>();
 
         let properties_by_entity_id =
-            properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+            entity_properties_get_query::get_bulk_entity_properties_values(
                 &self.pool,
                 &entity_refs,
             )
@@ -341,6 +345,97 @@ impl PropertiesRepo for PropertiesPgRepo {
         }
 
         Ok(result)
+    }
+
+    #[tracing::instrument(skip(self, entity_refs, property_ids), err)]
+    async fn get_entity_properties_batch_filtered(
+        &self,
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+        tag_viewer_user_id: Option<&str>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err> {
+        let mut result = entity_refs
+            .iter()
+            .map(|entity_ref| (EntityPropertiesKey::from(entity_ref), Vec::new()))
+            .collect::<HashMap<_, _>>();
+
+        let properties_by_entity_id =
+            entity_properties_get_query::get_bulk_entity_properties_values_filtered(
+                &self.pool,
+                &entity_refs,
+                &property_ids,
+                tag_viewer_user_id,
+            )
+            .await?;
+
+        for property in properties_by_entity_id.into_values().flatten() {
+            let key = EntityPropertiesKey {
+                entity_id: property.property.entity_id.clone(),
+                entity_type: property.property.entity_type,
+            };
+            result.entry(key).or_default().push(property);
+        }
+
+        Ok(result)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_properties_with_definitions(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityPropertyWithDefinition>, Self::Err> {
+        entity_properties_get_query::get_entity_properties_values(
+            &self.pool,
+            entity_id,
+            entity_type,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn lookup_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> Result<Option<EntityPropertyReference>, Self::Err> {
+        entity_properties_get_query::lookup_entity_property(&self.pool, entity_property_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_entity_property(&self, entity_property_id: Uuid) -> Result<(), Self::Err> {
+        entity_property_queries::delete_entity_property(&self.pool, entity_property_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> Result<(), Self::Err> {
+        entity_property_queries::delete_entity_properties(&self.pool, entity_reference).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_document_metadata(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<DocumentMetadata>, Self::Err> {
+        metadata_queries::get_document_metadata(&self.pool, document_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_thread_metadata(
+        &self,
+        thread_id: Uuid,
+    ) -> Result<Option<ThreadMetadata>, Self::Err> {
+        metadata_queries::get_thread_metadata(&self.pool, thread_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_project_metadata(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<ProjectMetadata>, Self::Err> {
+        metadata_queries::get_project_metadata(&self.pool, project_id).await
     }
 
     #[tracing::instrument(skip(self))]

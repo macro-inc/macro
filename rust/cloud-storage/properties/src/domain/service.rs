@@ -230,4 +230,53 @@ pub trait PropertiesService: Send + Sync + 'static {
         &self,
         owner: PropertyDefinitionOwner<'_>,
     ) -> impl Future<Output = Result<TagSet, PropertiesErr>> + Send;
+
+    /// Get an entity's stored properties with definitions, values, and options,
+    /// sorted by display name. Does not include computed metadata properties
+    /// (see [`Self::get_entity_metadata_properties`]).
+    fn get_entity_properties_with_definitions(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyWithDefinition>, PropertiesErr>> + Send;
+
+    /// Get an entity's read-only metadata properties, computed on-the-fly from
+    /// the entity itself (name, owner, timestamps, ...).
+    /// Returns `None` when the entity doesn't exist (or the id is malformed);
+    /// entity types without metadata yield `Some(vec![])`.
+    fn get_entity_metadata_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Option<Vec<EntityPropertyWithDefinition>>, PropertiesErr>> + Send;
+
+    /// Get properties for multiple entities, keyed by entity id and type.
+    /// An empty `property_ids` fetches all properties for the given entities;
+    /// otherwise only the requested definitions are returned.
+    fn get_bulk_entity_properties(
+        &self,
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>,
+            PropertiesErr,
+        >,
+    > + Send;
+
+    /// Delete all properties attached to an entity (internal operation, no
+    /// permission checks).
+    fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Delete a single entity property by its ID on behalf of a user.
+    /// Fails when the property doesn't exist, is required for the entity type,
+    /// or the user lacks edit access to the entity.
+    fn delete_entity_property(
+        &self,
+        entity_property_id: Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 }

@@ -24,6 +24,7 @@ use uuid::Uuid;
 use std::sync::Arc;
 
 use super::error::PropertiesErr;
+use super::metadata;
 use super::model::{
     EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TagScope, TagSet,
     UpdatePropertyOptionOutcome,
@@ -888,6 +889,153 @@ where
             .map_err(anyhow::Error::from)?;
 
         self.build_tag_set(scope, Some(definition)).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_properties_with_definitions(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityPropertyWithDefinition>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_entity_properties_with_definitions(entity_id, entity_type)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_metadata_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<Option<Vec<EntityPropertyWithDefinition>>, PropertiesErr> {
+        let properties = match entity_type {
+            EntityType::Document | EntityType::Task => self
+                .repository
+                .get_document_metadata(entity_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .map(|meta| metadata::document_metadata_properties(meta, entity_type)),
+            EntityType::Thread => {
+                let Ok(thread_id) = Uuid::parse_str(entity_id) else {
+                    tracing::error!(entity_id = %entity_id, "invalid thread UUID");
+                    return Ok(None);
+                };
+                self.repository
+                    .get_thread_metadata(thread_id)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .map(metadata::thread_metadata_properties)
+            }
+            EntityType::Project => self
+                .repository
+                .get_project_metadata(entity_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .map(metadata::project_metadata_properties),
+            _ => {
+                tracing::debug!(
+                    entity_type = ?entity_type,
+                    "no metadata properties available for this entity type"
+                );
+                Some(Vec::new())
+            }
+        };
+
+        Ok(properties)
+    }
+
+    #[tracing::instrument(skip(self, entity_refs, property_ids), fields(entity_count = entity_refs.len(), property_count = property_ids.len()), err)]
+    async fn get_bulk_entity_properties(
+        &self,
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr>
+    {
+        // An empty property_ids means "fetch all properties"; otherwise only
+        // the requested definitions are returned.
+        let result = if property_ids.is_empty() {
+            self.repository
+                .get_entity_properties_batch(entity_refs)
+                .await
+                .map_err(anyhow::Error::from)?
+        } else {
+            self.repository
+                .get_entity_properties_batch_filtered(entity_refs, property_ids, None)
+                .await
+                .map_err(anyhow::Error::from)?
+        };
+
+        Ok(result)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> Result<(), PropertiesErr> {
+        Ok(self
+            .repository
+            .delete_entity_properties(entity_reference)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(entity_property_id = %entity_property_id, user_id = %user_id), err)]
+    async fn delete_entity_property(
+        &self,
+        entity_property_id: Uuid,
+        user_id: &str,
+    ) -> Result<(), PropertiesErr> {
+        let property_info = self
+            .repository
+            .lookup_entity_property(entity_property_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::EntityPropertyNotFound)?;
+
+        tracing::debug!(
+            entity_id = %property_info.entity_id,
+            entity_type = ?property_info.entity_type,
+            property_definition_id = %property_info.property_definition_id,
+            "fetched entity property info"
+        );
+
+        // Check if this property is required for the entity type (e.g., Task properties)
+        if SystemPropertyKey::is_required_for_entity(
+            property_info.property_definition_id,
+            property_info.entity_type,
+        ) {
+            tracing::warn!(
+                entity_type = ?property_info.entity_type,
+                property_definition_id = %property_info.property_definition_id,
+                "attempted to remove required property"
+            );
+            return Err(PropertiesErr::RequiredProperty);
+        }
+
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionDenied)?;
+        permission_service
+            .check_entity_edit_permission(
+                user_id,
+                &property_info.entity_id,
+                property_info.entity_type,
+            )
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+
+        self.repository
+            .delete_entity_property(entity_property_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        tracing::info!("successfully removed entity property");
+
+        Ok(())
     }
 }
 

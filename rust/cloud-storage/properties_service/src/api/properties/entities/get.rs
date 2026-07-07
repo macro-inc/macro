@@ -11,22 +11,19 @@ use crate::api::{
     properties::entities::types::{
         EntityPropertiesResponse, EntityQueryParams, retain_caller_visible_tags,
     },
+    properties::properties_err_status,
 };
 use model::user::UserContext;
 use models_properties::EntityType;
-use properties_db_client::{
-    entity_properties::get as entity_properties_get, error::PropertiesDatabaseError,
-};
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum GetEntityPropertiesErr {
-    #[error("An internal error occurred")]
-    Internal(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    Database(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
 
-    #[error("{0}")]
-    Metadata(#[from] crate::api::properties::metadata::MetadataError),
+    #[error("Entity not found")]
+    MetadataNotFound,
 
     #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
@@ -35,9 +32,9 @@ pub enum GetEntityPropertiesErr {
 impl IntoResponse for GetEntityPropertiesErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            GetEntityPropertiesErr::Internal(_)
-            | GetEntityPropertiesErr::Database(_)
-            | GetEntityPropertiesErr::Metadata(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            GetEntityPropertiesErr::Properties(e) => properties_err_status(e),
+            // Preserved behavior: a missing entity on the metadata path is a 500.
+            GetEntityPropertiesErr::MetadataNotFound => StatusCode::INTERNAL_SERVER_ERROR,
             GetEntityPropertiesErr::Permission(e) => e.status_code(),
         };
 
@@ -96,74 +93,26 @@ pub async fn get_entity_properties(
     let (user_properties, metadata_properties) = if query.include_metadata {
         // Fetch user properties and metadata in parallel when metadata is requested
         let (user_properties_result, metadata_properties_result) = tokio::join!(
-            entity_properties_get::get_entity_properties_values(&state.db, &entity_id, entity_type),
-            async {
-                match entity_type {
-                    EntityType::Document | EntityType::Task => {
-                        crate::api::properties::metadata::get_document_metadata_properties(
-                            &state.db,
-                            &entity_id,
-                            entity_type,
-                        )
-                        .await
-                    }
-                    EntityType::Thread => {
-                        let thread_id = uuid::Uuid::parse_str(&entity_id).map_err(|e| {
-                            tracing::error!(error = ?e, entity_id = %entity_id, "invalid thread UUID");
-                            crate::api::properties::metadata::MetadataError::NotFound
-                        })?;
-                        crate::api::properties::metadata::get_thread_metadata_properties(
-                            &state.db, thread_id,
-                        )
-                        .await
-                    }
-                    EntityType::Project => {
-                        super::super::metadata::get_project_metadata_properties(
-                            &state.db, &entity_id,
-                        )
-                        .await
-                    }
-                    _ => {
-                        tracing::debug!(
-                            entity_type = ?entity_type,
-                            "no system properties available for this entity type"
-                        );
-                        Ok(vec![])
-                    }
-                }
-            }
+            state
+                .properties_service
+                .get_entity_properties_with_definitions(&entity_id, entity_type),
+            state
+                .properties_service
+                .get_entity_metadata_properties(&entity_id, entity_type)
         );
 
-        let user_properties = user_properties_result.inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                entity_id = %entity_id,
-                "failed to retrieve entity properties from database"
-            );
-        })?;
-
-        let metadata_properties = metadata_properties_result.inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                entity_id = %entity_id,
-                "failed to get metadata properties"
-            );
-        })?;
+        let user_properties = user_properties_result?;
+        let metadata_properties =
+            metadata_properties_result?.ok_or(GetEntityPropertiesErr::MetadataNotFound)?;
 
         (user_properties, metadata_properties)
     } else {
         // Only fetch user properties when metadata not requested - no parallel task needed
         tracing::debug!("skipping metadata properties due to include_metadata=false");
-        let user_properties =
-            entity_properties_get::get_entity_properties_values(&state.db, &entity_id, entity_type)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error = ?e,
-                        entity_id = %entity_id,
-                        "failed to retrieve entity properties from database"
-                    );
-                })?;
+        let user_properties = state
+            .properties_service
+            .get_entity_properties_with_definitions(&entity_id, entity_type)
+            .await?;
 
         (user_properties, vec![])
     };

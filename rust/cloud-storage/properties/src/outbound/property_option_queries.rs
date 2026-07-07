@@ -1,5 +1,7 @@
 //! Property option query helpers.
 
+use std::collections::HashMap;
+
 use models_properties::db;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use sqlx::{Pool, Postgres};
@@ -72,6 +74,54 @@ pub async fn get_property_options(
     rows.into_iter()
         .map(|row| row.try_into().map_err(anyhow::Error::from))
         .collect()
+}
+
+/// Gets property options for multiple properties in a single query.
+/// Returns a HashMap where the key is property_definition_id and value is the list of options.
+#[tracing::instrument(skip(pool))]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "runtime query keeps test builds offline-friendly"
+)]
+pub async fn get_property_options_batch(
+    pool: &Pool<Postgres>,
+    property_definition_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, Vec<PropertyOption>>> {
+    if property_definition_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = sqlx::query_as::<_, db::PropertyOption>(
+        r#"
+        SELECT 
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color,
+            created_at,
+            updated_at
+        FROM property_options 
+        WHERE property_definition_id = ANY($1)
+        ORDER BY property_definition_id, display_order, number_value, LOWER(string_value)
+        "#,
+    )
+    .bind(property_definition_ids)
+    .fetch_all(pool)
+    .await?;
+
+    // Group options by property_definition_id
+    let mut result: HashMap<Uuid, Vec<PropertyOption>> = HashMap::new();
+    for row in rows {
+        let option: PropertyOption = row.try_into()?;
+        result
+            .entry(option.property_definition_id)
+            .or_default()
+            .push(option);
+    }
+
+    Ok(result)
 }
 
 /// Creates a new property option.

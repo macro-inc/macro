@@ -23,7 +23,6 @@ outbound = [
   "dep:model_notifications",
   "dep:models_permissions",
   "dep:notification",
-  "dep:properties_db_client",
   "dep:serde_json",
   "dep:sqlx",
   "ports",
@@ -47,7 +46,6 @@ model_notifications = { path = "../model_notifications", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 models_permissions = { path = "../models_permissions", optional = true }
 models_properties = { path = "../models_properties" }
-properties_db_client = { path = "../properties_db_client", optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

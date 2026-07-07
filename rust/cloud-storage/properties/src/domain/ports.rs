@@ -9,9 +9,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::document_metadata::DocumentMetadata;
+use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType};
+use models_properties::service::thread_metadata::ThreadMetadata;
+use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
 use uuid::Uuid;
 
 use super::model::{
@@ -247,6 +250,71 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
     > + Send;
+
+    /// Get the properties attached to multiple entities, filtered by property
+    /// definition IDs, keyed by entity id and type. When `tag_viewer_user_id`
+    /// is set, also returns TAG properties whose definition is owned by that
+    /// user or their team.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_entity_properties_batch_filtered<'a>(
+        &self,
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+        tag_viewer_user_id: Option<&'a str>,
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
+    > + Send;
+
+    /// Get an entity's properties with definitions, values, and options,
+    /// sorted by display name.
+    fn get_entity_properties_with_definitions(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyWithDefinition>, Self::Err>> + Send;
+
+    /// Look up an entity property by its ID.
+    /// Returns the entity reference (for permissions) and definition ID
+    /// (for required property checks), or `None` if it doesn't exist.
+    fn lookup_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityPropertyReference>, Self::Err>> + Send;
+
+    /// Delete an entity property by its ID. A no-op if it doesn't exist.
+    fn delete_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete all properties attached to an entity.
+    fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a document's metadata (name, owner, timestamps, project).
+    /// Returns `None` if the document doesn't exist.
+    /// Tasks are stored as documents, so this works for both.
+    fn get_document_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentMetadata>, Self::Err>> + Send;
+
+    /// Get an email thread's metadata (subject, timestamps, message count).
+    /// Returns `None` if the thread doesn't exist.
+    fn get_thread_metadata(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ThreadMetadata>, Self::Err>> + Send;
+
+    /// Get a project's metadata (name, owner, timestamps, parent).
+    /// Returns `None` if the project doesn't exist or is deleted.
+    fn get_project_metadata(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Option<ProjectMetadata>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
