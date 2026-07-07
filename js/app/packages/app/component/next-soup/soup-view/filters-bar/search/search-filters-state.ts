@@ -12,7 +12,8 @@ import {
 } from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { batch, createMemo } from 'solid-js';
+import { batch, createEffect, createMemo } from 'solid-js';
+import { useSearchTagsFlag } from './search-tags-flag';
 
 export type SearchIndexId =
   | 'channels'
@@ -162,6 +163,7 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
  */
 export function createSearchFiltersController() {
   const { soup, queryFilters } = useSoupView();
+  const searchTags = useSearchTagsFlag();
 
   const type = createMemo<SearchTypeValue>(
     () =>
@@ -198,7 +200,9 @@ export function createSearchFiltersController() {
     taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES)
   );
   const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
-  const tags = createMemo<PropertyFilter[]>(() => include().tagFilters ?? []);
+  const tags = createMemo<PropertyFilter[]>(() =>
+    searchTags() ? (include().tagFilters ?? []) : []
+  );
 
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
@@ -228,6 +232,15 @@ export function createSearchFiltersController() {
         or: state.type === 'all' ? [] : [state.type],
       }));
     });
+
+  // With the rollout flag off, strip tag filters restored from an earlier
+  // session out of the query state so tagFilters never reaches either data
+  // path (soup AST or search-service request).
+  createEffect(() => {
+    if (!searchTags() && include().tagFilters?.length) {
+      apply({ type: type(), tags: [], ...currentSections() });
+    }
+  });
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
     apply({ type: type(), tags: tags(), ...currentSections(), ...sections });
