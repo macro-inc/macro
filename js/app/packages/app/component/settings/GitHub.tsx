@@ -8,7 +8,11 @@ import {
 } from '@queries/auth';
 import { Match, Show, Switch } from 'solid-js';
 import { IntegrationRow, SettingsCard } from './primitives';
-import { ConnectAction, type ConnectionState, StatusDot } from './integration-ui';
+import {
+  ConnectAction,
+  type ConnectionState,
+  StatusDot,
+} from './integration-ui';
 
 /** GitHub integration as a Connected-accounts card. */
 export function GitHubCard() {

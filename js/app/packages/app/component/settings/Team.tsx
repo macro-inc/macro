@@ -396,7 +396,7 @@ function InviteRow(props: {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(
-        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`,
+        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`
       );
     } catch (err) {
       console.error('Failed to copy to clipboard', err);
@@ -787,7 +787,12 @@ const TEAM_FIELD_CLASS = 'settings-input w-56 mobile:w-32';
 function ReadOnlyField(props: { value: string; tooltip: string }) {
   return (
     <Tooltip label={props.tooltip} placement="top">
-      <input type="text" value={props.value} disabled class={TEAM_FIELD_CLASS} />
+      <input
+        type="text"
+        value={props.value}
+        disabled
+        class={TEAM_FIELD_CLASS}
+      />
     </Tooltip>
   );
 }
@@ -1319,9 +1324,7 @@ function TeamManagement(props: {
           </Show>
         </SettingsSection>
 
-        <Show
-          when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}
-        >
+        <Show when={isOwner() && (invitesQuery.data?.invites?.length ?? 0) > 0}>
           <SettingsSection title="Pending invites">
             <SettingsCard>
               <For each={invitesQuery.data?.invites ?? []}>

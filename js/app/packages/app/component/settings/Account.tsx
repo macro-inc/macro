@@ -6,7 +6,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
-import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown, cn } from '@ui';
+import {
+  Dialog,
+  Button,
+  Panel,
+  Tooltip,
+  ToggleSwitch,
+  Dropdown,
+  cn,
+} from '@ui';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import {
   blockNameToFileExtensions,
@@ -91,17 +99,28 @@ async function removeProfilePicture(): Promise<boolean> {
 
 function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   switch (status.status) {
-    case 'Idle': return 'Idle';
-    case 'CheckingForUpdate': return 'Checking for update...';
-    case 'UpdateFound': return `Update available: v${status.data.version}`;
-    case 'NoUpdateNeeded': return 'Up to date';
-    case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
-    case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
-    case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
-    case 'ClearRequired': return 'Cached update revoked';
-    case 'NativeUpdateRequired': return 'App update required';
-    case 'Completed': return 'Update ready';
-    case 'Error': return 'An error occurred when checking for updates';
+    case 'Idle':
+      return 'Idle';
+    case 'CheckingForUpdate':
+      return 'Checking for update...';
+    case 'UpdateFound':
+      return `Update available: v${status.data.version}`;
+    case 'NoUpdateNeeded':
+      return 'Up to date';
+    case 'WaitingForWifi':
+      return 'Waiting for Wi-Fi to download';
+    case 'Downloading':
+      return `Downloading: ${Math.round(status.data.progress)}%`;
+    case 'Unzipping':
+      return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'ClearRequired':
+      return 'Cached update revoked';
+    case 'NativeUpdateRequired':
+      return 'App update required';
+    case 'Completed':
+      return 'Update ready';
+    case 'Error':
+      return 'An error occurred when checking for updates';
   }
 }
 
@@ -304,7 +323,8 @@ export function Account() {
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
+    createSignal<boolean>(false);
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -414,68 +434,88 @@ export function Account() {
       <Show when={isNativeMobilePlatform()}>
         <SettingsSection title="Danger zone">
           <div>
-            <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
+            <Button
+              variant="danger"
+              depth={3}
+              onClick={() => setShowDeleteModal(true)}
+            >
               Delete Account
             </Button>
             <Dialog
-                  open={showDeleteModal()}
-                  onOpenChange={setShowDeleteModal}
-                  position="center"
-                  class="w-120"
-                >
-                  <Panel depth={2} class="rounded-xl">
-                    <Panel.Header class="px-6">
-                      <Dialog.Title class="text-ink text-sm font-semibold">
-                        Delete Account
-                      </Dialog.Title>
-                    </Panel.Header>
-                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                        Are you sure you want to delete your account? This action is
-                        permanent and cannot be undone.
-                      </Dialog.Description>
-                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
-                          Cancel
-                        </Button>
-                        <Button variant="danger" depth={3} onClick={() => {
-                          setShowDeleteModal(false);
-                          setShowDeleteConfirmModal(true);
-                        }}>
-                          Delete
-                        </Button>
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                </Dialog>
-                <Dialog
-                  open={showDeleteConfirmModal()}
-                  onOpenChange={setShowDeleteConfirmModal}
-                  position="center"
-                  class="w-120"
-                >
-                  <Panel depth={2} class="rounded-xl">
-                    <Panel.Header class="px-6">
-                      <Dialog.Title class="text-ink text-sm font-semibold">
-                        Are you absolutely sure?
-                      </Dialog.Title>
-                    </Panel.Header>
-                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                        This will permanently delete your account and all associated
-                        data. This cannot be undone.
-                      </Dialog.Description>
-                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
-                          Cancel
-                        </Button>
-                        <Button variant="danger" depth={3} onClick={deleteAccountHandler}>
-                          Delete My Account
-                        </Button>
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                </Dialog>
+              open={showDeleteModal()}
+              onOpenChange={setShowDeleteModal}
+              position="center"
+              class="w-120"
+            >
+              <Panel depth={2} class="rounded-xl">
+                <Panel.Header class="px-6">
+                  <Dialog.Title class="text-ink text-sm font-semibold">
+                    Delete Account
+                  </Dialog.Title>
+                </Panel.Header>
+                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                    Are you sure you want to delete your account? This action is
+                    permanent and cannot be undone.
+                  </Dialog.Description>
+                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                    <Button
+                      variant="base"
+                      depth={3}
+                      onClick={() => setShowDeleteModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      depth={3}
+                      onClick={() => {
+                        setShowDeleteModal(false);
+                        setShowDeleteConfirmModal(true);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </Panel.Body>
+              </Panel>
+            </Dialog>
+            <Dialog
+              open={showDeleteConfirmModal()}
+              onOpenChange={setShowDeleteConfirmModal}
+              position="center"
+              class="w-120"
+            >
+              <Panel depth={2} class="rounded-xl">
+                <Panel.Header class="px-6">
+                  <Dialog.Title class="text-ink text-sm font-semibold">
+                    Are you absolutely sure?
+                  </Dialog.Title>
+                </Panel.Header>
+                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                    This will permanently delete your account and all associated
+                    data. This cannot be undone.
+                  </Dialog.Description>
+                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                    <Button
+                      variant="base"
+                      depth={3}
+                      onClick={() => setShowDeleteConfirmModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      depth={3}
+                      onClick={deleteAccountHandler}
+                    >
+                      Delete My Account
+                    </Button>
+                  </div>
+                </Panel.Body>
+              </Panel>
+            </Dialog>
           </div>
         </SettingsSection>
       </Show>
@@ -608,13 +648,12 @@ function NotificationToggle() {
 function NotificationSettings(props: {
   settings: SupportedNotificationSettings;
 }) {
-  const analytics = useAnalytics()
+  const analytics = useAnalytics();
 
-  const handleToggle = (checked: boolean) =>  {
-    analytics.track('notifications_toggled')
-    props.settings.toggle(checked)
-  }
-
+  const handleToggle = (checked: boolean) => {
+    analytics.track('notifications_toggled');
+    props.settings.toggle(checked);
+  };
 
   return (
     <Row label="Notifications">
@@ -636,14 +675,17 @@ function NotificationNotSupported() {
 }
 
 function bundleUpdateAction(
-  status: BundleUpdateStatus,
+  status: BundleUpdateStatus
 ): { label: string; action: () => void } | null {
   const grantBundleUpdate = () =>
     invoke('grant_bundle_update', { approved: true }).catch(console.error);
 
   switch (status.status) {
     case 'Idle':
-      return { label: 'Check for Update', action: () => invoke('check_for_update') };
+      return {
+        label: 'Check for Update',
+        action: () => invoke('check_for_update'),
+      };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
@@ -677,7 +719,7 @@ function BundleVersionRow() {
   const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
     open ? loadEntryAssetInfo() : null
   );
-  
+
   return (
     <Show when={bundleDebugInfo()}>
       {(info) => (
@@ -688,8 +730,8 @@ function BundleVersionRow() {
               class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => setShowBuildInfo(true)}
             >
-              {info().bundleBuild}{' '}
-              ({info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
+              {info().bundleBuild} (
+              {info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
               {info().nativeBuild}
             </button>
           </Row>
@@ -710,8 +752,8 @@ function BundleVersionRow() {
                   <div class="flex items-center justify-between gap-4">
                     <span class="text-ink-muted">Selected bundle</span>
                     <span class="text-ink">
-                      {info().bundleBuild}{' '}
-                      ({info().source === 'embedded' ? 'app' : 'ota'})
+                      {info().bundleBuild} (
+                      {info().source === 'embedded' ? 'app' : 'ota'})
                     </span>
                   </div>
                   <div class="flex items-center justify-between gap-4">

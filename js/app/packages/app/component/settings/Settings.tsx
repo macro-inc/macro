@@ -143,19 +143,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex(tab => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
   }
 
   function handleNextTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
+    const nextIndex =
+      getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
 
   function handlePreviousTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
+    const nextIndex =
+      getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
@@ -181,7 +183,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register number keys 1-9 for direct tab navigation
   for (let i = 1; i <= 9; i++) {
     const keyNum = i;
-    function handleNumberKey() { return navigateToTabIndex(keyNum - 1); }
+    function handleNumberKey() {
+      return navigateToTabIndex(keyNum - 1);
+    }
     registerHotkey({
       description: `Go to settings tab ${keyNum}`,
       hotkey: `${keyNum}` as ValidHotkey,
@@ -206,7 +210,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <FloatRegion region="accessory">
         <div class="flex items-center px-(--mobile-chrome-gutter)">
           <PillTabs
-            items={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+            items={flatTabs().map((tab) => ({
+              value: tab.tab,
+              label: tab.label,
+            }))}
             value={activeTabId()}
             onChange={handleTabChange}
           />

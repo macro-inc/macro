@@ -147,7 +147,9 @@ function AddServerForm(props: {
               variant="active"
               size="sm"
               depth={3}
-              disabled={!name().trim() || !url().trim() || addMutation.isPending}
+              disabled={
+                !name().trim() || !url().trim() || addMutation.isPending
+              }
               onClick={handleSubmit}
             >
               {addMutation.isPending ? 'Adding...' : 'Add'}
@@ -439,7 +441,9 @@ export function IntegrationsSection() {
 
       <Show when={!serversQuery.isError}>
         <SettingsCard>
-          <For each={servers()}>{(server) => <ServerRow server={server} />}</For>
+          <For each={servers()}>
+            {(server) => <ServerRow server={server} />}
+          </For>
           <For each={suggestions()}>
             {(server) => <FeaturedServerRow server={server} />}
           </For>

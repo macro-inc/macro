@@ -294,7 +294,8 @@ export function Appearance() {
 
   const lightThemes = () =>
     themes().filter((theme) => !isTokensDark(theme.tokens));
-  const darkThemes = () => themes().filter((theme) => isTokensDark(theme.tokens));
+  const darkThemes = () =>
+    themes().filter((theme) => isTokensDark(theme.tokens));
 
   const chooseTheme = (id: string) => {
     applyTheme(id);
@@ -373,63 +374,63 @@ export function Appearance() {
             <Show when={editorOpen()}>
               <Layer depth={3}>
                 <div class="mx-3 my-2 flex flex-col gap-3 rounded-xl border border-ink/[0.05] bg-surface px-4 py-4">
-                <div class="flex items-center gap-2">
-                  <Button
-                    label="Close editor"
-                    onClick={closeEditor}
-                    variant="ghost"
-                    size="icon-sm"
-                  >
-                    <XIcon class="size-4" />
-                  </Button>
-                  <input
-                    type="text"
-                    value={themeName()}
-                    onInput={(e) => setThemeName(e.currentTarget.value)}
-                    spellcheck={false}
-                    placeholder="Theme name"
-                    aria-label="Theme name"
-                    class="w-40 min-w-0 rounded-md border border-edge-muted bg-transparent px-2 py-1 text-xs text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
-                  />
-                  <div class="flex-1" />
-                  <Button
-                    label="Randomize theme"
-                    onPointerDown={randomizeTheme}
-                    variant="ghost"
-                    size="icon-sm"
-                  >
-                    <ShuffleIcon class="size-4" />
-                  </Button>
-                  <TabsInset
-                    depth={3}
-                    onChange={(value) => setEditorTab(value as EditorTab)}
-                    list={[
-                      { value: 'basic', label: 'Basic' },
-                      { value: 'advanced', label: 'Variables' },
-                    ]}
-                    value={editorTab()}
-                    defaultValue="basic"
-                  />
-                </div>
-                <div class="relative overflow-hidden rounded-lg">
-                  {/* The Basic view defines the box height; it stays mounted
+                  <div class="flex items-center gap-2">
+                    <Button
+                      label="Close editor"
+                      onClick={closeEditor}
+                      variant="ghost"
+                      size="icon-sm"
+                    >
+                      <XIcon class="size-4" />
+                    </Button>
+                    <input
+                      type="text"
+                      value={themeName()}
+                      onInput={(e) => setThemeName(e.currentTarget.value)}
+                      spellcheck={false}
+                      placeholder="Theme name"
+                      aria-label="Theme name"
+                      class="w-40 min-w-0 rounded-md border border-edge-muted bg-transparent px-2 py-1 text-xs text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
+                    />
+                    <div class="flex-1" />
+                    <Button
+                      label="Randomize theme"
+                      onPointerDown={randomizeTheme}
+                      variant="ghost"
+                      size="icon-sm"
+                    >
+                      <ShuffleIcon class="size-4" />
+                    </Button>
+                    <TabsInset
+                      depth={3}
+                      onChange={(value) => setEditorTab(value as EditorTab)}
+                      list={[
+                        { value: 'basic', label: 'Basic' },
+                        { value: 'advanced', label: 'Variables' },
+                      ]}
+                      value={editorTab()}
+                      defaultValue="basic"
+                    />
+                  </div>
+                  <div class="relative overflow-hidden rounded-lg">
+                    {/* The Basic view defines the box height; it stays mounted
                       (just hidden) on the Variables tab so the variables list
                       scrolls within that same height. Basic rows use dividers
                       only; the Variables list keeps a bordered container. */}
-                  <div classList={{ invisible: editorTab() !== 'basic' }}>
-                    <ThemeEditorBasic />
-                  </div>
-                  <Show when={editorTab() === 'advanced'}>
-                    <div class="absolute inset-0 overflow-y-auto rounded-lg border border-ink/[0.05] bg-surface">
-                      <ThemeEditorAdvanced />
+                    <div classList={{ invisible: editorTab() !== 'basic' }}>
+                      <ThemeEditorBasic />
                     </div>
-                  </Show>
-                </div>
-                <div class="flex justify-end">
-                  <Button variant="base" size="sm" onClick={saveCurrentTheme}>
-                    Save theme
-                  </Button>
-                </div>
+                    <Show when={editorTab() === 'advanced'}>
+                      <div class="absolute inset-0 overflow-y-auto rounded-lg border border-ink/[0.05] bg-surface">
+                        <ThemeEditorAdvanced />
+                      </div>
+                    </Show>
+                  </div>
+                  <div class="flex justify-end">
+                    <Button variant="base" size="sm" onClick={saveCurrentTheme}>
+                      Save theme
+                    </Button>
+                  </div>
                 </div>
               </Layer>
             </Show>

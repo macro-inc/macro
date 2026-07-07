@@ -437,7 +437,9 @@ function InboxRow(props: {
                   props.hasCompletedBackfill
                 }
               >
-                <span class="text-xs text-ink-muted">Initial sync complete</span>
+                <span class="text-xs text-ink-muted">
+                  Initial sync complete
+                </span>
               </Match>
             </Switch>
           </Show>
@@ -513,4 +515,3 @@ function InboxRow(props: {
     </div>
   );
 }
-

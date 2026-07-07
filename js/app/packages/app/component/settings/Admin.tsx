@@ -14,7 +14,10 @@ function DebugSettingRow(props: { setting: DebugSettingDef }) {
   const checked = () => getDebugSetting(props.setting.key);
 
   return (
-    <SettingsRow label={props.setting.label} description={props.setting.description}>
+    <SettingsRow
+      label={props.setting.label}
+      description={props.setting.description}
+    >
       <ToggleSwitch
         size="md"
         checked={checked()}
