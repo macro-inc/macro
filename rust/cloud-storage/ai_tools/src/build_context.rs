@@ -57,6 +57,7 @@ env_var! {
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
         DocumentPermissionJwt,
+        KafkaBrokers,
     }
 }
 
@@ -81,7 +82,8 @@ maybe_env_var! {
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
+/// `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -240,6 +242,10 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
         properties_service.clone(),
     );
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -254,6 +260,7 @@ pub async fn build_tool_service_context_from_env(
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
             pool.clone(),
         )),
+        macro_event_broker,
     };
 
     let document_tool_context = DocumentToolContext::new(

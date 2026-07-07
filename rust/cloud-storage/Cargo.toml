@@ -91,6 +91,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.86"
 automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
@@ -99,6 +100,7 @@ aws-sdk-sesv2 = "1.118.0"
 aws-sdk-sns = "1.99.0"
 aws-sdk-sqs = "1.98.0"
 aws-smithy-types = "1.4.7"
+aws-types = "1"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }

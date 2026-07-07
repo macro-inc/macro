@@ -2,6 +2,7 @@ use foreign_entity::domain::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
 };
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
+use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker, Topic as _};
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
 use std::sync::{Arc, Mutex};
@@ -293,6 +294,36 @@ impl ForeignEntityService for TestForeignEntityService {
     }
 }
 
+/// A document lifecycle event recorded by [`TestEventBroker`].
+#[derive(Clone, Debug)]
+struct PublishedEvent {
+    topic: &'static str,
+    key: String,
+    payload: serde_json::Value,
+}
+
+#[derive(Clone, Default)]
+struct TestEventBroker {
+    published: Arc<Mutex<Vec<PublishedEvent>>>,
+}
+
+impl TestEventBroker {
+    fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
+        Arc::clone(&self.published)
+    }
+}
+
+impl MacroEventBroker for TestEventBroker {
+    async fn send_event<E: MacroEvent + ?Sized>(&self, event: &E) -> Result<(), EventBrokerError> {
+        self.published.lock().unwrap().push(PublishedEvent {
+            topic: event.topic().as_str(),
+            key: event.key().to_string(),
+            payload: serde_json::to_value(event.event())?,
+        });
+        Ok(())
+    }
+}
+
 type TestDocumentService = DocumentServiceImpl<
     MockDocumentRepo,
     TestUploadUrlPort,
@@ -300,6 +331,7 @@ type TestDocumentService = DocumentServiceImpl<
     TestConnectionService,
     TestEntityAccessManagementService,
     TestForeignEntityService,
+    TestEventBroker,
 >;
 
 fn make_test_service(repo: MockDocumentRepo) -> TestDocumentService {
@@ -332,7 +364,30 @@ fn make_test_service_with_foreign_entity_service(
         TestConnectionService,
         TestEntityAccessManagementService,
         foreign_entity_service,
+        TestEventBroker::default(),
     )
+}
+
+/// Build a test service along with a handle to its recording event broker.
+fn make_test_service_with_event_broker(
+    repo: MockDocumentRepo,
+) -> (TestDocumentService, TestEventBroker) {
+    let event_broker = TestEventBroker::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        TestEntityAccessManagementService,
+        TestForeignEntityService::default(),
+        event_broker.clone(),
+    );
+    (service, event_broker)
 }
 
 fn make_foreign_entity(
@@ -1018,4 +1073,192 @@ async fn test_get_task_github_pull_requests_skips_malformed_keys_before_lookup()
             foreign_entity_source: Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string()),
         }]
     );
+}
+
+fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+        .unwrap()
+        .into_owned();
+
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user_id,
+        document_id,
+        EntityType::Document,
+    )
+}
+
+fn edit_receipt(document_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+        .unwrap()
+        .into_owned();
+
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user_id,
+        document_id,
+        EntityType::Document,
+    )
+}
+
+#[tokio::test]
+async fn test_delete_document_publishes_document_deleted_event() {
+    let mut repo = make_mock_repo();
+    repo.expect_soft_delete_document()
+        .withf(|id| id == "doc-1")
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_update_project_modified()
+        .withf(|id| id == "project-1")
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .delete_document(owner_receipt("doc-1"), Some("project-1".to_string()))
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.documents");
+    assert_eq!(event.key, "doc-1");
+    assert_eq!(event.payload["event_type"], "document.deleted");
+    assert_eq!(event.payload["schema_version"], 1);
+    assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(
+        event.payload["metadata"]["actor_user_id"],
+        "macro|user@user.com"
+    );
+    assert_eq!(event.payload["metadata"]["project_id"], "project-1");
+    assert!(
+        uuid::Uuid::parse_str(event.payload["event_id"].as_str().unwrap()).is_ok(),
+        "event_id should be a valid uuid: {:?}",
+        event.payload["event_id"]
+    );
+}
+
+#[tokio::test]
+async fn test_delete_document_publishes_no_event_when_repo_fails() {
+    let mut repo = make_mock_repo();
+    repo.expect_soft_delete_document()
+        .withf(|id| id == "doc-1")
+        .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    let result = service.delete_document(owner_receipt("doc-1"), None).await;
+
+    assert!(result.is_err());
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_edit_document_publishes_document_updated_event() {
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .withf(|args| args.document_id == "doc-1")
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    service
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            EditDocumentServiceArgs {
+                document_name: Some("New name.md".to_string()),
+                project_id: None,
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.documents");
+    assert_eq!(event.key, "doc-1");
+    assert_eq!(event.payload["event_type"], "document.updated");
+    assert_eq!(event.payload["metadata"]["document_name"], "New name");
+    assert_eq!(event.payload["metadata"]["owner"], "macro|owner@user.com");
+    assert_eq!(
+        event.payload["metadata"]["actor_user_id"],
+        "macro|user@user.com"
+    );
+    assert_eq!(event.payload["metadata"]["share_permission_updated"], false);
+    assert_eq!(
+        event.payload["metadata"]["previous_project_id"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        event.payload["metadata"]["project_id"],
+        serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn test_copy_document_publishes_document_copied_event() {
+    let mut repo = make_mock_repo();
+    let original_metadata = make_test_metadata();
+    let original_for_lookup = original_metadata.clone();
+    repo.expect_get_document_metadata()
+        .withf(|id| id == "doc-1")
+        .returning(move |_| Box::pin(std::future::ready(Ok(original_for_lookup.clone()))));
+    repo.expect_get_project_owner()
+        .withf(|id| id == "project-1")
+        .returning(|_| {
+            Box::pin(std::future::ready(Ok(
+                macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+                    .unwrap()
+                    .into_owned(),
+            )))
+        });
+    let mut copied_metadata = make_test_metadata();
+    copied_metadata.document_id = "doc-2".to_string();
+    copied_metadata.document_name = "copied doc".to_string();
+    repo.expect_copy_document()
+        .returning(move |_| Box::pin(std::future::ready(Ok(copied_metadata.clone()))));
+    repo.expect_get_document_version_id()
+        .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+    repo.expect_get_latest_document_version_id()
+        .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document_context = task_document_context("doc-1");
+    document_context.file_type = Some("txt".to_string());
+    document_context.sub_type = None;
+
+    service
+        .copy_document(
+            authenticated_receipt("doc-1"),
+            document_context,
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+                .unwrap()
+                .into_owned(),
+            "copied doc".to_string(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let published = event_broker.published();
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    let event = &published[0];
+    assert_eq!(event.topic, "macro.documents");
+    assert_eq!(event.key, "doc-2");
+    assert_eq!(event.payload["event_type"], "document.copied");
+    assert_eq!(event.payload["metadata"]["document_id"], "doc-2");
+    assert_eq!(event.payload["metadata"]["source_document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["document_name"], "copied doc");
+    assert_eq!(event.payload["metadata"]["owner"], "macro|user@user.com");
 }

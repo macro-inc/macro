@@ -202,6 +202,7 @@ dependencies = [
  "macro_db_client",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
@@ -1162,6 +1163,24 @@ dependencies = [
  "cmake",
  "dunce",
  "fs_extra",
+]
+
+[[package]]
+name = "aws-msk-iam-sasl-signer"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e62f2c07adf3f0bd1ad40414dd30fcf34c595d5f613e36011d5b62eeff14f490"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "aws-sdk-sts",
+ "aws-sigv4",
+ "aws-types",
+ "base64 0.22.1",
+ "chrono",
+ "futures",
+ "thiserror 1.0.69",
+ "url",
 ]
 
 [[package]]
@@ -4036,6 +4055,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -4151,6 +4171,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_project_utils",
  "macro_queues",
@@ -4329,7 +4350,10 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env",
  "macro_env_var",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_service_urls",
  "macro_sync_service_jwt",
  "macro_user_id",
@@ -4343,6 +4367,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "non_empty",
+ "rdkafka",
  "reqwest 0.13.4",
  "s3_key",
  "schemars 1.2.1",
@@ -7806,6 +7831,10 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "aws-msk-iam-sasl-signer",
+ "aws-types",
+ "macro_env",
+ "macro_env_var",
  "macro_event_topics",
  "rdkafka",
  "rootcause",
@@ -8177,6 +8206,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -15344,10 +15374,11 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "aho-corasick",
+ "aws-config",
  "aws-credential-types",
  "aws-runtime",
+ "aws-sdk-sts",
  "aws-sigv4",
- "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-http-client",
  "aws-smithy-runtime",
