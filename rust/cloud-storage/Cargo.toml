@@ -80,13 +80,13 @@ apollo-compiler = "1"
 apollo-parser = "0.8"
 askama = "0.14"
 async-graphql = "7.2.1"
+async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
   "completions",
   "embedding",
 ] }
-async-lock = "3"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
 automod = "1"
@@ -134,7 +134,6 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
-lru = "0.16"
 lazy_static = "1.5.0"
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
@@ -145,6 +144,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 lol_html = "2.4.0"
+lru = "0.16"
 mockall = "0.13"
 nom = "8"
 opentelemetry = "0.31.0"
@@ -163,12 +163,14 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
   "thread_safe",
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
+postcard = { version = "1", features = ["use-std"] }
 quote = "1"
 rand = "0.9.0"
+# uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
   "cmake-build",
   "libz-static",
-  "ssl",
+  "ssl-vendored",
   "tokio",
 ] }
 recursion = "0.5.4"
@@ -184,11 +186,10 @@ rmcp = "1.6.0"
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
-postcard = { version = "1", features = ["use-std"] }
 serde = { version = "1.0.214", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }
-serde-wasm-bindgen = "0.6"
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
@@ -202,8 +203,6 @@ sqlx = { version = "0.8.6", features = [
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }
@@ -233,6 +232,8 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
