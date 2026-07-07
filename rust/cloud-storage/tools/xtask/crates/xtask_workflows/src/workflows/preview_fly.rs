@@ -188,6 +188,11 @@ fn bake_preload_tar() -> Step<Run> {
 fn stage_context() -> Step<Run> {
     Step::new("Stage preview build context").run(indoc::indoc! {r#"
         set -euo pipefail
+        # The dev-shell env (BASH_ENV) exports a Nix LD_LIBRARY_PATH; host
+        # binaries like rsync then resolve Nix-store libs whose deps drag in
+        # Nix glibc mid-process and crash on glibc symbol versions. This step
+        # is pure file shuffling — drop it.
+        unset LD_LIBRARY_PATH
         ctx=preview-ctx
         mkdir -p "$ctx/repo" "$ctx/artifacts/binaries" "$ctx/bin"
         # The minimal repo layout xtask reads at runtime — including every
