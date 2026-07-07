@@ -7,10 +7,23 @@ tag filters apply server-side on every leg of unified search, not just documents
 |---|---|---|---|
 | macro-2208 | parent integration branch + this plan | `gbirman/macro-2208-searchtags-index-tags-for-non-document-entity-types-in-opensearch` | this doc |
 | macro-2209 | email threads — builds the generic pipeline | `gbirman/macro-2209-searchtags-index-tags-for-email` | **MERGED into parent** (#4563, `372c96059`); dev putMapping + THREAD backfill done |
-| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | **MERGED into parent** (#4570, `338463fd6`); ops pending: putMapping chats → deploy → CHAT backfill |
-| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | **PR #4564 open → parent**, rebased over #4570, contract-verified; ops pending: create index → deploy → project backfill → PROJECT properties pass |
+| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | **MERGED into parent** (#4570, `338463fd6`) |
+| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | **MERGED into parent** (#4564, `bcbec6788`) |
 
-Subtasks branch off this parent and merge back into it; the parent merges to main.
+All three subtasks are merged; the parent (with `origin/main` merged back in) goes to main next.
+
+## 0. Rollout state (updated 2026-07-07)
+
+| Step | dev | prod |
+|---|---|---|
+| emails putMapping | DONE (2209) | pending — `INDEX=emails scripts/add_properties_field.ts` before/with release |
+| THREAD properties backfill | DONE (2209, 8 threads) | pending — after release |
+| chats putMapping | DONE | pending — `INDEX=chats scripts/add_properties_field.ts` |
+| projects index + alias | DONE (`projects_v1` ← `create_indices.ts`) | pending — `create_indices.ts` (⚠️ ignores DRY_RUN — it applies on every run; it is idempotent, but run it deliberately) |
+| deploy | on merge to main | next tagged release |
+| projects full backfill | after dev deploy — `POST /internal/backfill/projects` | after release (see §5 sparse-window note) |
+| CHAT / PROJECT properties backfill | after dev deploy — `POST /internal/backfill/properties` | after release |
+| FE search-view enablement | gated behind the feature-flag task `019f3e60-39aa-7bd4-8229-8a377aa67855` | same flag |
 
 ---
 

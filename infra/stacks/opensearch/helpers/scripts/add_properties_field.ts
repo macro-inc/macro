@@ -1,14 +1,26 @@
 require('dotenv').config();
 
 import { client } from '../client';
-import { EMAIL_INDEX, IS_DRY_RUN } from '../constants';
+import { CHATS_ALIAS, EMAILS_ALIAS, IS_DRY_RUN } from '../constants';
+
+// Indexes that receive the nested entity-properties field additively
+// (documents shipped with it; projects_v1 was created with it).
+const SUPPORTED_INDEXES = [EMAILS_ALIAS, CHATS_ALIAS];
 
 async function addPropertiesField(dryRun: boolean) {
+  const index = process.env.INDEX;
+  if (!index || !SUPPORTED_INDEXES.includes(index)) {
+    console.log(
+      `⚠️  Set INDEX to one of: ${SUPPORTED_INDEXES.join(', ')}. Aborting.`
+    );
+    return;
+  }
+
   const opensearchClient = client();
 
   console.log('\n' + '='.repeat(60));
   console.log(
-    `Add nested properties field to emails index ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
+    `Add nested properties field to "${index}" index ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
   );
   console.log('='.repeat(60));
 
@@ -16,21 +28,20 @@ async function addPropertiesField(dryRun: boolean) {
     console.log('\n⚠️  DRY-RUN MODE: No changes will be made');
   }
 
-  const indexExists = (
-    await opensearchClient.indices.exists({ index: EMAIL_INDEX })
-  ).body;
+  const indexExists = (await opensearchClient.indices.exists({ index })).body;
 
   if (!indexExists) {
-    console.log(`⚠️  Index "${EMAIL_INDEX}" does not exist. Aborting.`);
+    console.log(`⚠️  Index "${index}" does not exist. Aborting.`);
     return;
   }
 
   console.log('\nAdding nested properties field mapping...');
   const mappingUpdate = {
     properties: {
-      // Thread-level entity properties (e.g. tags), denormalized onto every
-      // message doc of the thread. Same nested shape as the documents index
-      // so the shared property/tag filters apply unchanged.
+      // Entity properties (e.g. tags), same nested shape as the documents
+      // index so the shared property/tag filters apply unchanged. Emails:
+      // thread-level values denormalized onto every message doc. Chats:
+      // values live on the parent chat doc only.
       properties: {
         type: 'nested' as const,
         properties: {
@@ -47,7 +58,7 @@ async function addPropertiesField(dryRun: boolean) {
     console.log('[DRY-RUN] Would add nested properties field mapping');
   } else {
     const putMappingResponse = await opensearchClient.indices.putMapping({
-      index: EMAIL_INDEX,
+      index,
       body: mappingUpdate,
     });
 
@@ -65,10 +76,10 @@ async function addPropertiesField(dryRun: boolean) {
     console.log('\nTo run for real, set DRY_RUN=false environment variable\n');
   } else {
     console.log(
-      '\n✓ properties field has been added to the emails index mapping.'
+      `\n✓ properties field has been added to the "${index}" index mapping.`
     );
     console.log(
-      '✓ To backfill existing thread tags, enqueue an UpdateDocumentProperties search-queue message per tagged thread (entity_type "thread").\n'
+      '✓ To backfill existing tags, POST /internal/backfill/properties with the matching entity_type.\n'
     );
   }
 }
