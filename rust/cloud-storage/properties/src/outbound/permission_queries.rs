@@ -38,15 +38,13 @@ pub async fn get_owner_and_deleted(
             .fetch_one(pool)
             .await?
         }
-        EntityType::Project => {
-            sqlx::query!(
-                r#"SELECT "userId" as user_id, "deletedAt" as deleted_at FROM "Project" WHERE id=$1"#,
-                entity_id
-            )
-            .map(|r| (r.user_id, r.deleted_at.is_some()))
-            .fetch_one(pool)
-            .await?
-        }
+        EntityType::Project => sqlx::query!(
+            r#"SELECT "userId" as user_id, "deletedAt" as deleted_at FROM "Project" WHERE id=$1"#,
+            entity_id
+        )
+        .map(|r| (r.user_id, r.deleted_at.is_some()))
+        .fetch_one(pool)
+        .await?,
     };
 
     Ok(result)

@@ -11,18 +11,18 @@ use super::{
     entity_properties_get_query, entity_property_queries, metadata_queries,
     property_definition_queries, property_option_queries, task_property_queries,
 };
-use models_properties::EntityPropertyReference;
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::project_metadata::ProjectMetadata;
-use models_properties::service::thread_metadata::ThreadMetadata;
 use crate::domain::model::{
     EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
+use models_properties::EntityPropertyReference;
+use models_properties::service::document_metadata::DocumentMetadata;
+use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
+use models_properties::service::thread_metadata::ThreadMetadata;
 
 /// PostgreSQL implementation of PropertiesRepo.
 #[derive(Debug, Clone)]

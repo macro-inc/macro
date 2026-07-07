@@ -50,18 +50,17 @@ where
             entity_info_queries::get_document_name(&self.pool, &notification.task_id.to_string())
                 .await?;
 
-        let sender_profile_picture_url =
-            entity_info_queries::get_user_profile_picture(
-                &self.pool,
-                notification.assigned_by.as_ref(),
-            )
-                .await
-                .ok()
-                .flatten();
+        let sender_profile_picture_url = entity_info_queries::get_user_profile_picture(
+            &self.pool,
+            notification.assigned_by.as_ref(),
+        )
+        .await
+        .ok()
+        .flatten();
 
         let assigned_by = notification.assigned_by.into_owned();
-        let notification_entity = model_entity::EntityType::Document
-            .with_entity_string(notification.task_id.to_string());
+        let notification_entity =
+            model_entity::EntityType::Document.with_entity_string(notification.task_id.to_string());
 
         let notification_futures: Vec<_> = notification
             .recipient_ids

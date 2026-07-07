@@ -410,7 +410,9 @@ async fn delete_property_definition_cascades(pool: Pool<Postgres>) -> anyhow::Re
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
-async fn delete_nonexistent_property_definition_is_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn delete_nonexistent_property_definition_is_noop(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
     let property_id = "00000000-0000-0000-0000-000000000000"

@@ -6,10 +6,10 @@ use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
 };
-use models_properties::service::property_option::PropertyOption;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
 use system_properties::SystemPropertyKey;

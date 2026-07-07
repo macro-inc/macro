@@ -6,11 +6,11 @@
 use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::thread_metadata::ThreadMetadata;

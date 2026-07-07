@@ -13,9 +13,12 @@ use uuid::Uuid;
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn get_entity_properties_values_sorted(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
 
     assert_eq!(properties.len(), 6);
 
@@ -35,9 +38,12 @@ async fn get_entity_properties_values_sorted(pool: Pool<Postgres>) -> anyhow::Re
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn get_entity_properties_values_value_kinds(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
 
     // Select property has its options attached.
     let priority_prop = properties
@@ -84,9 +90,12 @@ async fn get_entity_properties_values_value_kinds(pool: Pool<Postgres>) -> anyho
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn get_entity_properties_values_null_values(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc3", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc3",
+        EntityType::Document,
+    )
+    .await?;
 
     // doc3 has 3 properties with NULL values
     assert_eq!(properties.len(), 3);
@@ -121,9 +130,12 @@ async fn get_entity_properties_values_empty(pool: Pool<Postgres>) -> anyhow::Res
 )]
 async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // Single entity reference on doc1.
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
     let assigned_prop = properties
         .iter()
         .find(|p| p.definition.display_name == "Test Assigned To")
@@ -142,9 +154,12 @@ async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow
     assert_eq!(refs[0].entity_type, EntityType::User);
 
     // Multiple entity references on doc2.
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc2", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc2",
+        EntityType::Document,
+    )
+    .await?;
     let assigned_prop = properties
         .iter()
         .find(|p| p.definition.display_name == "Test Assigned To")
@@ -158,9 +173,12 @@ async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow
     assert!(user_ids.contains(&"user2"));
 
     // Null entity reference on doc3.
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc3", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc3",
+        EntityType::Document,
+    )
+    .await?;
     let assigned_prop = properties
         .iter()
         .find(|p| p.definition.display_name == "Test Assigned To")
@@ -176,9 +194,12 @@ async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn get_entity_properties_multi_select_string(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc2", EntityType::Document)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc2",
+        EntityType::Document,
+    )
+    .await?;
 
     // Department property is a multi-select SELECT_STRING
     let dept_prop = properties
@@ -208,9 +229,12 @@ async fn get_entity_properties_multi_select_string(pool: Pool<Postgres>) -> anyh
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn get_entity_properties_link_and_number_values(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let properties =
-        entity_properties_get_query::get_entity_properties_values(&pool, "proj1", EntityType::Project)
-            .await?;
+    let properties = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "proj1",
+        EntityType::Project,
+    )
+    .await?;
 
     let link_prop = properties
         .iter()
@@ -314,8 +338,7 @@ async fn lookup_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
     );
 
     // Nonexistent id yields None.
-    let missing =
-        entity_properties_get_query::lookup_entity_property(&pool, Uuid::nil()).await?;
+    let missing = entity_properties_get_query::lookup_entity_property(&pool, Uuid::nil()).await?;
     assert!(missing.is_none());
 
     Ok(())
@@ -395,17 +418,23 @@ async fn delete_entity_property_removes_property(pool: Pool<Postgres>) -> anyhow
         .parse::<Uuid>()
         .unwrap();
 
-    let properties_before =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let properties_before = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
     let initial_count = properties_before.len();
     assert!(initial_count > 0);
 
     entity_property_queries::delete_entity_property(&pool, entity_property_id).await?;
 
-    let properties_after =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let properties_after = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
     assert_eq!(properties_after.len(), initial_count - 1);
 
     // Deleting a non-existent entity property should succeed (no error).
@@ -423,32 +452,50 @@ async fn delete_entity_properties_only_deletes_specific_entity(
 ) -> anyhow::Result<()> {
     let entity_ref = EntityReference::new("doc1", EntityType::Document);
 
-    let doc1_before =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let doc1_before = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
     assert!(!doc1_before.is_empty());
-    let doc2_before =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc2", EntityType::Document)
-            .await?;
-    let proj1_before =
-        entity_properties_get_query::get_entity_properties_values(&pool, "proj1", EntityType::Project)
-            .await?;
+    let doc2_before = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc2",
+        EntityType::Document,
+    )
+    .await?;
+    let proj1_before = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "proj1",
+        EntityType::Project,
+    )
+    .await?;
     assert!(!proj1_before.is_empty());
 
     entity_property_queries::delete_entity_properties(&pool, &entity_ref).await?;
 
     // doc1's properties are gone; doc2 and proj1 are unchanged.
-    let doc1_after =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc1", EntityType::Document)
-            .await?;
+    let doc1_after = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc1",
+        EntityType::Document,
+    )
+    .await?;
     assert_eq!(doc1_after.len(), 0);
-    let doc2_after =
-        entity_properties_get_query::get_entity_properties_values(&pool, "doc2", EntityType::Document)
-            .await?;
+    let doc2_after = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "doc2",
+        EntityType::Document,
+    )
+    .await?;
     assert_eq!(doc2_after.len(), doc2_before.len());
-    let proj1_after =
-        entity_properties_get_query::get_entity_properties_values(&pool, "proj1", EntityType::Project)
-            .await?;
+    let proj1_after = entity_properties_get_query::get_entity_properties_values(
+        &pool,
+        "proj1",
+        EntityType::Project,
+    )
+    .await?;
     assert_eq!(proj1_after.len(), proj1_before.len());
 
     // Deleting a non-existent entity should succeed (no error).

@@ -141,12 +141,7 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     } else {
         state
             .properties_service
-            .list_property_definitions(
-                team_id,
-                user_id_opt,
-                include_system,
-                query.for_entity_type,
-            )
+            .list_property_definitions(team_id, user_id_opt, include_system, query.for_entity_type)
             .await?
             .into_iter()
             .map(PropertyDefinitionResponse::Simple)

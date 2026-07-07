@@ -103,7 +103,10 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), Self::Err> {
-        match self.get_access_level(user_id, entity_id, entity_type).await? {
+        match self
+            .get_access_level(user_id, entity_id, entity_type)
+            .await?
+        {
             Some(AccessLevel::Edit) | Some(AccessLevel::Owner) => Ok(()),
             Some(_) | None => anyhow::bail!("Access denied"),
         }
@@ -137,7 +140,10 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             }
         }
 
-        match self.get_access_level(user_id, entity_id, entity_type).await? {
+        match self
+            .get_access_level(user_id, entity_id, entity_type)
+            .await?
+        {
             Some(_) => Ok(()), // Any access level is sufficient for viewing
             None => anyhow::bail!("Access denied"),
         }

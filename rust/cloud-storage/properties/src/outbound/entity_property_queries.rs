@@ -1,7 +1,7 @@
 //! General entity property query helpers.
 
-use models_properties::{EntityReference, EntityType};
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

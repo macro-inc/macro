@@ -112,9 +112,7 @@ async fn create_property_option_duplicate_fails(pool: Pool<Postgres>) -> anyhow:
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
-async fn create_property_option_invalid_property_fails(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn create_property_option_invalid_property_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
     let result = repo
