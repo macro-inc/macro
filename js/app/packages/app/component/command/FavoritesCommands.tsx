@@ -1,9 +1,5 @@
-import {
-  favoriteDisplayName,
-  favoriteIconType,
-  favoriteSplitContent,
-} from '@app/util/favorites';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { FavoriteIcon } from '@app/component/FavoriteIcon';
+import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
@@ -89,10 +85,7 @@ export function FavoritesCommands() {
             return true;
           },
           commandPaletteIcon: (props) => (
-            <EntityIcon
-              targetType={favoriteIconType(favorite)}
-              class={props.class}
-            />
+            <FavoriteIcon favorite={favorite} class={props.class} />
           ),
           runWithInputFocused: true,
         })
