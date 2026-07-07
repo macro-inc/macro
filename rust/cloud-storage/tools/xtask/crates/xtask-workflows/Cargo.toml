@@ -15,5 +15,5 @@ serde_json = { workspace = true }
 # Define GitHub Actions workflows in Rust.
 gh-workflow = "0.8"
 indoc = "2"
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 xtask-paths = { path = "../xtask-paths" }

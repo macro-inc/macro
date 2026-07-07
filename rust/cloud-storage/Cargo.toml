@@ -116,6 +116,11 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
+# Pinned engine for the generated dependency artifacts (used by the xtask
+# graph/deps commands). This version lives in Cargo.lock, so dev machines and
+# CI always run the identical generator; guppy is pinned to the version the
+# hakari release is built against.
+guppy = "0.17.24"
 hex = "0.4.3"
 hmac = "0.12.1"
 http = "1"
@@ -183,6 +188,7 @@ serde_json = { version = "1.0.132" }
 serde-wasm-bindgen = "0.6"
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
+serde_yaml = "0.9"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",

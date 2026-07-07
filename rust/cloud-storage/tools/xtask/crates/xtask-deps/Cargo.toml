@@ -12,10 +12,9 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 serde_json = { workspace = true }
-# Pinned engine for the generated dependency artifacts. These versions live in
+guppy = { workspace = true }
+# Pinned engine for the generated dependency artifacts. This version lives in
 # Cargo.lock, so dev machines and CI always run the identical generator —
-# upgrading it is an explicit, reviewed lock change. guppy is pinned to the
-# version this hakari release is built against.
-guppy = "0.17.24"
+# upgrading it is an explicit, reviewed lock change.
 hakari = { version = "0.17.9", features = ["cli-support"] }
 xtask-graph = { path = "../xtask-graph" }
