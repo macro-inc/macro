@@ -166,3 +166,13 @@ pub struct EmailBackfillRequest {
     /// the adapter's default.
     pub batch_size: Option<usize>,
 }
+
+/// Property-only backfill: re-enqueue a property update message for every
+/// entity of one type that has property rows, refreshing the denormalized
+/// `properties` field without re-extracting content. Used after adding the
+/// field to an index's mapping.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PropertiesBackfillRequest {
+    /// The property entity type to backfill (e.g. "thread").
+    pub entity_type: String,
+}

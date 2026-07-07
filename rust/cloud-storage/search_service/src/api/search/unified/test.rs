@@ -76,6 +76,7 @@ fn test_sort_unified_search_results() {
             inbox_visible: true,
             is_draft: false,
             is_important: false,
+            properties: None,
             extra: EmailSearchResponseItem {
                 id: email_id,
                 name: Some("Middle Email".to_string()),

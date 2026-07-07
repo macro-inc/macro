@@ -680,6 +680,33 @@ pub async fn get_entity_properties_for_index(
         .collect())
 }
 
+/// Page through the distinct entity ids that hold property rows of one
+/// entity type, ordered by entity id so offset pagination is stable. Used by
+/// the search properties backfill.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_entity_ids_with_properties(
+    db: &Pool<Postgres>,
+    entity_type: EntityType,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<String>> {
+    let rows = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT entity_id
+        FROM entity_properties
+        WHERE entity_type = $1
+        ORDER BY entity_id
+        LIMIT $2 OFFSET $3
+        "#,
+        entity_type as EntityType,
+        limit,
+        offset,
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
 /// Batch variant of [`get_entity_properties_for_index`]: fetch the flattened
 /// properties of many entities of one type in a single query, keyed by
 /// entity id. Entities without properties are absent from the map.

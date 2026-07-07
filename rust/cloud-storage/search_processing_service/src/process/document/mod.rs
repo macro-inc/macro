@@ -69,4 +69,3 @@ pub async fn process_extract_sync_message(
 
     Ok(())
 }
-

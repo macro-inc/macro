@@ -125,6 +125,7 @@ export * from './emailSearchResponseItemName';
 export * from './emailSearchResponseItemSubject';
 export * from './emailSearchResponseItemWithMetadata';
 export * from './emailSearchResponseItemWithMetadataAllOf';
+export * from './emailSearchResponseItemWithMetadataAllOfProperties';
 export * from './emailSearchResponseItemWithMetadataAllOfSnippet';
 export * from './emailSearchResponseItemWithMetadataAllOfViewedAt';
 export * from './emailSearchResult';

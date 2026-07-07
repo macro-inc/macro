@@ -28,7 +28,7 @@ use crate::api::context::ApiContext;
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
     CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest, DocumentBackfillRequest,
-    EmailBackfillRequest,
+    EmailBackfillRequest, PropertiesBackfillRequest,
 };
 use crate::domain::service::BackfillService;
 
@@ -39,6 +39,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/channels", post(channels))
         .route("/documents", post(documents))
         .route("/emails", post(emails))
+        .route("/properties", post(properties))
         .route("/{job_id}", get(status))
 }
 
@@ -123,6 +124,23 @@ async fn emails(
         "emails",
         move |svc, progress, cancel| async move {
             svc.backfill_emails(req, progress, cancel).await
+        },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, req))]
+async fn properties(
+    State(service): State<Arc<BackfillServiceImpl>>,
+    State(jobs): State<BackfillJobs>,
+    extract::Json(req): extract::Json<PropertiesBackfillRequest>,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "properties",
+        move |svc, progress, cancel| async move {
+            svc.backfill_entity_properties(req, progress, cancel).await
         },
     )
     .await
