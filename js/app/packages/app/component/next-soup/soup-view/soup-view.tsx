@@ -1695,7 +1695,7 @@ const SoupList = (props: SoupListProps) => {
         <div
           ref={setTopSpacerRef}
           aria-hidden
-          class="h-0 mobile:h-(--mobile-content-inset-top)"
+          class="h-0 block sm:hidden mobile:h-(--mobile-content-inset-top)"
         />
         <Virtualizer
           cache={props.cache}
