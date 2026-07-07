@@ -94,6 +94,30 @@ pub fn mount_cache_volume() -> Step<Use> {
         .continue_on_error(true)
 }
 
+/// [`mount_cache_volume`] plus the checkout's cargo target dir. Persisting
+/// `target/` is what makes the preview job's zigbuild incremental — cargo's
+/// own fingerprints carry across runs, where sccache alone left build scripts,
+/// native (cmake/zig) compiles, and linking cold every time. The volume is a
+/// block-device mount, so a multi-GB target tree costs nothing to save or
+/// restore.
+pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
+    Step::new("Mount Namespace cache volume")
+        .uses(
+            "namespacelabs",
+            "nscloud-cache-action",
+            "15799a6b54e5765f85b2aac25b3f0df43ed571c0", // v1.4.3
+        )
+        .add_with(("cache", "rust"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n/nix\n${{{{ github.workspace }}}}/rust/cloud-storage/target",
+                vars::SCCACHE_VOLUME_DIR
+            ),
+        ))
+        .continue_on_error(true)
+}
+
 /// Repoint sccache at the persisted volume. Runs AFTER `setup-cachix`; this keeps
 /// the compiled artifact cache directory aligned with the Namespace mounted path.
 pub fn pin_sccache_dir() -> Step<Run> {

@@ -30,6 +30,7 @@ jobs:
         path: |-
           /home/runner/.cache/sccache
           /nix
+          ${{ github.workspace }}/rust/cloud-storage/target
       continue-on-error: true
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd

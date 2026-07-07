@@ -62,7 +62,8 @@ fn deploy() -> Job {
         // Share the CI compile cache volume (nix store + sccache + cargo):
         // this job compiles the same workspace as the check/test jobs, so its
         // sccache entries are the same content-addressed set — a bespoke tag
-        // just means a permanently cold volume.
+        // just means a permanently cold volume. The cargo target dir rides the
+        // same volume so the zigbuild is incremental across runs.
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .permissions(
             Permissions::default()
@@ -72,7 +73,7 @@ fn deploy() -> Job {
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
         .add_step(steps::checkout(false, true))
-        .add_step(steps::mount_cache_volume())
+        .add_step(steps::mount_cache_volume_with_cargo_target())
         // Namespace remote builder: persistent BuildKit layer cache across
         // runs, same as the deploy workflows use. The aux-image builds and the
         // preview-image build both go through it.
