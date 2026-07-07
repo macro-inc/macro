@@ -60,6 +60,8 @@ pub enum StackCmd {
     Expose(super::stack::ExposeArgs),
     /// Tear the instance down: containers, volumes, tunnel, and state.
     Down(super::stack::DownArgs),
+    /// Report the init-snapshot key/location for this instance.
+    Snapshot(super::stack::SnapshotArgs),
 }
 
 #[derive(Args, Clone, Default)]
@@ -184,6 +186,7 @@ fn run(cli: Cli) -> Result<()> {
             StackCmd::Status(a) => super::stack::status(&a),
             StackCmd::Expose(a) => super::stack::expose(&a),
             StackCmd::Down(a) => super::stack::down(&a),
+            StackCmd::Snapshot(a) => super::stack::snapshot_status(&a),
         },
     }
 }

@@ -1,12 +1,65 @@
 [package]
-description = "cargo x launcher: delegates each subcommand to its own xtask-<command> crate so only that command's deps compile"
+description = "Repo automation: regenerates workspace-hack and the deploy dep-closure map"
 edition = "2024"
 name = "xtask"
 publish = false
 version = "0.1.0"
 
-# Intentionally dependency-free: the launcher only maps a subcommand to its
-# command crate and re-invokes `cargo run -p xtask_<command>`. Keeping it free
-# of dependencies means `cargo x` never compiles guppy/hakari/aws-sdk/etc. just
-# to dispatch. The command crates live under `crates/*`.
 [dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# Pinned engine for the generated dependency artifacts. These versions live in
+# Cargo.lock, so dev machines and CI always run the identical generator —
+# upgrading it is an explicit, reviewed lock change. guppy is pinned to the
+# version this hakari release is built against.
+guppy = "0.17.24"
+hakari = { version = "0.17.9", features = ["cli-support"] }
+# Define GitHub Actions workflows in Rust (`cargo run -p xtask -- workflows`).
+# xtask is excluded from hakari traversal, so these stay out of workspace-hack.
+gh-workflow = "0.8"
+indoc = "2"
+# Local/dev orchestration (`cargo x run-local` etc.). xtask is excluded from
+# hakari traversal, so these deps never enter workspace-hack. We reuse the
+# workspace-pinned versions so the orchestrator builds against the same crate
+# graph as the services it launches.
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+clap = { workspace = true }
+macro_aws_config = { path = "../../macro_aws_config" }
+macro_queues = { path = "../../macro_queues" }
+serde = { workspace = true }
+tokio = { workspace = true }
+# Source of truth for `cargo x kafka-topics`, which generates
+# .github/kafka-cluster-topics.json from the crate's declared topics, and for
+# the local-stack topic provisioning (local::kafka).
+macro_event_topics = { path = "../../macro_event_topics" }
+# AdminClient for creating the declared topics on the local broker. Optional
+# (behind `local-stack`): the workspace links librdkafka dynamically, and the
+# CI jobs that build xtask on bare runners (path filters, generated-file
+# checks) have no system librdkafka to link against.
+rdkafka = { workspace = true, optional = true }
+# Typed docker-compose model (build the override as structs, not strings) +
+# Docker Engine API client for the discrete container/image ops.
+bollard = "0.21"
+console = "0.15"
+docker-compose-types = { version = "0.24", features = ["indexmap"] }
+indexmap = { workspace = true }
+indicatif = "0.18"
+serde_yaml = "0.9"
+# Parse user-provided `--env-file` overlays (reading only; no crate emits the
+# docker-compose `env_file` format we generate). EnumIter derives the port list.
+dotenvy = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+# Content-address the init snapshots (`stack up` restore/save keys).
+sha2 = { workspace = true }
+# Signal the frontend dev server's whole process group on shutdown (kill bun +
+# the Vite child it spawns, not just bun).
+libc = "0.2"
+macro_env_var = { path = "../../macro_env_var" }
+
+[features]
+# Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
+# default so plain `cargo run -p xtask` builds without a system librdkafka;
+# the just recipes (just/xtask.just) enable it.
+local-stack = ["dep:rdkafka"]

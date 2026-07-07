@@ -20,6 +20,9 @@ use std::path::{Path, PathBuf};
 /// `env!("CARGO_MANIFEST_DIR")` expands to this crate's directory, which is a
 /// fixed location, so the depth here does not depend on the caller.
 pub fn workspace_root() -> PathBuf {
+    if let Some(root) = repo_root_override() {
+        return root.join("rust/cloud-storage");
+    }
     // <workspace>/tools/xtask/crates/xtask_paths -> nth(4) == <workspace>.
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -31,9 +34,23 @@ pub fn workspace_root() -> PathBuf {
 /// The repository root (two levels above the cloud-storage workspace:
 /// `<repo>/rust/cloud-storage`).
 pub fn repo_root() -> PathBuf {
+    if let Some(root) = repo_root_override() {
+        return root;
+    }
     workspace_root()
         .ancestors()
         .nth(2)
         .expect("cloud-storage workspace has no repo root two levels up")
         .to_owned()
+}
+
+/// `CARGO_MANIFEST_DIR` is baked in at compile time, which is wrong when a
+/// prebuilt xtask binary runs outside the checkout it was compiled in (a Fly
+/// preview VM, a CI-staged layout). `MACRO_REPO_ROOT` points it at the staged
+/// repo layout instead.
+// xtask is host tooling, not a service reading APP_SECRETS_JSON, so reading
+// the process environment directly is correct here.
+#[allow(clippy::disallowed_methods)]
+fn repo_root_override() -> Option<PathBuf> {
+    std::env::var_os("MACRO_REPO_ROOT").map(PathBuf::from)
 }

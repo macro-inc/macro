@@ -116,6 +116,12 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
         uri strip_prefix /sync
         reverse_proxy sync-service:8787
     }
+    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —
+    # this is how a headless/preview stack reads its passwordless login codes.
+    handle /mailpit/* {
+        reverse_proxy mailpit:8025
+    }
+    redir /mailpit /mailpit/ 308
 
 "#;
 

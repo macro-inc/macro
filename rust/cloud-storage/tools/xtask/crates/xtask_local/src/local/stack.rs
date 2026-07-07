@@ -25,7 +25,7 @@ use serde_json::json;
 use super::cli::{EnvArgs, InstanceArgs, RunArgs};
 use super::instance::{Instance, Port};
 use super::stage::Stage;
-use super::{arch, env_layer, frontend, mailpit, proxy, summary, Mode};
+use super::{arch, env_layer, frontend, mailpit, proxy, snapshot, summary, Mode};
 
 #[derive(Args, Clone, Default)]
 pub struct UpArgs {
@@ -34,7 +34,20 @@ pub struct UpArgs {
     /// Stage this prebuilt frontend dist instead of building (CI artifact reuse).
     #[arg(long)]
     pub frontend_dist: Option<PathBuf>,
+    /// Neither restore from nor save an init snapshot — always run the full
+    /// migrate/kickstart/index init.
+    #[arg(long)]
+    pub no_snapshot: bool,
     /// Print a machine-readable JSON summary as the final line.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Clone, Default)]
+pub struct SnapshotArgs {
+    #[command(flatten)]
+    pub instance: InstanceArgs,
+    /// Print machine-readable JSON (key, dir, present).
     #[arg(long)]
     pub json: bool,
 }
@@ -156,6 +169,14 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
         })
     });
 
+    // The init snapshot decision: hash the init-defining inputs (possible only
+    // after `prepare` wrote the kickstart) and check for a stored snapshot.
+    // Restores skip migrate/kickstart/index-init; a cold init saves one for
+    // next time — that's how the cache seeds itself.
+    let snapshot_plan = (!args.no_snapshot && !stage.is_dry_run())
+        .then(|| snapshot::Plan::compute(&instance))
+        .transpose()?;
+
     if let Some(handle) = teardown {
         stage.run_step("Tearing down previous stack", move || {
             let _ = handle.join();
@@ -163,7 +184,25 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
         })?;
     }
     super::ensure_external_resources(&stage, &instance)?;
-    super::bring_up_infra(&stage, mode, &instance, &env)?;
+    match &snapshot_plan {
+        Some(plan) if plan.exists() => {
+            snapshot::restore(&stage, &instance, plan)?;
+            super::bring_up_infra(
+                &stage,
+                mode,
+                &instance,
+                &env,
+                super::InfraInit::FromSnapshot,
+            )?;
+        }
+        Some(plan) => {
+            super::bring_up_infra(&stage, mode, &instance, &env, super::InfraInit::Full)?;
+            snapshot::save(&stage, &instance, &env, plan)?;
+        }
+        None => {
+            super::bring_up_infra(&stage, mode, &instance, &env, super::InfraInit::Full)?;
+        }
+    }
     if let Some(handle) = fe_build {
         stage.run_step("Building frontend (static bundle)", move || {
             handle
@@ -493,6 +532,40 @@ pub fn expose(args: &ExposeArgs) -> Result<()> {
             bail!("cloudflared exited with {status}\n{tail}");
         }
     }
+    Ok(())
+}
+
+/// `cargo x stack snapshot` — report the instance's init-snapshot key and
+/// whether a snapshot exists for it. CI uses `--json` to find the directory to
+/// bake into preview images.
+pub fn snapshot_status(args: &SnapshotArgs) -> Result<()> {
+    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    // The key hashes the generated kickstart; (re)write it so the verb works
+    // before any `up` has run. Deterministic, so this never changes a key.
+    super::fusionauth::write_kickstart(&instance)?;
+    let plan = snapshot::Plan::compute(&instance)?;
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string(&json!({
+                "key": plan.key,
+                "dir": plan.dir,
+                "present": plan.exists(),
+                "root": snapshot::root_dir(),
+            }))?
+        );
+        return Ok(());
+    }
+    println!("key      {}", plan.key);
+    println!("dir      {}", plan.dir.display());
+    println!(
+        "present  {}",
+        if plan.exists() {
+            "yes"
+        } else {
+            "no (next cold `stack up` will save it)"
+        }
+    );
     Ok(())
 }
 

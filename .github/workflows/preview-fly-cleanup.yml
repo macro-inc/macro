@@ -1,0 +1,30 @@
+# Destroys the per-PR Fly preview app when its PR closes or the `preview`
+# label is removed. Counterpart to .github/workflows/preview-fly.yml.
+
+name: Fly Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy preview app
+    if: >-
+      github.event.action == 'closed' ||
+      github.event.label.name == 'preview'
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      # Destroy is idempotent from our side: a PR that never had a preview
+      # simply has no app to destroy.
+      - name: Destroy app
+        run: |
+          flyctl apps destroy "macro-pr-${{ github.event.pull_request.number }}" --yes || true

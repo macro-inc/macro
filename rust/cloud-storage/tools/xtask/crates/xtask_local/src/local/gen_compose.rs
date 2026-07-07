@@ -203,6 +203,9 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
     services.insert("fusionauth".to_string(), Some(fusionauth));
 
     // Mailpit (also on `auth` so FusionAuth can deliver passwordless codes).
+    // MP_WEBROOT serves the UI under /mailpit so the proxy can expose it on the
+    // single origin — a headless/preview stack has no other way to read the
+    // passwordless login codes.
     services.insert(
         "mailpit".to_string(),
         Some(dct::Service {
@@ -210,6 +213,7 @@ fn add_local_infra(services: &mut IndexMap<String, Option<dct::Service>>, instan
             environment: kv(&[
                 ("MP_SMTP_AUTH_ACCEPT_ANY", "1"),
                 ("MP_SMTP_AUTH_ALLOW_INSECURE", "1"),
+                ("MP_WEBROOT", "/mailpit"),
             ]),
             ports: dct::Ports::Short(vec![
                 format!("{}:1025", instance.port(Port::MailpitSmtp)),
