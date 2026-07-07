@@ -7,8 +7,8 @@ tag filters apply server-side on every leg of unified search, not just documents
 |---|---|---|---|
 | macro-2208 | parent integration branch + this plan | `gbirman/macro-2208-searchtags-index-tags-for-non-document-entity-types-in-opensearch` | this doc |
 | macro-2209 | email threads — builds the generic pipeline | `gbirman/macro-2209-searchtags-index-tags-for-email` | **MERGED into parent** (#4563, `372c96059`); dev putMapping + THREAD backfill done |
-| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | **PR #4570 open → parent**, contract-verified; ops pending: putMapping chats → deploy → CHAT backfill |
-| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | restore + read cutover committed, e2e done; adding Project arms + §2.11, then PR |
+| macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | **MERGED into parent** (#4570, `338463fd6`); ops pending: putMapping chats → deploy → CHAT backfill |
+| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | **PR #4564 open → parent**; final rebase over #4570 in progress |
 
 Subtasks branch off this parent and merge back into it; the parent merges to main.
 
@@ -388,6 +388,17 @@ Adds:
    its enrichment already exist) → likely no gen-api regen.
 7. Backfills: full project backfill (indexes properties via attach), then the
    generic properties backfill is a no-op safety pass.
+
+Rollout caveat (from 2211's e2e): because D2 cuts project name search over to
+the OpenSearch leg, project search is SPARSE between deploy and backfill
+completion. Dev: run the backfill immediately after deploy — minutes-long
+window. Prod: either accept the same short window right after the release, or
+split the read-path cutover commit onto the following release (the branch is
+structured to allow it). Gab decides at release time.
+
+Known freshness gap: domain-repo `Project.updatedAt` bumps outside
+DSS/macro_project_utils don't publish search events → stale ranking order.
+Filed: task `019f3e58-d507-7126-9039-d28859cba67d`.
 
 **Ship dark (D3, resolved):** projects are not yet taggable in the FE
 (deferred, task filed). The index restore and leg replacement go live (that IS
