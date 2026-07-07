@@ -90,6 +90,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -859,7 +860,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <hr class="border-transparent my-2" />
       </div>
 
-      <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
+      <Suspense>
+        <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
+      </Suspense>
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
