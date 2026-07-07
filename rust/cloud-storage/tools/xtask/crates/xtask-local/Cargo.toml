@@ -1,0 +1,53 @@
+[package]
+description = "xtask local: Macro local & dev stack orchestration (infra + binaries + proxy + frontend)"
+edition = "2024"
+name = "xtask-local"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask-local"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# Local/dev orchestration. These deps reuse the workspace-pinned versions so
+# the orchestrator builds against the same crate graph as the services it
+# launches.
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+clap = { workspace = true }
+macro_aws_config = { path = "../../../../macro_aws_config" }
+macro_queues = { path = "../../../../macro_queues" }
+serde = { workspace = true }
+tokio = { workspace = true }
+# Source of truth for the declared Kafka topics (local-stack provisioning).
+macro_event_topics = { path = "../../../../macro_event_topics" }
+# AdminClient for creating the declared topics on the local broker. Optional
+# (behind `local-stack`): the workspace links librdkafka dynamically, and the
+# CI jobs that build this on bare runners have no system librdkafka to link
+# against.
+rdkafka = { workspace = true, optional = true }
+# Typed docker-compose model (build the override as structs, not strings) +
+# Docker Engine API client for the discrete container/image ops.
+bollard = "0.21"
+console = "0.15"
+docker-compose-types = { version = "0.24", features = ["indexmap"] }
+indexmap = { workspace = true }
+indicatif = "0.18"
+serde_yaml = "0.9"
+# Parse user-provided `--env-file` overlays. EnumIter derives the port list.
+dotenvy = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+# Signal the frontend dev server's whole process group on shutdown.
+libc = "0.2"
+macro_env_var = { path = "../../../../macro_env_var" }
+xtask-paths = { path = "../xtask-paths" }
+
+[features]
+# Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
+# default so a plain build works without a system librdkafka; the just recipes
+# enable it.
+local-stack = ["dep:rdkafka"]

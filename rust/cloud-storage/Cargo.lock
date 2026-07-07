@@ -15578,6 +15578,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-local"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-dynamodb",
+ "aws-sdk-s3",
+ "aws-sdk-sqs",
+ "bollard",
+ "clap",
+ "console 0.15.11",
+ "docker-compose-types",
+ "dotenvy",
+ "indexmap 2.14.0",
+ "indicatif",
+ "libc",
+ "macro_aws_config",
+ "macro_env_var",
+ "macro_event_topics",
+ "macro_queues",
+ "rdkafka",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "strum",
+ "tokio",
+ "xtask-paths",
+]
+
+[[package]]
 name = "xtask-nextest-filter"
 version = "0.1.0"
 dependencies = [
