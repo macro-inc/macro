@@ -572,8 +572,13 @@ fn bring_up_infra(
         // Kafka is healthy (`--wait` gates on its broker healthcheck); create
         // the event topics declared in `macro_event_topics` — the local
         // equivalent of the MSK topic provisioning driven by the generated
-        // `.github/kafka-cluster-topics.json`.
-        stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        // `.github/kafka-cluster-topics.json`. Restored volumes already carry
+        // the topics (they live in the broker's data dir), so only a full init
+        // provisions — which also means a snapshot-restoring `stack up` (e.g.
+        // the preview VM) never needs the rdkafka-backed `local-stack` feature.
+        if init == InfraInit::Full {
+            stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
+        }
 
         // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
         // poll it patiently until it's up. On a full init that wait covers the

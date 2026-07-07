@@ -6,7 +6,7 @@
 //! kickstart, the index mappings, the infra image pins, the container
 //! platform), so instead of re-running the init on every `stack up`, we key
 //! it: hash the inputs, and if
-//! a snapshot of the four stateful volumes exists under that key, restore it
+//! a snapshot of the stateful volumes exists under that key, restore it
 //! and skip the init entirely. The full-delete/full-create idempotency
 //! guarantee survives because the key *is* the definition of "clean" — any
 //! change to an input misses the cache and falls back to a real init (which
@@ -29,7 +29,9 @@ use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
 
 /// Bump when the snapshot mechanism itself changes shape (archive layout,
 /// volume set) so old snapshots can't be restored into a new scheme.
-const FORMAT: u32 = 1;
+/// 2: Kafka's volume joined the set (topics live in the broker data dir, so a
+/// restore carries them and the rdkafka-backed provisioning is skipped).
+const FORMAT: u32 = 2;
 
 /// The throwaway container image used to tar/untar volumes. Alpine for its
 /// size; only needs `tar` + `sh`.
@@ -38,10 +40,11 @@ const HELPER_IMAGE: &str = "alpine:3";
 /// The stateful volumes a snapshot captures, as `(archive name, volume)`
 /// pairs. Redis is deliberately absent — it's a cache, and an empty cache is
 /// valid clean state.
-fn archives(instance: &Instance) -> [(&'static str, String); 4] {
+fn archives(instance: &Instance) -> [(&'static str, String); 5] {
     [
         ("postgres.tar.gz", instance.volume_postgres()),
         ("opensearch.tar.gz", instance.volume_opensearch()),
+        ("kafka.tar.gz", instance.volume_kafka()),
         ("fusionauth-db.tar.gz", instance.volume_fusionauth_db()),
         (
             "fusionauth-config.tar.gz",
@@ -52,7 +55,7 @@ fn archives(instance: &Instance) -> [(&'static str, String); 4] {
 
 /// The compose services that own those volumes — quiesced (stopped) while the
 /// archives are written so the files are consistent.
-const STATEFUL_SERVICES: &[&str] = &["postgres", "search", "fusionauth", "db"];
+const STATEFUL_SERVICES: &[&str] = &["postgres", "search", "kafka", "fusionauth", "db"];
 
 /// Where snapshots live. `MACRO_STACK_SNAPSHOT_DIR` overrides for CI bakes and
 /// preview images; the default sits inside the gitignored generated dir.
@@ -226,7 +229,7 @@ pub fn save(
 
     // Bring the quiesced infra back to ready before the app services start.
     let mut up = super::compose_cmd(instance, env);
-    up.args(["up", "-d", "--wait", "postgres", "search"]);
+    up.args(["up", "-d", "--wait", "postgres", "search", "kafka"]);
     stage.run("Restarting infra after snapshot", &mut up)?;
     let mut fa = super::compose_cmd(instance, env);
     fa.args(["up", "-d", "fusionauth"]);

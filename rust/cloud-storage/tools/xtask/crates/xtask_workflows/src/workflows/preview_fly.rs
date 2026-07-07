@@ -77,6 +77,10 @@ fn deploy() -> Job {
                 .working_directory("rust/cloud-storage"),
         )
         .add_step(
+            // Deliberately WITHOUT the `local-stack` feature: the VM restores
+            // the baked snapshot, whose Kafka volume already carries the
+            // topics, so it never provisions Kafka — and skipping rdkafka
+            // means no dynamically-linked librdkafka to ship into the VM.
             Step::new("Build xtask (runs inside the preview VM)")
                 .run("cargo build --release -p xtask")
                 .working_directory("rust/cloud-storage"),
@@ -99,15 +103,15 @@ fn deploy() -> Job {
 }
 
 /// A cold `stack up` on the runner runs the real init (migrate, kickstart,
-/// indices) and saves the content-addressed snapshot the VM restores from. It
-/// also pulls/builds every image the stack runs, which the preload step bakes.
+/// Kafka topics, indices) and saves the content-addressed snapshot the VM
+/// restores from. It also pulls/builds every image the stack runs, which the
+/// preload step bakes. Via `just` (not the bare `cargo x` alias) because the
+/// justfile enables the `local-stack` feature the Kafka provisioning needs.
 fn bake_snapshot() -> Step<Run> {
-    Step::new("Bake init snapshot")
-        .run(indoc::indoc! {r#"
-            cargo x stack up --no-frontend --no-doppler --no-build
-            cargo x stack snapshot --json
-        "#})
-        .working_directory("rust/cloud-storage")
+    Step::new("Bake init snapshot").run(indoc::indoc! {r#"
+        just stack up --no-frontend --no-doppler --no-build
+        just stack snapshot --json
+    "#})
 }
 
 fn bake_preload_tar() -> Step<Run> {

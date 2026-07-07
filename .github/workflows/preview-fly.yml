@@ -53,9 +53,8 @@ jobs:
       working-directory: js/app/packages/app
     - name: Bake init snapshot
       run: |
-        cargo x stack up --no-frontend --no-doppler --no-build
-        cargo x stack snapshot --json
-      working-directory: rust/cloud-storage
+        just stack up --no-frontend --no-doppler --no-build
+        just stack snapshot --json
     - name: Bake image preload tar
       run: |
         set -euo pipefail
