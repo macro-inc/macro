@@ -8,6 +8,7 @@ import {
 import { mergeRegister } from '@lexical/utils';
 import type { LexicalEditor } from 'lexical';
 import { registerTableListTab } from './tableListTab';
+import { registerTableSelectAll } from './tableSelectAll';
 
 interface TablePluginProps {
   // When `false` (default `true`), merged cell support (colspan and rowspan) will be disabled and all
@@ -33,6 +34,9 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
 
     // Let list items claim Tab for indentation before cell navigation
     (props.hasTabHandler ?? true) ? registerTableListTab(editor) : () => {},
+
+    // Ctrl/Cmd+A inside a table selects the table before the document
+    registerTableSelectAll(editor),
 
     // Unmerge cells when the feature isn't enabled
     (() => {
