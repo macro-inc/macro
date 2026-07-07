@@ -20,7 +20,7 @@ export default function BlockUnknown() {
     <DocumentBlockContainer>
       <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
-          <SidePanel.Layout defaultOpen={false}>
+          <SidePanel.Layout>
             <FileSidePanelSections />
             <div class="flex size-full min-w-0 flex-col overflow-hidden">
               <div class="relative">
