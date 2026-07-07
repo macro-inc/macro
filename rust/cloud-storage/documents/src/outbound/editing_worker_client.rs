@@ -53,7 +53,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
                 ],
             },
-            "interpret": true,
+            "interpret": false,
         });
 
         let edit_resp = self

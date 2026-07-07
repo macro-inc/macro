@@ -54,7 +54,10 @@ export type { UsageEntry };
 export type RunEditResult = {
   usage: UsageEntry[];
   ops: DocumentOp[];
-  trace?: string;
+  /** Markdown trace of the session; always built so it can be persisted. */
+  trace: string;
+  /** Unique id for this edit session; keys the persisted trace. */
+  sessionId: string;
   clarification?: string;
 };
 
@@ -99,10 +102,12 @@ export async function runEditSession(
   const allOps: DocumentOp[] = [];
   // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
+  const sessionId = crypto.randomUUID();
   const startedAt = new Date();
   const initialDocument = serializeWithXml(workspace.session);
   try {
-    const { totalUsage, steps, intent, clarification } = await supervisor(
+    const { totalUsage, steps, stepDurationsMs, intent, clarification } =
+      await supervisor(
       workspace.session,
       args.prompt,
       args.models,
@@ -133,6 +138,7 @@ export async function runEditSession(
         initialDocument,
         intent,
         coderCodeBlocks,
+        stepDurationsMs,
       },
       steps as any,
       usage
@@ -143,7 +149,8 @@ export async function runEditSession(
     return {
       usage,
       ops: allOps,
-      trace: args.debug ? trace : undefined,
+      trace,
+      sessionId,
       clarification,
     };
   } finally {

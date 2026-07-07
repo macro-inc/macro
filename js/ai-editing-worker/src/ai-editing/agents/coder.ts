@@ -8,6 +8,7 @@ import {
   createReadDocumentTool,
   createRunCodeTool,
 } from '../tools';
+import { EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunTaskDeps } from './types';
 
 export type { RunTaskDeps } from './types';
@@ -46,6 +47,7 @@ export async function coder(
         false
       ),
     },
+    providerOptions: EDIT_PROVIDER_OPTIONS,
     abortSignal: deps.signal,
   });
 }

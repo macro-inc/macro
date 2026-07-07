@@ -10,6 +10,7 @@ import { createDispatchTool, createImBlockedTool } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
+import { EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
@@ -70,13 +71,24 @@ export async function supervisor(
   const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
   const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
 
+  // Wall-clock duration of each supervisor step, measured between step
+  // boundaries. In Workers `Date.now()` only advances across I/O, which every
+  // step has (the model call), so these deltas are real.
+  const stepDurationsMs: number[] = [];
+  let lastStepAt = Date.now();
   const result = await generateText({
     model: models.supervisor,
     stopWhen: [stepCountIs(6), hasToolCall('reportBlocked')],
     system: MASTER_SYSTEM,
     prompt,
     tools,
+    providerOptions: EDIT_PROVIDER_OPTIONS,
     abortSignal: opts.signal,
+    onStepFinish: () => {
+      const now = Date.now();
+      stepDurationsMs.push(now - lastStepAt);
+      lastStepAt = now;
+    },
   });
   tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
 
@@ -90,6 +102,7 @@ export async function supervisor(
     text: result.text || 'Applied edits.',
     totalUsage: tracker,
     steps: result.steps,
+    stepDurationsMs,
     intent,
     clarification,
   };

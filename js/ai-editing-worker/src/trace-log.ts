@@ -9,6 +9,8 @@ export type TraceMeta = {
   intent?: string;
   /** JS code blocks run by each coder, indexed by dispatch round then edit index. */
   coderCodeBlocks?: string[][][];
+  /** Wall-clock duration of each supervisor step, in ms. */
+  stepDurationsMs?: number[];
 };
 
 type Usage = UsageEntry[];
@@ -31,7 +33,9 @@ function formatDispatchArgs(
       let out = `${i + 1}. ${e.editing_instruction}${range}`;
       if (e.snippets && Object.keys(e.snippets).length > 0) {
         for (const [key, value] of Object.entries(e.snippets)) {
-          out += `\n   snippets.${key}:\n   \`\`\`\n${value
+          const text =
+            typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+          out += `\n   snippets.${key}:\n   \`\`\`\n${text
             .split('\n')
             .map((l) => `   ${l}`)
             .join('\n')}\n   \`\`\``;
@@ -111,13 +115,25 @@ function formatToolCall(
   return lines.join('\n');
 }
 
+/** Step header timing, e.g. `· 0.9s · t+1.4s` (this step / cumulative). */
+function formatTiming(durationMs?: number, elapsedMs?: number): string {
+  const parts: string[] = [];
+  if (durationMs != null) parts.push(`${(durationMs / 1000).toFixed(1)}s`);
+  if (elapsedMs != null) parts.push(`t+${(elapsedMs / 1000).toFixed(1)}s`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
 function formatStep(
   step: StepResult<ToolSet>,
   i: number,
+  durationMs: number | undefined,
+  elapsedMs: number | undefined,
   dispatchRoundRef: { current: number },
   coderCodeBlocks?: string[][][]
 ): string {
-  const lines: string[] = [`### Step ${i + 1}`];
+  const lines: string[] = [
+    `### Step ${i + 1}${formatTiming(durationMs, elapsedMs)}`,
+  ];
 
   if (step.text) {
     lines.push('');
@@ -181,10 +197,20 @@ function formatTrace(
   sections.push('', '---', '', '## Supervisor');
 
   const dispatchRoundRef = { current: 0 };
+  let elapsedMs = 0;
   for (let i = 0; i < steps.length; i++) {
+    const durationMs = meta.stepDurationsMs?.[i];
+    if (durationMs != null) elapsedMs += durationMs;
     sections.push('');
     sections.push(
-      formatStep(steps[i]!, i, dispatchRoundRef, meta.coderCodeBlocks)
+      formatStep(
+        steps[i]!,
+        i,
+        durationMs,
+        meta.stepDurationsMs ? elapsedMs : undefined,
+        dispatchRoundRef,
+        meta.coderCodeBlocks
+      )
     );
   }
 
