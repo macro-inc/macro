@@ -6,8 +6,6 @@ use rdkafka::ClientConfig;
 use rdkafka::client::{ClientContext, OAuthToken};
 use rdkafka::consumer::ConsumerContext;
 
-use crate::domain::models::EventBrokerError;
-
 /// Region used to sign MSK IAM auth tokens when `AWS_REGION` is unset.
 /// Matches the fallback in `macro_aws_config`.
 const DEFAULT_AWS_REGION: &str = "us-east-1";
@@ -28,30 +26,23 @@ pub fn configure_sasl_iam(config: &mut ClientConfig) -> &mut ClientConfig {
 /// Client context that supplies AWS MSK IAM (SASL/OAUTHBEARER) auth tokens,
 /// signing with the ambient AWS credentials (e.g. the ECS task role).
 ///
-/// librdkafka invokes [`ClientContext::generate_oauth_token`] on one of its own
-/// (non-tokio) threads when the connection is first established and again
-/// before each token expires, so blocking on the async signer here is safe.
+/// librdkafka invokes [`ClientContext::generate_oauth_token`] when the
+/// connection is first established and again before each token expires.
 pub struct MskIamClientContext {
     region: Region,
-    runtime: tokio::runtime::Handle,
 }
 
 impl MskIamClientContext {
-    /// Build a context that signs tokens for the region in `AWS_REGION`
-    /// (falling back to `us-east-1`), refreshing through the current tokio
-    /// runtime. Errors when called outside a tokio runtime.
-    pub fn from_env() -> Result<Self, EventBrokerError> {
-        let runtime = tokio::runtime::Handle::try_current().map_err(|e| {
-            EventBrokerError::Publish(format!("MSK IAM auth requires a tokio runtime: {e}"))
-        })?;
+    /// Build a context that signs tokens for the region in `AWS_REGION`,
+    /// falling back to `us-east-1`.
+    pub fn from_env() -> Self {
         let region = AwsRegion::new()
             .and_then(|region| region.value().map(str::to_string))
             .unwrap_or_else(|| DEFAULT_AWS_REGION.to_string());
 
-        Ok(Self {
+        Self {
             region: Region::new(region),
-            runtime,
-        })
+        }
     }
 }
 
@@ -62,9 +53,27 @@ impl ClientContext for MskIamClientContext {
         &self,
         _oauthbearer_config: Option<&str>,
     ) -> Result<OAuthToken, Box<dyn std::error::Error>> {
-        let (token, expiration_time_ms) = self
-            .runtime
-            .block_on(generate_auth_token(self.region.clone()))?;
+        let region = self.region.clone();
+
+        // librdkafka may invoke this callback on a tokio runtime thread (for a
+        // `StreamConsumer`, it fires while `recv()` is polled from async code),
+        // where blocking on the ambient runtime panics. Sign on a dedicated
+        // thread with its own single-threaded runtime instead, so the callback
+        // is safe from any calling context. Tokens live ~15 minutes, so the
+        // per-refresh thread + runtime cost is negligible.
+        let signer = std::thread::spawn(
+            move || -> Result<(String, i64), Box<dyn std::error::Error + Send + Sync>> {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
+                Ok(runtime.block_on(generate_auth_token(region))?)
+            },
+        );
+
+        let (token, expiration_time_ms) = signer
+            .join()
+            .map_err(|_| "MSK IAM token signer thread panicked")?
+            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
 
         Ok(OAuthToken {
             token,

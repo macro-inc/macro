@@ -106,7 +106,7 @@ impl DocumentsConsumer {
                 configure_sasl_iam(&mut config);
                 Self::MskIam(
                     config
-                        .create_with_context(MskIamClientContext::from_env()?)
+                        .create_with_context(MskIamClientContext::from_env())
                         .context("failed to create MSK IAM kafka consumer")?,
                 )
             }

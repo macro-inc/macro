@@ -54,8 +54,7 @@ fn create_error(e: impl std::fmt::Display) -> EventBrokerError {
 impl KafkaEventPublisher {
     /// Build a producer connected to the given comma-separated `brokers` list,
     /// choosing the transport from the `ENVIRONMENT` variable (see the module
-    /// docs). Must be called from within a tokio runtime outside `Local`, since
-    /// MSK IAM token refreshes are driven through the runtime's handle.
+    /// docs).
     ///
     /// Producer creation is lazy: nothing connects to Kafka (and no IAM token
     /// is signed) until an event is published.
@@ -65,11 +64,14 @@ impl KafkaEventPublisher {
                 Producer::Plaintext(base_config(brokers).create().map_err(create_error)?)
             }
             Environment::Develop | Environment::Production => {
-                let context = MskIamClientContext::from_env()?;
                 let mut config = base_config(brokers);
                 configure_sasl_iam(&mut config);
 
-                Producer::MskIam(config.create_with_context(context).map_err(create_error)?)
+                Producer::MskIam(
+                    config
+                        .create_with_context(MskIamClientContext::from_env())
+                        .map_err(create_error)?,
+                )
             }
         };
 
