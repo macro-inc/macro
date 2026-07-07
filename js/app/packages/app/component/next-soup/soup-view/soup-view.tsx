@@ -39,6 +39,11 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import {
+  CALLS_GRID_COUNT,
+  CALLS_GRID_MIN_WIDTH,
+  CallsGrid,
+} from '@app/component/next-soup/soup-view/views/calls/CallsGrid';
 import { InboxListEntity } from '@app/component/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
@@ -770,6 +775,66 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return isListViewID(id) ? id : undefined;
   });
 
+  // On desktop the calls view lifts the most recent calls out of the list and
+  // shows them as a card grid above it — but only while the list column is
+  // wide enough for at least two card columns, and only for a flat,
+  // unsearched list (group headers and search hits stay in the list, where
+  // their context lives).
+  const [listColumnRef, setListColumnRef] = createSignal<HTMLElement>();
+  const listColumnSize = createElementSize(listColumnRef);
+
+  const callsGridRows = createMemo<SoupRow[]>(() => {
+    if (isMobile() || currentView() !== 'calls') return [];
+    if (searchText()) return [];
+    if ((listColumnSize.width ?? 0) < CALLS_GRID_MIN_WIDTH) return [];
+
+    const gridRows: SoupRow[] = [];
+    for (const row of rows()) {
+      if (
+        row.getIsGrouped() ||
+        row.getIsLoadMore() ||
+        row.original.type !== 'call'
+      ) {
+        break;
+      }
+      gridRows.push(row);
+      if (gridRows.length === CALLS_GRID_COUNT) break;
+    }
+    return gridRows;
+  });
+
+  const listRows = createMemo(() => {
+    const gridCount = callsGridRows().length;
+    return gridCount ? rows().slice(gridCount) : rows();
+  });
+
+  // Navigation code scrolls by index into the full rows() array, but the
+  // virtualizer only holds the rows after the calls grid — shift indexes
+  // back by the extracted count so scroll targets stay aligned.
+  const adjustedVirtualizerHandle = createMemo<VirtualizerHandle | undefined>(
+    () => {
+      const handle = virtualizerHandle();
+      if (!handle) return handle;
+
+      return new Proxy(handle, {
+        get(target, prop) {
+          if (prop === 'scrollToIndex') {
+            return (
+              index: number,
+              opts?: Parameters<VirtualizerHandle['scrollToIndex']>[1]
+            ) =>
+              target.scrollToIndex(
+                Math.max(0, index - callsGridRows().length),
+                opts
+              );
+          }
+          const value = Reflect.get(target, prop);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    }
+  );
+
   const focusFirstEntity = () => {
     const allRows = rows();
     const firstEntityIndex = allRows.findIndex(
@@ -783,7 +848,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup.setPreviewEntity(result?.row.id);
 
     if (result) {
-      virtualizerHandle()?.scrollToIndex(result.index, { align: 'nearest' });
+      adjustedVirtualizerHandle()?.scrollToIndex(result.index, {
+        align: 'nearest',
+      });
     }
   };
 
@@ -856,7 +923,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-    virtualizerHandle,
+    virtualizerHandle: adjustedVirtualizerHandle,
     hasNextPage: source.hasNextPage,
     isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
@@ -888,7 +955,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
-    virtualizerHandle,
+    virtualizerHandle: adjustedVirtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     currentView,
     activeTab,
@@ -1206,6 +1273,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
             maxSize={previewPaneVisible() ? 840 : undefined}
           >
             <div
+              ref={setListColumnRef}
               class={cn(
                 '@container/u-list size-full unified-list-root flex flex-col relative',
                 soup.previewEntity() !== undefined &&
@@ -1253,6 +1321,26 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     </div>
                   </Match>
                   <Match when={rows().length}>
+                    <Show when={callsGridRows().length > 0}>
+                      <CallsGrid
+                        rows={callsGridRows()}
+                        onEntityClick={(row, event) => {
+                          onEntityClick({
+                            type: 'entity',
+                            entity: row.original,
+                            event,
+                            location: undefined,
+                            rowIndex: row.index,
+                          });
+                        }}
+                        onEntityMouseMove={(row) => {
+                          if (isKeypressActive()) return;
+                          if (soup.previewEntity() || isNewInboxEnabled())
+                            return;
+                          soup.focus.setIndex(row.index);
+                        }}
+                      />
+                    </Show>
                     <ListLayoutProvider ref={localEntityListRef}>
                       <Show when={currentView() === 'tasks' && !isMobile()}>
                         <ResponsiveTaskListHeader class="shrink-0" />
@@ -1294,7 +1382,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollBottom={debouncedFetchMore}
                           scrollBottomOffset={300}
-                          rows={rows()}
+                          rows={listRows()}
                         >
                           {(row, i) => {
                             const timestamp = () => {
@@ -1446,7 +1534,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                         ) =>
                                           handleMultiSelectChecked({
                                             entity: row.original,
-                                            entityIndex: i(),
+                                            entityIndex: row.index,
                                             next,
                                             shiftKey: shiftKey ?? false,
                                           })
@@ -1497,7 +1585,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 </Switch>
                                 <Show
                                   when={
-                                    i() === rows().length - 1 &&
+                                    i() === listRows().length - 1 &&
                                     isSearchServiceLoading()
                                   }
                                 >
@@ -1506,7 +1594,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     Searching...
                                   </div>
                                 </Show>
-                                <Show when={i() === rows().length - 1}>
+                                <Show when={i() === listRows().length - 1}>
                                   {/* Desktop-only: mobile clearance comes
                                       from the in-scroll trailing spacer. */}
                                   <div class="h-15 mobile:hidden" />
