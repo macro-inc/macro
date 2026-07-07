@@ -524,6 +524,14 @@
         # zig links the final binary (cargo-zigbuild); drop the host-only mold arg.
         RUSTFLAGS = "";
         CARGO_PROFILE = "release";
+        # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+        # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+        # buildInputs provides to host builds (see the note on `libraries`;
+        # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+        # invisible here. Pass the include path explicitly; cc-rs and
+        # cmake-rs both honor CFLAGS/CXXFLAGS.
+        CFLAGS = "-I${pkgs.curl.dev}/include";
+        CXXFLAGS = "-I${pkgs.curl.dev}/include";
         # Lambdas don't need max opt; matches the cargo-lambda CI setting.
         CARGO_PROFILE_RELEASE_OPT_LEVEL = "2";
         # aws-lc-sys (aws-lc-rs / rustls default crypto, pulled via aws-sdk &
