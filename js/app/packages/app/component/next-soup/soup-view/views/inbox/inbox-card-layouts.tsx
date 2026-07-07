@@ -1,6 +1,6 @@
 import { ListPropertyValue } from '@app/component/next-soup/soup-view/views/tasks/list-property-value';
-import { mapMediaItems, type MediaItem } from '@channel/Media/media-items';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
+import { type MediaItem, mapMediaItems } from '@channel/Media/media-items';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';

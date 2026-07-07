@@ -6,7 +6,6 @@ import {
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
   differenceInDays,
-  differenceInHours,
   differenceInMilliseconds,
   differenceInMonths,
   differenceInWeeks,

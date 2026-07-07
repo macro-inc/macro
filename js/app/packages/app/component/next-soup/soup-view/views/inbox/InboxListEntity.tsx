@@ -1,10 +1,10 @@
 import { useChannelsContext } from '@core/context/channels';
 import { MaybeEntityRow, MultiSelectCheckbox } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
+import { cn } from '@ui';
 import { createMemo } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
 import { scopeThreadNotifications } from './utils';
-import { cn } from '@ui';
 
 /**
  * Inbox-specific list entity: renders the notification `InboxCardLayout` for a
