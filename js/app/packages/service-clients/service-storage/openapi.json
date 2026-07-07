@@ -18445,6 +18445,13 @@
             "type": ["string", "null"],
             "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
           },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Properties attached to this company (system CRM properties like\nStage / Owner / Revenue plus any custom ones)."
+          },
           "teamId": {
             "type": "string",
             "format": "uuid",

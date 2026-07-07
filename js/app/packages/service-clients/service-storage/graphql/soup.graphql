@@ -168,6 +168,9 @@ query Soup($input: SoupInput!) {
             updatedAt
             viewedAt
             domains
+            properties {
+              ...SoupPropertyFields
+            }
           }
           ... on GraphqlSoupForeignEntity {
             id

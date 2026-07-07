@@ -11,7 +11,7 @@
 //! Design invariant: Docker never compiles Rust. Binaries are built on the host
 //! and bind-mounted read-only into the runtime image at `/app/out`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub mod arch;
 pub mod build;
@@ -132,25 +132,17 @@ impl Mode {
 }
 
 /// The cloud-storage cargo workspace root (`rust/cloud-storage`). Anchored on
-/// the crate manifest dir rather than the invocation cwd so the orchestrator
-/// works from anywhere, exactly like `main::build_graph`.
+/// the manifest dir rather than the invocation cwd so the orchestrator works
+/// from anywhere.
 pub fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("xtask manifest dir has no workspace root two levels up")
-        .to_owned()
+    xtask_paths::workspace_root()
 }
 
 /// The repository root (two levels above the cloud-storage workspace:
 /// `<repo>/rust/cloud-storage`). This is where `docker-compose.yml`,
 /// `infra/`, `js/`, and the root `justfile` live.
 pub fn repo_root() -> PathBuf {
-    workspace_root()
-        .ancestors()
-        .nth(2)
-        .expect("cloud-storage workspace has no repo root two levels up")
-        .to_owned()
+    xtask_paths::repo_root()
 }
 
 use std::process::Command;

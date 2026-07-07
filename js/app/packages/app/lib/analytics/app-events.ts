@@ -140,6 +140,27 @@ export type AppEvents = {
     channelId: string;
     callId?: string;
   } & Record<string, unknown>;
+  // Mic audio-processing state transitions (noise suppression attach /
+  // detach / fallback). `constraintMismatch` flags engines that report
+  // different track settings than were requested (mode changes that silently
+  // no-oped); `sampleRate` <= 16000 indicates a Bluetooth HFP capture path.
+  call_audio_processing: {
+    event: string;
+    channelId: string;
+    preferredMode: string;
+    activeMode: string;
+    constraintMismatch: boolean;
+  } & Record<string, unknown>;
+  // Per-call summary of remote-audio decode health, flushed at room teardown.
+  // High concealment alongside clean capture-side state points a "muddled
+  // voices" report at the network/playback leg, not noise suppression.
+  call_audio_receiver_stats: {
+    channelId: string;
+    callId?: string;
+    sampledIntervals: number;
+    badIntervals: number;
+    maxConcealmentRate: number;
+  } & Record<string, unknown>;
 
   block_pdf_definition_open: Record<string, unknown>;
   block_pdf_section_open: Record<string, unknown>;

@@ -429,6 +429,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           { skipTargets: ['ccf'] }
         ),
         clientFilters: { and: ['crm-company-active'] },
+        groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
       }),
       // Admin/owner only — the BE rejects `hidden: true` requests from
       // non-admins with 403. Returning `undefined` hides the tab for
@@ -441,6 +442,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             { skipTargets: ['ccf'] }
           ),
           clientFilters: { and: ['crm-company-hidden'] },
+          groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
         };
       },
     },

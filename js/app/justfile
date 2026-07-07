@@ -162,6 +162,6 @@ build-cache-wasm:
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). See rust/cloud-storage/tools/xtask/src/cache_wasm.rs.
+# dev machines). See rust/cloud-storage/tools/xtask/crates/xtask_cache_wasm/src/main.rs.
 ensure-cache-wasm:
     cd {{justfile_directory()}}/../../rust/cloud-storage && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm

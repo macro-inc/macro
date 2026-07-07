@@ -1,6 +1,6 @@
 //! Generate the repo's GitHub Actions workflows from Rust.
 //!
-//! `cargo run -p xtask -- workflows` writes every entry in [`WORKFLOWS`] to
+//! `cargo x workflows` writes every entry in [`WORKFLOWS`] to
 //! `<repo-root>/.github/workflows/<filename>`. The `--check` variant regenerates
 //! them in memory and fails if the committed YAML has drifted, so CI can
 //! guarantee the checked-in YAML always matches this source.
@@ -33,7 +33,7 @@ mod vars;
 mod web_app_check_main;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use gh_workflow::Workflow;
@@ -250,19 +250,14 @@ fn render(workflow: &WorkflowFile) -> Result<String> {
 fn disclaimer(source: &str) -> String {
     format!(
         "# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).\n\
-         # Source: rust/cloud-storage/tools/xtask/src/workflows/{source}.rs\n",
+         # Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/{source}.rs\n",
     )
 }
 
-/// `<repo-root>/.github/workflows`, anchored on the crate's manifest dir so the
-/// task works from any cwd. This crate lives at
-/// `<repo-root>/rust/cloud-storage/tools/xtask`, i.e. four ancestors up.
+/// `<repo-root>/.github/workflows`. Anchored on the repo root (from
+/// [`xtask_paths`]) so the task works from any cwd.
 fn workflows_dir() -> Result<PathBuf> {
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .context("xtask manifest dir has no repo root four levels up")?;
-    let dir = repo_root.join(".github").join("workflows");
+    let dir = xtask_paths::repo_root().join(".github").join("workflows");
     if !dir.is_dir() {
         bail!("expected a workflows directory at {}", dir.display());
     }

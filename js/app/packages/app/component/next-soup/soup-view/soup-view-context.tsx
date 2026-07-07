@@ -30,6 +30,7 @@ import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
+  entityMatchesTagFilter,
   isListViewID,
   type ListView,
   soupItemMatchesListView,
@@ -47,6 +48,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
+  COMPANY_STAGE_OPTIONS,
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
@@ -121,6 +123,8 @@ interface SoupViewContextValues {
   queryFilters: QueryStore;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
+  ownerFilter: Accessor<string[]>;
+  setOwnerFilter: Setter<string[]>;
   inboxFilter: Accessor<string[] | undefined>;
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
@@ -224,7 +228,7 @@ export const SoupViewContextProvider: FlowComponent<
   onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
-    const groupBy = groupByField();
+    const groupBy = serverGroupByField();
 
     queryClient.setQueryData(
       soupKeys.astItems({
@@ -268,6 +272,10 @@ export const SoupViewContextProvider: FlowComponent<
   const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
   const [assigneeFilter, setAssigneeFilter] = useEntryState<string[]>(
     'soup.assigneeFilter',
+    { default: [] }
+  );
+  const [ownerFilter, setOwnerFilter] = useEntryState<string[]>(
+    'soup.ownerFilter',
     { default: [] }
   );
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
@@ -329,6 +337,16 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
+  // Clear the owner sub-filter when leaving the CRM company presets
+  createEffect(() => {
+    if (
+      !soup.predicates.isActive('crm-company-active') &&
+      !soup.predicates.isActive('crm-company-hidden')
+    ) {
+      setOwnerFilter([]);
+    }
+  });
+
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -337,6 +355,21 @@ export const SoupViewContextProvider: FlowComponent<
     if (content.type !== 'component') return;
     return isListViewID(content.id) ? content.id : undefined;
   });
+
+  // CRM companies come back from a dedicated soup request (not the dynamic
+  // query the server-side grouped path is built on), so property grouping on
+  // the Customers view buckets client-side over the flat list — same approach
+  // as date grouping. `groupByField` stays populated so group headers can
+  // resolve icons/labels for the grouping property.
+  const isClientPropertyGroup = createMemo(
+    () =>
+      activeListView() === 'companies' && groupByField()?.type === 'property'
+  );
+
+  // The group-by actually sent to the backend (drives the grouped queries).
+  const serverGroupByField = createMemo(() =>
+    isClientPropertyGroup() ? undefined : groupByField()
+  );
 
   // The new inbox surfaces channel threads the current user participates in —
   // the root sender, anyone who replied, or anyone @-mentioned — via the
@@ -455,6 +488,7 @@ export const SoupViewContextProvider: FlowComponent<
     userId: userId(),
     notificationSource,
     assignees: assigneeFilter(),
+    owners: ownerFilter(),
   });
 
   const attachNotifications = (entity: EntityData) => {
@@ -475,7 +509,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const itemsQuery = useSoupAstItemsQuery(
     () => {
-      const groupBy = groupByField();
+      const groupBy = serverGroupByField();
       return {
         params: soupParams(),
         body: soupBody(),
@@ -551,10 +585,14 @@ export const SoupViewContextProvider: FlowComponent<
   const baseEntities = () => {
     let transformed = items();
     const ctx = getFilterContext();
+    const tagOptionIds = activeTagOptionIds();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      if (!entityMatchesTagFilter(entity, tagOptionIds)) {
         continue;
       }
       next.push(entity);
@@ -606,7 +644,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (!groups || !items) return;
       return { groups, items };
     }),
-    groupByField,
+    groupByField: serverGroupByField,
     soupParams,
     soupBody,
     queryOptions: () => {
@@ -646,9 +684,103 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // Group key an entity falls under for a property grouping: the first
+  // select-option id / entity-reference id, or '' for "Not set".
+  const clientPropertyGroupKey = (
+    entity: SoupEntity,
+    propertyDefinitionId: string
+  ): string => {
+    const properties = 'properties' in entity ? (entity.properties ?? []) : [];
+    const property = properties.find(
+      (p) => p.definition.id === propertyDefinitionId
+    );
+    const value = property?.value;
+    if (!value) return '';
+    if (value.type === 'SelectOption' || value.type === 'Link') {
+      const first = value.value[0];
+      return typeof first === 'string' ? first : '';
+    }
+    if (value.type === 'EntityReference') {
+      const first = value.value[0];
+      return first && typeof first === 'object' && 'entity_id' in first
+        ? String(first.entity_id)
+        : '';
+    }
+    return '';
+  };
+
   const rows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsQuery.data?.groups;
+
+    // Client-side property grouping (Customers view): bucket the flat
+    // (paginated) list by property value; option order comes from the
+    // statically-known stage options, then label, with "Not set" last.
+    if (enabled() && isClientPropertyGroup() && !search.isSearching()) {
+      const definitionId =
+        field?.type === 'property' ? field.propertyDefinitionId : '';
+      const buckets = new Map<string, SoupEntity[]>();
+      for (const entity of entities()) {
+        const key = clientPropertyGroupKey(entity, definitionId);
+        const bucket = buckets.get(key);
+        if (bucket) {
+          bucket.push(entity);
+        } else {
+          buckets.set(key, [entity]);
+        }
+      }
+
+      const stageOrder = COMPANY_STAGE_OPTIONS.map((o) => o.value as string);
+      const order = [...buckets.keys()].sort((a, b) => {
+        if (a === '') return 1;
+        if (b === '') return -1;
+        const aStage = stageOrder.indexOf(a);
+        const bStage = stageOrder.indexOf(b);
+        if (aStage !== -1 || bStage !== -1) {
+          return (
+            (aStage === -1 ? stageOrder.length : aStage) -
+            (bStage === -1 ? stageOrder.length : bStage)
+          );
+        }
+        const aLabel = getPropertyOptionLabel(a) ?? a;
+        const bLabel = getPropertyOptionLabel(b) ?? b;
+        return aLabel.localeCompare(bLabel);
+      });
+
+      const groupedRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of order) {
+        const groupEntities = buckets.get(key)!;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: key === '' ? 'Not set' : (getPropertyOptionLabel(key) ?? key),
+          count: groupEntities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        groupedRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: groupEntities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of groupEntities) {
+          groupedRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return groupedRows;
+    }
 
     // Client-side date grouping: reuse the single flat (paginated) list and
     // regenerate date buckets from whatever's loaded — no per-group fetching.
@@ -816,6 +948,8 @@ export const SoupViewContextProvider: FlowComponent<
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
     inboxFilter,
     setInboxFilter,
     activeTab,

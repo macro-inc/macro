@@ -1,3 +1,5 @@
+//! `cargo x doppler-bins <changed-files-path>`
+//!
 //! Computes which "doppler config" validation binaries are affected by a set of
 //! changed files, for cloud-storage CI.
 //!
@@ -11,20 +13,31 @@
 //!
 //! Input is a newline-delimited file of paths relative to the repository root
 //! (typically `git diff --name-only ...`). Output is the affected bin names, one
-//! per line, sorted and deduplicated. This is the native replacement for the
-//! previous bash + python script and reuses the same guppy package graph as
-//! [`crate::nextest_filter`].
+//! per line, sorted and deduplicated.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use guppy::graph::{BuildTargetId, PackageGraph};
+use xtask_graph::build_graph;
 
 /// Source path (relative to a crate root) of a service's doppler-config binary.
 const DOPPLER_CONFIG_SRC: &str = "src/doppler_config.rs";
 
-pub fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        [changed_files_path] => {
+            // Read-only: `--locked` so computing the filter never rewrites Cargo.lock.
+            let graph = build_graph(true)?;
+            run(&graph, Path::new(changed_files_path))
+        }
+        _ => bail!("usage: cargo x doppler-bins <changed-files-path>"),
+    }
+}
+
+fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
     let workspace = graph.workspace();
     let ws_root = workspace.root();
     let repo_root = ws_root

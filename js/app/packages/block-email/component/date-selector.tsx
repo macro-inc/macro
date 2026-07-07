@@ -6,7 +6,7 @@ import {
 } from '@kobalte/core/combobox';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
-import { cn, Layer } from '@ui';
+import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
 import {
   type Component,
@@ -303,83 +303,88 @@ export const DateSelector = (props: DateSelectorProps) => {
       </Show>
 
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
-        <Layer depth={3}>
-          <Combobox.Content
-            class="w-full max-w-sm bg-surface text-ink border border-edge"
-            on:keydown={handleKeyDown}
+        <Combobox.Content
+          class="rounded-xl size-auto z-action-menu menu-open-animation shadow-menu w-full max-w-70 text-ink"
+          as={Surface}
+          depth={3}
+          bgToken="menu"
+          on:keydown={handleKeyDown}
+        >
+          <WithCustomDateMode
+            selectedDate={selectedDate()}
+            disablePriorToDate={props.disablePriorToDate}
+            disableAfterDate={props.disableAfterDate}
+            mode={mode()}
+            onSelectDate={(date) => {
+              onChange({ type: 'custom', date });
+              setInternalOpen(false);
+            }}
           >
-            <WithCustomDateMode
-              selectedDate={selectedDate()}
-              disablePriorToDate={props.disablePriorToDate}
-              disableAfterDate={props.disableAfterDate}
-              mode={mode()}
-              onSelectDate={(date) => {
-                onChange({ type: 'custom', date });
-                setInternalOpen(false);
-              }}
-            >
-              <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-                <SearchIcon class="size-4 text-ink-muted" />
-                <Combobox.Input
-                  ref={setSearchInputRef}
-                  class="w-full caret-accent"
-                  autofocus
-                />
-              </div>
+            <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
+              <SearchIcon class="size-4 text-ink-muted" />
+              <Combobox.Input
+                ref={setSearchInputRef}
+                class="w-full caret-accent"
+                autofocus
+              />
+            </div>
 
-              <Show when={selectedOption()}>
-                {(option) => (
-                  <CurrentValueDisplay
-                    selectedOption={option()}
-                    onClear={() => {
-                      onChange(null);
-                    }}
-                  />
-                )}
-              </Show>
-              <Show when={dateOptions().length === 0}>
-                <Show
-                  when={searchQuery().trim()}
-                  fallback={
+            <Show when={selectedOption()}>
+              {(option) => (
+                <CurrentValueDisplay
+                  selectedOption={option()}
+                  onClear={() => {
+                    onChange(null);
+                  }}
+                />
+              )}
+            </Show>
+            <div class="p-1.5">
+              <div class="max-h-56 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+                <Show when={dateOptions().length === 0}>
+                  <Show
+                    when={searchQuery().trim()}
+                    fallback={
+                      <div class="text-center py-2 text-ink-muted text-sm">
+                        Enter a date or duration
+                      </div>
+                    }
+                  >
                     <div class="text-center py-2 text-ink-muted text-sm">
-                      Enter a date or duration
+                      No dates match "{searchQuery()}"
                     </div>
-                  }
-                >
-                  <div class="text-center py-2 text-ink-muted text-sm">
-                    No dates match "{searchQuery()}"
-                  </div>
+                  </Show>
                 </Show>
-              </Show>
-              <Combobox.Listbox ref={setListboxRef} />
-              <Show when={props.withTime}>
-                <div class="px-2 py-1.5 border-t border-edge-muted">
-                  <label class="flex items-center justify-between text-sm">
-                    Time
-                    <input
-                      type="time"
-                      value={
-                        selectedDate()
-                          ? format(selectedDate()!, 'HH:mm')
-                          : undefined
-                      }
-                      onInput={onTimeInputChange}
-                    />
-                  </label>
-                </div>
-              </Show>
-              <div class="px-2 py-1.5 border-t border-edge-muted">
-                <div class="text-xs text-ink-muted">
-                  <span>Use queries like </span>
-                  <code class="bg-active px-1">3d</code>,{' '}
-                  <code class="bg-active px-1">1w</code>,{' '}
-                  <code class="bg-active px-1">feb 17</code>, or{' '}
-                  <code class="bg-active px-1">tomorrow</code>
-                </div>
+                <Combobox.Listbox ref={setListboxRef} />
               </div>
-            </WithCustomDateMode>
-          </Combobox.Content>
-        </Layer>
+            </div>
+            <Show when={props.withTime}>
+              <div class="px-2 py-1.5 border-t border-edge-muted">
+                <label class="flex items-center justify-between text-sm">
+                  Time
+                  <input
+                    type="time"
+                    value={
+                      selectedDate()
+                        ? format(selectedDate()!, 'HH:mm')
+                        : undefined
+                    }
+                    onInput={onTimeInputChange}
+                  />
+                </label>
+              </div>
+            </Show>
+            <div class="px-2 py-1.5 border-t border-edge-muted">
+              <div class="text-xs text-ink-muted">
+                <span>Use queries like </span>
+                <code class="bg-active px-1">3d</code>,{' '}
+                <code class="bg-active px-1">1w</code>,{' '}
+                <code class="bg-active px-1">feb 17</code>, or{' '}
+                <code class="bg-active px-1">tomorrow</code>
+              </div>
+            </div>
+          </WithCustomDateMode>
+        </Combobox.Content>
       </DateSelectorPortalWrapper>
     </Combobox>
   );
@@ -451,7 +456,7 @@ const DateSelectorItem: Component<
 
     if (item.type === 'option') return item.displayText;
 
-    return 'Custom date';
+    return 'Custom date...';
   };
 
   const description = () => {
@@ -461,14 +466,10 @@ const DateSelectorItem: Component<
     return 'Pick from calendar';
   };
 
-  return (
+  const item = () => (
     <Combobox.Item
       item={props.item}
-      class={cn(
-        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 relative data-highlighted:bg-hover',
-        props.item.rawValue.type === 'select-custom' &&
-          'border-t border-edge-muted'
-      )}
+      class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default outline-none data-highlighted:bg-hover"
       onPointerDown={(e: PointerEvent) => {
         // Prevent default to stop input blur on mobile, which would close the
         // combobox before the selection click event fires.
@@ -488,5 +489,11 @@ const DateSelectorItem: Component<
         </Combobox.ItemDescription>
       </Show>
     </Combobox.Item>
+  );
+
+  return (
+    <Show when={props.item.rawValue.type === 'select-custom'} fallback={item()}>
+      <div class="border-t border-edge-muted mt-1.5 pt-1.5">{item()}</div>
+    </Show>
   );
 };

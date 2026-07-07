@@ -1,3 +1,5 @@
+//! `cargo x nextest-filter <changed-files-path>`
+//!
 //! Computes the cargo-nextest package filter for cloud-storage CI.
 //!
 //! Input is a newline-delimited file of paths relative to the repository root
@@ -9,10 +11,23 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use guppy::graph::PackageGraph;
+use xtask_graph::build_graph;
 
-pub fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        [changed_files_path] => {
+            // Read-only: `--locked` so computing the filter never rewrites Cargo.lock.
+            let graph = build_graph(true)?;
+            run(&graph, Path::new(changed_files_path))
+        }
+        _ => bail!("usage: cargo x nextest-filter <changed-files-path>"),
+    }
+}
+
+fn run(graph: &PackageGraph, changed_files_path: &Path) -> Result<()> {
     let workspace = graph.workspace();
     let ws_root = workspace.root();
     let repo_root = ws_root

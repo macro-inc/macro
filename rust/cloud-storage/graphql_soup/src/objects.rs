@@ -1365,6 +1365,15 @@ impl GraphqlSoupCrmCompany {
             .collect()
     }
 
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
+            .collect()
+    }
+
     async fn notifications(&self) -> Vec<GraphqlSoupNotification> {
         Vec::new()
     }

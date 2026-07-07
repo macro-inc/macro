@@ -1,4 +1,4 @@
-//! `cargo run -p xtask -- cache-wasm [--force]`
+//! `cargo x cache-wasm [--force]`
 //!
 //! Ensures the browser cache wasm package (`client/cache-wasm`, built by
 //! wasm-pack into the gitignored `js/app/packages/graphql-cache/wasm/`) is
@@ -13,27 +13,26 @@
 //! this check — they always rebuild (`just build-cache-wasm` → `--force`),
 //! so deploys never depend on version-bump discipline.
 
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{path::Path, process::Command};
 
 use anyhow::{Context, Result, bail};
 
 const CRATE_REL: &str = "client/cache-wasm";
 const PKG_REL: &str = "js/app/packages/graphql-cache/wasm";
 
-pub(crate) fn run(force: bool) -> Result<()> {
-    let workspace_dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .context("xtask manifest dir has no workspace root two levels up")?
-        .to_path_buf();
-    let repo_root = workspace_dir
-        .ancestors()
-        .nth(2)
-        .context("workspace root has no repo root two levels up")?
-        .to_path_buf();
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let force = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        [] => false,
+        ["--force"] => true,
+        _ => bail!("usage: cargo x cache-wasm [--force]"),
+    };
+    run(force)
+}
+
+fn run(force: bool) -> Result<()> {
+    let workspace_dir = xtask_paths::workspace_root();
+    let repo_root = xtask_paths::repo_root();
 
     let crate_version = crate_version(&workspace_dir.join(CRATE_REL).join("Cargo.toml"))?;
     let pkg_dir = repo_root.join(PKG_REL);
@@ -76,7 +75,7 @@ pub(crate) fn run(force: bool) -> Result<()> {
 
 /// Reads `version = "…"` from the crate's `[package]` section. A focused
 /// line scan (the first `version =` in the manifest precedes any other
-/// section) keeps xtask free of a toml dependency.
+/// section) keeps the task free of a toml dependency.
 fn crate_version(manifest: &Path) -> Result<String> {
     let text = std::fs::read_to_string(manifest)
         .with_context(|| format!("reading {}", manifest.display()))?;

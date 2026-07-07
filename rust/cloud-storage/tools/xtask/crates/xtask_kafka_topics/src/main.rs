@@ -1,3 +1,5 @@
+//! `cargo x kafka-topics [--check]`
+//!
 //! Generates `.github/kafka-cluster-topics.json`: the name of every Kafka
 //! topic declared in the `macro_event_topics` crate, consumed by infra
 //! (alongside `services-config.json`) to ensure all cluster topics are
@@ -5,22 +7,23 @@
 //! can guarantee the checked-in file always matches the crate.
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
 const OUTPUT_REL: &str = ".github/kafka-cluster-topics.json";
 
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        [] => run(false),
+        ["--check"] => run(true),
+        _ => bail!("usage: cargo x kafka-topics [--check]"),
+    }
+}
+
 /// Regenerates (or, in check mode, diffs) the topics file.
-pub fn run(check: bool) -> Result<()> {
-    // Anchor on the manifest dir, not the invocation cwd, so the task works
-    // from anywhere in the repo. The crate lives at
-    // `<repo-root>/rust/cloud-storage/tools/xtask`, i.e. four ancestors up.
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .context("xtask manifest dir has no repo root four levels up")?;
-    let output_path = repo_root.join(OUTPUT_REL);
+fn run(check: bool) -> Result<()> {
+    let output_path = xtask_paths::repo_root().join(OUTPUT_REL);
 
     // Sorted for a deterministic file regardless of declaration order. A bare
     // array (no disclaimer wrapper) so infra can parse the file directly.

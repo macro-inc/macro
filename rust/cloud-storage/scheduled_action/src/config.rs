@@ -31,6 +31,8 @@ env_vars! {
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     /// Secrets Manager secret name for the CloudFront signer private key.
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 }
 
 /// The configuration parameters for the agent schedule service.
@@ -55,6 +57,7 @@ pub struct Config {
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
     pub document_storage_service_cloudfront_signer_private_key_secret_name:
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+    pub kafka_brokers: KafkaBrokers,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
 }

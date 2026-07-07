@@ -1,4 +1,5 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { createNumericParser } from '@block-canvas/util/parse';
 import {
   useBlockId,
@@ -283,6 +284,17 @@ export default function BlockCanvas(props: BlockCanvasProps) {
     return file;
   }
 
+  const CanvasBody = () => (
+    <Show when={dataState() === 'initialized'} fallback={<LoadingView />}>
+      <CanvasController>
+        <Show when={visible()}>
+          <CanvasRenderer />
+          <ToolBar />
+        </Show>
+      </CanvasController>
+    </Show>
+  );
+
   return (
     <DocumentBlockContainer>
       <div
@@ -296,16 +308,14 @@ export default function BlockCanvas(props: BlockCanvasProps) {
         }}
       >
         <ModalsProvider>
-          <Show when={!isNestedBlock}>
-            <TopBar />
-          </Show>
-          <Show when={dataState() === 'initialized'} fallback={<LoadingView />}>
-            <CanvasController>
-              <Show when={visible()}>
-                <CanvasRenderer />
-                <ToolBar />
-              </Show>
-            </CanvasController>
+          <Show when={!isNestedBlock} fallback={<CanvasBody />}>
+            <SidePanel.Layout defaultOpen={false}>
+              <FileSidePanelSections />
+              <div class="flex size-full min-w-0 flex-col overflow-hidden">
+                <TopBar />
+                <CanvasBody />
+              </div>
+            </SidePanel.Layout>
           </Show>
         </ModalsProvider>
       </div>

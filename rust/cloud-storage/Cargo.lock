@@ -202,6 +202,7 @@ dependencies = [
  "macro_db_client",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
@@ -1162,6 +1163,24 @@ dependencies = [
  "cmake",
  "dunce",
  "fs_extra",
+]
+
+[[package]]
+name = "aws-msk-iam-sasl-signer"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e62f2c07adf3f0bd1ad40414dd30fcf34c595d5f613e36011d5b62eeff14f490"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "aws-sdk-sts",
+ "aws-sigv4",
+ "aws-types",
+ "base64 0.22.1",
+ "chrono",
+ "futures",
+ "thiserror 1.0.69",
+ "url",
 ]
 
 [[package]]
@@ -4022,6 +4041,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -4137,6 +4157,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_project_utils",
  "macro_queues",
@@ -4315,7 +4336,10 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env",
  "macro_env_var",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_service_urls",
  "macro_sync_service_jwt",
  "macro_user_id",
@@ -4329,6 +4353,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "non_empty",
+ "rdkafka",
  "reqwest 0.13.4",
  "s3_key",
  "schemars 1.2.1",
@@ -4342,6 +4367,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "urlencoding",
  "utoipa",
@@ -7421,6 +7447,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-sys"
+version = "1.1.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85bc9657773828b90eeb625adff10eeac83cc21bbfd8e23a03eaa8a33c9e28d9"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7792,6 +7830,10 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "aws-msk-iam-sasl-signer",
+ "aws-types",
+ "macro_env",
+ "macro_env_var",
  "macro_event_topics",
  "rdkafka",
  "rootcause",
@@ -8163,6 +8205,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
@@ -9512,6 +9555,18 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.112"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d55af3b3e226502be1526dfdba67ab0e9c96fc293004e79576b2b9edb0dbdb"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "opentelemetry"
@@ -10916,8 +10971,11 @@ version = "4.10.0+2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e234cf318915c1059d4921ef7f75616b5219b10b46e9f3a511a15eb4b56a3f77"
 dependencies = [
+ "cmake",
  "libc",
+ "libz-sys",
  "num_enum",
+ "openssl-sys",
  "pkg-config",
 ]
 
@@ -15330,10 +15388,11 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "aho-corasick",
+ "aws-config",
  "aws-credential-types",
  "aws-runtime",
+ "aws-sdk-sts",
  "aws-sigv4",
- "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-http-client",
  "aws-smithy-runtime",
@@ -15478,6 +15537,66 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 [[package]]
 name = "xtask"
 version = "0.1.0"
+
+[[package]]
+name = "xtask_cache_wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "xtask_paths",
+]
+
+[[package]]
+name = "xtask_deps"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "hakari",
+ "serde_json",
+ "xtask_graph",
+]
+
+[[package]]
+name = "xtask_doppler_bins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask_graph",
+]
+
+[[package]]
+name = "xtask_graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask_paths",
+]
+
+[[package]]
+name = "xtask_graphql_soup_schema"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "xtask_paths",
+]
+
+[[package]]
+name = "xtask_kafka_topics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_event_topics",
+ "serde_json",
+ "xtask_paths",
+]
+
+[[package]]
+name = "xtask_local"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-dynamodb",
@@ -15488,12 +15607,8 @@ dependencies = [
  "console 0.15.11",
  "docker-compose-types",
  "dotenvy",
- "gh-workflow",
- "guppy",
- "hakari",
  "indexmap 2.14.0",
  "indicatif",
- "indoc",
  "libc",
  "macro_aws_config",
  "macro_env_var",
@@ -15505,6 +15620,32 @@ dependencies = [
  "serde_yaml",
  "strum",
  "tokio",
+ "xtask_paths",
+]
+
+[[package]]
+name = "xtask_nextest_filter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask_graph",
+]
+
+[[package]]
+name = "xtask_paths"
+version = "0.1.0"
+
+[[package]]
+name = "xtask_workflows"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gh-workflow",
+ "indoc",
+ "serde_json",
+ "serde_yaml",
+ "xtask_paths",
 ]
 
 [[package]]
