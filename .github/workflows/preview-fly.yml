@@ -64,7 +64,7 @@ jobs:
       working-directory: js/app/packages/app
     - name: Bake init snapshot
       run: |
-        just stack up --no-frontend --no-doppler --no-build
+        just stack up --infra-only --no-doppler --no-build
         just stack snapshot --json
     - name: Dump stack diagnostics
       if: failure()
@@ -87,6 +87,11 @@ jobs:
           --env-file infra/local/generated/macro/local.generated.env \
           config --images | sort -u)
         echo "baking images:" $images
+        # The infra-only bake never starts the app layer, so images only it
+        # runs (proxy, mailpit) haven't been pulled yet.
+        for img in $images; do
+          docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+        done
         docker save -o preview-ctx/preload/images.tar $images alpine:3
     - name: Stage preview build context
       run: |

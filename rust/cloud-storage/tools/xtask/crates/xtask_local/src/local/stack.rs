@@ -38,6 +38,13 @@ pub struct UpArgs {
     /// migrate/kickstart/index init.
     #[arg(long)]
     pub no_snapshot: bool,
+    /// Stop after the infra bring-up + init (and the snapshot save/restore):
+    /// no app services, proxy, or frontend. This is the CI bake mode — the
+    /// app services need the Doppler-sourced env (AWS endpoints, shared
+    /// secrets) to even boot, which a bake environment deliberately lacks,
+    /// and the init snapshot only captures the infra volumes anyway.
+    #[arg(long)]
+    pub infra_only: bool,
     /// Print a machine-readable JSON summary as the final line.
     #[arg(long)]
     pub json: bool,
@@ -150,7 +157,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
         std::thread::spawn(move || super::teardown_commands(&instance))
     });
 
-    let static_frontend = !args.run.no_frontend;
+    let static_frontend = !args.run.no_frontend && !args.infra_only;
     let (env, _target) = super::prepare(&stage, mode, &instance, &args.run, static_frontend)?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -209,6 +216,19 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<()> {
                 .join()
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
         })?;
+    }
+    if args.infra_only {
+        // No app stack, no proxy: nothing to summarize or gate on, and no
+        // stack.json — `update`/`status` on an infra-only bake should say
+        // "bring the stack up first" rather than assume a running app.
+        stage.note("  infra-only: app services, proxy, and frontend skipped");
+        if args.json {
+            println!(
+                "{}",
+                serde_json::to_string(&summary_json(mode, &instance, false))?
+            );
+        }
+        return Ok(());
     }
     super::bring_up_app(&stage, mode, &instance, &env)?;
 

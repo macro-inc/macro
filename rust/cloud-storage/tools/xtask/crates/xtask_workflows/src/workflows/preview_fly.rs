@@ -133,14 +133,16 @@ fn deploy() -> Job {
         .add_step(comment_preview_url())
 }
 
-/// A cold `stack up` on the runner runs the real init (migrate, kickstart,
-/// Kafka topics, indices) and saves the content-addressed snapshot the VM
-/// restores from. It also pulls/builds every image the stack runs, which the
-/// preload step bakes. Via `just` (not the bare `cargo x` alias) because the
-/// justfile enables the `local-stack` feature the Kafka provisioning needs.
+/// A cold `stack up --infra-only` on the runner runs the real init (migrate,
+/// kickstart, Kafka topics, indices) and saves the content-addressed snapshot
+/// the VM restores from. Infra only: the app services need the Doppler-sourced
+/// env to boot, which this runner deliberately lacks — the snapshot captures
+/// only the infra volumes anyway. Via `just` (not the bare `cargo x` alias)
+/// because the justfile enables the `local-stack` feature the Kafka
+/// provisioning needs.
 fn bake_snapshot() -> Step<Run> {
     Step::new("Bake init snapshot").run(indoc::indoc! {r#"
-        just stack up --no-frontend --no-doppler --no-build
+        just stack up --infra-only --no-doppler --no-build
         just stack snapshot --json
     "#})
 }
@@ -173,6 +175,11 @@ fn bake_preload_tar() -> Step<Run> {
           --env-file infra/local/generated/macro/local.generated.env \
           config --images | sort -u)
         echo "baking images:" $images
+        # The infra-only bake never starts the app layer, so images only it
+        # runs (proxy, mailpit) haven't been pulled yet.
+        for img in $images; do
+          docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+        done
         docker save -o preview-ctx/preload/images.tar $images alpine:3
     "#})
 }

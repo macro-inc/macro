@@ -138,7 +138,9 @@ just stack down               # containers + volumes + tunnel + state
 
 All the `run_local` flags apply (`--instance`, `--no-doppler --env-file`,
 `--no-build`, `--binaries-dir`); CI can hand in a prebuilt bundle with
-`--frontend-dist`. The app is served at `<proxy>/app/` — the bundle resolves its
+`--frontend-dist`, and `--infra-only` stops after the infra bring-up + init
+(the CI bake mode — without Doppler the app services have no env to boot
+with, and the snapshot only captures infra volumes). The app is served at `<proxy>/app/` — the bundle resolves its
 backend from the origin it is served on, so the same stack works on localhost,
 through a tunnel, or behind a preview hostname without a rebuild.
 
