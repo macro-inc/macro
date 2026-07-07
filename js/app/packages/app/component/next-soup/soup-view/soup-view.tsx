@@ -318,9 +318,28 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'channel',
     (notification) => {
+      const meta = notification.notification_metadata;
+
+      let threadId;
+
+      if (
+        meta.tag === 'channel_mention' ||
+        meta.tag === 'channel_message_reply'
+      ) {
+        threadId = meta.content.threadId?.toString();
+      }
+
       refetchSoupEntity(notification.entity_id, 'channel');
       invalidateSoupEntity(notification.entity_id);
       invalidateEntityNotifications(notification.entity_id);
+
+      // For new inbox, we want to display channel threads so we should refetch the thread
+      // item if this notification was for a thread
+      if (threadId) {
+        refetchSoupEntity(threadId, 'channelThread');
+        invalidateSoupEntity(threadId);
+        invalidateEntityNotifications(threadId);
+      }
     }
   );
 
