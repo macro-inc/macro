@@ -741,7 +741,7 @@ export function useIsNewInboxEnabled() {
 export function usePreviewPaneVisiblity() {
   const panel = useSplitPanelOrThrow();
 
-  const { soup } = useSoupView();
+  const { soup, rows } = useSoupView();
 
   const isNewInboxEnabled = useIsNewInboxEnabled();
 
@@ -763,7 +763,7 @@ export function usePreviewPaneVisiblity() {
   });
 
   const previewPaneVisible = createMemo(
-    () => previewVisible() || previewPlaceholderVisible()
+    () => rows().length && (previewVisible() || previewPlaceholderVisible())
   );
 
   return {
