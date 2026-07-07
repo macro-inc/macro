@@ -11,6 +11,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isSettingsPath } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
@@ -49,7 +50,6 @@ import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
-import { SettingsModal } from './settings/SettingsModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const AUTH_URLS = [
@@ -64,7 +64,7 @@ const AUTH_URLS = [
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'slim' : 'hidden'),
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -77,7 +77,9 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isMobile() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname)
+      !AUTH_URLS.includes(location.pathname) &&
+      // Settings is a full-cover route with its own tab nav — hide app chrome.
+      !isSettingsPath(location.pathname)
   );
   createEffect(() => {
     console.log('VIZ', sidebarVisible());
@@ -151,7 +153,6 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
-          <SettingsModal />
         </Show>
         <Show
           when={

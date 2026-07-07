@@ -11,12 +11,14 @@ const {
 	"coding-model": codingModelFlag,
 	debug,
 	out,
+	prompt: promptFlag,
 	"prompt-file": promptFile,
-	_,
 } = await yargs(hideBin(process.argv))
-	.usage("$0 [prompt] --ws-url <url>")
+	.usage("$0 --prompt <text> --ws-url <url>")
 	.help()
+	.strict()
 	.option("ws-url", { type: "string", demandOption: true, describe: "sync service ws url with token, e.g. wss://…/document/<id>/connect?token=<doc-token>" })
+	.option("prompt", { type: "string", describe: "the edit instruction (or use --prompt-file)" })
 	.option("port", { type: "number", default: 8933, describe: "worker port" })
 	.option("worker-url", { type: "string", describe: "full worker base URL (overrides --port)" })
 	.option("supervisor-model", { type: "string", demandOption: true, describe: "provider:model for the supervisor" })
@@ -24,16 +26,17 @@ const {
 	.option("coding-model", { type: "string", demandOption: true, describe: "provider:model for the coding agents" })
 	.option("debug", { type: "boolean", default: false, describe: "include the supervisor step trace + replay trace in the response" })
 	.option("out", { type: "string", describe: "write the replay trace JSON to this file (implies --debug)" })
-	.option("prompt-file", { type: "string", describe: "read the prompt from this file instead of the positional arg" })
+	.option("prompt-file", { type: "string", describe: "read the prompt from this file instead of --prompt" })
+	.check((argv) => {
+		if (!argv.prompt && !argv["prompt-file"]) throw new Error("provide --prompt <text> or --prompt-file <path>");
+		if (argv._.length > 0) throw new Error(`unexpected positional args: ${argv._.join(" ")} — everything is a flag (use --prompt)`);
+		return true;
+	})
 	.parse();
 
 const prompt = promptFile
 	? (await Bun.file(promptFile as string).text()).trim()
-	: (_[0] as string | undefined);
-if (!prompt) {
-	console.error("Usage: bun run scripts/edit.ts [prompt] --ws-url <url>  (or pass --prompt-file <path>)");
-	process.exit(1);
-}
+	: (promptFlag as string);
 
 const parsed = new URL(wsUrl as string);
 const pathParts = parsed.pathname.split("/");

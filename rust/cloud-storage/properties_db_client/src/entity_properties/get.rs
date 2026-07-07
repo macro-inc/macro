@@ -471,14 +471,16 @@ WHERE (ep.entity_id, ep.entity_type) IN (
 
 /// Gets entity properties with their definitions and values for multiple entities, filtered by property definition IDs.
 /// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
-/// Only returns properties matching the specified property_ids.
+/// Only returns properties matching the specified property_ids. When `tag_viewer_user_id` is set,
+/// also returns TAG properties whose definition is owned by that user or their team.
 #[tracing::instrument(skip(db))]
 pub async fn get_bulk_entity_properties_values_filtered(
     db: &Pool<Postgres>,
     entity_refs: &[EntityReference],
     property_ids: &[Uuid],
+    tag_viewer_user_id: Option<&str>,
 ) -> Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
-    if entity_refs.is_empty() || property_ids.is_empty() {
+    if entity_refs.is_empty() || (property_ids.is_empty() && tag_viewer_user_id.is_none()) {
         // If no property_ids specified, return empty map for each entity
         let mut result = HashMap::new();
         for entity_ref in entity_refs {
@@ -514,11 +516,23 @@ INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
 WHERE (ep.entity_id, ep.entity_type) IN (
     SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
 )
-AND pd.id = ANY($3::UUID[])
+AND (
+    pd.id = ANY($3::UUID[])
+    OR (
+        $4::text IS NOT NULL
+        AND pd.data_type = $5
+        AND (
+            pd.user_id = $4
+            OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $4)
+        )
+    )
+)
         "#,
         &entity_ids,
         &entity_types as &[EntityType],
-        &property_ids
+        &property_ids,
+        tag_viewer_user_id,
+        DataType::Tag as DataType
     )
     .fetch_all(db)
     .await?;
@@ -1136,6 +1150,73 @@ mod tests {
         } else {
             panic!("Expected Number value");
         }
+
+        Ok(())
+    }
+
+    /// Definition ids returned for tagdoc1 given a set of requested property
+    /// ids and an optional tag viewer.
+    async fn tagdoc_definition_ids(
+        pool: &Pool<Postgres>,
+        property_ids: &[Uuid],
+        tag_viewer: Option<&str>,
+    ) -> anyhow::Result<Vec<Uuid>> {
+        let entity_refs = vec![EntityReference {
+            entity_id: "tagdoc1".to_string(),
+            entity_type: EntityType::Document,
+            specific_message_id: None,
+        }];
+        let map = get_bulk_entity_properties_values_filtered(
+            pool,
+            &entity_refs,
+            property_ids,
+            tag_viewer,
+        )
+        .await?;
+        Ok(map["tagdoc1"]
+            .iter()
+            .map(|p| p.definition.id)
+            .collect::<Vec<_>>())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("properties", "tags"))
+    )]
+    async fn test_get_bulk_filtered_includes_caller_visible_tags(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        let priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+        let user1_tags = Uuid::parse_str("aa111111-1111-1111-1111-111111111111")?;
+        let team1_tags = Uuid::parse_str("aa222222-2222-2222-2222-222222222222")?;
+        let user2_tags = Uuid::parse_str("aa333333-3333-3333-3333-333333333333")?;
+
+        // user1 sees the requested id plus their own and their team's tags,
+        // never another user's personal tags.
+        let ids = tagdoc_definition_ids(&pool, &[priority], Some("user1")).await?;
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&priority));
+        assert!(ids.contains(&user1_tags));
+        assert!(ids.contains(&team1_tags));
+        assert!(!ids.contains(&user2_tags));
+
+        // A teammate without a personal set sees only the team tags.
+        let ids = tagdoc_definition_ids(&pool, &[priority], Some("user3")).await?;
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&priority));
+        assert!(ids.contains(&team1_tags));
+
+        // No viewer: only the explicitly requested ids.
+        let ids = tagdoc_definition_ids(&pool, &[priority], None).await?;
+        assert_eq!(ids, vec![priority]);
+
+        // A viewer with no requested ids still gets their tags.
+        let ids = tagdoc_definition_ids(&pool, &[], Some("user1")).await?;
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&user1_tags));
+        assert!(ids.contains(&team1_tags));
 
         Ok(())
     }

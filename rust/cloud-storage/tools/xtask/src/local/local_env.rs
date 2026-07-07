@@ -194,7 +194,10 @@ impl ServiceAuthEnv {
         ServiceAuthEnv {
             service_internal: identity::instance_secret("service-internal", name),
             dss_auth: identity::instance_secret("dss-auth", name),
-            doc_perm_jwt: identity::instance_secret("doc-perm-jwt", name),
+            // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
+            // ("local") so locally-minted tokens verify. This is ONLY for local
+            // dev use obv
+            doc_perm_jwt: "local".to_string(),
             internal_call: identity::instance_secret("internal-call", name),
             url_signing: identity::instance_secret("url-signing", name),
         }
@@ -222,10 +225,7 @@ impl ServiceAuthEnv {
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
             self.dss_auth.clone(),
         );
-        env.insert(
-            "DOCUMENT_PERMISSION_JWT_SECRET_KEY".into(),
-            self.doc_perm_jwt.clone(),
-        );
+        env.insert("DOCUMENT_PERMISSION_JWT".into(), self.doc_perm_jwt.clone());
         env.insert("INTERNAL_CALL_SECRET".into(), self.internal_call.clone());
         env.insert("URL_SIGNING_HMAC".into(), self.url_signing.clone());
     }

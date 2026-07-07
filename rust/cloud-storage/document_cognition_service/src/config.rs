@@ -20,7 +20,7 @@ env_vars!(
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     pub struct McpCredentialsKeySecretName;
-    pub struct DocumentPermissionJwtSecretKey;
+    pub struct DocumentPermissionJwt;
 );
 
 maybe_env_vars!(
@@ -70,7 +70,7 @@ pub struct Config {
     #[macro_config_default(AiEditingWorkerUrl::unwrap_new().to_string())]
     pub ai_editing_worker_url: String,
     /// JWT secret for minting document permission tokens for the editing worker.
-    pub document_permission_jwt_secret_key: DocumentPermissionJwtSecretKey,
+    pub document_permission_jwt: DocumentPermissionJwt,
 }
 
 impl Config {
@@ -118,9 +118,7 @@ impl Config {
             ),
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
-            document_permission_jwt_secret_key: DocumentPermissionJwtSecretKey::Comptime(
-                "DOCUMENT_PERMISSION_JWT_SECRET_KEY",
-            ),
+            document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
         }
     }
 }

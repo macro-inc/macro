@@ -1,17 +1,24 @@
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useSenderName } from '@app/component/app-sidebar/utils';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { ReadonlyThread } from '@channel/StandaloneThread';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Avatar, cn, NavRow, Tooltip } from '@ui';
+import { Avatar, cn, NavRow, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -20,6 +27,7 @@ import {
   on,
   onCleanup,
   onMount,
+  type ParentProps,
   Show,
 } from 'solid-js';
 
@@ -111,6 +119,95 @@ function groupByChannel(
   }
 
   return groups;
+}
+
+const HOVER_PREVIEW_COUNT = 3;
+
+// Unique thread roots (a reply previews its whole thread), newest first.
+function getPreviewThreadRoots(group: ChannelGroup): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const notification of group.notifications) {
+    const { messageId, threadId } = getChannelNotificationParams(notification);
+    const rootId = threadId ?? messageId;
+    if (!rootId || seen.has(rootId)) continue;
+    seen.add(rootId);
+    roots.push(rootId);
+  }
+  return roots;
+}
+
+function GroupHoverPreview(props: { group: ChannelGroup }) {
+  const orchestrator = useGlobalBlockOrchestrator();
+  const roots = () => getPreviewThreadRoots(props.group);
+  // Show the latest few threads oldest → newest, like the channel reads.
+  const visible = () => roots().slice(0, HOVER_PREVIEW_COUNT).reverse();
+  const hiddenCount = () => roots().length - visible().length;
+
+  return (
+    <div class="w-90 min-h-12 max-h-96 overflow-y-auto overscroll-contain flex flex-col py-1">
+      <Show when={hiddenCount() > 0}>
+        <span class="px-3 py-1 text-xs text-ink-extra-muted">
+          +{hiddenCount()} earlier
+        </span>
+      </Show>
+      <For each={visible()}>
+        {(rootMessageId) => (
+          <ReadonlyThread
+            channelId={props.group.entityId}
+            messageId={rootMessageId}
+            onClickMessage={(clickedMessageId, e) => {
+              e.stopPropagation();
+              const isReply = clickedMessageId !== rootMessageId;
+              navigateToChannelMessage(
+                orchestrator,
+                props.group.entityId,
+                clickedMessageId,
+                isReply ? rootMessageId : undefined
+              );
+            }}
+          />
+        )}
+      </For>
+    </div>
+  );
+}
+
+function UnreadHoverCard(
+  props: ParentProps<{ group: ChannelGroup; disabled?: boolean }>
+) {
+  const [hovered, setHovered] = createSignal(false);
+  const open = () => hovered() && !props.disabled;
+
+  return (
+    <Show when={!isTouchDevice()} fallback={props.children}>
+      <KobalteTooltip
+        open={open()}
+        onOpenChange={setHovered}
+        placement="right"
+        overflowPadding={16}
+        fitViewport={true}
+        closeDelay={250}
+        openDelay={1000}
+        flip={true}
+        gutter={4}
+      >
+        <KobalteTooltip.Trigger
+          class="inline-flex items-center w-full"
+          as="div"
+        >
+          {props.children}
+        </KobalteTooltip.Trigger>
+        <KobalteTooltip.Portal>
+          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation">
+            <Surface depth={3}>
+              <GroupHoverPreview group={props.group} />
+            </Surface>
+          </KobalteTooltip.Content>
+        </KobalteTooltip.Portal>
+      </KobalteTooltip>
+    </Show>
+  );
 }
 
 function ChannelGroupItem(props: {
@@ -239,8 +336,10 @@ function ChannelGroupItem(props: {
     </NavRow>
   );
 
+  const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setContextMenuOpen}>
       <ContextMenu.Trigger
         class={cn(isSlim() ? 'flex justify-center' : 'w-full')}
       >
@@ -252,7 +351,9 @@ function ChannelGroupItem(props: {
             </Tooltip>
           }
         >
-          <ButtonContent />
+          <UnreadHoverCard group={props.group} disabled={contextMenuOpen()}>
+            <ButtonContent />
+          </UnreadHoverCard>
         </Show>
       </ContextMenu.Trigger>
 

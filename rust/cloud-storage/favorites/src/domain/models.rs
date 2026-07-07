@@ -5,7 +5,9 @@ use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 
 /// A single favorited entity, including display metadata hydrated from the
-/// favorited entity where available.
+/// favorited entity where available. Display names are deliberately not
+/// included: clients resolve them from the entity previews pipeline, which
+/// is viewer-relative for DM channels and updated by renames.
 ///
 /// A favorite is identified by `(entity_type, entity_id)` within the user's
 /// collection; there is no surrogate id.
@@ -24,9 +26,6 @@ pub struct Favorite {
     pub sort_order: f64,
     /// When the favorite was created.
     pub created_at: DateTime<Utc>,
-    /// Display name of the favorited entity, when it could be resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
     /// File type of the favorited document, when applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,

@@ -1229,17 +1229,34 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
 }
 
 #[test]
-fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
+fn test_build_thread_email_filter_calendar_only_true_uses_thread_flag() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
     let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("EXISTS"));
-    assert!(debug.contains("email_attachments"));
-    assert!(debug.contains("m_cal.thread_id = t.id"));
-    assert!(debug.contains("a_cal.filename ILIKE '%.ics'"));
-    assert!(debug.contains("a_cal.mime_type = 'text/calendar'"));
-    assert!(debug.contains("a_cal.mime_type = 'application/ics'"));
+    assert!(debug.contains("t.has_calendar_attachment"));
+    // No per-thread attachment probe remains in the candidate WHERE.
+    assert!(!debug.contains("email_attachments"));
+}
+
+#[test]
+fn test_full_query_calendar_only_uses_thread_flag_without_cte() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        sql.contains("t.has_calendar_attachment"),
+        "candidate WHERE must use the denormalized flag: {sql}"
+    );
+    assert!(
+        !sql.contains("calendar_threads"),
+        "calendar CTE should be gone: {sql}"
+    );
+    assert!(
+        !sql.contains("email_attachments"),
+        "no attachment scan should remain: {sql}"
+    );
 }
 
 #[test]

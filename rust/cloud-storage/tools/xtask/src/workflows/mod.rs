@@ -15,6 +15,8 @@ mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod cancel_stuck_cloud_storage_deploys;
+mod cargo_deny;
+mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
 mod cleanup_preview;
@@ -122,6 +124,18 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 cancel_stuck_cloud_storage_deploys::cancel_stuck_cloud_storage_deploys,
                 cancel_stuck_cloud_storage_deploys::patch,
             )
+        },
+    },
+    WorkflowFile {
+        slug: "cargo_deny",
+        file_name: "cargo_deny.yml",
+        render_yaml: || render_gh_workflow(cargo_deny::cargo_deny)(),
+    },
+    WorkflowFile {
+        slug: "cargo_workspace_dependency_check",
+        file_name: "cargo_workspace_dependency_check.yml",
+        render_yaml: || {
+            render_gh_workflow(cargo_workspace_dependency_check::cargo_workspace_dependency_check)()
         },
     },
     WorkflowFile {

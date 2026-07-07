@@ -49,7 +49,7 @@ env_vars! {
     /// links to Macro items in MCP responses.
     pub struct AppBaseUrl;
     /// JWT secret for minting document permission tokens for the editing worker.
-    pub struct DocumentPermissionJwtSecretKey;
+    pub struct DocumentPermissionJwt;
 }
 
 /// The configuration parameters for the MCP server.
@@ -86,7 +86,7 @@ pub struct Config {
     pub app_base_url: AppBaseUrl,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
-    pub document_permission_jwt_secret_key: DocumentPermissionJwtSecretKey,
+    pub document_permission_jwt: DocumentPermissionJwt,
 }
 
 impl Config {

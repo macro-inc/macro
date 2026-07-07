@@ -18,7 +18,11 @@
 		"hono": "^4.6.20",
 		"quickjs-emscripten": "^0.31.0",
 		"yargs": "^18.0.0",
-		"zod": "^4.4.3"
+		"zod": "^4.4.3",
+		"bitf": "^1.0.2",
+		"flat": "^6.0.1",
+		"p-queue": "^9.3.0",
+		"random-js": "^2.1.0"
 	},
 	"devDependencies": {
 		"@types/node": "^25.9.3",

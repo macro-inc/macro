@@ -727,7 +727,7 @@ async fn main() -> anyhow::Result<()> {
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
-            document_permission_jwt_secret: config.document_permission_jwt_secret_key.as_ref().to_string(),
+            document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),
         channels_state: ChannelsRouterState::from_arc(

@@ -296,3 +296,49 @@ async fn get_scheduled_db_messages_returns_empty_for_nonexistent_link(
 
     Ok(())
 }
+
+async fn fetch_calendar_flag(pool: &Pool<Postgres>, thread_id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        "SELECT has_calendar_attachment FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b201")?;
+    let ics_message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+    let fusionauth_user_id = "00000000-0000-0000-0000-000000000b01";
+
+    // Establish the flag from the fixture's .ics attachment.
+    let mut conn = pool.acquire().await?;
+    crate::threads::update::sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    drop(conn);
+    assert!(fetch_calendar_flag(&pool, thread_id).await?);
+
+    let message = crate::messages::get_simple_messages::get_simple_message(
+        &pool,
+        &ics_message_id,
+        fusionauth_user_id,
+    )
+    .await?
+    .expect("fixture message present");
+
+    let mut tx = pool.begin().await?;
+    let deleted_thread =
+        crate::messages::delete::delete_message_with_tx(&mut tx, &message, true).await?;
+    tx.commit().await?;
+
+    // The thread survives (a second message remains) and the flag flips off
+    // because its attachments cascaded away with the message.
+    assert!(deleted_thread.is_none());
+    assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    Ok(())
+}

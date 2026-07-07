@@ -1,13 +1,21 @@
 import {
+  createRenderEffect,
   createSignal,
   For,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
-import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
+import { useLocation } from '@solidjs/router';
+import {
+  type SettingsTab,
+  settingsTabFromSplitPath,
+  useSettingsState,
+} from '@core/constant/SettingsState';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLogout } from '@core/auth/logout';
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileApp } from './MobileApp';
@@ -36,9 +44,9 @@ import {
 import { Billing } from '@app/component/settings/Billing';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
-export type SettingsVariant = 'split' | 'modal';
+export type SettingsVariant = 'split' | 'fullscreen';
 
-// Panel-width breakpoints (the panel can be a full-screen modal or a resizable
+// Panel-width breakpoints (the panel can be a full-screen page or a resizable
 // split, so we measure the panel itself rather than the viewport). Below
 // `COMPACT` the sidebar collapses into a horizontal tab bar; between `COMPACT`
 // and `NARROW` the gutter around the content card tightens.
@@ -46,9 +54,20 @@ const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
-  return (
-      <SettingsPanel />
-  )
+  const location = useLocation();
+  // Sync the active page from the docked split's URL (`settings/<slug>`). Read
+  // the live URL reactively — not static mount props — so browser back/forward
+  // and direct navigation stay in sync: reconcile reuses this component on
+  // same-key changes, so it never remounts to pick up a new tab. Using
+  // createRenderEffect (runs during render) matches the previous synchronous set
+  // so the layout URL-sync never observes a stale tab on first paint, and the
+  // activeTabId read is untracked so a tab click (which sets it, then updates
+  // the URL) isn't reverted by this effect firing before the URL catches up.
+  createRenderEffect(() => {
+    const tab = settingsTabFromSplitPath(location.pathname);
+    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+  });
+  return <SettingsPanel />;
 }
 
 type SettingsPanelProps = {
@@ -61,9 +80,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const {
     closeSettings,
     moveSettingsToSplit,
-    moveSettingsToModal,
+    moveSettingsToFullscreen,
     activeTabId,
-    setActiveTabId,
+    selectTab,
   } = useSettingsState();
   const { groups, flatTabs, isAvailable } = useSettingsTabs();
   const logout = useLogout();
@@ -116,7 +135,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        setActiveTabId(tab.tab);
+        selectTab(tab.tab);
         return true;
       }
     }
@@ -174,7 +193,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      setActiveTabId(value as SettingsTab);
+      selectTab(value as SettingsTab);
     }
   };
 
@@ -196,7 +215,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     );
   }
 
-  // "Back to app" — the modal's only close affordance. Laid out like a nav row.
+  // "Back to app" — the full-page route's only close affordance. Laid out like a nav row.
   const backToApp = () => (
     <button
       type="button"
@@ -249,13 +268,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </div>
           </Show>
         </SplitHeaderLeft>
-        {/* Pop the split back out into the modal (desktop only). */}
+        {/* Pop the split back out into the full-page settings route (desktop only). */}
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
               class="p-1 rounded-lg"
-              label="Open in modal"
-              onClick={() => moveSettingsToModal()}
+              label="Open fullscreen"
+              onClick={() => moveSettingsToFullscreen()}
             >
               <ArrowsOut class="size-4" />
             </Button>
@@ -272,9 +291,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
               narrow() ? 'pr-1' : 'pr-2'
             )}
           >
-            {/* The full-screen modal has no surrounding chrome, so the sidebar
+            {/* The full-screen page has no surrounding chrome, so the sidebar
                 carries the "back" and "move to split" affordances itself. */}
-            <Show when={variant() === 'modal'}>
+            <Show when={variant() === 'fullscreen'}>
               <div class="flex items-center justify-between gap-1">
                 {backToApp()}
                 {moveToSplitButton()}
@@ -324,11 +343,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         >
           <Layer depth={1}>
             <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
-              {/* Compact modal chrome: no split header to host the tabs, so
-                  the sidebar collapses into a top bar here — back / tab
+              {/* Compact full-screen chrome: no split header to host the tabs,
+                  so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its
                   header.) */}
-              <Show when={variant() === 'modal' && compact()}>
+              <Show when={variant() === 'fullscreen' && compact()}>
                 <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
                   {backToApp()}
                   <TabsInsetDropdown

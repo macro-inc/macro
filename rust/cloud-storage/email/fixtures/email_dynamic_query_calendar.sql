@@ -33,3 +33,16 @@ VALUES
     -- Thread 7 (inbox with CC): only a non-calendar attachment → should NOT match
     ('90000007-0000-0000-0000-000000000007', '30000007-0000-0000-0000-000000000007',
      'report.pdf', 'application/pdf', NOW());
+
+-- Maintain the denormalized flag the CalendarOnly filter reads (set at
+-- attachment ingest in production; mirrored here for the raw inserts above).
+UPDATE email_threads t
+SET has_calendar_attachment = true
+WHERE t.id IN (
+    SELECT m.thread_id
+    FROM email_attachments a
+    JOIN email_messages m ON m.id = a.message_id
+    WHERE a.filename ILIKE '%.ics'
+       OR a.mime_type = 'text/calendar'
+       OR a.mime_type = 'application/ics'
+);

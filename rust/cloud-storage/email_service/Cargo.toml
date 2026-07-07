@@ -14,6 +14,10 @@ name = "backfill_contacts"
 path = "src/bin/backfill_contacts/backfill_contacts.rs"
 
 [[bin]]
+name = "backfill_calendar_flags"
+path = "src/bin/backfill_calendar_flags/backfill_calendar_flags.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 

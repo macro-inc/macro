@@ -38,7 +38,7 @@ env_vars! {
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     #[derive(Clone)]
-    pub struct DocumentPermissionJwtSecretKey;
+    pub struct DocumentPermissionJwt;
     pub struct GithubWebhookSecretKey;
     pub struct GithubSyncAppPemSecretKey;
     pub struct CalWebhookSecretKey;
@@ -136,7 +136,7 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key:
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
 
-    pub document_permission_jwt_secret_key: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
+    pub document_permission_jwt: DocumentPermissionJwt,
 
     pub livekit_transcription_agent_name: LivekitTranscriptionAgentName,
     pub internal_call_secret: InternalCallSecret,

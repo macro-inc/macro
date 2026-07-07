@@ -645,7 +645,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           </Show>
           <Show when={text().content?.trim()}>
             {(value) => (
-              <InboxCard.Content class="truncate text-sm text-ink/60">
+              <InboxCard.Content class="truncate flex text-sm text-ink/60">
                 <StaticMarkdown
                   markdown={value()}
                   singleLine
