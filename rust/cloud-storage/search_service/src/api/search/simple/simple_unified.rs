@@ -233,6 +233,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
+    // Tags additionally apply to the emails index, where thread properties
+    // are denormalized onto every message doc.
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
     // Tags are only indexed for the documents index. With a tag filter
@@ -320,10 +322,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     // has_child clause ANDed via bool.must.
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
-    filter_document_response.tag_option_ids = tag_option_ids;
+    filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
     filter_email_response.terms = email_terms.clone();
+    filter_email_response.tag_option_ids = tag_option_ids;
     filter_call_record_response.terms = search_terms.clone();
 
     // Widen the email access filter to every inbox the caller can reach (their

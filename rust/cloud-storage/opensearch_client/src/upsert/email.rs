@@ -1,6 +1,7 @@
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
+use super::properties::IndexedProperty;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting an email message into the opensearch index
@@ -45,6 +46,10 @@ pub struct UpsertEmailArgs {
     pub sent_at_seconds: Option<EpochSeconds>,
     /// The content of the email message
     pub content: String,
+    /// Denormalized thread properties (e.g. tags) used for search filtering.
+    /// Thread-level, so identical across every message doc of the thread.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<IndexedProperty>,
 }
 
 #[tracing::instrument(skip(client))]
@@ -126,4 +131,71 @@ pub(crate) async fn bulk_upsert_email_messages(
     let index = index_override.unwrap_or(SearchIndex::Emails.as_ref());
 
     super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_email_messages").await
+}
+
+/// Update only the denormalized `properties` on every message doc of a
+/// thread, without touching content. The emails index is flat (one doc per
+/// message sharing the thread's `entity_id`), so this is an update-by-query
+/// rather than a single-doc update. Zero matched docs is a no-op — the
+/// thread isn't indexed yet, so the next full index will include the
+/// properties. Version conflicts proceed: a concurrent full reindex writes
+/// the same freshly-fetched values.
+pub(crate) async fn update_email_thread_properties(
+    client: &opensearch::OpenSearch,
+    thread_id: &str,
+    properties: &[IndexedProperty],
+) -> Result<()> {
+    let properties_value =
+        serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
+            details: err.to_string(),
+            method: Some("update_email_thread_properties".to_string()),
+        })?;
+    let body = serde_json::json!({
+        "query": { "term": { "entity_id": thread_id } },
+        "script": {
+            "source": "ctx._source.properties = params.properties",
+            "lang": "painless",
+            "params": { "properties": properties_value }
+        }
+    });
+
+    let response = client
+        .update_by_query(opensearch::UpdateByQueryParts::Index(&[
+            SearchIndex::Emails.as_ref(),
+        ]))
+        .conflicts(opensearch::params::Conflicts::Proceed)
+        .refresh(true) // Ensure the index reflects changes immediately
+        .body(body)
+        .send()
+        .await
+        .map_err(|err| OpensearchClientError::DeserializationFailed {
+            details: err.to_string(),
+            method: Some("update_email_thread_properties".to_string()),
+        })?;
+
+    let status_code = response.status_code();
+    if status_code.is_success() {
+        tracing::trace!(thread_id=%thread_id, "email thread properties updated");
+        return Ok(());
+    }
+    let body =
+        response
+            .text()
+            .await
+            .map_err(|err| OpensearchClientError::DeserializationFailed {
+                details: err.to_string(),
+                method: Some("update_email_thread_properties".to_string()),
+            })?;
+
+    tracing::error!(
+        status_code=?status_code,
+        body=?body,
+        thread_id=%thread_id,
+        "error updating email thread properties",
+    );
+
+    Err(OpensearchClientError::Unknown {
+        details: body,
+        method: Some("update_email_thread_properties".to_string()),
+    })
 }

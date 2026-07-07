@@ -1,7 +1,7 @@
 use anyhow::Context;
 use model::document::FileTypeExt;
 use opensearch_client::OpensearchClient;
-use sqs_client::search::document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage};
+use sqs_client::search::document::{DocumentId, SearchExtractorMessage};
 
 mod document_info;
 mod raw_document;
@@ -70,17 +70,3 @@ pub async fn process_extract_sync_message(
     Ok(())
 }
 
-pub async fn process_property_update(
-    opensearch_client: &OpensearchClient,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    message: &DocumentPropertiesUpdate,
-) -> anyhow::Result<()> {
-    raw_document::update_search_with_property_update(opensearch_client, db, message)
-        .await
-        .context(format!(
-            "{} unable to update document properties in search",
-            message.document_id
-        ))?;
-
-    Ok(())
-}
