@@ -6,11 +6,13 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { isMobile } from '@core/mobile/isMobile';
 
 import { logger } from '@observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -18,7 +20,9 @@ import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { cn } from '@ui';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { BottomReplyButtons } from './BottomReplyButtons';
 
 interface MessageContainerProps {
   message: ApiMessage;
@@ -27,6 +31,7 @@ interface MessageContainerProps {
   isFocused: boolean;
   isTarget: boolean;
   isExpanded: boolean;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -45,6 +50,27 @@ export function MessageContainer(props: MessageContainerProps) {
   const showReply = () =>
     showReplyInternal() ||
     context.messages.replyingToMessageId() === props.message.db_id;
+
+  const showInlineReplyInput = createMemo(() => {
+    if (!props.isLastMessage) return showReply() || !!draftChild();
+    return (
+      !isMobile() && (context.messages.bottomReplyOpen() || !!draftChild())
+    );
+  });
+
+  const showDesktopLastReplyControls = createMemo(
+    () =>
+      props.isLastMessage &&
+      !!props.message.db_id &&
+      !isMobile() &&
+      context.drafts.initialDraftsSettled()
+  );
+
+  const showInlineReplyArea = createMemo(
+    () =>
+      context.permissions().isOwner &&
+      (showInlineReplyInput() || showDesktopLastReplyControls())
+  );
 
   const setShowReply = (value: boolean | ((prev: boolean) => boolean)) => {
     const newValue =
@@ -200,10 +226,10 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative rounded-lg overflow-hidden pl-1 pr-1.5 py-2 ring-1 ring-inset [&>div]:bg-transparent!"
+            class="relative rounded-lg overflow-hidden p-2 ring"
             classList={{
               'bg-active/60 ring-edge': props.isFocused,
-              'bg-ink-muted/[0.025] ring-ink-muted/8': !props.isFocused,
+              'bg-ink-muted/4 ring-transparent': !props.isFocused,
             }}
           >
             <Message
@@ -217,9 +243,8 @@ export function MessageContainer(props: MessageContainerProps) {
               isTarget={props.isTarget}
               hasReplyInputBelow={true}
               hideConnectors
-              hasThreadChildren={
-                !props.isLastMessage && (showReply() || !!draftChild())
-              }
+              disableHoverBackground
+              hasThreadChildren={showInlineReplyArea()}
             >
               <Message.TopBar>
                 <EmailMessageTopBar
@@ -325,16 +350,35 @@ export function MessageContainer(props: MessageContainerProps) {
                 </div>
               </Show>
             </Message>
-            <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
-              <Show when={context.permissions().isOwner}>
-                <div class="border-t border-ink-muted/8 -mx-1.5 px-1.5 pt-2 pb-1 [&>*>div]:border-0! [&>*>div]:bg-transparent! [&>*>div]:rounded-none!">
-                  <EmailInput
-                    replyingTo={() => props.message}
-                    setShowReply={setShowReply}
-                    draft={draftChild()}
+            <Show when={showInlineReplyArea()}>
+              <div
+                class={cn(
+                  'relative border-t border-edge-muted',
+                )}
+              >
+                <Show when={props.isLastMessage && !isMobile()}>
+                  <FloatingInputLoader
+                    isLoading={context.query.isFetching}
+                    loadingText="Loading messages"
                   />
-                </div>
-              </Show>
+                </Show>
+                <Switch>
+                  <Match when={showInlineReplyInput()}>
+                    <EmailInput
+                      replyingTo={() => props.message}
+                      setShowReply={setShowReply}
+                      draft={draftChild()}
+                      markdownDomRef={
+                        props.isLastMessage ? props.markdownDomRef : undefined
+                      }
+                      unframed
+                    />
+                  </Match>
+                  <Match when={props.isLastMessage && !isMobile()}>
+                    <BottomReplyButtons lastMessage={props.message} />
+                  </Match>
+                </Switch>
+              </div>
             </Show>
           </div>
         </div>

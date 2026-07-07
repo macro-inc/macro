@@ -19,6 +19,7 @@ const LAST_MESSAGE_REST_FRACTION = 0.4;
 
 interface MessageListProps {
   initialLoadComplete: boolean;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   onScrollPositionChange?: (scrollFromTop: number) => void;
   title?: string;
   /**
@@ -149,6 +150,9 @@ export function MessageList(props: MessageListProps) {
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}
                 isExpanded={isExpanded()}
+                markdownDomRef={
+                  isLastMessage() ? props.markdownDomRef : undefined
+                }
               />
             );
           }}

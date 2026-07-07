@@ -688,6 +688,9 @@ function EmailContent(props: EmailViewProps) {
                   </Show>
                   <MessageList
                     initialLoadComplete={context.initialLoadComplete()}
+                    markdownDomRef={(el) => {
+                      markdownDomRef = el;
+                    }}
                     onScrollPositionChange={handleScrollPositionChange}
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
@@ -697,7 +700,7 @@ function EmailContent(props: EmailViewProps) {
                     scrollContainer={context.messagesListRef}
                   />
                 </div>
-                <Show when={replyArea()}>
+                <Show when={isMobile() && replyArea()}>
                   {(info) => (
                     <div
                       class={cn(
@@ -711,7 +714,7 @@ function EmailContent(props: EmailViewProps) {
                           : 'mobile:hidden'
                       )}
                     >
-                      <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
+                      <div class="relative w-full flex flex-row justify-center macro-message-width macro-message-padding mx-auto bg-[green]">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}
                           loadingText="Loading messages"
