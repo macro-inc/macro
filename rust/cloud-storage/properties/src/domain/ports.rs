@@ -6,15 +6,13 @@
 use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::TaskAssignedMetadata;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
-use notification::domain::models::SendNotificationRequest;
 use uuid::Uuid;
 
-use super::model::{EntityPropertiesKey, EntityPropertyInfo};
+use super::model::{EntityPropertiesKey, EntityPropertyInfo, TaskAssignedNotification};
 
 /// Repository trait for property operations.
 ///
@@ -132,21 +130,6 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
     > + Send;
-
-    /// Get the name of a document.
-    /// Returns `None` if the document doesn't exist or has no name.
-    /// Tasks are stored as documents, so this works for both documents and tasks.
-    fn get_document_name(
-        &self,
-        id: &str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
-
-    /// Get the profile picture URL for a user.
-    /// Returns `None` if the user doesn't exist or has no profile picture.
-    fn get_user_profile_picture(
-        &self,
-        user_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
@@ -185,21 +168,18 @@ pub trait PermissionService: Send + Sync + 'static {
 /// Notification service trait for sending notifications.
 ///
 /// This trait abstracts notification operations, allowing for different implementations
-/// (e.g., notification-service-backed, mock for testing).
+/// (e.g., notification-service-backed, mock for testing). Adapters are expected to
+/// enrich the domain-level notification (task name, sender profile picture) and fan
+/// out delivery per recipient on a best-effort basis.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait NotificationService: Send + Sync + 'static {
     type Err;
 
-    /// Send a notification message.
-    /// Returns the notification ID if successful.
-    fn send_notification<'a>(
+    /// Notify the recipients that they were assigned to a task.
+    fn send_task_assigned<'a>(
         &self,
-        message: SendNotificationRequest<
-            'a,
-            TaskAssignedMetadata,
-            notification::domain::models::apple::PushNotificationData,
-        >,
-    ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
+        notification: TaskAssignedNotification<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Port for keeping an entity's indexed properties in sync after a mutation.

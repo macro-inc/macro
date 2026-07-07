@@ -1,5 +1,6 @@
 //! Domain models for properties.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType};
@@ -49,4 +50,19 @@ pub struct PropertyOptionInfo {
     pub display_order: i32,
     /// The option's value.
     pub value: PropertyOptionValue,
+}
+
+/// A task-assignment notification expressed in domain terms.
+///
+/// Outbound adapters enrich this (task name, sender profile picture) and
+/// translate it to the concrete notification infrastructure, fanning out one
+/// notification per recipient.
+#[derive(Debug, Clone)]
+pub struct TaskAssignedNotification<'a> {
+    /// The task the recipients were assigned to.
+    pub task_id: Uuid,
+    /// The user who assigned the task.
+    pub assigned_by: MacroUserIdStr<'a>,
+    /// The newly assigned users to notify.
+    pub recipient_ids: Vec<MacroUserIdStr<'a>>,
 }

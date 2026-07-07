@@ -504,15 +504,11 @@ pub struct NoOpNotificationService;
 impl properties::NotificationService for NoOpNotificationService {
     type Err = anyhow::Error;
 
-    async fn send_notification<'a>(
+    async fn send_task_assigned<'a>(
         &self,
-        _message: notification::domain::models::SendNotificationRequest<
-            'a,
-            model_notifications::TaskAssignedMetadata,
-            notification::domain::models::apple::PushNotificationData,
-        >,
-    ) -> Result<uuid::Uuid, Self::Err> {
-        Ok(uuid::Uuid::nil())
+        _notification: properties::domain::model::TaskAssignedNotification<'a>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
     }
 }
 

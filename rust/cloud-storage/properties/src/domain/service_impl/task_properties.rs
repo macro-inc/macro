@@ -2,17 +2,16 @@
 
 use std::collections::HashSet;
 
-use futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::property_value::PropertyValue;
-use notification::domain::models::SendNotificationRequestBuilder;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
+use crate::domain::model::TaskAssignedNotification;
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
@@ -178,73 +177,18 @@ where
             return Ok(());
         }
 
-        let task_name = self
-            .repository
-            .get_document_name(&task_id.to_string())
+        let assigned_by = MacroUserIdStr::parse_from_str(assigned_by_user_id)
+            .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?;
+
+        notification_service
+            .send_task_assigned(TaskAssignedNotification {
+                task_id,
+                assigned_by,
+                recipient_ids,
+            })
             .await
             .map_err(anyhow::Error::from)
             .map_err(PropertiesErr::Repo)?;
-
-        let assigned_by =
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str(assigned_by_user_id)
-                .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?
-                .into_owned();
-
-        let notification_entity =
-            model_entity::EntityType::Document.with_entity_string(task_id.to_string());
-
-        let sender_profile_picture_url = self
-            .repository
-            .get_user_profile_picture(assigned_by_user_id)
-            .await
-            .ok()
-            .flatten();
-
-        let notification_futures: Vec<_> = recipient_ids
-            .iter()
-            .map(|recipient_id| {
-                let metadata = model_notifications::TaskAssignedMetadata {
-                    task_id: task_id.to_string(),
-                    task_name: task_name.clone(),
-                    sub_type: Some(model_notifications::NotificationDocumentSubType::Task),
-                    assigned_by: assigned_by.clone(),
-                    sender_profile_picture_url: sender_profile_picture_url.clone(),
-                };
-
-                let request = SendNotificationRequestBuilder {
-                    notification_entity: notification_entity.clone(),
-                    secondary_notification_entity: None,
-                    notification: metadata,
-                    sender_id: Some(assigned_by.clone()),
-                    recipient_ids: HashSet::from([recipient_id.copied()]),
-                }
-                .into_request()
-                .with_apns()
-                .with_conn_gateway();
-
-                let recipient_id_for_log = recipient_id.clone();
-                async move {
-                    let send_result = notification_service.send_notification(request).await;
-                    match send_result {
-                        Ok(notification_id) => {
-                            tracing::debug!(
-                                recipient_id = %recipient_id_for_log,
-                                notification_id = %notification_id,
-                                "sent task assignment notification"
-                            );
-                        }
-                        Err(_e) => {
-                            tracing::error!(
-                                recipient_id = %recipient_id_for_log,
-                                "failed to send task assignment notification"
-                            );
-                        }
-                    }
-                }
-            })
-            .collect();
-
-        join_all(notification_futures).await;
 
         Ok(())
     }

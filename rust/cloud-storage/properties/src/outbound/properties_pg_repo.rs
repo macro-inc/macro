@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::{
-    entity_info_queries, entity_properties_get_query, entity_property_queries,
-    property_definition_queries, task_property_queries,
+    entity_properties_get_query, entity_property_queries, property_definition_queries,
+    task_property_queries,
 };
 use crate::domain::model::{EntityPropertiesKey, EntityPropertyInfo};
 use crate::domain::ports::PropertiesRepo;
@@ -210,16 +210,5 @@ impl PropertiesRepo for PropertiesPgRepo {
                 }
             },
         }
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn get_document_name(&self, id: &str) -> Result<Option<String>, Self::Err> {
-        // Tasks are stored as documents, so this works for both documents and tasks
-        entity_info_queries::get_document_name(&self.pool, id).await
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn get_user_profile_picture(&self, user_id: &str) -> Result<Option<String>, Self::Err> {
-        entity_info_queries::get_user_profile_picture(&self.pool, user_id).await
     }
 }
