@@ -15,6 +15,13 @@ export type Bindings = {
 export type Env = ReturnType<typeof validateEnv>;
 
 function validateEnv(rawEnv: Bindings) {
+  const {
+    ANTHROPIC_API_KEY,
+    CEREBRAS_API_KEY,
+    OPENAI_API_KEY,
+    SYNC_WS_BASE,
+    TRACE_ADMIN_KEY,
+  } = rawEnv;
   return envsafe(
     {
       ANTHROPIC_API_KEY: str({ allowEmpty: false }),
@@ -24,9 +31,15 @@ function validateEnv(rawEnv: Bindings) {
       // Empty when unset; the trace-read endpoint stays closed until it's set.
       TRACE_ADMIN_KEY: str({ default: '', allowEmpty: true }),
     },
-    // Cast through unknown: Bindings carries the TRACES_DB object binding, which
-    // envsafe's string-record env type can't represent.
-    { env: rawEnv as unknown as Record<string, string | undefined> }
+    {
+      env: {
+        ANTHROPIC_API_KEY,
+        CEREBRAS_API_KEY,
+        OPENAI_API_KEY,
+        SYNC_WS_BASE,
+        TRACE_ADMIN_KEY,
+      },
+    }
   );
 }
 

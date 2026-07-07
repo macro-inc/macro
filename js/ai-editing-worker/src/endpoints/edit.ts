@@ -127,22 +127,18 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       signal,
     }).finally(presence.stop);
 
-    // Persist inline before responding: the client disconnects the moment the
-    // edit finishes, tearing down the invocation, so a waitUntil() write gets
-    // cancelled before it lands. A single indexed insert is ~1ms. Wrapped so a
-    // DB failure can never fail the edit itself.
     const db = c.env.TRACES_DB;
     if (db) {
-      try {
-        await insertEditTrace(db, {
+      c.executionCtx.waitUntil(
+        insertEditTrace(db, {
           id: session.sessionId,
           document_id: documentId,
           created_at: Date.now(),
           trace_json: JSON.stringify(session),
-        });
-      } catch (e) {
-        console.error('failed to persist edit trace:', e);
-      }
+        }).catch((e) => {
+          console.error('failed to persist edit trace:', e);
+        })
+      );
     }
 
     return c.json({
