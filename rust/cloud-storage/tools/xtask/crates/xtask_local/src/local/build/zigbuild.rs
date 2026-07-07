@@ -92,7 +92,35 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .env("ZIG_LOCAL_CACHE_DIR", zig_cache)
         .env("RUSTC_WRAPPER", "sccache")
         .env("XDG_CACHE_HOME", zig_cache);
+    if let Some(flag) = curl_include_flag() {
+        // First-found wins in cc's env chain (CFLAGS_<target> before CFLAGS),
+        // so set the target-specific var too in case something else exports a
+        // plain CFLAGS that would otherwise shadow ours — and vice versa.
+        let var = format!("CFLAGS_{}", target.triple.replace('-', "_"));
+        cmd.env(var, &flag).env("CFLAGS", &flag);
+    }
     cmd
+}
+
+/// librdkafka 2.12's bundled cmake build needs curl *headers* even with
+/// `WITH_CURL=0` (its config header always defines `WITH_OAUTHBEARER_OIDC` via
+/// `#cmakedefine01`, and rdkafka_conf.c guards the curl include with `#ifdef`
+/// instead of `#if`). Host builds get them from the Nix cc-wrapper, which
+/// reads `NIX_CFLAGS_COMPILE` — but `zig cc` is a raw clang that ignores it,
+/// so the dev shell's `curl.dev` never reaches the cross cmake build. Mine
+/// the wrapper flags for an include dir that actually carries `curl/curl.h`
+/// and hand it to cc/cmake explicitly; `-idirafter` keeps it at the lowest
+/// search priority so it cannot shadow zig's own libc headers.
+// Reading the ambient Nix shell env is the point here; there is no config
+// layer this could come from.
+#[allow(clippy::disallowed_methods)]
+fn curl_include_flag() -> Option<String> {
+    let flags = std::env::var("NIX_CFLAGS_COMPILE").ok()?;
+    flags
+        .split_whitespace()
+        .filter(|tok| tok.starts_with('/'))
+        .find(|dir| Path::new(dir).join("curl/curl.h").is_file())
+        .map(|dir| format!("-idirafter {dir}"))
 }
 
 /// Fail with an actionable hint if the rust-std for `target` is not installed.
