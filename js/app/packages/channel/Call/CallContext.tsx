@@ -148,6 +148,10 @@ function nativeAudioProcessingConstraints(
   const useBrowserProcessing = mode === 'browser';
 
   return {
+    // applyConstraints() replaces the track's entire constraint set, so echo
+    // cancellation must be restated here or every mode change silently drops
+    // it back to unconstrained.
+    echoCancellation: true,
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
       ? { autoGainControl: false }
       : {}),
@@ -844,8 +848,12 @@ function createCallState() {
       await r.switchActiveDevice('audioinput', deviceId);
       setStore('activeAudioInputDeviceId', deviceId);
 
-      // If mic is currently live, republish with the new device to ensure it
-      // actually takes effect (switchActiveDevice alone can be unreliable).
+      // If the mic is live, cycle mute/unmute as a nudge for devices where
+      // switchActiveDevice's internal track restart doesn't take. Note this
+      // is NOT a republish: setMicrophoneEnabled(true, opts) ignores the
+      // capture options when the muted publication survives
+      // (stopMicTrackOnMute is false), so the device change itself always
+      // comes from switchActiveDevice above.
       if (!store.isAudioMuted) {
         await r.localParticipant.setMicrophoneEnabled(false);
         await r.localParticipant.setMicrophoneEnabled(
@@ -1042,7 +1050,10 @@ function createCallState() {
       if (newMuted) {
         await r.localParticipant.setMicrophoneEnabled(false);
       } else {
-        // Re-enable with the user's selected device
+        // Re-enable the mic. When the muted publication survived
+        // (stopMicTrackOnMute is false) this only unmutes and the capture
+        // options are ignored; they matter when the track was stopped and
+        // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
         await r.localParticipant.setMicrophoneEnabled(
           true,
