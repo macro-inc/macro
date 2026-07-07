@@ -246,16 +246,23 @@ pub async fn handler(
             .into_response()
     })?;
 
-    let _ = state
-        .sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(UpsertProject {
-            project_id: project.id.clone(),
-            index_override: None,
-        }))
-        .await
-        .inspect_err(
-            |e| tracing::error!(error=?e, project_id=?project.id, "unable to enqueue project search upsert"),
-        );
+    tokio::spawn({
+        let sqs_client = state.sqs_client.clone();
+        let project_id = project.id.clone();
+        async move {
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(
+                    UpsertProject {
+                        project_id: project_id.clone(),
+                        index_override: None,
+                    },
+                ))
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, project_id=?project_id, "unable to enqueue project search upsert"),
+                );
+        }
+    });
 
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }
