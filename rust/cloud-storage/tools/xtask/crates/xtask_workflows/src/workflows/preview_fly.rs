@@ -59,7 +59,11 @@ fn deploy() -> Job {
             "github.event.pull_request.head.repo.full_name == github.repository && \
              contains(github.event.pull_request.labels.*.name, 'preview')",
         ))
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_FLY_CACHE_TAG))
+        // Share the CI compile cache volume (nix store + sccache + cargo):
+        // this job compiles the same workspace as the check/test jobs, so its
+        // sccache entries are the same content-addressed set — a bespoke tag
+        // just means a permanently cold volume.
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
@@ -68,9 +72,10 @@ fn deploy() -> Job {
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
         .add_step(steps::checkout(false, true))
-        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
+        .add_step(steps::pin_sccache_dir())
         .add_step(
             Step::new("Build service binaries")
                 .run("cargo x zigbuild")

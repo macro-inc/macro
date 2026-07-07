@@ -391,6 +391,11 @@ services:
     build:
       context: ./rust/sync-service
       dockerfile: Dockerfile
+      # macro_sync_service_jwt is a `../cloud-storage/...` path dependency that
+      # lives outside this build context; hand it in as a named context so a
+      # fresh image build works (a stale cached image hides this otherwise).
+      additional_contexts:
+        - macro_sync_service_jwt=./rust/cloud-storage/macro_sync_service_jwt
     ports:
       - "8787:8787"
     volumes:

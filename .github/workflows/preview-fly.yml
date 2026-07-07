@@ -11,7 +11,7 @@ name: Fly Preview
 jobs:
   deploy:
     if: github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'preview')
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=preview-fly
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     permissions:
       contents: read
       pull-requests: write
@@ -26,7 +26,7 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: bun,rust
+        cache: rust
         path: |-
           /home/runner/.cache/sccache
           /nix
@@ -37,6 +37,10 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: Build service binaries
       run: cargo x zigbuild
       working-directory: rust/cloud-storage

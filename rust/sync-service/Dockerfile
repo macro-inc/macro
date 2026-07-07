@@ -25,6 +25,11 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY bebop-schema/Cargo.toml bebop-schema/Cargo.toml
 
+# The macro_sync_service_jwt path dependency (`../cloud-storage/...`) resolves
+# to /cloud-storage/... from /app. It lives outside this build context, so
+# compose passes it in as an additional named context (see docker-compose.yml).
+COPY --from=macro_sync_service_jwt . /cloud-storage/macro_sync_service_jwt
+
 # Create dummy src to build dependencies only (cached layer)
 RUN mkdir -p src bebop-schema/src && \
     echo "use worker::*; #[event(fetch)] async fn fetch(_: Request, _: Env, _: Context) -> Result<Response> { Response::ok(\"ok\") }" > src/lib.rs && \
