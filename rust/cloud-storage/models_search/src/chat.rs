@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use item_filters::ChatFilters;
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -58,6 +59,10 @@ pub struct ChatMetadata {
 pub struct ChatSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the chat doesn't exist in the database.
     pub metadata: Option<ChatMetadata>,
+    /// Entity properties (e.g. tags) on the chat.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: ChatSearchResponseItem,
 }

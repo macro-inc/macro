@@ -1,6 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use crate::upsert::document::IndexedProperty;
+use crate::upsert::properties::IndexedProperty;
 use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 #[cfg(test)]

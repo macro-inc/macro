@@ -21,9 +21,8 @@ use models_search::{
     unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
 };
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
-use opensearch_client::search::documents::DocumentSearchMode;
+use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg};
 use opensearch_client::search::model::SearchHit;
-use opensearch_client::search::properties::PropertyFilterArg;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Identifies the source of a search result for cursor regeneration
@@ -329,7 +328,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
-    filter_chat_response.tag_option_ids = tag_option_ids;
+    filter_chat_response.tag_option_ids = tag_option_ids.clone();
     filter_email_response.terms = email_terms.clone();
     filter_email_response.tag_option_ids = tag_option_ids;
     filter_call_record_response.terms = search_terms.clone();

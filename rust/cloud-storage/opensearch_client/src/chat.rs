@@ -1,6 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{self, chat_message::UpsertChatMessageArgs, document::IndexedProperty},
+    upsert::{self, chat_message::UpsertChatMessageArgs, properties::IndexedProperty},
 };
 
 impl OpensearchClient {

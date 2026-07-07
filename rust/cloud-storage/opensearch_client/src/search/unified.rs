@@ -15,7 +15,7 @@ use crate::{
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchMode,
+            DocumentSearchMode, PropertyFilterArg,
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
@@ -23,7 +23,6 @@ use crate::{
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
             inject_fragment_size, parse_highlight_hit,
         },
-        properties::PropertyFilterArg,
         query::Keys,
     },
 };
