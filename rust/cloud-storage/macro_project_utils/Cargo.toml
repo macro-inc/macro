@@ -7,6 +7,9 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "search",
+] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

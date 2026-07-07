@@ -39,6 +39,10 @@ pub async fn process_entity_property_update(
             .update_chat_properties(entity_id, &properties)
             .await
             .context("failed to update chat properties in search index"),
+        EntityType::Project => opensearch_client
+            .update_project_properties(entity_id, &properties)
+            .await
+            .context("failed to update project properties in search index"),
         other => {
             tracing::warn!(
                 entity_type = %other,

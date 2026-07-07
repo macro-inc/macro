@@ -23,6 +23,7 @@ use crate::{
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
             inject_fragment_size, parse_highlight_hit,
         },
+        projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
     },
 };
@@ -64,6 +65,8 @@ pub struct UnifiedSearchArgs {
     pub chat_search_args: UnifiedChatSearchArgs,
     /// The call record search args. If None, we do not search call records
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
+    /// The project search args. If None, we do not search projects
+    pub project_search_args: UnifiedProjectSearchArgs,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -163,6 +166,22 @@ impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
     }
 }
 
+impl From<UnifiedSearchArgs> for ProjectSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ProjectSearchArgs {
+            terms: args.project_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.project_search_args.ids_only,
+            project_ids: args.project_search_args.project_ids,
+            tag_option_ids: args.project_search_args.tag_option_ids,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
     pub terms: Vec<String>,
@@ -218,6 +237,14 @@ pub struct UnifiedCallRecordSearchArgs {
     pub ids_only: bool,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedProjectSearchArgs {
+    pub terms: Vec<String>,
+    pub project_ids: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+}
+
 /// Possible search result indices for unified search
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -227,6 +254,10 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
+    // Keep last: with `untagged`, earlier variants win and every other doc
+    // shape carries required fields (document_name, title, message_id, …)
+    // a project doc lacks.
+    Project(ProjectIndex),
 }
 
 pub struct SplitUnifiedSearchResponseValues {
@@ -498,6 +529,27 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
+            UnifiedSearchIndex::Project(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Projects,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ProjectSearchConfig::TITLE_KEY,
+                                content_key: ProjectSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: a
+                    .updated_at_seconds
+                    .and_then(|s| DateTime::from_timestamp(s, 0)),
+            },
             UnifiedSearchIndex::CallRecord(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::CallRecords,
@@ -603,6 +655,17 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Projects)
+    {
+        let project_search_args: ProjectSearchArgs = args.clone().into();
+        let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+        let project_bool_query = project_query_builder.build_bool_query()?;
+        let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
     // create the search request
     let mut search_request_builder = SearchRequestBuilder::new();
 
@@ -630,6 +693,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .require_field_match(true)
         .field("content", em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
+        .field("name", em_field().number_of_fragments(0))
         .field("subject", em_field().number_of_fragments(0))
         .field("sender", em_field().number_of_fragments(0))
         .field("sender_name", em_field().number_of_fragments(0))

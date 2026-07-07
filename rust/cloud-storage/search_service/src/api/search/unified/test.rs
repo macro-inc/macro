@@ -92,6 +92,7 @@ fn test_sort_unified_search_results() {
         }),
         // Project with updated_at = 2000 (second newest)
         UnifiedSearchResponseItem::Project(ProjectSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(ProjectMetadata {
                 created_at: DateTime::from_timestamp(1900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(2000, 0).unwrap(),
