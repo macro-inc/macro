@@ -1098,7 +1098,7 @@ impl<
             let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
             let _ = self
                 .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, &old_project_id)
+                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
                 .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
             let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),

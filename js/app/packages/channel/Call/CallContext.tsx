@@ -127,12 +127,13 @@ function microphoneCaptureOptions(
     supportsNativeAudioProcessingConstraint('noiseSuppression');
 
   return {
-    // Krisp's guidance is to run with AGC off: a gain stage under its filter
-    // can make suppressed noise audible again. Outside Krisp mode there is no
-    // such layer, and AGC-off just leaves quiet mics quiet — low-SNR speech
-    // that downstream VADs (encoder DTX, suppression models) then gate.
+    // Browser AGC runs inside the capture pipeline (AEC → AGC → NS), i.e.
+    // upstream of any track processor — it feeds Krisp a healthy input level
+    // and cannot re-amplify the filter's residue (that would need a gain
+    // stage after the processor, which doesn't exist here). AGC-off left
+    // quiet mics at low SNR, and Krisp/browser NS then gated their speech.
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: mode !== 'krisp' }
+      ? { autoGainControl: true }
       : {}),
     echoCancellation: true,
     ...(noiseSuppressionSupported
@@ -160,9 +161,9 @@ function nativeAudioProcessingConstraints(
     // cancellation must be restated here or every mode change silently drops
     // it back to unconstrained.
     echoCancellation: true,
-    // AGC off only under Krisp — see microphoneCaptureOptions.
+    // AGC stays on in every mode — see microphoneCaptureOptions.
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: mode !== 'krisp' }
+      ? { autoGainControl: true }
       : {}),
     ...(noiseSuppressionSupported
       ? { noiseSuppression: useBrowserProcessing }
