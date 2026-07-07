@@ -491,6 +491,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ..Default::default()
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
+        project_search_args: UnifiedProjectSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -523,6 +524,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -790,6 +792,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             ..Default::default()
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
+        project_search_args: UnifiedProjectSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -842,6 +845,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },

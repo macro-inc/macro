@@ -1,7 +1,7 @@
 use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 
 use crate::api::search::crm_company;
-use crate::api::search::simple::{simple_chat, simple_project};
+use crate::api::search::simple::simple_chat;
 use crate::api::{
     context::SearchHandlerState,
     search::{SearchPaginationParams, simple::SearchError},
@@ -29,7 +29,6 @@ use opensearch_client::search::unified::UnifiedSearchArgs;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchSource {
     ChatName,
-    ProjectName,
     Content,
     CrmCompany,
 }
@@ -273,7 +272,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         mut filter_channel_response,
         mut filter_chat_response,
         mut filter_email_response,
-        filter_project_response,
+        mut filter_project_response,
         mut filter_call_record_response,
     ) = tokio::try_join!(
         doc_filters.filter_to_search_args(
@@ -322,7 +321,8 @@ pub(in crate::api::search) async fn perform_unified_search(
     // channel messages are single-doc-per-message so each token must
     // appear in the same message via bool.must. Documents, chats, and
     // call records are join-shape, where each term becomes a separate
-    // has_child clause ANDed via bool.must.
+    // has_child clause ANDed via bool.must. Projects are flat and match
+    // terms against their name only.
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
@@ -332,6 +332,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_email_response.terms = email_terms.clone();
     filter_email_response.tag_option_ids = tag_option_ids;
     filter_call_record_response.terms = search_terms.clone();
+    filter_project_response.terms = search_terms.clone();
 
     // Widen the email access filter to every inbox the caller can reach (their
     // own plus delegated). Connected secondary inboxes share the owner's
@@ -358,10 +359,6 @@ pub(in crate::api::search) async fn perform_unified_search(
         .as_ref()
         .map(|c| c.chat_name_cursor.clone())
         .unwrap_or_default();
-    let project_cursor = cursor
-        .as_ref()
-        .map(|c| c.project_name_cursor.clone())
-        .unwrap_or_default();
 
     let content_cursor = cursor
         .as_ref()
@@ -375,7 +372,6 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
     let chat_cursor_for_search = chat_cursor.clone();
-    let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
     let crm_cursor_for_search = crm_cursor.clone();
 
@@ -408,6 +404,12 @@ pub(in crate::api::search) async fn perform_unified_search(
             if should_include_call_records && !filter_call_record_response.call_ids.is_empty() {
                 indices.insert(models_opensearch::OpenSearchEntityType::CallRecords);
             }
+            if should_include_projects
+                && !(filter_project_response.ids_only
+                    && filter_project_response.project_ids.is_empty())
+            {
+                indices.insert(models_opensearch::OpenSearchEntityType::Projects);
+            }
             indices
         },
         document_search_args: filter_document_response.clone(),
@@ -415,11 +417,12 @@ pub(in crate::api::search) async fn perform_unified_search(
         channel_message_search_args: filter_channel_response,
         chat_search_args: filter_chat_response.clone(),
         call_record_search_args: filter_call_record_response.clone(),
+        project_search_args: filter_project_response,
     };
 
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
-    let (chat_results, project_results, content_results, crm_results) = tokio::join!(
+    let (chat_results, content_results, crm_results) = tokio::join!(
         async {
             if should_include_chats {
                 match search_on {
@@ -445,34 +448,12 @@ pub(in crate::api::search) async fn perform_unified_search(
             }
         },
         async {
-            if should_include_projects {
-                match search_on {
-                    SearchOn::Name | SearchOn::NameContent => {
-                        simple_project::search_names(
-                            &ctx.db,
-                            &user_id,
-                            &simple_project::FilterProjectResponse {
-                                ids_only: filter_project_response.ids_only,
-                                project_ids: filter_project_response.project_ids,
-                            },
-                            name_search_term.clone(),
-                            page_size,
-                            project_cursor_for_search,
-                        )
-                        .await
-                    }
-                    SearchOn::Content => Ok((vec![], SearchCursorOption::Done)),
-                }
-            } else {
-                Ok((vec![], SearchCursorOption::Done))
-            }
-        },
-        async {
-            // Documents and email subjects are name-searched in OpenSearch.
-            // In Name mode keep only those two indices: chats and projects
+            // Documents, email subjects, and project names are name-searched
+            // in OpenSearch. In Name mode keep only those indices: chats
             // still name-search in Postgres above, and channels/call records
             // have no name concept. Documents match `document_name`, emails
-            // their subject.
+            // their subject, projects their `name`. Projects have no content,
+            // so a content-only search drops them.
             let mut args = unified_search_args;
             match search_on {
                 SearchOn::Name => {
@@ -481,6 +462,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     args.search_indices.retain(|i| {
                         *i == models_opensearch::OpenSearchEntityType::Documents
                             || *i == models_opensearch::OpenSearchEntityType::Emails
+                            || *i == models_opensearch::OpenSearchEntityType::Projects
                     });
                 }
                 SearchOn::NameContent => {
@@ -488,6 +470,8 @@ pub(in crate::api::search) async fn perform_unified_search(
                 }
                 SearchOn::Content => {
                     args.document_search_args.mode = DocumentSearchMode::Content;
+                    args.search_indices
+                        .remove(&models_opensearch::OpenSearchEntityType::Projects);
                 }
             }
             if args.search_indices.is_empty() {
@@ -520,13 +504,11 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Extract results and next cursors
     let (chat_hits, chat_next_cursor) = chat_results?;
-    let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
     let (crm_hits, crm_next_cursor) = crm_results?;
 
     // Track original counts before combining
     let chat_name_count = chat_hits.len();
-    let project_name_count = project_hits.len();
     // Content hits are chunk-level (many per document), so the page budget counts
     // distinct documents. Name/crm sub-searches return one row per entity, so
     // their hit count already equals their entity count.
@@ -534,23 +516,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     let crm_count = crm_hits.len();
 
     let final_tagged = {
-        let _span = tracing::info_span!(
-            "combine_and_sort_results",
-            chat_name_count,
-            project_name_count,
-            content_count
-        )
-        .entered();
+        let _span = tracing::info_span!("combine_and_sort_results", chat_name_count, content_count)
+            .entered();
 
         // Wrap results with source tags
         let mut combined: Vec<TaggedSearchHit> = Vec::new();
         combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
             source: SearchSource::ChatName,
-        }));
-        combined.extend(project_hits.into_iter().map(|hit| TaggedSearchHit {
-            hit,
-            source: SearchSource::ProjectName,
         }));
         combined.extend(content_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
@@ -594,10 +567,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             .iter()
             .filter(|h| h.source == SearchSource::ChatName)
             .count();
-        let included_project_names = final_tagged
-            .iter()
-            .filter(|h| h.source == SearchSource::ProjectName)
-            .count();
         let included_content = distinct_entity_count(
             final_tagged
                 .iter()
@@ -618,14 +587,6 @@ pub(in crate::api::search) async fn perform_unified_search(
             &chat_cursor,
         );
 
-        let new_project_cursor = compute_next_cursor(
-            &project_next_cursor,
-            included_project_names,
-            project_name_count,
-            find_last_of_source(&final_tagged, SearchSource::ProjectName),
-            &project_cursor,
-        );
-
         let new_content_cursor = compute_next_cursor(
             &content_next_cursor,
             included_content,
@@ -644,7 +605,6 @@ pub(in crate::api::search) async fn perform_unified_search(
 
         // Build next cursor if any source has more results
         let has_more = new_chat_cursor.has_more()
-            || new_project_cursor.has_more()
             || new_content_cursor.has_more()
             || new_crm_cursor.has_more();
 
@@ -652,7 +612,9 @@ pub(in crate::api::search) async fn perform_unified_search(
             let cursor = SearchCursor {
                 chat_name_cursor: new_chat_cursor,
                 content_cursor: new_content_cursor,
-                project_name_cursor: new_project_cursor,
+                // Projects ride the OpenSearch content cursor; the field
+                // stays only so older cursors still decode.
+                project_name_cursor: SearchCursorOption::Done,
                 crm_company_cursor: new_crm_cursor,
             };
             cursor.encode()
