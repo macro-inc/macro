@@ -1819,12 +1819,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 )}
               >
                 <Show
-                  when={soup.focus.row()?.getIsGrouped() === false}
+                  when={
+                    (soup.focus.row() && !isNewInboxEnabled()) ||
+                    (soup.focus.row()?.getIsGrouped() === false &&
+                      isNewInboxEnabled())
+                  }
                   fallback={
                     <EmptyStatePanel
                       graphic={EmptyStatePreviewIcon}
                       title="Nothing selected"
-                      description="Select an item from your inbox to preview it here."
+                      description={
+                        isNewInboxEnabled()
+                          ? 'Select an item from your inbox to preview it here.'
+                          : 'Select an item from the list to preview it here'
+                      }
                       centered
                     />
                   }
