@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/preview_fly.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/preview_fly.rs
 name: Fly Preview
 'on':
   pull_request:
@@ -50,8 +50,8 @@ jobs:
         cargo x zigbuild
         sccache --show-stats
       working-directory: rust/cloud-storage
-    - name: Build xtask (runs inside the preview VM)
-      run: cargo build --release -p xtask
+    - name: Build xtask_local (runs inside the preview VM)
+      run: cargo build --release -p xtask_local
       working-directory: rust/cloud-storage
     - name: Build frontend bundle (same-origin)
       run: bun run --bun build
@@ -111,7 +111,7 @@ jobs:
           -exec cp {} "$ctx/artifacts/binaries/" \;
         cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
         cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/release/xtask "$ctx/bin/xtask"
+        cp rust/cloud-storage/target/release/xtask_local "$ctx/bin/xtask"
         cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp infra/preview/Dockerfile "$ctx/Dockerfile"
     - name: Setup flyctl

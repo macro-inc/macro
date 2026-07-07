@@ -15537,6 +15537,35 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 [[package]]
 name = "xtask"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-dynamodb",
+ "aws-sdk-s3",
+ "aws-sdk-sqs",
+ "bollard",
+ "clap",
+ "console 0.15.11",
+ "docker-compose-types",
+ "dotenvy",
+ "gh-workflow",
+ "guppy",
+ "hakari",
+ "indexmap 2.14.0",
+ "indicatif",
+ "indoc",
+ "libc",
+ "macro_aws_config",
+ "macro_env_var",
+ "macro_event_topics",
+ "macro_queues",
+ "rdkafka",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "strum",
+ "tokio",
+]
 
 [[package]]
 name = "xtask_cache_wasm"

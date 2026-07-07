@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/preview_fly.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/preview_fly.rs
 name: Fly Preview Cleanup
 'on':
   pull_request:

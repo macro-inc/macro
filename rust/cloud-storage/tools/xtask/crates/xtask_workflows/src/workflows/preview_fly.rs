@@ -104,12 +104,14 @@ fn deploy() -> Job {
                 .working_directory("rust/cloud-storage"),
         )
         .add_step(
-            // Deliberately WITHOUT the `local-stack` feature: the VM restores
-            // the baked snapshot, whose Kafka volume already carries the
-            // topics, so it never provisions Kafka — and skipping rdkafka
-            // means no dynamically-linked librdkafka to ship into the VM.
-            Step::new("Build xtask (runs inside the preview VM)")
-                .run("cargo build --release -p xtask")
+            // xtask_local, not the dependency-free `xtask` launcher (which
+            // just re-invokes cargo — useless in the VM). Deliberately WITHOUT
+            // the `local-stack` feature: the VM restores the baked snapshot,
+            // whose Kafka volume already carries the topics, so it never
+            // provisions Kafka — and skipping rdkafka means no
+            // dynamically-linked librdkafka to ship into the VM.
+            Step::new("Build xtask_local (runs inside the preview VM)")
+                .run("cargo build --release -p xtask_local")
                 .working_directory("rust/cloud-storage"),
         )
         .add_step(
@@ -198,7 +200,7 @@ fn stage_context() -> Step<Run> {
           -exec cp {} "$ctx/artifacts/binaries/" \;
         cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
         cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/release/xtask "$ctx/bin/xtask"
+        cp rust/cloud-storage/target/release/xtask_local "$ctx/bin/xtask"
         cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp infra/preview/Dockerfile "$ctx/Dockerfile"
     "#})
