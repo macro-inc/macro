@@ -232,7 +232,7 @@ soup entities from the normy config as they migrate.
 ## 5. Repo layout
 
 ```
-rust/graphql-cache/            # new cargo workspace (or members of an existing one)
+rust/cloud-storage/client/            # new cargo workspace (or members of an existing one)
   cache-core/                  # pure engine, native tests
   cache-schema-codegen/        # schema.graphql → type metadata (build.rs or CLI)
   cache-wasm/                  # wasm-bindgen shell (web)
@@ -258,7 +258,7 @@ js/app/packages/graphql-cache/ # JS glue
   after the decisions landed — recover them from history (`jj`/git) if
   re-measurement is ever needed; the results live in Appendix A.
 
-**Phase 1 — cache-core (native, no wasm)** *(done — `rust/graphql-cache/cache-core`)*
+**Phase 1 — cache-core (native, no wasm)** *(done — `rust/cloud-storage/client/cache-core`)*
 - Schema metadata codegen from `rust/cloud-storage/schema.graphql`
   (`build.rs`; key policy derived via the presence-of-id convention, build
   fails on malformed shapes).

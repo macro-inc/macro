@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-cache-wasm
- * which runs wasm-pack over rust/graphql-cache/cache-wasm into
+ * which runs wasm-pack over rust/cloud-storage/client/cache-wasm into
  * packages/graphql-cache/wasm/ (gitignored).
  */
 

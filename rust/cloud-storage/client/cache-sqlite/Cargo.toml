@@ -1,0 +1,17 @@
+[package]
+name = "cache-sqlite"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cache-core = { path = "../cache-core" }
+# 0.32 pins libsqlite3-sys 0.30, matching the workspace sqlx-sqlite pin
+# (libsqlite3-sys has `links = "sqlite3"` — only one version may exist).
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pollster = "0.4"
+serde_json = { workspace = true }
+tempfile = "3"

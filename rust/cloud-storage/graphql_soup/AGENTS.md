@@ -1,7 +1,7 @@
 # graphql_soup — schema conventions
 
 This crate defines the GraphQL schema consumed by the client's **normalized
-cache** (`rust/graphql-cache`, design doc:
+cache** (`rust/cloud-storage/client`, design doc:
 `js/app/docs/graphql-normalized-cache-plan.md`). Two field-naming
 conventions in this schema are load-bearing for cache correctness. The
 cache's build validates *shapes* but cannot validate *semantics* — that's
@@ -28,7 +28,7 @@ Clients key cache records by `__typename:id`. Consequences:
   add constant or synthetic ids to such types — a constant id (e.g.
   `"soup_page"`) would merge every instance into a single record globally.
 - `id` fields must be exactly `ID!` (non-null, non-list); the cache build
-  (`rust/graphql-cache/cache-core/build.rs`) fails otherwise, and fails if
+  (`rust/cloud-storage/client/cache-core/build.rs`) fails otherwise, and fails if
   the query root exposes an `id`.
 
 Review checklist when adding/changing a type:

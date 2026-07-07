@@ -153,4 +153,4 @@ cycles-ci:
 
 # Build the GraphQL cache wasm module into packages/graphql-cache/wasm (gitignored).
 build-cache-wasm:
-    wasm-pack build {{justfile_directory()}}/../../rust/graphql-cache/cache-wasm --target web --release --out-dir {{justfile_directory()}}/packages/graphql-cache/wasm
+    wasm-pack build {{justfile_directory()}}/../../rust/cloud-storage/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/packages/graphql-cache/wasm

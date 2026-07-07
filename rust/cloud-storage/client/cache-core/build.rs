@@ -10,6 +10,11 @@
 //! config to drift. The build still fails on malformed shapes (e.g. a
 //! nullable or non-ID `id`).
 
+// std::env::var is disallowed workspace-wide to force `macro_env_var` for
+// service config; build scripts read cargo-provided vars (CARGO_MANIFEST_DIR,
+// OUT_DIR), which have nothing to do with app secrets.
+#![allow(clippy::disallowed_methods)]
+
 use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::Schema;
 use sha2::{Digest, Sha256};
@@ -17,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
-const SCHEMA_PATH: &str = "../../cloud-storage/schema.graphql";
+const SCHEMA_PATH: &str = "../../schema.graphql";
 
 fn main() {
     println!("cargo:rerun-if-changed={SCHEMA_PATH}");

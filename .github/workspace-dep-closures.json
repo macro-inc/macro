@@ -503,6 +503,22 @@
       "user_quota",
       "workspace-hack"
     ],
+    "cache-core": [
+      "client/cache-core"
+    ],
+    "cache-idb": [
+      "client/cache-core",
+      "client/cache-idb"
+    ],
+    "cache-sqlite": [
+      "client/cache-core",
+      "client/cache-sqlite"
+    ],
+    "cache-wasm": [
+      "client/cache-core",
+      "client/cache-idb",
+      "client/cache-wasm"
+    ],
     "cal": [
       "analytics_client",
       "cal",
