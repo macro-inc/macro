@@ -4,7 +4,7 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
+        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
         TypingAction,
     },
     ports::{
@@ -13,6 +13,7 @@ use crate::domain::{
         ChannelSideEffectContext,
     },
 };
+use bot_id::BotIdStr;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
@@ -40,27 +41,38 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 /// Bot mentions normally arrive tagged `bot`, but Macro AI is surfaced through
 /// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
 /// bot is recognized as a bot mention too.
+///
+/// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
+/// rejected (historical bare-UUID content is normalized by migration).
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
         .filter_map(|mention| match mention.entity_type.as_str() {
-            BOT_MENTION_ENTITY_TYPE => BotId::parse_uuid_str(&mention.entity_id).ok(),
-            "user" => BotId::parse_uuid_str(&mention.entity_id)
-                .ok()
-                .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
+            BOT_MENTION_ENTITY_TYPE => mention_bot_id(&mention.entity_id),
+            "user" => {
+                mention_bot_id(&mention.entity_id).filter(|id| *id == bot_id::MACRO_AI_BOT_ID)
+            }
             _ => None,
         })
         .filter(|id| seen.insert(*id))
         .collect()
 }
 
+/// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
+fn mention_bot_id(entity_id: &str) -> Option<BotId> {
+    BotIdStr::parse_from_str(entity_id)
+        .ok()
+        .map(|id| id.bot_id())
+}
+
 /// Whether a `user`-tagged mention actually targets a bot (and so must not be
-/// treated as a user recipient). Real user ids are not bare UUIDs, so this only
-/// matches the Macro AI bot surfaced through the user-mention UI.
+/// treated as a user recipient). Real user ids are `macro|<email>` strings,
+/// never `bot|<uuid>` principals, so this only matches the Macro AI bot
+/// surfaced through the user-mention UI.
 fn is_bot_user_mention(mention: &SimpleMention) -> bool {
     mention.entity_type == "user"
-        && BotId::parse_uuid_str(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
+        && mention_bot_id(&mention.entity_id) == Some(bot_id::MACRO_AI_BOT_ID)
 }
 
 /// Realtime update requested by the channel domain.
@@ -523,7 +535,7 @@ where
                 self.publish_realtime(ChannelRealtimeEffect::Typing {
                     recipients,
                     channel_id,
-                    user_id: actor.to_storage_string(),
+                    user_id: actor.as_ref().to_string(),
                     action,
                     thread_id,
                     nonce,
@@ -620,18 +632,14 @@ where
 
     /// Resolve the public bot profile when the message sender is a bot.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
-        match &message.sender_id {
-            Sender::Bot(bot_id) => {
-                if *bot_id == bot_id::MACRO_AI_BOT_ID {
-                    return Some(BotSenderProfile {
-                        name: bot_id::MACRO_AI_NAME.to_string(),
-                        avatar_url: None,
-                    });
-                }
-                self.context.get_bot_sender_profile(*bot_id).await
-            }
-            Sender::User(_) => None,
+        let bot_id = message.sender_id.as_bot()?.bot_id();
+        if bot_id == bot_id::MACRO_AI_BOT_ID {
+            return Some(BotSenderProfile {
+                name: bot_id::MACRO_AI_NAME.to_string(),
+                avatar_url: None,
+            });
         }
+        self.context.get_bot_sender_profile(bot_id).await
     }
 
     async fn publish_realtime(&self, effect: ChannelRealtimeEffect) {
@@ -658,15 +666,17 @@ where
             has_attachments,
             bot_profile,
         } = inputs;
-        let resolved_sender = match &message.sender_id {
-            Sender::User(user_id) => ResolvedNotificationSender {
+        let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
+            let user_id = user_id.clone();
+            ResolvedNotificationSender {
                 sender: NotificationSender::User(user_id.clone()),
                 profile_picture_url: self
                     .context
                     .get_sender_profile_picture_url(user_id.clone())
                     .await,
-            },
-            Sender::Bot(bot_id) => match bot_profile {
+            }
+        } else if let Some(bot_id) = message.sender_id.as_bot().map(|id| id.bot_id()) {
+            match bot_profile {
                 Some(profile) => ResolvedNotificationSender {
                     sender: NotificationSender::Bot { name: profile.name },
                     profile_picture_url: profile.avatar_url,
@@ -675,7 +685,9 @@ where
                     tracing::warn!(bot_id = %bot_id, "missing bot profile, skipping message notifications");
                     return;
                 }
-            },
+            }
+        } else {
+            return;
         };
         let context = match self
             .build_posted_message_context(
@@ -1084,7 +1096,7 @@ struct PostedMessageNotificationContext {
 /// Bots are not user recipients and are not valid `MacroUserIdStr`s, so they are
 /// skipped before parsing to avoid spurious parse warnings.
 fn is_bot_principal(id: &str) -> bool {
-    BotId::parse_storage_str(id).is_ok()
+    BotIdStr::parse_from_str(id).is_ok()
 }
 
 fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
@@ -1113,22 +1125,24 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
     match event {
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
-            actor: Sender::User(_),
+            actor,
             participant_user_ids,
             ..
-        } => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
-            invited_by: Sender::User(_),
+            invited_by,
             active_participant_user_ids,
             ..
-        } => Some(active_participant_user_ids.iter().cloned().collect()),
+        } if invited_by.as_user().is_some() => {
+            Some(active_participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantJoined {
             channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
-            user_id: Sender::User(_),
+            user_id,
             active_participant_user_ids,
             ..
-        } if active_participant_user_ids.len() > 1 => {
+        } if user_id.as_user().is_some() && active_participant_user_ids.len() > 1 => {
             Some(active_participant_user_ids.iter().cloned().collect())
         }
         _ => None,

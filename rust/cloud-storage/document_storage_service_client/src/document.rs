@@ -384,6 +384,35 @@ impl DocumentStorageServiceClient {
         Ok(response_data)
     }
 
+    /// Create the "Macro how to guide" onboarding document for a user and pin
+    /// it to their sidebar favorites
+    #[tracing::instrument(skip(self))]
+    pub async fn initialize_how_to_guide(&self, user_id: &str) -> Result<()> {
+        let url = format!("{}/internal/documents/initialize_how_to_guide", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                user_id=%user_id,
+                "error when initializing how to guide"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        Ok(())
+    }
+
     /// Create a document
     #[tracing::instrument(skip(self))]
     pub async fn create_document_internal(

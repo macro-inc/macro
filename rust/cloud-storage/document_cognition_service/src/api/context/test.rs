@@ -254,13 +254,25 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        // Producer creation is lazy: nothing connects to Kafka unless an event
+        // is published, so a dummy broker address is safe for tests.
+        macro_event_broker::MacroEventBrokerService::new(
+            macro_event_broker::KafkaEventPublisher::new("localhost:9092")
+                .expect("kafka producer config is valid"),
+        ),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
+    let test_editing_client =
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            "http://nofileshere".into(),
+        );
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
         test_lexical_client,
         sync_service_client.as_ref().clone(),
+        test_editing_client,
+        "test-jwt-secret".to_string(),
     );
 
     let search_service_client = Arc::new(search_service_client);

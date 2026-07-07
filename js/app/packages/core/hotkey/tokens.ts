@@ -54,6 +54,7 @@ export const TOKENS = {
       share: 'entity.action.share',
       copyBranchName: 'entity.action.copyBranchName',
       copyEntityId: 'entity.action.copyEntityId',
+      favorite: 'entity.action.favorite',
       properties: 'entity.action.properties',
       priority: 'entity.action.priority',
       status: 'entity.action.status',

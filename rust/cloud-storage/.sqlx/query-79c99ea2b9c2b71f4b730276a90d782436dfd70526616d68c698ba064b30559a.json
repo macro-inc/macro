@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT f.entity_type as \"entity_type!\", f.entity_id as \"entity_id!\"\n            FROM favorite f\n            JOIN UNNEST($2::text[], $3::text[]) AS w(entity_type, entity_id)\n              ON w.entity_type = f.entity_type AND w.entity_id = f.entity_id\n            WHERE f.user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "79c99ea2b9c2b71f4b730276a90d782436dfd70526616d68c698ba064b30559a"
+}

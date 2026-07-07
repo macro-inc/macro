@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -47,6 +48,12 @@ export function useCreateChannelMutation(
       {
         onError(error) {
           console.error('failed to create channel', error);
+        },
+        onSuccess: (data) => {
+          analytics.track('create_entity', {
+            entityType: 'channel',
+            entityId: data.id,
+          });
         },
         onSettled: () => void invalidateListChannels(),
       },

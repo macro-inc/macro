@@ -58,6 +58,7 @@ export function TagPicker(props: {
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const [search, setSearch] = createSignal('');
@@ -127,7 +128,10 @@ export function TagPicker(props: {
   return (
     <Popover
       open={open()}
-      onOpenChange={setOpen}
+      onOpenChange={(value) => {
+        setOpen(value);
+        props.onOpenChange?.(value);
+      }}
       placement="bottom-start"
       gutter={4}
     >

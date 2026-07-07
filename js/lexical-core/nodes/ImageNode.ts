@@ -138,7 +138,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
 
   static importDOM(): DOMConversionMap<HTMLElement> | null {
     return {
-      img: (domNode: HTMLImageElement) => {
+      img: (domNode: HTMLElement) => {
         const src = domNode.getAttribute('src');
         const alt = domNode.getAttribute('alt');
         const width = domNode.getAttribute('width');
@@ -176,7 +176,7 @@ export class ImageNode extends MediaNode<{ alt: string }> {
         }
         return null;
       },
-      div: (domNode: HTMLDivElement) => {
+      div: (domNode: HTMLElement) => {
         const img = domNode.querySelector('img');
         if (!img) return null;
 

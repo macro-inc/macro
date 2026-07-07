@@ -5,6 +5,9 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+channel_sender = { path = "../channel_sender" }
+either = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 nom = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

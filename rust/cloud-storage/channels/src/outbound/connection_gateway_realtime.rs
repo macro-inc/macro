@@ -4,12 +4,11 @@
 mod test;
 
 use crate::domain::{
-    models::{
-        BotSenderProfile, CountedReaction, MutatedAttachment, MutatedMessage, Sender, TypingAction,
-    },
+    models::{BotSenderProfile, CountedReaction, MutatedAttachment, MutatedMessage, TypingAction},
     ports::ChannelRealtimePublisher,
     side_effects::ChannelRealtimeEffect,
 };
+use channel_sender::ChannelSender;
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType as GatewayEntityType;
@@ -181,25 +180,28 @@ struct MessageRealtimeSender {
 
 impl MessageRealtimeSender {
     fn new(
-        sender: &Sender,
+        sender: &ChannelSender<'_>,
         triggered_by: Option<String>,
         bot_profile: Option<BotSenderProfile>,
     ) -> Self {
-        match sender {
-            Sender::Bot(bot_id) => Self {
+        if let Some(bot_id) = sender.as_bot() {
+            Self {
                 sender_type: "bot",
                 id: bot_id.as_uuid().to_string(),
                 name: bot_profile.as_ref().map(|profile| profile.name.clone()),
                 avatar_url: bot_profile.and_then(|profile| profile.avatar_url),
                 triggered_by,
-            },
-            Sender::User(user_id) => Self {
+            }
+        } else if let Some(user_id) = sender.as_user() {
+            Self {
                 sender_type: "user",
                 id: user_id.as_ref().to_string(),
                 name: None,
                 avatar_url: None,
                 triggered_by: None,
-            },
+            }
+        } else {
+            unreachable!("channel sender is always either a user or a bot")
         }
     }
 }

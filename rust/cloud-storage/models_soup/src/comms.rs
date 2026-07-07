@@ -460,25 +460,36 @@ impl SoupChannel {
 
 impl SoupMessageSender {
     fn from_storage_string(sender_id: &str) -> Self {
-        match channels::domain::models::Sender::parse_storage_str(sender_id) {
-            Ok(channels::domain::models::Sender::Bot(bot_id)) => Self {
-                sender_type: SoupMessageSenderType::Bot,
-                id: bot_id.as_uuid().to_string(),
-                name: None,
-                avatar_url: None,
-            },
-            Ok(channels::domain::models::Sender::User(user_id)) => Self {
-                sender_type: SoupMessageSenderType::User,
-                id: user_id.to_string(),
-                name: None,
-                avatar_url: None,
-            },
-            Err(_) => Self {
+        let Ok(sender) = channels::domain::models::ChannelSender::parse_from_str(sender_id) else {
+            return Self {
                 sender_type: SoupMessageSenderType::User,
                 id: sender_id.to_string(),
                 name: None,
                 avatar_url: None,
-            },
+            };
+        };
+
+        if let Some(bot_id) = sender.as_bot() {
+            Self {
+                sender_type: SoupMessageSenderType::Bot,
+                id: bot_id.as_uuid().to_string(),
+                name: None,
+                avatar_url: None,
+            }
+        } else if let Some(user_id) = sender.as_user() {
+            Self {
+                sender_type: SoupMessageSenderType::User,
+                id: user_id.to_string(),
+                name: None,
+                avatar_url: None,
+            }
+        } else {
+            Self {
+                sender_type: SoupMessageSenderType::User,
+                id: sender_id.to_string(),
+                name: None,
+                avatar_url: None,
+            }
         }
     }
 

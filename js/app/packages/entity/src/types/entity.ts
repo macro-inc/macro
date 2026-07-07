@@ -186,6 +186,7 @@ export type EmailEntity = EntityBase & {
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
+  properties?: SoupProperty[];
 };
 
 export type ProjectEntity = EntityBase & {
@@ -244,6 +245,10 @@ export type CrmCompanyEntity = EntityBase & {
    * endpoint. */
   hidden: boolean;
   domains: CrmCompanyDomain[];
+  /** CRM properties (Stage / Owner / Revenue + custom) attached to the
+   * company. Populated by the soup queries; search results don't carry
+   * them. */
+  properties?: SoupProperty[];
 };
 
 export type CrmContactEntity = EntityBase & {

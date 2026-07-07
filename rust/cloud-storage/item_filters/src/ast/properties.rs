@@ -199,3 +199,43 @@ impl ExpandFrame<PropertiesLiteral> for Vec<PropertyFilter> {
         Ok(nodes.into_iter().fold_with(Expr::and))
     }
 }
+
+/// True when the filter could match an entity of one of the given types.
+/// Untyped literals match any type. Conservative under NOT, since a negated
+/// predicate can match anything.
+pub fn properties_filter_can_apply_to(
+    expr: &Expr<PropertiesLiteral>,
+    entity_types: &[PropertyEntityType],
+) -> bool {
+    match expr {
+        Expr::And(a, b) => {
+            properties_filter_can_apply_to(a, entity_types)
+                && properties_filter_can_apply_to(b, entity_types)
+        }
+        Expr::Or(a, b) => {
+            properties_filter_can_apply_to(a, entity_types)
+                || properties_filter_can_apply_to(b, entity_types)
+        }
+        Expr::Not(_) => true,
+        Expr::Literal(PropertiesLiteral { entity_type, .. }) => {
+            entity_type.is_none_or(|entity_type| entity_types.contains(&entity_type))
+        }
+    }
+}
+
+/// True when the filter can match an entity that has no property rows at all,
+/// i.e. the expression evaluated with every literal false. When this returns
+/// false, property-less entity types (channels, calls, CRM companies, foreign
+/// entities) can never satisfy the filter.
+pub fn properties_filter_matches_propertyless(expr: &Expr<PropertiesLiteral>) -> bool {
+    match expr {
+        Expr::And(a, b) => {
+            properties_filter_matches_propertyless(a) && properties_filter_matches_propertyless(b)
+        }
+        Expr::Or(a, b) => {
+            properties_filter_matches_propertyless(a) || properties_filter_matches_propertyless(b)
+        }
+        Expr::Not(a) => !properties_filter_matches_propertyless(a),
+        Expr::Literal(_) => false,
+    }
+}

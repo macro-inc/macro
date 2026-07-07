@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cd packages/app && bun run --bun dev",
+    "dev": "just ensure-cache-wasm && cd packages/app && bun run --bun dev",
     "build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
     "test": "bunx vitest run",
     "local:e2e": "LOCAL_E2E=true bunx playwright test",
@@ -59,6 +59,7 @@
     "@solid-primitives/broadcast-channel": "^0.1.1",
     "@solid-primitives/context": "^0.3.2",
     "@solid-primitives/event-bus": "^1.1.2",
+    "@solid-primitives/keyed": "^1.5.3",
     "@solid-primitives/lifecycle": "^0.1.2",
     "@solid-primitives/memo": "^1.4.5",
     "@solid-primitives/platform": "^0.2.1",
@@ -115,6 +116,7 @@
     "uuid": "^10.0.0",
     "virtua": "0.48.8",
     "vite-plugin-wasm": "^3.5.0",
+    "wonka": "^6.3.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

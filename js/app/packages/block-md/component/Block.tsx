@@ -66,7 +66,7 @@ async function ingestLocalSnapshot(
   // we replay, and then reload, and now we are in a state where we have an old
   // document until the new one loads in
   if (walEntries.length >= 1) {
-    const doc = loroManager.getDoc();
+    const doc = loroManager.doc;
     const snapshot = doc.export({
       mode: 'shallow-snapshot',
       frontiers: doc.oplogFrontiers(),
@@ -82,7 +82,7 @@ async function ingestRemoteSnapshot(
   const sync = await doInitialSync();
   if (sync.isErr()) {
     console.error('Failed to receive initial sync', sync.error);
-    return loroManager.isInitialized();
+    return loroManager.initialized;
   }
   await loroManager.ingest({
     kind: 'dss',
@@ -114,11 +114,10 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
 
-  const getSyncSource = blockSyncSourceSignal.get;
+  const _getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
-    liveSyncSource: () => getSyncSource()!,
     documentId: blockId,
   });
 

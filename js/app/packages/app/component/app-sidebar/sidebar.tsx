@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { SidebarActiveCallWidget } from '@app/component/app-sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
+import { FavoritesSection } from '@app/component/app-sidebar/favorites-section';
 import {
   InviteModal,
   setInviteModalOpen,
@@ -19,6 +20,7 @@ import {
   requestInboxFilter,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
+import { setAllSidePanelsOpen } from '@app/component/side-panel/registry';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type {
   ReferredFrom,
@@ -88,6 +90,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -185,7 +188,7 @@ const SIDEBAR_LINKS = [
     ? ([
         {
           id: 'companies',
-          label: 'Companies',
+          label: 'Customers',
           href: LIST_VIEW_PATHS.companies,
           icon: AnimatedCompanyIcon,
           hotkey: 'o',
@@ -421,11 +424,13 @@ const registerSidebarHotkeys = ({
     hotkey: 'cmd+.',
     scopeId: 'global',
     hotkeyToken: TOKENS.global.toggleSidebar,
-    description: 'Toggle sidebar',
+    description: 'Toggle sidebar and side panels',
     runWithInputFocused: true,
     keyDownHandler: (e) => {
       e?.preventDefault();
-      onOpenChange(isSlim());
+      const show = isSlim();
+      onOpenChange(show);
+      setAllSidePanelsOpen(show);
       return true;
     },
   });
@@ -695,11 +700,15 @@ const DASHBOARD_LINK: SidebarItem = {
  * widget. Label/icon come from the settings tab config (see
  * `getSettingsTabItem`); this list only decides which tabs to promote.
  */
-const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
+const PROMOTED_SETTINGS_TABS: SettingsTab[] = [
+  'Mobile App',
+  'Connected',
+  'Team',
+];
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const layout = useSplitLayout();
-  const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
+  const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const callCtx = useCallContextOptional();
 
@@ -763,7 +772,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
-      setActiveTabId(tab);
+      selectTab(tab);
       return;
     }
     openSettings(tab);
@@ -850,6 +859,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
       <div class="px-2">
         <hr class="border-transparent my-2" />
       </div>
+
+      <Suspense>
+        <FavoritesSection sidebarState={props.sidebarState ?? 'expanded'} />
+      </Suspense>
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />

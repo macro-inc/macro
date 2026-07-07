@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/code_check_cloud_storage.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs
 name: cloud storage code check
 env:
   CARGO_INCREMENTAL: '0'

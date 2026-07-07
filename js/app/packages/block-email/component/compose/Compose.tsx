@@ -12,7 +12,10 @@ import {
   createEmailFormState,
   type DraftFormAttachment,
 } from '@block-email/component/createEmailFormState';
-import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import {
+  markThreadDraftSaved,
+  useMaybeEmailContext,
+} from '@block-email/component/EmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
@@ -95,6 +98,7 @@ type UndoComposeSnapshot = {
   subject: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
+  includeSignature: boolean;
 };
 
 let undoComposeSnapshot: UndoComposeSnapshot | null = null;
@@ -196,6 +200,7 @@ export function EmailCompose(props: EmailComposeProps) {
     for (const attachment of restoredSnapshot.attachments) {
       form.attachments.add(attachment);
     }
+    setIncludeSignature(restoredSnapshot.includeSignature);
     undoComposeSnapshot = null;
   }
 
@@ -367,7 +372,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
 
-  const undoSend = async (draftId: string) => {
+  const undoSend = async (draftId: string, threadId?: string) => {
     try {
       const result = await emailClient.unscheduleMessage(
         { draftID: draftId },
@@ -382,11 +387,17 @@ export function EmailCompose(props: EmailComposeProps) {
       queryClient.invalidateQueries({
         queryKey: emailKeys.previews._def,
       });
+      // Wipe the new thread's cache when its view unmounts (replaceSplit
+      // below) so the next visit fetches fresh data without the sent message.
+      if (threadId) markThreadDraftSaved(threadId);
       replaceSplit({
         content: {
           type: 'component',
           id: 'email-compose',
           params: { draftID: draftId },
+          // reattach() strips params by default; keep draftID so the compose
+          // remount can restore the undo snapshot.
+          preserveParams: true,
         },
       });
       toast.success('Send cancelled');
@@ -399,6 +410,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const sendMutation = useSendMessageMutation({
     onSuccess: (data) => {
       const draftId = data.message.db_id;
+      const threadId = data.message.thread_db_id;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -407,7 +419,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId);
+                  void undoSend(draftId, threadId ?? undefined);
                 },
               },
             ]
@@ -431,24 +443,6 @@ export function EmailCompose(props: EmailComposeProps) {
     setValidationError(null);
 
     const currentEditor = editor();
-
-    // Snapshot editor state before watermark so undo-send can restore it
-    if (currentEditor) {
-      const snapshotHtml = currentEditor.read(() =>
-        $generateHtmlFromNodes(currentEditor)
-      );
-      const draftId = currentDraftID();
-      if (draftId) {
-        undoComposeSnapshot = {
-          draftId,
-          recipients: structuredClone(unwrap(form.recipients())),
-          subject: form.subject(),
-          bodyHtml: snapshotHtml,
-          attachments: [...form.attachments.list()],
-        };
-      }
-    }
-
     const currentLink = link();
     const recipients = form.recipients();
 
@@ -487,6 +481,33 @@ export function EmailCompose(props: EmailComposeProps) {
     // Failsafe: don't send if a scheduled send time is set
     if (form.sendTime()) {
       return;
+    }
+
+    // Ensure the draft is saved before sending so undo-send always has a
+    // draft id to snapshot and restore (the send reuses the draft's db_id).
+    scheduleDraftSave.clear();
+    try {
+      await executeSaveDraft();
+    } catch {
+      // Draft save is best-effort; the send still works without one.
+    }
+
+    // Snapshot editor state before watermark so undo-send can restore it
+    if (currentEditor) {
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      const draftId = currentDraftID();
+      if (draftId) {
+        undoComposeSnapshot = {
+          draftId,
+          recipients: structuredClone(unwrap(form.recipients())),
+          subject: form.subject(),
+          bodyHtml: snapshotHtml,
+          attachments: [...form.attachments.list()],
+          includeSignature: includeSignature(),
+        };
+      }
     }
 
     // Append watermark after all validation passes so failed sends don't

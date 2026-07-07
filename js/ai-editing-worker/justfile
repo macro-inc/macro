@@ -1,0 +1,26 @@
+dev-local:
+  bun run src/server.ts
+
+dev:
+  SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt npx wrangler dev --env local
+
+dev-remote-dev:
+  npx wrangler dev --env dev
+
+dev-remote-prod:
+  npx wrangler dev --env prod
+
+generate-sandbox:
+  bun scripts/generate-sandbox.ts
+
+deploy-dev-dry-run: generate-sandbox
+  npx wrangler deploy --env dev --dry-run
+
+deploy-dev: generate-sandbox
+  npx wrangler deploy --env dev
+
+deploy-playground: generate-sandbox
+  npx wrangler deploy --env playground
+
+deploy-prod: generate-sandbox
+  npx wrangler deploy --env prod

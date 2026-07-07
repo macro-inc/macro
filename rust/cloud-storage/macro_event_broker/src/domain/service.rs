@@ -9,6 +9,7 @@ use crate::domain::models::{EventBrokerError, MacroEvent};
 use crate::domain::ports::{EventPublisher, MacroEventBroker};
 
 /// Orchestrates serializing events and handing them to an [`EventPublisher`].
+#[derive(Clone)]
 pub struct MacroEventBrokerService<P: EventPublisher> {
     publisher: P,
 }

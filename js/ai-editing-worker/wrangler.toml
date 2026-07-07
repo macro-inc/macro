@@ -1,0 +1,68 @@
+name = "ai-editing-worker"
+main = "src/index.ts"
+compatibility_date = "2025-07-22"
+compatibility_flags = ["nodejs_compat", "enable_request_signal", "global_fetch_strictly_public"]
+
+[alias]
+"loro-crdt" = "loro-crdt/bundler"
+"@observability/logger" = "./src/logger-shim.ts"
+"@core" = "../app/packages/core"
+"@loro-mirror" = "../loro-mirror"
+"@websocket" = "../app/packages/websocket/index.ts"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
+[observability]
+enabled = true
+
+[vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+
+[dev]
+port = 8933
+
+[env.local.vars]
+SYNC_WS_BASE = "ws://sync-service:8787"
+DSS_BASE = "http://document-storage-service:8080"
+SEARCH_SERVICE_BASE = "http://search-processing-service:8080"
+CONTACTS_SERVICE_BASE = "http://contacts-service:8080"
+AUTH_SERVICE_BASE = "http://connection-gateway:8080"
+
+[env.dev.vars]
+SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage-dev.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+
+[env.playground]
+name = "ai-editing-worker-playground"
+
+[env.playground.vars]
+SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage-dev.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+
+[env.prod]
+name = "ai-editing-worker"
+
+[env.prod.vars]
+SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
+DSS_BASE = "https://cloud-storage.macro.com"
+SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
+CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
+AUTH_SERVICE_BASE = "https://auth-service.macro.com"

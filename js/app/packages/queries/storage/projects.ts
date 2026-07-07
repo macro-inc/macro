@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
@@ -91,6 +92,8 @@ export async function createProject(params: {
   name: string;
   parentId?: string;
   sharePermission?: null;
+  /** UI surface the creation originated from, for analytics. */
+  source?: string;
 }): Promise<string | undefined> {
   const result = await storageServiceClient.projects.create({
     name: params.name,
@@ -100,6 +103,12 @@ export async function createProject(params: {
 
   if (result.isOk()) {
     const projectId = result.value.id;
+    analytics.track('create_entity', {
+      entityType: 'project',
+      entityId: projectId,
+      parentId: params.parentId,
+      source: params.source,
+    });
     setPreviewOnCreate({
       itemId: projectId,
       itemType: 'project',
@@ -148,6 +157,11 @@ function _useCreateProjectMutation(
       });
 
       if (result.isOk()) {
+        analytics.track('create_entity', {
+          entityType: 'project',
+          entityId: result.value.id,
+          parentId: params.parentId,
+        });
         return result.value.id;
       }
       return undefined;

@@ -1,5 +1,10 @@
 export type {} from './context';
 export {
+  FileDetailsSection,
+  FilePropertiesSection,
+  FileSidePanelSections,
+} from './FileSidePanelSections';
+export {
   GithubPullRequestChecksContent,
   GithubPullRequestDetailsContent,
   GithubPullRequestDetailsRows,

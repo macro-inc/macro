@@ -14,6 +14,7 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
@@ -171,6 +172,8 @@ export class AgentScheduleService extends pulumi.ComponentResource {
           secretsManagerPolicy.arn,
           sqsPolicy.arn,
           s3Policy.arn,
+          // Producer/consumer access to the macro event Kafka cluster.
+          getKafkaClusterPolicy(),
         ],
         tags,
       },

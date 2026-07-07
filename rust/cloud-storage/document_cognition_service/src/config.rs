@@ -2,6 +2,7 @@ use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_service_urls::AiEditingWorkerUrl;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -19,6 +20,9 @@ env_vars!(
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     pub struct McpCredentialsKeySecretName;
+    pub struct DocumentPermissionJwt;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 );
 
 maybe_env_vars!(
@@ -64,6 +68,13 @@ pub struct Config {
     pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    /// AI editing worker URL
+    #[macro_config_default(AiEditingWorkerUrl::unwrap_new().to_string())]
+    pub ai_editing_worker_url: String,
+    /// JWT secret for minting document permission tokens for the editing worker.
+    pub document_permission_jwt: DocumentPermissionJwt,
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
 }
 
 impl Config {
@@ -110,6 +121,9 @@ impl Config {
                 McpCredentialsKeySecretName::Comptime("MCP_CREDENTIALS_KEY_SECRET_NAME"),
             ),
             internal_api_key: InternalApiKey::Comptime(""),
+            ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
+            document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
+            kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
         }
     }
 }

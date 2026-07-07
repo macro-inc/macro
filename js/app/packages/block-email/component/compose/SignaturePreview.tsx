@@ -70,7 +70,7 @@ export function SignaturePreview(props: {
             Signature
           </button>
           <Tooltip
-            label="Edit your signature in Settings -> Connected accounts."
+            label="Edit your signature in Settings -> Connections."
             as="span"
           >
             <InfoIcon class="size-3.5 text-ink-muted" />

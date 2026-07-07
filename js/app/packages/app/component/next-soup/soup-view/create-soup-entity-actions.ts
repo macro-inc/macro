@@ -6,10 +6,12 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { getChannelParams } from '@block-channel/utils/link';
 import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import { useIsTeamAdmin } from '@queries/team/teams';
+import type { Component, JSX } from 'solid-js';
 import {
   makeBlockSenderAction,
   makeCopyAction,
@@ -17,6 +19,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
+  makeFavoriteAction,
   makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkSenderNoiseAction,
@@ -37,6 +40,8 @@ const NOISE_TABS = new Set(['noise']);
 type SoupEntityActionItem = {
   id: string;
   label: string;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  hotkeyToken?: HotkeyToken;
   onClick: () => void | Promise<void>;
   destructive?: boolean;
 };
@@ -77,6 +82,7 @@ export function createSoupEntityActions(): {
   });
 
   const copyAction = makeCopyAction();
+  const favoriteAction = makeFavoriteAction();
   const moveToProjectAction = makeMoveToProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
@@ -221,6 +227,19 @@ export function createSoupEntityActions(): {
         id: 'rename',
         label: 'Rename',
         onClick: handle(renameAction.executeWithSoup),
+      });
+    }
+
+    if (canExecuteAll(favoriteAction.canExecute)) {
+      const allFavorited = entities.every((entity) =>
+        favoriteAction.isFavorited(entity)
+      );
+      // No icon: the other items in this menu don't have one.
+      middleItems.push({
+        id: 'favorite',
+        label: allFavorited ? 'Unfavorite' : 'Favorite',
+        hotkeyToken: TOKENS.entity.action.favorite,
+        onClick: handle(favoriteAction.executeWithSoup),
       });
     }
 

@@ -1,4 +1,8 @@
+import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { CallStatusBadge, SharedBadge } from '../../components/Badges';
@@ -11,6 +15,7 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isDocumentEntity,
   isEmailEntity,
   isGithubPrEntity,
   isProjectContainedEntity,
@@ -26,6 +31,22 @@ import {
   GithubPullRequestPills,
 } from './foreign';
 import type { LayoutProps } from './shared';
+
+function RowTags(props: {
+  entityId: string;
+  entityType: EntityType;
+  properties: SoupProperty[] | undefined;
+}) {
+  const filterByTag = useRowTagFilter();
+  return (
+    <EntityRowTags
+      entityId={props.entityId}
+      entityType={props.entityType}
+      properties={props.properties}
+      onFilterByTag={filterByTag}
+    />
+  );
+}
 
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
@@ -164,6 +185,34 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isTaskEntity(props.entity) && props.entity}>
           {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
+        <Show when={isDocumentEntity(props.entity) && props.entity}>
+          {(entity) => {
+            const properties = () => {
+              const doc = entity();
+              return 'properties' in doc ? doc.properties : undefined;
+            };
+            return (
+              <RowTags
+                entityId={entity().id}
+                entityType={
+                  isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
+                }
+                properties={properties()}
+              />
+            );
+          }}
+        </Show>
+        <Show when={isEmailEntity(props.entity) && props.entity}>
+          {(entity) => (
+            // No filter-by-tag affordance. The soup email path does not apply
+            // tag filters, so filtering would leave email rows unfiltered.
+            <EntityRowTags
+              entityId={entity().id}
+              entityType={EntityType.THREAD}
+              properties={entity().properties}
+            />
+          )}
         </Show>
       </Entity.Slot>
       <Entity.Slot

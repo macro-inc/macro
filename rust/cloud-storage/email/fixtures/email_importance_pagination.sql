@@ -9,7 +9,7 @@
 
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('a1111111-1111-1111-1111-111111111111', 'macro1', 'fa1', 'user1@test.com', 'GMAIL', true, NOW(), NOW()),
+    ('a1111111-1111-1111-1111-111111111111', 'macro|user1@test.com', 'fa1', 'user1@test.com', 'GMAIL', true, NOW(), NOW()),
     ('b2222222-2222-2222-2222-222222222222', 'macro2', 'fa2', 'user2@test.com', 'GMAIL', true, NOW(), NOW());
 
 INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)

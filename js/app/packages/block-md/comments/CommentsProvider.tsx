@@ -87,7 +87,7 @@ export const CommentsProvider: VoidComponent<{
   }
   const { plugins, editor } = wrapper;
 
-  const currentPeerId = () => props.loroManager.getPeerIdStr();
+  const currentPeerId = () => props.loroManager.peerIdStr;
 
   const [marks, setMarks] = markStore;
   const [commentThreadsData] = commentThreadsResource;

@@ -1,5 +1,5 @@
-import { type JSX, Show } from 'solid-js';
 import { cn, Layer } from '@ui';
+import { type JSX, Show } from 'solid-js';
 
 /*
  * Shared building blocks for the settings panels. Every settings tab composes

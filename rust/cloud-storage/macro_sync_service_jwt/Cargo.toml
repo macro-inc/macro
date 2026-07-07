@@ -1,0 +1,12 @@
+[package]
+edition = "2024"
+name = "macro_sync_service_jwt"
+publish = false
+version = "0.1.0"
+
+# Excluded from workspace-hack in .config/hakari.toml since it needs to compile
+# to wasm too for sync service
+[dependencies]
+derive_more = { version = "2", features = ["display", "from"] }
+jsonwebtoken = { workspace = true }
+serde = { workspace = true }

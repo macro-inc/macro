@@ -25,8 +25,11 @@ export type SearchIndexId =
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
-/** Search types whose results are documents/tasks, where tag filtering applies. */
+/** Search types where tag filtering applies: documents/tasks plus the mixed
+ * `all` view (tags there narrow the taggable result types and leave the
+ * rest untouched). */
 export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
+  'all',
   'task',
   'document-or-file',
 ]);
@@ -63,9 +66,9 @@ export type SearchFiltersSections = {
 
 export type SearchFiltersState = SearchFiltersSections & {
   type: SearchTypeValue;
-  // Selected tags. Applied only on the document/task types (TAG_SEARCH_TYPES)
+  // Selected tags. Applied only on the all/document/task types (TAG_SEARCH_TYPES)
   // and read live from the compiled query, so they persist across those types
-  // but clear when switching to a type where tags do not apply (all/email/etc).
+  // but clear when switching to a type where tags do not apply (email/channels/etc).
   // Each entry carries its owning definition id and option id; combined as one OR.
   tags: PropertyFilter[];
 };
@@ -91,17 +94,17 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   const include: FieldFilters = { ...baseline.include };
   const exclude: FieldFilters = { ...baseline.exclude };
 
+  // Tags apply on the all/document/task types only, so a tag filter never
+  // silently empties a search narrowed to emails/channels/calls.
+  if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
+    include.tagFilters = state.tags;
+  }
+
   if (state.type === 'all') return { include, exclude };
 
   const seed = SEARCH_INDEX_SEEDS[state.type];
   Object.assign(include, seed.include);
   Object.assign(exclude, seed.exclude);
-
-  // Tags only apply where results are already narrowed to documents/tasks, so a
-  // tag filter never silently empties an email/channel/call search.
-  if (TAG_SEARCH_TYPES.has(state.type) && state.tags.length) {
-    include.tagFilters = state.tags;
-  }
 
   if (state.type === 'email') {
     if (state.email.importance !== undefined) {

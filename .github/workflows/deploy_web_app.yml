@@ -1,0 +1,112 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/deploy_web_app.rs
+name: Deploy Web App
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to build for. e.g. (dev, prod)
+      notify:
+        required: false
+        type: boolean
+    secrets:
+      AWS_ACCESS_KEY:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      PULUMI_ACCESS_TOKEN:
+        required: true
+      DD_APP_KEY:
+        required: true
+      DD_API_KEY:
+        required: true
+      DD_WEB_APP_TOKEN:
+        required: true
+      SEGMENT_WRITE_KEY:
+        required: true
+      POSTHOG_API_KEY:
+        required: true
+      CACHIX_AUTH_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options:
+        - dev
+        - prod
+        description: The environment to build for
+      notify:
+        required: false
+        type: boolean
+        description: Whether to notify the Slack channel of the deployment completion
+jobs:
+  build-deploy:
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    env:
+      CI: 'true'
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ github.ref_name }}
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Build
+      run: just build-${{ inputs.environment }}
+      env:
+        VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
+        VITE_DD_HASH: ${{ github.sha }}
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      working-directory: js/app
+    - name: Install infra dependencies
+      run: bun install
+      working-directory: infra
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    - name: Deploy with Pulumi
+      uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
+      with:
+        command: up
+        stack-name: macro-inc/${{ inputs.environment }}
+        work-dir: ./infra/stacks/web-app
+      env:
+        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        DD_HOST: https://api.us5.datadoghq.com/
+    - name: Upload sourcemaps to Datadog
+      run: bun run ddupload:${{ inputs.environment }}
+      env:
+        DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
+        DATADOG_SITE: us5.datadoghq.com
+        DATADOG_API_HOST: api.us5.datadoghq.com
+      working-directory: js/app/packages/app
+    - name: Upload production build
+      if: ${{ inputs.environment == 'prod' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: web-app-build
+        path: js/app/packages/app/dist
+        overwrite: 'true'
+concurrency:
+  group: deploy-web-app-${{ inputs.environment }}
+  cancel-in-progress: false

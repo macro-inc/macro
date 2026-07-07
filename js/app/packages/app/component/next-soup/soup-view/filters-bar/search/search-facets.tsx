@@ -463,8 +463,8 @@ export function useSearchFacets(
     },
   });
 
-  // Tags show only where tagging applies (documents/tasks), gated behind the
-  // tags feature flag, and hidden when the caller has no tags defined.
+  // Tags show only where tagging applies (all/documents/tasks), gated behind
+  // the tags feature flag, and hidden when the caller has no tags defined.
   const tagFacets = (): SearchFacetVM[] =>
     tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
 
@@ -488,6 +488,7 @@ export function useSearchFacets(
           ...tagFacets(),
         ];
       case 'document-or-file':
+      case 'all':
         return [type, ...tagFacets()];
       default:
         return [type];

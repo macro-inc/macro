@@ -2,7 +2,7 @@
 
 use crate::domain::{
     models::{DocumentError, EditDocumentServiceArgs},
-    ports::{DocumentService, create::DocumentCreationService},
+    ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -59,17 +59,18 @@ pub struct RenameDocument {
 }
 
 #[async_trait]
-impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for RenameDocument
+impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for RenameDocument
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     type Output = RenameDocumentResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, document_id=?self.document_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Rename document");

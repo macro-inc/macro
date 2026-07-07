@@ -42,7 +42,10 @@ import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { useHistory } from '../history/HistoryContext';
-import { DispatchAgentButton } from './DispatchAgentMenu';
+import {
+  DispatchAgentButton,
+  useDispatchAgentSplitFileActions,
+} from './DispatchAgentMenu';
 
 export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const blockName = useBlockName();
@@ -59,6 +62,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
+  const dispatchAgentActions = useDispatchAgentSplitFileActions();
 
   const copyLink = () => {
     const url = buildSimpleEntityUrl({ id: blockId, type: blockAliasedName });
@@ -199,6 +203,16 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
           fileType: 'md',
         }),
     },
+    ...(isTask
+      ? ([
+          {
+            label: 'Code Actions',
+            icon: TerminalWindowIcon,
+            action: () => {},
+            children: dispatchAgentActions,
+          },
+        ] satisfies BlockTool[])
+      : []),
   ];
 
   return (
