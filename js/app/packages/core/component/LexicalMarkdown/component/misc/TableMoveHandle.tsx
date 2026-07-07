@@ -357,7 +357,7 @@ export function TableMoveHandle() {
           <button
             type="button"
             aria-label="Move cells"
-            class="fixed z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm touch-none"
+            class="fixed z-20 flex size-6 -translate-x-[calc(100%-3px)] -translate-y-[3px] items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm touch-none"
             classList={{
               'cursor-grab': !dragging(),
               'cursor-grabbing': dragging(),
