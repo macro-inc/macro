@@ -31,6 +31,10 @@ jobs:
           /home/runner/.cache/sccache
           /nix
       continue-on-error: true
+    - name: Set up Namespace Docker builder
+      uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
+    - name: Build aux service images (fail fast)
+      run: docker compose -p macro -f docker-compose.yml build search sync_service websocket_service lexical_service
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps
@@ -42,7 +46,9 @@ jobs:
         echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
     - name: Build service binaries
-      run: cargo x zigbuild
+      run: |
+        cargo x zigbuild
+        sccache --show-stats
       working-directory: rust/cloud-storage
     - name: Build xtask (runs inside the preview VM)
       run: cargo build --release -p xtask

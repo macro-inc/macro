@@ -73,12 +73,34 @@ fn deploy() -> Job {
         .add_env(("APP_NAME", APP_NAME))
         .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume())
+        // Namespace remote builder: persistent BuildKit layer cache across
+        // runs, same as the deploy workflows use. The aux-image builds and the
+        // preview-image build both go through it.
+        .add_step(
+            Step::new("Set up Namespace Docker builder").uses(
+                "namespacelabs",
+                "nscloud-setup-buildx-action",
+                "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
+            ), // v0.0.23
+        )
+        // Fail fast: the Docker-built aux images are the most fragile part of
+        // a fresh bring-up (stale local images mask their rot) and need
+        // nothing from nix/cargo — build them before the expensive toolchain
+        // setup so a broken Dockerfile fails in ~2 minutes, not ~12. The bake
+        // step's `stack up` then reuses these images instead of building.
+        .add_step(Step::new("Build aux service images (fail fast)").run(
+            "docker compose -p macro -f docker-compose.yml build \
+             search sync_service websocket_service lexical_service",
+        ))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
         .add_step(steps::pin_sccache_dir())
         .add_step(
             Step::new("Build service binaries")
-                .run("cargo x zigbuild")
+                .run(indoc::indoc! {r#"
+                    cargo x zigbuild
+                    sccache --show-stats
+                "#})
                 .working_directory("rust/cloud-storage"),
         )
         .add_step(
