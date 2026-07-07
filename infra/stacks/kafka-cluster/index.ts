@@ -28,6 +28,7 @@ export const clusterArn = kafkaCluster.cluster.arn;
 export const bootstrapBrokersSaslIam =
   kafkaCluster.cluster.bootstrapBrokersSaslIam;
 export const securityGroupId = kafkaCluster.securityGroup.id;
+
 // Producer + consumer access to the cluster and all its topics/groups. Attach
 // to the ECS task role of any service that publishes or consumes events:
 //
