@@ -563,6 +563,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
+
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
@@ -575,7 +576,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     const location = channelLocation(entity());
     const tag = getNotificationTag(props.item.notification);
 
-    let sender = isDM() ? entity().name || senderName() : '';
+    let sender = isDM() ? senderName() : '';
     let action = '';
 
     if (tag === 'document_mention' && isDM()) {

@@ -1819,7 +1819,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 )}
               >
                 <Show
-                  when={soup.focus.item()}
+                  when={soup.focus.row()?.getIsGrouped() === false}
                   fallback={
                     <EmptyStatePanel
                       graphic={EmptyStatePreviewIcon}
