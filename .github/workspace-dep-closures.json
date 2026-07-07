@@ -423,14 +423,6 @@
       "prompt",
       "workspace-hack"
     ],
-    "backfill_entity_access": [
-      "backfill_entity_access",
-      "macro_entrypoint",
-      "macro_env",
-      "macro_env_var",
-      "macro_uuid",
-      "workspace-hack"
-    ],
     "bot_id": [
       "bot_id",
       "cowlike",

@@ -7,7 +7,6 @@ members = [
   "ai_projections_refresh_handler",
   "ai_usage",
   "authentication_service",
-  "backfill_entity_access",
   "bot_id",
   "bots",
   "call_recording_preview_handler",
