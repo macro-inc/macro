@@ -175,6 +175,28 @@ pub(crate) async fn update_email_thread_properties(
 
     let status_code = response.status_code();
     if status_code.is_success() {
+        // A 200 can still carry per-document failures in the body.
+        let body: serde_json::Value =
+            response
+                .json()
+                .await
+                .map_err(|err| OpensearchClientError::DeserializationFailed {
+                    details: err.to_string(),
+                    method: Some("update_email_thread_properties".to_string()),
+                })?;
+        if let Some(failures) = body.get("failures").and_then(|f| f.as_array())
+            && !failures.is_empty()
+        {
+            tracing::error!(
+                thread_id=%thread_id,
+                failures=?failures,
+                "update_by_query reported failures updating email thread properties",
+            );
+            return Err(OpensearchClientError::Unknown {
+                details: format!("update_by_query failures: {failures:?}"),
+                method: Some("update_email_thread_properties".to_string()),
+            });
+        }
         tracing::trace!(thread_id=%thread_id, "email thread properties updated");
         return Ok(());
     }
