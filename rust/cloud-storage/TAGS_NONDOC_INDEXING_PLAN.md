@@ -431,13 +431,13 @@ the release; backfills run after it).
 
 - **Message rename**: `UpdateDocumentProperties`/`DocumentPropertiesUpdate.document_id`
   → entity naming with `#[serde(alias)]`, one release after the generic
-  consumer is everywhere.
+  consumer is everywhere. Filed: task `019f3e31-5ee2-7475-b422-db1eb5aa59e9`.
 - **Option-delete staleness** (pre-existing, all entity types): deleting a tag
   option strips PG values (macro-2128) but never re-enqueues affected entities,
   so the option id lingers in `properties.values` until the entity's next
   property write. Harmless while deleted option ids can't be selected in the
   UI; a proper fix is enqueueing property updates for affected entities on
-  option delete. File separately.
+  option delete. Filed: task `019f3e31-6744-707a-a8f7-bfd5ba5df3b6`.
 - **Channels / calls / CRM** legs stay tag-incapable (keep `!tags_active`).
 - **update_by_query conflict skips** (emails): healed by attach-on-upsert;
   residual risk is a stale properties array on one message copy until the next
@@ -447,7 +447,7 @@ the release; backfills run after it).
   (`tag_viewer_user_id`) — a caller can be shown another user's personal tag on
   a shared entity in search results but not in soup. Pre-existing for
   documents, now inherited by every leg that adds response properties (§2.11).
-  Resolve once, centrally — file separately.
+  Resolve once, centrally. Filed: task `019f3e31-7ce9-7964-9cfd-cf6cb105c2ac`.
 - **sqlx**: the backfill's new query needs `.sqlx` regen — run per-crate
   `cargo sqlx prepare` (librdkafka breaks workspace-wide `just prepare_db`).
 - **Codegen**: no public API model changes are expected (`tag_option_ids`
