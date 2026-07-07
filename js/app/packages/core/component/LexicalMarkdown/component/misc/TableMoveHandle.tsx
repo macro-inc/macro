@@ -22,7 +22,7 @@ import DotsIcon from '@phosphor/dots-six-vertical.svg';
 import RowsIcon from '@phosphor/rows.svg';
 import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
 import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
-import TableIcon from '@phosphor/table.svg';
+import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   $getNearestNodeFromDOMNode,
@@ -53,33 +53,33 @@ type MenuItem = {
   label: string;
   icon: Component<ComponentProps<'svg'>>;
   action: (cell: TableCellNode) => void;
-  // Spans both grid columns.
-  wide?: boolean;
 };
 
+// 2×2 grid: column inserts side by side on top, row inserts below.
 const INSERT_ITEMS: MenuItem[] = [
   {
-    label: 'Column left',
+    label: 'Insert column left',
     icon: ColumnsPlusLeftIcon,
     action: () => $insertTableColumnAtSelection(false),
   },
   {
-    label: 'Column right',
+    label: 'Insert column right',
     icon: ColumnsPlusRightIcon,
     action: () => $insertTableColumnAtSelection(true),
   },
   {
-    label: 'Row above',
-    icon: RowsPlusTopIcon,
-    action: () => $insertTableRowAtSelection(false),
-  },
-  {
-    label: 'Row below',
+    label: 'Insert row below',
     icon: RowsPlusBottomIcon,
     action: () => $insertTableRowAtSelection(true),
   },
+  {
+    label: 'Insert row above',
+    icon: RowsPlusTopIcon,
+    action: () => $insertTableRowAtSelection(false),
+  },
 ];
 
+// Bottom row: delete the row/column the selection is in.
 const DELETE_ITEMS: MenuItem[] = [
   {
     label: 'Delete row',
@@ -91,16 +91,10 @@ const DELETE_ITEMS: MenuItem[] = [
     icon: ColumnsIcon,
     action: () => $deleteTableColumnAtSelection(),
   },
-  {
-    label: 'Delete table',
-    icon: TableIcon,
-    wide: true,
-    action: (cell) => $getTableNodeFromLexicalNodeOrThrow(cell).remove(),
-  },
 ];
 
-const MENU_WIDTH_PX = 232;
-const MENU_MAX_HEIGHT_PX = 200;
+const MENU_WIDTH_PX = 104;
+const MENU_MAX_HEIGHT_PX = 140;
 
 type DropTarget = {
   cellElem: HTMLElement;
@@ -234,9 +228,24 @@ export function TableMoveHandle() {
 
     const a = anchorElem.getBoundingClientRect();
     const f = focusElem.getBoundingClientRect();
+
+    // Top-left corner of the table (clamped to the scroll wrapper's visible
+    // span) for the touch-only delete-table button.
+    const tableElem = anchorElem.closest('table');
+    const tableRect = tableElem?.getBoundingClientRect();
+    const wrapperRect = tableElem
+      ?.closest('.md-table-scrollable-wrapper')
+      ?.getBoundingClientRect();
+
     return {
       x: Math.min(Math.max(a.right, f.right), window.innerWidth),
       y: Math.min(a.top, f.top),
+      tableCorner: tableRect
+        ? {
+            x: Math.max(tableRect.left, wrapperRect?.left ?? -Infinity),
+            y: Math.max(tableRect.top, 12),
+          }
+        : undefined,
     };
   });
 
@@ -380,15 +389,21 @@ export function TableMoveHandle() {
     }
   );
 
-  const menuItemButton = (item: MenuItem, danger: boolean) => (
+  const menuItemButton = (item: MenuItem, danger?: boolean) => (
     <button
       type="button"
-      class="flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs ring-1 ring-edge active:bg-accent/10"
-      classList={{ 'text-failure': danger, 'col-span-2': item.wide }}
+      aria-label={item.label}
+      title={item.label}
+      class="flex items-center justify-center rounded-md py-2 ring-1 ring-edge active:bg-accent/10"
+      classList={{ 'text-failure': danger, 'text-ink-muted': !danger }}
       onClick={() => runMenuAction(item.action)}
     >
-      <item.icon class="size-4 shrink-0" />
-      {item.label}
+      <span class="relative">
+        <item.icon class="size-5" />
+        <Show when={danger}>
+          <TrashIcon class="absolute -right-1 -bottom-1 size-3 rounded-full bg-surface" />
+        </Show>
+      </span>
     </button>
   );
 
@@ -487,6 +502,27 @@ export function TableMoveHandle() {
           >
             <DotsIcon class="size-3.5" />
           </button>
+          {/* Touch devices get a persistent delete-table button on the
+              table's top-left corner while the selection is in the table. */}
+          <Show when={isTouchDevice() && pos().tableCorner}>
+            {(corner) => (
+              <button
+                type="button"
+                aria-label="Delete table"
+                title="Delete table"
+                class="fixed z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-failure shadow-sm active:border-failure active:bg-failure active:text-surface"
+                style={{ left: `${corner().x}px`, top: `${corner().y}px` }}
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() =>
+                  runMenuAction((cell) =>
+                    $getTableNodeFromLexicalNodeOrThrow(cell).remove()
+                  )
+                }
+              >
+                <TrashIcon class="size-3.5" />
+              </button>
+            )}
+          </Show>
           <Show when={menuOpen()}>
             <div
               class="fixed z-30 grid -translate-x-full grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
@@ -502,10 +538,7 @@ export function TableMoveHandle() {
               use:clickOutside={() => setMenuOpen(false)}
               onPointerDown={(e) => e.preventDefault()}
             >
-              <For each={INSERT_ITEMS}>
-                {(item) => menuItemButton(item, false)}
-              </For>
-              <div class="col-span-2 my-0.5 h-px shrink-0 bg-edge" />
+              <For each={INSERT_ITEMS}>{(item) => menuItemButton(item)}</For>
               <For each={DELETE_ITEMS}>
                 {(item) => menuItemButton(item, true)}
               </For>
