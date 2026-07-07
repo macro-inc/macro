@@ -296,3 +296,67 @@ async fn unparseable_user_id_skips_widening(pool: Pool<Postgres>) -> anyhow::Res
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_shared_threads", "email_project_scope")
+    )
+)]
+async fn shared_only_with_project_scope_excludes_owned_threads(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // Shared=Only means "not my own threads": the project widening must keep
+    // teammates' threads but never return the caller's own.
+    let filter = Arc::new(Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(SHARED_PROJECT.to_string())),
+        Expr::Literal(EmailLiteral::Shared(item_filters::SharedEmailFilter::Only)),
+    ));
+    let ids = run_query(&pool, PreviewViewStandardLabel::All, filter, USER1).await?;
+
+    assert_eq!(
+        ids,
+        vec![
+            USER2_ARCHIVED_IN_SHARED.to_string(),
+            USER2_IN_SHARED.to_string(),
+        ],
+        "Shared=Only + project scope must return only other users' project threads"
+    );
+    assert!(
+        !ids.contains(&OWN_IN_SHARED.to_string()),
+        "the caller's own project thread must be excluded under Shared=Only"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_shared_threads", "email_project_scope")
+    )
+)]
+async fn multi_project_filter_widens_every_accessible_project(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let filter = Arc::new(Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId(SHARED_PROJECT.to_string())),
+        Expr::Literal(EmailLiteral::ProjectId(TEAM_PROJECT.to_string())),
+    ));
+    let ids = run_query(&pool, PreviewViewStandardLabel::All, filter, USER1).await?;
+
+    assert_eq!(
+        ids,
+        vec![
+            USER2_ARCHIVED_IN_SHARED.to_string(), // 2024-03-07
+            USER2_IN_TEAM.to_string(),            // 2024-03-05
+            OWN_IN_SHARED.to_string(),            // 2024-03-01
+            USER2_IN_SHARED.to_string(),          // 2024-02-02
+        ],
+        "an OR of project ids must widen every project the caller can access"
+    );
+
+    Ok(())
+}

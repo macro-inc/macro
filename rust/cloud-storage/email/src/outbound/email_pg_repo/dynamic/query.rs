@@ -43,7 +43,7 @@ struct QueryParams {
 
 /// See [`QueryParams::project_scope`].
 struct ProjectScope {
-    project_id: String,
+    project_ids: Vec<String>,
     source_ids: Vec<String>,
 }
 
@@ -249,18 +249,18 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
         }
-        // All threads in the requested project, across every inbox — gated
-        // on the caller's sources having an entity_access grant on the
-        // project itself (same check as thread_access.rs Source 3).
+        // All threads in the requested projects, across every inbox — each
+        // row gated on the caller's sources having an entity_access grant
+        // on that row's project (same check as thread_access.rs Source 3).
         ThreadCandidateSource::Project => {
             let scope = params
                 .project_scope
                 .as_ref()
                 .expect("Project candidate source requires project_scope");
-            builder.push("t.project_id = ");
-            builder.push_bind(scope.project_id.clone());
+            builder.push("t.project_id = ANY(");
+            builder.push_bind(scope.project_ids.clone());
             builder.push(
-                r#" AND EXISTS (
+                r#") AND EXISTS (
                         SELECT 1 FROM entity_access pea
                         WHERE pea.entity_id::text = t.project_id
                           AND pea.entity_type = 'project'
@@ -268,6 +268,13 @@ fn push_thread_candidate_select(
             );
             builder.push_bind(scope.source_ids.clone());
             builder.push("))");
+            // Shared=Only means "not my own threads" — keep the project
+            // widening for teammates' threads but exclude the caller's.
+            if matches!(params.shared, SharedEmailFilter::Only) {
+                builder.push(" AND NOT (t.link_id = ANY(");
+                builder.push_bind(params.link_ids.clone());
+                builder.push("))");
+            }
         }
     }
 
@@ -767,8 +774,9 @@ fn debug_build_query_sql_full(
     let shared = extract_shared_filter(email_filter);
     // Mirror the real path's scope derivation with a fixed source id in
     // place of the get_user_source_ids DB lookup.
-    let project_scope = extract_project_filter(email_filter).map(|project_id| ProjectScope {
-        project_id,
+    let project_ids = extract_project_filter(email_filter);
+    let project_scope = (!project_ids.is_empty()).then(|| ProjectScope {
+        project_ids,
         source_ids: vec!["test-user".to_string()],
     });
     let is_important = matches!(
@@ -812,16 +820,19 @@ fn extract_shared_filter(ast: &Expr<EmailLiteral>) -> SharedEmailFilter {
     )
 }
 
-/// First `ProjectId` literal in the tree, if any. A negated `ProjectId`
-/// ("not in project X") must not widen the candidate set, so anything under
-/// a `Not` is ignored.
-fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Option<String> {
+/// Every `ProjectId` literal in the tree. A negated `ProjectId` ("not in
+/// project X") must not widen the candidate set, so anything under a `Not`
+/// is ignored.
+fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
     ast.collapse_frames(
-        |frame: filter_ast::ExprFrame<Option<String>, EmailLiteral>| match frame {
-            filter_ast::ExprFrame::Literal(EmailLiteral::ProjectId(id)) => Some(id),
-            filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a.or(b),
-            filter_ast::ExprFrame::Not(_) => None,
-            _ => None,
+        |frame: filter_ast::ExprFrame<Vec<String>, EmailLiteral>| match frame {
+            filter_ast::ExprFrame::Literal(EmailLiteral::ProjectId(id)) => vec![id],
+            filter_ast::ExprFrame::And(mut a, b) | filter_ast::ExprFrame::Or(mut a, b) => {
+                a.extend(b);
+                a
+            }
+            filter_ast::ExprFrame::Not(_) => Vec::new(),
+            _ => Vec::new(),
         },
     )
 }
@@ -874,21 +885,21 @@ pub(crate) async fn dynamic_email_thread_cursor(
     // project, so resolve the caller's entity_access sources up front (the
     // lookup is memoized for 30s). On failure, degrade to the un-widened
     // query rather than erroring — the scope can only ever add rows.
-    let project_scope = match extract_project_filter(email_filter) {
-        Some(project_id) => {
-            let user = MacroUserIdStr::parse_from_str(user_id).ok();
-            match get_user_source_ids(pool, user.as_deref()).await {
-                Ok(source_ids) => Some(ProjectScope {
-                    project_id,
-                    source_ids: source_ids.0,
-                }),
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");
-                    None
-                }
+    let project_ids = extract_project_filter(email_filter);
+    let project_scope = if project_ids.is_empty() {
+        None
+    } else {
+        let user = MacroUserIdStr::parse_from_str(user_id).ok();
+        match get_user_source_ids(pool, user.as_deref()).await {
+            Ok(source_ids) => Some(ProjectScope {
+                project_ids,
+                source_ids: source_ids.0,
+            }),
+            Err(e) => {
+                tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");
+                None
             }
         }
-        None => None,
     };
 
     let is_important = matches!(

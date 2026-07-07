@@ -1472,7 +1472,7 @@ fn test_build_query_project_filter_adds_access_gated_union_branch() {
     );
     // Candidate set widens to the whole project, gated on project access.
     assert!(
-        sql.contains("t.project_id = "),
+        sql.contains("t.project_id = ANY("),
         "project branch must filter on project_id: {sql}"
     );
     assert!(
@@ -1506,5 +1506,67 @@ fn test_build_query_no_project_filter_has_no_project_branch() {
     assert!(
         !sql.contains("pea.entity_type = 'project'"),
         "project branch must only appear for project-scoped filters: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_multi_project_filter_widens_all_projects() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::ProjectId(
+            "159f7ca9-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    // One project branch carrying every requested id via = ANY, gated per
+    // row so access is checked against each thread's own project.
+    assert_eq!(
+        sql.matches("t.project_id = ANY(").count(),
+        1,
+        "multi-project filters must widen through a single ANY branch: {sql}"
+    );
+    assert!(
+        sql.contains("pea.entity_id::text = t.project_id"),
+        "access gate must be per-row: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_shared_only_project_branch_excludes_owned() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::Shared(item_filters::SharedEmailFilter::Only)),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        sql.contains("AND NOT (t.link_id = ANY("),
+        "Shared=Only must exclude the caller's own threads from the project branch: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_shared_include_project_branch_keeps_owned() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::Shared(
+            item_filters::SharedEmailFilter::Include,
+        )),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        !sql.contains("AND NOT (t.link_id = ANY("),
+        "Shared=Include must not exclude owned threads from the project branch: {sql}"
     );
 }
