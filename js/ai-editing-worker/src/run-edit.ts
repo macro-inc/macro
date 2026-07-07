@@ -13,7 +13,11 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
 import { createWorkerSyncSource } from './sources';
-import { buildTraceLog } from './trace-log';
+import {
+  buildTraceSession,
+  renderTraceMarkdown,
+  type TraceSession,
+} from './trace-log';
 
 export type Model = {
   provider: 'anthropic' | 'cerebras' | 'openai';
@@ -54,10 +58,8 @@ export type { UsageEntry };
 export type RunEditResult = {
   usage: UsageEntry[];
   ops: DocumentOp[];
-  /** Markdown trace of the session; always built so it can be persisted. */
-  trace: string;
-  /** Unique id for this edit session; keys the persisted trace. */
-  sessionId: string;
+  /** Structured trace of the session; stored as JSON, rendered to markdown on demand. */
+  session: TraceSession;
   clarification?: string;
 };
 
@@ -106,22 +108,23 @@ export async function runEditSession(
   const startedAt = new Date();
   const initialDocument = serializeWithXml(workspace.session);
   try {
-    const { totalUsage, steps, stepDurationsMs, intent, clarification } =
-      await supervisor(
-      workspace.session,
-      args.prompt,
-      args.models,
-      {
-        borrowWriter: () => workspace.borrowWriter(),
-        typingAnimations: args.typingAnimations,
-        sleep: args.sleep,
-        signal: args.signal,
-        interpret: args.interpret,
-        runner: args.runner,
-        onOps: (ops) => allOps.push(...ops),
-        onCoderResult: (codes) => coderCodeBlocks.push(codes),
-      }
-    );
+    const {
+      totalUsage,
+      steps,
+      stepDurationsMs,
+      intent,
+      interpretDurationMs,
+      clarification,
+    } = await supervisor(workspace.session, args.prompt, args.models, {
+      borrowWriter: () => workspace.borrowWriter(),
+      typingAnimations: args.typingAnimations,
+      sleep: args.sleep,
+      signal: args.signal,
+      interpret: args.interpret,
+      runner: args.runner,
+      onOps: (ops) => allOps.push(...ops),
+      onCoderResult: (codes) => coderCodeBlocks.push(codes),
+    });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
     // commit reached the server before we disconnect.
@@ -130,13 +133,15 @@ export async function runEditSession(
 
     const usage = totalUsage.toEntries();
 
-    const trace = buildTraceLog(
+    const session = buildTraceSession(
       {
+        sessionId,
         documentId: args.documentId,
         prompt: args.prompt,
         startedAt,
         initialDocument,
         intent,
+        interpretDurationMs,
         coderCodeBlocks,
         stepDurationsMs,
       },
@@ -144,13 +149,17 @@ export async function runEditSession(
       usage
     );
 
-    console.log(JSON.stringify({ documentId: args.documentId, debug: trace }));
+    console.log(
+      JSON.stringify({
+        documentId: args.documentId,
+        debug: renderTraceMarkdown(session),
+      })
+    );
 
     return {
       usage,
       ops: allOps,
-      trace,
-      sessionId,
+      session,
       clarification,
     };
   } finally {

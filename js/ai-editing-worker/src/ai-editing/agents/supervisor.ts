@@ -32,13 +32,16 @@ export async function supervisor(
   const docContext = `<document>\n${initialText}\n</document>`;
 
   let intent = '';
+  let interpretDurationMs: number | undefined;
   if (opts.interpret) {
+    const interpretStartedAt = Date.now();
     const interpretation = await interpreter(
       docContext,
       request,
       models.interpret,
       INTERPRET_SYSTEM
     );
+    interpretDurationMs = Date.now() - interpretStartedAt;
     tracker.add(
       models.interpret as { modelId: string },
       interpretation.totalUsage
@@ -72,8 +75,8 @@ export async function supervisor(
   const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
 
   // Wall-clock duration of each supervisor step, measured between step
-  // boundaries. In Workers `Date.now()` only advances across I/O, which every
-  // step has (the model call), so these deltas are real.
+  // boundaries. Best-effort, but since between model calls it's probably good
+  // enough.
   const stepDurationsMs: number[] = [];
   let lastStepAt = Date.now();
   const result = await generateText({
@@ -104,6 +107,7 @@ export async function supervisor(
     steps: result.steps,
     stepDurationsMs,
     intent,
+    interpretDurationMs,
     clarification,
   };
 }

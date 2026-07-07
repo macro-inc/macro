@@ -10,6 +10,7 @@ import { type Bindings, getEnv } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
+import { renderTraceMarkdown } from '../trace-log';
 import { insertEditTrace } from '../traces-db';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
@@ -109,43 +110,46 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, trace, sessionId, clarification } =
-      await runEditSession({
-        wsUrl,
-        documentId,
-        prompt,
-        models: {
-          supervisor: resolveModel(models.supervisor),
-          interpret: resolveModel(models.interpret),
-          coding: resolveModel(models.coding),
-        },
-        typingAnimations,
-        sleep,
-        interpret,
-        debug,
-        runner: runInSandbox,
-        signal,
-      }).finally(presence.stop);
+    const { usage, ops, session, clarification } = await runEditSession({
+      wsUrl,
+      documentId,
+      prompt,
+      models: {
+        supervisor: resolveModel(models.supervisor),
+        interpret: resolveModel(models.interpret),
+        coding: resolveModel(models.coding),
+      },
+      typingAnimations,
+      sleep,
+      interpret,
+      debug,
+      runner: runInSandbox,
+      signal,
+    }).finally(presence.stop);
 
-    // Best-effort trace persistence: runs after the response is sent so it adds
-    // no latency, and a DB failure can never fail the edit.
+    // Persist inline before responding: the client disconnects the moment the
+    // edit finishes, tearing down the invocation, so a waitUntil() write gets
+    // cancelled before it lands. A single indexed insert is ~1ms. Wrapped so a
+    // DB failure can never fail the edit itself.
     const db = c.env.TRACES_DB;
     if (db) {
-      c.executionCtx.waitUntil(
-        insertEditTrace(db, {
-          id: sessionId,
+      try {
+        await insertEditTrace(db, {
+          id: session.sessionId,
           document_id: documentId,
           created_at: Date.now(),
-          markdown: trace,
-        }).catch((e) => console.error('failed to persist edit trace:', e))
-      );
+          trace_json: JSON.stringify(session),
+        });
+      } catch (e) {
+        console.error('failed to persist edit trace:', e);
+      }
     }
 
     return c.json({
       ok: true,
       usage,
       ops,
-      trace: debug ? trace : undefined,
+      trace: debug ? renderTraceMarkdown(session) : undefined,
       clarification,
     });
   } catch (err) {

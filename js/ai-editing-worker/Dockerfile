@@ -10,11 +10,10 @@ EXPOSE 8933
 
 CMD ["sh", "-c", "\
   bun scripts/generate-sandbox.ts && \
-  printf 'OPENAI_API_KEY=%s\\nANTHROPIC_API_KEY=%s\\nCEREBRAS_API_KEY=%s\\nEDIT_COMPLETE_WEBHOOK_URL=%s\\n' \
+  printf 'OPENAI_API_KEY=%s\\nANTHROPIC_API_KEY=%s\\nCEREBRAS_API_KEY=%s\\n' \
     \"${OPENAI_API_KEY}\" \
     \"${ANTHROPIC_API_KEY}\" \
     \"${CEREBRAS_API_KEY}\" \
-    \"https://wolf--f350af5c7a1511f1b5581607ee4eb77e.web.val.run\" \
     > .dev.vars && \
   npx wrangler dev \
     --env local \

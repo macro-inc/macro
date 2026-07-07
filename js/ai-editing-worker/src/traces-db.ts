@@ -13,7 +13,8 @@ export type EditTrace = {
   id: string;
   document_id: string;
   created_at: number;
-  markdown: string;
+  /** Serialized TraceSession (see trace-log.ts). */
+  trace_json: string;
 };
 
 export async function insertEditTrace(
@@ -22,9 +23,9 @@ export async function insertEditTrace(
 ): Promise<void> {
   await db
     .prepare(
-      'INSERT INTO edit_traces (id, document_id, created_at, markdown) VALUES (?, ?, ?, ?)'
+      'INSERT INTO edit_traces (id, document_id, created_at, trace_json) VALUES (?, ?, ?, ?)'
     )
-    .bind(trace.id, trace.document_id, trace.created_at, trace.markdown)
+    .bind(trace.id, trace.document_id, trace.created_at, trace.trace_json)
     .run();
 }
 
@@ -35,7 +36,7 @@ export async function listEditTraces(
 ): Promise<EditTrace[]> {
   const { results } = await db
     .prepare(
-      'SELECT id, document_id, created_at, markdown FROM edit_traces WHERE document_id = ? ORDER BY created_at DESC'
+      'SELECT id, document_id, created_at, trace_json FROM edit_traces WHERE document_id = ? ORDER BY created_at DESC'
     )
     .bind(documentId)
     .all<EditTrace>();
