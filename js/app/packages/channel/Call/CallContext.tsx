@@ -123,6 +123,8 @@ function microphoneCaptureOptions(
   deviceId?: string | null
 ): AudioCaptureOptions {
   const useBrowserProcessing = mode === 'browser';
+  const noiseSuppressionSupported =
+    supportsNativeAudioProcessingConstraint('noiseSuppression');
 
   return {
     // AGC can raise residual background artifacts during quiet speech/silence.
@@ -132,11 +134,14 @@ function microphoneCaptureOptions(
       ? { autoGainControl: false }
       : {}),
     echoCancellation: true,
-    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+    ...(noiseSuppressionSupported
       ? { noiseSuppression: useBrowserProcessing }
       : {}),
+    // Voice isolation is a second, platform-level suppression stage; running
+    // it on top of noiseSuppression cascades filters and attenuates voice.
+    // Use it only as the fallback when noiseSuppression is unsupported.
     ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
-      ? { voiceIsolation: useBrowserProcessing }
+      ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
   };
@@ -146,6 +151,8 @@ function nativeAudioProcessingConstraints(
   mode: MicNoiseSuppressionMode
 ): NativeAudioProcessingConstraints {
   const useBrowserProcessing = mode === 'browser';
+  const noiseSuppressionSupported =
+    supportsNativeAudioProcessingConstraint('noiseSuppression');
 
   return {
     // applyConstraints() replaces the track's entire constraint set, so echo
@@ -155,11 +162,13 @@ function nativeAudioProcessingConstraints(
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
       ? { autoGainControl: false }
       : {}),
-    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+    ...(noiseSuppressionSupported
       ? { noiseSuppression: useBrowserProcessing }
       : {}),
+    // See microphoneCaptureOptions: voiceIsolation is only the fallback when
+    // noiseSuppression is unsupported, never a second stacked layer.
     ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
-      ? { voiceIsolation: useBrowserProcessing }
+      ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
   };
 }
