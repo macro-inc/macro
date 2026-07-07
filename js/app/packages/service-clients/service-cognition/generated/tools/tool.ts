@@ -28,6 +28,7 @@ type ToolParserMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
@@ -36,6 +37,10 @@ type ToolParserMap = {
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
+  };
+  ListCompanies: {
+    call: types.ListCompanies;
+    response: types.ListCompaniesResponse;
   };
   ListEntities: {
     call: types.ListEntities;
@@ -136,6 +141,10 @@ const toolParserMap = {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
   },
+  GetCompany: {
+    call: schemas.GetCompany,
+    response: schemas.GetCompanyResponse,
+  },
   GetEntityProperties: {
     call: schemas.GetEntityProperties,
     response: schemas.GetEntityPropertiesResponse,
@@ -144,6 +153,10 @@ const toolParserMap = {
   ListCallRecords: {
     call: schemas.ListCallRecords,
     response: schemas.ListCallRecordsResponse,
+  },
+  ListCompanies: {
+    call: schemas.ListCompanies,
+    response: schemas.ListCompaniesResponse,
   },
   ListEntities: {
     call: schemas.ListEntities,
@@ -267,6 +280,7 @@ type ToolDataMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
     response: types.GetEntityPropertiesResponse;
@@ -275,6 +289,10 @@ type ToolDataMap = {
   ListCallRecords: {
     call: types.ListCallRecords;
     response: types.ListCallRecordsResponse;
+  };
+  ListCompanies: {
+    call: types.ListCompanies;
+    response: types.ListCompaniesResponse;
   };
   ListEntities: {
     call: types.ListEntities;

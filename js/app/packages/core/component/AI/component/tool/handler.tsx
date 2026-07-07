@@ -6,6 +6,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { getThreadHandler } from './GetThread';
@@ -54,7 +55,9 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
+  ListCompanies: listCompaniesHandler,
   ListCallRecords: listCallRecordsHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,

@@ -507,6 +507,49 @@ export const EditDocumentResponse = z.object({
   summary: z.string(),
 });
 
+export const GetCompany = z.object({ company_id: z.string().uuid() });
+
+export const GetCompanyResponse = z.object({
+  contacts: z.array(
+    z.object({
+      email: z.string(),
+      id: z.string().uuid(),
+      lastInteraction: z.string().datetime({ offset: true }),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+  description: z.union([z.string(), z.null()]).optional(),
+  domains: z.array(z.string()),
+  emailSync: z.boolean(),
+  firstInteraction: z.string().datetime({ offset: true }),
+  hidden: z.boolean(),
+  id: z.string().uuid(),
+  lastInteraction: z.string().datetime({ offset: true }),
+  name: z.union([z.string(), z.null()]).optional(),
+  ownerUserId: z.union([z.string(), z.null()]).optional(),
+  properties: z.array(
+    z.object({
+      currentValue: z.any().optional(),
+      dataType: z.string(),
+      displayName: z.string(),
+      isMultiSelect: z.boolean(),
+      isSystem: z.boolean(),
+      options: z.array(
+        z.object({ displayValue: z.string(), id: z.string().uuid() })
+      ),
+      propertyDefinitionId: z.string().uuid(),
+    })
+  ),
+  revenue: z.union([z.number(), z.null()]).optional(),
+  stage: z
+    .union([
+      z.object({ label: z.string(), optionId: z.string().uuid() }),
+      z.null(),
+    ])
+    .optional(),
+  summary: z.string(),
+});
+
 export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
@@ -517,6 +560,7 @@ export const GetEntityProperties = z.object({
     'thread',
     'channel',
     'user',
+    'company',
   ]),
 });
 
@@ -610,6 +654,35 @@ export const ListCallRecordsResponse = z.object({
         .optional(),
     })
   ),
+});
+
+export const ListCompanies = z.object({
+  include_hidden: z.union([z.boolean(), z.null()]).default(null),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  owner_user_id: z.union([z.string(), z.null()]).default(null),
+  search: z.union([z.string(), z.null()]).default(null),
+  stage: z.union([z.string(), z.null()]).default(null),
+});
+
+export const ListCompaniesResponse = z.object({
+  companies: z.array(
+    z.object({
+      domains: z.array(z.string()),
+      hidden: z.boolean(),
+      id: z.string().uuid(),
+      lastInteraction: z.string().datetime({ offset: true }),
+      name: z.union([z.string(), z.null()]).optional(),
+      ownerUserId: z.union([z.string(), z.null()]).optional(),
+      revenue: z.union([z.number(), z.null()]).optional(),
+      stage: z
+        .union([
+          z.object({ label: z.string(), optionId: z.string().uuid() }),
+          z.null(),
+        ])
+        .optional(),
+    })
+  ),
+  summary: z.string(),
 });
 
 export const ListEntities = z.object({
@@ -2109,6 +2182,7 @@ export const SetEntityProperty = z.object({
           'thread',
           'channel',
           'user',
+          'company',
         ]),
       }),
       z.null(),
@@ -2127,6 +2201,7 @@ export const SetEntityProperty = z.object({
             'thread',
             'channel',
             'user',
+            'company',
           ]),
         })
       ),
@@ -2141,6 +2216,7 @@ export const SetEntityProperty = z.object({
     'thread',
     'channel',
     'user',
+    'company',
   ]),
   link_url: z.union([z.string(), z.null()]).default(null),
   link_urls: z.union([z.array(z.string()), z.null()]).default(null),

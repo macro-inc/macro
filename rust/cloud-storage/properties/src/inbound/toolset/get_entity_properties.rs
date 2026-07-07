@@ -23,6 +23,7 @@ pub enum ToolEntityType {
     Thread,
     Channel,
     User,
+    Company,
 }
 
 impl From<ToolEntityType> for EntityType {
@@ -35,6 +36,7 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Thread => EntityType::Thread,
             ToolEntityType::Channel => EntityType::Channel,
             ToolEntityType::User => EntityType::User,
+            ToolEntityType::Company => EntityType::Company,
         }
     }
 }
@@ -42,7 +44,7 @@ impl From<ToolEntityType> for EntityType {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "GetEntityProperties",
-    description = "Get all properties attached to an entity (document, task, project, etc.). Returns property definitions with their current values and available options for select-type properties. Use this to discover custom properties on an entity. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first."
+    description = "Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Use this to discover custom properties on an entity. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
 )]
 pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]

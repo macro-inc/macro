@@ -246,7 +246,8 @@ export type ToolEntityType =
   | 'chat'
   | 'thread'
   | 'channel'
-  | 'user';
+  | 'user'
+  | 'company';
 /**
  * Entity types that can be returned by the list entities AI tool.
  */
@@ -853,6 +854,127 @@ export interface Thread {
   updatedAt?: string | null;
 }
 /**
+ * A contact belonging to the company.
+ */
+export interface CompanyContactItem {
+  /**
+   * The contact's email address.
+   */
+  email: string;
+  /**
+   * The CRM contact id.
+   */
+  id: string;
+  /**
+   * Most recent known interaction with this contact.
+   */
+  lastInteraction: string;
+  /**
+   * The contact's display name, when known.
+   */
+  name?: string | null;
+}
+/**
+ * A CRM company row returned by [`ListCompanies`].
+ */
+export interface CompanyListItem {
+  /**
+   * The company's email domains, primary domain first.
+   */
+  domains: string[];
+  /**
+   * Whether the company is hidden from the team's CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * The CRM company id. Use with GetCompany, GetEntityProperties /
+   * SetEntityProperty (entity_type=company).
+   */
+  id: string;
+  /**
+   * Most recent known email interaction with this company.
+   */
+  lastInteraction: string;
+  /**
+   * Company display name, when resolved.
+   */
+  name?: string | null;
+  /**
+   * Macro user id of the company's owner, if set.
+   */
+  ownerUserId?: string | null;
+  /**
+   * The company's revenue (dollars), if set.
+   */
+  revenue?: number | null;
+  /**
+   * The company's pipeline stage, if set.
+   */
+  stage?: ToolCompanyStage | null;
+}
+/**
+ * A company's pipeline stage: the select option id currently set plus its
+ * human-readable label.
+ */
+export interface ToolCompanyStage {
+  /**
+   * The stage's display label (e.g. "Lead", "Customer").
+   */
+  label: string;
+  /**
+   * The stage property option id (usable with SetEntityProperty).
+   */
+  optionId: string;
+}
+/**
+ * A property attached to the company (builtin or custom).
+ */
+export interface CompanyPropertyItem {
+  /**
+   * The current value, if set.
+   */
+  currentValue?: {
+    [k: string]: unknown;
+  };
+  /**
+   * The data type (boolean, date, number, string, select_string, select_number, tag, entity, link).
+   */
+  dataType: string;
+  /**
+   * Human-readable property name.
+   */
+  displayName: string;
+  /**
+   * Whether the property supports multiple values.
+   */
+  isMultiSelect: boolean;
+  /**
+   * Whether this is a system-defined property.
+   */
+  isSystem: boolean;
+  /**
+   * Available options for select-type properties.
+   */
+  options: CompanyPropertyOption[];
+  /**
+   * The property definition id. Use with SetEntityProperty (entity_type=company).
+   */
+  propertyDefinitionId: string;
+}
+/**
+ * An option available on a select-type company property.
+ */
+export interface CompanyPropertyOption {
+  /**
+   * The option's display value.
+   */
+  displayValue: string;
+  /**
+   * The option id to use when setting select values via SetEntityProperty.
+   */
+  id: string;
+}
+/**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
@@ -1213,7 +1335,78 @@ export interface EmailSearchResult {
   sent_at?: string | null;
 }
 /**
- * Get all properties attached to an entity (document, task, project, etc.). Returns property definitions with their current values and available options for select-type properties. Use this to discover custom properties on an entity. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first.
+ * Fetch one of the team's CRM companies by id, with its domains, contacts, pipeline Stage / Owner / Revenue, and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change a property (move stage, set owner/revenue, or edit a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response.
+ */
+export interface GetCompany {
+  /**
+   * The CRM company id (UUID), e.g. from ListCompanies.
+   */
+  company_id: string;
+}
+/**
+ * Response from the [`GetCompany`] tool.
+ */
+export interface GetCompanyResponse {
+  /**
+   * Contacts attached to this company.
+   */
+  contacts: CompanyContactItem[];
+  /**
+   * Short company description, when resolved.
+   */
+  description?: string | null;
+  /**
+   * The company's email domains, primary domain first.
+   */
+  domains: string[];
+  /**
+   * Whether team-wide email sharing is enabled for this company.
+   */
+  emailSync: boolean;
+  /**
+   * Earliest known email interaction with this company.
+   */
+  firstInteraction: string;
+  /**
+   * Whether the company is hidden from the team's CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * The CRM company id.
+   */
+  id: string;
+  /**
+   * Most recent known email interaction with this company.
+   */
+  lastInteraction: string;
+  /**
+   * Company display name, when resolved.
+   */
+  name?: string | null;
+  /**
+   * Macro user id of the company's owner, if set.
+   */
+  ownerUserId?: string | null;
+  /**
+   * All properties attached to this company (builtin Stage / Owner /
+   * Revenue plus custom ones), with current values and select options.
+   */
+  properties: CompanyPropertyItem[];
+  /**
+   * The company's revenue (dollars), if set.
+   */
+  revenue?: number | null;
+  /**
+   * The company's pipeline stage, if set.
+   */
+  stage?: ToolCompanyStage | null;
+  /**
+   * Human-readable summary.
+   */
+  summary: string;
+}
+/**
+ * Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Use this to discover custom properties on an entity. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
  */
 export interface GetEntityProperties {
   /**
@@ -1401,6 +1594,44 @@ export interface ListCallRecordsResponse {
    * Call records ordered by start time descending.
    */
   records: CallRecordSummary[];
+}
+/**
+ * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.
+ */
+export interface ListCompanies {
+  /**
+   * Also include companies hidden from the CRM. Defaults to false. Requires team admin or owner role.
+   */
+  include_hidden?: boolean | null;
+  /**
+   * Maximum number of companies to return. Defaults to 50; max 200.
+   */
+  limit?: number | null;
+  /**
+   * Filter to companies whose Owner property is this Macro user id (e.g. "macro|user@example.com"). Use ListTeamMembers to find user ids.
+   */
+  owner_user_id?: string | null;
+  /**
+   * Case-insensitive substring matched against company names and domains (e.g. "acme" matches "Acme Corp" and "acme.com").
+   */
+  search?: string | null;
+  /**
+   * Filter to companies in this pipeline stage. Accepts a stage label matched case-insensitively (e.g. "lead", "Customer" — teams may have custom stage names) or a stage option UUID.
+   */
+  stage?: string | null;
+}
+/**
+ * Response from the [`ListCompanies`] tool.
+ */
+export interface ListCompaniesResponse {
+  /**
+   * The matching CRM companies.
+   */
+  companies: CompanyListItem[];
+  /**
+   * Human-readable summary of the results.
+   */
+  summary: string;
 }
 /**
  * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as "list my tasks", "tasks assigned to me", or "tasks I completed yesterday", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {"l":{"dst":"task"}} and includeTypes ["document"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For "completed yesterday", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. For finding specific items by name or content, use the search tool instead.
@@ -2718,6 +2949,12 @@ export interface SendEmail {
  * - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
  * - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
  * - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
+ *
+ * CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties:
+ * - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
+ * - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
+ * - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
+ * Editing company properties requires the caller to be a team admin or owner.
  *
  * For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options.
  */
