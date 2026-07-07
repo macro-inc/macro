@@ -38,7 +38,7 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg px-2 py-2.5',
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 px-2',
 
         {
           'bg-accent/8': props.selected,
@@ -132,6 +132,8 @@ function Attachments(props: {
   items: InboxCardAttachment[];
   max?: number;
   class?: string;
+  /** When set, media tiles become clickable and call this with the item index. */
+  onOpen?: (index: number) => void;
 }): JSX.Element {
   const max = (): number => props.max ?? 4;
   const visible = (): InboxCardAttachment[] => props.items.slice(0, max());
@@ -143,29 +145,42 @@ function Attachments(props: {
       class={cn('flex max-w-full flex-wrap items-center gap-1.5', props.class)}
     >
       <For each={visible()}>
-        {(attachment) => (
+        {(attachment, index) => (
           <Show when={attachment.src} fallback={attachment.fallback?.()}>
-            {(src) => (
-              <Show
-                when={attachment.kind === 'video'}
-                fallback={
+            {(src) => {
+              const media = () =>
+                attachment.kind === 'video' ? (
+                  <video
+                    src={src()}
+                    muted
+                    playsinline
+                    preload="metadata"
+                    class="size-12 rounded-lg border border-edge object-cover"
+                  />
+                ) : (
                   <img
                     src={attachment.thumbSrc ?? src()}
                     alt={attachment.alt ?? ''}
                     loading="lazy"
                     class="size-12 rounded-lg border border-edge object-cover"
                   />
-                }
-              >
-                <video
-                  src={src()}
-                  muted
-                  playsinline
-                  preload="metadata"
-                  class="size-12 rounded-lg border border-edge object-cover"
-                />
-              </Show>
-            )}
+                );
+
+              return props.onOpen ? (
+                <button
+                  type="button"
+                  class="rounded-lg transition-opacity hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onOpen?.(index());
+                  }}
+                >
+                  {media()}
+                </button>
+              ) : (
+                media()
+              );
+            }}
           </Show>
         )}
       </For>

@@ -1,5 +1,6 @@
 import { ListPropertyValue } from '@app/component/next-soup/soup-view/views/tasks/list-property-value';
-import { mapMediaItems } from '@channel/Media/media-items';
+import { mapMediaItems, type MediaItem } from '@channel/Media/media-items';
+import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
@@ -39,7 +40,15 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { stringToItemType } from '@service-storage/client';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
-import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard, type InboxCardAttachment } from './InboxCard';
@@ -525,7 +534,7 @@ function BaseCard(props: {
       </InboxCard.Body>
       <InboxTimestamp
         timestamp={props.timestamp}
-        class="col-start-3 row-start-2 self-start justify-self-end"
+        class="col-start-3 row-start-1 self-start justify-self-end"
       />
     </InboxCard.Root>
   );
@@ -688,6 +697,12 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
+/** Fallback shown in place of message text when a message is just attachments. */
+const attachmentSummary = (count: number): string | undefined =>
+  count <= 0
+    ? undefined
+    : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
+
 export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const isLatestNotificationReply = createMemo(() => {
     const notification = props.item.notification;
@@ -735,36 +750,40 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const originalSenderLabel = () =>
     originalSenderId() === currentUserId() ? 'You' : originalSenderName();
 
-  const attachments = createMemo(() => {
+  // Media (images/videos) render in a clickable grid backed by the shared
+  // media viewer; non-media attachments keep their entity-preview tiles.
+  const mediaItems = createMemo<MediaItem[]>(() => {
     if (
       isLatestNotificationReply() ||
       props.item.entity.type !== 'channel_thread'
     )
-      return;
-
-    const itemAttachments = props.item.entity.attachments;
-
-    return itemAttachments.map((attachment): InboxCardAttachment => {
-      const media = mapMediaItems([attachment])[0];
-      if (media) {
-        return {
-          id: media.id,
-          src: media.src,
-          kind: media.kind,
-          thumbSrc: media.thumbSrc,
-        };
-      }
-      return {
-        id: attachment.entity_id,
-        fallback: () => (
-          <ItemPreview
-            id={attachment.entity_id}
-            type={stringToItemType(attachment.entity_type)}
-          />
-        ),
-      };
-    });
+      return [];
+    return mapMediaItems(props.item.entity.attachments);
   });
+
+  const fileAttachments = createMemo<InboxCardAttachment[]>(() => {
+    if (
+      isLatestNotificationReply() ||
+      props.item.entity.type !== 'channel_thread'
+    )
+      return [];
+    return props.item.entity.attachments
+      .filter((attachment) => mapMediaItems([attachment]).length === 0)
+      .map(
+        (attachment): InboxCardAttachment => ({
+          id: attachment.entity_id,
+          fallback: () => (
+            <ItemPreview
+              id={attachment.entity_id}
+              type={stringToItemType(attachment.entity_type)}
+            />
+          ),
+        })
+      );
+  });
+
+  const [viewerOpen, setViewerOpen] = createSignal(false);
+  const [viewerIndex, setViewerIndex] = createSignal(0);
 
   const text = createMemo(() => {
     if (props.item.entity.type !== 'channel_thread') {
@@ -777,21 +796,23 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     const metadata = props.item.notification?.notification_metadata;
     const location = channelLocation(props.item.entity);
 
-    let content = itemContent(props.item.entity, props.item.notification);
+    const rootAttachments = props.item.entity.attachments;
+
+    let content: string | undefined;
+    let context: string | undefined;
     if (metadata?.tag === 'channel_message_reply') {
+      // Current message is the reply; the quoted context is the original (root).
       content = metadata.content.messageContent;
-    }
-
-    const attachments_ = props.item.entity.attachments;
-    let context = attachments_
-      ? `sent ${attachments_.length > 1 ? '' : 'an'} ${plural('attachment', attachments_.length)}`
-      : undefined;
-
-    if (
-      metadata?.tag === 'channel_message_reply' &&
-      props.item.entity.content.trim().length
-    ) {
-      context = props.item.entity.content.trim();
+      const original = props.item.entity.content.trim();
+      context = original.length
+        ? original
+        : attachmentSummary(rootAttachments.length);
+    } else {
+      // Root message: fall back to an attachment summary when it has no text.
+      content = itemContent(props.item.entity, props.item.notification);
+      if (!content?.trim()) {
+        content = attachmentSummary(rootAttachments.length) ?? content;
+      }
     }
 
     return {
@@ -802,79 +823,98 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   });
 
   return (
-    <InboxCard.Root
-      dimmed={!props.item.unread}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
-    >
-      <div class="col-start-1 row-start-2">
-        <InboxCard.Icon
-          fallback={
-            <ActionBubble tag={getNotificationTag(props.item.notification)} />
-          }
-        ></InboxCard.Icon>
-      </div>
-      <InboxCard.Body class="contents">
-        <div class={cn('col-start-2 row-start-2')}>
-          <InboxCard.Header class="self-center">
-            <InboxCard.Title class="flex items-center gap-1">
-              <Badge unread={props.item.unread} />
-              {text().title}
-            </InboxCard.Title>
-          </InboxCard.Header>
+    <>
+      <InboxCard.Root
+        dimmed={!props.item.unread}
+        selected={props.selected}
+        highlighted={props.highlighted}
+        onClick={props.onClick}
+      >
+        <div class="col-start-1 row-start-2">
+          <InboxCard.Icon
+            fallback={
+              <ActionBubble tag={getNotificationTag(props.item.notification)} />
+            }
+          ></InboxCard.Icon>
+        </div>
+        <InboxCard.Body class="contents">
+          <div class={cn('col-start-2 row-start-2')}>
+            <InboxCard.Header class="self-center">
+              <InboxCard.Title class="flex items-center gap-1">
+                <Badge unread={props.item.unread} />
+                {text().title}
+              </InboxCard.Title>
+            </InboxCard.Header>
 
-          {/* For replies, show the original message being replied to first,
+            {/* For replies, show the original message being replied to first,
               with a left bar marking it as the quoted original. */}
-          <Show when={isLatestNotificationReply() && text().context?.trim()}>
-            {(context) => (
-              <div class="flex min-w-0 items-center gap-1 border-l-2 border-edge-muted pl-2">
-                <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
-                  {originalSenderLabel()}:
-                </span>
-                <InboxCard.Content class="truncate text-sm text-ink/60">
-                  <StaticMarkdown
-                    markdown={context()}
-                    singleLine
-                    theme={unifiedListMarkdownTheme}
-                  />
-                </InboxCard.Content>
-              </div>
-            )}
-          </Show>
-
-          <div class="flex min-w-0 items-center gap-1">
-            <Show when={!isDM()}>
-              <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
-                {senderLabel()}:
-              </span>
-            </Show>
-            <Show when={text().content?.trim()}>
-              {(value) => (
-                <InboxCard.Content class="truncate text-sm text-ink/60">
-                  <StaticMarkdown
-                    markdown={value()}
-                    singleLine
-                    theme={unifiedListMarkdownTheme}
-                  />
-                </InboxCard.Content>
+            <Show when={isLatestNotificationReply() && text().context?.trim()}>
+              {(context) => (
+                <div class="flex min-w-0 items-center gap-1 border-l-2 border-edge-muted pl-2">
+                  <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
+                    {originalSenderLabel()}:
+                  </span>
+                  <InboxCard.Content class="truncate text-sm text-ink/60">
+                    <StaticMarkdown
+                      markdown={context()}
+                      singleLine
+                      theme={unifiedListMarkdownTheme}
+                    />
+                  </InboxCard.Content>
+                </div>
               )}
             </Show>
-          </div>
-        </div>
 
-        <Show when={attachments()?.length}>
-          <InboxCard.Attachments
-            class="col-start-2 row-start-3"
-            items={attachments()!}
-          />
-        </Show>
-      </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-2 self-start justify-self-end"
+            <div class="flex min-w-0 items-center gap-1">
+              <Show when={!isDM()}>
+                <span class="flex gap-1 items-center text-sm whitespace-nowrap text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted">
+                  {senderLabel()}:
+                </span>
+              </Show>
+              <Show when={text().content?.trim()}>
+                {(value) => (
+                  <InboxCard.Content class="truncate text-sm text-ink/60">
+                    <StaticMarkdown
+                      markdown={value()}
+                      singleLine
+                      theme={unifiedListMarkdownTheme}
+                    />
+                  </InboxCard.Content>
+                )}
+              </Show>
+            </div>
+          </div>
+
+          <Show when={mediaItems().length || fileAttachments().length}>
+            <div class="col-start-2 row-start-3 flex min-w-0 flex-col gap-2">
+              <Show when={mediaItems().length}>
+                <InboxCard.Attachments
+                  items={mediaItems()}
+                  onOpen={(index) => {
+                    setViewerIndex(index);
+                    setViewerOpen(true);
+                  }}
+                />
+              </Show>
+              <Show when={fileAttachments().length}>
+                <InboxCard.Attachments items={fileAttachments()} />
+              </Show>
+            </div>
+          </Show>
+        </InboxCard.Body>
+        <InboxTimestamp
+          timestamp={props.item.timestamp}
+          class="col-start-3 row-start-2 self-start justify-self-end"
+        />
+      </InboxCard.Root>
+      <MediaViewerDialog
+        items={mediaItems}
+        open={viewerOpen()}
+        onOpenChange={setViewerOpen}
+        currentIndex={viewerIndex}
+        onCurrentIndexChange={setViewerIndex}
       />
-    </InboxCard.Root>
+    </>
   );
 }
 

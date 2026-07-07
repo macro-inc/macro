@@ -1558,8 +1558,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                   when={soup.focus.item()}
                   fallback={
                     <EmptyStatePanel
-                      align="center"
-                      graphic={EmptyStatePreviewIcon}
+                      graphic={(iconProps) => (
+                        <EmptyStatePreviewIcon {...iconProps} />
+                      )}
                       title="Nothing selected"
                       description="Select an item from your inbox to preview it here."
                     />

@@ -1,9 +1,10 @@
 import { useChannelsContext } from '@core/context/channels';
-import { MaybeEntityRow } from '@entity';
+import { MaybeEntityRow, MultiSelectCheckbox } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { createMemo } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
 import { scopeThreadNotifications } from './utils';
+import { cn } from '@ui';
 
 /**
  * Inbox-specific list entity: renders the notification `InboxCardLayout` for a
@@ -28,7 +29,7 @@ export function InboxListEntity(props: BaseListEntityProps) {
 
   return (
     <div
-      class="group/inbox-item mx-2"
+      class="group/inbox-item relative mx-2"
       ref={props.ref}
       onMouseMove={props.onMouseMove}
     >
@@ -40,7 +41,18 @@ export function InboxListEntity(props: BaseListEntityProps) {
           onClick={props.onClick}
         />
       </MaybeEntityRow>
-      {/* <div class="w-[calc(100%_-_2rem)] h-px mx-4 my-2 bg-edge-muted/50" /> */}
+      <div
+        class={cn(
+          'hidden absolute right-2 bottom-2 z-10 group-hover/inbox-item:flex items-center justify-center bg-surface overflow-hidden',
+          props.checked && 'flex'
+        )}
+      >
+        <MultiSelectCheckbox
+          checked={props.checked}
+          onChecked={props.onChecked}
+          showBorder
+        />
+      </div>
     </div>
   );
 }
