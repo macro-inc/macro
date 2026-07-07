@@ -119,6 +119,10 @@ export class CacheWorkerCore {
         await this.requireEngine().clear();
         return null;
       }
+      default: {
+        // Compile-time exhaustiveness: a new request kind fails here.
+        return request satisfies never;
+      }
     }
   }
 

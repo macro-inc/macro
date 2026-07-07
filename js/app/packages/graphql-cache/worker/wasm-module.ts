@@ -29,6 +29,8 @@ export interface CacheEngine {
   externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
+  /** Close the IndexedDB connection; call before destroyCache. */
+  close(): Promise<void>;
 }
 
 export interface CacheWasmModule {

@@ -102,8 +102,11 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// All rejections surface as real `Error` objects (consistent
+/// `instanceof Error` / `.message` behavior with the `JsError`-returning
+/// functions like `openCache`).
 fn err_js(e: impl std::fmt::Display) -> JsValue {
-    JsValue::from_str(&e.to_string())
+    js_sys::Error::new(&e.to_string()).into()
 }
 
 fn parse_variables(
@@ -234,6 +237,17 @@ impl CacheEngine {
         let engine = self.engine.clone();
         future_to_promise(async move {
             engine.lock().await.clear().await.map_err(err_js)?;
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Closes the underlying IndexedDB connection. Call before
+    /// [`destroyCache`](destroy_cache) — database deletion blocks while
+    /// connections are open. The engine is unusable afterwards.
+    pub fn close(&self) -> js_sys::Promise {
+        let engine = self.engine.clone();
+        future_to_promise(async move {
+            engine.lock().await.storage().close();
             Ok(JsValue::UNDEFINED)
         })
     }

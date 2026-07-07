@@ -304,3 +304,76 @@ fn identity_witness_wipes_on_user_change() {
         assert!(ops.contains(&1) && ops.contains(&2));
     });
 }
+
+#[test]
+fn capacity_constrained_rewrite_preserves_fields() {
+    block_on(async {
+        // Hot capacity far below the batch size: during a write, the batch
+        // itself exceeds the LRU. A partial re-write over the same entities
+        // must still merge against storage, not clobber it.
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 2);
+
+        // Full write: documentName + ownerId (well over 2 records: root,
+        // user, 3 items, 3 documents).
+        let full = page(&[("doc-1", "A"), ("doc-2", "B"), ("doc-3", "C")]);
+        engine
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &full, None)
+            .await
+            .unwrap();
+
+        // Partial re-write of the same entities via a narrower query (no
+        // ownerId), renaming them.
+        const PARTIAL_QUERY: &str = r#"
+        query Soup($input: SoupInput!) {
+          user {
+            id
+            soup(input: $input) {
+              items {
+                id
+                entity {
+                  __typename
+                  ... on GraphqlSoupDocument { id documentName: name }
+                }
+              }
+              nextCursor
+              hasMore
+            }
+          }
+        }
+        "#;
+        let partial = json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "items": [
+                        { "id": "doc-1", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-1", "documentName": "A2" } },
+                        { "id": "doc-2", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-2", "documentName": "B2" } },
+                        { "id": "doc-3", "entity": { "__typename": "GraphqlSoupDocument", "id": "doc-3", "documentName": "C2" } }
+                    ],
+                    "nextCursor": null,
+                    "hasMore": false
+                }
+            }
+        });
+        engine
+            .write_query(None, PARTIAL_QUERY, Some("Soup"), &vars(10), &partial, None)
+            .await
+            .unwrap();
+
+        // The full query must still be answerable: ownerId preserved from
+        // the first write, names updated by the second.
+        let ReadResult::Hit { data } = engine
+            .read_query(None, QUERY, Some("Soup"), &vars(10))
+            .await
+            .unwrap()
+        else {
+            panic!("expected hit: partial re-write must not drop fields");
+        };
+        let items = data["user"]["soup"]["items"].as_array().unwrap();
+        assert_eq!(items.len(), 3);
+        for (item, name) in items.iter().zip(["A2", "B2", "C2"]) {
+            assert_eq!(item["entity"]["documentName"], json!(name));
+            assert_eq!(item["entity"]["ownerId"], json!("user-1"));
+        }
+    });
+}

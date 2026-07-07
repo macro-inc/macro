@@ -63,6 +63,20 @@ export type CacheResponse =
   | { id: number; ok: false; error: string };
 
 /**
+ * Fire-and-forget notice from a client to the worker (no id/response).
+ * `disconnect` lets a SharedWorker drop the sender's port — there is no
+ * platform event for client disconnection, so hosts send this on dispose
+ * and pagehide.
+ */
+export type CacheNotice = { kind: 'disconnect' };
+
+export function isCacheNotice(
+  msg: CacheRequest | CacheNotice
+): msg is CacheNotice {
+  return msg.kind === 'disconnect';
+}
+
+/**
  * Pushed (not request/response) messages from worker to its client(s):
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.

@@ -148,6 +148,11 @@ export function normalizedCacheExchange(
           }
         } catch (error) {
           options.onCacheError?.(error, op);
+          // `cache-only` must never touch the network, even when the cache
+          // itself fails — degrade to an empty result instead.
+          if (policy === 'cache-only') {
+            return cacheResult(op, undefined, false);
+          }
         }
         enqueueForward(op);
         return undefined;

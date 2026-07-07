@@ -79,4 +79,9 @@ async fn write_then_read_through_js_boundary() {
             .unwrap();
     let affected: Vec<String> = serde_wasm_bindgen::from_value(affected).unwrap();
     assert_eq!(affected, vec!["tab1:1".to_string()]);
+
+    // Lifecycle: close the connection, then deletion completes (would hang
+    // on a live connection without versionchange auto-close).
+    JsFuture::from(engine.close()).await.unwrap();
+    destroy_cache("wasm-shell-test".into()).await.unwrap();
 }

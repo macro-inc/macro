@@ -232,6 +232,47 @@ describe('normalizedCacheExchange', () => {
     expect(results[0]?.data).toEqual({ from: 'network' });
   });
 
+  it('cache-only never touches the network, even when the cache read throws', async () => {
+    host.readQuery = async () => {
+      throw new Error('idb exploded');
+    };
+    const onCacheError = vi.fn();
+    const client = { reexecuteOperation: vi.fn() } as unknown as Client;
+    const ops = makeSubject<Operation>();
+    const results: OperationResult[] = [];
+    const forwarded: Operation[] = [];
+    const forward = (ops$: Source<Operation>): Source<OperationResult> =>
+      pipe(
+        ops$,
+        map((op) => {
+          forwarded.push(op);
+          return {
+            operation: op,
+            data: { from: 'network' },
+            error: undefined,
+            extensions: undefined,
+            stale: false,
+            hasNext: false,
+          };
+        })
+      );
+    pipe(
+      normalizedCacheExchange(host, { onCacheError })({
+        forward,
+        client,
+        dispatchDebug: () => undefined,
+      })(ops.source),
+      subscribe((r) => results.push(r))
+    );
+    ops.next(makeOp(1, 'cache-only'));
+    await tick();
+
+    expect(onCacheError).toHaveBeenCalledOnce();
+    expect(forwarded).toHaveLength(0);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data).toBeUndefined();
+  });
+
   it('passes the extracted identity tag on write-through', async () => {
     const client = { reexecuteOperation: vi.fn() } as unknown as Client;
     const ops = makeSubject<Operation>();

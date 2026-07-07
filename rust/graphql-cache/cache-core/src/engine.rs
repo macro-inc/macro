@@ -239,23 +239,28 @@ impl<S: Storage> Engine<S> {
         }
 
         // Load current values (hot tier, then storage) so merges detect real
-        // changes.
-        let keys: Vec<EntityKey> = updates.keys().cloned().collect();
-        let mut missing_from_hot: Vec<EntityKey> = Vec::new();
-        for key in &keys {
-            if !self.hot.contains(key) {
-                missing_from_hot.push(key.clone());
+        // changes. Merges are staged in a plain map, NOT the LRU: a batch
+        // larger than the hot capacity would otherwise evict its own
+        // records mid-merge and overwrite storage with partial updates.
+        let mut staging: HashMap<EntityKey, Record> = HashMap::new();
+        let mut missing: Vec<EntityKey> = Vec::new();
+        for key in updates.keys() {
+            match self.hot.peek(key) {
+                Some(record) => {
+                    staging.insert(key.clone(), record.clone());
+                }
+                None => missing.push(key.clone()),
             }
         }
-        if !missing_from_hot.is_empty() {
+        if !missing.is_empty() {
             let fetched = self
                 .storage
-                .get_batch(&missing_from_hot)
+                .get_batch(&missing)
                 .await
                 .map_err(EngineError::Storage)?;
-            for (key, record) in missing_from_hot.into_iter().zip(fetched) {
+            for (key, record) in missing.into_iter().zip(fetched) {
                 if let Some(r) = record {
-                    self.hot.put(key, r);
+                    staging.insert(key, r);
                 }
             }
         }
@@ -263,19 +268,21 @@ impl<S: Storage> Engine<S> {
         let mut changed = BTreeSet::new();
         let mut to_persist: Vec<(EntityKey, Record)> = Vec::new();
         for (key, update) in updates {
-            let merged = match self.hot.get_mut(&key) {
-                Some(existing) => {
+            let merged = match staging.remove(&key) {
+                Some(mut existing) => {
                     if existing.merge(update) {
                         changed.insert(key.clone());
                     }
-                    existing.clone()
+                    existing
                 }
                 None => {
                     changed.insert(key.clone());
-                    self.hot.put(key.clone(), update.clone());
                     update
                 }
             };
+            // Refresh the hot tier (eviction here is harmless: storage gets
+            // the fully merged record below).
+            self.hot.put(key.clone(), merged.clone());
             to_persist.push((key, merged));
         }
 
@@ -346,6 +353,12 @@ impl<S: Storage> Engine<S> {
 
     pub fn active_ops(&self) -> usize {
         self.deps.active_ops()
+    }
+
+    /// Access to the underlying storage (hosts need it for lifecycle
+    /// operations like closing connections before database deletion).
+    pub fn storage(&self) -> &S {
+        &self.storage
     }
 
     /// Memoized document parse. Takes the map (not `&mut self`) so callers

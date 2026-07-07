@@ -34,20 +34,47 @@ impl IdbStorage {
         request.on_upgrade_needed(|event| {
             let database = event.database().expect("upgrade event has database");
             // Out-of-line string keys (the entity key), Uint8Array values.
-            let _ = database.create_object_store(RECORDS_STORE, ObjectStoreParams::new());
+            // Surface setup failures immediately rather than as misleading
+            // "store not found" errors on later transactions.
+            database
+                .create_object_store(RECORDS_STORE, ObjectStoreParams::new())
+                .expect("create records object store");
         });
-        let db = request.await?;
+        let mut db = request.await?;
+        // Close immediately when another context needs this database gone or
+        // upgraded (delete/upgrade requests block while connections are
+        // open); without this, `destroy` from another tab can hang forever.
+        db.on_version_change(|event: web_sys::Event| {
+            if let Some(target) = event.target() {
+                if let Ok(db) = wasm_bindgen::JsCast::dyn_into::<web_sys::IdbDatabase>(target) {
+                    db.close();
+                }
+            }
+        });
         Ok(IdbStorage { db })
     }
 
     /// Deletes the database for `scope` (logout / stale-namespace cleanup).
+    ///
+    /// Connections opened by [`Self::open`] auto-close on `versionchange`,
+    /// so this does not block on our own live handles. A `blocked` event
+    /// (foreign connection without that handler) is logged for diagnosis
+    /// instead of hanging silently.
     pub async fn destroy(scope: &str) -> Result<(), IdbStorageError> {
         let factory = Factory::new()?;
-        factory.delete(&cache_namespace(scope))?.await?;
+        let mut request = factory.delete(&cache_namespace(scope))?;
+        request.on_blocked(|_| {
+            web_sys::console::warn_1(
+                &"graphql-cache: database deletion blocked by an open connection".into(),
+            );
+        });
+        request.await?;
         Ok(())
     }
 
-    pub fn close(self) {
+    /// Closes the underlying connection. Subsequent operations on this
+    /// storage will fail; call right before dropping/destroying.
+    pub fn close(&self) {
         self.db.close();
     }
 }

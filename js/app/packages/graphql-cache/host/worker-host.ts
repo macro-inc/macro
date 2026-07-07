@@ -6,6 +6,7 @@
  */
 
 import {
+  type CacheNotice,
   type CacheRequest,
   isCachePush,
   type ReadResult,
@@ -29,12 +30,24 @@ export interface WorkerHostOptions {
   hotCapacity?: number;
   /** Force a topology (tests/diagnostics). */
   forceDedicatedWorker?: boolean;
+  /**
+   * Per-request timeout in ms (default 10s). A hung worker rejects the
+   * pending call; the exchange degrades rejected reads to the network.
+   */
+  requestTimeoutMs?: number;
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
-  const pending = new Map<number, Pending>();
+  const pending = new Map<
+    number,
+    Pending & { timer: ReturnType<typeof setTimeout> }
+  >();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
+  const requestTimeoutMs =
+    options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let nextRequestId = 1;
 
   const useShared =
@@ -59,6 +72,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const entry = pending.get(msg.id);
     if (!entry) return;
     pending.delete(msg.id);
+    clearTimeout(entry.timer);
     if (msg.ok) {
       entry.resolve(msg.result);
     } else {
@@ -74,7 +88,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     worker.port.onmessage = onMessage;
     worker.port.start();
     post = (msg) => worker.port.postMessage(msg);
-    dispose = () => worker.port.close();
+    dispose = () => {
+      // Tell the SharedWorker to drop our port — there is no platform
+      // disconnect event, and stale ports would otherwise accumulate.
+      const notice: CacheNotice = { kind: 'disconnect' };
+      worker.port.postMessage(notice);
+      worker.port.close();
+    };
   } else {
     const worker = new Worker(
       new URL('../worker/cache.worker.ts', import.meta.url),
@@ -85,12 +105,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     dispose = () => worker.terminate();
   }
 
+  // Best-effort cleanup when the page goes away (bfcache-safe: a restored
+  // page gets a fresh host on next use anyway).
+  if (typeof addEventListener === 'function') {
+    addEventListener('pagehide', dispose, { once: true });
+  }
+
   function request(
     msg: DistributiveOmit<CacheRequest, 'id'>
   ): Promise<unknown> {
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (pending.delete(id)) {
+          reject(new Error(`cache worker timeout: ${msg.kind}`));
+        }
+      }, requestTimeoutMs);
+      pending.set(id, { resolve, reject, timer });
       post({ ...msg, id } as CacheRequest);
     });
   }

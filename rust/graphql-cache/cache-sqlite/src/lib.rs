@@ -9,6 +9,8 @@
 //! immediately. That's fine for the Tauri host, which runs the engine on a
 //! dedicated thread (blocking IO is the point of the native host).
 
+#![deny(missing_docs)]
+
 use cache_core::codec::{cache_namespace, decode_record, encode_record};
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
@@ -16,14 +18,18 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 use thiserror::Error;
 
+/// Errors produced by the SQLite storage backend.
 #[derive(Debug, Error)]
 pub enum SqliteStorageError {
+    /// Underlying SQLite failure.
     #[error("sqlite: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    /// A stored record failed to decode (corruption → discard & rebuild).
     #[error(transparent)]
     Codec(#[from] cache_core::codec::CodecError),
 }
 
+/// [`Storage`] backend over a SQLite database (Tauri native host).
 pub struct SqliteStorage {
     conn: Connection,
 }
