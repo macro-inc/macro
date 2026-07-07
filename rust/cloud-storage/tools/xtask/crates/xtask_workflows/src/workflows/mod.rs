@@ -25,6 +25,7 @@ mod code_check_infra;
 mod deploy_preview;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
+mod preview_fly;
 mod pulumi_preview_pr;
 mod reusable_preview_service;
 mod runners;
@@ -187,6 +188,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
                 reusable_preview_service::patch,
             )
         },
+    },
+    WorkflowFile {
+        slug: "preview_fly",
+        file_name: "preview-fly.yml",
+        render_yaml: || render_gh_workflow(preview_fly::preview_fly)(),
+    },
+    WorkflowFile {
+        slug: "preview_fly",
+        file_name: "preview-fly-cleanup.yml",
+        render_yaml: || render_gh_workflow(preview_fly::preview_fly_cleanup)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",

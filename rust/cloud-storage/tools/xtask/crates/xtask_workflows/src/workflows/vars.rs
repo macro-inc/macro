@@ -17,7 +17,9 @@ secret!(CACHIX_AUTH_TOKEN);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DD_WEB_APP_TOKEN);
+secret!(DOPPLER_PREVIEW_TOKEN);
 secret!(DOPPLER_TOKEN);
+secret!(FLY_API_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
 secret!(POSTHOG_API_KEY);
@@ -41,6 +43,11 @@ pub const CI_CACHE_TAG: &str = "sccache-ci";
 /// ([`CI_CACHE_TAG`]) and from the deploy workflows' heavily-churned default
 /// `linux-mid` volume.
 pub const WEB_CI_CACHE_TAG: &str = "web-ci";
+
+/// Namespace cache tag for the Fly preview deploys: the job compiles Rust AND
+/// builds the frontend AND runs the full stack, so it gets its own volume
+/// rather than churning the CI or web ones.
+pub const PREVIEW_FLY_CACHE_TAG: &str = "preview-fly";
 
 /// Directory sccache uses for its local-disk cache. Lives on the Namespace cache
 /// volume so it persists across runs — this is what replaces the S3 bucket.

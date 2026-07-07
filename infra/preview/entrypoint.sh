@@ -27,9 +27,18 @@ if [ -f /srv/macro/preload/images.tar ]; then
   docker load -i /srv/macro/preload/images.tar
 fi
 
+# With a DOPPLER_TOKEN (a config-scoped service token, injected as a Fly
+# secret) the env layer pulls the preview secrets; without one the stack runs
+# on the code-owned local dummies only.
+doppler_args=(--no-doppler)
+if [ -n "${DOPPLER_TOKEN:-}" ]; then
+  log "DOPPLER_TOKEN present — pulling preview secrets"
+  doppler_args=()
+fi
+
 log "bringing the stack up (snapshot restore)"
 /srv/macro/bin/xtask stack up \
-  --no-doppler \
+  "${doppler_args[@]}" \
   --no-build \
   --binaries-dir /srv/macro/artifacts/binaries \
   --frontend-dist /srv/macro/artifacts/frontend-dist \

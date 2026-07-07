@@ -1,170 +1,160 @@
-# Full-stack preview deploys on Fly Machines.
-#
-# Opt-in via the `preview` label. Builds every artifact on the runner (service
-# binaries, same-origin frontend bundle, init snapshot, image preload tar),
-# stages them into a self-contained VM image, and deploys it as the per-PR Fly
-# app `macro-pr-<N>` — which suspends when idle and wakes on request.
-# Teardown: .github/workflows/preview-fly-cleanup.yml.
-#
-# Requires: FLY_API_TOKEN secret (org deploy token), FLY_ORG variable.
-
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/src/workflows/preview_fly.rs
 name: Fly Preview
-
-on:
+'on':
   pull_request:
-    types: [opened, reopened, synchronize, labeled]
-
-concurrency:
-  group: fly-preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-  pull-requests: write
-
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - labeled
 jobs:
   deploy:
-    name: Build & deploy preview
-    # Same-repo branches only: the preview image embeds CI-built artifacts and
-    # the app serves under our Fly org — never build it from fork code.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      contains(github.event.pull_request.labels.*.name, 'preview')
-    runs-on: linux-extra-beefy
+    if: github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=preview-fly
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP_NAME: macro-pr-${{ github.event.pull_request.number }}
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-
-      - name: Setup dev shell + web deps
-        uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      - name: Build service binaries
-        working-directory: rust/cloud-storage
-        run: cargo x zigbuild
-
-      - name: Build xtask (runs inside the preview VM)
-        working-directory: rust/cloud-storage
-        run: cargo build --release -p xtask
-
-      - name: Build frontend bundle (same-origin)
-        working-directory: js/app/packages/app
-        env:
-          MODE: development
-          NODE_ENV: production
-          VITE_LOCAL_SERVERS: ALL
-          VITE_LOCAL_BACKEND_ORIGIN: same-origin
-        run: bun run --bun build
-
-      # A cold `stack up` on the runner runs the real init (migrate, kickstart,
-      # indices) and saves the content-addressed snapshot the VM restores from.
-      # It also pulls/builds every image the stack runs, which the next step
-      # bakes into the preload tar.
-      - name: Bake init snapshot
-        working-directory: rust/cloud-storage
-        run: |
-          cargo x stack up --no-frontend --no-doppler --no-build
-          cargo x stack snapshot --json
-
-      - name: Bake image preload tar
-        run: |
-          set -euo pipefail
-          mkdir -p preview-ctx/preload
-          docker pull alpine:3
-          images=$(docker compose -p macro \
-            -f docker-compose.yml \
-            -f infra/local/generated/macro/docker-compose.override.yml \
-            --env-file infra/local/generated/macro/local.generated.env \
-            config --images | sort -u)
-          echo "baking images:" $images
-          docker save -o preview-ctx/preload/images.tar $images alpine:3
-
-      - name: Stage preview build context
-        run: |
-          set -euo pipefail
-          ctx=preview-ctx
-          mkdir -p "$ctx/repo" "$ctx/artifacts/binaries" "$ctx/bin"
-          # The minimal repo layout xtask reads at runtime — including every
-          # snapshot-key input, byte-identical to this checkout, so the VM's
-          # key matches the snapshot baked above.
-          rsync -a --relative --exclude node_modules \
-            docker-compose.yml \
-            docker-compose-databases.yml \
-            infra/stacks/fusionauth-instance/docker-compose.yml \
-            infra/local/nginx \
-            infra/local/opensearch \
-            infra/stacks/opensearch/helpers \
-            rust/cloud-storage/macro_db_client/migrations \
-            "$ctx/repo/"
-          # Service binaries only — the target dir also holds gigabytes of
-          # build intermediates.
-          find rust/cloud-storage/target/x86_64-unknown-linux-gnu/debug \
-            -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
-            -exec cp {} "$ctx/artifacts/binaries/" \;
-          cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
-          cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-          cp rust/cloud-storage/target/release/xtask "$ctx/bin/xtask"
-          cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
-          cp infra/preview/Dockerfile "$ctx/Dockerfile"
-
-      - name: Setup flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@v1.5
-
-      - name: Deploy to Fly
-        env:
-          FLY_ORG: ${{ vars.FLY_ORG }}
-        run: |
-          set -euo pipefail
-          flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
-          flyctl auth docker
-          image="registry.fly.io/$APP_NAME:${{ github.sha }}"
-          docker build -t "$image" preview-ctx
-          docker push "$image"
-          flyctl deploy --app "$APP_NAME" \
-            --config infra/preview/fly.toml \
-            --image "$image" \
-            --yes
-
-      - name: Comment preview URL
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const app = process.env.APP_NAME;
-            const url = `https://${app}.fly.dev`;
-            const marker = '<!-- fly-preview -->';
-            const body = [
-              marker,
-              `🚀 **Full-stack preview**: ${url}`,
-              '',
-              `- Suspended when idle — the first request wakes it (a few seconds).`,
-              `- Log in with any email; the passwordless code lands in [Mailpit](${url}/mailpit/).`,
-              `- Deployed from ${context.payload.pull_request.head.sha.slice(0, 7)}.`,
-            ].join('\n');
-            const { data: comments } = await github.rest.issues.listComments({
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun,rust
+        path: |-
+          /home/runner/.cache/sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup dev shell + web deps
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Build service binaries
+      run: cargo x zigbuild
+      working-directory: rust/cloud-storage
+    - name: Build xtask (runs inside the preview VM)
+      run: cargo build --release -p xtask
+      working-directory: rust/cloud-storage
+    - name: Build frontend bundle (same-origin)
+      run: bun run --bun build
+      env:
+        MODE: development
+        NODE_ENV: production
+        VITE_LOCAL_SERVERS: ALL
+        VITE_LOCAL_BACKEND_ORIGIN: same-origin
+      working-directory: js/app/packages/app
+    - name: Bake init snapshot
+      run: |
+        cargo x stack up --no-frontend --no-doppler --no-build
+        cargo x stack snapshot --json
+      working-directory: rust/cloud-storage
+    - name: Bake image preload tar
+      run: |
+        set -euo pipefail
+        mkdir -p preview-ctx/preload
+        docker pull alpine:3
+        images=$(docker compose -p macro \
+          -f docker-compose.yml \
+          -f infra/local/generated/macro/docker-compose.override.yml \
+          --env-file infra/local/generated/macro/local.generated.env \
+          config --images | sort -u)
+        echo "baking images:" $images
+        docker save -o preview-ctx/preload/images.tar $images alpine:3
+    - name: Stage preview build context
+      run: |
+        set -euo pipefail
+        ctx=preview-ctx
+        mkdir -p "$ctx/repo" "$ctx/artifacts/binaries" "$ctx/bin"
+        # The minimal repo layout xtask reads at runtime — including every
+        # snapshot-key input, byte-identical to this checkout, so the VM's
+        # key matches the snapshot baked above.
+        rsync -a --relative --exclude node_modules \
+          docker-compose.yml \
+          docker-compose-databases.yml \
+          infra/stacks/fusionauth-instance/docker-compose.yml \
+          infra/local/nginx \
+          infra/local/opensearch \
+          infra/stacks/opensearch/helpers \
+          rust/cloud-storage/macro_db_client/migrations \
+          "$ctx/repo/"
+        # Service binaries only — the target dir also holds gigabytes of
+        # build intermediates.
+        find rust/cloud-storage/target/x86_64-unknown-linux-gnu/debug \
+          -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
+          -exec cp {} "$ctx/artifacts/binaries/" \;
+        cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
+        cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
+        cp rust/cloud-storage/target/release/xtask "$ctx/bin/xtask"
+        cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
+        cp infra/preview/Dockerfile "$ctx/Dockerfile"
+    - name: Setup flyctl
+      uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+    - name: Deploy to Fly
+      run: |
+        set -euo pipefail
+        if [ -z "$DOPPLER_PREVIEW_TOKEN" ]; then
+          echo "DOPPLER_PREVIEW_TOKEN secret is not set (a Doppler service token scoped to the preview config)" >&2
+          exit 1
+        fi
+        flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
+        flyctl secrets set --app "$APP_NAME" --stage "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN"
+        flyctl auth docker
+        image="registry.fly.io/$APP_NAME:${{ github.sha }}"
+        docker build -t "$image" preview-ctx
+        docker push "$image"
+        flyctl deploy --app "$APP_NAME" \
+          --config infra/preview/fly.toml \
+          --image "$image" \
+          --yes
+      env:
+        FLY_ORG: ${{ vars.FLY_ORG }}
+        DOPPLER_PREVIEW_TOKEN: ${{ secrets.DOPPLER_PREVIEW_TOKEN }}
+    - name: Comment preview URL
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const app = process.env.APP_NAME;
+          const url = `https://${app}.fly.dev`;
+          const marker = '<!-- fly-preview -->';
+          const body = [
+            marker,
+            `🚀 **Full-stack preview**: ${url}`,
+            '',
+            `- Suspended when idle — the first request wakes it (a few seconds).`,
+            `- Log in with any email; the passwordless code lands in [Mailpit](${url}/mailpit/).`,
+            `- Deployed from ${context.payload.pull_request.head.sha.slice(0, 7)}.`,
+          ].join('\n');
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            per_page: 100,
+          });
+          const existing = comments.find(c => c.body && c.body.startsWith(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              per_page: 100,
+              body,
             });
-            const existing = comments.find(c => c.body && c.body.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+          }
+concurrency:
+  group: fly-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true

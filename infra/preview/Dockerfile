@@ -22,7 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       docker-buildx \
       ca-certificates \
       curl \
+      gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Doppler CLI: the machine boots with a config-scoped service token
+# (DOPPLER_TOKEN, set as a Fly secret by the workflow) and the stack's env
+# layer pulls the preview secrets with it.
+RUN curl -Ls --tlsv1.2 --proto "=https" https://cli.doppler.com/install.sh | sh
 
 COPY . /srv/macro
 RUN chmod +x /srv/macro/entrypoint.sh /srv/macro/bin/xtask
