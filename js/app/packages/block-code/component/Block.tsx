@@ -44,7 +44,7 @@ export default function BlockCode() {
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
         <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col items-end relative">
           <ModalsProvider>
-            <SidePanel.Layout>
+            <SidePanel.Layout defaultOpen={false}>
               <FileSidePanelSections />
               <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
                 <TopBar

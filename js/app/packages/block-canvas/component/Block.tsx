@@ -309,7 +309,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
       >
         <ModalsProvider>
           <Show when={!isNestedBlock} fallback={<CanvasBody />}>
-            <SidePanel.Layout>
+            <SidePanel.Layout defaultOpen={false}>
               <FileSidePanelSections />
               <div class="flex size-full min-w-0 flex-col overflow-hidden">
                 <TopBar />
