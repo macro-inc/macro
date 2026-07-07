@@ -167,16 +167,20 @@ impl ConnectionService for TestConnectionService {
     }
 }
 
-#[derive(Clone)]
-struct TestEntityAccessManagementService;
+#[derive(Clone, Default)]
+struct TestEntityAccessManagementService {
+    added_to_projects: Arc<Mutex<Vec<uuid::Uuid>>>,
+    removed_from_projects: Arc<Mutex<Vec<uuid::Uuid>>>,
+}
 
 impl EntityAccessManagementService for TestEntityAccessManagementService {
     async fn add_entity_to_project(
         &self,
         _entity_id: &uuid::Uuid,
         _entity_type: EntityType,
-        _project_id: &uuid::Uuid,
+        project_id: &uuid::Uuid,
     ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        self.added_to_projects.lock().unwrap().push(*project_id);
         Ok(())
     }
 
@@ -184,8 +188,12 @@ impl EntityAccessManagementService for TestEntityAccessManagementService {
         &self,
         _entity_id: &uuid::Uuid,
         _entity_type: EntityType,
-        _old_project_id: &uuid::Uuid,
+        old_project_id: &uuid::Uuid,
     ) -> Result<(), entity_access_management::domain::models::EntityAccessManagementError> {
+        self.removed_from_projects
+            .lock()
+            .unwrap()
+            .push(*old_project_id);
         Ok(())
     }
 
@@ -362,10 +370,32 @@ fn make_test_service_with_foreign_entity_service(
         TestUploadUrlPort,
         TestTaskPropertiesPort,
         TestConnectionService,
-        TestEntityAccessManagementService,
+        TestEntityAccessManagementService::default(),
         foreign_entity_service,
         TestEventBroker::default(),
     )
+}
+
+/// Build a test service along with a handle to its recording entity access service.
+fn make_test_service_with_entity_access(
+    repo: MockDocumentRepo,
+) -> (TestDocumentService, TestEntityAccessManagementService) {
+    let entity_access = TestEntityAccessManagementService::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService,
+        entity_access.clone(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    (service, entity_access)
 }
 
 /// Build a test service along with a handle to its recording event broker.
@@ -383,7 +413,7 @@ fn make_test_service_with_event_broker(
         TestUploadUrlPort,
         TestTaskPropertiesPort,
         TestConnectionService,
-        TestEntityAccessManagementService,
+        TestEntityAccessManagementService::default(),
         TestForeignEntityService::default(),
         event_broker.clone(),
     );
@@ -1196,6 +1226,86 @@ async fn test_edit_document_publishes_document_updated_event() {
     assert_eq!(
         event.payload["metadata"]["project_id"],
         serde_json::Value::Null
+    );
+}
+
+#[tokio::test]
+async fn test_edit_document_rename_only_keeps_project_access() {
+    let document_id = uuid::Uuid::new_v4().to_string();
+    let old_project_id = uuid::Uuid::new_v4();
+
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, entity_access) = make_test_service_with_entity_access(repo);
+
+    let mut context = task_document_context(&document_id);
+    context.project_id = Some(old_project_id.to_string());
+
+    service
+        .edit_document(
+            edit_receipt(&document_id),
+            context,
+            EditDocumentServiceArgs {
+                document_name: Some("New name".to_string()),
+                project_id: None,
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        entity_access
+            .removed_from_projects
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(entity_access.added_to_projects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_edit_document_project_change_moves_project_access() {
+    let document_id = uuid::Uuid::new_v4().to_string();
+    let old_project_id = uuid::Uuid::new_v4();
+    let new_project_id = uuid::Uuid::new_v4();
+
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_update_project_modified()
+        .times(2)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+
+    let (service, entity_access) = make_test_service_with_entity_access(repo);
+
+    let mut context = task_document_context(&document_id);
+    context.project_id = Some(old_project_id.to_string());
+
+    service
+        .edit_document(
+            edit_receipt(&document_id),
+            context,
+            EditDocumentServiceArgs {
+                document_name: None,
+                project_id: Some(new_project_id.to_string()),
+                share_permission: None,
+                file_type: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *entity_access.removed_from_projects.lock().unwrap(),
+        vec![old_project_id]
+    );
+    assert_eq!(
+        *entity_access.added_to_projects.lock().unwrap(),
+        vec![new_project_id]
     );
 }
 
