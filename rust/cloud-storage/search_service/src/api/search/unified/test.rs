@@ -50,6 +50,7 @@ fn test_sort_unified_search_results() {
         }),
         // Chat with updated_at = 3000 (newest)
         UnifiedSearchResponseItem::Chat(ChatSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(ChatMetadata {
                 created_at: DateTime::from_timestamp(2900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(3000, 0).unwrap(),

@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id as entity_id,\n                p.name,\n                regexp_replace(\n                    p.name,\n                    $6,\n                    '<macro_em>\\1</macro_em>',\n                    'gi'\n                ) as name_highlighted,\n                p.\"updatedAt\" as updated_at\n            FROM \"Project\" p\n            WHERE p.id = ANY($1)\n                AND p.\"deletedAt\" IS NULL\n                AND p.name ILIKE $2\n                AND (\n                    $4::timestamptz IS NULL\n                    OR (p.\"updatedAt\", p.id) < ($4, $5)\n                )\n            ORDER BY p.\"updatedAt\" DESC, p.id DESC\n            LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name_highlighted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "85423841a8e715417d2e6c4c210b096a1aedea8c4bb63029e0024bce1e5029f9"
+}

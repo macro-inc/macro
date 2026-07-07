@@ -233,13 +233,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
     // (which drops them) and attach them to the document search args below.
-    // Tags additionally apply to the emails index, where thread properties
-    // are denormalized onto every message doc.
+    // Tags additionally apply to the emails index (thread properties
+    // denormalized onto every message doc) and the chats index (nested on
+    // the parent chat doc).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
     let tag_option_ids = req.filters.tag_option_ids.clone();
-    // Tags are only indexed for the documents and emails indexes. With a tag
-    // filter active every other source is dropped, so response pages contain
-    // only rows the filter was actually applied to.
+    // Tags are only indexed for the documents, emails, and chats indexes.
+    // With a tag filter active every other source is dropped, so response
+    // pages contain only rows the filter was actually applied to.
     let tags_active = !tag_option_ids.is_empty();
 
     // CRM is opt-in: it only runs when the caller resolved a team receipt
@@ -258,7 +259,9 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     let should_include_documents = search_filters.should_include_documents;
     let should_include_channels = search_filters.should_include_channels && !tags_active;
-    let should_include_chats = search_filters.should_include_chats && !tags_active;
+    // Chats stay live under a tag filter: both chat legs apply it (nested
+    // clause on the chats index, entity_properties EXISTS on the name leg).
+    let should_include_chats = search_filters.should_include_chats;
     let should_include_projects = search_filters.should_include_projects && !tags_active;
     let should_include_emails = search_filters.should_include_emails;
     let should_include_call_records = search_filters.should_include_call_records && !tags_active;
@@ -325,6 +328,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
+    filter_chat_response.tag_option_ids = tag_option_ids.clone();
     filter_email_response.terms = email_terms.clone();
     filter_email_response.tag_option_ids = tag_option_ids;
     filter_call_record_response.terms = search_terms.clone();
@@ -428,6 +432,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                                 chat_ids: filter_chat_response.chat_ids,
                             },
                             name_search_term.clone(),
+                            &filter_chat_response.tag_option_ids,
                             page_size,
                             chat_cursor_for_search,
                         )

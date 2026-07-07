@@ -141,6 +141,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
+            tag_option_ids: args.chat_search_args.tag_option_ids,
         }
     }
 }
@@ -168,6 +169,7 @@ pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]

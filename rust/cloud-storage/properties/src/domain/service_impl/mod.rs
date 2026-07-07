@@ -27,7 +27,7 @@ use helpers::{extract_option_ids_from_property_value, is_property_applicable_to}
 fn is_search_indexed(entity_type: EntityType) -> bool {
     matches!(
         entity_type,
-        EntityType::Task | EntityType::Document | EntityType::Thread
+        EntityType::Task | EntityType::Document | EntityType::Thread | EntityType::Chat
     )
 }
 

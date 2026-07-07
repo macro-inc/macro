@@ -74,6 +74,7 @@ export * from './chatSearchResponseItem';
 export * from './chatSearchResponseItemWithMetadata';
 export * from './chatSearchResponseItemWithMetadataAllOf';
 export * from './chatSearchResponseItemWithMetadataAllOfMetadata';
+export * from './chatSearchResponseItemWithMetadataAllOfProperties';
 export * from './crmCompanyFilters';
 export * from './crmCompanyFiltersHidden';
 export * from './crmCompanySearchDomain';
