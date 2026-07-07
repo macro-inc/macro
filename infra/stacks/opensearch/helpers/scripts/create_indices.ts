@@ -11,6 +11,7 @@ import {
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
   EMAILS_INDEX,
+  IS_DRY_RUN,
   PROJECTS_ALIAS,
   PROJECTS_INDEX,
   SHARD_SETTINGS,
@@ -143,6 +144,10 @@ async function createIndexWithAlias(
       console.log(`${indexName}: ${plan.reason}`);
       return;
     case 'add_alias':
+      if (IS_DRY_RUN) {
+        console.log(`[DRY-RUN] Would add alias ${aliasName} -> ${indexName}`);
+        return;
+      }
       console.log(`Adding alias ${aliasName} -> ${indexName}`);
       await opensearchClient.indices.putAlias({
         index: indexName,
@@ -150,6 +155,12 @@ async function createIndexWithAlias(
       });
       return;
     case 'create_with_alias':
+      if (IS_DRY_RUN) {
+        console.log(
+          `[DRY-RUN] Would create ${indexName} with alias ${aliasName}`
+        );
+        return;
+      }
       console.log(
         `${indexName} does not exist, creating with alias ${aliasName}`
       );
@@ -160,6 +171,10 @@ async function createIndexWithAlias(
       return;
     case 'create_without_alias':
       console.log(`${indexName}: ${plan.nextStep}`);
+      if (IS_DRY_RUN) {
+        console.log(`[DRY-RUN] Would create ${indexName} without alias`);
+        return;
+      }
       await opensearchClient.indices.create({
         index: indexName,
         body,
@@ -605,7 +620,9 @@ const CALL_RECORDS_V2_BODY = {
 
 async function createIndices() {
   const opensearchClient = client();
-  console.log('Creating indices...');
+  console.log(
+    `Creating indices... ${IS_DRY_RUN ? '(DRY-RUN MODE — set DRY_RUN=false to apply)' : '(LIVE MODE)'}`
+  );
 
   try {
     await createIndexWithAlias(opensearchClient, {

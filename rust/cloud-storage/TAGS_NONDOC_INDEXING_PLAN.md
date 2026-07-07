@@ -19,7 +19,7 @@ All three subtasks are merged; the parent (with `origin/main` merged back in) go
 | emails putMapping | DONE (2209) | pending — `INDEX=emails scripts/add_properties_field.ts` before/with release |
 | THREAD properties backfill | DONE (2209, 8 threads) | pending — after release |
 | chats putMapping | DONE | pending — `INDEX=chats scripts/add_properties_field.ts` |
-| projects index + alias | DONE (`projects_v1` ← `create_indices.ts`) | pending — `create_indices.ts` (⚠️ ignores DRY_RUN — it applies on every run; it is idempotent, but run it deliberately) |
+| projects index + alias | DONE (`projects_v1` ← `create_indices.ts`) | pending — `create_indices.ts` with `DRY_RUN=false` (dry-run by default like the other helpers) |
 | deploy | on merge to main | next tagged release |
 | projects full backfill | after dev deploy — `POST /internal/backfill/projects` | after release (see §5 sparse-window note) |
 | CHAT / PROJECT properties backfill | after dev deploy — `POST /internal/backfill/properties` | after release |
