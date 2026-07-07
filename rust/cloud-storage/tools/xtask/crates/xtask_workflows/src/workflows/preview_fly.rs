@@ -131,7 +131,20 @@ fn deploy() -> Job {
         .add_step(stage_context())
         .add_step(setup_flyctl())
         .add_step(deploy_to_fly())
+        .add_step(dump_fly_diagnostics())
         .add_step(comment_preview_url())
+}
+
+/// When the machine never passes its health check, the answer is inside the
+/// VM (dockerd, image load, `stack up`) — dump its logs and state so a failed
+/// deploy is diagnosable from CI output alone.
+fn dump_fly_diagnostics() -> Step<Run> {
+    Step::new("Dump Fly diagnostics")
+        .run(indoc::indoc! {r#"
+            flyctl machine list --app "$APP_NAME" || true
+            flyctl logs --app "$APP_NAME" --no-tail || true
+        "#})
+        .if_condition(Expression::new("failure()"))
 }
 
 /// A cold `stack up --infra-only` on the runner runs the real init (migrate,
@@ -251,9 +264,13 @@ fn deploy_to_fly() -> Step<Run> {
             image="registry.fly.io/$APP_NAME:${{ github.sha }}"
             docker build -t "$image" preview-ctx
             docker push "$image"
+            # First boot does real work before 8090 opens (docker load of the
+            # preload tar, snapshot restore, compose up, FusionAuth's JVM) —
+            # give the health check more runway than flyctl's default wait.
             flyctl deploy --app "$APP_NAME" \
               --config infra/preview/fly.toml \
               --image "$image" \
+              --wait-timeout 900 \
               --yes
         "#})
         // Accept the org slug from either a repo variable or a repo secret —
