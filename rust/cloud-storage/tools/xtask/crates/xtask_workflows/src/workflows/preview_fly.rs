@@ -263,15 +263,37 @@ fn deploy_to_fly() -> Step<Run> {
             flyctl auth docker
             image="registry.fly.io/$APP_NAME:${{ github.sha }}"
             docker build -t "$image" preview-ctx
-            docker push "$image"
+            # The preload layer is multi-GB and the Fly registry occasionally
+            # aborts such uploads ("s3aws: append to zero-size path
+            # unsupported") — retry; layers that made it are reused.
+            pushed=""
+            for _ in 1 2 3; do
+              if docker push "$image"; then pushed=1; break; fi
+              echo "docker push failed, retrying" >&2
+              sleep 15
+            done
+            [ -n "$pushed" ]
+            # Keep the machine in demand while it boots: with zero inbound
+            # traffic, fly-proxy counts a health-failing machine as excess
+            # capacity and suspends it mid-boot (observed mid-docker-load).
+            # Any response status counts as traffic, and a request also
+            # resumes an already-suspended machine.
+            (while :; do
+              curl -s -o /dev/null --max-time 10 "https://$APP_NAME.fly.dev/" || true
+              sleep 15
+            done) &
+            keepalive=$!
             # First boot does real work before 8090 opens (docker load of the
             # preload tar, snapshot restore, compose up, FusionAuth's JVM) —
             # give the health check more runway than flyctl's default wait.
+            rc=0
             flyctl deploy --app "$APP_NAME" \
               --config infra/preview/fly.toml \
               --image "$image" \
               --wait-timeout 900 \
-              --yes
+              --yes || rc=$?
+            kill "$keepalive" 2>/dev/null || true
+            exit "$rc"
         "#})
         // Accept the org slug from either a repo variable or a repo secret —
         // it's not sensitive, but people reasonably reach for secrets first.

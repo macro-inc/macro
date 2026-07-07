@@ -24,7 +24,9 @@ fi
 # redeploy); suspend/resume keeps it, so this only runs on real boots.
 if [ -f /srv/macro/preload/images.tar ]; then
   log "loading baked images"
+  t0=$(date +%s)
   docker load -i /srv/macro/preload/images.tar
+  log "images loaded in $(($(date +%s) - t0))s"
 fi
 
 # With a DOPPLER_TOKEN (a config-scoped service token, injected as a Fly
