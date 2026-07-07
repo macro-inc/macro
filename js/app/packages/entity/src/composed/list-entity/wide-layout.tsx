@@ -32,15 +32,16 @@ import {
 } from './foreign';
 import type { LayoutProps } from './shared';
 
-function DocumentRowTags(props: {
+function RowTags(props: {
   entityId: string;
+  entityType: EntityType;
   properties: SoupProperty[] | undefined;
 }) {
   const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
-      entityType={EntityType.DOCUMENT}
+      entityType={props.entityType}
       properties={props.properties}
       onFilterByTag={filterByTag}
     />
@@ -192,12 +193,26 @@ export function WideLayout(props: LayoutProps) {
               return 'properties' in doc ? doc.properties : undefined;
             };
             return (
-              <DocumentRowTags
+              <RowTags
                 entityId={entity().id}
+                entityType={
+                  isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
+                }
                 properties={properties()}
               />
             );
           }}
+        </Show>
+        <Show when={isEmailEntity(props.entity) && props.entity}>
+          {(entity) => (
+            // No filter-by-tag affordance. The soup email path does not apply
+            // tag filters, so filtering would leave email rows unfiltered.
+            <EntityRowTags
+              entityId={entity().id}
+              entityType={EntityType.THREAD}
+              properties={entity().properties}
+            />
+          )}
         </Show>
       </Entity.Slot>
       <Entity.Slot

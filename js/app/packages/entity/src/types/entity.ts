@@ -186,6 +186,7 @@ export type EmailEntity = EntityBase & {
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
+  properties?: SoupProperty[];
 };
 
 export type ProjectEntity = EntityBase & {
