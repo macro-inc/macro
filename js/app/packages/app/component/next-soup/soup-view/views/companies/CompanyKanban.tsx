@@ -1,7 +1,12 @@
+import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { usePreviewPaneVisiblity } from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { PreviewPanel } from '@app/component/PreviewPanel';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import {
   COMPANY_STAGE_OPTIONS,
   Entity,
@@ -19,8 +24,15 @@ import type { Property } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn, Layer } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { cn, EmptyStatePanel, Layer } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 
 /** Column key for companies without a Stage value. */
 const NO_STAGE_KEY = '';
@@ -43,12 +55,17 @@ const STAGE_COLUMNS: StageColumn[] = [
  * "No stage"), fed by the same filtered soup entities as the list. Cards
  * drag between columns to update the company's Stage property (team
  * admins/owners only, matching CRM edit access).
+ *
+ * Like the list, the board supports the toggleable preview pane (Preview
+ * button / space in the filters bar): while it's open, clicking a card
+ * previews the company to the side instead of replacing the split.
  */
 export function CompanyKanban() {
   const { source, soup } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const isTeamAdmin = useIsTeamAdmin();
   const saveMutation = useBulkSaveEntityPropertiesMutation();
+  const orchestrator = useGlobalBlockOrchestrator();
 
   const stageProperty = createMemo(
     (): Property =>
@@ -57,6 +74,32 @@ export function CompanyKanban() {
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STAGE
       )!
   );
+
+  // Preview-pane open state is per history entry, mirroring SoupViewList:
+  // restored synchronously so the first render sees the pane, captured on
+  // nav-away so back/forward returns to the same state.
+  const persistedPreview = panel.handle.currentEntryState()?.['soup.preview'] as
+    | string
+    | undefined;
+  soup.setPreviewEntity(persistedPreview);
+  const previewCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.preview',
+    () => soup.previewEntity()
+  );
+  onCleanup(previewCaptorTeardown);
+
+  const { paneVisible, previewVisible } = usePreviewPaneVisiblity();
+
+  // Keep the panel-level preview flag in sync (entity toolbars read it),
+  // and clear it when the board unmounts so it doesn't go stale.
+  createEffect(() => {
+    const hasPreviewEntity = !!soup.previewEntity();
+    const [getPreview, setPreview] = panel.previewState;
+    if (hasPreviewEntity !== getPreview()) {
+      setPreview(hasPreviewEntity);
+    }
+  });
+  onCleanup(() => panel.previewState[1](false));
 
   const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
 
@@ -100,6 +143,14 @@ export function CompanyKanban() {
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
     soup.focus.set(entity.id);
+
+    // While the preview pane is open, card clicks retarget it instead of
+    // replacing the split (mirrors the list view's behavior).
+    if (previewVisible() && soup.previewEntity()) {
+      soup.setPreviewEntity(entity.id);
+      return;
+    }
+
     void openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
       splitHandle: panel.handle,
@@ -108,81 +159,119 @@ export function CompanyKanban() {
   };
 
   return (
-    <div class="size-full min-w-0 overflow-x-auto overflow-y-hidden">
-      <div class="flex h-full gap-3 p-3">
-        <For each={columns()}>
-          {(column) => (
-            <div
-              class={cn(
-                'flex h-full w-64 shrink-0 flex-col rounded-lg border border-edge-muted bg-surface',
-                dropTarget() === column.key &&
-                  draggedId() &&
-                  'border-accent/50 bg-accent/5'
-              )}
-              onDragOver={(e) => {
-                if (!draggedId()) return;
-                e.preventDefault();
-                setDropTarget(column.key);
-              }}
-              onDragLeave={(e) => {
-                if (
-                  e.relatedTarget instanceof Node &&
-                  e.currentTarget.contains(e.relatedTarget)
-                ) {
-                  return;
-                }
-                if (dropTarget() === column.key) setDropTarget(undefined);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const id = draggedId() ?? e.dataTransfer?.getData('text/plain');
-                setDropTarget(undefined);
-                setDraggedId(undefined);
-                if (id) moveToStage(id, column.key);
-              }}
-            >
-              <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
-                <Show
-                  when={column.key !== NO_STAGE_KEY}
-                  fallback={
-                    <CircleDashed class="size-3.5 text-ink-extra-muted" />
-                  }
-                >
-                  <PropertyValueIcon optionId={column.key} class="size-3.5" />
-                </Show>
-                <span class="truncate">{column.label}</span>
-                <span class="ml-auto shrink-0 tabular-nums px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted font-medium">
-                  {column.entities.length}
-                </span>
-              </div>
-              <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
-                <For each={column.entities}>
-                  {(entity) => (
-                    <CompanyKanbanCard
-                      entity={entity}
-                      draggable={isTeamAdmin()}
-                      dragging={draggedId() === entity.id}
-                      onDragStart={(e) => {
-                        e.dataTransfer?.setData('text/plain', entity.id);
-                        if (e.dataTransfer) {
-                          e.dataTransfer.effectAllowed = 'move';
-                        }
-                        setDraggedId(entity.id);
-                      }}
-                      onDragEnd={() => {
-                        setDraggedId(undefined);
-                        setDropTarget(undefined);
-                      }}
-                      onClick={(e) => openCompany(entity, e)}
-                    />
-                  )}
-                </For>
-              </div>
-            </div>
+    <Resize.Zone direction="horizontal" gutter={0}>
+      <Resize.Panel id="company-kanban" minSize={200}>
+        <div
+          class={cn(
+            'size-full min-w-0 overflow-x-auto overflow-y-hidden',
+            paneVisible() && 'border-r border-edge-muted'
           )}
-        </For>
-      </div>
-    </div>
+        >
+          <div class="flex h-full gap-3 p-3">
+            <For each={columns()}>
+              {(column) => (
+                <div
+                  class={cn(
+                    'flex h-full w-64 shrink-0 flex-col rounded-lg border border-edge-muted bg-surface',
+                    dropTarget() === column.key &&
+                      draggedId() &&
+                      'border-accent/50 bg-accent/5'
+                  )}
+                  onDragOver={(e) => {
+                    if (!draggedId()) return;
+                    e.preventDefault();
+                    setDropTarget(column.key);
+                  }}
+                  onDragLeave={(e) => {
+                    if (
+                      e.relatedTarget instanceof Node &&
+                      e.currentTarget.contains(e.relatedTarget)
+                    ) {
+                      return;
+                    }
+                    if (dropTarget() === column.key) setDropTarget(undefined);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id =
+                      draggedId() ?? e.dataTransfer?.getData('text/plain');
+                    setDropTarget(undefined);
+                    setDraggedId(undefined);
+                    if (id) moveToStage(id, column.key);
+                  }}
+                >
+                  <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
+                    <Show
+                      when={column.key !== NO_STAGE_KEY}
+                      fallback={
+                        <CircleDashed class="size-3.5 text-ink-extra-muted" />
+                      }
+                    >
+                      <PropertyValueIcon
+                        optionId={column.key}
+                        class="size-3.5"
+                      />
+                    </Show>
+                    <span class="truncate">{column.label}</span>
+                    <span class="ml-auto shrink-0 tabular-nums px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted font-medium">
+                      {column.entities.length}
+                    </span>
+                  </div>
+                  <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
+                    <For each={column.entities}>
+                      {(entity) => (
+                        <CompanyKanbanCard
+                          entity={entity}
+                          draggable={isTeamAdmin()}
+                          dragging={draggedId() === entity.id}
+                          onDragStart={(e) => {
+                            e.dataTransfer?.setData('text/plain', entity.id);
+                            if (e.dataTransfer) {
+                              e.dataTransfer.effectAllowed = 'move';
+                            }
+                            setDraggedId(entity.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedId(undefined);
+                            setDropTarget(undefined);
+                          }}
+                          onClick={(e) => openCompany(entity, e)}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+      </Resize.Panel>
+      <Show when={paneVisible()}>
+        <Resize.Panel
+          id="soup-preview"
+          minSize={500}
+          target={{ kind: 'percent', percent: 70 }}
+        >
+          <Show
+            when={soup.focus.item()}
+            fallback={
+              <EmptyStatePanel
+                graphic={EmptyStatePreviewIcon}
+                title="Nothing selected"
+                description="Select a card from the board to preview it here"
+                centered
+              />
+            }
+          >
+            <PreviewPanel
+              selectedEntity={soup.focus.item()}
+              orchestrator={orchestrator}
+              splitPanelContext={panel}
+            />
+          </Show>
+        </Resize.Panel>
+      </Show>
+    </Resize.Zone>
   );
 }
 

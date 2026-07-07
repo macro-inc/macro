@@ -40,6 +40,11 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/component/next-soup/soup-view/soup-view-tabs';
+import {
+  useIsNewInboxEnabled,
+  usePreviewPaneVisiblity,
+  WIDE_SPLIT_PANEL_BREAKPOINT,
+} from '@app/component/next-soup/soup-view/use-preview-pane-visibility';
 import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/component/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -65,7 +70,6 @@ import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -73,11 +77,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
-  ENABLE_UNIFIED_LIST_AI_INPUT,
-} from '@core/constant/featureFlags';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   soupListContainerAttribute,
@@ -142,8 +142,6 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-
-const WIDE_SPLIT_PANEL_BREAKPOINT = window.innerWidth * 0.25;
 
 export const SoupSectionHeader = (props: {
   children: JSX.Element;
@@ -823,60 +821,6 @@ export const SoupView = (props: SoupViewProps) => {
     </SplitPanelContext.Provider>
   );
 };
-
-export function useIsNewInboxEnabled() {
-  const panel = useSplitPanelOrThrow();
-
-  const currentView = () => {
-    const { type, id } = panel.handle.content();
-    if (type !== 'component') return;
-    return isListViewID(id) ? id : undefined;
-  };
-
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-
-  const isNewInboxEnabled = () =>
-    currentView() === 'inbox' && newInboxFlag().enabled;
-
-  return isNewInboxEnabled;
-}
-
-export function usePreviewPaneVisiblity() {
-  const panel = useSplitPanelOrThrow();
-
-  const { soup, rows } = useSoupView();
-
-  const isNewInboxEnabled = useIsNewInboxEnabled();
-
-  const isWideSplitPanel = createMemo(() => {
-    return (panel.panelSize.width ?? 0) > WIDE_SPLIT_PANEL_BREAKPOINT;
-  });
-
-  const previewVisible = createMemo(
-    () =>
-      isWideSplitPanel() &&
-      (!!soup.previewEntity() || panel.previewState[0]()) &&
-      !!soup.focus.item()
-  );
-
-  // Placeholder display only for new inbox where the preview panel is open by default
-  // Only open while no items are focused
-  const previewPlaceholderVisible = createMemo(() => {
-    return isWideSplitPanel() && isNewInboxEnabled() && !soup.focus.item();
-  });
-
-  const previewPaneVisible = createMemo(
-    () => rows().length > 0 && (previewVisible() || previewPlaceholderVisible())
-  );
-
-  return {
-    paneVisible: previewPaneVisible,
-    placeholderVisible: previewPlaceholderVisible,
-    previewVisible,
-  };
-}
 
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
