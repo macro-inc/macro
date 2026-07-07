@@ -65,6 +65,7 @@ members = [
   "task_dedup",
   "tools/native_app_server",
   "tools/xtask",
+  "tools/xtask/crates/*",
   "unfurl",
   "unfurl_service",
   "upload_extractor_lambda_handler",

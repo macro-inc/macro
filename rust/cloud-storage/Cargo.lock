@@ -15522,6 +15522,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask-paths",
+]
+
+[[package]]
+name = "xtask-paths"
+version = "0.1.0"
+
+[[package]]
 name = "xxhash-rust"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

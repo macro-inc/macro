@@ -1,0 +1,13 @@
+[package]
+description = "Shared guppy PackageGraph builder for the graph-based xtask commands"
+edition = "2024"
+name = "xtask-graph"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+# Pinned engine for the generated dependency artifacts. These versions live in
+# Cargo.lock, so dev machines and CI always run the identical generator.
+guppy = "0.17.24"
+xtask-paths = { path = "../xtask-paths" }
