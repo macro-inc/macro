@@ -351,11 +351,7 @@ export function MessageContainer(props: MessageContainerProps) {
               </Show>
             </Message>
             <Show when={showInlineReplyArea()}>
-              <div
-                class={cn(
-                  'relative border-t border-edge-muted',
-                )}
-              >
+              <div class={cn('relative border-t border-edge-muted')}>
                 <Show when={props.isLastMessage && !isMobile()}>
                   <FloatingInputLoader
                     isLoading={context.query.isFetching}

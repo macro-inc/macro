@@ -228,7 +228,7 @@ export function ComposeLayout(props: {
             <Show when={!isCcVisible()}>
               <Button
                 size="sm"
-                class='rounded-lg'
+                class="rounded-lg"
                 onClick={() => setShowCc(true)}
                 disabled={ctx.disabled()}
               >
@@ -238,7 +238,7 @@ export function ComposeLayout(props: {
             <Show when={!isBccVisible()}>
               <Button
                 size="sm"
-                class='rounded-lg'
+                class="rounded-lg"
                 onClick={() => setShowBcc(true)}
                 disabled={ctx.disabled()}
               >

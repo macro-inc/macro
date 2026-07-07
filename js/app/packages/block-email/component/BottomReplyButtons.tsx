@@ -25,7 +25,7 @@ function ReplyActionButton(props: {
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
       depth={isMobile() ? 3 : undefined}
-      variant='base'
+      variant="base"
       class={cn(
         // Island pills when floating in the mobile accessory region.
         'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
