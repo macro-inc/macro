@@ -15568,6 +15568,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-kafka-topics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_event_topics",
+ "serde_json",
+ "xtask-paths",
+]
+
+[[package]]
 name = "xtask-nextest-filter"
 version = "0.1.0"
 dependencies = [
@@ -15579,6 +15589,18 @@ dependencies = [
 [[package]]
 name = "xtask-paths"
 version = "0.1.0"
+
+[[package]]
+name = "xtask-workflows"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gh-workflow",
+ "indoc",
+ "serde_json",
+ "serde_yaml",
+ "xtask-paths",
+]
 
 [[package]]
 name = "xxhash-rust"

@@ -1,0 +1,17 @@
+[package]
+description = "xtask kafka-topics: generate/verify .github/kafka-cluster-topics.json from macro_event_topics"
+edition = "2024"
+name = "xtask-kafka-topics"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask-kafka-topics"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# Source of truth for the declared topics.
+macro_event_topics = { path = "../../../../macro_event_topics" }
+xtask-paths = { path = "../xtask-paths" }

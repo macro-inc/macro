@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/deploy_preview.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask-workflows/src/workflows/deploy_preview.rs
 name: Deploy Preview
 env:
   PREVIEW_BUCKET: macro-preview-assets-dev
