@@ -1,19 +1,22 @@
+//! Tag set endpoints.
+
 use axum::{
     Json,
     extract::{Extension, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_access::domain::ports::EntityAccessService;
+use model::user::UserContext;
+use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
-use crate::api::properties::properties_err_status;
-use model::user::UserContext;
-use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
-use properties::domain::model::{self as properties_model, PropertyDefinitionOwner};
-use properties::{PropertiesErr, PropertiesService};
+use super::{PropertiesRouterState, PropertyTeamExtractor, caller_team_id, properties_err_status};
+use crate::domain::error::PropertiesErr;
+use crate::domain::model::{self as properties_model, PropertyDefinitionOwner};
+use crate::domain::service::PropertiesService;
 
 /// Which owner a tag set belongs to.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]
@@ -95,10 +98,10 @@ impl IntoResponse for TagsError {
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id), err)]
-pub async fn list_tags(
-    State(state): State<PropertiesHandlerState>,
+pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
+    State(state): State<PropertiesRouterState<S, A>>,
     Extension(user_context): Extension<UserContext>,
-    team: PropertyTeamExtractor,
+    team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
     let sets = state
         .properties_service
@@ -122,10 +125,10 @@ pub async fn list_tags(
     tag = "Properties"
 )]
 #[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id, scope = ?request.scope), err)]
-pub async fn ensure_tag_set(
-    State(state): State<PropertiesHandlerState>,
+pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
+    State(state): State<PropertiesRouterState<S, A>>,
     Extension(user_context): Extension<UserContext>,
-    team: PropertyTeamExtractor,
+    team: PropertyTeamExtractor<A>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
     let owner = match request.scope {

@@ -27,34 +27,16 @@ impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
             entity_access_service,
         }
     }
-}
 
-/// Map `models_properties::EntityType` to `model_entity::EntityType`.
-fn map_entity_type(entity_type: EntityType) -> Option<ModelEntityType> {
-    match entity_type {
-        EntityType::Document => Some(ModelEntityType::Document),
-        EntityType::Chat => Some(ModelEntityType::Chat),
-        EntityType::Project => Some(ModelEntityType::Project),
-        EntityType::Thread => Some(ModelEntityType::EmailThread),
-        EntityType::Channel => Some(ModelEntityType::Channel),
-        EntityType::Task => Some(ModelEntityType::Document), // tasks use document permissions
-        // CRM company access is resolved from the owning team's membership
-        // (member → View, admin → Edit, owner → Owner).
-        EntityType::Company => Some(ModelEntityType::CrmCompany),
-        EntityType::User => None,
-    }
-}
-
-impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> {
-    type Err = anyhow::Error;
-
-    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
-    async fn check_entity_edit_permission(
+    /// Gets the user's access level for an entity, including the thread
+    /// ownership fallback for owned threads where permission records were
+    /// never created.
+    async fn get_access_level(
         &self,
         user_id: &str,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> Result<(), Self::Err> {
+    ) -> anyhow::Result<Option<AccessLevel>> {
         let model_entity_type = match map_entity_type(entity_type) {
             Some(t) => t,
             None => {
@@ -88,12 +70,76 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             && owner_id == user_id
         {
             tracing::debug!("user owns thread via link_id, granting owner access");
-            return Ok(());
+            return Ok(Some(AccessLevel::Owner));
         }
 
-        match access_level {
+        Ok(access_level)
+    }
+}
+
+/// Map `models_properties::EntityType` to `model_entity::EntityType`.
+fn map_entity_type(entity_type: EntityType) -> Option<ModelEntityType> {
+    match entity_type {
+        EntityType::Document => Some(ModelEntityType::Document),
+        EntityType::Chat => Some(ModelEntityType::Chat),
+        EntityType::Project => Some(ModelEntityType::Project),
+        EntityType::Thread => Some(ModelEntityType::EmailThread),
+        EntityType::Channel => Some(ModelEntityType::Channel),
+        EntityType::Task => Some(ModelEntityType::Document), // tasks use document permissions
+        // CRM company access is resolved from the owning team's membership
+        // (member → View, admin → Edit, owner → Owner).
+        EntityType::Company => Some(ModelEntityType::CrmCompany),
+        EntityType::User => None,
+    }
+}
+
+impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> {
+    type Err = anyhow::Error;
+
+    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
+    async fn check_entity_edit_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(), Self::Err> {
+        match self.get_access_level(user_id, entity_id, entity_type).await? {
             Some(AccessLevel::Edit) | Some(AccessLevel::Owner) => Ok(()),
             Some(_) | None => anyhow::bail!("Access denied"),
+        }
+    }
+
+    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
+    async fn check_entity_view_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(), Self::Err> {
+        // Check if entity is deleted: the owner always has access, and deleted
+        // entities are only visible to their owner.
+        match entity_type {
+            EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => {}
+            _ => {
+                let (owner, deleted) =
+                    permission_queries::get_owner_and_deleted(&self.db, entity_id, entity_type)
+                        .await?;
+
+                // If you are the owner fast return
+                if owner.eq(user_id) {
+                    return Ok(());
+                }
+
+                // If the item is deleted and you aren't the owner you are unauthorized
+                if deleted {
+                    anyhow::bail!("Access denied");
+                }
+            }
+        }
+
+        match self.get_access_level(user_id, entity_id, entity_type).await? {
+            Some(_) => Ok(()), // Any access level is sufficient for viewing
+            None => anyhow::bail!("Access denied"),
         }
     }
 

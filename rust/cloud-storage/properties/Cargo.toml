@@ -13,7 +13,19 @@ ai_tools = [
   "dep:serde_json",
   "ports",
 ]
-default = ["ai_tools", "outbound", "ports"]
+default = ["ai_tools", "inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:entity_access",
+  "dep:model",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:tokio",
+  "dep:tower",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
 outbound = [
   "dep:entity_access",
   "dep:entity_access_db_utils",
@@ -32,6 +44,7 @@ ports = []
 [dependencies]
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
@@ -42,6 +55,7 @@ futures = { workspace = true, optional = true }
 notification = { path = "../notification", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
+model = { path = "../model", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 models_permissions = { path = "../models_permissions", optional = true }
@@ -52,7 +66,10 @@ serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
+tower = { workspace = true, optional = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -279,4 +279,21 @@ pub trait PropertiesService: Send + Sync + 'static {
         entity_property_id: Uuid,
         user_id: &str,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Check that a user has view access to an entity (any access level).
+    /// For anonymous users (empty user_id), only allows publicly shared entities.
+    fn check_entity_view_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Check that a user has edit access to an entity (Edit or Owner level).
+    fn check_entity_edit_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 }

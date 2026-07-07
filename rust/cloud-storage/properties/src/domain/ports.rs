@@ -341,6 +341,17 @@ pub trait PermissionService: Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Check if a user has view access to an entity (any access level).
+    /// The owner always has access; deleted entities are only visible to their
+    /// owner. For anonymous users (empty user_id), only allows access to
+    /// publicly shared entities.
+    fn check_entity_view_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Grant edit permissions to users for a task.
     /// This is used when task assignees are updated to ensure they can edit the task.
     fn grant_permissions_to_task<'a>(

@@ -11,7 +11,7 @@
 //! - `outbound` - Outbound adapters (e.g., PostgreSQL implementation)
 
 pub mod domain;
-#[cfg(feature = "ai_tools")]
+#[cfg(any(feature = "ai_tools", feature = "inbound"))]
 pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;

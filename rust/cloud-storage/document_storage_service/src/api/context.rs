@@ -380,11 +380,10 @@ env_var! {
 
 impl From<&ApiContext> for PropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState {
-            db: ctx.db.clone(),
-            properties_service: ctx.properties_service.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
+        PropertiesHandlerState::new(
+            ctx.properties_service.clone(),
+            ctx.entity_access_service.clone(),
+        )
     }
 }
 

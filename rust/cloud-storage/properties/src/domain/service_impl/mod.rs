@@ -1037,6 +1037,42 @@ where
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn check_entity_view_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(), PropertiesErr> {
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionServiceNotConfigured)?;
+
+        permission_service
+            .check_entity_view_permission(user_id, entity_id, entity_type)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn check_entity_edit_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(), PropertiesErr> {
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionServiceNotConfigured)?;
+
+        permission_service
+            .check_entity_edit_permission(user_id, entity_id, entity_type)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)
+    }
 }
 
 /// Validate the color rules for a property option: colors are only supported
