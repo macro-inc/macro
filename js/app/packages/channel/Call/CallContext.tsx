@@ -496,8 +496,29 @@ function createCallState() {
 
   // --- internal helpers ---
 
+  // Noise-suppression processor work can be reached concurrently (background
+  // media setup, mute toggle, device switch, NS toggle). Overlapping runs can
+  // attach duplicate Krisp instances or land an attach after the user toggled
+  // off, so it is serialized; each queued run re-reads the persisted mode,
+  // which means the latest user intent wins regardless of arrival order.
+  let micProcessingQueue: Promise<void> = Promise.resolve();
+
+  function enqueueMicProcessing<T>(task: () => Promise<T>): Promise<T> {
+    const run = micProcessingQueue.then(task);
+    micProcessingQueue = run.then(
+      () => {},
+      () => {}
+    );
+    return run;
+  }
+
   /** Apply the preferred mic noise suppression mode to the current mic track. */
-  async function ensureNoiseSuppressionOnMicTrack(r: Room) {
+  function ensureNoiseSuppressionOnMicTrack(r: Room): Promise<void> {
+    return enqueueMicProcessing(() => applyNoiseSuppressionToMicTrack(r));
+  }
+
+  /** Serialized body of ensureNoiseSuppressionOnMicTrack — do not call directly. */
+  async function applyNoiseSuppressionToMicTrack(r: Room) {
     if (room() !== r) return;
 
     const preferredMode = persistedNoiseSuppressionMode();
@@ -1115,13 +1136,11 @@ function createCallState() {
     if (!r) return;
 
     try {
-      if (newMode === 'off') {
-        await detachKrispFromMicTrack(r);
-        await applyNativeAudioProcessingToMicTrack(r, 'off');
-        logMicAudioProcessing('noise-suppression-toggled-off', r);
-      } else {
-        await ensureNoiseSuppressionOnMicTrack(r);
-      }
+      // Both directions run through the serialized ensure path: its 'off'
+      // branch detaches Krisp and clears native processing, and queueing
+      // means a toggle issued while an attach is in flight still converges
+      // on the mode the user picked last.
+      await ensureNoiseSuppressionOnMicTrack(r);
     } catch (e) {
       console.error('failed to toggle noise suppression', e);
     }
