@@ -414,6 +414,20 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
 
+/**
+ * Non-reactive check for imperative call sites (e.g. the soup GraphQL
+ * client's normalized-cache gate). Env override first (dev), else the same
+ * PostHog flag that gates the GraphQL transport — so cache and transport
+ * activate together in previews/production.
+ */
+export function ENABLE_GRAPHQL_SOUP(): boolean {
+  if (ENABLE_GRAPHQL_SOUP_OVERRIDE !== undefined) {
+    return ENABLE_GRAPHQL_SOUP_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_GRAPHQL_SOUP_FLAG) ?? false;
+}
+
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'
