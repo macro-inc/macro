@@ -31,6 +31,7 @@ import {
   Index,
   mapArray,
   Match,
+  onCleanup,
   Show,
   Suspense,
   Switch,
@@ -391,10 +392,16 @@ function InviteRow(props: {
 }) {
   const [copied, setCopied] = createSignal(false);
   let copyResetTimeout: ReturnType<typeof setTimeout> | undefined;
-  const handleCopyLink = () => {
-    void navigator.clipboard.writeText(
-      `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`,
-    );
+  onCleanup(() => clearTimeout(copyResetTimeout));
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`,
+      );
+    } catch (err) {
+      console.error('Failed to copy to clipboard', err);
+      return;
+    }
     setCopied(true);
     clearTimeout(copyResetTimeout);
     copyResetTimeout = setTimeout(() => setCopied(false), 2000);
