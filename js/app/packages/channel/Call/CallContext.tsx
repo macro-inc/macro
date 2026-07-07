@@ -483,6 +483,21 @@ function createCallState() {
       | NativeAudioProcessingConstraints
       | undefined;
 
+    // A requested constraint the engine reports back differently in settings
+    // means the processing state was never actually applied (live-track
+    // applyConstraints is not honored everywhere) — the key signal behind
+    // "toggled noise suppression and nothing changed" reports.
+    const constraintMismatch = (
+      ['autoGainControl', 'echoCancellation', 'noiseSuppression'] as const
+    ).some((name) => {
+      const requested = constraints?.[name];
+      return (
+        typeof requested === 'boolean' &&
+        settings?.[name] !== undefined &&
+        settings[name] !== requested
+      );
+    });
+
     console.debug('[call] mic audio processing', {
       event,
       preferredMode: persistedNoiseSuppressionMode(),
@@ -491,6 +506,7 @@ function createCallState() {
       hasMicTrack: !!micTrack,
       micReadyState: mediaStreamTrack?.readyState,
       hasProcessor: !!micTrack?.getProcessor(),
+      constraintMismatch,
       settings: {
         autoGainControl: settings?.autoGainControl,
         echoCancellation: settings?.echoCancellation,
@@ -505,6 +521,24 @@ function createCallState() {
         noiseSuppression: constraints?.noiseSuppression,
         voiceIsolation: constraints?.voiceIsolation,
       },
+      ...extra,
+    });
+
+    analytics.track('call_audio_processing', {
+      event,
+      channelId: store.activeChannelId ?? '',
+      callId: store.activeCallId ?? undefined,
+      preferredMode: persistedNoiseSuppressionMode(),
+      activeMode: store.noiseSuppressionMode,
+      krispSupported: isKrispNoiseFilterSupported(),
+      hasProcessor: !!micTrack?.getProcessor(),
+      constraintMismatch,
+      autoGainControl: settings?.autoGainControl,
+      echoCancellation: settings?.echoCancellation,
+      noiseSuppression: settings?.noiseSuppression,
+      voiceIsolation: settings?.voiceIsolation,
+      channelCount: settings?.channelCount,
+      sampleRate: settings?.sampleRate,
       ...extra,
     });
   }
