@@ -337,9 +337,11 @@ Rebase onto parent after 2209 merges. Adds:
    `TAG_SEARCH_TYPES`.
 6. Backfill: `POST /internal/backfill/properties {CHAT}`.
 
-**Blocker:** chats are not yet taggable in the FE (deferred from macro-2181,
-task filed). The indexing pipeline can land regardless; FE facet enablement
-(`'agent'`) should wait for the taggability task, or ship dark behind the tags flag.
+**Ship dark (D3, resolved):** chats are not yet taggable in the FE (deferred
+from macro-2181, task filed). Land the full indexing pipeline + backfill live,
+but do NOT add `'agent'` to `TAG_SEARCH_TYPES` — the taggability follow-up task
+flips it. Constraint: that follow-up must need FE-only changes (search type +
+tag UI); leave no backend work behind.
 
 ## 5. macro-2211 — projects (restore index, then extend)
 
@@ -374,18 +376,18 @@ Adds:
 7. Backfills: full project backfill (indexes properties via attach), then the
    generic properties backfill is a no-op safety pass.
 
-**Blockers:** projects not yet taggable in FE (deferred, task filed); the full
-index restore itself is the bulk of the work.
+**Ship dark (D3, resolved):** projects are not yet taggable in the FE
+(deferred, task filed). The index restore and leg replacement go live (that IS
+the task — name search moves source), with the tag plumbing included from day
+one; no FE change is needed since projects only surface on the `all` type, so
+tags start matching projects the moment the taggability follow-up lets users
+create them. That follow-up must need zero search-side work.
 
-**D2 (decide in 2211):** what happens to the PG name leg
-(`simple_project::search_names` → `name_search/src/project.rs`, trigram
-`idx_project_name_trgm`, cursor `project_name_cursor`)? Recommendation: once
-the OS leg is verified at parity, replace the PG name leg with it (single
-source; unified merge already dedupes by entity, but dual legs are redundant
-and rank inconsistently). Interim option if 2211 drags: filter the PG projects
-leg by tags with an `EXISTS (SELECT 1 FROM entity_properties …)` join — the
-same pattern #4537 uses for email soup — cheap, delivers tag-filtered projects
-without the index; considered and parked in favor of the mandated full restore.
+**D2 (resolved 2026-07-07): retire the PG name leg.** Once the OS leg is
+verified at parity, 2211 replaces `simple_project::search_names`
+(`name_search/src/project.rs`, trigram `idx_project_name_trgm`, cursor
+`project_name_cursor`) with the OpenSearch leg as the single source. The
+interim PG `EXISTS` tag-filter option is rejected.
 
 ---
 
@@ -433,9 +435,11 @@ the release; backfills run after it).
   already exists on the request; all new args are internal), so no
   `gen-api`/`gen-tools` runs should be needed — re-check per PR.
 
-## 8. Open decisions (gab)
+## 8. Decisions (resolved by gab, 2026-07-07)
 
-- **D2** (§5): retire the PG projects name leg once the OS leg lands?
-- **D3**: should 2210/2211 ship their pipeline dark (indexing live, FE facet
-  off) while chats/projects taggability tasks are pending? Recommended: yes —
-  backfill volume stays ~0 and integration risk drops.
+- **D2** (§5): yes — 2211 retires the PG projects name leg once the OpenSearch
+  leg is verified at parity.
+- **D3** (§4, §5): yes — 2210/2211 ship dark (indexing + backfill live, FE
+  facet off), with the constraint that the chats/projects taggability
+  follow-up tasks can hook in with FE-only changes: add the search type to
+  `TAG_SEARCH_TYPES` and enable the entity's tag UI, nothing else.
