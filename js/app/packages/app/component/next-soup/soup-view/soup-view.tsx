@@ -1580,6 +1580,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       graphic={EmptyStatePreviewIcon}
                       title="Nothing selected"
                       description="Select an item from your inbox to preview it here."
+                      centered
                     />
                   }
                 >
