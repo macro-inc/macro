@@ -12,6 +12,7 @@ use email::{
 use email_service::config::Config;
 use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiKey;
@@ -20,6 +21,8 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+pub(crate) type EmailEntityAccessManagementService =
+    EntityAccessManagementServiceImpl<entity_access_management::outbound::PgRepository>;
 pub(crate) type EmailSvc = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -46,6 +49,10 @@ pub(crate) struct ApiContext {
     pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
-    pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
+    pub email_thread_state: EmailThreadRouterState<
+        EmailSvc,
+        EmailEntityAccessService,
+        EmailEntityAccessManagementService,
+    >,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
 }

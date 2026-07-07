@@ -3,9 +3,11 @@ use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use chrono::{DateTime, Utc};
+use entity_access::outbound::get_user_source_ids;
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -32,11 +34,23 @@ struct QueryParams {
     /// copies of the same conversation collapse to one row (see
     /// [`build_query`]).
     team_id: Option<Uuid>,
+    /// When `Some`, a project-scoped candidate source is UNIONed in: every
+    /// thread with this `project_id`, gated on the caller's entity_access
+    /// sources granting access to the project itself. Set only when the
+    /// filter AST carries a (non-negated) `ProjectId` literal.
+    project_scope: Option<ProjectScope>,
+}
+
+/// See [`QueryParams::project_scope`].
+struct ProjectScope {
+    project_id: String,
+    source_ids: Vec<String>,
 }
 
 enum ThreadCandidateSource {
     Owned,
     Shared,
+    Project,
 }
 
 /// `email_user_history` (`uh`) only drives ordering/cursoring for the
@@ -80,7 +94,7 @@ fn push_shared_cte(builder: &mut QueryBuilder<'static, Postgres>, params: &Query
             SELECT entity_id AS thread_id
             FROM entity_access
             WHERE source_id = ANY(SELECT source_id FROM user_source_ids)
-              AND entity_type = 'thread'
+              AND entity_type = 'email_thread'
         )"#,
     );
 }
@@ -235,6 +249,26 @@ fn push_thread_candidate_select(
         ThreadCandidateSource::Shared => {
             builder.push("t.id IN (SELECT thread_id FROM SharedEmailThreads)");
         }
+        // All threads in the requested project, across every inbox — gated
+        // on the caller's sources having an entity_access grant on the
+        // project itself (same check as thread_access.rs Source 3).
+        ThreadCandidateSource::Project => {
+            let scope = params
+                .project_scope
+                .as_ref()
+                .expect("Project candidate source requires project_scope");
+            builder.push("t.project_id = ");
+            builder.push_bind(scope.project_id.clone());
+            builder.push(
+                r#" AND EXISTS (
+                        SELECT 1 FROM entity_access pea
+                        WHERE pea.entity_id::text = t.project_id
+                          AND pea.entity_type = 'project'
+                          AND pea.source_id = ANY("#,
+            );
+            builder.push_bind(scope.source_ids.clone());
+            builder.push("))");
+        }
     }
 
     // Belt-and-suspenders killswitch check that covers both the Owned and
@@ -373,10 +407,11 @@ fn build_query(
         None
     } else {
         // Owned-only, non-team queries can scope the CTE's contact/message
-        // scans to the caller's links; shared/team candidates include
-        // threads from other links, so scoping there would drop rows.
+        // scans to the caller's links; shared/team/project candidates
+        // include threads from other links, so scoping there would drop rows.
         let link_scope = (matches!(params.shared, SharedEmailFilter::Exclude)
-            && params.team_id.is_none())
+            && params.team_id.is_none()
+            && params.project_scope.is_none())
         .then_some(params.link_ids.as_slice());
         build_matching_threads_cte_body(email_filter, &params.resolved, link_scope)
     };
@@ -512,6 +547,24 @@ fn build_query(
             sort_ts_field,
             ThreadCandidateSource::Shared,
         ),
+    }
+
+    // Project-scoped source is additive: callers without project access
+    // still get their own (and shared) threads from the branches above.
+    if params.project_scope.is_some() {
+        builder.push(
+            r#"
+                UNION
+                "#,
+        );
+        push_thread_candidate_select(
+            &mut builder,
+            view,
+            email_filter,
+            &params,
+            sort_ts_field,
+            ThreadCandidateSource::Project,
+        );
     }
 
     if params.team_id.is_some() {
@@ -712,6 +765,12 @@ fn debug_build_query_sql_full(
     use sqlx::Execute;
 
     let shared = extract_shared_filter(email_filter);
+    // Mirror the real path's scope derivation with a fixed source id in
+    // place of the get_user_source_ids DB lookup.
+    let project_scope = extract_project_filter(email_filter).map(|project_id| ProjectScope {
+        project_id,
+        source_ids: vec!["test-user".to_string()],
+    });
     let is_important = matches!(
         view,
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
@@ -731,6 +790,7 @@ fn debug_build_query_sql_full(
             user_id: "test-user".to_string(),
             resolved,
             team_id,
+            project_scope,
         },
     )
     .build()
@@ -748,6 +808,20 @@ fn extract_shared_filter(ast: &Expr<EmailLiteral>) -> SharedEmailFilter {
             }
             filter_ast::ExprFrame::Not(a) => a,
             _ => SharedEmailFilter::Exclude,
+        },
+    )
+}
+
+/// First `ProjectId` literal in the tree, if any. A negated `ProjectId`
+/// ("not in project X") must not widen the candidate set, so anything under
+/// a `Not` is ignored.
+fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Option<String> {
+    ast.collapse_frames(
+        |frame: filter_ast::ExprFrame<Option<String>, EmailLiteral>| match frame {
+            filter_ast::ExprFrame::Literal(EmailLiteral::ProjectId(id)) => Some(id),
+            filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a.or(b),
+            filter_ast::ExprFrame::Not(_) => None,
+            _ => None,
         },
     )
 }
@@ -796,6 +870,27 @@ pub(crate) async fn dynamic_email_thread_cursor(
     let email_filter = query.filter();
     let shared = extract_shared_filter(email_filter);
 
+    // Project-scoped queries widen the candidate set to every thread in the
+    // project, so resolve the caller's entity_access sources up front (the
+    // lookup is memoized for 30s). On failure, degrade to the un-widened
+    // query rather than erroring — the scope can only ever add rows.
+    let project_scope = match extract_project_filter(email_filter) {
+        Some(project_id) => {
+            let user = MacroUserIdStr::parse_from_str(user_id).ok();
+            match get_user_source_ids(pool, user.as_deref()).await {
+                Ok(source_ids) => Some(ProjectScope {
+                    project_id,
+                    source_ids: source_ids.0,
+                }),
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+
     let is_important = matches!(
         view,
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
@@ -826,6 +921,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
             user_id: user_id.to_string(),
             resolved,
             team_id,
+            project_scope,
         },
     );
 

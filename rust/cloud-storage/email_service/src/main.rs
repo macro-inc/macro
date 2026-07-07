@@ -11,6 +11,7 @@ use email::{
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -143,9 +144,13 @@ async fn main() -> anyhow::Result<()> {
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
+    let entity_access_management_service = Arc::new(EntityAccessManagementServiceImpl::new(
+        entity_access_management::outbound::PgRepository::new(db.clone()),
+    ));
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
+        entity_access_management_service,
     };
     let auth_service_client = Arc::new(auth_service_client);
     let redis_conn = redis_client
