@@ -335,7 +335,12 @@ export function ChannelInput(props: ChannelInputProps) {
 
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
-    focus: focusEditor,
+    focus: () => {
+      // A collapsed pill hides the editor; programmatic focus implies intent
+      // to type, so expand first.
+      collapsedInput.expand();
+      focusEditor();
+    },
     send: () => inputState.commands.send(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,

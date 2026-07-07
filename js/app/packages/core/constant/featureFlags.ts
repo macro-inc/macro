@@ -447,3 +447,9 @@ export const ENABLE_NEW_INBOX_OVERRIDE =
 export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
 export const ENABLE_TAGS_FE_OVERRIDE =
   resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
+
+// Channel mode where replying and editing do not happen inline, but in a single unified input instead.
+export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
+  'UNIFIED_CHANNEL_INPUT',
+  false
+);

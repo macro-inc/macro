@@ -4,25 +4,12 @@ function getMessageElement(messageId: string) {
   );
 }
 
-function getReplyInputElement(messageId: string) {
-  return document.querySelector<HTMLElement>(
-    `[data-inline-input-container-id="${messageId}"]`
-  );
-}
-
 function getChannelScrollElement(element: HTMLElement) {
   return element.closest('[data-channel-scroll]');
 }
 
 export function scrollMessageIntoView(messageId: string) {
   const element = getMessageElement(messageId);
-  if (!element) return false;
-  element.scrollIntoView({ block: 'nearest' });
-  return true;
-}
-
-export function scrollReplyInputIntoView(messageId: string) {
-  const element = getReplyInputElement(messageId);
   if (!element) return false;
   element.scrollIntoView({ block: 'nearest' });
   return true;

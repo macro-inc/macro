@@ -5,6 +5,7 @@ import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '../macroAi';
 import { useMessage } from './context';
+import type { MessageData } from './types';
 
 type SenderNameProps = {
   class?: string;
@@ -22,17 +23,22 @@ function botName(
   return parsed.id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
 }
 
-export function SenderName(props: SenderNameProps) {
+export function MessageSenderName(props: SenderNameProps) {
   const message = useMessage();
-  const macroId = () => tryMacroId(message().sender_id);
-  const [displayName] = useDisplayName(macroId());
-  const agentName = () => botName(message().sender_id, message().sender);
 
   return (
     <Show when={!props.hidden}>
       <span class={cn('text-sm font-medium truncate', props.class)}>
-        {agentName() ?? displayName()}
+        <SenderName message={message()} />
       </span>
     </Show>
   );
+}
+
+export function SenderName(props: { message: MessageData }) {
+  const macroId = () => tryMacroId(props.message.sender_id);
+  const [displayName] = useDisplayName(macroId());
+  const agentName = () =>
+    botName(props.message.sender_id, props.message.sender);
+  return <>{agentName() ?? displayName()}</>;
 }

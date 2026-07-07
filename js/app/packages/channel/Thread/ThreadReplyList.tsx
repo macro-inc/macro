@@ -34,6 +34,10 @@ export function ThreadReplyList(props: {
   isNewMessage?: (message: NewMessageCheckable) => boolean;
   onReady?: (handle: ThreadReplyListHandle) => void;
   selectedReplyId?: Accessor<string | undefined>;
+  /**
+   * Reply targeted by channel navigation or bound to the unified input's reply (quote-reply).
+   */
+  targetedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;
   onSelectReply?: (replyId: string) => void;
 }) {
@@ -89,10 +93,8 @@ export function ThreadReplyList(props: {
                 messageEditor={props.messageEditor}
                 participants={props.participants}
                 onClick={() => props.onSelectReply?.(reply.id)}
-                highlighted={isReplySelected()}
-                selectionState={
-                  isReplySelected() ? { isSelected: true } : undefined
-                }
+                selected={isReplySelected()}
+                targeted={props.targetedReplyId?.() === reply.id}
               />
             </MarkMessageNotifications>
           </div>

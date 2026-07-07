@@ -333,18 +333,12 @@
 
 @keyframes long-press-message-highlight {
   from {
-    background-color: oklch(from var(--color-accent) l c h / 0%);
-    outline-color: transparent;
-    outline-offset: -1px;
-    outline-style: solid;
-    outline-width: 1px;
+    background-color: oklch(from var(--color-ink) l c h / 0%);
+    border-radius: var(--radius-sm);
   }
   to {
-    background-color: oklch(from var(--color-accent) l c h / 5%);
-    outline-color: oklch(from var(--color-accent) l c h / 20%);
-    outline-offset: -1px;
-    outline-style: solid;
-    outline-width: 1px;
+    background-color: oklch(from var(--color-ink) l c h / 5%);
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -357,11 +351,6 @@
 @keyframes indeterminate-bar {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
-}
-
-@keyframes long-press-accent-bar {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 
 /* Big hammer fix for cursor pointer. */
@@ -514,6 +503,7 @@ a {
 
 @utility macro-message-width {
   max-width: 100%;
+  width: 100%;
   @media (min-width: 640px) {
     max-width: 800px;
     min-width: 250px;
@@ -578,23 +568,23 @@ a {
   opacity: 0 !important;
 }
 
-/* Channel message hover + non-selection highlight */
+/* Channel message hover + selection-cursor highlight */
 /* Suppressed on touch devices */
 /* Background-only — borders/rings are reserved for structural UI edges. */
-html:not([data-touch-device="true"]) [data-message][data-highlighted],
+[data-message][data-selected],
 html:not([data-touch-device="true"]) [data-message]:hover{
   @apply bg-ink/5 rounded-sm;
+}
+
+/* Accent bar marking the targeted message (unified-input target, navigation target) */
+[data-message][data-targeted] > .message-accent-bar {
+  opacity: 1;
 }
 
 /* Channel message long-press animation */
 .channel-message-long-press-highlight [data-swipe-content],
 [data-message].channel-message-long-press-highlight{
   animation: long-press-message-highlight 400ms ease-in both;
-}
-
-[data-message].channel-message-long-press-highlight > .message-accent-bar,
-.channel-message-long-press-highlight [data-accent-bar] {
-  animation: long-press-accent-bar 400ms ease-in both;
 }
 
 /* Immediate touch feedback for mobile soup entity rows */
