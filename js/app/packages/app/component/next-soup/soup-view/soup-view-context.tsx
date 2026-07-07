@@ -28,6 +28,7 @@ import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
+  entityMatchesTagFilter,
   isListViewID,
   type ListView,
   soupItemMatchesListView,
@@ -561,10 +562,14 @@ export const SoupViewContextProvider: FlowComponent<
   const baseEntities = () => {
     let transformed = items();
     const ctx = getFilterContext();
+    const tagOptionIds = activeTagOptionIds();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      if (!entityMatchesTagFilter(entity, tagOptionIds)) {
         continue;
       }
       next.push(entity);
