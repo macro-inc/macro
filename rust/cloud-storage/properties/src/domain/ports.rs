@@ -8,11 +8,15 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
+use models_properties::{DataType, EntityReference, EntityType};
 use uuid::Uuid;
 
-use super::model::{EntityPropertiesKey, EntityPropertyInfo, TaskAssignedNotification};
+use super::model::{
+    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TaskAssignedNotification,
+};
 
 /// Repository trait for property operations.
 ///
@@ -28,6 +32,60 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Get a property definition by ID with ownership validation.
+    /// Returns `None` if the property doesn't exist, if the caller doesn't own it,
+    /// or if it's a system property. The caller owns it when it is their user
+    /// property, or a property of the team they belong to.
+    fn get_property_definition_with_owner(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a str>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions with their options, owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions_with_options<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a str>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
+    /// Create a property definition, optionally with select options
+    /// (atomically when options are provided).
+    fn create_property_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+        options: Vec<PropertyOption>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// Delete a property definition and all associated data (cascades).
+    /// A no-op if the definition doesn't exist.
+    fn delete_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(

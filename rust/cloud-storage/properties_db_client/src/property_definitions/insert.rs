@@ -2,7 +2,6 @@
 
 use crate::error::PropertiesDatabaseError;
 use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_option::PropertyOption;
 use models_properties::{DataType, EntityType, db};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -94,124 +93,6 @@ pub async fn create_property_definition(
     Ok(PropertyDefinition::from(db_result))
 }
 
-/// Creates a property definition with options in a single transaction.
-#[tracing::instrument(skip(db, options))]
-pub async fn create_property_definition_with_options(
-    db: &Pool<Postgres>,
-    owner: DefinitionOwner<'_>,
-    display_name: &str,
-    data_type: DataType,
-    is_multi_select: bool,
-    specific_entity_type: Option<EntityType>,
-    options: Vec<PropertyOption>,
-) -> Result<PropertyDefinition> {
-    let (team_id, user_id) = owner.into_ids();
-
-    let mut tx = db.begin().await?;
-
-    let id = macro_uuid::generate_uuid_v7();
-
-    let row = match sqlx::query!(
-        r#"
-        INSERT INTO property_definitions (
-            id,
-            team_id,
-            user_id,
-            display_name,
-            data_type,
-            is_multi_select,
-            specific_entity_type
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING
-            id,
-            team_id,
-            user_id,
-            display_name,
-            data_type as "data_type: DataType",
-            is_multi_select,
-            specific_entity_type as "specific_entity_type: Option<EntityType>",
-            created_at,
-            updated_at
-        "#,
-        id,
-        team_id,
-        user_id,
-        display_name,
-        data_type as DataType,
-        is_multi_select,
-        specific_entity_type as Option<EntityType>
-    )
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(row) => row,
-        Err(e) => {
-            tracing::error!(
-                error = ?e,
-                display_name = %display_name,
-                "property definition insert failed, rolling back transaction"
-            );
-            if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(
-                    error = ?rollback_err,
-                    "failed to rollback transaction after property definition insert error"
-                );
-            }
-            return Err(e.into());
-        }
-    };
-
-    let db_property_def = db::PropertyDefinition {
-        id: row.id,
-        team_id: row.team_id,
-        user_id: row.user_id,
-        display_name: row.display_name,
-        data_type: row.data_type,
-        is_multi_select: row.is_multi_select,
-        specific_entity_type: row.specific_entity_type.flatten(),
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        is_system: false, // User-created properties are never system properties
-    };
-
-    for option in options {
-        if let Err(e) = crate::property_options::insert::create_property_option_tx(
-            &mut tx,
-            db_property_def.id,
-            option.display_order,
-            option.value,
-            option.color,
-        )
-        .await
-        {
-            tracing::error!(
-                error = ?e,
-                property_definition_id = %db_property_def.id,
-                "property option creation failed, rolling back transaction"
-            );
-            if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(
-                    error = ?rollback_err,
-                    "failed to rollback transaction after property option insert error"
-                );
-            }
-            return Err(e);
-        }
-    }
-
-    match tx.commit().await {
-        Ok(_) => Ok(db_property_def.into()),
-        Err(e) => {
-            tracing::error!(
-                error = ?e,
-                "failed to commit transaction for property definition with options"
-            );
-            Err(e.into())
-        }
-    }
-}
-
 /// Returns the owner's tag definition, creating it on first use.
 ///
 /// Tag definitions are TAG-typed, multi-select, and unique per owner (enforced by a partial
@@ -254,7 +135,6 @@ pub async fn get_or_create_tag_definition(
 mod tests {
     use super::*;
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
-    use models_properties::service::property_option::PropertyOptionValue;
     use sqlx::{Pool, Postgres};
 
     fn team_1() -> Uuid {
@@ -333,59 +213,6 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-
-        Ok(())
-    }
-
-    #[sqlx::test(
-        migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../fixtures", scripts("properties"))
-    )]
-    async fn test_create_property_definition_with_options(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
-        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
-
-        let options = vec![
-            PropertyOption {
-                id: macro_uuid::generate_uuid_v7(),
-                property_definition_id: uuid::Uuid::nil(), // Will be set by the function
-                display_order: 0,
-                value: PropertyOptionValue::String("Option 1".to_string()),
-                color: None,
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
-            },
-            PropertyOption {
-                id: macro_uuid::generate_uuid_v7(),
-                property_definition_id: uuid::Uuid::nil(),
-                display_order: 1,
-                value: PropertyOptionValue::String("Option 2".to_string()),
-                color: None,
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
-            },
-        ];
-
-        let property = create_property_definition_with_options(
-            &pool,
-            DefinitionOwner::Team(team_1()),
-            "Property With Options",
-            DataType::SelectString,
-            false,
-            None,
-            options,
-        )
-        .await?;
-
-        assert_eq!(property.display_name, "Property With Options");
-        assert_eq!(property.data_type, DataType::SelectString);
-
-        // Verify options were created
-        let created_options =
-            crate::property_options::get::get_property_options(&pool, property.id).await?;
-
-        assert_eq!(created_options.len(), 2);
 
         Ok(())
     }

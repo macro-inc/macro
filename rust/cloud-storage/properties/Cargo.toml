@@ -8,7 +8,6 @@ version = "0.1.0"
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
-  "dep:chrono",
   "dep:schemars",
   "dep:serde",
   "dep:serde_json",
@@ -35,7 +34,7 @@ ports = []
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
-chrono = { workspace = true, optional = true }
+chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }

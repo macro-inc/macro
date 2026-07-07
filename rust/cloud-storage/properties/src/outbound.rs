@@ -8,4 +8,6 @@ pub mod properties_pg_repo;
 pub mod property_definition_queries;
 pub mod task_property_queries;
 #[cfg(test)]
+mod definitions_test;
+#[cfg(test)]
 pub mod test;

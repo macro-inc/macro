@@ -13,25 +13,27 @@ use model::user::UserContext;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use properties_db_client::{
-    error::PropertiesDatabaseError, property_definitions::get as property_definitions_get,
-};
-use system_properties::SystemPropertyKey;
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum ListPropertiesErr {
-    #[error("An internal error occurred")]
-    InternalError(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    DatabaseError(#[from] PropertiesDatabaseError),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
 }
 
 impl IntoResponse for ListPropertiesErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            ListPropertiesErr::InternalError(_) | ListPropertiesErr::DatabaseError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            ListPropertiesErr::Properties(e) => match e {
+                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
+                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
+                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
+                    StatusCode::FORBIDDEN
+                }
+                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            },
         };
 
         if status_code.is_server_error() {
@@ -125,93 +127,41 @@ pub async fn list_properties(
         "listing properties"
     );
 
-    let filter_entity_type = query.for_entity_type;
-
     let response = if query.include_options {
-        let properties_with_options = property_definitions_get::get_properties_with_options(
-            &state.db,
-            team_id,
-            user_id_opt,
-            include_system,
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                team_id = ?team_id,
-                scope = ?query.scope,
-                user_id = %user_context.user_id,
-                "failed to retrieve properties with options"
-            );
-        })?;
-
-        let response: Vec<PropertyDefinitionResponse> = properties_with_options
+        state
+            .properties_service
+            .list_property_definitions_with_options(
+                team_id,
+                user_id_opt,
+                include_system,
+                query.for_entity_type,
+            )
+            .await?
             .into_iter()
-            .filter(|p| {
-                filter_entity_type
-                    .map(|et| is_property_applicable_to(p.definition.id, et))
-                    .unwrap_or(true)
-            })
             .map(PropertyDefinitionResponse::WithOptions)
-            .collect();
-
-        tracing::info!(
-            properties_count = response.len(),
-            team_id = ?team_id,
-            scope = ?query.scope,
-            user_id = %user_context.user_id,
-            "successfully retrieved properties with options"
-        );
-        response
+            .collect::<Vec<_>>()
     } else {
-        let properties = property_definitions_get::get_properties(
-            &state.db,
-            team_id,
-            user_id_opt,
-            include_system,
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                team_id = ?team_id,
-                scope = ?query.scope,
-                user_id = %user_context.user_id,
-                "failed to retrieve properties"
-            );
-        })?;
-
-        let response: Vec<PropertyDefinitionResponse> = properties
+        state
+            .properties_service
+            .list_property_definitions(
+                team_id,
+                user_id_opt,
+                include_system,
+                query.for_entity_type,
+            )
+            .await?
             .into_iter()
-            .filter(|p| {
-                filter_entity_type
-                    .map(|et| is_property_applicable_to(p.id, et))
-                    .unwrap_or(true)
-            })
             .map(PropertyDefinitionResponse::Simple)
-            .collect();
-
-        tracing::info!(
-            properties_count = response.len(),
-            team_id = ?team_id,
-            scope = ?query.scope,
-            user_id = %user_context.user_id,
-            "successfully retrieved properties"
-        );
-        response
+            .collect::<Vec<_>>()
     };
 
+    tracing::info!(
+        properties_count = response.len(),
+        team_id = ?team_id,
+        scope = ?query.scope,
+        user_id = %user_context.user_id,
+        "successfully retrieved properties"
+    );
+
     Ok(Json(response))
-}
-
-/// Check if a property can be attached to the given entity type.
-pub fn is_property_applicable_to(property_id: uuid::Uuid, entity_type: EntityType) -> bool {
-    // Task-only properties: Parent Task and Subtasks
-    if property_id == SystemPropertyKey::PARENT_TASK_UUID
-        || property_id == SystemPropertyKey::SUBTASKS_UUID
-    {
-        return entity_type == EntityType::Task;
-    }
-
-    true
 }

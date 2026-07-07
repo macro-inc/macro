@@ -22,7 +22,10 @@ impl IntoResponse for EntityPropertyOptionErr {
         let status_code = match &self {
             EntityPropertyOptionErr::Properties(e) => match e {
                 PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
-                PropertiesErr::PermissionDenied => StatusCode::FORBIDDEN,
+                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
+                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
+                    StatusCode::FORBIDDEN
+                }
                 PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
                     StatusCode::INTERNAL_SERVER_ERROR
                 }

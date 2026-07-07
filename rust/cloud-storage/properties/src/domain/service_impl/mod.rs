@@ -6,8 +6,12 @@ mod task_properties;
 use std::collections::HashMap;
 
 use models_properties::api::requests::SetPropertyValue;
+use models_properties::api::{CreatePropertyDefinitionRequest, PropertyDataType};
 use models_properties::convert_set_property_value_to_property_value;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
@@ -16,7 +20,7 @@ use uuid::Uuid;
 use std::sync::Arc;
 
 use super::error::PropertiesErr;
-use super::model::{EntityPropertiesKey, EntityPropertyInfo};
+use super::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner};
 use super::ports::{NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer};
 use super::service::PropertiesService;
 
@@ -475,5 +479,154 @@ where
             return Ok(result);
         }
         Err(PropertiesErr::PermissionServiceNotConfigured)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_property_definitions(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&str>,
+        include_system: bool,
+        for_entity_type: Option<EntityType>,
+    ) -> Result<Vec<PropertyDefinition>, PropertiesErr> {
+        let definitions = self
+            .repository
+            .list_property_definitions(team_id, user_id, include_system)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(definitions
+            .into_iter()
+            .filter(|d| {
+                for_entity_type
+                    .map(|et| is_property_applicable_to(d.id, et))
+                    .unwrap_or(true)
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_property_definitions_with_options(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&str>,
+        include_system: bool,
+        for_entity_type: Option<EntityType>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, PropertiesErr> {
+        let definitions = self
+            .repository
+            .list_property_definitions_with_options(team_id, user_id, include_system)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(definitions
+            .into_iter()
+            .filter(|d| {
+                for_entity_type
+                    .map(|et| is_property_applicable_to(d.definition.id, et))
+                    .unwrap_or(true)
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self, request), fields(display_name = %request.display_name), err)]
+    async fn create_property_definition(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+        request: &CreatePropertyDefinitionRequest,
+    ) -> Result<PropertyDefinition, PropertiesErr> {
+        if let Err(err) = request.validate() {
+            return Err(PropertiesErr::Validation(err.to_string()));
+        }
+
+        let property_options = match &request.data_type {
+            PropertyDataType::SelectString { options, .. } => options
+                .iter()
+                .map(|opt| {
+                    build_property_option(
+                        opt.display_order,
+                        PropertyOptionValue::String(opt.value.clone()),
+                    )
+                })
+                .collect(),
+            PropertyDataType::SelectNumber { options, .. } => options
+                .iter()
+                .map(|opt| {
+                    build_property_option(opt.display_order, PropertyOptionValue::Number(opt.value))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        let property = self
+            .repository
+            .create_property_definition(
+                owner,
+                &request.display_name,
+                request.data_type.to_data_type(),
+                request.data_type.is_multi_select(),
+                request.data_type.specific_entity_type(),
+                property_options,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        tracing::info!(
+            property_id = %property.id,
+            data_type = ?property.data_type,
+            "successfully created property definition"
+        );
+
+        Ok(property)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> Result<(), PropertiesErr> {
+        // First check if the property exists and if it's a system property.
+        let property = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        if property.is_system || SystemPropertyKey::is_system_uuid(property_definition_id) {
+            return Err(PropertiesErr::SystemPropertyNotModifiable);
+        }
+
+        // Then verify ownership.
+        self.repository
+            .get_property_definition_with_owner(property_definition_id, user_id, team_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        self.repository
+            .delete_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        tracing::info!("successfully deleted property definition");
+
+        Ok(())
+    }
+}
+
+/// Build a [`PropertyOption`] for creation. IDs and timestamps are placeholders
+/// replaced by the database on insert.
+fn build_property_option(display_order: i32, value: PropertyOptionValue) -> PropertyOption {
+    PropertyOption {
+        id: Uuid::nil(),                     // Temporary ID, will be replaced by DB
+        property_definition_id: Uuid::nil(), // Temporary ID, will be replaced by DB
+        display_order,
+        value,
+        color: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
     }
 }

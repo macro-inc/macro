@@ -11,9 +11,12 @@ use super::{
     entity_properties_get_query, entity_property_queries, property_definition_queries,
     task_property_queries,
 };
-use crate::domain::model::{EntityPropertiesKey, EntityPropertyInfo};
+use crate::domain::model::{EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner};
 use crate::domain::ports::PropertiesRepo;
+use models_properties::DataType;
 use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::PropertyOption;
 
 /// PostgreSQL implementation of PropertiesRepo.
 #[derive(Debug, Clone)]
@@ -37,6 +40,85 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_definition_id: Uuid,
     ) -> Result<Option<PropertyDefinition>, Self::Err> {
         property_definition_queries::get_property_definition(&self.pool, property_definition_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn get_property_definition_with_owner(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
+    ) -> Result<Option<PropertyDefinition>, Self::Err> {
+        property_definition_queries::get_property_definition_with_owner(
+            &self.pool,
+            property_definition_id,
+            user_id,
+            team_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_property_definitions(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&str>,
+        include_system: bool,
+    ) -> Result<Vec<PropertyDefinition>, Self::Err> {
+        property_definition_queries::list_property_definitions(
+            &self.pool,
+            team_id,
+            user_id,
+            include_system,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_property_definitions_with_options(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&str>,
+        include_system: bool,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        property_definition_queries::list_property_definitions_with_options(
+            &self.pool,
+            team_id,
+            user_id,
+            include_system,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, options), err)]
+    async fn create_property_definition(
+        &self,
+        owner: PropertyDefinitionOwner<'_>,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+        options: Vec<PropertyOption>,
+    ) -> Result<PropertyDefinition, Self::Err> {
+        property_definition_queries::create_property_definition(
+            &self.pool,
+            owner,
+            display_name,
+            data_type,
+            is_multi_select,
+            specific_entity_type,
+            options,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        property_definition_queries::delete_property_definition(&self.pool, property_definition_id)
             .await
     }
 

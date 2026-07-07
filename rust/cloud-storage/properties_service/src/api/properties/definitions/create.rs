@@ -5,28 +5,18 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use thiserror::Error;
-use uuid::Uuid;
 
 use crate::api::context::{PropertiesHandlerState, PropertyTeamExtractor, caller_team_id};
 use model::user::UserContext;
-use models_properties::api::{
-    CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType,
-};
+use models_properties::api::{CreatePropertyDefinitionRequest, CreatePropertyScope};
 use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use properties_db_client::{
-    error::PropertiesDatabaseError,
-    property_definitions::insert::{self as property_definitions_insert, DefinitionOwner},
-};
+use properties::domain::model::PropertyDefinitionOwner;
+use properties::{PropertiesErr, PropertiesService};
 
 #[derive(Debug, Error)]
 pub enum CreatePropertyDefinitionErr {
-    #[error("An internal error occurred")]
-    InternalError(#[from] anyhow::Error),
-    #[error("An internal error occurred")]
-    DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("{0}")]
-    InvalidRequest(String),
+    #[error(transparent)]
+    Properties(#[from] PropertiesErr),
     #[error("You must be on a team to create a team property")]
     TeamMembershipRequired,
 }
@@ -34,9 +24,16 @@ pub enum CreatePropertyDefinitionErr {
 impl IntoResponse for CreatePropertyDefinitionErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            CreatePropertyDefinitionErr::InternalError(_)
-            | CreatePropertyDefinitionErr::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            CreatePropertyDefinitionErr::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            CreatePropertyDefinitionErr::Properties(e) => match e {
+                PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
+                PropertiesErr::NotFound => StatusCode::NOT_FOUND,
+                PropertiesErr::PermissionDenied | PropertiesErr::SystemPropertyNotModifiable => {
+                    StatusCode::FORBIDDEN
+                }
+                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            },
             CreatePropertyDefinitionErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 
@@ -72,21 +69,13 @@ pub async fn create_property_definition(
     team: PropertyTeamExtractor,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
-    if let Err(err) = request.validate() {
-        tracing::error!(
-            error = %err,
-            "property definition validation failed"
-        );
-        return Err(CreatePropertyDefinitionErr::InvalidRequest(err.to_string()));
-    }
-
     // Derive the owner from the authenticated caller - clients never supply owner ids.
     let owner = match request.scope {
-        CreatePropertyScope::User => DefinitionOwner::User(user_context.user_id.as_str()),
+        CreatePropertyScope::User => PropertyDefinitionOwner::User(user_context.user_id.as_str()),
         CreatePropertyScope::Team => {
             let team_id =
                 caller_team_id(&team).ok_or(CreatePropertyDefinitionErr::TeamMembershipRequired)?;
-            DefinitionOwner::Team(team_id)
+            PropertyDefinitionOwner::Team(team_id)
         }
     };
 
@@ -96,90 +85,10 @@ pub async fn create_property_definition(
         "creating property definition"
     );
 
-    let (base_data_type, property_options) = match &request.data_type {
-        PropertyDataType::SelectString { options, .. } => {
-            let property_options: Vec<PropertyOption> = options
-                .iter()
-                .map(|opt| PropertyOption {
-                    id: Uuid::nil(),                     // Temporary ID, will be replaced by DB
-                    property_definition_id: Uuid::nil(), // Temporary ID, will be replaced by DB
-                    display_order: opt.display_order,
-                    value: PropertyOptionValue::String(opt.value.clone()),
-                    color: None,
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                })
-                .collect();
-            (request.data_type.to_data_type(), property_options)
-        }
-        PropertyDataType::SelectNumber { options, .. } => {
-            let property_options: Vec<PropertyOption> = options
-                .iter()
-                .map(|opt| PropertyOption {
-                    id: Uuid::nil(),                     // Temporary ID, will be replaced by DB
-                    property_definition_id: Uuid::nil(), // Temporary ID, will be replaced by DB
-                    display_order: opt.display_order,
-                    value: PropertyOptionValue::Number(opt.value),
-                    color: None,
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                })
-                .collect();
-            (request.data_type.to_data_type(), property_options)
-        }
-        _ => (request.data_type.to_data_type(), Vec::new()),
-    };
-
-    let property = if property_options.is_empty() {
-        tracing::debug!("no options provided, using simple creation");
-
-        property_definitions_insert::create_property_definition(
-            &state.db,
-            owner,
-            &request.display_name,
-            base_data_type,
-            request.data_type.is_multi_select(),
-            request.data_type.specific_entity_type(),
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                display_name = %request.display_name,
-                "failed to create property definition in database"
-            );
-        })?
-    } else {
-        tracing::debug!(
-            options_count = property_options.len(),
-            "options provided, using transactional creation"
-        );
-
-        property_definitions_insert::create_property_definition_with_options(
-            &state.db,
-            owner,
-            &request.display_name,
-            base_data_type,
-            request.data_type.is_multi_select(),
-            request.data_type.specific_entity_type(),
-            property_options,
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                display_name = %request.display_name,
-                "failed to create property definition with options in database"
-            );
-        })?
-    };
-
-    tracing::info!(
-        property_id = %property.id,
-        display_name = %property.display_name,
-        data_type = ?property.data_type,
-        "successfully created property definition"
-    );
+    let property = state
+        .properties_service
+        .create_property_definition(owner, &request)
+        .await?;
 
     Ok((StatusCode::CREATED, Json(property)))
 }

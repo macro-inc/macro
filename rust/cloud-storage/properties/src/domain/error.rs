@@ -13,6 +13,14 @@ pub enum PropertiesErr {
     #[error("Access denied")]
     PermissionDenied,
 
+    /// Requested resource not found - maps to 404
+    #[error("Property definition not found")]
+    NotFound,
+
+    /// System properties cannot be modified - maps to 403
+    #[error("Cannot modify system properties")]
+    SystemPropertyNotModifiable,
+
     /// Repository/database errors - maps to 500
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

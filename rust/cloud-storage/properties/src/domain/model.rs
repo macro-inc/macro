@@ -52,6 +52,27 @@ pub struct PropertyOptionInfo {
     pub value: PropertyOptionValue,
 }
 
+/// The owner of a user- or team-created property definition. Encodes the
+/// "exactly one of user / team" invariant in the type, so neither a both-owners
+/// nor a no-owner row is representable. System properties are not created here.
+#[derive(Debug, Clone, Copy)]
+pub enum PropertyDefinitionOwner<'a> {
+    /// Owned by a single user.
+    User(&'a str),
+    /// Owned by a team.
+    Team(Uuid),
+}
+
+impl<'a> PropertyDefinitionOwner<'a> {
+    /// Split into the nullable (team_id, user_id) columns the row stores.
+    pub fn into_ids(self) -> (Option<Uuid>, Option<&'a str>) {
+        match self {
+            PropertyDefinitionOwner::User(user_id) => (None, Some(user_id)),
+            PropertyDefinitionOwner::Team(team_id) => (Some(team_id), None),
+        }
+    }
+}
+
 /// A task-assignment notification expressed in domain terms.
 ///
 /// Outbound adapters enrich this (task name, sender profile picture) and
