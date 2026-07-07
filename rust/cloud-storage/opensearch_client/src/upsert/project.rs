@@ -34,7 +34,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
 /// Upsert a single project doc. Full-overwrite `index` semantics so omitted
 /// optional fields (e.g. `parent_project_id`) get cleared on Some→None
 /// transitions.
-#[tracing::instrument(skip(client, args), fields(project_id=%args.project_id))]
+#[tracing::instrument(skip(client, args), fields(project_id=%args.project_id), err)]
 pub(crate) async fn upsert_project(
     client: &opensearch::OpenSearch,
     args: &UpsertProjectArgs,

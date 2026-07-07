@@ -6,7 +6,7 @@ use crate::{Result, error::OpensearchClientError};
 /// project id, so this is a direct delete. A missing-doc 404 is a no-op —
 /// the project was never indexed or is already gone. A missing-index 404
 /// (`index_not_found_exception`) is a real outage and must propagate.
-#[tracing::instrument(skip(client))]
+#[tracing::instrument(skip(client), err)]
 pub async fn delete_project_by_id(
     client: &opensearch::OpenSearch,
     project_id: &str,

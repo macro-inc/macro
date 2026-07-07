@@ -48,7 +48,7 @@ impl OpensearchClient {
     }
 
     /// Refresh only the denormalized `properties` on an existing parent chat doc.
-    #[tracing::instrument(skip(self, properties))]
+    #[tracing::instrument(skip(self, properties), err)]
     pub async fn update_chat_properties(
         &self,
         chat_id: &str,

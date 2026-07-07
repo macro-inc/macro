@@ -22,7 +22,7 @@ impl OpensearchClient {
 
     /// Refresh only the denormalized `properties` on every message doc of a
     /// thread.
-    #[tracing::instrument(skip(self, properties))]
+    #[tracing::instrument(skip(self, properties), err)]
     pub async fn update_email_thread_properties(
         &self,
         thread_id: &str,

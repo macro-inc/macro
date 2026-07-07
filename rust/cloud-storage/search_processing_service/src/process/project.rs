@@ -30,7 +30,7 @@ async fn fetch_indexed_properties(
 /// Handles upserting a project into the opensearch index. Re-reads the
 /// project row so the indexed doc always reflects the current state; a
 /// missing or soft-deleted row turns the upsert into a removal.
-#[tracing::instrument(skip(opensearch_client, db))]
+#[tracing::instrument(skip(opensearch_client, db), err)]
 pub async fn upsert_project(
     opensearch_client: &OpensearchClient,
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -88,7 +88,7 @@ pub async fn upsert_project(
 }
 
 /// Handles the removal of a project from the opensearch index
-#[tracing::instrument(skip(opensearch_client))]
+#[tracing::instrument(skip(opensearch_client), err)]
 pub async fn remove_project(
     opensearch_client: &OpensearchClient,
     message: &RemoveProject,

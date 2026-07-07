@@ -4,7 +4,7 @@ use crate::{
 };
 
 impl OpensearchClient {
-    #[tracing::instrument(skip(self, upsert_project_args), fields(project_id=%upsert_project_args.project_id))]
+    #[tracing::instrument(skip(self, upsert_project_args), fields(project_id=%upsert_project_args.project_id), err)]
     pub async fn upsert_project(
         &self,
         upsert_project_args: &UpsertProjectArgs,
@@ -14,7 +14,7 @@ impl OpensearchClient {
     }
 
     /// Deletes a project from the opensearch projects index
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn delete_project(
         &self,
         project_id: &str,
@@ -24,7 +24,7 @@ impl OpensearchClient {
     }
 
     /// Updates only the denormalized `properties` on an indexed project
-    #[tracing::instrument(skip(self, properties))]
+    #[tracing::instrument(skip(self, properties), err)]
     pub async fn update_project_properties(
         &self,
         project_id: &str,
