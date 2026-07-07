@@ -151,6 +151,16 @@ export type AppEvents = {
     activeMode: string;
     constraintMismatch: boolean;
   } & Record<string, unknown>;
+  // Per-call summary of remote-audio decode health, flushed at room teardown.
+  // High concealment alongside clean capture-side state points a "muddled
+  // voices" report at the network/playback leg, not noise suppression.
+  call_audio_receiver_stats: {
+    channelId: string;
+    callId?: string;
+    sampledIntervals: number;
+    badIntervals: number;
+    maxConcealmentRate: number;
+  } & Record<string, unknown>;
 
   block_pdf_definition_open: Record<string, unknown>;
   block_pdf_section_open: Record<string, unknown>;

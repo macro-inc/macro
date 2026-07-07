@@ -8,6 +8,7 @@ import {
   RoomEvent,
   Track,
 } from 'livekit-client';
+import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 
 type LivekitJsCallControllerState = {
   activeChannelId: string | null;
@@ -41,6 +42,13 @@ type LivekitJsCallControllerOptions = {
 export function createLivekitJsCallController(
   options: LivekitJsCallControllerOptions
 ) {
+  let stopReceiverStatsSampling: (() => void) | null = null;
+
+  function stopReceiverStats() {
+    stopReceiverStatsSampling?.();
+    stopReceiverStatsSampling = null;
+  }
+
   function syncParticipantMap(room: Room) {
     options.setRemoteParticipants(new Map(room.remoteParticipants));
     options.bumpTrackVersion();
@@ -90,6 +98,7 @@ export function createLivekitJsCallController(
 
   function destroyRoom() {
     options.cancelPendingMediaSetup();
+    stopReceiverStats();
     options.destroyProcessors();
 
     const room = options.room();
@@ -157,6 +166,14 @@ export function createLivekitJsCallController(
     // Sync participants that were already in the room when we connected.
     syncParticipantMap(targetRoom);
 
+    // Sample receive-side decode stats for the life of the room; the sampler
+    // flushes one summary analytics event when stopped at teardown.
+    stopReceiverStats();
+    stopReceiverStatsSampling = startReceiverStatsSampling(targetRoom, {
+      channelId: tokenResponse.channelId,
+      callId: tokenResponse.callId,
+    });
+
     // Default to microphone on, video off as soon as the room is connected.
     options.setInitialMediaState();
 
@@ -189,11 +206,13 @@ export function createLivekitJsCallController(
     if (!room) return;
 
     options.cancelPendingMediaSetup();
+    stopReceiverStats();
     room.disconnect();
   }
 
   function dispose() {
     options.cancelPendingMediaSetup();
+    stopReceiverStats();
     const room = options.room();
     if (!room) return;
 
