@@ -34,8 +34,8 @@ jobs:
       continue-on-error: true
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
-    - name: Build aux service images (fail fast)
-      run: docker compose -p macro -f docker-compose.yml build search sync_service websocket_service lexical_service
+    - name: Build compose service images (fail fast)
+      run: docker compose -p macro -f docker-compose.yml build search sync_service websocket_service lexical_service ai_editing_worker
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
     - name: Setup dev shell + web deps

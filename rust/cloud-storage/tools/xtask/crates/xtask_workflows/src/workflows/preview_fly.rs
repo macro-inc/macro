@@ -84,14 +84,15 @@ fn deploy() -> Job {
                 "d059ed7184f0bc7c8b27e8810cea153d02bcc6dd",
             ), // v0.0.23
         )
-        // Fail fast: the Docker-built aux images are the most fragile part of
-        // a fresh bring-up (stale local images mask their rot) and need
-        // nothing from nix/cargo — build them before the expensive toolchain
-        // setup so a broken Dockerfile fails in ~2 minutes, not ~12. The bake
-        // step's `stack up` then reuses these images instead of building.
-        .add_step(Step::new("Build aux service images (fail fast)").run(
+        // Fail fast: the Docker-built images are the most fragile part of a
+        // fresh bring-up (stale local images mask their rot) and need nothing
+        // from nix/cargo — build them before the expensive toolchain setup so
+        // a broken Dockerfile fails in ~2 minutes, not ~12. This is also the
+        // ONLY thing that builds them now: the infra-only bake never starts
+        // the app layer, so the preload tar takes exactly what's built here.
+        .add_step(Step::new("Build compose service images (fail fast)").run(
             "docker compose -p macro -f docker-compose.yml build \
-             search sync_service websocket_service lexical_service",
+             search sync_service websocket_service lexical_service ai_editing_worker",
         ))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup dev shell + web deps", false))
