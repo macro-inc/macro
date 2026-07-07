@@ -22,7 +22,7 @@ const QUERY = gql`
 
 type FakeHost = CacheHost & {
   reads: Array<{ opKey?: number; query: string; variables?: object }>;
-  writes: Array<{ opKey?: number; data: unknown }>;
+  writes: Array<{ opKey?: number; data: unknown; identity?: string }>;
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   pushAffected: (opKeys: number[]) => void;
@@ -51,8 +51,12 @@ function makeFakeHost(): FakeHost {
       return readResult;
     },
     async writeQuery(args): Promise<WriteResult> {
-      host.writes.push({ opKey: args.opKey, data: args.data });
-      return { changed: [], affectedOps: [] };
+      host.writes.push({
+        opKey: args.opKey,
+        data: args.data,
+        identity: args.identity,
+      });
+      return { changed: [], affectedOps: [], reset: false };
     },
     async invalidate() {
       return [];
@@ -226,6 +230,35 @@ describe('normalizedCacheExchange', () => {
 
     expect(onCacheError).toHaveBeenCalledOnce();
     expect(results[0]?.data).toEqual({ from: 'network' });
+  });
+
+  it('passes the extracted identity tag on write-through', async () => {
+    const client = { reexecuteOperation: vi.fn() } as unknown as Client;
+    const ops = makeSubject<Operation>();
+    const forward = (ops$: Source<Operation>): Source<OperationResult> =>
+      pipe(
+        ops$,
+        map((op) => ({
+          operation: op,
+          data: { user: { id: 'macro|sean@macro.com' } },
+          error: undefined,
+          extensions: undefined,
+          stale: false,
+          hasNext: false,
+        }))
+      );
+    pipe(
+      normalizedCacheExchange(host, {
+        extractIdentity: (data) =>
+          (data as { user?: { id?: string } })?.user?.id,
+      })({ forward, client, dispatchDebug: () => undefined })(ops.source),
+      subscribe(() => undefined)
+    );
+    ops.next(makeOp(1));
+    await tick();
+
+    expect(host.writes).toHaveLength(1);
+    expect(host.writes[0]?.identity).toBe('macro|sean@macro.com');
   });
 
   it('re-executes affected active operations as cache-first', async () => {

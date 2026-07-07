@@ -95,7 +95,8 @@ export class CacheWorkerCore {
             request.query,
             request.operationName,
             request.variables,
-            request.data
+            request.data,
+            request.identity
           );
         const result =
           this.options.multiEngine && this.scope
@@ -107,7 +108,7 @@ export class CacheWorkerCore {
       case 'invalidate': {
         const engine = this.requireEngine();
         const affectedOps = await engine.invalidateKeys(request.keys);
-        this.fanOut({ changed: request.keys, affectedOps });
+        this.fanOut({ changed: request.keys, affectedOps, reset: false });
         return affectedOps;
       }
       case 'teardown': {
@@ -139,18 +140,25 @@ export class CacheWorkerCore {
       if (this.options.multiEngine) {
         this.broadcast = new BroadcastChannel(broadcastChannelName(scope));
         this.broadcast.onmessage = (event: MessageEvent<CacheBroadcast>) => {
-          void this.onExternalChange(event.data);
+          void this.onBroadcast(event.data);
         };
       }
     })();
     await this.initPromise;
   }
 
-  /** Changed records from another tab's engine: evict + notify our client. */
-  private async onExternalChange(msg: CacheBroadcast): Promise<void> {
-    if (msg.kind !== 'changed' || msg.source === this.workerId) return;
+  /** Broadcasts from other tabs' engines sharing our storage. */
+  private async onBroadcast(msg: CacheBroadcast): Promise<void> {
+    if (msg.source === this.workerId) return;
     const engine = this.engine;
     if (!engine) return;
+    if (msg.kind === 'reset') {
+      // Another engine wiped the shared storage (identity change): drop
+      // local in-memory state and re-execute everything we track.
+      const affectedOps = await this.enqueue(() => engine.externalReset());
+      this.push({ kind: 'ops-affected', opIds: affectedOps, keys: [] });
+      return;
+    }
     const affectedOps = await this.enqueue(() =>
       engine.invalidateKeys(msg.keys)
     );
@@ -159,7 +167,7 @@ export class CacheWorkerCore {
 
   /** After a local change: notify connected clients + other tabs. */
   private fanOut(result: WriteResult): void {
-    if (result.changed.length === 0) return;
+    if (result.changed.length === 0 && !result.reset) return;
     if (result.affectedOps.length > 0) {
       this.push({
         kind: 'ops-affected',
@@ -168,11 +176,9 @@ export class CacheWorkerCore {
       });
     }
     if (this.options.multiEngine && this.broadcast) {
-      const msg: CacheBroadcast = {
-        kind: 'changed',
-        keys: result.changed,
-        source: this.workerId,
-      };
+      const msg: CacheBroadcast = result.reset
+        ? { kind: 'reset', source: this.workerId }
+        : { kind: 'changed', keys: result.changed, source: this.workerId };
       this.broadcast.postMessage(msg);
     }
   }

@@ -213,16 +213,16 @@ mod tests {
             let storage = SqliteStorage::open_in_memory("user-1").unwrap();
             let mut engine = Engine::new(storage);
             let query = r#"query Soup($input: SoupInput!) {
-                soup(input: $input) { nextCursor hasMore items { id } }
+                user { id soup(input: $input) { nextCursor hasMore items { id } } }
             }"#;
             let serde_json::Value::Object(vars) = serde_json::json!({"input": {"limit": 1}}) else {
                 unreachable!()
             };
             let data = serde_json::json!({
-                "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] }
+                "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
             });
             engine
-                .write_query(None, query, Some("Soup"), &vars, &data)
+                .write_query(None, query, Some("Soup"), &vars, &data, None)
                 .await
                 .unwrap();
             let ReadResult::Hit { data: cached } = engine

@@ -41,8 +41,32 @@ pub struct WriteResult {
     /// Records whose contents changed.
     pub changed: BTreeSet<EntityKey>,
     /// Active operations depending on changed records (host re-executes
-    /// these). Excludes the operation that performed the write.
+    /// these). Excludes the operation that performed the write. After a
+    /// `reset` this is *every* active operation except the origin.
     pub affected_ops: BTreeSet<OpId>,
+    /// True when the identity witness observed a different user than the one
+    /// bound to this cache: all previous state was wiped (silent restart)
+    /// before this response was written. Hosts must broadcast this to other
+    /// engine instances sharing the same storage.
+    pub reset: bool,
+}
+
+/// Reserved storage key holding the identity bound to this cache. The
+/// `__meta:` prefix can never collide with entity keys (typenames can't
+/// contain `:`).
+const IDENTITY_META_KEY: &str = "__meta:identity";
+const IDENTITY_FIELD: &str = "userId";
+
+/// Hydration/binding state of the session identity tag for this cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum IdentityState {
+    /// Not yet loaded from storage.
+    NotHydrated,
+    /// Hydrated: no identity has been bound to this cache yet.
+    Missing,
+    /// Hydrated: bound to this identity. (Named `Bound` rather than `Some`
+    /// to avoid shadowing/confusion with `Option::Some` in matches.)
+    Bound(String),
 }
 
 /// Default hot-tier capacity (records, not bytes — byte budgets are a
@@ -54,6 +78,7 @@ pub struct Engine<S: Storage> {
     hot: LruCache<EntityKey, Record>,
     docs: HashMap<String, Document>,
     deps: DepIndex,
+    identity: IdentityState,
 }
 
 impl<S: Storage> Engine<S> {
@@ -67,7 +92,46 @@ impl<S: Storage> Engine<S> {
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: HashMap::new(),
             deps: DepIndex::new(),
+            identity: IdentityState::NotHydrated,
         }
+    }
+
+    /// The identity binding of this cache, hydrating it from storage on
+    /// first use. Never returns [`IdentityState::NotHydrated`].
+    async fn bound_identity(&mut self) -> Result<IdentityState, EngineError<S::Error>> {
+        if self.identity == IdentityState::NotHydrated {
+            let key = EntityKey(IDENTITY_META_KEY.to_string());
+            let fetched = self
+                .storage
+                .get_batch(std::slice::from_ref(&key))
+                .await
+                .map_err(EngineError::Storage)?;
+            let stored = fetched.into_iter().next().flatten().and_then(|record| {
+                match record.fields.get(IDENTITY_FIELD) {
+                    Some(crate::value::CacheValue::String(s)) => Some(s.clone()),
+                    _ => None,
+                }
+            });
+            self.identity = match stored {
+                Some(user_id) => IdentityState::Bound(user_id),
+                None => IdentityState::Missing,
+            };
+        }
+        Ok(self.identity.clone())
+    }
+
+    async fn bind_identity(&mut self, user_id: &str) -> Result<(), EngineError<S::Error>> {
+        let mut record = Record::default();
+        record.fields.insert(
+            IDENTITY_FIELD.to_string(),
+            crate::value::CacheValue::String(user_id.to_string()),
+        );
+        self.storage
+            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.to_string()), record)])
+            .await
+            .map_err(EngineError::Storage)?;
+        self.identity = IdentityState::Bound(user_id.to_string());
+        Ok(())
     }
 
     /// Attempts to answer a query from cache. When `op_id` is given the
@@ -140,6 +204,12 @@ impl<S: Storage> Engine<S> {
 
     /// Normalizes and stores a network response. Returns changed records and
     /// the affected active operations (excluding `origin_op`).
+    ///
+    /// `identity` is an opaque session tag extracted by the host (e.g. the
+    /// viewer id from the response). The engine knows nothing about its
+    /// meaning — only that a write tagged with a different identity than the
+    /// one bound to this cache wipes everything before the write proceeds
+    /// (silent restart), atomically with this write.
     pub async fn write_query(
         &mut self,
         origin_op: Option<OpId>,
@@ -147,10 +217,26 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
         data: &Json,
+        identity: Option<&str>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let updates = normalize(op, variables, data)?;
+
+        let mut reset = false;
+        if let Some(observed) = identity {
+            match self.bound_identity().await? {
+                IdentityState::NotHydrated => unreachable!("bound_identity hydrates"),
+                IdentityState::Missing => self.bind_identity(observed).await?,
+                IdentityState::Bound(bound) if bound == observed => {}
+                IdentityState::Bound(_) => {
+                    self.hot.clear();
+                    self.storage.clear().await.map_err(EngineError::Storage)?;
+                    self.bind_identity(observed).await?;
+                    reset = true;
+                }
+            }
+        }
 
         // Load current values (hot tier, then storage) so merges detect real
         // changes.
@@ -201,14 +287,31 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
 
-        let mut affected_ops = self.deps.ops_for_keys(changed.iter());
+        let mut affected_ops = if reset {
+            // Everything anyone had cached is gone: re-execute all ops.
+            self.deps.all_ops()
+        } else {
+            self.deps.ops_for_keys(changed.iter())
+        };
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
         Ok(WriteResult {
             changed,
             affected_ops,
+            reset,
         })
+    }
+
+    /// Reacts to a reset performed by *another* engine instance sharing the
+    /// same storage (cross-tab broadcast): drops all local in-memory state
+    /// and returns every local active operation for re-execution.
+    pub fn external_reset(&mut self) -> BTreeSet<OpId> {
+        self.hot.clear();
+        self.docs.clear();
+        // Another engine may have rebound the shared storage → re-hydrate.
+        self.identity = IdentityState::NotHydrated;
+        self.deps.all_ops()
     }
 
     /// Unregisters an active operation (urql teardown).
@@ -236,6 +339,8 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
         self.hot.clear();
         self.deps = DepIndex::new();
+        // The wipe below removes the binding record too.
+        self.identity = IdentityState::Missing;
         self.storage.clear().await.map_err(EngineError::Storage)
     }
 

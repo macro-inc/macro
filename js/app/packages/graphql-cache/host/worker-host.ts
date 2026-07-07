@@ -126,6 +126,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
+        identity: args.identity,
       })) as WriteResult;
     },
 

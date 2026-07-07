@@ -11,7 +11,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
-    soup(input: $input) { nextCursor hasMore items { id } }
+    user { id soup(input: $input) { nextCursor hasMore items { id } } }
 }"#;
 
 fn js(json: serde_json::Value) -> JsValue {
@@ -27,7 +27,7 @@ async fn write_then_read_through_js_boundary() {
 
     let vars = serde_json::json!({"input": {"limit": 1}});
     let data = serde_json::json!({
-        "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] }
+        "user": { "id": "user-1", "soup": { "nextCursor": null, "hasMore": false, "items": [{"id": "doc-1"}] } }
     });
 
     // Miss first.
@@ -42,19 +42,22 @@ async fn write_then_read_through_js_boundary() {
     let read: serde_json::Value = serde_wasm_bindgen::from_value(read).unwrap();
     assert_eq!(read["kind"], "miss");
 
-    // Write via op 2, expect op 1 affected (registered on the miss).
+    // Write via op 2 (tagged with the viewer identity), expect op 1
+    // affected (registered on the miss).
     let write = JsFuture::from(engine.write_query(
         Some("tab1:2".into()),
         QUERY.into(),
         Some("Soup".into()),
         js(vars.clone()),
         js(data.clone()),
+        Some("user-1".into()),
     ))
     .await
     .unwrap();
     let write: serde_json::Value = serde_wasm_bindgen::from_value(write).unwrap();
     assert!(!write["changed"].as_array().unwrap().is_empty());
     assert_eq!(write["affectedOps"], serde_json::json!(["tab1:1"]));
+    assert_eq!(write["reset"], serde_json::json!(false));
 
     // Hit now; data is a plain JS object round-tripped exactly.
     let read = JsFuture::from(engine.read_query(

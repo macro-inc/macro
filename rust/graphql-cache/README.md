@@ -7,7 +7,7 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 
 | Crate | Purpose |
 |---|---|
-| `cache-core` | Pure engine: schema-metadata codegen (build.rs from `rust/cloud-storage/schema.graphql` + `key_config.toml`), normalize/denormalize, LRU hot tier, dependency index, async `Storage` trait |
+| `cache-core` | Pure engine: schema-metadata codegen (build.rs from `rust/cloud-storage/schema.graphql`), normalize/denormalize, LRU hot tier, dependency index, async `Storage` trait |
 | `cache-sqlite` | `Storage` over SQLite — Tauri native host |
 | `cache-idb` | `Storage` over IndexedDB via the `idb` crate — browser wasm host (wasm32-only; empty shell elsewhere) |
 
@@ -34,7 +34,15 @@ WASM_BINDGEN_TEST_ONLY_WEB=1 cargo test --target wasm32-unknown-unknown
 
 ## Key policy
 
-`cache-core/key_config.toml` decides which schema types are normalized
-entities vs embedded values. **The build fails when the schema and the key
-config drift** — adding a type to `schema.graphql` requires a caching
-decision here.
+**Presence-of-id convention**: an output object type with an `id: ID!`
+field is a normalized entity keyed by `__typename:id`; a type without `id`
+is embedded inline in its parent record. The schema itself is the policy —
+there is no client-side key config. The build fails on malformed shapes
+(nullable/non-ID `id`, `id` on the query root). Consequence for schema
+authors: **only expose a field named `id` when it is the object's global
+identity** (e.g. `GraphqlSoupProperty` exposes `propertyDefinitionId`
+because a property instance's value is per-entity).
+
+Identity is not the cache's concern: the engine accepts an opaque session
+tag on writes (extracted by the urql exchange from `data.user.id`) and
+wipes + rebinds atomically when the tag changes (silent restart).

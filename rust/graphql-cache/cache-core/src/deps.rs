@@ -65,6 +65,11 @@ impl DepIndex {
     pub fn active_ops(&self) -> usize {
         self.by_op.len()
     }
+
+    /// All registered operation ids (cache reset → everything re-executes).
+    pub fn all_ops(&self) -> BTreeSet<OpId> {
+        self.by_op.keys().copied().collect()
+    }
 }
 
 #[cfg(test)]

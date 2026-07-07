@@ -97,8 +97,8 @@ impl From<EntityType> for GraphqlSoupEntityType {
 
 #[Object]
 impl GraphqlSoupItem {
-    async fn id(&self) -> &str {
-        &self.id
+    async fn id(&self) -> ID {
+        ID(self.id.clone())
     }
 
     async fn entity_type(&self) -> GraphqlSoupEntityType {
@@ -352,7 +352,11 @@ pub struct GraphqlSoupProperty(SoupProperty);
 
 #[Object]
 impl GraphqlSoupProperty {
-    async fn id(&self) -> ID {
+    /// Id of the shared property *definition* — deliberately not named `id`:
+    /// a property instance has no global identity (its `value` is
+    /// per-entity), so it must never be treated as a cacheable entity.
+    /// Normalized caches key objects by the presence of an `id` field.
+    async fn property_definition_id(&self) -> ID {
         ID(self.0.definition.id.to_string())
     }
 
@@ -976,9 +980,12 @@ impl GraphqlSoupChannelParticipant {
 /// GraphQL channel message summary.
 pub struct GraphqlSoupChannelMessage(ChannelMessage);
 
+// NOTE: `id` (not `messageId`) — objects exposing `id: ID!` are treated as
+// normalized entities by clients' caches (presence-of-id convention).
+
 #[Object]
 impl GraphqlSoupChannelMessage {
-    async fn message_id(&self) -> ID {
+    async fn id(&self) -> ID {
         ID(self.0.message_id.to_string())
     }
 

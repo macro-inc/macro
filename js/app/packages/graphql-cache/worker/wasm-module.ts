@@ -22,9 +22,11 @@ export interface CacheEngine {
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
-    data: unknown
+    data: unknown,
+    identity: string | undefined
   ): Promise<WriteResult>;
   invalidateKeys(keys: string[]): Promise<string[]>;
+  externalReset(): Promise<string[]>;
   teardownOperation(opId: string): Promise<void>;
   clear(): Promise<void>;
 }

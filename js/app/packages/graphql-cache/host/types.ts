@@ -17,6 +17,8 @@ export interface CacheReadArgs {
 
 export interface CacheWriteArgs extends CacheReadArgs {
   data: unknown;
+  /** Opaque session tag; see protocol.ts `identity`. */
+  identity?: string;
 }
 
 export interface CacheHost {
