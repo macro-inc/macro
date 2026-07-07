@@ -554,6 +554,8 @@ export const SoupView = (props: SoupViewProps) => {
 
   const { paneVisible } = usePreviewPaneVisiblity();
 
+  const isNewInboxEnabled = useIsNewInboxEnabled();
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -705,7 +707,11 @@ export const SoupView = (props: SoupViewProps) => {
         </div>
       </div>
       <Suspense>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+        <Show
+          when={
+            ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile() && !isNewInboxEnabled()
+          }
+        >
           <SoupChatInput />
         </Show>
       </Suspense>
