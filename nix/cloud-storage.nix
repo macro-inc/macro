@@ -28,6 +28,12 @@
         [
           openssl
           openssl.dev
+          # librdkafka 2.12's cmake config header always defines
+          # WITH_OAUTHBEARER_OIDC (via #cmakedefine01), and rdkafka_conf.c
+          # guards its curl include with #ifdef instead of #if, so the bundled
+          # cmake-build needs curl headers even with WITH_CURL=0. Headers only;
+          # nothing links against libcurl.
+          curl.dev
           glib
           glib.dev
           libclang
