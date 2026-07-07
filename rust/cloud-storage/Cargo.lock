@@ -15531,6 +15531,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-deps"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "hakari",
+ "serde_json",
+ "xtask-graph",
+]
+
+[[package]]
+name = "xtask-doppler-bins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask-graph",
+]
+
+[[package]]
 name = "xtask-graph"
 version = "0.1.0"
 dependencies = [
@@ -15545,6 +15565,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "xtask-paths",
+]
+
+[[package]]
+name = "xtask-nextest-filter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "xtask-graph",
 ]
 
 [[package]]

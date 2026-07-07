@@ -1,0 +1,15 @@
+[package]
+description = "xtask nextest-filter: nextest rdeps package filter for a set of changed files"
+edition = "2024"
+name = "xtask-nextest-filter"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask-nextest-filter"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+guppy = "0.17.24"
+xtask-graph = { path = "../xtask-graph" }
