@@ -420,9 +420,10 @@ export const SoupViewContextProvider: FlowComponent<
         documentSeen: seen,
         emailSeen: seen,
         channelSeen: seen,
-        channelThreadSeen: seen,
+        // channelThreadSeen: seen,
         chatSeen: seen,
         folderSeen: seen,
+        foreignEntitySeen: seen,
       },
     };
   };
