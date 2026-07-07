@@ -5,8 +5,14 @@ publish = false
 version = "0.1.0"
 
 # Excluded from workspace-hack in .config/hakari.toml since it needs to compile
-# to wasm too for sync service
+# to wasm too for sync service.
+#
+# Deps are pinned CONCRETELY (no `workspace = true`) on purpose: sync-service's
+# Docker image copies this crate in standalone, with no workspace root to
+# inherit from. Keep these specs in lockstep with the workspace pins.
 [dependencies]
 derive_more = { version = "2", features = ["display", "from"] }
-jsonwebtoken = { workspace = true }
-serde = { workspace = true }
+jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
+  "rust_crypto",
+] }
+serde = { version = "1.0.214", features = ["derive"] }
