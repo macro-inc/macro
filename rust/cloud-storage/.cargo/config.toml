@@ -1,11 +1,18 @@
 # Cargo aliases for the cloud-storage workspace.
 #
-# `cargo x <subcommand>` runs the xtask repo-automation tool from anywhere inside
-# rust/cloud-storage:
+# `cargo x <subcommand>` runs xtask from anywhere inside rust/cloud-storage:
 #   cargo x workflows [--check]      # regenerate / verify .github/workflows
 #   cargo x deps [--check]           # regenerate / verify workspace-hack + dep closures
 #   cargo x nextest-filter <file>    # nextest rdeps filter for changed files
 #   cargo x doppler-bins <file>      # Doppler config-validation bins affected by changed files
 #   cargo x graphql-soup-schema <file> # export GraphQL Soup SDL to a file
+#   cargo x cache-wasm [--force]     # build the browser cache wasm package
+#   cargo x kafka-topics [--check]   # regenerate / verify kafka-cluster-topics.json
+#   (anything else)                  # local/dev orchestration (xtask-local)
+#
+# `xtask` is a dependency-free launcher: it maps the subcommand to its own
+# command crate under tools/xtask/crates/ and re-invokes `cargo run -p
+# xtask-<command>`, so each command compiles only its own dependency set
+# (e.g. `cargo x cache-wasm` never builds guppy/hakari/aws-sdk/tokio).
 [alias]
 x = "run -p xtask --"
