@@ -12,8 +12,7 @@ import {
 } from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { batch, createEffect, createMemo } from 'solid-js';
-import { useSearchTagsFlag } from './search-tags-flag';
+import { batch, createMemo } from 'solid-js';
 
 export type SearchIndexId =
   | 'channels'
@@ -163,7 +162,6 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
  */
 export function createSearchFiltersController() {
   const { soup, queryFilters } = useSoupView();
-  const searchTags = useSearchTagsFlag();
 
   const type = createMemo<SearchTypeValue>(
     () =>
@@ -200,9 +198,7 @@ export function createSearchFiltersController() {
     taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES)
   );
   const taskCreatedBy = createMemo(() => withoutNil(include().documentOwnerId));
-  const tags = createMemo<PropertyFilter[]>(() =>
-    searchTags() ? (include().tagFilters ?? []) : []
-  );
+  const tags = createMemo<PropertyFilter[]>(() => include().tagFilters ?? []);
 
   const currentSections = (): SearchFiltersSections => ({
     email: { importance: emailImportance(), inboxIds: emailInbox() },
@@ -232,15 +228,6 @@ export function createSearchFiltersController() {
         or: state.type === 'all' ? [] : [state.type],
       }));
     });
-
-  // Restored state is already stripped at soup-view init. This covers the
-  // rollout flag turning off mid-session, so the hidden facet never leaves
-  // an invisible tag filter applied.
-  createEffect(() => {
-    if (!searchTags() && include().tagFilters?.length) {
-      apply({ type: type(), tags: [], ...currentSections() });
-    }
-  });
 
   const applySections = (sections: Partial<SearchFiltersSections>) =>
     apply({ type: type(), tags: tags(), ...currentSections(), ...sections });
