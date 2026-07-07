@@ -341,6 +341,7 @@ pub(crate) struct ApiContext {
     #[cfg(feature = "graphql")]
     pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
     pub favorites_state: DssFavoritesState,
+    pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,

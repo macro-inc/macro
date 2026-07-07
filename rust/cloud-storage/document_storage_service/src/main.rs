@@ -695,9 +695,10 @@ async fn main() -> anyhow::Result<()> {
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
         )),
         favorites_state: FavoritesRouterState::new(
-            favorites_service,
+            favorites_service.clone(),
             entity_access_service.clone(),
         ),
+        favorites_service,
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]
