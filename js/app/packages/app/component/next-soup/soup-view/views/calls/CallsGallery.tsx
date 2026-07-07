@@ -1,26 +1,80 @@
 import type { SoupRow } from '@app/component/next-soup/create-soup-state';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
+import { usePreference } from '@app/preferences/use-preference';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { TabsInset } from '@core/component/TabsInset';
 import { UserIcon } from '@core/component/UserIcon';
 import { CallRecordName } from '@entity/components/CallRecordName';
 import { Entity } from '@entity/entity';
 import type { CallEntity } from '@entity/types/entity';
+import ListIcon from '@phosphor/list.svg';
+import SquaresFourIcon from '@phosphor/squares-four.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import { useCallRecordQuery } from '@queries/call/call';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 
-/** How many of the most recent calls are lifted out of the list into cards. */
-export const CALLS_GRID_COUNT = 4;
+export type CallsLayoutMode = 'gallery' | 'list';
 
 /**
- * Narrowest list-column width (px) the card grid renders at. Below this the
- * two-column grid would collapse to a single column, so the grid turns off
- * and the calls render as normal list rows instead.
+ * Module-scope so the header toggle and the list body read the same reactive
+ * source (usePreference creates an independent signal per call, so two
+ * component-level calls with the same key would not stay in sync live).
  */
-export const CALLS_GRID_MIN_WIDTH = 520;
+const [callsLayoutMode, setCallsLayoutMode] = usePreference<CallsLayoutMode>(
+  'macro:pref:soup:calls:layout',
+  { default: 'gallery' }
+);
+
+export { callsLayoutMode };
+
+/**
+ * Narrowest list-column width (px) the gallery renders at. Below this the
+ * two-column grid would collapse to a single column, so the gallery falls
+ * back to normal list rows regardless of the toggle.
+ */
+const CALLS_GALLERY_MIN_WIDTH = 520;
+const CALLS_GALLERY_FOUR_COLUMN_WIDTH = 896;
+
+/** Card columns for a given list-column width; 0 disables the gallery. */
+export function getCallsGalleryColumns(width: number): number {
+  if (width < CALLS_GALLERY_MIN_WIDTH) return 0;
+  return width < CALLS_GALLERY_FOUR_COLUMN_WIDTH ? 2 : 4;
+}
+
+/** Finder-style gallery/list switch shown in the calls view header. */
+export function CallsLayoutToggle() {
+  return (
+    <TabsInset
+      list={[
+        {
+          value: 'gallery',
+          label: (
+            <Tooltip label="Gallery view" as="span">
+              <span class="flex items-center" aria-label="Gallery view">
+                <SquaresFourIcon class="size-3.5" />
+              </span>
+            </Tooltip>
+          ),
+        },
+        {
+          value: 'list',
+          label: (
+            <Tooltip label="List view" as="span">
+              <span class="flex items-center" aria-label="List view">
+                <ListIcon class="size-3.5" />
+              </span>
+            </Tooltip>
+          ),
+        },
+      ]}
+      value={callsLayoutMode()}
+      onChange={(value) => setCallsLayoutMode(value as CallsLayoutMode)}
+    />
+  );
+}
 
 const MAX_ATTENDEE_PILLS = 3;
 
@@ -141,17 +195,23 @@ function CallCard(props: {
 }
 
 /**
- * Card grid for the most recent calls, shown above the calls list on desktop.
- * Two columns by default, four when the list column is @4xl wide. The rows
- * passed here are removed from the list by the caller.
+ * One virtualized row of the calls gallery: up to `columns` call cards laid
+ * out on a fixed grid. Cards keep click/focus/context-menu parity with list
+ * rows.
  */
-export function CallsGrid(props: {
+export function CallsGalleryRow(props: {
   rows: SoupRow[];
+  columns: number;
   onEntityClick: (row: SoupRow, event: MouseEvent) => void;
   onEntityMouseMove?: (row: SoupRow) => void;
 }) {
   return (
-    <div class="grid shrink-0 grid-cols-2 items-stretch gap-2 px-2 pb-1 pt-2 @4xl/u-list:grid-cols-4">
+    <div
+      class="grid items-stretch gap-2 px-2 py-1"
+      style={{
+        'grid-template-columns': `repeat(${props.columns}, minmax(0, 1fr))`,
+      }}
+    >
       <For each={props.rows}>
         {(row) => (
           <SoupEntityContextMenu entity={row.original}>
