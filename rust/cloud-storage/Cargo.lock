@@ -15522,11 +15522,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask-cache-wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "xtask-paths",
+]
+
+[[package]]
 name = "xtask-graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "guppy",
+ "xtask-paths",
+]
+
+[[package]]
+name = "xtask-graphql-soup-schema"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "xtask-paths",
 ]
 

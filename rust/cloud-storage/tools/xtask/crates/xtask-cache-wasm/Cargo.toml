@@ -1,0 +1,15 @@
+[package]
+description = "xtask cache-wasm: build the browser cache wasm package when missing or version-drifted"
+edition = "2024"
+name = "xtask-cache-wasm"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask-cache-wasm"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+xtask-paths = { path = "../xtask-paths" }

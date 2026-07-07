@@ -1,0 +1,14 @@
+[package]
+description = "xtask graphql-soup-schema: export the GraphQL Soup SDL to a file"
+edition = "2024"
+name = "xtask-graphql-soup-schema"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask-graphql-soup-schema"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+xtask-paths = { path = "../xtask-paths" }
