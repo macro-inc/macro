@@ -1,3 +1,4 @@
+export { groupedCacheVersion } from './grouped-operations';
 export { initSoupNormalizer } from './normalizer';
 export {
   getSoupEntityById,

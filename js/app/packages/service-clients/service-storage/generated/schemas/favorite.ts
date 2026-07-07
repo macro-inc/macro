@@ -9,11 +9,12 @@ import type { FavoriteChannelType } from './favoriteChannelType';
 import type { FavoriteDocumentSubType } from './favoriteDocumentSubType';
 import type { FavoriteEntityType } from './favoriteEntityType';
 import type { FavoriteFileType } from './favoriteFileType';
-import type { FavoriteName } from './favoriteName';
 
 /**
  * A single favorited entity, including display metadata hydrated from the
-favorited entity where available.
+favorited entity where available. Display names are deliberately not
+included: clients resolve them from the entity previews pipeline, which
+is viewer-relative for DM channels and updated by renames.
 
 A favorite is identified by `(entity_type, entity_id)` within the user's
 collection; there is no surrogate id.
@@ -33,8 +34,6 @@ export interface Favorite {
   entityType: FavoriteEntityType;
   /** File type of the favorited document, when applicable. */
   fileType?: FavoriteFileType;
-  /** Display name of the favorited entity, when it could be resolved. */
-  name?: FavoriteName;
   /** Manual ordering value; lower sorts first. */
   sortOrder: number;
 }

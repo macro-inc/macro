@@ -322,6 +322,7 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
+        user_id: MacroUserIdStr<'_>,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         use frecency::domain::models::AggregateFrecency;
@@ -360,7 +361,7 @@ where
             .collect();
 
         self.soup_storage
-            .populate_properties(&mut items)
+            .populate_properties(user_id, &mut items)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -567,7 +568,7 @@ where
                     },
                 );
 
-                let email_soup_fut = self.handle_email_request(email_request);
+                let email_soup_fut = self.handle_email_request(req.user.copied(), email_request);
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 

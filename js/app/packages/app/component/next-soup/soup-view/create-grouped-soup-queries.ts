@@ -2,6 +2,7 @@ import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { groupedCacheVersion } from '@queries/soup/cache';
 import {
   parseGroupMeta,
   serializeGroupByField,
@@ -189,6 +190,9 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       ...query,
       data: () => {
         groupDataVersion();
+        // External cache patches (optimistic property edits, WS inserts)
+        // bump this since query.data is read untracked.
+        groupedCacheVersion();
         return untrack(query.data);
       },
       fetchNextPage: async () => {

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nSELECT\n    ep.entity_id,\n    ep.entity_type as \"entity_type: EntityType\",\n    ep.property_definition_id\nFROM entity_properties ep\nWHERE ep.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3f3b5a5d8734e3748d4e29d64cfa89baff99dae621e7cbd7a10017beec9485c8"
+}

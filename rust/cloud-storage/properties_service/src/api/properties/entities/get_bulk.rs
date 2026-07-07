@@ -71,6 +71,7 @@ async fn get_bulk_entity_properties_impl(
             &state.db,
             &request.entities,
             &request.property_ids,
+            None,
         )
         .await
     }

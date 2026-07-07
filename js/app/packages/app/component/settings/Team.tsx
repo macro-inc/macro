@@ -5,6 +5,7 @@ import TrashIcon from '@phosphor/trash.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import XIcon from '@phosphor/x.svg';
+import LinkIcon from '@phosphor/link.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -21,6 +22,7 @@ import {
 } from './primitives';
 import { Select } from '@kobalte/core/select';
 import { useUserId } from '@core/context/user';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { useDisplayName, tryMacroId, macroIdToEmail } from '@core/user';
 import {
   createMemo,
@@ -29,6 +31,7 @@ import {
   Index,
   mapArray,
   Match,
+  onCleanup,
   Show,
   Suspense,
   Switch,
@@ -387,6 +390,23 @@ function InviteRow(props: {
   isOwner: boolean;
   onCancel: () => void;
 }) {
+  const [copied, setCopied] = createSignal(false);
+  let copyResetTimeout: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(copyResetTimeout));
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `${getWebOrigin()}/app/team-invite?id=${props.invite.id}`,
+      );
+    } catch (err) {
+      console.error('Failed to copy to clipboard', err);
+      return;
+    }
+    setCopied(true);
+    clearTimeout(copyResetTimeout);
+    copyResetTimeout = setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
       <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -404,6 +424,18 @@ function InviteRow(props: {
         </div>
       </div>
       <Show when={props.isOwner}>
+        <Tooltip label={copied() ? 'Copied' : 'Copy invite link'}>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="shrink-0"
+            onClick={handleCopyLink}
+          >
+            <Show when={copied()} fallback={<LinkIcon class="size-4" />}>
+              <CheckIcon class="size-4" />
+            </Show>
+          </Button>
+        </Tooltip>
         <Tooltip label="Cancel invite">
           <Button
             variant="ghost"

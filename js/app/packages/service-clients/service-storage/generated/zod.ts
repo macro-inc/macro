@@ -6273,18 +6273,12 @@ export const listFavoritesResponse = zod
               .describe(
                 'File type of the favorited document, when applicable.'
               ),
-            name: zod
-              .string()
-              .nullish()
-              .describe(
-                'Display name of the favorited entity, when it could be resolved.'
-              ),
             sortOrder: zod
               .number()
               .describe('Manual ordering value; lower sorts first.'),
           })
           .describe(
-            "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
+            "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
           )
       )
       .describe("The requesting user's favorites, in manual order."),
@@ -6362,18 +6356,12 @@ export const addFavoriteResponse = zod
       .string()
       .nullish()
       .describe('File type of the favorited document, when applicable.'),
-    name: zod
-      .string()
-      .nullish()
-      .describe(
-        'Display name of the favorited entity, when it could be resolved.'
-      ),
     sortOrder: zod
       .number()
       .describe('Manual ordering value; lower sorts first.'),
   })
   .describe(
-    "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
+    "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id."
   );
 
 /**

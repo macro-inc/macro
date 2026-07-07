@@ -1254,6 +1254,66 @@ async fn test_filter_by_project_ids_include_root(db: PgPool) -> anyhow::Result<(
     Ok(())
 }
 
+// The frontend's "all folders" filter is `pf: !(pid = nil)`. Root projects
+// have a NULL parentId, so the negated equality must not drop them.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_negated_project_id_filter_includes_root_projects(db: PgPool) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Mirror the folders-view request: docs and chats excluded via nil-id
+    // literals, projects included via a negated nil parent-id literal.
+    let filters = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::Id(Uuid::nil())))),
+        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::ChatId(Uuid::nil())))),
+        project_filter: Some(Arc::new(Expr::is_not(Expr::Literal(
+            ProjectLiteral::ProjectId(Uuid::nil()),
+        )))),
+        ..Default::default()
+    };
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let project_ids: HashSet<Uuid> = items
+        .iter()
+        .map(|item| match item {
+            SoupItem::Project(p) => p.id,
+            other => panic!("expected only projects, got {other:?}"),
+        })
+        .collect();
+
+    let expected_ids: HashSet<Uuid> = [
+        "11111111-1111-1111-1111-111111111111", // Project A (root, NULL parentId)
+        "22222222-2222-2222-2222-222222222222", // Project B (child of A)
+        "33333333-3333-3333-3333-333333333333", // Project C (child of B)
+        "44444444-4444-4444-4444-444444444444", // Project D (root, NULL parentId)
+    ]
+    .iter()
+    .map(|&s| Uuid::parse_str(s).unwrap())
+    .collect();
+
+    assert_eq!(
+        project_ids, expected_ids,
+        "negated pid filter should include root (NULL-parent) projects"
+    );
+
+    Ok(())
+}
+
 // Test combined filters across multiple entity types
 #[sqlx::test(
     fixtures(

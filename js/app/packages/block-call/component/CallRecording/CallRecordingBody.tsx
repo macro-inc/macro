@@ -160,7 +160,7 @@ export function CallRecordingBody(props: {
           class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16">
+          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16 mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
             <div class="flex flex-col gap-10">
               <header>
                 <Show when={!isMobile()}>
