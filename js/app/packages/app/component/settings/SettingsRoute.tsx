@@ -1,6 +1,6 @@
 import { useSettingsState } from '@core/constant/SettingsState';
-import { isMobile } from '@core/mobile/isMobile';
 import { settingsSlugToTab } from '@core/constant/settingsTabsConfig';
+import { isMobile } from '@core/mobile/isMobile';
 import { Navigate, useParams } from '@solidjs/router';
 import { Layer } from '@ui';
 import { createEffect, Show } from 'solid-js';
