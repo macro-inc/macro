@@ -90,16 +90,23 @@ async fn create_project_v2(
         }
     };
 
-    let _ = ctx
-        .sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(UpsertProject {
-            project_id: project.id.clone(),
-            index_override: None,
-        }))
-        .await
-        .inspect_err(
-            |e| tracing::error!(error=?e, project_id=?project.id, "unable to enqueue project search upsert"),
-        );
+    tokio::spawn({
+        let sqs_client = ctx.sqs_client.clone();
+        let project_id = project.id.clone();
+        async move {
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpsertProject(
+                    UpsertProject {
+                        project_id: project_id.clone(),
+                        index_override: None,
+                    },
+                ))
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, project_id=?project_id, "unable to enqueue project search upsert"),
+                );
+        }
+    });
 
     // update project modified if necessary
     if let Some(project_id) = req.project_parent_id {
