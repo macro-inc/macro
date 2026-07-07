@@ -714,7 +714,7 @@ function EmailContent(props: EmailViewProps) {
                           : 'mobile:hidden'
                       )}
                     >
-                      <div class="relative w-full flex flex-row justify-center macro-message-width macro-message-padding mx-auto bg-[green]">
+                      <div class="relative w-full flex flex-row justify-center macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}
                           loadingText="Loading messages"
