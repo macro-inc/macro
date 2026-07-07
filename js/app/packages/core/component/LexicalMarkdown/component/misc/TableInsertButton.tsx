@@ -11,12 +11,14 @@ import {
 } from '@lexical/table';
 import PlusIcon from '@phosphor/plus.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Layer } from '@ui';
 import {
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
   isHTMLElement,
 } from 'lexical';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { tableColumnResizeEdge } from './TableCellResizer';
 
 // How close (px) the pointer must be to a row/column border for the button to show.
 const BORDER_PROXIMITY = 6;
@@ -44,7 +46,17 @@ export function TableInsertButton() {
     if (!buttonHovered()) setInsertTarget(undefined);
   };
 
+  // A column resize captures the pointer, so no pointermove would ever
+  // clear a stale button; hide it for the duration of the drag.
+  createEffect(() => {
+    if (tableColumnResizeEdge()) {
+      setButtonHovered(false);
+      setInsertTarget(undefined);
+    }
+  });
+
   const onPointerMove = createCallback((event: PointerEvent) => {
+    if (tableColumnResizeEdge()) return;
     const currentEditor = editor();
     const target = event.target;
     if (!currentEditor || !isHTMLElement(target)) return;
@@ -203,40 +215,43 @@ export function TableInsertButton() {
     <Show when={insertTarget()}>
       {(target) => (
         <ScopedPortal scope="split">
-          <Show when={buttonHovered()}>
-            <div
-              class="fixed z-10 pointer-events-none bg-accent"
-              style={
-                target().type === 'row'
-                  ? {
-                      left: `${target().lineFrom}px`,
-                      width: `${target().lineTo - target().lineFrom}px`,
-                      top: `${target().y - 1}px`,
-                      height: '2px',
-                    }
-                  : {
-                      top: `${target().lineFrom}px`,
-                      height: `${target().lineTo - target().lineFrom}px`,
-                      left: `${target().x - 1}px`,
-                      width: '2px',
-                    }
-              }
-            />
-          </Show>
-          <button
-            type="button"
-            class="fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-accent hover:bg-accent hover:text-surface"
-            style={{ left: `${target().x}px`, top: `${target().y}px` }}
-            onPointerDown={(e) => e.preventDefault()}
-            onPointerEnter={() => setButtonHovered(true)}
-            onPointerLeave={() => {
-              setButtonHovered(false);
-              setInsertTarget(undefined);
-            }}
-            onClick={onInsert}
-          >
-            <PlusIcon class="size-3" />
-          </button>
+          {/* Same elevated surface as the other floating bars. */}
+          <Layer depth={2}>
+            <Show when={buttonHovered()}>
+              <div
+                class="fixed z-10 pointer-events-none bg-accent"
+                style={
+                  target().type === 'row'
+                    ? {
+                        left: `${target().lineFrom}px`,
+                        width: `${target().lineTo - target().lineFrom}px`,
+                        top: `${target().y - 1}px`,
+                        height: '2px',
+                      }
+                    : {
+                        top: `${target().lineFrom}px`,
+                        height: `${target().lineTo - target().lineFrom}px`,
+                        left: `${target().x - 1}px`,
+                        width: '2px',
+                      }
+                }
+              />
+            </Show>
+            <button
+              type="button"
+              class="fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-accent hover:bg-accent hover:text-surface"
+              style={{ left: `${target().x}px`, top: `${target().y}px` }}
+              onPointerDown={(e) => e.preventDefault()}
+              onPointerEnter={() => setButtonHovered(true)}
+              onPointerLeave={() => {
+                setButtonHovered(false);
+                setInsertTarget(undefined);
+              }}
+              onClick={onInsert}
+            >
+              <PlusIcon class="size-3" />
+            </button>
+          </Layer>
         </ScopedPortal>
       )}
     </Show>

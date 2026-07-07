@@ -1086,15 +1086,17 @@ export function MarkdownEditor(props: {
 
         <Show when={canEdit()}>
           {/* On touch devices the hover-driven controls are unusable; the
-              move handle's tap menu covers insert/delete instead. */}
+              move handle's tap menu covers insert/delete instead. The cell
+              resizer needs no handle on touch: a horizontal swipe from a
+              column border resizes it. */}
           <Show when={!isTouchDevice()}>
-            <TableCellResizer />
             <TableInsertButton />
             <TableDeleteButtons />
           </Show>
           <Show when={isTouchDevice()}>
             <TableSelectionActionBar />
           </Show>
+          <TableCellResizer />
           <TableMoveHandle />
         </Show>
 

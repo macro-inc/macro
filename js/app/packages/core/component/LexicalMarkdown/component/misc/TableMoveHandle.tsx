@@ -24,6 +24,7 @@ import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
 import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Layer } from '@ui';
 import {
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
@@ -479,75 +480,78 @@ export function TableMoveHandle() {
     <Show when={handlePosition()}>
       {(pos) => (
         <ScopedPortal scope="split">
-          <Show when={dragging() && dropTarget()}>
-            {(t) => (
-              <div
-                class="fixed z-10 pointer-events-none bg-accent/15 ring-1 ring-accent/60"
-                style={{
-                  left: `${t().rect.left}px`,
-                  top: `${t().rect.top}px`,
-                  width: `${t().rect.width}px`,
-                  height: `${t().rect.height}px`,
-                }}
-              />
-            )}
-          </Show>
-          <button
-            ref={setHandleElem}
-            type="button"
-            aria-label="Move cells"
-            class="fixed z-20 flex size-6 -translate-x-[calc(100%-3px)] -translate-y-[3px] items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm touch-none"
-            classList={{
-              'cursor-grab': !dragging(),
-              'cursor-grabbing': dragging(),
-            }}
-            style={{ left: `${pos().x}px`, top: `${pos().y}px` }}
-            onPointerDown={onHandlePointerDown}
-          >
-            <DotsIcon class="size-3.5" />
-          </button>
-          {/* Touch devices get a persistent delete-table button on the
-              table's top-left corner while the selection is in the table. */}
-          <Show when={isTouchDevice() && pos().tableCorner}>
-            {(corner) => (
-              <button
-                type="button"
-                aria-label="Delete table"
-                title="Delete table"
-                class="fixed z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-failure shadow-sm active:border-failure active:bg-failure active:text-surface"
-                style={{ left: `${corner().x}px`, top: `${corner().y}px` }}
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() =>
-                  runMenuAction((cell) =>
-                    $getTableNodeFromLexicalNodeOrThrow(cell).remove()
-                  )
-                }
-              >
-                <TrashIcon class="size-3.5" />
-              </button>
-            )}
-          </Show>
-          <Show when={menuOpen()}>
-            <div
-              class="z-30 grid grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
-              style={{
-                width: `${MENU_WIDTH_PX}px`,
-                'max-height': `${MENU_MAX_HEIGHT_PX}px`,
+          {/* Same elevated surface as the other floating bars. */}
+          <Layer depth={2}>
+            <Show when={dragging() && dropTarget()}>
+              {(t) => (
+                <div
+                  class="fixed z-10 pointer-events-none bg-accent/15 ring-1 ring-accent/60"
+                  style={{
+                    left: `${t().rect.left}px`,
+                    top: `${t().rect.top}px`,
+                    width: `${t().rect.width}px`,
+                    height: `${t().rect.height}px`,
+                  }}
+                />
+              )}
+            </Show>
+            <button
+              ref={setHandleElem}
+              type="button"
+              aria-label="Move cells"
+              class="fixed z-20 flex size-6 -translate-x-[calc(100%-3px)] -translate-y-[3px] items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm touch-none"
+              classList={{
+                'cursor-grab': !dragging(),
+                'cursor-grabbing': dragging(),
               }}
-              use:floatWithElement={{
-                element: handleElem,
-                floatingOptions: { placement: 'bottom-end' },
-                spacing: 4,
-              }}
-              use:clickOutside={() => setMenuOpen(false)}
-              onPointerDown={(e) => e.preventDefault()}
+              style={{ left: `${pos().x}px`, top: `${pos().y}px` }}
+              onPointerDown={onHandlePointerDown}
             >
-              <For each={INSERT_ITEMS}>{(item) => menuItemButton(item)}</For>
-              <For each={DELETE_ITEMS}>
-                {(item) => menuItemButton(item, true)}
-              </For>
-            </div>
-          </Show>
+              <DotsIcon class="size-3.5" />
+            </button>
+            {/* Touch devices get a persistent delete-table button on the
+              table's top-left corner while the selection is in the table. */}
+            <Show when={isTouchDevice() && pos().tableCorner}>
+              {(corner) => (
+                <button
+                  type="button"
+                  aria-label="Delete table"
+                  title="Delete table"
+                  class="fixed z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-failure shadow-sm active:border-failure active:bg-failure active:text-surface"
+                  style={{ left: `${corner().x}px`, top: `${corner().y}px` }}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() =>
+                    runMenuAction((cell) =>
+                      $getTableNodeFromLexicalNodeOrThrow(cell).remove()
+                    )
+                  }
+                >
+                  <TrashIcon class="size-3.5" />
+                </button>
+              )}
+            </Show>
+            <Show when={menuOpen()}>
+              <div
+                class="z-30 grid grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
+                style={{
+                  width: `${MENU_WIDTH_PX}px`,
+                  'max-height': `${MENU_MAX_HEIGHT_PX}px`,
+                }}
+                use:floatWithElement={{
+                  element: handleElem,
+                  floatingOptions: { placement: 'bottom-end' },
+                  spacing: 4,
+                }}
+                use:clickOutside={() => setMenuOpen(false)}
+                onPointerDown={(e) => e.preventDefault()}
+              >
+                <For each={INSERT_ITEMS}>{(item) => menuItemButton(item)}</For>
+                <For each={DELETE_ITEMS}>
+                  {(item) => menuItemButton(item, true)}
+                </For>
+              </div>
+            </Show>
+          </Layer>
         </ScopedPortal>
       )}
     </Show>

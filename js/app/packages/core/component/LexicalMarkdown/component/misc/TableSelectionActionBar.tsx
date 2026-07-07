@@ -20,6 +20,7 @@ import CopyIcon from '@phosphor/copy.svg';
 import EraserIcon from '@phosphor/eraser.svg';
 import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { Layer } from '@ui';
 import {
   $getSelection,
   BLUR_COMMAND,
@@ -204,28 +205,31 @@ export function TableSelectionActionBar() {
     <Show when={anchorRect()}>
       {(rect) => (
         <ScopedPortal scope="split">
-          <div
-            ref={setAnchorElem}
-            class="pointer-events-none fixed"
-            style={{
-              left: `${rect().left}px`,
-              top: `${rect().top}px`,
-              width: `${rect().width}px`,
-              height: `${rect().height}px`,
-            }}
-          />
-          <div
-            class="z-30 flex items-center gap-0.5 rounded-lg bg-surface p-1 shadow-lg ring-1 ring-edge"
-            use:floatWithElement={{
-              element: anchorElem,
-              floatingOptions: { placement: 'top' },
-            }}
-          >
-            {barButton('Cut', ScissorsIcon, runCut)}
-            {barButton('Copy', CopyIcon, runCopy)}
-            {barButton('Paste', ClipboardIcon, () => void runPaste())}
-            {barButton('Clear', EraserIcon, runClear, true)}
-          </div>
+          {/* Same elevated surface as the other floating bars. */}
+          <Layer depth={2}>
+            <div
+              ref={setAnchorElem}
+              class="pointer-events-none fixed"
+              style={{
+                left: `${rect().left}px`,
+                top: `${rect().top}px`,
+                width: `${rect().width}px`,
+                height: `${rect().height}px`,
+              }}
+            />
+            <div
+              class="z-30 flex items-center gap-0.5 rounded-lg bg-surface p-1 shadow-lg ring-1 ring-edge"
+              use:floatWithElement={{
+                element: anchorElem,
+                floatingOptions: { placement: 'top' },
+              }}
+            >
+              {barButton('Cut', ScissorsIcon, runCut)}
+              {barButton('Copy', CopyIcon, runCopy)}
+              {barButton('Paste', ClipboardIcon, () => void runPaste())}
+              {barButton('Clear', EraserIcon, runClear, true)}
+            </div>
+          </Layer>
         </ScopedPortal>
       )}
     </Show>

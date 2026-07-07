@@ -5,13 +5,14 @@ import {
   $deleteTableRowAtSelection,
   $getTableNodeFromLexicalNodeOrThrow,
   $isTableCellNode,
-  $isTableSelection,
   getDOMCellFromTarget,
 } from '@lexical/table';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { $getNearestNodeFromDOMNode, $getSelection, isHTMLElement } from 'lexical';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { Layer } from '@ui';
+import { $getNearestNodeFromDOMNode, isHTMLElement } from 'lexical';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { tableColumnResizeEdge } from './TableCellResizer';
 
 type DeleteTarget = {
   cellElem: HTMLElement;
@@ -24,7 +25,14 @@ type DeleteTarget = {
   // Clamped to the visible span of the scroll wrapper.
   tableLeft: number;
   tableRight: number;
+  // Pointer proximity to the border each button sits on.
+  nearTop: boolean;
+  nearLeft: boolean;
 };
+
+// How far (px) inside the table's top/left border the pointer still counts
+// as hovering that border.
+const EDGE_PROXIMITY_PX = 20;
 
 const BUTTON_CLASS =
   'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
@@ -40,7 +48,17 @@ export function TableDeleteButtons() {
     if (!hovered()) setTarget(undefined);
   };
 
+  // A column resize captures the pointer, so no pointermove would ever
+  // clear stale buttons; hide them for the duration of the drag.
+  createEffect(() => {
+    if (tableColumnResizeEdge()) {
+      setHovered(undefined);
+      setTarget(undefined);
+    }
+  });
+
   const onPointerMove = createCallback((event: PointerEvent) => {
+    if (tableColumnResizeEdge()) return;
     const eventTarget = event.target;
     if (!editor() || !isHTMLElement(eventTarget)) return;
 
@@ -56,6 +74,11 @@ export function TableDeleteButtons() {
       .closest('.md-table-scrollable-wrapper')
       ?.getBoundingClientRect();
 
+    const tableLeft = Math.max(tableRect.left, wrapperRect?.left ?? -Infinity);
+    const nearTop = event.clientY - tableRect.top <= EDGE_PROXIMITY_PX;
+    const nearLeft = event.clientX - tableLeft <= EDGE_PROXIMITY_PX;
+    if (!nearTop && !nearLeft) return clear();
+
     setTarget({
       cellElem: domCell.elem,
       cellLeft: rect.left,
@@ -64,8 +87,10 @@ export function TableDeleteButtons() {
       cellBottom: rect.bottom,
       tableTop: tableRect.top,
       tableBottom: tableRect.bottom,
-      tableLeft: Math.max(tableRect.left, wrapperRect?.left ?? -Infinity),
+      tableLeft,
       tableRight: Math.min(tableRect.right, wrapperRect?.right ?? Infinity),
+      nearTop,
+      nearLeft,
     });
   });
 
@@ -123,74 +148,84 @@ export function TableDeleteButtons() {
     <Show when={target()}>
       {(t) => (
         <ScopedPortal scope="split">
-          {/* Highlight of the row/column about to be deleted. */}
-          <Show when={hovered()}>
-            {(h) => (
-              <div
-                class="fixed z-10 pointer-events-none bg-failure/15"
+          {/* Same elevated surface as the other floating bars. */}
+          <Layer depth={2}>
+            {/* Highlight of the row/column about to be deleted. */}
+            <Show when={hovered()}>
+              {(h) => (
+                <div
+                  class="fixed z-10 pointer-events-none bg-failure/15"
+                  style={{
+                    left:
+                      h() === 'column'
+                        ? `${t().cellLeft}px`
+                        : `${t().tableLeft}px`,
+                    width:
+                      h() === 'column'
+                        ? `${t().cellRight - t().cellLeft}px`
+                        : `${t().tableRight - t().tableLeft}px`,
+                    top:
+                      h() === 'row' ? `${t().cellTop}px` : `${t().tableTop}px`,
+                    height:
+                      h() === 'row'
+                        ? `${t().cellBottom - t().cellTop}px`
+                        : `${t().tableBottom - t().tableTop}px`,
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={t().nearTop}>
+              <button
+                type="button"
+                aria-label="Delete column"
+                class={BUTTON_CLASS}
                 style={{
-                  left:
-                    h() === 'column'
-                      ? `${t().cellLeft}px`
-                      : `${t().tableLeft}px`,
-                  width:
-                    h() === 'column'
-                      ? `${t().cellRight - t().cellLeft}px`
-                      : `${t().tableRight - t().tableLeft}px`,
-                  top: h() === 'row' ? `${t().cellTop}px` : `${t().tableTop}px`,
-                  height:
-                    h() === 'row'
-                      ? `${t().cellBottom - t().cellTop}px`
-                      : `${t().tableBottom - t().tableTop}px`,
+                  left: `${(t().cellLeft + t().cellRight) / 2}px`,
+                  top: `${Math.max(t().tableTop, 12)}px`,
                 }}
-              />
-            )}
-          </Show>
-          <button
-            type="button"
-            aria-label="Delete column"
-            class={BUTTON_CLASS}
-            style={{
-              left: `${(t().cellLeft + t().cellRight) / 2}px`,
-              top: `${Math.max(t().tableTop, 12)}px`,
-            }}
-            onPointerDown={(e) => e.preventDefault()}
-            onPointerEnter={() => setHovered('column')}
-            onPointerLeave={onButtonLeave}
-            onClick={() => deleteAt('column')}
-          >
-            <TrashIcon class="size-3" />
-          </button>
-          <button
-            type="button"
-            aria-label="Delete row"
-            class={BUTTON_CLASS}
-            style={{
-              left: `${t().tableLeft}px`,
-              top: `${(t().cellTop + t().cellBottom) / 2}px`,
-            }}
-            onPointerDown={(e) => e.preventDefault()}
-            onPointerEnter={() => setHovered('row')}
-            onPointerLeave={onButtonLeave}
-            onClick={() => deleteAt('row')}
-          >
-            <TrashIcon class="size-3" />
-          </button>
-          <button
-            type="button"
-            aria-label="Delete table"
-            class={BUTTON_CLASS}
-            style={{
-              left: `${t().tableLeft}px`,
-              top: `${t().tableTop}px`,
-            }}
-            onPointerDown={(e) => e.preventDefault()}
-            onPointerEnter={() => setHovered('table')}
-            onPointerLeave={onButtonLeave}
-            onClick={() => deleteAt('table')}
-          >
-            <TrashIcon class="size-3" />
-          </button>
+                onPointerDown={(e) => e.preventDefault()}
+                onPointerEnter={() => setHovered('column')}
+                onPointerLeave={onButtonLeave}
+                onClick={() => deleteAt('column')}
+              >
+                <TrashIcon class="size-3" />
+              </button>
+            </Show>
+            <Show when={t().nearLeft}>
+              <button
+                type="button"
+                aria-label="Delete row"
+                class={BUTTON_CLASS}
+                style={{
+                  left: `${t().tableLeft}px`,
+                  top: `${(t().cellTop + t().cellBottom) / 2}px`,
+                }}
+                onPointerDown={(e) => e.preventDefault()}
+                onPointerEnter={() => setHovered('row')}
+                onPointerLeave={onButtonLeave}
+                onClick={() => deleteAt('row')}
+              >
+                <TrashIcon class="size-3" />
+              </button>
+            </Show>
+            <Show when={t().nearTop && t().nearLeft}>
+              <button
+                type="button"
+                aria-label="Delete table"
+                class={BUTTON_CLASS}
+                style={{
+                  left: `${t().tableLeft}px`,
+                  top: `${t().tableTop}px`,
+                }}
+                onPointerDown={(e) => e.preventDefault()}
+                onPointerEnter={() => setHovered('table')}
+                onPointerLeave={onButtonLeave}
+                onClick={() => deleteAt('table')}
+              >
+                <TrashIcon class="size-3" />
+              </button>
+            </Show>
+          </Layer>
         </ScopedPortal>
       )}
     </Show>

@@ -3,6 +3,7 @@ import { useCanEdit } from '@core/signal/permissions';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
+import { Layer } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -119,45 +120,48 @@ export function FloatingTableMenu() {
 
   return (
     <Show when={menuOpen()}>
-      <div
-        class="p-2 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg ring-1 ring-edge cursor-default select-none"
-        use:floatWithSelection={{
-          selection: untrack(() => window.getSelection()),
-          reactiveOnContainer: editor()?.getRootElement(),
-        }}
-        use:clickOutside={() => resetMenu()}
-        on:mousedown={(e) => e.preventDefault()}
-      >
-        <div class="flex flex-col items-center gap-1.5">
-          <div
-            class="grid gap-1"
-            style={{
-              'grid-template-columns': `repeat(${visibleCols()}, 1fr)`,
-            }}
-          >
-            <Index each={Array.from({ length: visibleRows() })}>
-              {(_, rowIndex) => (
-                <Index each={Array.from({ length: visibleCols() })}>
-                  {(_, colIndex) => (
-                    <div
-                      class="size-4 border border-edge rounded-xs transition-colors duration-100"
-                      classList={{
-                        'bg-accent/20 border-accent/50':
-                          rowIndex < rows() && colIndex < cols(),
-                      }}
-                      onMouseOver={() => handleCellHover(rowIndex, colIndex)}
-                      onClick={() => insertTable(rowIndex + 1, colIndex + 1)}
-                    />
-                  )}
-                </Index>
-              )}
-            </Index>
+      {/* Same elevated surface as the other floating bars. */}
+      <Layer depth={2}>
+        <div
+          class="p-2 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg ring-1 ring-edge cursor-default select-none"
+          use:floatWithSelection={{
+            selection: untrack(() => window.getSelection()),
+            reactiveOnContainer: editor()?.getRootElement(),
+          }}
+          use:clickOutside={() => resetMenu()}
+          on:mousedown={(e) => e.preventDefault()}
+        >
+          <div class="flex flex-col items-center gap-1.5">
+            <div
+              class="grid gap-1"
+              style={{
+                'grid-template-columns': `repeat(${visibleCols()}, 1fr)`,
+              }}
+            >
+              <Index each={Array.from({ length: visibleRows() })}>
+                {(_, rowIndex) => (
+                  <Index each={Array.from({ length: visibleCols() })}>
+                    {(_, colIndex) => (
+                      <div
+                        class="size-4 border border-edge rounded-xs transition-colors duration-100"
+                        classList={{
+                          'bg-accent/20 border-accent/50':
+                            rowIndex < rows() && colIndex < cols(),
+                        }}
+                        onMouseOver={() => handleCellHover(rowIndex, colIndex)}
+                        onClick={() => insertTable(rowIndex + 1, colIndex + 1)}
+                      />
+                    )}
+                  </Index>
+                )}
+              </Index>
+            </div>
+            <p class="text-xs text-ink-muted">
+              {rows()} &times; {cols()}
+            </p>
           </div>
-          <p class="text-xs text-ink-muted">
-            {rows()} &times; {cols()}
-          </p>
         </div>
-      </div>
+      </Layer>
     </Show>
   );
 }
