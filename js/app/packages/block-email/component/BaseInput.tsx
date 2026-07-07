@@ -1496,7 +1496,7 @@ export function BaseInput(props: {
 
   const ReplyTypeDropdown = () => (
     <Dropdown>
-      <Dropdown.Trigger as={Button} size='md'>
+      <Dropdown.Trigger as={Button} size="md">
         <Switch>
           <Match when={effectiveReplyType() === 'reply'}>
             <Reply class="size-4 shrink-0" />
@@ -1564,7 +1564,7 @@ export function BaseInput(props: {
     >
       <div
         class={cn(
-          'relative min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap p-2 pt-4',
+          'relative min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap p-2 pt-4'
         )}
       >
         <Show
@@ -1611,30 +1611,30 @@ export function BaseInput(props: {
                   onSelect={persistDraftOnSenderSwitch}
                 />
               </div>
-              <div class="flex items-center gap-3 ml-auto shrink-0">
+              <div class="flex items-center ml-auto shrink-0">
                 <Show when={!showCc()}>
-                  <button
-                    type="button"
-                    class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
+                  <Button
+                    size="sm"
+                    class="rounded-lg"
                     onClick={() => {
                       setShowCc(true);
                       queueMicrotask(() => ccRef()?.focus());
                     }}
                   >
                     Cc
-                  </button>
+                  </Button>
                 </Show>
                 <Show when={!showBcc()}>
-                  <button
-                    type="button"
-                    class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
+                  <Button
+                    size="sm"
+                    class="rounded-lg"
                     onClick={() => {
                       setShowBcc(true);
                       queueMicrotask(() => bccRef()?.focus());
                     }}
                   >
                     Bcc
-                  </button>
+                  </Button>
                 </Show>
               </div>
             </div>
@@ -1895,6 +1895,7 @@ export function BaseInput(props: {
               onclick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
+              variant="ghost"
               tooltip="Show formatting toolbar"
               size="icon-sm"
             >
@@ -1934,6 +1935,17 @@ export function BaseInput(props: {
                 <Quotes />
               </KToggleButton>
             </Tooltip>
+            <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
+            <Button
+              onclick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              size="icon-sm"
+            >
+              <Trash />
+            </Button>
+          </div>
+
+          <div class="flex flex-row items-center gap-1">
             <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
               <EmailDateSelector
                 sendTime={form().sendTime() ?? null}
@@ -1946,25 +1958,17 @@ export function BaseInput(props: {
                 disablePortal={isMobile()}
               />
             </Show>
-            <Button
-              onclick={deleteDraftAndReset}
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              size="icon-sm"
-            >
-              <Trash />
-            </Button>
+            <SendButton
+              disabled={
+                uploadAttachmentMutation.isPending ||
+                sendMutation.isPending ||
+                !!form().sendTime()
+              }
+              pending={sendMutation.isPending}
+              hidden={isMobile() && !hasBodyText()}
+              onClick={() => sendEmail()}
+            />
           </div>
-
-          <SendButton
-            disabled={
-              uploadAttachmentMutation.isPending ||
-              sendMutation.isPending ||
-              !!form().sendTime()
-            }
-            pending={sendMutation.isPending}
-            hidden={isMobile() && !hasBodyText()}
-            onClick={() => sendEmail()}
-          />
         </div>
       </div>
     </Surface>

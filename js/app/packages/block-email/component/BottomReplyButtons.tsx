@@ -20,12 +20,12 @@ function ReplyActionButton(props: {
 }) {
   return (
     <Button
-      variant="base"
       // Button wraps itself in Layer depth={0} by default; in the floating
       // accessory region, match the chrome's depth so the island surface
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
       depth={isMobile() ? 3 : undefined}
+      variant='base'
       class={cn(
         // Island pills when floating in the mobile accessory region.
         'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
