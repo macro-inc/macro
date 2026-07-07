@@ -1,5 +1,5 @@
-import { settingsSlugToTab } from '@core/constant/settingsTabsConfig';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { settingsSlugToTab } from '@core/constant/settingsTabsConfig';
 import { Navigate, useParams } from '@solidjs/router';
 import { Layer } from '@ui';
 import { createEffect, Show } from 'solid-js';

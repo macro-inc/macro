@@ -1,6 +1,6 @@
 [package]
 description = "Repo automation: regenerates workspace-hack and the deploy dep-closure map"
-edition = "2021"
+edition = "2024"
 name = "xtask"
 publish = false
 version = "0.1.0"

@@ -1,6 +1,6 @@
 use super::*;
-use crate::local::instance::Instance;
 use crate::local::Mode;
+use crate::local::instance::Instance;
 
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");

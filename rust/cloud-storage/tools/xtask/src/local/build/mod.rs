@@ -10,7 +10,7 @@ mod runtime_image;
 mod zigbuild;
 
 pub use binaries_dir::BinariesDir;
-pub use runtime_image::{ensure_runtime_image, RUNTIME_IMAGE_TAG};
+pub use runtime_image::{RUNTIME_IMAGE_TAG, ensure_runtime_image};
 
 use anyhow::Result;
 

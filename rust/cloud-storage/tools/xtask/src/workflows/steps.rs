@@ -18,11 +18,7 @@ pub trait FluentBuilder: Sized {
     }
     /// Apply `f` only when `cond` holds.
     fn when(self, cond: bool, f: impl FnOnce(Self) -> Self) -> Self {
-        if cond {
-            f(self)
-        } else {
-            self
-        }
+        if cond { f(self) } else { self }
     }
 }
 

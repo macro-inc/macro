@@ -5,8 +5,8 @@
 //! has no compose support.)
 
 use anyhow::{Context, Result};
-use bollard::models::{NetworkCreateRequest, VolumeCreateRequest};
 use bollard::Docker;
+use bollard::models::{NetworkCreateRequest, VolumeCreateRequest};
 use macro_env_var::maybe_env_var;
 
 /// Run a future to completion on a throwaway current-thread runtime (xtask's

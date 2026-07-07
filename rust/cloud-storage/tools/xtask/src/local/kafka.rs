@@ -17,13 +17,13 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 #[cfg(feature = "local-stack")]
+use rdkafka::ClientConfig;
+#[cfg(feature = "local-stack")]
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 #[cfg(feature = "local-stack")]
 use rdkafka::client::DefaultClientContext;
 #[cfg(feature = "local-stack")]
 use rdkafka::types::RDKafkaErrorCode;
-#[cfg(feature = "local-stack")]
-use rdkafka::ClientConfig;
 
 use super::instance::Instance;
 #[cfg(feature = "local-stack")]

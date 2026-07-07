@@ -1,9 +1,9 @@
 import { useChannelsContext } from '@core/context/channels';
-import { MaybeEntityRow } from '@entity';
+import { MaybeEntityRow, MultiSelectCheckbox } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
+import { cn } from '@ui';
 import { createMemo } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
-import { useInboxExpansion } from './inbox-expansion';
 import { scopeThreadNotifications } from './utils';
 
 /**
@@ -12,12 +12,8 @@ import { scopeThreadNotifications } from './utils';
  * adapter only maps the row into the card's display item and derives `selected`
  * from the focused row (which is what the preview shows).
  *
- * Expand/collapse of thread sub-items is read from the view-level
- * `InboxExpansionProvider` when present (so it survives the row scrolling out of
- * view); without a provider the card falls back to its own local state.
  */
 export function InboxListEntity(props: BaseListEntityProps) {
-  const expansion = useInboxExpansion();
   const channels = useChannelsContext();
 
   // A channel_thread soup entity comes back with a generic name ("Channel
@@ -32,21 +28,31 @@ export function InboxListEntity(props: BaseListEntityProps) {
   const item = createMemo(() => toInboxCardDisplayItem(entity()));
 
   return (
-    <div class="mx-1" ref={props.ref} onMouseMove={props.onMouseMove}>
+    <div
+      class="group/inbox-item relative mx-2"
+      ref={props.ref}
+      onMouseMove={props.onMouseMove}
+    >
       <MaybeEntityRow entityId={props.entity.id} config={props.entityRowConfig}>
         <InboxCardLayout
           item={item()}
           selected={props.checked}
           highlighted={props.highlighted}
           onClick={props.onClick}
-          expanded={
-            expansion ? expansion.isExpanded(props.entity.id) : undefined
-          }
-          onToggleExpanded={
-            expansion ? () => expansion.toggle(props.entity.id) : undefined
-          }
         />
       </MaybeEntityRow>
+      <div
+        class={cn(
+          'hidden absolute right-2 bottom-2 z-10 group-hover/inbox-item:flex items-center justify-center bg-surface overflow-hidden',
+          props.checked && 'flex'
+        )}
+      >
+        <MultiSelectCheckbox
+          checked={props.checked}
+          onChecked={props.onChecked}
+          showBorder
+        />
+      </div>
     </div>
   );
 }

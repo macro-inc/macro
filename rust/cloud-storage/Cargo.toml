@@ -7,11 +7,14 @@ members = [
   "ai_projections_refresh_handler",
   "ai_usage",
   "authentication_service",
-  "backfill_entity_access",
   "bot_id",
   "bots",
   "call_recording_preview_handler",
   "channel_bots",
+  "client/cache-core",
+  "client/cache-idb",
+  "client/cache-sqlite",
+  "client/cache-wasm",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -72,6 +75,8 @@ members = [
 
 [workspace.dependencies]
 anyhow = "1.0.100"
+apollo-compiler = "1"
+apollo-parser = "0.8"
 askama = "0.14"
 async-graphql = "7.2.1"
 async-openai = { version = "0.36.1", features = [
@@ -80,10 +85,12 @@ async-openai = { version = "0.36.1", features = [
   "completions",
   "embedding",
 ] }
+async-lock = "3"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
 automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
@@ -92,6 +99,7 @@ aws-sdk-sesv2 = "1.118.0"
 aws-sdk-sns = "1.99.0"
 aws-sdk-sqs = "1.98.0"
 aws-smithy-types = "1.4.7"
+aws-types = "1"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -120,6 +128,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lru = "0.16"
 lazy_static = "1.5.0"
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
@@ -167,9 +176,11 @@ rmcp = "1.6.0"
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
+postcard = { version = "1", features = ["use-std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }
+serde-wasm-bindgen = "0.6"
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 sha2 = "0.10.8"
@@ -182,6 +193,8 @@ sqlx = { version = "0.8.6", features = [
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }

@@ -456,6 +456,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the entity access service implementation

@@ -8,7 +8,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::super::arch::Target;
 use super::super::inventory::RUST_SERVICES;

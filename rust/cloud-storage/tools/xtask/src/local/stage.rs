@@ -15,7 +15,7 @@ use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use console::Style;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 

@@ -18,13 +18,13 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use docker_compose_types as dct;
 use indexmap::IndexMap;
-use serde_yaml::value::{Tag, TaggedValue};
 use serde_yaml::Value;
+use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
-use super::{repo_root, Mode};
+use super::{Mode, repo_root};
 
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
@@ -68,10 +68,11 @@ pub fn generate(mode: Mode, instance: &Instance, binaries: &BinariesDir) -> Resu
         // Named instances need their own host ports (replacing the base ports —
         // emitted as `!override` in apply_tags). Only the self-contained local
         // stacks remap; dev inherits the base-compose ports.
-        if mode.spec().runs_local_infra && !instance.is_default() {
-            if let Some(port) = svc.host_port {
-                s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
-            }
+        if mode.spec().runs_local_infra
+            && !instance.is_default()
+            && let Some(port) = svc.host_port
+        {
+            s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }

@@ -6,7 +6,7 @@
 //! pins glibc rather than cross-compiling between architectures — a materially
 //! lower-risk use of zigbuild than full cross builds.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// The glibc version the binaries are linked against, expressed as a
 /// `cargo zigbuild` target suffix (the same mechanism the Lambda builds use in

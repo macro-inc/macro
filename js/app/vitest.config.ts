@@ -32,6 +32,13 @@ export default defineConfig({
         },
       },
       {
+        plugins: [tsconfigPaths()],
+        test: {
+          include: ['packages/graphql-cache/**/*.{test,spec}.{ts,tsx}'],
+          name: 'graphql-cache',
+        },
+      },
+      {
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',

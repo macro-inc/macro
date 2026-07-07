@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use super::instance::{Instance, Port};
-use super::{identity, resources, Mode};
+use super::{Mode, identity, resources};
 
 /// The full local environment for one instance.
 pub struct LocalEnv {

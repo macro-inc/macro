@@ -22,6 +22,7 @@ use entity_access::domain::models::{
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
 use model::document::{ContentType, DocumentBasic, FileAssociation, FileType, FileTypeExt};
@@ -38,6 +39,10 @@ use crate::domain::models::{
 
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
+use super::events::{
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata, DocumentMacroEvent,
+    DocumentUpdatedMetadata,
+};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
@@ -60,6 +65,7 @@ pub struct DocumentServiceImpl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
+    B: MacroEventBroker,
 > {
     /// Document repository
     pub repo: R,
@@ -77,6 +83,8 @@ pub struct DocumentServiceImpl<
     pub entity_access_management_service: Eam,
     /// Foreign entity service
     pub foreign_entity_service: F,
+    /// Macro event broker for publishing document lifecycle events
+    pub macro_event_broker: B,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -115,6 +123,15 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     match file_type {
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+/// The user id to attribute a document lifecycle event to, when the caller is
+/// an authenticated user.
+fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
     }
 }
 
@@ -188,7 +205,8 @@ impl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
-> DocumentServiceImpl<R, U, T, C, Eam, F>
+    B: MacroEventBroker,
+> DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
     /// Create a document service with its repository and external service ports.
     #[allow(clippy::too_many_arguments)]
@@ -201,6 +219,7 @@ impl<
         connection_service: C,
         entity_access_management_service: Eam,
         foreign_entity_service: F,
+        macro_event_broker: B,
     ) -> Self {
         Self {
             repo,
@@ -211,6 +230,7 @@ impl<
             connection_service,
             entity_access_management_service,
             foreign_entity_service,
+            macro_event_broker,
         }
     }
 
@@ -466,6 +486,17 @@ impl<
             .await
             .map_err(|e| DocumentError::Internal(e.into()))
     }
+
+    /// Publish a document lifecycle event; failures are logged and dropped.
+    async fn publish_document_event(&self, event: &DocumentMacroEvent) {
+        let _ = self
+            .macro_event_broker
+            .send_event(event)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish document event");
+            });
+    }
 }
 
 #[cfg(feature = "document_create")]
@@ -476,7 +507,8 @@ impl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
-> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F>
+    B: MacroEventBroker,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
     async fn create_document(
         &self,
@@ -529,7 +561,8 @@ impl<
     C: ConnectionService,
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
-> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F>
+    B: MacroEventBroker,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -690,6 +723,16 @@ impl<
             .inspect_err(|e| {
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
+
+        self.publish_document_event(&DocumentMacroEvent::deleted(
+            entity_access_receipt.entity().entity_id.clone(),
+            DocumentDeletedMetadata {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+                project_id,
+            },
+        ))
+        .await;
 
         Ok(())
     }
@@ -995,6 +1038,20 @@ impl<
 
         let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
 
+        self.publish_document_event(&DocumentMacroEvent::created(
+            document_metadata.document_id.clone(),
+            DocumentCreatedMetadata {
+                document_id: document_metadata.document_id.clone(),
+                owner: document_metadata.owner.clone(),
+                document_name: document_metadata.document_name.clone(),
+                file_type,
+                project_id: project_id.map(|p| p.to_string()),
+                sub_type: document_metadata.sub_type,
+                created_at: document_metadata.created_at,
+            },
+        ))
+        .await;
+
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
@@ -1079,13 +1136,15 @@ impl<
             .document_name
             .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
+        let share_permission_updated = args.share_permission.is_some();
+
         self.repo
             .edit_document(EditDocumentRepoArgs {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
-                document_name,
+                document_name: document_name.clone(),
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
-                file_type: args.file_type,
+                file_type: args.file_type.clone(),
             })
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
@@ -1132,6 +1191,21 @@ impl<
             .inspect_err(|e| {
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
+
+        self.publish_document_event(&DocumentMacroEvent::updated(
+            entity_access_receipt.entity().entity_id.clone(),
+            DocumentUpdatedMetadata {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                owner: document_context.owner.clone(),
+                actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+                document_name,
+                previous_project_id: document_context.project_id.clone(),
+                project_id: args.project_id,
+                file_type: args.file_type,
+                share_permission_updated,
+            },
+        ))
+        .await;
 
         Ok(())
     }
@@ -1374,6 +1448,21 @@ impl<
         let team_task_metadata = self
             .team_task_metadata_for_document(&new_document_id)
             .await?;
+
+        self.publish_document_event(&DocumentMacroEvent::copied(
+            new_document_id.clone(),
+            DocumentCopiedMetadata {
+                document_id: new_document_id.clone(),
+                source_document_id: original_metadata.document_id.clone(),
+                source_version_id: query_version_id,
+                owner: user_id.clone(),
+                document_name: new_metadata.document_name.clone(),
+                file_type,
+                project_id: new_metadata.project_id.clone(),
+                sub_type: new_metadata.sub_type,
+            },
+        ))
+        .await;
 
         Ok(DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(

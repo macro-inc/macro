@@ -1,10 +1,10 @@
 //! workspace-hack maintenance through the hakari library — the same engine
 //! the `cargo hakari` CLI wraps, minus the CLI (and its version skew).
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use guppy::graph::PackageGraph;
-use hakari::summaries::{HakariConfig, DEFAULT_CONFIG_PATH};
 use hakari::HakariBuilder;
+use hakari::summaries::{DEFAULT_CONFIG_PATH, HakariConfig};
 
 /// Regenerates (or, in check mode, diffs) the workspace-hack crate:
 /// the generated section of its Cargo.toml, plus the `workspace-hack`
