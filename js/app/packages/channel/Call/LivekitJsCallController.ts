@@ -133,6 +133,12 @@ export function createLivekitJsCallController(
 
     const targetRoom = new Room({
       audioCaptureDefaults: options.currentMicrophoneCaptureOptions(),
+      publishDefaults: {
+        // Noise-suppressed audio has a near-silent noise floor, which makes
+        // Opus DTX (on by default) misread quiet speech onsets as silence and
+        // clip them. Always-on frames cost little at speech bitrates.
+        dtx: false,
+      },
     });
     attachRoomListeners(targetRoom);
     options.setRoom(targetRoom);
