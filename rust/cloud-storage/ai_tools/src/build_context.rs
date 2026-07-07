@@ -191,6 +191,9 @@ pub async fn build_tool_service_context_from_env(
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -274,6 +277,9 @@ pub async fn build_tool_service_context_from_env(
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

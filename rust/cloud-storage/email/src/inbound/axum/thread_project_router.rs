@@ -6,11 +6,8 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     ProjectBodyAccessLevelExtractor, ThreadAccessLevelExtractor,
 };
-use entity_access_management::domain::ports::EntityAccessManagementService;
-use model_entity::EntityType;
 use model_error_response::ErrorResponse;
 use thiserror::Error;
-use uuid::Uuid;
 
 use crate::domain::{models::EmailErr, ports::EmailService};
 
@@ -80,17 +77,16 @@ impl From<EmailErr> for UpdateThreadProjectError {
 }
 
 /// Create the thread project router with a `PATCH /{thread_id}/project` handler.
-pub fn thread_project_router<S, T, Svc, M>(state: EmailThreadRouterState<T, Svc, M>) -> Router<S>
+pub fn thread_project_router<S, T, Svc>(state: EmailThreadRouterState<T, Svc>) -> Router<S>
 where
     S: Send + Sync + 'static,
     T: EmailService,
     Svc: EntityAccessService,
-    M: EntityAccessManagementService,
 {
     Router::new()
         .route(
             "/{thread_id}/project",
-            patch(update_thread_project_handler::<T, Svc, M>),
+            patch(update_thread_project_handler::<T, Svc>),
         )
         .with_state(state)
 }
@@ -113,12 +109,8 @@ where
     )
 )]
 #[tracing::instrument(err, skip(state, access, project))]
-pub async fn update_thread_project_handler<
-    T: EmailService,
-    Svc: EntityAccessService,
-    M: EntityAccessManagementService,
->(
-    State(state): State<EmailThreadRouterState<T, Svc, M>>,
+pub async fn update_thread_project_handler<T: EmailService, Svc: EntityAccessService>(
+    State(state): State<EmailThreadRouterState<T, Svc>>,
     access: ThreadAccessLevelExtractor<EditAccessLevel, Svc>,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, UpdateThreadProjectRequest, Svc>,
 ) -> Result<Json<UpdateThreadProjectResponse>, UpdateThreadProjectError> {
@@ -130,46 +122,10 @@ pub async fn update_thread_project_handler<
         ProjectBodyAccessLevelExtractor::ProjectNotInBody { .. } => None,
     };
 
-    let thread_id = access.entity_access_receipt.entity().entity_id.clone();
-    let new_project_id = project_receipt
-        .as_ref()
-        .map(|r| r.entity().entity_id.clone());
-
     let old_project_id = state
         .service
         .update_thread_project(access.entity_access_receipt, project_receipt)
         .await?;
-
-    // Sync denormalized entity_access rows for the containing project.
-    // Best-effort: the project assignment itself already succeeded.
-    if old_project_id != new_project_id
-        && let Ok(thread_uuid) = Uuid::parse_str(&thread_id)
-    {
-        if let Some(old) = old_project_id
-            .as_deref()
-            .and_then(|p| Uuid::parse_str(p).ok())
-        {
-            let _ = state
-                .entity_access_management_service
-                .remove_entity_from_project(&thread_uuid, EntityType::EmailThread, &old)
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, project_id=%old, "unable to remove thread project access"),
-                );
-        }
-        if let Some(new) = new_project_id
-            .as_deref()
-            .and_then(|p| Uuid::parse_str(p).ok())
-        {
-            let _ = state
-                .entity_access_management_service
-                .add_entity_to_project(&thread_uuid, EntityType::EmailThread, &new)
-                .await
-                .inspect_err(
-                    |e| tracing::error!(error=?e, project_id=%new, "unable to add thread project access"),
-                );
-        }
-    }
 
     Ok(Json(UpdateThreadProjectResponse { old_project_id }))
 }

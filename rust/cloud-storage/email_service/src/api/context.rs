@@ -31,6 +31,7 @@ pub(crate) type EmailSvc = EmailServiceImpl<
         crm::outbound::companies_repo::CompaniesRepositoryImpl,
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     >,
+    EmailEntityAccessManagementService,
 >;
 
 #[derive(Clone, FromRef)]
@@ -49,10 +50,6 @@ pub(crate) struct ApiContext {
     pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,
     pub entity_access_service: Arc<EmailEntityAccessService>,
-    pub email_thread_state: EmailThreadRouterState<
-        EmailSvc,
-        EmailEntityAccessService,
-        EmailEntityAccessManagementService,
-    >,
+    pub email_thread_state: EmailThreadRouterState<EmailSvc, EmailEntityAccessService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
 }

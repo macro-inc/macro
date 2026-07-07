@@ -257,6 +257,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
@@ -264,6 +267,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+        ),
         0,
     ));
     let system_properties_service =

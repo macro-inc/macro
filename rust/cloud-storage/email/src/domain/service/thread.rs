@@ -27,7 +27,7 @@ struct ThreadFetchResult {
     is_owner: bool,
 }
 
-impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS>
+impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
 where
     T: EmailRepo,
     U: FrecencyQueryService,

@@ -109,6 +109,7 @@ type DssEmailService = EmailServiceImpl<
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
     DssCrmService,
+    EntityAccessManagementService,
 >;
 
 /// CRM router state.

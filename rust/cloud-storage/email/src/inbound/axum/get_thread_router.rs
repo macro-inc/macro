@@ -22,37 +22,34 @@ const DEFAULT_MESSAGE_LIMIT: i64 = 5;
 /// The maximum number of messages that can be returned per request.
 const MESSAGE_MAX: i64 = 100;
 
-pub struct EmailThreadRouterState<T, Svc, M> {
+pub struct EmailThreadRouterState<T, Svc> {
     pub service: Arc<T>,
     pub access_service: Arc<Svc>,
-    pub entity_access_management_service: Arc<M>,
 }
 
-impl<T, Svc, M> Clone for EmailThreadRouterState<T, Svc, M> {
+impl<T, Svc> Clone for EmailThreadRouterState<T, Svc> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
-            entity_access_management_service: self.entity_access_management_service.clone(),
         }
     }
 }
 
-impl<T, Svc, M> FromRef<EmailThreadRouterState<T, Svc, M>> for Arc<Svc> {
-    fn from_ref(state: &EmailThreadRouterState<T, Svc, M>) -> Self {
+impl<T, Svc> FromRef<EmailThreadRouterState<T, Svc>> for Arc<Svc> {
+    fn from_ref(state: &EmailThreadRouterState<T, Svc>) -> Self {
         state.access_service.clone()
     }
 }
 
-pub fn thread_router<S, T, Svc, M>(state: EmailThreadRouterState<T, Svc, M>) -> Router<S>
+pub fn thread_router<S, T, Svc>(state: EmailThreadRouterState<T, Svc>) -> Router<S>
 where
     S: Send + Sync + 'static,
     T: EmailService,
     Svc: EntityAccessService,
-    M: Send + Sync + 'static,
 {
     Router::new()
-        .route("/{thread_id}", get(get_thread_handler::<T, Svc, M>))
+        .route("/{thread_id}", get(get_thread_handler::<T, Svc>))
         .with_state(state)
 }
 
@@ -109,12 +106,8 @@ impl IntoResponse for GetThreadError {
     )
 )]
 #[tracing::instrument(err, skip(state, access))]
-pub async fn get_thread_handler<
-    T: EmailService,
-    Svc: EntityAccessService,
-    M: Send + Sync + 'static,
->(
-    State(state): State<EmailThreadRouterState<T, Svc, M>>,
+pub async fn get_thread_handler<T: EmailService, Svc: EntityAccessService>(
+    State(state): State<EmailThreadRouterState<T, Svc>>,
     access: ThreadAccessLevelExtractor<ViewAccessLevel, Svc>,
     extract::Query(params): extract::Query<GetThreadParams>,
 ) -> Result<Json<GetThreadResponse>, GetThreadError> {
