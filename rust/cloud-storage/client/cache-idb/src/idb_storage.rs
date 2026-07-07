@@ -1,4 +1,4 @@
-use cache_core::codec::{cache_namespace, decode_record, encode_record, CodecError};
+use cache_core::codec::{CodecError, cache_namespace, decode_record, encode_record};
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
 use idb::{Database, DatabaseEvent, Factory, ObjectStoreParams, TransactionMode};

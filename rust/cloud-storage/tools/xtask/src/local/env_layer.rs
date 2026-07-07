@@ -20,7 +20,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use super::instance::Instance;
-use super::{local_env, Mode};
+use super::{Mode, local_env};
 
 /// The fully resolved environment for a run.
 pub struct ResolvedEnv {

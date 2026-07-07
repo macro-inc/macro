@@ -1,8 +1,8 @@
 //! Write path: response JSON → normalized records.
 
-use crate::document::{resolve_args_key, FieldNode, MissingVariable, Operation, Selection};
+use crate::document::{FieldNode, MissingVariable, Operation, Selection, resolve_args_key};
 use crate::meta::{self, FieldKind, TypeKind};
-use crate::value::{field_key, CacheValue, EntityKey, Record};
+use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -15,9 +15,13 @@ pub enum NormalizeError {
     UnknownType(String),
     #[error("unknown field `{type_name}.{field}`")]
     UnknownField { type_name: String, field: String },
-    #[error("`{type_name}` is abstract but the response object has no __typename; add __typename to the selection")]
+    #[error(
+        "`{type_name}` is abstract but the response object has no __typename; add __typename to the selection"
+    )]
     MissingTypename { type_name: String },
-    #[error("key field `{type_name}.{field}` is missing or not a string/number in the response; every query fetching `{type_name}` must select its key")]
+    #[error(
+        "key field `{type_name}.{field}` is missing or not a string/number in the response; every query fetching `{type_name}` must select its key"
+    )]
     BadKeyField { type_name: String, field: String },
     #[error("response field `{type_name}.{field}` has unexpected shape: {detail}")]
     Shape {
@@ -212,7 +216,7 @@ fn normalize_object(
         _ => {
             return Err(NormalizeError::MissingTypename {
                 type_name: named_type.to_string(),
-            })
+            });
         }
     };
     let concrete_meta = meta::type_meta(concrete)
@@ -229,7 +233,7 @@ fn normalize_object(
                         return Err(NormalizeError::BadKeyField {
                             type_name: concrete.to_string(),
                             field: kf.to_string(),
-                        })
+                        });
                     }
                 };
                 key_values.push(v);

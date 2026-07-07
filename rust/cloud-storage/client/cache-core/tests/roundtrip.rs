@@ -2,11 +2,11 @@
 //! Soup query, mirroring
 //! `js/app/packages/service-clients/service-storage/graphql/soup.graphql`.
 
-use cache_core::denormalize::{denormalize, ReadOutcome};
+use cache_core::denormalize::{ReadOutcome, denormalize};
 use cache_core::document::Document;
 use cache_core::normalize::normalize;
 use cache_core::value::{CacheValue, EntityKey, Record};
-use serde_json::{json, Value as Json};
+use serde_json::{Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 const SOUP_QUERY: &str = r#"

@@ -4,7 +4,7 @@
 use cache_core::engine::{Engine, ReadResult};
 use cache_core::store::InMemoryStorage;
 use pollster::block_on;
-use serde_json::{json, Value as Json};
+use serde_json::{Value as Json, json};
 
 const QUERY: &str = r#"
 query Soup($input: SoupInput!) {

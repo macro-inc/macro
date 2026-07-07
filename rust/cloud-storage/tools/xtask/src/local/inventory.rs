@@ -8,8 +8,8 @@
 //! `email_service` crate) and makes "a port on a portless worker"
 //! unrepresentable (`host_port: None` == portless worker).
 
-use super::instance::Port;
 use super::Mode;
+use super::instance::Port;
 
 /// A Rust service whose binary the orchestrator builds on the host and mounts
 /// into the runtime image at `/app/out/<cargo_bin>`. Several fields document

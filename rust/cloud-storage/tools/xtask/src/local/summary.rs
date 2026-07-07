@@ -4,7 +4,7 @@ use console::Style;
 
 use super::env_layer::ResolvedEnv;
 use super::instance::{Instance, Port};
-use super::{frontend, mailpit, proxy, Mode};
+use super::{Mode, frontend, mailpit, proxy};
 
 /// Print the mode/instance/endpoints block after a successful startup.
 pub fn print(mode: Mode, instance: &Instance, env: &ResolvedEnv) {

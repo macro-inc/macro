@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use super::{arch, cli::InstanceArgs, instance::Instance, stage::Stage};
 
@@ -113,7 +113,7 @@ fn check_rust_target() -> Status {
             return Status::Fail {
                 msg: e.to_string(),
                 hint: None,
-            }
+            };
         }
     };
     let sysroot = match Command::new("rustc").args(["--print", "sysroot"]).output() {
@@ -122,7 +122,7 @@ fn check_rust_target() -> Status {
             return Status::Fail {
                 msg: "rustc not found".into(),
                 hint: None,
-            }
+            };
         }
     };
     let std_dir = std::path::Path::new(&sysroot)

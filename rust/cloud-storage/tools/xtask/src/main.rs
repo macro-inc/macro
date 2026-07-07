@@ -26,9 +26,9 @@ mod workflows;
 
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
-use guppy::graph::PackageGraph;
+use anyhow::{Context, Result, bail};
 use guppy::MetadataCommand;
+use guppy::graph::PackageGraph;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

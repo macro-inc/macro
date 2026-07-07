@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 
 use super::gen_compose::caddyfile_path;
 use super::instance::{Instance, Port};
-use super::{inventory, Mode};
+use super::{Mode, inventory};
 
 /// The host-facing proxy origin.
 pub fn url(instance: &Instance) -> String {

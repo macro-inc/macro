@@ -1,6 +1,6 @@
 use std::{path::Path, process::Command};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 pub(crate) fn run(output_path: &Path) -> Result<()> {
     let workspace_dir = Path::new(env!("CARGO_MANIFEST_DIR"))

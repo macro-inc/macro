@@ -14,7 +14,7 @@
 use cache_core::codec::{cache_namespace, decode_record, encode_record};
 use cache_core::store::Storage;
 use cache_core::value::{EntityKey, Record};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 use thiserror::Error;
 

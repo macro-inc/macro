@@ -2,10 +2,10 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
-use crate::denormalize::{denormalize, DenormalizeError, ReadOutcome, RecordSource};
+use crate::denormalize::{DenormalizeError, ReadOutcome, RecordSource, denormalize};
 use crate::deps::{DepIndex, OpId};
 use crate::document::{Document, DocumentError};
-use crate::normalize::{normalize, NormalizeError};
+use crate::normalize::{NormalizeError, normalize};
 use crate::store::Storage;
 use crate::value::{EntityKey, Record};
 use lru::LruCache;

@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{proxy, repo_root, stage::Stage, Mode};
+use super::{Mode, proxy, repo_root, stage::Stage};
 
 /// The app dir where `bun run dev` runs.
 fn app_dir() -> std::path::PathBuf {

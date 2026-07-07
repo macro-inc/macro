@@ -15,8 +15,8 @@
 // OUT_DIR), which have nothing to do with app secrets.
 #![allow(clippy::disallowed_methods)]
 
-use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::Schema;
+use apollo_compiler::schema::ExtendedType;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;

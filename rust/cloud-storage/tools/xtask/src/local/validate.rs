@@ -4,12 +4,12 @@
 //! service builds in Docker for the local path, and local mode never requires
 //! Pulumi / real AWS / real SES.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::inventory::services_for_mode;
-use super::{arch, env_layer, gen_compose, instance::Instance, workspace_root, Mode};
+use super::{Mode, arch, env_layer, gen_compose, instance::Instance, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local
 /// compose.
@@ -180,7 +180,9 @@ pub fn local_env(
             match env.get("DATABASE_URL") {
                 None => failures.push("run-dev requires a dev DATABASE_URL (none found)".into()),
                 Some(v) if v.contains("@postgres:") || v.contains("localhost") => {
-                    failures.push(format!("run-dev DATABASE_URL={v} points at local infra; expected a shared-dev host"));
+                    failures.push(format!(
+                        "run-dev DATABASE_URL={v} points at local infra; expected a shared-dev host"
+                    ));
                 }
                 Some(_) => {}
             }

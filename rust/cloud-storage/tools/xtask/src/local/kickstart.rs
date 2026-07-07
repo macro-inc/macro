@@ -9,7 +9,7 @@
 //! (after the app it registers against exists); passwordless login auto-creates
 //! all other users on demand.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::identity;
 

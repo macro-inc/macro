@@ -35,7 +35,7 @@ mod web_app_check_main;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use gh_workflow::Workflow;
 
 /// A generated workflow. `slug` is the snake_case source module (`<slug>.rs`)

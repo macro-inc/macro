@@ -103,7 +103,7 @@ impl Document {
                 _ => {
                     return Err(DocumentError::Malformed(
                         "type-system definition in executable document",
-                    ))
+                    ));
                 }
             }
         }
