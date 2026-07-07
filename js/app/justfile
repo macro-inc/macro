@@ -54,18 +54,21 @@ local-search:
 local-email:
     cd packages/app && VITE_LOCAL_SERVERS='email-service' bun run --bun dev
 
-build-dev:
+# All app builds need the gitignored wasm pkg (packages/graphql-cache/wasm):
+# without it the cache worker's dynamic import 404s at runtime and the
+# normalized cache silently degrades to network-only.
+build-dev: build-cache-wasm
     cd packages/app && MODE=development NODE_ENV=production bun run --bun build
 
-build-staging:
+build-staging: build-cache-wasm
     cd packages/app && MODE=staging NODE_ENV=production bun run --bun build
 
-build-prod:
+build-prod: build-cache-wasm
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
-build-tauri:
+build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
