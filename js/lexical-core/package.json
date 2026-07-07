@@ -1,29 +1,30 @@
 {
-  "name": "@macro-inc/lexical-core",
-  "version": "0.2.2",
-  "description": "Core lexical types, nodes, and utilities for. Includes custom nodes (CommentNode, ImageNode, EquationNode, etc.), plugins (nodeIdPlugin, peerIdPlugin), and markdown transformers for Lexical editor.",
-  "main": "index.ts",
-  "type": "module",
-  "scripts": {
-    "generate-golden": "bun run scripts/generate-golden.ts"
-  },
-  "keywords": [],
-  "author": "seamus",
-  "dependencies": {
-    "nanoid": "^5.1.5",
-    "lexical": "0.45.0",
-    "loro-crdt": "1.13.3",
-    "@lexical/code": "0.45.0",
-    "@lexical/headless": "0.45.0",
-    "@lexical/link": "0.45.0",
-    "@lexical/list": "0.45.0",
-    "@lexical/mark": "0.45.0",
-    "@lexical/markdown": "0.45.0",
-    "@lexical/rich-text": "0.45.0",
-    "@lexical/table": "0.45.0",
-    "@lexical/utils": "0.45.0"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.3.14"
-  }
+	"name": "@macro-inc/lexical-core",
+	"version": "0.2.2",
+	"description": "Core lexical types, nodes, and utilities for. Includes custom nodes (CommentNode, ImageNode, EquationNode, etc.), plugins (nodeIdPlugin, peerIdPlugin), and markdown transformers for Lexical editor.",
+	"main": "index.ts",
+	"type": "module",
+	"scripts": {
+		"generate-golden": "bun run scripts/generate-golden.ts"
+	},
+	"keywords": [],
+	"author": "seamus",
+	"dependencies": {
+		"nanoid": "^5.1.5",
+		"lexical": "0.45.0",
+		"loro-crdt": "1.13.3",
+		"@lexical/code": "0.45.0",
+		"@lexical/headless": "0.45.0",
+		"@lexical/link": "0.45.0",
+		"@lexical/list": "0.45.0",
+		"@lexical/mark": "0.45.0",
+		"@lexical/markdown": "0.45.0",
+		"@lexical/rich-text": "0.45.0",
+		"@lexical/table": "0.45.0",
+		"@lexical/utils": "0.45.0",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.14"
+	}
 }

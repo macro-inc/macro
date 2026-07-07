@@ -371,6 +371,16 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   overflow: inherit;
 }
 
+/*
+Lists indent with margin-left, so bullet/number markers paint outside the
+list's own box. The overflow inherited above clips them for top-level lists
+in a cell — move the indent inside the box so markers stay visible.
+*/
+.md-table-cell > .md-list {
+  margin-left: 0;
+  padding-left: 1.5em;
+}
+
 .md-table-cell-resizer {
   position: absolute;
   right: -4px;
