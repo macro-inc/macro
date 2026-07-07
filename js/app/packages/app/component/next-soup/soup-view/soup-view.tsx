@@ -1289,10 +1289,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             setLocalEntityListRef(el);
                             soupNavigationTouchHighlight(el);
                           }}
-                          virtualizerClass={cn(
-                            previewVisible() && 'pt-1' /* scuffed */,
-                            'scrollbar-hidden space-y-2'
-                          )}
+                          virtualizerClass={'scrollbar-hidden space-y-2'}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
                           onScrollBottom={debouncedFetchMore}
