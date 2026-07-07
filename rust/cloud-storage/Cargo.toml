@@ -166,7 +166,9 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 quote = "1"
 rand = "0.9.0"
 rdkafka = { version = "0.37", default-features = false, features = [
-  "dynamic-linking",
+  "cmake-build",
+  "libz-static",
+  "ssl-vendored",
   "tokio",
 ] }
 recursion = "0.5.4"
