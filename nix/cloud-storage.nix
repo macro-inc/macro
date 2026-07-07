@@ -775,11 +775,11 @@
           pkgs.mkShell (
             {
               buildInputs = shellTools ++ libraries;
-              # shellHook runs after setup hooks so these prepend-exports survive.
-              shellHook = ''
-                export PKG_CONFIG_PATH="${pkgConfigPath}:$PKG_CONFIG_PATH"
-                export PKG_CONFIG_PATH_FOR_TARGET="${pkgConfigPath}:$PKG_CONFIG_PATH_FOR_TARGET"
-              '';
+              PKG_CONFIG_PATH = pkgConfigPath;
+              # Cargo build scripts use the Nix pkg-config wrapper, which prefers
+              # the target-specific search path when PKG_CONFIG_PATH_FOR_TARGET is set.
+              # Keep librdkafka visible there so rdkafka-sys can find rdkafka.pc.
+              PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
               # Keep local cargo-lambda builds on the same aws-lc-sys path as
