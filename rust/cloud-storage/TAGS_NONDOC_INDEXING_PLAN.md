@@ -8,7 +8,7 @@ tag filters apply server-side on every leg of unified search, not just documents
 | macro-2208 | parent integration branch + this plan | `gbirman/macro-2208-searchtags-index-tags-for-non-document-entity-types-in-opensearch` | this doc |
 | macro-2209 | email threads — builds the generic pipeline | `gbirman/macro-2209-searchtags-index-tags-for-email` | **MERGED into parent** (#4563, `372c96059`); dev putMapping + THREAD backfill done |
 | macro-2210 | AI chats — extends the pipeline | `gbirman/macro-2210-searchtags-index-tags-for-ai-chats` | **MERGED into parent** (#4570, `338463fd6`); ops pending: putMapping chats → deploy → CHAT backfill |
-| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | **PR #4564 open → parent**; final rebase over #4570 in progress |
+| macro-2211 | projects — restores a full OpenSearch index, then extends | `gbirman/macro-2211-searchtags-index-projects-into-opensearch` | **PR #4564 open → parent**, rebased over #4570, contract-verified; ops pending: create index → deploy → project backfill → PROJECT properties pass |
 
 Subtasks branch off this parent and merge back into it; the parent merges to main.
 
