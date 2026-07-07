@@ -532,6 +532,16 @@
         # cmake-rs both honor CFLAGS/CXXFLAGS.
         CFLAGS = "-I${pkgs.curl.dev}/include";
         CXXFLAGS = "-I${pkgs.curl.dev}/include";
+        # commonArgs pins OPENSSL_NO_VENDOR=1 so host builds use the Nix
+        # openssl, and openssl-sys honors that env var even when the crate's
+        # `vendored` feature (rdkafka `ssl-vendored`) is enabled. Lambdas
+        # can't use the Nix openssl: its shared libs need glibc >= 2.38
+        # symbols while zig links against the pinned Lambda glibc, and the
+        # /nix/store rpath doesn't exist in the Lambda runtime anyway. Flip
+        # the override off so openssl-src compiles OpenSSL with zig cc
+        # against the pinned glibc and links it statically — same idea as
+        # AWS_LC_SYS_CMAKE_BUILDER above.
+        OPENSSL_NO_VENDOR = "0";
         # Lambdas don't need max opt; matches the cargo-lambda CI setting.
         CARGO_PROFILE_RELEASE_OPT_LEVEL = "2";
         # aws-lc-sys (aws-lc-rs / rustls default crypto, pulled via aws-sdk &
@@ -544,6 +554,9 @@
           pkgs.zig
           pkgs.cmake
           pkgs.nasm
+          # openssl-src (vendored OpenSSL, see OPENSSL_NO_VENDOR below) runs
+          # OpenSSL's perl-based Configure.
+          pkgs.perl
         ];
         # zig needs a writable cache inside the sandbox ($HOME is read-only).
         preBuild = ''
@@ -797,6 +810,11 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # rdkafka's ssl-vendored feature exists for the Lambda
+              # derivations (see lambdaCommonArgs); local builds keep using
+              # the Nix openssl instead of vendoring, which would need perl
+              # on PATH and a from-source OpenSSL compile.
+              OPENSSL_NO_VENDOR = "1";
               # Keep local cargo-lambda builds on the same aws-lc-sys path as
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
