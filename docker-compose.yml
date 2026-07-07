@@ -396,6 +396,7 @@ services:
       # fresh image build works (a stale cached image hides this otherwise).
       additional_contexts:
         - macro_sync_service_jwt=./rust/cloud-storage/macro_sync_service_jwt
+        - cloud_storage_manifest=./rust/cloud-storage
     ports:
       - "8787:8787"
     volumes:

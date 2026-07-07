@@ -28,7 +28,12 @@ COPY bebop-schema/Cargo.toml bebop-schema/Cargo.toml
 # The macro_sync_service_jwt path dependency (`../cloud-storage/...`) resolves
 # to /cloud-storage/... from /app. It lives outside this build context, so
 # compose passes it in as an additional named context (see docker-compose.yml).
+# Its deps are `workspace = true`, so the real cloud-storage workspace root
+# manifest comes along too (single source of truth for version pins), with its
+# member list shrunk to just this crate — the other members aren't in the image.
 COPY --from=macro_sync_service_jwt . /cloud-storage/macro_sync_service_jwt
+COPY --from=cloud_storage_manifest Cargo.toml /cloud-storage/Cargo.toml
+RUN sed -i '/^members = \[$/,/^\]$/c\members = ["macro_sync_service_jwt"]' /cloud-storage/Cargo.toml
 
 # Create dummy src to build dependencies only (cached layer)
 RUN mkdir -p src bebop-schema/src && \
