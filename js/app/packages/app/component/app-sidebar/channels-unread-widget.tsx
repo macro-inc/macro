@@ -136,6 +136,7 @@ const PREVIEW_WARM_OPEN_DELAY_MS = 100;
 const PREVIEW_CLOSE_DELAY_MS = 200;
 const PREVIEW_WARM_LINGER_MS = 400;
 const PREVIEW_ANCHOR_PIN_MS = 600;
+const PREVIEW_ANCHOR_WAIT_MS = 10_000;
 
 type UnreadPreviewManager = {
   activeGroupId: Accessor<string | null>;
@@ -348,14 +349,14 @@ function PreviewThreadError(props: { retry: () => void }) {
 
 function PreviewThreadSkeleton() {
   return (
-    <div class="flex flex-col gap-3 px-3 py-2 animate-pulse">
+    <div class="flex flex-col gap-3 px-3 py-2">
       <div class="flex items-center gap-2">
-        <div class="size-5 rounded-full bg-ink/10" />
-        <div class="h-3 w-24 rounded-sm bg-ink/10" />
+        <div class="skeleton-shimmer size-5 rounded-full bg-ink/10" />
+        <div class="skeleton-shimmer h-3 w-24 rounded-sm bg-ink/10" />
       </div>
       <div class="flex flex-col gap-1.5">
-        <div class="h-3 w-full rounded-sm bg-ink/10" />
-        <div class="h-3 w-2/3 rounded-sm bg-ink/10" />
+        <div class="skeleton-shimmer h-3 w-full rounded-sm bg-ink/10" />
+        <div class="skeleton-shimmer h-3 w-2/3 rounded-sm bg-ink/10" />
       </div>
     </div>
   );
@@ -371,13 +372,14 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
 
   let scrollRef: HTMLDivElement | undefined;
 
-  // Pin the newest unread message into view while async thread content
-  // settles, until the user scrolls the card themselves.
+  // Pin the newest unread message into view, waiting out slow thread
+  // loads, until the user scrolls the card themselves.
   onMount(() => {
     const container = scrollRef;
     if (!container) return;
     const anchorId = unreadInfo().anchorMessageId;
     const startedAt = performance.now();
+    let anchorFoundAt = anchorId ? undefined : startedAt;
     let cancelled = false;
     let frame: number | undefined;
 
@@ -396,6 +398,7 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
           )
         : null;
       if (target) {
+        anchorFoundAt ??= performance.now();
         const containerRect = container.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
         const bottomDelta = targetRect.bottom - containerRect.bottom;
@@ -412,7 +415,11 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
       } else {
         container.scrollTop = container.scrollHeight;
       }
-      if (performance.now() - startedAt < PREVIEW_ANCHOR_PIN_MS) {
+      const deadline =
+        anchorFoundAt === undefined
+          ? startedAt + PREVIEW_ANCHOR_WAIT_MS
+          : anchorFoundAt + PREVIEW_ANCHOR_PIN_MS;
+      if (performance.now() < deadline) {
         frame = requestAnimationFrame(pin);
       }
     };
@@ -731,7 +738,7 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
     orderedIds().filter((id) => channelGroupsMap().has(id))
   );
 
-  const groupById = (id: string) => channelGroupsMap().get(id)!;
+  const groupById = (id: string) => channelGroupsMap().get(id);
 
   const channelLettersMap = createMemo(() =>
     computeChannelLetters(channelGroups())
@@ -823,12 +830,14 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
             <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
               <For each={slimVisibleIds()}>
                 {(entityId) => (
-                  <ChannelGroupItem
-                    group={groupById(entityId)}
-                    animate={false}
-                    isSlim
-                    channelLetters={channelLettersMap().get(entityId)}
-                  />
+                  <Show when={groupById(entityId) != null}>
+                    <ChannelGroupItem
+                      group={groupById(entityId)!}
+                      animate={false}
+                      isSlim
+                      channelLetters={channelLettersMap().get(entityId)}
+                    />
+                  </Show>
                 )}
               </For>
               <Show when={slimOverflow() > 0}>
@@ -855,11 +864,13 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
               >
                 <For each={visibleGroupIds()}>
                   {(entityId) => (
-                    <ChannelGroupItem
-                      group={groupById(entityId)}
-                      animate={false}
-                      channelLetters={channelLettersMap().get(entityId)}
-                    />
+                    <Show when={groupById(entityId) != null}>
+                      <ChannelGroupItem
+                        group={groupById(entityId)!}
+                        animate={false}
+                        channelLetters={channelLettersMap().get(entityId)}
+                      />
+                    </Show>
                   )}
                 </For>
               </div>

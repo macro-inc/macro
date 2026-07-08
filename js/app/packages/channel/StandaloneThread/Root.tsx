@@ -28,7 +28,7 @@ type RootProps = ParentProps<{
 
 export function Root(props: RootProps) {
   return (
-    <DebugSuspense name="StandaloneThread.Root">
+    <DebugSuspense name="StandaloneThread.Root" fallback={props.fallback}>
       <RootInner {...props} />
     </DebugSuspense>
   );

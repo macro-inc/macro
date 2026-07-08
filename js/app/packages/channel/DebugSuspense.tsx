@@ -3,6 +3,7 @@ import { type JSX, Suspense } from 'solid-js';
 type DebugSuspenseProps = {
   name: string;
   children: JSX.Element;
+  fallback?: JSX.Element;
 };
 
 function DebugSuspenseFallback(props: Pick<DebugSuspenseProps, 'name'>) {
@@ -12,7 +13,9 @@ function DebugSuspenseFallback(props: Pick<DebugSuspenseProps, 'name'>) {
 
 export function DebugSuspense(props: DebugSuspenseProps) {
   return (
-    <Suspense fallback={<DebugSuspenseFallback name={props.name} />}>
+    <Suspense
+      fallback={props.fallback ?? <DebugSuspenseFallback name={props.name} />}
+    >
       {props.children}
     </Suspense>
   );
