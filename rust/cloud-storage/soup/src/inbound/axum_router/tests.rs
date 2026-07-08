@@ -123,7 +123,7 @@ impl SoupService for MockSoup {
     ) -> Result<
         Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
         SoupErr,
-    > {
+    >{
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }
