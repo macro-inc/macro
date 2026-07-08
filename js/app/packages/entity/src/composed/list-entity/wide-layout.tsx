@@ -155,6 +155,19 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
+        <Show
+          when={
+            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
+          }
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.PROJECT}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (
             <span class="ph-no-capture text-ink-extra-muted text-xs">
@@ -220,19 +233,6 @@ export function WideLayout(props: LayoutProps) {
             <EntityRowTags
               entityId={entity().id}
               entityType={EntityType.THREAD}
-              properties={entity().properties}
-            />
-          )}
-        </Show>
-        <Show
-          when={
-            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
-          }
-        >
-          {(entity) => (
-            <RowTags
-              entityId={entity().id}
-              entityType={EntityType.PROJECT}
               properties={entity().properties}
             />
           )}
