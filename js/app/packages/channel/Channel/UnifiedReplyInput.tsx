@@ -24,7 +24,10 @@ export function UnifiedReplyInput(props: {
   onExit: () => void;
 }) {
   return (
-    <div class="relative w-full flex flex-col items-center gap-1">
+    <div
+      data-keep-keyboard
+      class="relative w-full flex flex-col items-center gap-1"
+    >
       <InputFlag
         label={
           <Show

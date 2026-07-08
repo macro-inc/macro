@@ -80,9 +80,9 @@ import { ChannelDropZone } from './ChannelDropZone';
 import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
 import { createChannelHotkeys } from './create-channel-hotkeys';
+import { createChannelKeyboardHandler } from './create-channel-keyboard-handler';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
-import { createMainInputKeyboardHandler } from './create-main-input-keyboard-handler';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import {
@@ -163,8 +163,6 @@ export function Channel(props: ChannelProps) {
     createSignal<ThreadListNavigation>();
   const [threadListScrollState, setThreadListScrollState] =
     createSignal<ThreadListScrollState>();
-  const [messageListElement, setMessageListElement] =
-    createSignal<HTMLDivElement>();
 
   // When opening without a target, clear stale data that was previously
   // restored from a load-around session so the query fetches from the bottom.
@@ -253,7 +251,6 @@ export function Channel(props: ChannelProps) {
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
   );
-  const [channelInputEl, setChannelInputEl] = createSignal<HTMLDivElement>();
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
@@ -476,12 +473,20 @@ export function Channel(props: ChannelProps) {
     scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
   });
 
-  // On Native iOS app, when the main channel input is focused, scroll to bottom if already near bottom
-  createMainInputKeyboardHandler(
-    channelInputEl,
-    threadListNavigation,
-    messageListElement
-  );
+  createChannelKeyboardHandler({
+    navigation: threadListNavigation,
+    isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
+    // The unified input's current binding — the edited message (the edit
+    // face covers the reply face), else the reply target.
+    boundMessageId: () => {
+      const editing = messageEditor.state();
+      if (editing) return editing.messageId;
+      const replyTarget = unifiedInput.replyTarget();
+      return replyTarget
+        ? (replyTarget.replyId ?? replyTarget.threadId)
+        : undefined;
+    },
+  });
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const senderId = userId();
@@ -538,7 +543,6 @@ export function Channel(props: ChannelProps) {
               <div
                 class="ph-no-capture relative flex-1 min-h-0 outline-none flex flex-col"
                 ref={(element) => {
-                  setMessageListElement(element);
                   attachMessageListRef(element);
                 }}
                 tabIndex={-1}
@@ -642,7 +646,6 @@ export function Channel(props: ChannelProps) {
                   <ChannelInputContainer
                     ref={(el) => {
                       attachInputRef(el);
-                      setChannelInputEl(el);
                     }}
                   >
                     <Switch>
@@ -680,10 +683,15 @@ export function Channel(props: ChannelProps) {
                             state={threadManager.getOrCreateThreadState(
                               threadId
                             )}
-                            getTargetMessage={() =>
-                              unifiedInput.replyTarget()?.message ??
-                              messageById().get(threadId)
-                            }
+                            getTargetMessage={() => {
+                              const target = unifiedInput.replyTarget();
+                              if (target?.message) return target.message;
+                              // A restored quote-reply has no resolvable
+                              // message (messageById only indexes thread
+                              // roots) — don't misattribute it to the root.
+                              if (target?.replyId) return undefined;
+                              return messageById().get(threadId);
+                            }}
                             onNavigateToTarget={() =>
                               goToMessage(
                                 threadId,
