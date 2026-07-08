@@ -279,6 +279,49 @@ pub(crate) async fn upsert_document(
     Ok(())
 }
 
+/// Builds the 2-line bulk body for a parent-only write: one `index` op
+/// (routing = parent _id = document_id) followed by the parent doc body.
+fn parent_only_bulk_body(args: &UpsertDocumentArgs) -> Vec<String> {
+    let parent_id = args.document_id.as_str();
+    let parent_action = serde_json::json!({
+        "index": {
+            "_id": parent_id,
+            "routing": parent_id,
+        }
+    });
+    vec![parent_action.to_string(), parent_doc_body(args).to_string()]
+}
+
+/// Upsert only the parent doc for a document with no indexable content
+/// (e.g. archives, media). Writes the same full-overwrite parent body as
+/// the chunked paths — `node_id`/`content` on `args` are ignored — and
+/// touches no children.
+#[tracing::instrument(skip(client))]
+pub(crate) async fn upsert_parent_document(
+    client: &opensearch::OpenSearch,
+    args: &UpsertDocumentArgs,
+    index_override: Option<&str>,
+) -> Result<()> {
+    let index = resolve_destination(index_override);
+    let bulk_body = parent_only_bulk_body(args);
+
+    let result =
+        super::bulk_upsert_to_index(client, index, bulk_body, "upsert_parent_document").await?;
+
+    if result.failed > 0 {
+        return Err(OpensearchClientError::Unknown {
+            details: format!(
+                "upsert_parent_document had {} failures: {:?}",
+                result.failed, result.errors
+            ),
+            method: Some("upsert_parent_document".to_string()),
+        });
+    }
+
+    tracing::trace!(parent=%args.document_id, "parent document upserted successfully");
+    Ok(())
+}
+
 /// Update the denormalized `document_name` for an existing document.
 ///
 /// A single partial-update on the parent doc; children don't carry

@@ -108,6 +108,84 @@ async fn attach_indexed_properties(
     Ok(())
 }
 
+/// Builds the parent-only upsert for a file type with no indexable content.
+/// Returns `None` when the document has no file type.
+fn generate_parent_only_upsert(
+    document_info: DocumentMetadata,
+) -> anyhow::Result<Option<UpsertDocumentArgs>> {
+    let Some(file_type) = document_info.file_type else {
+        return Ok(None);
+    };
+    Ok(Some(UpsertDocumentArgs {
+        document_id: document_info.document_id,
+        node_id: String::new(),
+        raw_content: None,
+        document_name: document_info.document_name,
+        content: String::new(),
+        owner_id: document_info.owner.to_string(),
+        file_type,
+        updated_at_seconds: EpochSeconds::new(Utc::now().timestamp())?,
+        sub_type: document_info.sub_type.map(|st| st.to_string()),
+        properties: vec![],
+    }))
+}
+
+/// Indexes a name-only parent doc (no content chunks) for file types whose
+/// content isn't searchable, so the document stays findable by name and
+/// filterable by its indexed properties.
+async fn update_search_with_parent_only_document(
+    opensearch_client: &OpensearchClient,
+    db: &sqlx::Pool<sqlx::Postgres>,
+    search_extractor_message: &SearchExtractorMessage,
+) -> anyhow::Result<()> {
+    let document_info = match get_document_info(db, search_extractor_message)
+        .await
+        .context("failed to get document info")?
+    {
+        DocumentInfo::Active(info) => *info,
+        DocumentInfo::Removable => {
+            tracing::trace!("document is deleted or missing, removing from search index");
+            opensearch_client
+                .delete_document(
+                    &search_extractor_message.document_id,
+                    search_extractor_message.index_override.as_deref(),
+                )
+                .await
+                .context("failed to delete document from search index")?;
+            return Ok(());
+        }
+        DocumentInfo::Skip => {
+            tracing::trace!("no document info returned");
+            return Ok(());
+        }
+    };
+
+    let Some(args) = generate_parent_only_upsert(document_info)? else {
+        tracing::debug!("file type is none");
+        return Ok(());
+    };
+
+    let sub_type = args.sub_type.clone();
+    let mut upserts = vec![args];
+    attach_indexed_properties(
+        db,
+        &search_extractor_message.document_id,
+        sub_type.as_deref(),
+        &mut upserts,
+    )
+    .await?;
+
+    opensearch_client
+        .upsert_parent_document(
+            &upserts[0],
+            search_extractor_message.index_override.as_deref(),
+        )
+        .await
+        .context("unable to upsert parent-only document in opensearch")?;
+
+    Ok(())
+}
+
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
 /// the document in opensearch.
 #[tracing::instrument(skip(opensearch_client, db, s3_client, document_storage_bucket, search_extractor_message), fields(document_id=search_extractor_message.document_id, file_type=?search_extractor_message.file_type))]
@@ -119,8 +197,12 @@ pub async fn update_search_with_raw_document(
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
     if !is_searchable_association(&search_extractor_message.file_type.macro_app_path()) {
-        tracing::warn!("unsupported file type");
-        return Ok(());
+        return update_search_with_parent_only_document(
+            opensearch_client,
+            db,
+            search_extractor_message,
+        )
+        .await;
     }
 
     // This ensures we only process the latest version
@@ -504,5 +586,51 @@ mod tests {
 
         assert_eq!(upserts.len(), 1);
         assert_eq!(upserts[0].sub_type, Some("task".to_string()));
+    }
+
+    fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
+        DocumentMetadata {
+            document_id: "CCC".to_string(),
+            document_version_id: 0,
+            owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+            document_name: "pdf copy".to_string(),
+            file_type: file_type.map(|ft| ft.to_string()),
+            sha: None,
+            project_id: None,
+            project_name: None,
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            document_bom: None,
+            modification_data: None,
+            created_at: None,
+            updated_at: None,
+            sub_type: None,
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn test_generate_parent_only_upsert() {
+        let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
+            .expect("could not generate parent-only upsert")
+            .expect("expected upsert args");
+
+        assert_eq!(args.document_id, "CCC");
+        assert_eq!(args.document_name, "pdf copy");
+        assert_eq!(args.owner_id, "macro|nobody@macro.com");
+        assert_eq!(args.file_type, "zip");
+        assert_eq!(args.sub_type, None);
+        assert_eq!(args.content, "");
+        assert_eq!(args.raw_content, None);
+        assert!(args.properties.is_empty());
+    }
+
+    #[test]
+    fn test_generate_parent_only_upsert_without_file_type() {
+        let args = generate_parent_only_upsert(parent_only_document_info(None))
+            .expect("could not generate parent-only upsert");
+
+        assert!(args.is_none());
     }
 }
