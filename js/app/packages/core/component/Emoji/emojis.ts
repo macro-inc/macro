@@ -1,6 +1,7 @@
 import GithubShortcodes from 'emojibase-data/en/shortcodes/github.json';
 import EmojiLib from 'emojilib';
 import { createMemo, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import GroupedEmojiData from 'unicode-emoji-json/data-by-group.json';
 import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
 import CldrTags from './cldr-tags.json';
@@ -78,35 +79,41 @@ export function resolveEmoji(key: string): string | undefined {
 // enough that neither should dominate the other — "thumbs" is a keyword of
 // thumbs_down only), then keyword prefixes, word boundaries, and substrings.
 function tokenScore(token: string, entry: SimpleEmoji): number {
-  if (entry.shortcodes.includes(token)) {
-    return 0;
-  }
-  if (
-    entry.terms.includes(token) ||
-    entry.shortcodes.some((code) => code.startsWith(token))
-  ) {
-    return 1;
-  }
-  if (entry.terms.some((term) => term.startsWith(token))) {
-    return 2;
-  }
-  if (entry.shortcodes.some((code) => code.includes(`_${token}`))) {
-    return 3;
-  }
-  if (
-    entry.terms.some(
-      (term) => term.includes(`_${token}`) || term.includes(` ${token}`)
+  return match(entry)
+    .when(
+      ({ shortcodes }) => shortcodes.includes(token),
+      () => 0
     )
-  ) {
-    return 4;
-  }
-  if (entry.shortcodes.some((code) => code.includes(token))) {
-    return 5;
-  }
-  if (entry.terms.some((term) => term.includes(token))) {
-    return 6;
-  }
-  return -1;
+    .when(
+      ({ shortcodes, terms }) =>
+        terms.includes(token) ||
+        shortcodes.some((code) => code.startsWith(token)),
+      () => 1
+    )
+    .when(
+      ({ terms }) => terms.some((term) => term.startsWith(token)),
+      () => 2
+    )
+    .when(
+      ({ shortcodes }) => shortcodes.some((code) => code.includes(`_${token}`)),
+      () => 3
+    )
+    .when(
+      ({ terms }) =>
+        terms.some(
+          (term) => term.includes(`_${token}`) || term.includes(` ${token}`)
+        ),
+      () => 4
+    )
+    .when(
+      ({ shortcodes }) => shortcodes.some((code) => code.includes(token)),
+      () => 5
+    )
+    .when(
+      ({ terms }) => terms.some((term) => term.includes(token)),
+      () => 6
+    )
+    .otherwise(() => -1);
 }
 
 export function searchEmojis(query: string): SimpleEmoji[] {
