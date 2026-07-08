@@ -51,7 +51,7 @@ export const AnimatedFileMdIcon = (props: {
         rx="1.5"
         fill="none"
         stroke="currentColor"
-        stroke-width="1.125"
+        stroke-width="1.5"
       />
       <rect x="3" y="3.9375" width="12" height="1.125" rx="0.5625" />
       <rect

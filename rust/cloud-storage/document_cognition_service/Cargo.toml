@@ -46,6 +46,7 @@ chat = { path = "../chat", features = ["attachment"] }
 channels = { path = "../channels", features = ["outbound", "attachment"] }
 chrono = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
+connection_gateway_client = { path = "../connection_gateway_client" }
 cookie = { workspace = true }
 crm = { path = "../crm" }
 document_storage_service_client = { path = "../document_storage_service_client" }
@@ -73,6 +74,7 @@ macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
+macro_event_broker = { path = "../macro_event_broker" }
 macro_queues = { path = "../macro_queues" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",

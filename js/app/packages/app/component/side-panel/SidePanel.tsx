@@ -32,6 +32,7 @@ import {
   type SidePanelContextType,
   type SidePanelSectionEntry,
 } from './context';
+import { registerSidePanelInstance } from './registry';
 
 const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
@@ -47,7 +48,8 @@ const MAIN_MIN_PX = 320;
  *
  * Two rendering modes based on available width:
  *   - Wide (>= NARROW_THRESHOLD_PX, non-mobile): side panel renders as a
- *     resizable split next to the main content. Defaults to open.
+ *     resizable split next to the main content. Defaults to open unless
+ *     `defaultOpen` is false.
  *   - Narrow (mobile or narrower than threshold): side panel renders as a
  *     full-screen overlay covering the main content. Defaults to closed;
  *     the main content stays mounted underneath.
@@ -56,13 +58,13 @@ const MAIN_MIN_PX = 320;
  *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
-function Layout(props: ParentProps) {
+function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
-  const [isWideOpen, setIsWideOpen] = createSignal(true);
+  const [isWideOpen, setIsWideOpen] = createSignal(props.defaultOpen ?? true);
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());
 
@@ -72,6 +74,10 @@ function Layout(props: ParentProps) {
     setter(typeof next === 'function' ? next : () => next);
   };
   const toggle = () => setIsOpen((prev) => !prev);
+
+  // Let global chrome shortcuts (cmd+.) hide/show this panel alongside the
+  // app sidebar.
+  onCleanup(registerSidePanelInstance({ setIsOpen, isNarrow }));
 
   const register = (entry: SidePanelSectionEntry) => {
     setSections((prev) => {

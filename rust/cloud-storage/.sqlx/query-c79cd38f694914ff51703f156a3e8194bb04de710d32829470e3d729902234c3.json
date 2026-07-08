@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM favorite\n            WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c79cd38f694914ff51703f156a3e8194bb04de710d32829470e3d729902234c3"
+}

@@ -1,4 +1,3 @@
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use worker::Error;
@@ -122,13 +121,10 @@ did not match expected value: {}",
         TokenFrom::QueryParams => req.query::<WebsocketQueryParams>()?.token,
     };
 
-    let validation = Validation::new(Algorithm::HS256);
     let secret = secrets.document_permissions_secret;
-    let key = DecodingKey::from_secret(secret.to_string().as_bytes());
 
-    let claims = decode::<AuthToken>(&token, &key, &validation)
-        .context("failed to decode `AuthToken`")?
-        .claims;
+    let claims = macro_sync_service_jwt::decode::<AuthToken>(&token, &secret)
+        .context("failed to decode `AuthToken`")?;
 
     Ok(claims)
 }

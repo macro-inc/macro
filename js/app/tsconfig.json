@@ -60,6 +60,9 @@
       "loro-crdt/*": [
         "../node_modules/loro-crdt/*"
       ],
+      "@graphql-cache/*": [
+        "./packages/graphql-cache/*"
+      ],
       "@filesystem": [
         "./packages/filesystem/src"
       ],

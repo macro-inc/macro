@@ -293,7 +293,7 @@ impl NotificationExtEmail for InviteToTeamMetadata {
         EmailContent {
             subject: format!(
                 "{} has invited you to the {} team on Macro",
-                self.invited_by.as_ref(),
+                self.invited_by.email_part().as_ref(),
                 self.team_name
             ),
             body: self
@@ -303,10 +303,10 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     }
 
     fn rate_limit_config() -> RateLimitConfig {
-        const HOURS_PER_WEEK: u64 = 24 * 7;
+        const TWO_DAYS: u64 = 24 * 2;
         RateLimitConfig {
             max_count: 1,
-            window: Duration::from_hours(HOURS_PER_WEEK),
+            window: Duration::from_hours(TWO_DAYS),
         }
     }
 

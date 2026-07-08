@@ -1,0 +1,54 @@
+{
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"target": "es2022",
+		"verbatimModuleSyntax": false,
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"moduleDetection": "force",
+		"downlevelIteration": true,
+		"noImplicitAny": false,
+		"strictNullChecks": false,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"moduleResolution": "Bundler",
+		"module": "es2022",
+		"noEmit": true,
+		"lib": [
+			"es2023",
+			"dom"
+		],
+		"types": [
+			"@types/node",
+			"bun-types"
+		],
+		"baseUrl": ".",
+		"paths": {
+			"@loro-mirror/*": [
+				"../loro-mirror/*"
+			],
+			"@core/*": [
+				"../app/packages/core/*"
+			],
+			"@websocket": [
+				"../app/packages/websocket"
+			],
+			"@websocket/*": [
+				"../app/packages/websocket/*"
+			]
+		}
+	},
+	"exclude": [
+		"node_modules",
+		"../lexical-core/nodes",
+		"../lexical-core/transformers",
+		"../loro-mirror"
+	],
+	"include": [
+		"src",
+		"scripts",
+		"wasm.d.ts",
+		"prompts.d.ts"
+	]
+}

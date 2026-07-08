@@ -1,0 +1,25 @@
+-- no-transaction
+-- Entity-first lookup index for soup dynamic queries.
+--
+-- The soup TopItems arms gate each candidate row with a semi-join:
+--   d.id IN (SELECT ea.entity_id::text FROM entity_access ea
+--            JOIN user_source_ids us ON us.source_id = ea.source_id
+--            WHERE ea.entity_type = '<type>')
+-- When the arm's own filters (owner, notification join, date) are selective,
+-- the cheapest plan probes entity_access per candidate row. That probe needs
+-- an index leading on the TEXT form of entity_id (item ids are TEXT columns),
+-- then entity_type, with source_id available for the membership check.
+--
+-- idx_entity_access_source_type_entity covers the source-first direction;
+-- this covers the entity-first direction.
+--
+-- NOTE: if the concurrent build is interrupted mid-deploy it can leave an
+-- INVALID index behind, and the IF NOT EXISTS rerun will not rebuild it
+-- (this migration must stay a single statement — sqlx sends no-transaction
+-- migrations as one simple-query batch, and a multi-statement batch gets an
+-- implicit transaction, which CONCURRENTLY forbids). If that happens, fix by
+-- hand: DROP INDEX CONCURRENTLY idx_entity_access_entity_text_type_source;
+-- then re-run migrations. Check with:
+--   SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_entity_access_entity_text_type_source
+    ON entity_access ((entity_id::text), entity_type, source_id);

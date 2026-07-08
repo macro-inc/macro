@@ -61,6 +61,7 @@ import {
   SearchableMultiSelectInline,
   type SearchableOption,
 } from './searchable-multi-select';
+import { useTagFilter } from './tag-filter';
 
 export type { FilterCategory, FilterOption } from './filter-categories';
 
@@ -298,6 +299,49 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
+const COMPANIES_FILTER_CATEGORIES: FilterCategory[] = [
+  {
+    id: 'stage',
+    label: 'Stage',
+    labelPlural: 'Stages',
+    options: [
+      ...(
+        [
+          ['company-stage-lead', 'Lead', PROPERTY_OPTION_IDS.STAGE.LEAD],
+          [
+            'company-stage-qualified',
+            'Qualified',
+            PROPERTY_OPTION_IDS.STAGE.QUALIFIED,
+          ],
+          ['company-stage-demo', 'Demo', PROPERTY_OPTION_IDS.STAGE.DEMO],
+          ['company-stage-trial', 'Trial', PROPERTY_OPTION_IDS.STAGE.TRIAL],
+          [
+            'company-stage-negotiation',
+            'Negotiation',
+            PROPERTY_OPTION_IDS.STAGE.NEGOTIATION,
+          ],
+          [
+            'company-stage-customer',
+            'Customer',
+            PROPERTY_OPTION_IDS.STAGE.CUSTOMER,
+          ],
+          [
+            'company-stage-churned',
+            'Churned',
+            PROPERTY_OPTION_IDS.STAGE.CHURNED,
+          ],
+        ] as const
+      ).map(([id, label, optionId]) => ({
+        id,
+        label,
+        icon: () => <PropertyValueIcon optionId={optionId} class="size-3.5" />,
+      })),
+      { id: 'company-no-stage', label: 'No Stage' },
+    ],
+    multiple: true,
+  },
+];
+
 const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
@@ -370,7 +414,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
-  companies: [],
+  companies: COMPANIES_FILTER_CATEGORIES,
   channels: [],
   calls: [],
   folders: [],
@@ -536,6 +580,8 @@ export const UnifiedFilterDropdown = (
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
     activeTab,
     readFilter,
     setReadFilter,
@@ -701,7 +747,63 @@ export const UnifiedFilterDropdown = (
     });
   };
 
+  // Owner options for the Customers view (contacts, plus a "No owner" row).
+  const ownerOptions = createMemo((): SearchableOption[] => {
+    const currentUserId = userId();
+    const noOwnerOption: SearchableOption = {
+      id: NO_ASSIGNEE,
+      label: 'No owner',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    };
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noOwnerOption,
+      ...otherContactOptions,
+    ];
+  });
+
+  // Owner filtering is a client-side predicate (companies come back from a
+  // dedicated capped CRM request), so no query filters to maintain here.
+  const handleOwnerChange = (ids: string[]) => {
+    batch(() => {
+      setOwnerFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
+        soup.predicates.toggle({ and: ['company-owner'] });
+      }
+    });
+  };
+
   const isTasksView = () => currentView() === 'tasks';
+  const isCompaniesView = () => currentView() === 'companies';
+  const isDocumentsView = () => currentView() === 'documents';
+
+  const tagFilter = useTagFilter();
+  const showTagsFilter = () =>
+    tagFilter.enabled() &&
+    tagFilter.hasTags() &&
+    (isTasksView() || isDocumentsView());
 
   registerHotkey({
     hotkey: 'f',
@@ -740,7 +842,14 @@ export const UnifiedFilterDropdown = (
   };
 
   return (
-    <Show when={categories().length > 0 || isTasksView() || isNewInbox()}>
+    <Show
+      when={
+        categories().length > 0 ||
+        isTasksView() ||
+        isNewInbox() ||
+        showTagsFilter()
+      }
+    >
       <Dropdown
         open={open()}
         onOpenChange={handleOpenChange}
@@ -760,7 +869,7 @@ export const UnifiedFilterDropdown = (
           </Switch>
         </Show>
 
-        <Dropdown.Content>
+        <Dropdown.Content class="shadow-menu">
           <Dropdown.Group>
             <Show when={isNewInbox()}>
               <ReadStatusSubmenu
@@ -770,7 +879,10 @@ export const UnifiedFilterDropdown = (
             </Show>
             <Show
               when={
-                categories().length === 1 && !isTasksView() && !isNewInbox()
+                categories().length === 1 &&
+                !isTasksView() &&
+                !isCompaniesView() &&
+                !isNewInbox()
               }
               fallback={
                 <>
@@ -830,6 +942,17 @@ export const UnifiedFilterDropdown = (
                       placeholder="Search assignees..."
                     />
                   </Show>
+
+                  {/* Owner filter for the Customers view */}
+                  <Show when={isCompaniesView()}>
+                    <SearchableFilterSubmenu
+                      label="Owner"
+                      options={ownerOptions}
+                      activeIds={ownerFilter}
+                      onChange={handleOwnerChange}
+                      placeholder="Search owners..."
+                    />
+                  </Show>
                 </>
               }
             >
@@ -864,6 +987,16 @@ export const UnifiedFilterDropdown = (
                   );
                 }}
               </For>
+            </Show>
+
+            <Show when={showTagsFilter()}>
+              <SearchableFilterSubmenu
+                label="Tags"
+                options={tagFilter.options}
+                activeIds={tagFilter.activeIds}
+                onChange={tagFilter.onChange}
+                placeholder="Filter by tag..."
+              />
             </Show>
           </Dropdown.Group>
         </Dropdown.Content>

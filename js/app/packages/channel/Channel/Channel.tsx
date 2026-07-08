@@ -120,6 +120,7 @@ export type ChannelMessagesStateSnapshot = {
 
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
+  goToLatest: () => void;
   getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
 };
 
@@ -420,6 +421,31 @@ export function Channel(props: ChannelProps) {
     }
   };
 
+  const [pendingScrollToLatest, setPendingScrollToLatest] = createSignal(false);
+
+  const goToLatest: ChannelHandle['goToLatest'] = () => {
+    handleScrollToBottom();
+    setPendingScrollToLatest(true);
+  };
+
+  // When handleScrollToBottom resets a mid-history slice, the newest page
+  // arrives asynchronously and swaps the message set, so a single scroll can
+  // settle mid-list. Keep scrolling until the viewport rests at the bottom of
+  // fully loaded data.
+  createEffect(() => {
+    if (!pendingScrollToLatest()) return;
+    const navigation = threadListNavigation();
+    const scrollState = threadListScrollState();
+    if (!navigation || !scrollState?.didInitialScroll) return;
+    if (messageIndex.keys.length === 0) return;
+    if (messagesQuery.isFetching || messagesQuery.hasPreviousPage) return;
+    if (scrollState.isNearBottom) {
+      setPendingScrollToLatest(false);
+      return;
+    }
+    navigation.scrollToBottom('end');
+  });
+
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
@@ -490,6 +516,7 @@ export function Channel(props: ChannelProps) {
       if (props.onHandleReady)
         props.onHandleReady({
           goToMessage,
+          goToLatest,
           getMessagesStateSnapshot,
         });
     })

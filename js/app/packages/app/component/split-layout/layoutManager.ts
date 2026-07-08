@@ -7,10 +7,12 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
+import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -81,6 +83,20 @@ function getAliasOrType(content: SplitContent): string {
   return content.type === 'component'
     ? content.type
     : content.aliasContext?.alias || content.type;
+}
+
+/**
+ * The `type/id` URL pair for a split's content. The docked settings panel is
+ * stored internally as the `component/settings` content, but it serializes as
+ * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
+ * settings page is open — matching the full-page `/settings/:tab` route. Reads
+ * the active-tab signal, so the URL updates reactively as the tab changes.
+ */
+function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component' && content.id === 'settings') {
+    return ['settings', settingsTabToSlug(activeTabId())];
+  }
+  return [getAliasOrType(content), content.id].map(String);
 }
 
 function keyOfSplitContent(s: SplitContent): SplitKey {
@@ -169,6 +185,14 @@ export type OpenWithSplitOptions = {
   preferNewSplit?: boolean;
   insertIndex?: number;
   handle?: SplitHandle;
+  /**
+   * Ask the block to land on its latest content via the `goToLatest` block
+   * method. Covers content that is already mounted (e.g. a channel open in
+   * another split parked at an old scroll position), which would otherwise
+   * just be activated as-is. Omit when navigating to a specific location
+   * within the block.
+   */
+  reopen?: 'latest';
 };
 
 /**
@@ -801,8 +825,7 @@ export function createSplitLayout(
   const getUrlSegments = () => {
     return state.splits
       .filter((s) => !isExcluded(s))
-      .flatMap((s) => [getAliasOrType(s.content), s.content.id])
-      .map(String);
+      .flatMap((s) => contentUrlSegments(s.content));
   };
 
   const getUrl = () => {
@@ -917,9 +940,8 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () =>
-        [getAliasOrType(content()), content().id].map(String),
-      getUrl: () => getAliasOrType(content()) + '/' + content().id,
+      getUrlSegments: () => contentUrlSegments(content()),
+      getUrl: () => contentUrlSegments(content()).join('/'),
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
@@ -1248,6 +1270,16 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    if (options.reopen === 'latest') {
+      // Fire-and-forget so it covers every open path (fresh mount, duplicate
+      // activation, interceptor-consumed navigation). The block-handle proxy
+      // waits for the block and method to register before invoking.
+      void orchestrator
+        .getBlockHandle(content.id)
+        .then((handle) => handle?.goToLatest())
+        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
+    }
+
     if (navigationInterceptor) {
       const result = navigationInterceptor(content, options);
       if (result.handled) return undefined;

@@ -6,7 +6,7 @@
 -- Insert test links
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro1', 'user1', 'user1@test.com', 'GMAIL', true, NOW(), NOW()),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user1@test.com', 'user1', 'user1@test.com', 'GMAIL', true, NOW(), NOW()),
     ('aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb', 'macro2', 'user2', 'user2@test.com', 'GMAIL', true, NOW(), NOW());
 
 -- Insert test threads

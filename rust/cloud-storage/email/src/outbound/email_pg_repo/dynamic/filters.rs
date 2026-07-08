@@ -4,7 +4,9 @@ use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{Email, EmailLiteral};
+use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue};
 use recursion::CollapsibleExt;
+use uuid::Uuid;
 
 fn date_predicate(col: &str, lit: &DateLiteral) -> SqlFragment {
     let sql = match lit {
@@ -34,7 +36,8 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::CreatedAt(_)
-            | EmailLiteral::UpdatedAt(_),
+            | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::Property(_),
         ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
         filter_ast::ExprFrame::Literal(_) => false,
@@ -52,7 +55,8 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::CreatedAt(_)
-            | EmailLiteral::UpdatedAt(_),
+            | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::Property(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
     })
@@ -332,6 +336,7 @@ pub(super) fn build_message_email_filter(
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::Property(_)) => SqlFragment::raw("TRUE"),
     });
 
     fragment.with_and_prefix()
@@ -549,6 +554,7 @@ fn build_union_branch(
     kind: AddressKind,
     email: &Email,
     resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
 ) -> Option<SqlFragment> {
     let trash = build_trash_check(resolved);
     match (resolved.contact_ids_for(email), email) {
@@ -581,7 +587,8 @@ fn build_union_branch(
         (None, Email::Complete(_)) => None,
         (None, Email::Partial(s)) => {
             let pattern = format!("%{}%", escape_like_pattern(s));
-            let mut f = build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern);
+            let mut f =
+                build_union_branch_text_match(kind, "c.email_address ILIKE ", pattern, link_scope);
             f.push_raw(" AND ");
             f.extend(trash);
             Some(f)
@@ -592,6 +599,7 @@ fn build_union_branch(
                 kind,
                 "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
                 domain,
+                link_scope,
             );
             f.push_raw(" AND ");
             f.extend(trash);
@@ -600,12 +608,32 @@ fn build_union_branch(
     }
 }
 
+/// `AND <alias>.link_id = ANY($links)` when a link scope applies, empty otherwise.
+fn link_scope_fragment(alias: &str, link_scope: Option<&[Uuid]>) -> SqlFragment {
+    match link_scope {
+        Some(links) => {
+            let mut f = SqlFragment::raw(format!(" AND {alias}.link_id = ANY("));
+            f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+            f.push_raw(")");
+            f
+        }
+        None => SqlFragment::empty(),
+    }
+}
+
 /// Shared shape for a union-branch SELECT that joins through
 /// `email_contacts` with a single bound predicate against `c.*`.
+///
+/// Text matches (ILIKE / domain equality) are not contact-id-scoped like the
+/// Complete branches are, so without `link_scope` they scan matches across
+/// every mailbox in the table before the candidate stage intersects with the
+/// caller's threads. Scoping both `c` and `m` by the caller's links bounds
+/// the CTE to the caller's own mail.
 fn build_union_branch_text_match(
     kind: AddressKind,
     predicate_prefix: &str,
     bind_value: String,
+    link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
     match kind {
         AddressKind::Sender => {
@@ -615,6 +643,8 @@ fn build_union_branch_text_match(
                  WHERE {predicate_prefix}"
             ));
             f.extend(SqlFragment::bind_string(bind_value));
+            f.extend(link_scope_fragment("c", link_scope));
+            f.extend(link_scope_fragment("m", link_scope));
             f
         }
         _ => {
@@ -627,6 +657,8 @@ fn build_union_branch_text_match(
             ));
             f.extend(SqlFragment::bind_string(bind_value));
             f.push_raw(format!(" AND mr.recipient_type = '{recipient_type}'"));
+            f.extend(link_scope_fragment("c", link_scope));
+            f.extend(link_scope_fragment("m", link_scope));
             f
         }
     }
@@ -651,9 +683,16 @@ fn build_union_branch_text_match(
 ///    every conjunct).
 ///
 /// Returns `None` when there are no pure-address conjuncts to push down.
+///
+/// `link_scope` restricts the CTE's contact/message scans to the given
+/// links. Only pass it when every candidate thread is known to belong to
+/// those links (owned-only, non-team queries) — shared and team candidate
+/// selects include threads from other users' links, which the scoped CTE
+/// would wrongly filter out.
 pub(super) fn build_matching_threads_cte_body(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
+    link_scope: Option<&[Uuid]>,
 ) -> Option<SqlFragment> {
     let conjuncts = extract_address_only_conjuncts(ast);
     if conjuncts.is_empty() {
@@ -665,7 +704,7 @@ pub(super) fn build_matching_threads_cte_body(
     {
         let branches: Vec<SqlFragment> = literals
             .into_iter()
-            .filter_map(|(k, e)| build_union_branch(k, e, resolved))
+            .filter_map(|(k, e)| build_union_branch(k, e, resolved, link_scope))
             .collect();
         if !branches.is_empty() {
             let mut iter = branches.into_iter();
@@ -694,6 +733,7 @@ pub(super) fn build_matching_threads_cte_body(
     f.extend(build_trash_check(resolved));
     f.push_raw(" AND ");
     f.extend(predicate);
+    f.extend(link_scope_fragment("m", link_scope));
     Some(f)
 }
 
@@ -725,19 +765,11 @@ pub(super) fn build_thread_email_filter(
             f
         }
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => SqlFragment::raw(
-            r#"EXISTS (
-                    SELECT 1
-                    FROM email_messages m_cal
-                    JOIN email_attachments a_cal ON a_cal.message_id = m_cal.id
-                    WHERE m_cal.thread_id = t.id
-                      AND (
-                        a_cal.filename ILIKE '%.ics'
-                        OR a_cal.mime_type = 'text/calendar'
-                        OR a_cal.mime_type = 'application/ics'
-                      )
-                )"#,
-        ),
+        // Denormalized flag maintained at attachment ingest — deriving this
+        // from email_attachments at query time is prohibitively slow.
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => {
+            SqlFragment::raw("t.has_calendar_attachment")
+        }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
             SqlFragment::raw("TRUE")
@@ -749,6 +781,10 @@ pub(super) fn build_thread_email_filter(
 
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(ref lit)) => {
             date_predicate(sort_ts_field, lit)
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Property(ref lit)) => {
+            build_thread_property_predicate(lit)
         }
 
         filter_ast::ExprFrame::Literal(
@@ -764,6 +800,42 @@ pub(super) fn build_thread_email_filter(
     });
 
     fragment.with_and_prefix()
+}
+
+/// Entity-property predicate for a candidate thread: EXISTS against
+/// `entity_properties` keyed on the thread id. A literal typed to a
+/// non-thread entity can never match a thread, so it renders FALSE.
+fn build_thread_property_predicate(lit: &PropertiesLiteral) -> SqlFragment {
+    if lit
+        .entity_type
+        .is_some_and(|et| et != PropertyEntityType::Thread)
+    {
+        return SqlFragment::raw("FALSE");
+    }
+    let mut f = SqlFragment::raw(
+        r#"EXISTS (
+                SELECT 1 FROM entity_properties ep_prop
+                WHERE ep_prop.entity_id = t.id::text
+                AND ep_prop.entity_type = 'THREAD'
+                AND ep_prop.property_definition_id = "#,
+    );
+    f.extend(SqlFragment::bind_uuid(lit.property_definition_id));
+    match &lit.value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            f.push_raw(" AND ep_prop.values->'value' ? ");
+            f.extend(SqlFragment::bind_string(option_id.to_string()));
+        }
+        PropertyMatchValue::EntityRef(entity_id) => {
+            f.push_raw(" AND ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', ");
+            f.extend(SqlFragment::bind_string(entity_id.to_string()));
+            f.push_raw("::text))");
+        }
+    }
+    f.push_raw(
+        r#"
+            )"#,
+    );
+    f
 }
 
 /// Escapes special characters in LIKE patterns to prevent SQL injection

@@ -456,6 +456,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the entity access service implementation
@@ -464,8 +465,11 @@ pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessS
 >;
 
 /// Type alias for the document tool context
-pub type ToolDocumentToolContext =
-    DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
+pub type ToolDocumentToolContext = DocumentToolContext<
+    ToolDocumentService,
+    ToolEntityAccessService,
+    documents::outbound::editing_worker_client::ReqwestEditingWorkerClient,
+>;
 
 /// Type alias for the foreign entity service implementation used by AI tools.
 pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;

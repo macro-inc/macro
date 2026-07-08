@@ -1,7 +1,10 @@
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { ENABLE_TASK_DUPLICATES_FLAG } from '@core/constant/featureFlags';
+import {
+  ENABLE_TASK_DUPLICATES_FLAG,
+  ENABLE_TASK_DUPLICATES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -38,8 +41,6 @@ function SimilarTasksInner(props: {
   const similarity = useTaskSimilaritySearchQuery(() => ({
     title: props.debounced().title,
     markdown: props.debounced().markdown,
-    // Mirror the composer's create call, which does not share with a team.
-    shareWithTeam: false,
   }));
 
   // The query retains its last data while disabled, so clear the results
@@ -88,13 +89,16 @@ function SimilarTasksInner(props: {
             )}
           />
           <CopyIcon class="size-3.5 shrink-0" />
-          <span>Possible duplicates</span>
+          <span>Similar Tasks</span>
         </button>
         <Show when={expanded()}>
           <ListLayoutProvider ref={listRef}>
+            {/* Named `u-list` container so the task rows pick up the narrow
+                (<=840px) container queries and collapse status/priority/
+                assignee pills to icons, leaving the width for task names. */}
             <div
               ref={setListRef}
-              class="flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
+              class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
             >
               <For each={entities()}>
                 {(entity) => (
@@ -124,7 +128,9 @@ export function SimilarTasksSection(props: {
   content: Accessor<string>;
   onOpenTask: (taskId: string) => void;
 }) {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG);
+  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
+    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
+  });
 
   const [debounced, setDebounced] = createSignal<DebouncedInput>({
     title: props.title(),

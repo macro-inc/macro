@@ -19,6 +19,5 @@ export interface DocumentPermissionsToken {
   exp: number;
   /** The issuer of the token */
   iss: string;
-  /** The users id if present */
   user_id?: DocumentPermissionsTokenUserId;
 }

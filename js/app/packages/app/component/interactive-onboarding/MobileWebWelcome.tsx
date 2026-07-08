@@ -14,11 +14,6 @@ export default function MobileWebWelcome(props: MobileWebWelcomeProps) {
 
   onMount(() => {
     analytics.track('mobile_web_welcome_viewed');
-    analytics.track('onboarding_step_welcome', {
-      id: 'welcome',
-      index: 0,
-      state: 'viewed',
-    });
   });
 
   const handleSignUp = () => {

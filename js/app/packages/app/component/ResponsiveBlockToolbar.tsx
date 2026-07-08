@@ -18,11 +18,13 @@ import {
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitFileMenuAction } from './split-layout/context';
 
 export type BlockTool = {
   label: string | (() => string);
   icon: Component;
   action: () => void;
+  children?: SplitFileMenuAction[];
   condition?: () => boolean;
   isActive?: () => boolean;
   buttonComponent?: () => JSX.Element;
@@ -108,7 +110,16 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
     visibleTools().filter((tool) => !isShareTool(tool));
   const activeToolbarTools = () =>
     toolbarTools().filter((tool) => !tool.condition || tool.condition());
-  const fileMenuTools = () => props.menuTools ?? visibleTools();
+  const fileMenuTools = () => {
+    if (!props.menuTools) return visibleTools();
+
+    const menuToolLabels = new Set(props.menuTools.map(getToolLabel));
+    const missingShareTools = visibleTools().filter(
+      (tool) => isShareTool(tool) && !menuToolLabels.has(getToolLabel(tool))
+    );
+
+    return [...props.menuTools, ...missingShareTools];
+  };
 
   return (
     <Show

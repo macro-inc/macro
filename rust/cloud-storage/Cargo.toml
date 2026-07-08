@@ -7,11 +7,14 @@ members = [
   "ai_projections_refresh_handler",
   "ai_usage",
   "authentication_service",
-  "backfill_entity_access",
   "bot_id",
   "bots",
   "call_recording_preview_handler",
   "channel_bots",
+  "client/cache-core",
+  "client/cache-idb",
+  "client/cache-sqlite",
+  "client/cache-wasm",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -32,16 +35,24 @@ members = [
   "email_sfs_delete_handler",
   "email_suppression_handler",
   "embedding",
+  "favorites",
   "foreign_entity",
+  "graphql_soup",
   "image_optimizer",
   "image_proxy_service",
   "integration_tests/local_e2e",
+  "macro_config",
+  "macro_event_broker",
+  "macro_event_topics",
+  "macro_queues",
+  "macro_sync_service_jwt",
   "mcp_service",
   "memory",
   "notification_sandbox",
   "notification_service",
   "organization_retention_handler",
   "organization_retention_trigger",
+  "prompt",
   "properties_service",
   "scheduled_action",
   "search_processing_service",
@@ -52,35 +63,35 @@ members = [
   "static_file_service",
   "task_dedup",
   "tools/native_app_server",
+  "tools/xtask",
+  "tools/xtask/crates/*",
   "unfurl",
   "unfurl_service",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
-  "macro_config",
-  "macro_event_broker",
-  "macro_event_topics",
-  "macro_queues",
-  "prompt",
   "workspace-hack",
-  "tools/xtask",
-  "graphql_soup",
 ]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
+apollo-compiler = "1"
+apollo-parser = "0.8"
 askama = "0.14"
+async-graphql = "7.2.1"
 async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
   "completions",
   "embedding",
 ] }
-async-graphql = "7.2.1"
+async-lock = "3"
 async-stream = "0.3.6"
 async-trait = "0.1.86"
+automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
@@ -89,6 +100,7 @@ aws-sdk-sesv2 = "1.118.0"
 aws-sdk-sns = "1.99.0"
 aws-sdk-sqs = "1.98.0"
 aws-smithy-types = "1.4.7"
+aws-types = "1"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -105,18 +117,24 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
+# Pinned engine for the generated dependency artifacts (used by the xtask
+# graph/deps commands). This version lives in Cargo.lock, so dev machines and
+# CI always run the identical generator; guppy is pinned to the version the
+# hakari release is built against.
+guppy = "0.17.24"
 hex = "0.4.3"
 hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
-inquire = "0.7"
 indexmap = "2"
+inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lru = "0.16"
 lazy_static = "1.5.0"
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
@@ -140,12 +158,17 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
-pdfium-render = { version = "0.8.37", default-features = false, features = ["pdfium_7543", "thread_safe"] }
+pdfium-render = { version = "0.8.37", default-features = false, features = [
+  "pdfium_7543",
+  "thread_safe",
+] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 quote = "1"
 rand = "0.9.0"
 rdkafka = { version = "0.37", default-features = false, features = [
-  "dynamic-linking",
+  "cmake-build",
+  "libz-static",
+  "ssl",
   "tokio",
 ] }
 recursion = "0.5.4"
@@ -161,11 +184,14 @@ rmcp = "1.6.0"
 rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
+postcard = { version = "1", features = ["use-std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }
+serde-wasm-bindgen = "0.6"
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
+serde_yaml = "0.9"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -176,6 +202,8 @@ sqlx = { version = "0.8.6", features = [
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.17" }
@@ -218,6 +246,7 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
 ] }
 derive_builder = "0.20.2"
 doppleganger = "0.5"
+doppler-config = "0.1.2"
 js-sys = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
@@ -226,4 +255,3 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
-doppler-config = "0.1.2"

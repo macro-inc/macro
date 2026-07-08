@@ -397,6 +397,7 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
+      reopen: entity.type === 'channel' && !location ? 'latest' : undefined,
     }
   );
 

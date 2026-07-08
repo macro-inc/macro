@@ -20,7 +20,9 @@ export function logSyncService({
   context: SyncLogContext;
   message: string;
 }): void {
-  if (level === 'debug' && !(window as any).debugSyncServiceLog) return;
+  const debugEnabled =
+    typeof window !== 'undefined' && (window as any).debugSyncServiceLog;
+  if (level === 'debug' && !debugEnabled) return;
   console[level === 'info' ? 'log' : level](
     { documentId, t: Date.now(), ...context },
     message

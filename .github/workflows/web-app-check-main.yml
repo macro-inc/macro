@@ -1,208 +1,250 @@
-name: 'Web App Pr Checks'
-on:
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+name: Web App Pr Checks
+'on':
   pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
     branches:
-      - main
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
-  cancel-in-progress: true
-
+    - main
 jobs:
   path-check:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-small
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       api_changed: ${{ steps.filter.outputs.api_changed }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            should_run:
-              - 'js/package.json'
-              - 'js/bun.lock'
-              - 'js/app/package.json'
-              - 'js/app/packages/**'
-              - 'js/app/src/**'
-              - 'js/app/biome.jsonc'
-              - 'js/lexical-core/**'
-              - 'js/lexical-service/**'
-              - '.github/actions/setup-cachix/**'
-              - '.github/actions/setup-reqs-web/**'
-              - '.github/workflows/web-app-check-main.yml'
-            api_changed:
-              - 'rust/cloud-storage/**/*.rs'
-              - 'rust/cloud-storage/Cargo.toml'
-              - 'rust/cloud-storage/Cargo.lock'
-              - 'flake.nix'
-              - 'flake.lock'
-              - 'js/app/scripts/generate-api-schema.ts'
-              - 'js/app/scripts/services.ts'
-              - '.github/actions/setup-cachix/**'
-              - '.github/actions/setup-reqs-web/**'
-              - '.github/workflows/web-app-check-main.yml'
-
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'js/package.json'
+            - 'js/bun.lock'
+            - 'js/app/package.json'
+            - 'js/app/packages/**'
+            - 'js/app/src/**'
+            - 'js/app/biome.jsonc'
+            - 'js/lexical-core/**'
+            - 'js/lexical-service/**'
+            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-reqs-web/**'
+            - '.github/workflows/web-app-check-main.yml'
+          api_changed:
+            - 'rust/cloud-storage/**/*.rs'
+            - 'rust/cloud-storage/Cargo.toml'
+            - 'rust/cloud-storage/Cargo.lock'
+            - 'flake.nix'
+            - 'flake.lock'
+            - 'js/app/scripts/generate-api-schema.ts'
+            - 'js/app/scripts/services.ts'
+            - '.github/actions/setup-cachix/**'
+            - '.github/actions/setup-reqs-web/**'
+            - '.github/workflows/web-app-check-main.yml'
   typescript:
-    needs: path-check
-    # Run the type check if rust code or frontend code has changed.
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
-    runs-on: linux-extra-beefy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Setup Prereqs
-        uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-        if: needs.path-check.outputs.api_changed == 'true'
-        with:
-          workspaces: rust/cloud-storage
-          shared-key: cloud-storage-gen-api
-          cache-on-failure: true
-          cache-targets: true
-      - name: Generate API Types
-        if: needs.path-check.outputs.api_changed == 'true'
-        working-directory: js/app
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: bun run gen-api -- --check
-      - name: show sccache stats
-        if: always() && needs.path-check.outputs.api_changed == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: sccache --show-stats || true
-      - name: Check Types
-        working-directory: js/app
-        run: |
-          bun run --bun --silent tsc --project ./packages/app/tsconfig.json
-
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun,rust
+        path: |-
+          /home/runner/.cache/sccache
+          /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Point sccache at the cache volume
+      run: |-
+        echo "SCCACHE_DIR=/home/runner/.cache/sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=20G" >> "$GITHUB_ENV"
+    - name: Generate API Types
+      if: needs.path-check.outputs.api_changed == 'true'
+      run: bun run gen-api -- --check
+      working-directory: js/app
+    - name: show sccache stats
+      if: always() && needs.path-check.outputs.api_changed == 'true'
+      run: sccache --show-stats || true
+    - name: Check Types
+      run: bun run --bun --silent tsc --project ./packages/app/tsconfig.json
+      working-directory: js/app
   biome-check:
-    needs: path-check
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          dev-shell: 'true'
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: Run Biome
-        working-directory: js/app
-        run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
-
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Run Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: js/app
   tailwind:
-    needs: path-check
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Theme Hygiene Inspector
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Setup Prereqs
-        uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: Check Tailwind Classes
-        working-directory: js/app
-        run: just check-tailwind
-
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Check Tailwind Classes
+      run: just check-tailwind
+      working-directory: js/app
   test:
-    needs: path-check
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Setup
-        uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-          playwright: 'true'
-      - name: Test
-        working-directory: js/app
-        run: bunx vitest
-
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        playwright: 'true'
+    - name: Test
+      run: bunx vitest
+      working-directory: js/app
   cycles:
-    needs: path-check
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup Nix dev shell
-        uses: ./.github/actions/setup-cachix
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          dev-shell: 'true'
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: Cycles Import Check
-        working-directory: js/app
-        run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: js/app
   build:
-    needs: path-check
+    needs:
+    - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
-    runs-on: linux-latest-middy
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      - name: Setup
-        uses: ./.github/actions/setup-reqs-web
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-      - name: Build
-        working-directory: js/app
-        run: bun run build
-
-  # Collector job that always runs - use this as the required status check
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    - name: Build
+      run: bun run build
+      working-directory: js/app
   status-check:
-    name: Web App Status Check
+    needs:
+    - path-check
+    - typescript
+    - biome-check
+    - tailwind
+    - test
+    - cycles
+    - build
     if: always()
-    needs: [path-check, typescript, biome-check, tailwind, test, cycles, build]
-    runs-on: ubuntu-latest
+    name: Web App Status Check
+    runs-on: namespace-profile-linux-small
     steps:
-      - name: Check job results
-        run: |
-          echo "path-check: ${{ needs.path-check.result }}"
-          echo "typescript: ${{ needs.typescript.result }}"
-          echo "biome-check: ${{ needs.biome-check.result }}"
-          echo "tailwind: ${{ needs.tailwind.result }}"
-          echo "test: ${{ needs.test.result }}"
-          echo "cycles: ${{ needs.cycles.result }}"
-          echo "build: ${{ needs.build.result }}"
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "typescript: ${{ needs.typescript.result }}"
+        echo "biome-check: ${{ needs.biome-check.result }}"
+        echo "tailwind: ${{ needs.tailwind.result }}"
+        echo "test: ${{ needs.test.result }}"
+        echo "cycles: ${{ needs.cycles.result }}"
+        echo "build: ${{ needs.build.result }}"
 
-          # Fail if any job failed (skipped and success are both OK)
-          if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-             [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-             [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]] || \
-             [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-             [[ "${{ needs.build.result }}" == "failure" ]]; then
-            echo "❌ One or more jobs failed"
-            exit 1
-          fi
+        # Fail if any job failed (skipped and success are both OK)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
+           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
+           [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
+           [[ "${{ needs.build.result }}" == "failure" ]]; then
+          echo "One or more jobs failed"
+          exit 1
+        fi
 
-          echo "✅ All jobs passed or were skipped"
+        echo "All jobs passed or were skipped"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-check
+  cancel-in-progress: true

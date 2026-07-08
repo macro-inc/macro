@@ -11,7 +11,10 @@ use channels::{
 use documents::{
     domain::models::CloudFrontConfig,
     inbound::toolset::DocumentToolContext,
-    outbound::{pg_document_repo::PgDocumentRepo, s3_upload_url::S3UploadUrlAdapter},
+    outbound::{
+        editing_worker_client::ReqwestEditingWorkerClient, pg_document_repo::PgDocumentRepo,
+        s3_upload_url::S3UploadUrlAdapter,
+    },
 };
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
@@ -26,7 +29,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -125,6 +129,7 @@ async fn build_tool_context(
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
+    let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
 
     let search_service_client =
         SearchServiceClient::new(document_storage_service_auth_key, dss_url);
@@ -208,6 +213,10 @@ async fn build_tool_context(
         ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
     let task_properties_service =
         ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -220,6 +229,7 @@ async fn build_tool_context(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -227,6 +237,8 @@ async fn build_tool_context(
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
+        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
+        config.document_permission_jwt.to_string(),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);

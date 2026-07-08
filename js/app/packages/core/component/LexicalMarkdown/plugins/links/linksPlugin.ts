@@ -347,10 +347,6 @@ function $tryInsertLink(
     return false;
   }
 
-  if (document.activeElement !== editor.getRootElement()) {
-    return false;
-  }
-
   if (insertType === 'collapsed' && onCreate) {
     onCreate({
       selection: window.getSelection(),

@@ -21,4 +21,5 @@ export const AiFeature = {
   call_summary: 'call_summary',
   channel_bot: 'channel_bot',
   ai_projection: 'ai_projection',
+  ai_editing: 'ai_editing',
 } as const;

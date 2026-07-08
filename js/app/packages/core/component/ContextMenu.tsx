@@ -279,7 +279,9 @@ export function GroupLabel(props: { children: JSX.Element }) {
 }
 
 export function MenuSeparator() {
-  return <ContextMenu.Separator class="my-1 border-edge border-t w-full" />;
+  return (
+    <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge" />
+  );
 }
 
 function MobileConditionalOverlay(

@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
 interface SlotProps {
@@ -38,19 +38,19 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        'group/inbox-item relative grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2 py-1.5',
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 px-2',
 
         {
           'bg-accent/8': props.selected,
           'bg-accent/16': props.selected && props.highlighted,
-          'bg-hover/30':
+          'bg-hover/50':
             props.highlighted && !props.selected && !isTouchDevice(),
-          'hover:bg-hover/30':
+          'hover:bg-hover/50':
             !props.highlighted && !props.selected && !isTouchDevice(),
-          'opacity-65': props.dimmed,
         },
         props.class
       )}
+      data-unread={props.dimmed ? undefined : true}
       role={interactive() ? 'button' : undefined}
       tabIndex={interactive() ? 0 : undefined}
       onClick={props.onClick}
@@ -72,15 +72,17 @@ function Icon(props: IconProps): JSX.Element {
   return (
     <span
       class={cn(
-        'relative grid size-10 shrink-0 place-items-center self-start overflow-visible rounded-full',
+        'relative grid size-8 shrink-0 place-items-center self-start overflow-visible',
         props.class
       )}
     >
-      <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
-        <Show when={props.src} fallback={props.fallback}>
-          {(src) => <img src={src()} alt="" class="size-full object-cover" />}
-        </Show>
-      </span>
+      <Layer depth={3}>
+        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface text-ink-extra-muted">
+          <Show when={props.src} fallback={props.fallback}>
+            {(src) => <img src={src()} alt="" class="size-full object-cover" />}
+          </Show>
+        </span>
+      </Layer>
       {props.children}
     </span>
   );
@@ -88,9 +90,7 @@ function Icon(props: IconProps): JSX.Element {
 
 function Body(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('flex min-w-0 flex-col gap-1', props.class)}>
-      {props.children}
-    </div>
+    <div class={cn('flex min-w-0 flex-col', props.class)}>{props.children}</div>
   );
 }
 
@@ -104,20 +104,36 @@ function Header(props: SlotProps): JSX.Element {
 
 function Title(props: SlotProps): JSX.Element {
   return (
-    <div class={cn('min-w-0 flex-1 truncate', props.class)}>
+    <div
+      class={cn(
+        'min-w-0 flex-1 truncate text-sm font-normal text-ink-extra-muted group-data-unread/inbox-item:text-ink group-data-unread/inbox-item:font-medium',
+        props.class
+      )}
+    >
       {props.children}
     </div>
   );
 }
 
 function Content(props: SlotProps): JSX.Element {
-  return <div class={cn('min-w-0', props.class)}>{props.children}</div>;
+  return (
+    <div
+      class={cn(
+        'min-w-0 text-ink-extra-muted/80 group-data-unread/inbox-item:text-ink-muted',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
 }
 
 function Attachments(props: {
   items: InboxCardAttachment[];
   max?: number;
   class?: string;
+  /** When set, media tiles become clickable and call this with the item index. */
+  onOpen?: (index: number) => void;
 }): JSX.Element {
   const max = (): number => props.max ?? 4;
   const visible = (): InboxCardAttachment[] => props.items.slice(0, max());
@@ -129,29 +145,42 @@ function Attachments(props: {
       class={cn('flex max-w-full flex-wrap items-center gap-1.5', props.class)}
     >
       <For each={visible()}>
-        {(attachment) => (
+        {(attachment, index) => (
           <Show when={attachment.src} fallback={attachment.fallback?.()}>
-            {(src) => (
-              <Show
-                when={attachment.kind === 'video'}
-                fallback={
+            {(src) => {
+              const media = () =>
+                attachment.kind === 'video' ? (
+                  <video
+                    src={src()}
+                    muted
+                    playsinline
+                    preload="metadata"
+                    class="size-12 rounded-lg border border-edge object-cover"
+                  />
+                ) : (
                   <img
                     src={attachment.thumbSrc ?? src()}
                     alt={attachment.alt ?? ''}
                     loading="lazy"
                     class="size-12 rounded-lg border border-edge object-cover"
                   />
-                }
-              >
-                <video
-                  src={src()}
-                  muted
-                  playsinline
-                  preload="metadata"
-                  class="size-12 rounded-lg border border-edge object-cover"
-                />
-              </Show>
-            )}
+                );
+
+              return props.onOpen ? (
+                <button
+                  type="button"
+                  class="rounded-lg transition-opacity hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onOpen?.(index());
+                  }}
+                >
+                  {media()}
+                </button>
+              ) : (
+                media()
+              );
+            }}
           </Show>
         )}
       </For>
@@ -172,7 +201,7 @@ function Meta(props: MetaProps): JSX.Element {
   return (
     <div
       class={cn(
-        'flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted',
+        'flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted mt-1',
         props.class
       )}
     >

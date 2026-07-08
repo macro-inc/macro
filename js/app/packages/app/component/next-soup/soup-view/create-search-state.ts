@@ -119,11 +119,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   // Channel thread filters
   if (
     include.channelThreadId?.length ||
-    include.channelThreadRootSenderId?.length
+    include.channelThreadRootSenderId?.length ||
+    include.channelThreadParticipantId?.length
   ) {
     filters.channel_thread_filters = {
       thread_ids: include.channelThreadId,
       root_sender_ids: include.channelThreadRootSenderId,
+      participant_ids: include.channelThreadParticipantId,
     };
   }
 
@@ -181,6 +183,12 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const propertyFilters = includePropertiesToFilters(include.properties);
   if (propertyFilters.length) {
     filters.property_filters = propertyFilters;
+  }
+
+  // Tags: match on the option ids alone (globally unique), OR'd across all tag
+  // definitions. No definition id is sent — the backend matches values only.
+  if (include.tagFilters?.length) {
+    filters.tag_option_ids = include.tagFilters.map((t) => t.value);
   }
 
   return filters;

@@ -2,19 +2,20 @@ import { runCreateAction } from '@app/component/Launcher';
 import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import type { BlockAlias, BlockName } from '@core/block';
-import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
-import EmptyStateAiIcon from '@design/empty-state-ai.svg';
-import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
-import EmptyStateCallsIcon from '@design/empty-state-calls.svg';
-import EmptyStateChannelsIcon from '@design/empty-state-channels.svg';
-import EmptyStateDocIcon from '@design/empty-state-doc.svg';
-import EmptyStateEmailIcon from '@design/empty-state-email.svg';
-import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
-import EmptyStateInboxZeroIcon from '@design/empty-state-inbox-zero.svg';
-import EmptyStateNoFilterMatchIcon from '@design/empty-state-no-filter-match.svg';
-import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg';
-import EmptyStateTasksIcon from '@design/empty-state-tasks.svg';
+import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
+import EmptyStateAutomationsGraphic from '@design/empty-state-automations.svg';
+import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
+import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
+import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
+import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
+import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
+import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
+import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
+import EmptyStateInboxZeroGraphic from '@design/empty-state-inbox-zero.svg';
+import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
+import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';
@@ -32,7 +33,7 @@ type FallbackContent = {
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',
-    graphic: EmptyStateDocIcon,
+    graphic: EmptyStateDocGraphic,
     description:
       'Write, collaborate, and share documents right inside Macro. Create notes, specs, or any long-form content and keep it alongside your conversations.',
     create: { label: 'New document', blockName: 'md' },
@@ -40,7 +41,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   channels: {
     plural: 'channels',
-    graphic: EmptyStateChannelsIcon,
+    graphic: EmptyStateChannelsGraphic,
     description:
       'Channels are shared spaces for team conversations organized by topic, project, or team. Create a channel to start collaborating with your team.',
     create: { label: 'New channel', blockName: 'channel' },
@@ -48,7 +49,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   calls: {
     plural: 'calls',
-    graphic: EmptyStateCallsIcon,
+    graphic: EmptyStateCallsGraphic,
     description: (
       <>
         See recordings, transcriptions and summaries of your Macro calls.
@@ -58,18 +59,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
     ),
     documentationUrl: `${DOCS_BASE}/product/calls`,
   },
-  search: { plural: 'items' },
 };
-
-function InboxZeroNumber(props: { class?: string }) {
-  return (
-    <div
-      class={`flex items-center justify-center font-mono text-[9rem] font-thin leading-none text-ink-muted ${props.class ?? ''}`}
-    >
-      0
-    </div>
-  );
-}
 
 export function EmptyState(props: {
   listView?: ListView;
@@ -90,8 +80,8 @@ export function EmptyState(props: {
     <Switch>
       <Match when={props.search}>
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateNoSearchMatchIcon}
+          centered
+          graphic={EmptyStateNoSearchMatchGraphic}
           title={
             soup.searchText().trim().length > 0
               ? `No results for "${soup.searchText()}"`
@@ -104,28 +94,36 @@ export function EmptyState(props: {
 
       <Match when={props.hasRefinementsFromBase}>
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateNoFilterMatchIcon}
+          centered
+          graphic={EmptyStateNoFilterMatchGraphic}
           title="No items matching the filters"
           description="Try adjusting or clearing your filters to see more results."
         >
           {props.onClearFilters && (
             <FilteredHiddenBanner
-              hasHiddenItems={props.hasHiddenItems}
+              hasHiddenItems={false}
               onClearFilters={props.onClearFilters}
             />
           )}
         </EmptyStatePanel>
       </Match>
 
-      <Match
-        when={
-          (props.listView === 'inbox' || props.listView === 'mail') &&
-          !emailActive()
-        }
-      >
+      <Match when={props.listView === 'inbox' && !emailActive()}>
         <EmptyStatePanel
-          graphic={EmptyStateEmailIcon}
+          graphic={EmptyStateInboxTrayGraphic}
+          title="Your inbox is empty"
+          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          primaryAction={{
+            label: 'Connect email',
+            onClick: onConnectEmail,
+          }}
+          documentationUrl={`${DOCS_BASE}/product/inbox`}
+        />
+      </Match>
+
+      <Match when={props.listView === 'mail' && !emailActive()}>
+        <EmptyStatePanel
+          graphic={EmptyStateEmailGraphic}
           title="Connect your email"
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
           primaryAction={{
@@ -168,8 +166,7 @@ export function EmptyState(props: {
                   };
           return (
             <EmptyStatePanel
-              align="center"
-              graphic={InboxZeroNumber}
+              graphic={EmptyStateInboxTrayGraphic}
               title={title}
               description={description}
               documentationUrl={`${DOCS_BASE}/product/inbox`}
@@ -180,8 +177,7 @@ export function EmptyState(props: {
 
       <Match when={props.listView === 'mail' && emailActive()}>
         <EmptyStatePanel
-          align="center"
-          graphic={InboxZeroNumber}
+          graphic={EmptyStateInboxTrayGraphic}
           title="Inbox zero"
           description="You're all caught up. New email will appear here as it arrives."
           documentationUrl={`${DOCS_BASE}/product/email`}
@@ -190,9 +186,7 @@ export function EmptyState(props: {
 
       <Match when={props.listView === 'tasks'}>
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateTasksIcon}
-          graphicClass="h-36 w-36"
+          graphic={EmptyStateTasksGraphic}
           title="Nothing to do"
           description="Tasks you create or that get assigned to you will show up here."
           primaryAction={{
@@ -208,8 +202,7 @@ export function EmptyState(props: {
         when={props.listView === 'agents' && soup.activeTab() === 'automations'}
       >
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateAutomationsIcon}
+          graphic={EmptyStateAutomationsGraphic}
           title="No automations to show"
           description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
@@ -222,21 +215,30 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'agents'}>
-        <AgentsEmptyState />
+        <EmptyStatePanel
+          graphic={EmptyStateAiGraphic}
+          title="Get started with agents"
+          description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
+          primaryAction={{
+            label: 'New agent',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('chat'),
+          }}
+          documentationUrl={`${DOCS_BASE}/product/agents`}
+        />
       </Match>
 
       <Match when={props.listView === 'companies'}>
         <EmptyStatePanel
-          align="center"
-          graphic={EmptyStateInboxZeroIcon}
-          title="No companies"
-          description="Companies you add or sync into your CRM will appear here."
+          graphic={EmptyStateCompaniesGraphic}
+          title="No customers"
+          description="Customers you add or sync into your CRM will appear here."
         />
       </Match>
 
       <Match when={props.listView === 'folders'}>
         <EmptyStatePanel
-          graphic={EmptyStateFolderIcon}
+          graphic={EmptyStateFolderGraphic}
           title="No folders"
           description="Folders let you organize conversations, documents, and tasks into projects. Create a folder or drop files below to get started."
           primaryAction={{
@@ -250,6 +252,16 @@ export function EmptyState(props: {
         </EmptyStatePanel>
       </Match>
 
+      <Match when={props.listView === 'search'}>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoSearchMatchGraphic}
+          title="No items to show"
+          description="Search across messages, documents, tasks, and more."
+          documentationUrl={`${DOCS_BASE}/product/search`}
+        />
+      </Match>
+
       <Match when={true}>
         {(() => {
           const fallback = (props.listView &&
@@ -258,8 +270,7 @@ export function EmptyState(props: {
           };
           return (
             <EmptyStatePanel
-              align="center"
-              graphic={fallback.graphic ?? EmptyStateInboxZeroIcon}
+              graphic={fallback.graphic ?? EmptyStateInboxZeroGraphic}
               title={`No ${fallback.plural} to show`}
               description={fallback.description}
               primaryAction={
@@ -278,27 +289,5 @@ export function EmptyState(props: {
         })()}
       </Match>
     </Switch>
-  );
-}
-
-function AgentsEmptyState() {
-  // Shares the left-aligned EmptyStatePanel layout with the folders / connect-email
-  // empty states; the MCP setup cards render below the actions as panel children.
-  return (
-    <div class="size-full" data-soup-empty-state>
-      <EmptyStatePanel
-        graphic={EmptyStateAiIcon}
-        title="Get started with agents"
-        description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
-        primaryAction={{
-          label: 'New agent',
-          icon: PlusIcon,
-          onClick: () => runCreateAction('chat'),
-        }}
-        documentationUrl={`${DOCS_BASE}/product/agents`}
-      >
-        <McpSetupCards />
-      </EmptyStatePanel>
-    </div>
   );
 }

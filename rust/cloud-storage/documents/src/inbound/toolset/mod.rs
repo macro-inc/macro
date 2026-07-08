@@ -1,6 +1,7 @@
 //! Toolset inbound adapter for Documents.
 
 mod create_document;
+mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
@@ -12,9 +13,10 @@ use crate::{
     domain::create::DocumentCreator,
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
+    domain::ports::editing::EditingWorkerService,
     inbound::toolset::{
-        create_document::CreateDocument, read_content::ReadContent, read_metadata::ReadMetadata,
-        rename_document::RenameDocument,
+        create_document::CreateDocument, edit_document::EditDocument, read_content::ReadContent,
+        read_metadata::ReadMetadata, rename_document::RenameDocument,
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -35,6 +37,7 @@ pub type DefaultDocumentToolCreator<DSvc> =
 pub struct DocumentToolContext<
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 > {
     /// The document service instance
     pub service: Arc<DSvc>,
@@ -49,10 +52,23 @@ pub struct DocumentToolContext<
 
     /// Backend-owned document creation use case.
     pub creator: DefaultDocumentToolCreator<DSvc>,
+
+    /// Editing worker service for the EditDocument tool.
+    pub editing: Arc<EDSvc>,
+
+    /// JWT secret used to mint document permission tokens for the editing worker.
+    pub document_permission_jwt_secret: String,
+
+    /// Records the token usage the editing worker reports. Defaults to a no-op;
+    /// the chat path injects the real (Postgres-backed) recorder per request.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
 }
 
-impl<DSvc: DocumentService + DocumentCreationService, ESvc: EntityAccessService> Clone
-    for DocumentToolContext<DSvc, ESvc>
+impl<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+> Clone for DocumentToolContext<DSvc, ESvc, EDSvc>
 {
     fn clone(&self) -> Self {
         Self {
@@ -61,12 +77,18 @@ impl<DSvc: DocumentService + DocumentCreationService, ESvc: EntityAccessService>
             lexical_client: self.lexical_client.clone(),
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
+            editing: self.editing.clone(),
+            document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            recorder: self.recorder.clone(),
         }
     }
 }
 
-impl<DSvc: DocumentService + DocumentCreationService, ESvc: EntityAccessService>
-    DocumentToolContext<DSvc, ESvc>
+impl<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+> DocumentToolContext<DSvc, ESvc, EDSvc>
 {
     /// Create a new document tool context
     pub fn new(
@@ -74,6 +96,8 @@ impl<DSvc: DocumentService + DocumentCreationService, ESvc: EntityAccessService>
         entity_access_service: ESvc,
         lexical_client: LexicalClient,
         sync_service_client: SyncServiceClient,
+        editing: EDSvc,
+        document_permission_jwt_secret: String,
     ) -> Self {
         let service = Arc::new(service);
         let lexical_client = Arc::new(lexical_client);
@@ -93,19 +117,31 @@ impl<DSvc: DocumentService + DocumentCreationService, ESvc: EntityAccessService>
             lexical_client,
             sync_service_client,
             creator,
+            editing: Arc::new(editing),
+            document_permission_jwt_secret,
+            recorder: Arc::new(ai_usage::NoOpUsageRecorder),
         }
+    }
+
+    /// Set the usage recorder the EditDocument tool logs worker token usage to.
+    pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
+        self.recorder = recorder;
+        self
     }
 }
 
 /// Create a document toolset
-pub fn document_toolset<DSvc, ESvc>() -> AsyncToolCollection<DocumentToolContext<DSvc, ESvc>>
+pub fn document_toolset<DSvc, ESvc, EDSvc>()
+-> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     AsyncToolCollection::new()
-        .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc>>()
-        .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc>>()
-        .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc>>()
-        .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc>>()
+        .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }

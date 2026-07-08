@@ -254,13 +254,25 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        // Producer creation is lazy: nothing connects to Kafka unless an event
+        // is published, so a dummy broker address is safe for tests.
+        macro_event_broker::MacroEventBrokerService::new(
+            macro_event_broker::KafkaEventPublisher::new("localhost:9092")
+                .expect("kafka producer config is valid"),
+        ),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
+    let test_editing_client =
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            "http://nofileshere".into(),
+        );
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
         test_lexical_client,
         sync_service_client.as_ref().clone(),
+        test_editing_client,
+        "test-jwt-secret".to_string(),
     );
 
     let search_service_client = Arc::new(search_service_client);
@@ -353,6 +365,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ai_tools::all_tools(),
         );
 
+    let projection_notifier =
+        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
+            connection_gateway_client::ConnectionGatewayClient::new(
+                "testing".to_string(),
+                "http://localhost".to_string(),
+            ),
+        ));
+
     let ai_projections_service = Arc::new(
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
@@ -360,6 +380,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ),
             sqs_client.clone(),
             projection_generator,
+            projection_notifier,
         ),
     );
 

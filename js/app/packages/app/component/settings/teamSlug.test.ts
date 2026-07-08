@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getTeamSlugError,
+  normalizeTeamSlugInput,
   TEAM_SLUG_ALLOWED_INPUT_REGEX,
   TEAM_SLUG_MAX_LENGTH,
   TEAM_SLUG_NORMALIZED_REGEX,
-  getTeamSlugError,
-  normalizeTeamSlugInput,
 } from './teamSlug.ts';
 
 describe('team slug validation', function () {
   it('uses an explicit allowed-input regex for backend-accepted characters', function () {
-    expect(TEAM_SLUG_ALLOWED_INPUT_REGEX.test('abc XYZ_- \t\n\f\r')).toBe(
-      true
-    );
+    expect(TEAM_SLUG_ALLOWED_INPUT_REGEX.test('abc XYZ_- \t\n\f\r')).toBe(true);
     expect(TEAM_SLUG_ALLOWED_INPUT_REGEX.test('abc123')).toBe(false);
     expect(TEAM_SLUG_ALLOWED_INPUT_REGEX.test('bad.slug')).toBe(false);
     expect(TEAM_SLUG_ALLOWED_INPUT_REGEX.test('café')).toBe(false);
@@ -40,9 +38,7 @@ describe('team slug validation', function () {
 
   it('rejects empty and separator-only input', function () {
     expect(getTeamSlugError('')).toBe('team slug cannot be empty');
-    expect(getTeamSlugError('  -__\t\n\f\r')).toBe(
-      'team slug cannot be empty'
-    );
+    expect(getTeamSlugError('  -__\t\n\f\r')).toBe('team slug cannot be empty');
   });
 
   it('rejects digits', function () {

@@ -169,7 +169,8 @@ export const getUsageHandler = async (
 };
 
 /**
- * @summary Gets or creates an ai projection and the requesting user's cold instance.
+ * @summary Gets or creates an ai projection and the requesting user's instance,
+triggering (or awaiting) materialization when needed.
  */
 export type upsertAiProjectionResponse200 = {
   data: ProjectionStateResponse;

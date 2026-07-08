@@ -1,7 +1,9 @@
 import {
   $applyNodeReplacement,
   $createParagraphNode,
+  $isElementNode,
   $isRootOrShadowRoot,
+  $splitNode,
   type DOMConversionMap,
   type EditorConfig,
   type EditorThemeClasses,
@@ -366,6 +368,29 @@ export function $isDocumentCardNode(
   return node instanceof DocumentCardNode;
 }
 
+function $removeEmptyElementChain(
+  node: ElementNode | null,
+  stopNode?: ElementNode | null
+): void {
+  let current: ElementNode | null = node;
+
+  while (current && !$isRootOrShadowRoot(current)) {
+    const parent = current.getParent();
+
+    if (current.getChildrenSize() > 0) {
+      break;
+    }
+
+    current.remove();
+
+    if (current === stopNode) {
+      break;
+    }
+
+    current = $isElementNode(parent) ? parent : null;
+  }
+}
+
 /**
  * Convert a DocumentMentionNode (inline) to a DocumentCardNode (block)
  * The mention node will be replaced with a card node, properly handling the block-level insertion
@@ -397,36 +422,22 @@ export function $convertMentionToCard(
     return cardNode;
   }
 
-  let topLevelBlock: LexicalNode = mentionNode;
-  let currentParent: ElementNode | null = parent;
+  const mentionIndex = mentionNode.getIndexWithinParent();
+  const [blockBeforeMention, blockAfterMention] = $splitNode(
+    parent,
+    mentionIndex
+  );
+  const parentBeforeMention = parent;
+  const parentAfterMention = mentionNode.getParent();
 
-  while (currentParent && !$isRootOrShadowRoot(currentParent)) {
-    topLevelBlock = currentParent;
-    currentParent = currentParent.getParent();
-  }
+  blockAfterMention.insertBefore(cardNode);
+  mentionNode.remove();
 
-  const siblings = parent.getChildren();
-  const mentionIndex = siblings.indexOf(mentionNode);
-
-  if (siblings.length === 1) {
-    topLevelBlock.replace(cardNode);
-  } else {
-    const nodesAfterMention = siblings.slice(mentionIndex + 1);
-
-    mentionNode.remove();
-
-    topLevelBlock.insertAfter(cardNode);
-
-    if (nodesAfterMention.length > 0) {
-      const newParagraph = $createParagraphNode();
-      cardNode.insertAfter(newParagraph);
-
-      nodesAfterMention.forEach((node) => {
-        node.remove();
-        newParagraph.append(node);
-      });
-    }
-  }
+  $removeEmptyElementChain(parentBeforeMention, blockBeforeMention);
+  $removeEmptyElementChain(
+    $isElementNode(parentAfterMention) ? parentAfterMention : null,
+    blockAfterMention
+  );
 
   return cardNode;
 }
@@ -446,7 +457,7 @@ export function $convertCardToMention(
     mentionUuid: cardNode.getMentionUuid(),
   });
 
-  let targetParagraph = $createParagraphNode();
+  const targetParagraph = $createParagraphNode();
   targetParagraph.append(mentionNode);
   cardNode.replace(targetParagraph);
   return mentionNode;

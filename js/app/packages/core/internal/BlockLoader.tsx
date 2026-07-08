@@ -145,6 +145,10 @@ Check that the load function does not return a preload source when the intent is
       });
 
       analytics.pageView(data.__block);
+      analytics.track('open_entity', {
+        entityType: data.__block,
+        entityId: props.id,
+      });
     }
 
     setData(() => data);

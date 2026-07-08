@@ -1,3 +1,5 @@
+import type { Accessor } from 'solid-js';
+
 export type PanelId = string;
 
 const _HORIZONTAL = 'horizontal' as const;
@@ -33,7 +35,7 @@ export type LayoutResult = {
 };
 
 export type ResizeZoneCtx = {
-  direction: 'horizontal' | 'vertical';
+  direction: Accessor<'horizontal' | 'vertical'>;
   register: (panel: PanelConfig, index?: number) => void;
   unregister: (id: PanelId) => void;
   update: (id: PanelId, config: { minSize?: number; maxSize?: number }) => void;

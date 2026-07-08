@@ -161,6 +161,7 @@ export function ComposeBody(props: {
           <Scroll>
             <MarkdownTextarea
               autoLinkMatchMode="common-tlds"
+              floatingFormatMenu
               domRef={props.inputRef}
               captureEditor={captureEditor}
               scrollRef={props.mobileScrollRef}

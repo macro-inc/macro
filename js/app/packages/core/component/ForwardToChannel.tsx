@@ -287,6 +287,17 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     };
   };
 
+  const trackForwardShare = (targetType: 'channel' | 'user') => {
+    const attachment = asAttachment();
+    analytics.track('share_entity', {
+      entityType: attachment.entity_type,
+      entityId: attachment.entity_id || undefined,
+      shareMethod: 'forward',
+      targetType,
+      location: 'forward_to_channel',
+    });
+  };
+
   function handleSubmit() {
     let options = selectedOptions();
     if (!options || options.length === 0) {
@@ -317,7 +328,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               },
             ],
           });
-          analytics.track('share_entity', { location: 'forward_to_channel' });
+          trackForwardShare('user');
         });
       } else {
         toast.failure('Message failed to send');
@@ -351,9 +362,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   ],
                 });
               }
-              analytics.track('share_entity', {
-                location: 'forward_to_channel',
-              });
+              trackForwardShare('channel');
             }),
           ]);
         } else {
@@ -382,7 +391,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 ],
               });
             }
-            analytics.track('share_entity', { location: 'forward_to_channel' });
+            trackForwardShare('user');
           });
         }
       }

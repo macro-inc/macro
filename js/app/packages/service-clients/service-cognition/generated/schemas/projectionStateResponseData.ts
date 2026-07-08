@@ -6,6 +6,7 @@
  */
 
 /**
- * The cached result, if any.
+ * The cached result, if any. JSON-encoded when the projection defines an
+`output_schema`.
  */
 export type ProjectionStateResponseData = string | null;

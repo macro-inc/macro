@@ -48,7 +48,7 @@ type UndoEntry = {
 
 type UndoEntryInput = Omit<UndoEntry, 'id'>;
 
-type UndoHandle = {
+export type UndoHandle = {
   id: string;
   /** Undo this specific entry, even if it is not at the top of the stack. */
   undo: (callbacks?: UndoCallbacks) => Promise<void>;

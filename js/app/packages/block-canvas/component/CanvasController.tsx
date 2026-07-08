@@ -930,11 +930,14 @@ export function CanvasController(props: ParentProps) {
   };
 
   onDragEnd((event) => {
+    // Only soup entity drags create nodes (not e.g. sidebar favorite drags).
+    if (event.draggable?.data.dragType !== 'entity') return;
     if (event.droppable?.id !== 'canvas-input-' + _id) return;
     dndDragEnd(event as EntityDragEvent);
   });
 
   onDragMove((event) => {
+    if (event.draggable?.data.dragType !== 'entity') return;
     dndDragMove(event as EntityDragEvent);
   });
 

@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO favorite (user_id, entity_type, entity_id, sort_order)\n            VALUES (\n                $1, $2, $3,\n                COALESCE((SELECT MAX(sort_order) + 1 FROM favorite WHERE user_id = $1), 0)\n            )\n            ON CONFLICT (user_id, entity_type, entity_id)\n                DO UPDATE SET updated_at = now()\n            RETURNING\n                entity_type as \"entity_type!\",\n                entity_id as \"entity_id!\",\n                sort_order as \"sort_order!\",\n                created_at as \"created_at!\",\n                NULL::text as \"file_type?\",\n                NULL::text as \"document_sub_type?\",\n                NULL::text as \"channel_type?\",\n                NULL::text as \"channel_id?\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sort_order!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "file_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "document_sub_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fc23180cd6d21a0a22ad0414c440d41068e04bc1e8a1a64d52382dc2e47be889"
+}

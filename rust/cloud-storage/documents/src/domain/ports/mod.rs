@@ -4,6 +4,7 @@
 
 #[cfg(feature = "document_create")]
 pub mod create;
+pub mod editing;
 pub mod markdown;
 
 use std::future::Future;

@@ -756,6 +756,35 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
     expect(after.pages[0].groups[0].itemIds).toEqual(['a-1']);
     expect(after.pages[0].groups[0].totalCount).toBe(1);
   });
+
+  it('refreshes item data when membership is unchanged', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    // Same group, new data (e.g. a tag/property edit that doesn't move it).
+    const merged = mockTaskItem('a-1', 'in_progress');
+    (merged as unknown as { data: { title: string } }).data.title =
+      'task a-1 (edited)';
+    mockNormalizer.getObjectById.mockReturnValue(merged);
+
+    optimisticUpdateSoupEntity({
+      tag: 'document',
+      data: { id: 'a-1' },
+      frecency_score: 1,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    const after =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    const page = after.pages[0];
+    expect(
+      (page.items['a-1'] as unknown as { data: { title: string } }).data.title
+    ).toBe('task a-1 (edited)');
+    expect(page.groups[0].itemIds).toEqual(['a-1']);
+    expect(page.groups[0].totalCount).toBe(1);
+  });
 });
 
 describe('optimisticUpdateSoupEntity — parent item filter gate', () => {

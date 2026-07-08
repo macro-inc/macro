@@ -1,6 +1,7 @@
 import { ok, okAsync } from 'neverthrow';
 import { vi } from 'vitest';
-import type { LoroManager } from './manager';
+import type { Chatter, ChatterMessage } from './chatter';
+import type { StateUpdate, SyncEngineManager } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
@@ -97,6 +98,36 @@ export function makeTestWAL(
   return { wal, walStore: store };
 }
 
+/**
+ * In-memory {@link Chatter} for tests — no real BroadcastChannel, so the engine
+ * tests don't depend on an ambient browser global. Records what the engine
+ * broadcasts (`posted`) and lets a test inject inbound messages (`receive`).
+ */
+export class MockChatter implements Chatter {
+  public posted: ChatterMessage[] = [];
+  public closed = false;
+  private handlers = new Set<(message: ChatterMessage) => void>();
+
+  public post = vi.fn((message: ChatterMessage) => {
+    this.posted.push(message);
+  });
+
+  public subscribe(handler: (message: ChatterMessage) => void) {
+    this.handlers.add(handler);
+    return () => this.handlers.delete(handler);
+  }
+
+  public close() {
+    this.closed = true;
+    this.handlers.clear();
+  }
+
+  /** Test helper: simulate a message arriving from another replica. */
+  public receive(message: ChatterMessage) {
+    this.handlers.forEach((h) => h(message));
+  }
+}
+
 export class MockLiveSyncSource implements LiveSyncSource {
   private listeners = new Set<(event: SyncSourceEvent) => void>();
   private pushResult = true;
@@ -142,35 +173,27 @@ export class MockLiveSyncSource implements LiveSyncSource {
   }
 }
 
-export class MockLoroManager implements LoroManager<GenericRootSchema> {
+export class MockLoroManager implements SyncEngineManager<GenericRootSchema> {
   private updateCallbacks = new Set<(update: LoroRawUpdate) => void>();
+  private stateCallbacks = new Set<
+    (update: StateUpdate<GenericRootSchema>) => void
+  >();
   private _initialized: boolean;
 
-  public schema = {} as GenericRootSchema;
-  public state = vi.fn(() => undefined as any);
-  public error = vi.fn(() => []);
-  public isInitialized: () => boolean;
-  public getPeerId = vi.fn(() => BigInt(1));
-  public getPeerIdStr = vi.fn(() => '1' as any);
+  public peerId = BigInt(1);
   public importUpdate = vi.fn(() => ok(true));
-  public importBatchUpdates = vi.fn(() => ok(true));
   public syncToLoro = vi.fn(async () => ok(undefined as void));
   public reset = vi.fn(async () => ok(undefined as void));
-  public initializeFromSnapshot = vi.fn(async () => ok(undefined as void));
-  public ingest = vi.fn(async () => {});
-  public getVersion = vi.fn(() => ({}) as any);
-  public getUpdateSince = vi.fn(() => ok(undefined as any));
-  public getAllContainerIds = vi.fn(() => ok([]));
-  public getContainerById = vi.fn(() => ok(undefined as any));
-  public getCursorPos = vi.fn(() => ok({ offset: 0, side: 0 as any }));
-  public getMirror = vi.fn(() => undefined as any);
 
   constructor(initialized = true) {
     this._initialized = initialized;
-    this.isInitialized = () => this._initialized;
   }
 
-  public getDoc() {
+  public get initialized(): boolean {
+    return this._initialized;
+  }
+
+  public get doc() {
     return {
       subscribeLocalUpdates: (cb: (update: LoroRawUpdate) => void) => {
         this.updateCallbacks.add(cb);
@@ -181,7 +204,16 @@ export class MockLoroManager implements LoroManager<GenericRootSchema> {
     } as any;
   }
 
+  public onStateChange(cb: (update: StateUpdate<GenericRootSchema>) => void) {
+    this.stateCallbacks.add(cb);
+    return () => this.stateCallbacks.delete(cb);
+  }
+
   public triggerLocalUpdate(update: LoroRawUpdate) {
     this.updateCallbacks.forEach((cb) => void cb(update));
+  }
+
+  public triggerStateChange(update: StateUpdate<GenericRootSchema>) {
+    this.stateCallbacks.forEach((cb) => void cb(update));
   }
 }

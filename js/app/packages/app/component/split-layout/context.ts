@@ -49,7 +49,8 @@ export type SplitBottomPanelRegistration = {
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
   icon: Component;
-  action: (e?: MouseEvent) => void;
+  action?: (e?: MouseEvent) => void;
+  children?: SplitFileMenuAction[];
   group?: 'delete';
 };
 
@@ -58,6 +59,23 @@ export type SplitFileMenuActionGroups = {
   tools: SplitFileMenuAction[];
   deleteOps: SplitFileMenuAction[];
 };
+
+export type SplitFileMenuActionSection = {
+  key: keyof SplitFileMenuActionGroups;
+  actions: SplitFileMenuAction[];
+};
+
+export function getSplitFileMenuActionSections(
+  groups: SplitFileMenuActionGroups
+): SplitFileMenuActionSection[] {
+  const sections: SplitFileMenuActionSection[] = [
+    { key: 'tools', actions: groups.tools },
+    { key: 'primaryOps', actions: groups.primaryOps },
+    { key: 'deleteOps', actions: groups.deleteOps },
+  ];
+
+  return sections.filter((section) => section.actions.length > 0);
+}
 
 export type SplitPanelContextType = {
   handle: SplitHandle;

@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import type * as pulumi from '@pulumi/pulumi';
 import type { Output } from '@pulumi/pulumi';
-import { DEFAULT_TARGET_GROUP_HEALTH_CHECK } from 'resources';
+import { DEFAULT_TARGET_GROUP_HEALTH_CHECK } from '../../../packages/resources';
 import { MACRO_SUBDOMAIN_CERT, stack } from './shared';
 
 export function serviceLoadBalancer(

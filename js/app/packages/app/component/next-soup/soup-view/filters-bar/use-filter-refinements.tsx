@@ -34,6 +34,7 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import type { SearchableOption } from './searchable-multi-select';
+import { useTagFilter } from './tag-filter';
 import {
   TASK_STATUS_FILTER_IDS,
   useTaskStatusFilter,
@@ -69,6 +70,8 @@ export function useFilterRefinements() {
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
     activeTab,
   } = useSoupView();
   const filterData = () => queryFilters.state;
@@ -77,10 +80,10 @@ export function useFilterRefinements() {
   const contacts = useContacts();
   const currentUserId = useUserId();
   const taskStatus = useTaskStatusFilter();
+  const tagFilter = useTagFilter();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
-    email: user.email(),
     // Filter refinements don't surface admin-gated tabs, so passing
     // false here is safe — the value only matters where the resolver
     // gates on it (companies → hidden).
@@ -130,7 +133,8 @@ export function useFilterRefinements() {
       ) ||
       currentFilterData.emailView !== presetFilters.emailView;
 
-    const hasSubFilters = assigneeFilter().length > 0;
+    const hasSubFilters =
+      assigneeFilter().length > 0 || ownerFilter().length > 0;
 
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
@@ -204,6 +208,87 @@ export function useFilterRefinements() {
       ...otherContactOptions,
     ];
   });
+
+  /**
+   * Owner options for the Customers view's owner sub-filter, keyed by id.
+   */
+  const ownerOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      map.set(NO_ASSIGNEE, {
+        label: 'No owner',
+        icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
+      });
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  const ownerSearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    const noOwnerOption: SearchableOption = {
+      id: NO_ASSIGNEE,
+      label: 'No owner',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    };
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noOwnerOption,
+      ...otherContactOptions,
+    ];
+  });
+
+  /**
+   * Handler for owner filter changes (Customers view). Client-side
+   * predicate only — companies come back from a dedicated capped CRM
+   * request with no property filter support.
+   */
+  const handleOwnerChange = (ids: string[]) => {
+    batch(() => {
+      setOwnerFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
+        soup.predicates.toggle({ and: ['company-owner'] });
+      }
+    });
+  };
 
   /**
    * Handler for assignee filter changes.
@@ -543,8 +628,103 @@ export function useFilterRefinements() {
       );
     };
 
+    // Tags chip (consolidated, searchable) for the documents/tasks views.
+    const pushTagsConsolidatedChip = () => {
+      if (view !== 'tasks' && view !== 'documents') return;
+      if (!tagFilter.enabled() || !tagFilter.hasTags()) return;
+
+      const key = 'tags';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      if (tagFilter.activeIds().length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        tagFilter.activeIds().map((id) => {
+          const opt = tagFilter.optionsById().get(id);
+          return { id, label: opt?.label ?? id, icon: opt?.icon };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Tags',
+            values: getValues,
+            searchableOptions: tagFilter.options,
+            activeSearchableIds: tagFilter.activeIds,
+            onSearchableChange: tagFilter.onChange,
+            searchPlaceholder: 'Filter by tag...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => tagFilter.onChange([]),
+          };
+        })
+      );
+    };
+
+    // Owner filter (consolidated) for the Customers view.
+    const pushOwnerConsolidatedChip = () => {
+      if (view !== 'companies') return;
+      const key = 'owner';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      const ids = ownerFilter();
+      if (ids.length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        ownerFilter().map((id) => {
+          const opt = ownerOptionsMap().get(id);
+          return {
+            id,
+            label: opt?.label ?? id,
+            icon: opt?.icon,
+          };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Owner',
+            values: getValues,
+            searchableOptions: ownerSearchableOptions,
+            activeSearchableIds: ownerFilter,
+            onSearchableChange: handleOwnerChange,
+            searchPlaceholder: 'Search owners...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleOwnerChange([]),
+          };
+        })
+      );
+    };
+
     pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
+    pushOwnerConsolidatedChip();
+    pushTagsConsolidatedChip();
 
     // Evict stale chips
     for (const key of consolidatedChipCache.keys()) {
@@ -664,6 +844,7 @@ export function useFilterRefinements() {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      setOwnerFilter([]);
       if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };

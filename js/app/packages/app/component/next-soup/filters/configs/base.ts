@@ -44,6 +44,8 @@ export type FilterContext = {
   userId?: string;
   notificationSource?: NotificationSource;
   assignees?: string[];
+  /** Selected company Owner ids for the Customers view's owner filter. */
+  owners?: string[];
 };
 
 export type Predicate = (entity: EntityData, ctx: FilterContext) => boolean;

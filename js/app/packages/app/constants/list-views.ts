@@ -1,3 +1,4 @@
+import type { EntityData } from '@entity';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
@@ -69,3 +70,56 @@ export const soupItemMatchesListView = (
     .with('inbox', 'search', undefined, () => true)
     .with('companies', () => item.tag === 'crmCompany')
     .exhaustive();
+
+/**
+ * Whether a soup item carries at least one of the given tag option ids. Tags are
+ * SelectOption property values on the item and option ids are globally unique, so
+ * the owning definition is not consulted. An empty filter matches everything.
+ * Used to gate optimistic websocket inserts so the grouped render (which skips
+ * client predicates) still honors an active tag filter.
+ */
+export const soupItemMatchesTagFilter = (
+  item: SoupApiItem,
+  tagOptionIds: readonly string[]
+): boolean => {
+  if (tagOptionIds.length === 0) return true;
+  const properties =
+    'properties' in item.data ? item.data.properties : undefined;
+  if (!properties?.length) return false;
+  const wanted = new Set(tagOptionIds);
+  for (const { value } of properties) {
+    if (
+      value?.type === 'SelectOption' &&
+      value.value.some((id) => wanted.has(id))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * `soupItemMatchesTagFilter` for mapped entities. Rendered rows are checked
+ * against the active tag filter because the server only tag-filters the
+ * document/chat/project soup unions and the document search leg. Entity types
+ * without loaded properties (channels, calls, search-service email results)
+ * never match, so they are excluded rather than leaking through unfiltered.
+ */
+export const entityMatchesTagFilter = (
+  entity: EntityData,
+  tagOptionIds: readonly string[]
+): boolean => {
+  if (tagOptionIds.length === 0) return true;
+  const properties = 'properties' in entity ? entity.properties : undefined;
+  if (!properties?.length) return false;
+  const wanted = new Set(tagOptionIds);
+  for (const { value } of properties) {
+    if (
+      value?.type === 'SelectOption' &&
+      value.value.some((id) => wanted.has(id))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};

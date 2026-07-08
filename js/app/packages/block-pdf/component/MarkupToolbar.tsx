@@ -2,7 +2,6 @@ import { useOwnedCommentPlaceableSelector } from '@block-pdf/signal/permissions'
 import {
   activePlaceableIdSignal,
   placeableModeSignal,
-  showTabBarSignal,
 } from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import {
@@ -12,13 +11,11 @@ import {
 } from '@core/signal/permissions';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Signature from '@phosphor/signature.svg';
-import Tabs from '@phosphor/tabs.svg';
 import Textbox from '@phosphor/textbox.svg';
 import Trash from '@phosphor/trash-simple.svg';
 import Cancel from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { placeableIdMap, useDeletePlaceable } from '../store/placeables';
 import { PayloadMode } from '../type/placeables';
 
@@ -28,7 +25,6 @@ export function MarkupToolbar() {
   const isDocumentOwner = useIsDocumentOwner();
 
   const [mode, setMode] = placeableModeSignal;
-  const [showTabBar, setShowTabBar] = showTabBarSignal;
 
   const activePlaceableId = activePlaceableIdSignal.get;
   const deletePlaceable = useDeletePlaceable();
@@ -44,63 +40,10 @@ export function MarkupToolbar() {
     return ownedCommentSelector(uuid);
   });
 
-  const dynamicButtonMode = () => {
-    if (showCancel()) return 'cancel';
-    if (showDelete()) return 'delete';
-    return 'placeholder';
-  };
-
-  const dynamicButton = createMemo(() => ({
-    cancel: () => (
-      <Button
-        size="icon-sm"
-        variant="danger"
-        tooltip="Cancel"
-        onClick={() => {
-          setMode(PayloadMode.NoMode);
-        }}
-      >
-        <Cancel />
-      </Button>
-    ),
-    delete: () => (
-      <Button
-        size="icon-sm"
-        variant="danger"
-        tooltip="Delete"
-        onClick={() => {
-          const activePlaceableIndex_ = activePlaceableId();
-          if (activePlaceableIndex_ == null) return;
-          deletePlaceable(activePlaceableIndex_);
-        }}
-      >
-        <Trash />
-      </Button>
-    ),
-    placeholder: () => (
-      <div class="invisible">
-        <Button size="icon-sm">
-          <Cancel />
-        </Button>
-      </div>
-    ),
-  }));
-
   return (
     <Show when={canComment()}>
       <div class="flex flex-row items-center">
         <Show when={canEdit()}>
-          <Button
-            size="icon-sm"
-            label={showTabBar() ? 'Hide Tabs' : 'Show Tabs'}
-            variant="ghost"
-            onClick={() => {
-              setShowTabBar(!showTabBar());
-            }}
-          >
-            <Tabs />
-          </Button>
-          <div class="w-px h-5 bg-edge mx-2" />
           <Button
             size="icon-sm"
             label="Text Box"
@@ -130,7 +73,45 @@ export function MarkupToolbar() {
         >
           <ChatTeardrop />
         </Button>
-        <Dynamic component={dynamicButton()[dynamicButtonMode()]} />
+        <Show
+          when={showCancel()}
+          fallback={
+            <Show
+              when={showDelete()}
+              fallback={
+                <div class="invisible">
+                  <Button size="icon-sm">
+                    <Cancel />
+                  </Button>
+                </div>
+              }
+            >
+              <Button
+                size="icon-sm"
+                variant="danger"
+                tooltip="Delete"
+                onClick={() => {
+                  const activePlaceableIndex_ = activePlaceableId();
+                  if (activePlaceableIndex_ == null) return;
+                  deletePlaceable(activePlaceableIndex_);
+                }}
+              >
+                <Trash />
+              </Button>
+            </Show>
+          }
+        >
+          <Button
+            size="icon-sm"
+            variant="danger"
+            tooltip="Cancel"
+            onClick={() => {
+              setMode(PayloadMode.NoMode);
+            }}
+          >
+            <Cancel />
+          </Button>
+        </Show>
       </div>
     </Show>
   );

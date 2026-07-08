@@ -23,6 +23,8 @@ env_vars! {
     pub struct OpensearchPassword;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
     pub struct LivekitServerUrl;
     pub struct LivekitApiKey;
     pub struct LivekitApiSecret;
@@ -30,12 +32,15 @@ env_vars! {
     /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
     /// infra stack, the same way `document_cognition_service` consumes it.
     pub struct OpenaiApiKey;
+    /// Cohere API key used by the task-dedup reranker. Required — injected
+    /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
+    pub struct CohereApiKey;
     pub struct DocumentLimit;
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     #[derive(Clone)]
-    pub struct DocumentPermissionJwtSecretKey;
+    pub struct DocumentPermissionJwt;
     pub struct GithubWebhookSecretKey;
     pub struct GithubSyncAppPemSecretKey;
     pub struct CalWebhookSecretKey;
@@ -89,10 +94,12 @@ pub struct Config {
     pub opensearch_password: OpensearchPassword,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
+    pub kafka_brokers: KafkaBrokers,
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
     pub openai_api_key: OpenaiApiKey,
+    pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
     pub cal_webhook_secret_key: CalWebhookSecretKey,
@@ -132,7 +139,7 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key:
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
 
-    pub document_permission_jwt_secret_key: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
+    pub document_permission_jwt: DocumentPermissionJwt,
 
     pub livekit_transcription_agent_name: LivekitTranscriptionAgentName,
     pub internal_call_secret: InternalCallSecret,

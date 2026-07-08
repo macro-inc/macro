@@ -17,7 +17,7 @@ export function FilteredHiddenBanner(props: FilteredHiddenBannerProps) {
   return (
     <div
       class={cn(
-        'flex flex-wrap items-center gap-3 rounded-md border border-edge-muted bg-input/50 px-4 py-3',
+        'flex flex-wrap items-center gap-3 rounded-md border border-edge-muted bg-input/50 px-3 py-1',
         showMessage() ? 'w-full max-w-md justify-between' : 'w-fit'
       )}
     >
