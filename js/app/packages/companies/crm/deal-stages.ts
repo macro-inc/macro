@@ -11,12 +11,16 @@
  * is active.
  */
 
+// Imports come from the concrete @entity modules, not the barrel: this
+// module loads inside soup-view-context's import chain, where the barrel
+// can still be mid-initialization (circular import) and its re-exports
+// undefined at module-eval time.
+import { soupPropertyToProperty } from '@entity/extractors-property';
+import { getCompanyStageOptionId } from '@entity/utils/company-properties';
 import {
   COMPANY_STAGE_OPTIONS,
-  getCompanyStageOptionId,
   getPropertyOptionLabel,
-} from '@entity';
-import { soupPropertyToProperty } from '@entity/extractors-property';
+} from '@entity/utils/task-properties';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property } from '@property/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
