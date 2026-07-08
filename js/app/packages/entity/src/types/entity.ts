@@ -192,6 +192,7 @@ export type EmailEntity = EntityBase & {
 export type ProjectEntity = EntityBase & {
   type: 'project';
   projectId?: string;
+  properties?: SoupProperty[];
 };
 
 export type CallStatus = StorageCallStatus;
@@ -363,7 +364,9 @@ export const isEmailEntity = (entity: EntityData): entity is EmailEntity => {
   return entity.type === 'email';
 };
 
-const _isProjectEntity = (entity: EntityData): entity is ProjectEntity => {
+export const isProjectEntity = (
+  entity: EntityData
+): entity is ProjectEntity => {
   return entity.type === 'project';
 };
 
