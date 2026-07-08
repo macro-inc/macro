@@ -149,12 +149,13 @@ fn search_and_stage_without_loader_still_returns_matches() {
 }
 
 #[test]
-fn search_and_stage_response_omits_additional_matches_when_empty() {
-    // `additional_matches` is model-facing noise when empty, so it is skipped.
+fn search_and_stage_response_always_includes_both_fields() {
+    // The generated frontend schema marks both fields required, so the wire
+    // format must include `additional_matches` even when empty.
     let response = search_and_stage(&catalog(), "linear", None);
     let json = serde_json::to_value(&response).unwrap();
     assert!(json.get("results").is_some());
-    assert!(json.get("additional_matches").is_none());
+    assert_eq!(json["additional_matches"], serde_json::json!([]));
 }
 
 // --- load (registers named tools via the loader) ---

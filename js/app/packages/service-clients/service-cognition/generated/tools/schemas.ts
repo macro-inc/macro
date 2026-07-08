@@ -1985,6 +1985,9 @@ export const RenameDocumentResponse = z.object({
 export const SearchTools = z.object({ query: z.string() });
 
 export const SearchToolsResponse = z.object({
+  additional_matches: z.array(
+    z.object({ description: z.string(), name: z.string() })
+  ),
   results: z.array(z.object({ description: z.string(), name: z.string() })),
 });
 

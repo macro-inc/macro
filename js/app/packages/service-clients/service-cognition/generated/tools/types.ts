@@ -1757,8 +1757,8 @@ export interface LoadToolsResponse {
   not_found: string[];
 }
 /**
- * A tool surfaced by [`SearchTools`] or loaded by [`LoadTools`] — just enough
- * for the model to decide whether to load it and how to call it.
+ * A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
+ * model to decide how to call it.
  */
 export interface ToolMatch {
   /**
@@ -1766,7 +1766,7 @@ export interface ToolMatch {
    */
   description: string;
   /**
-   * The exact name to load and then call the tool by.
+   * The exact name to call the tool by.
    */
   name: string;
 }
@@ -2616,7 +2616,7 @@ export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
 }
 /**
- * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. Returns matching tools' names and descriptions but does NOT load them — pass the names you want to `LoadTools` to make them callable. Searching is cheap, so cast a wide net.
+ * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**
@@ -2625,12 +2625,19 @@ export interface SearchTools {
   query: string;
 }
 /**
- * Response from [`SearchTools`]: matching tools (name + description), not yet
- * loaded.
+ * Response from [`SearchTools`]: ranked matches, split into the top matches
+ * (auto-loaded, callable on the next model turn) and the remainder (loadable
+ * via [`LoadTools`]).
  */
 export interface SearchToolsResponse {
   /**
-   * Tools matching the query. Call `LoadTools` with the names you want to use.
+   * Matches past the auto-load cap, ranked. Not callable yet — pass a name
+   * to `LoadTools` if one of these is the tool you need.
+   */
+  additional_matches: ToolMatch[];
+  /**
+   * Top matches, ranked by relevance. These are loaded: call them by exact
+   * name on the next step.
    */
   results: ToolMatch[];
 }

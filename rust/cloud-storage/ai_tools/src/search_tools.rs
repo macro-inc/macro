@@ -53,7 +53,6 @@ pub struct SearchToolsResponse {
     pub results: Vec<ToolMatch>,
     /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
     /// to `LoadTools` if one of these is the tool you need.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub additional_matches: Vec<ToolMatch>,
 }
 
