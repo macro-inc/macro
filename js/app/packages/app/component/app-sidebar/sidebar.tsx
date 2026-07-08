@@ -1277,7 +1277,7 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
             <CaretDownIcon
               class={cn(
                 'size-3 transition-transform duration-200',
-                expanded() && 'rotate-180'
+                !expanded() && 'rotate-180'
               )}
             />
           ) : undefined
