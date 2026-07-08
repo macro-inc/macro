@@ -27,7 +27,7 @@ use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter};
-use models_soup::{SoupProperty, item::SoupItem};
+use models_soup::{SoupProperty, document::SoupDocumentSubType, item::SoupItem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -115,8 +115,14 @@ pub enum EntityItem {
         id: Uuid,
         /// Document name.
         name: String,
+        /// The document's file type (e.g. md, pdf, docx), when known.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_type: Option<String>,
+        /// The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sub_type: Option<String>,
         /// Tags on the document visible to the user.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tags: Vec<AppliedTag>,
     },
     /// AI chat item.
@@ -127,7 +133,7 @@ pub enum EntityItem {
         /// Chat name.
         name: String,
         /// Tags on the chat visible to the user.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tags: Vec<AppliedTag>,
     },
     /// Project item.
@@ -138,7 +144,7 @@ pub enum EntityItem {
         /// Project name.
         name: String,
         /// Tags on the project visible to the user.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tags: Vec<AppliedTag>,
     },
     /// Email thread item.
@@ -149,7 +155,7 @@ pub enum EntityItem {
         /// Email subject, when present.
         subject: Option<String>,
         /// Tags on the thread visible to the user.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         tags: Vec<AppliedTag>,
     },
     /// Channel item.
@@ -195,6 +201,14 @@ impl EntityItem {
         match item {
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
+                sub_type: doc.sub_type.as_ref().map(|sub_type| {
+                    match sub_type {
+                        SoupDocumentSubType::Task { .. } => "task",
+                        SoupDocumentSubType::Snippet {} => "snippet",
+                    }
+                    .to_string()
+                }),
+                file_type: doc.file_type,
                 name: doc.name,
                 tags: resolve_applied_tags(&doc.properties, tag_map),
             },

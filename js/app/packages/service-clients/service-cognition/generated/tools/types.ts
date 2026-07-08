@@ -147,6 +147,10 @@ export type EmailPreset = 'signal';
 export type EntityItem =
   | {
       /**
+       * The document's file type (e.g. md, pdf, docx), when known.
+       */
+      fileType?: string | null;
+      /**
        * Document id.
        */
       id: string;
@@ -155,9 +159,13 @@ export type EntityItem =
        */
       name: string;
       /**
+       * The document's sub type: "task" for Macro tasks, "snippet" for snippets.
+       */
+      subType?: string | null;
+      /**
        * Tags on the document visible to the user.
        */
-      tags: AppliedTag[];
+      tags?: AppliedTag[];
       type: 'document';
     }
   | {
@@ -172,7 +180,7 @@ export type EntityItem =
       /**
        * Tags on the chat visible to the user.
        */
-      tags: AppliedTag[];
+      tags?: AppliedTag[];
       type: 'aiChat';
     }
   | {
@@ -187,7 +195,7 @@ export type EntityItem =
       /**
        * Tags on the project visible to the user.
        */
-      tags: AppliedTag[];
+      tags?: AppliedTag[];
       type: 'project';
     }
   | {
@@ -202,7 +210,7 @@ export type EntityItem =
       /**
        * Tags on the thread visible to the user.
        */
-      tags: AppliedTag[];
+      tags?: AppliedTag[];
       type: 'email';
     }
   | {
@@ -1518,7 +1526,7 @@ export interface ToolPropertyItem {
   /**
    * Available options for select-type properties.
    */
-  options: ToolPropertyOption[];
+  options?: ToolPropertyOption[];
   /**
    * The property definition ID. Use this when calling SetEntityProperty.
    */

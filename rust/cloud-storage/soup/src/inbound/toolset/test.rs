@@ -199,11 +199,15 @@ fn test_build_summary_with_items() {
         EntityItem::Document {
             id: Uuid::new_v4(),
             name: "test.md".to_string(),
+            file_type: Some("md".to_string()),
+            sub_type: None,
             tags: vec![],
         },
         EntityItem::Document {
             id: Uuid::new_v4(),
             name: "other.md".to_string(),
+            file_type: Some("md".to_string()),
+            sub_type: Some("task".to_string()),
             tags: vec![],
         },
         EntityItem::Email {

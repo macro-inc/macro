@@ -92,7 +92,7 @@ pub struct ToolPropertyItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<TagScope>,
     /// Available options for select-type properties.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<ToolPropertyOption>,
 }
 

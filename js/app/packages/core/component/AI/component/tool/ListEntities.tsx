@@ -1,4 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import WideChannel from '@icon/wide-channel.svg';
 import WideFileMd from '@icon/wide-file-md.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
@@ -68,7 +69,10 @@ const ListEntitiesToolResponse = (props: {
     switch (item.type) {
       case 'document':
         return () => {
-          replaceOrInsertSplit({ type: 'unknown', id: item.id });
+          replaceOrInsertSplit({
+            type: fileTypeToBlockName(item.subType ?? item.fileType),
+            id: item.id,
+          });
         };
       case 'aiChat':
         return () => {
