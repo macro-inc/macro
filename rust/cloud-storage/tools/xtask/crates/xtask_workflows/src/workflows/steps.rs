@@ -94,12 +94,15 @@ pub fn mount_cache_volume() -> Step<Use> {
         .continue_on_error(true)
 }
 
-/// [`mount_cache_volume`] plus the checkout's cargo target dir. Persisting
-/// `target/` is what makes the preview job's zigbuild incremental — cargo's
-/// own fingerprints carry across runs, where sccache alone left build scripts,
-/// native (cmake/zig) compiles, and linking cold every time. The volume is a
-/// block-device mount, so a multi-GB target tree costs nothing to save or
-/// restore.
+/// [`mount_cache_volume`] plus the checkout's cargo target dir and the init
+/// snapshot store. Persisting `target/` is what makes the preview job's
+/// zigbuild incremental — cargo's own fingerprints carry across runs, where
+/// sccache alone left build scripts, native (cmake/zig) compiles, and linking
+/// cold every time. Persisting the snapshot store lets the bake step skip the
+/// whole infra bring-up when the init inputs are unchanged (and keeps the
+/// snapshot bytes stable, so the VM image's snapshot layer stops churning).
+/// The volume is a block-device mount, so multi-GB trees cost nothing to save
+/// or restore.
 pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
     Step::new("Mount Namespace cache volume")
         .uses(
@@ -111,8 +114,9 @@ pub fn mount_cache_volume_with_cargo_target() -> Step<Use> {
         .add_with((
             "path",
             format!(
-                "{}\n/nix\n${{{{ github.workspace }}}}/rust/cloud-storage/target",
-                vars::SCCACHE_VOLUME_DIR
+                "{}\n/nix\n${{{{ github.workspace }}}}/rust/cloud-storage/target\n{}",
+                vars::SCCACHE_VOLUME_DIR,
+                vars::PREVIEW_SNAPSHOT_VOLUME_DIR
             ),
         ))
         .continue_on_error(true)

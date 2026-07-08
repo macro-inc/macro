@@ -59,6 +59,11 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// volume so it persists across runs — this is what replaces the S3 bucket.
 pub const SCCACHE_VOLUME_DIR: &str = "/home/runner/.cache/sccache";
 
+/// Init-snapshot store for the preview job (`MACRO_STACK_SNAPSHOT_DIR`). Lives
+/// on the preview cache volume so an unchanged init key skips the whole infra
+/// bake and produces byte-identical snapshot layers in the VM image.
+pub const PREVIEW_SNAPSHOT_VOLUME_DIR: &str = "/home/runner/.cache/macro-preview-snapshots";
+
 /// Max on-disk size for the sccache cache. Larger than the setup default since
 /// the persisted volume can hold a full-workspace cache.
 pub const SCCACHE_CACHE_SIZE: &str = "20G";

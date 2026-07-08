@@ -18,6 +18,7 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP_NAME: macro-pr-${{ github.event.pull_request.number }}
+      MACRO_STACK_SNAPSHOT_DIR: /home/runner/.cache/macro-preview-snapshots
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -31,6 +32,7 @@ jobs:
           /home/runner/.cache/sccache
           /nix
           ${{ github.workspace }}/rust/cloud-storage/target
+          /home/runner/.cache/macro-preview-snapshots
       continue-on-error: true
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
@@ -64,8 +66,19 @@ jobs:
       working-directory: js/app/packages/app
     - name: Bake init snapshot
       run: |
-        just stack up --infra-only --no-doppler --no-build
-        just stack snapshot --json
+        set -euo pipefail
+        mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
+        status=$(just stack snapshot --json | tail -n 1)
+        if echo "$status" | jq -e '.present' >/dev/null; then
+          echo "init snapshot cache hit: $status"
+          cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
+            -p xtask_local --features local-stack -- gen-compose
+        else
+          just stack up --infra-only --no-doppler --no-build
+          status=$(just stack snapshot --json | tail -n 1)
+          echo "$status" | jq -e '.present' >/dev/null
+        fi
+        echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
     - name: Dump stack diagnostics
       if: failure()
       run: |
@@ -99,15 +112,21 @@ jobs:
           rust/cloud-storage/macro_db_client/migrations \
           "$ctx/repo/"
         # Service binaries only — the target dir also holds gigabytes of
-        # build intermediates.
+        # build intermediates. `-p` everywhere: preserved mtimes mean files
+        # cargo didn't relink produce byte-identical Docker layers, so the
+        # registry push/pull skips them (the Dockerfile orders its COPYs
+        # stable → volatile for the same reason).
         find rust/cloud-storage/target/x86_64-unknown-linux-gnu/debug \
           -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
-          -exec cp {} "$ctx/artifacts/binaries/" \;
-        cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
-        cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
-        cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
-        cp infra/preview/Dockerfile "$ctx/Dockerfile"
+          -exec cp -p {} "$ctx/artifacts/binaries/" \;
+        cp -a js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
+        # Only the current key's snapshot — the volume store accumulates keys.
+        snap_dir=$(jq -r '.dir' "$RUNNER_TEMP/preview-snapshot.json")
+        mkdir -p "$ctx/artifacts/snapshots"
+        cp -a "$snap_dir" "$ctx/artifacts/snapshots/"
+        cp -p rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
+        cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
+        cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
     - name: Setup flyctl
       uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
     - name: Deploy to Fly
@@ -166,36 +185,50 @@ jobs:
         # manifest maps image ID -> local tag -> registry ref so boots can
         # skip images already present. alpine:3 rides along for the
         # snapshot-restore helper container.
+        # On a snapshot cache hit only gen-compose ran, which doesn't write
+        # the env file; compose hard-fails on a missing --env-file, and the
+        # image names don't interpolate env vars anyway.
+        envfile=infra/local/generated/macro/local.generated.env
+        [ -f "$envfile" ] || : > "$envfile"
         images=$(docker compose -p macro \
           -f docker-compose.yml \
           -f infra/local/generated/macro/docker-compose.override.yml \
-          --env-file infra/local/generated/macro/local.generated.env \
+          --env-file "$envfile" \
           config --images | sort -u)
         echo "mirroring images:" $images
         docker pull alpine:3
         mkdir -p preview-ctx/preload
         : > preview-ctx/preload/manifest.txt
+        : > "$RUNNER_TEMP/push-refs.txt"
         for img in $images alpine:3; do
-          # The infra-only bake never starts the app layer, so images only
-          # it runs (proxy, mailpit) haven't been pulled yet.
+          # Images the bake didn't leave in the daemon (snapshot cache hit,
+          # or app-layer-only images like proxy/mailpit) get pulled here.
           docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
-          ref="$registry:img-$(echo "$img" | tr '/:' '__')"
+          id=$(docker image inspect -f '{{.Id}}' "$img")
+          # Content-addressed tag: same image content = same ref, so a
+          # redeploy's push is skippable by a manifest existence check and
+          # concurrent PRs' deploys can never clobber each other's tags.
+          ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
           docker tag "$img" "$ref"
-          echo "$(docker image inspect -f '{{.Id}}' "$img") $img $ref" \
-            >> preview-ctx/preload/manifest.txt
+          echo "$id $img $ref" >> preview-ctx/preload/manifest.txt
+          if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "$ref" >> "$RUNNER_TEMP/push-refs.txt"
+          fi
         done
+        echo "pushing $(wc -l < "$RUNNER_TEMP/push-refs.txt") of $(wc -l < preview-ctx/preload/manifest.txt) images"
         # The Fly registry occasionally aborts large uploads ("s3aws:
         # append to zero-size path unsupported") — retry; layers that made
         # it are reused. Four pushes at a time keeps the first (cold) push
         # moving without saturating the registry.
-        awk '{print $3}' preview-ctx/preload/manifest.txt \
-          | xargs -P 4 -I {} sh -c '
+        if [ -s "$RUNNER_TEMP/push-refs.txt" ]; then
+          xargs -P 4 -I {} sh -c '
               for _ in 1 2 3; do
                 docker push "{}" && exit 0
                 echo "push of {} failed, retrying" >&2
                 sleep 15
               done
-              exit 1'
+              exit 1' < "$RUNNER_TEMP/push-refs.txt"
+        fi
         image="$registry:${{ github.sha }}"
         docker build -t "$image" preview-ctx
         pushed=""

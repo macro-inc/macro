@@ -8,6 +8,7 @@ set -euo pipefail
 
 log() { echo "[preview] $*"; }
 
+t_boot=$(date +%s)
 log "starting inner dockerd"
 dockerd >/var/log/dockerd.log 2>&1 &
 
@@ -20,6 +21,7 @@ if ! docker info >/dev/null 2>&1; then
   tail -n 50 /var/log/dockerd.log
   exit 1
 fi
+log "dockerd ready in $(($(date +%s) - t_boot))s"
 
 # Pull the stack images from the app's Fly registry repo (CI mirrored them
 # there at deploy time). /var/lib/docker is a persistent volume, so the
@@ -68,6 +70,11 @@ t0=$(date +%s)
   --frontend-dist /srv/macro/artifacts/frontend-dist \
   --json
 
-log "stack up took $(($(date +%s) - t0))s"
+log "stack up took $(($(date +%s) - t0))s (boot total $(($(date +%s) - t_boot))s)"
+# The backend health gate is the longest stack-up phase; surface the auth
+# service's own timestamped startup log so the wait is attributable from the
+# CI boot-timings step (which greps [preview] out of `flyctl logs`).
+docker logs -t --tail 40 macro-authentication-service-1 2>&1 \
+  | sed 's/^/[preview][auth] /' || true
 log "stack ready — proxy serving on :8090"
 exec sleep infinity

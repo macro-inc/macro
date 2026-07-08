@@ -32,7 +32,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # layer pulls the preview secrets with it.
 RUN curl -Ls --tlsv1.2 --proto "=https" https://cli.doppler.com/install.sh | sh
 
-COPY . /srv/macro
+# One COPY per artifact, ordered stable → volatile: the staging step preserves
+# mtimes, so a layer whose inputs didn't change this deploy is byte-identical
+# to the previous image's — the registry push and the Fly host's pull both
+# skip it. Everything after the first changed layer re-ships, so the pieces
+# that churn every deploy (frontend bundle, service binaries) go last.
+COPY entrypoint.sh /srv/macro/entrypoint.sh
+COPY repo/ /srv/macro/repo/
+COPY bin/ /srv/macro/bin/
+COPY artifacts/snapshots/ /srv/macro/artifacts/snapshots/
+COPY preload/ /srv/macro/preload/
+COPY artifacts/frontend-dist/ /srv/macro/artifacts/frontend-dist/
+COPY artifacts/binaries/ /srv/macro/artifacts/binaries/
 RUN chmod +x /srv/macro/entrypoint.sh /srv/macro/bin/xtask
 
 # Point the prebuilt xtask at the staged layout (its compiled-in paths refer to

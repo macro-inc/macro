@@ -74,6 +74,12 @@ fn deploy() -> Job {
         )
         .add_env(("FLY_API_TOKEN", vars::FLY_API_TOKEN))
         .add_env(("APP_NAME", APP_NAME))
+        // Init snapshots live on the cache volume: an unchanged key skips the
+        // whole infra bake and keeps snapshot bytes (→ VM image layer) stable.
+        .add_env((
+            "MACRO_STACK_SNAPSHOT_DIR",
+            vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
+        ))
         .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume_with_cargo_target())
         // Namespace remote builder: persistent BuildKit layer cache across
@@ -168,10 +174,28 @@ fn dump_boot_timings() -> Step<Run> {
 /// only the infra volumes anyway. Via `just` (not the bare `cargo x` alias)
 /// because the justfile enables the `local-stack` feature the Kafka
 /// provisioning needs.
+///
+/// The store lives on the cache volume (MACRO_STACK_SNAPSHOT_DIR), so when the
+/// init inputs are unchanged the snapshot is already there and the entire
+/// bring-up is skipped — only the generated compose override (which `up` would
+/// have written, and the mirror step reads) still needs producing. The final
+/// `snapshot --json` line lands in $RUNNER_TEMP for the stage step, which
+/// ships exactly that key's directory.
 fn bake_snapshot() -> Step<Run> {
     Step::new("Bake init snapshot").run(indoc::indoc! {r#"
-        just stack up --infra-only --no-doppler --no-build
-        just stack snapshot --json
+        set -euo pipefail
+        mkdir -p "$MACRO_STACK_SNAPSHOT_DIR"
+        status=$(just stack snapshot --json | tail -n 1)
+        if echo "$status" | jq -e '.present' >/dev/null; then
+          echo "init snapshot cache hit: $status"
+          cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
+            -p xtask_local --features local-stack -- gen-compose
+        else
+          just stack up --infra-only --no-doppler --no-build
+          status=$(just stack snapshot --json | tail -n 1)
+          echo "$status" | jq -e '.present' >/dev/null
+        fi
+        echo "$status" > "$RUNNER_TEMP/preview-snapshot.json"
     "#})
 }
 
@@ -215,15 +239,21 @@ fn stage_context() -> Step<Run> {
           rust/cloud-storage/macro_db_client/migrations \
           "$ctx/repo/"
         # Service binaries only — the target dir also holds gigabytes of
-        # build intermediates.
+        # build intermediates. `-p` everywhere: preserved mtimes mean files
+        # cargo didn't relink produce byte-identical Docker layers, so the
+        # registry push/pull skips them (the Dockerfile orders its COPYs
+        # stable → volatile for the same reason).
         find rust/cloud-storage/target/x86_64-unknown-linux-gnu/debug \
           -maxdepth 1 -type f -executable ! -name '*.d' ! -name '*.so' \
-          -exec cp {} "$ctx/artifacts/binaries/" \;
-        cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
-        cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
-        cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
-        cp infra/preview/Dockerfile "$ctx/Dockerfile"
+          -exec cp -p {} "$ctx/artifacts/binaries/" \;
+        cp -a js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
+        # Only the current key's snapshot — the volume store accumulates keys.
+        snap_dir=$(jq -r '.dir' "$RUNNER_TEMP/preview-snapshot.json")
+        mkdir -p "$ctx/artifacts/snapshots"
+        cp -a "$snap_dir" "$ctx/artifacts/snapshots/"
+        cp -p rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
+        cp -p infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
+        cp -p infra/preview/Dockerfile "$ctx/Dockerfile"
     "#})
 }
 
@@ -296,36 +326,50 @@ fn deploy_to_fly() -> Step<Run> {
             # manifest maps image ID -> local tag -> registry ref so boots can
             # skip images already present. alpine:3 rides along for the
             # snapshot-restore helper container.
+            # On a snapshot cache hit only gen-compose ran, which doesn't write
+            # the env file; compose hard-fails on a missing --env-file, and the
+            # image names don't interpolate env vars anyway.
+            envfile=infra/local/generated/macro/local.generated.env
+            [ -f "$envfile" ] || : > "$envfile"
             images=$(docker compose -p macro \
               -f docker-compose.yml \
               -f infra/local/generated/macro/docker-compose.override.yml \
-              --env-file infra/local/generated/macro/local.generated.env \
+              --env-file "$envfile" \
               config --images | sort -u)
             echo "mirroring images:" $images
             docker pull alpine:3
             mkdir -p preview-ctx/preload
             : > preview-ctx/preload/manifest.txt
+            : > "$RUNNER_TEMP/push-refs.txt"
             for img in $images alpine:3; do
-              # The infra-only bake never starts the app layer, so images only
-              # it runs (proxy, mailpit) haven't been pulled yet.
+              # Images the bake didn't leave in the daemon (snapshot cache hit,
+              # or app-layer-only images like proxy/mailpit) get pulled here.
               docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
-              ref="$registry:img-$(echo "$img" | tr '/:' '__')"
+              id=$(docker image inspect -f '{{.Id}}' "$img")
+              # Content-addressed tag: same image content = same ref, so a
+              # redeploy's push is skippable by a manifest existence check and
+              # concurrent PRs' deploys can never clobber each other's tags.
+              ref="$registry:img-$(echo "$img" | tr '/:' '__')-$(echo "$id" | cut -c8-19)"
               docker tag "$img" "$ref"
-              echo "$(docker image inspect -f '{{.Id}}' "$img") $img $ref" \
-                >> preview-ctx/preload/manifest.txt
+              echo "$id $img $ref" >> preview-ctx/preload/manifest.txt
+              if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+                echo "$ref" >> "$RUNNER_TEMP/push-refs.txt"
+              fi
             done
+            echo "pushing $(wc -l < "$RUNNER_TEMP/push-refs.txt") of $(wc -l < preview-ctx/preload/manifest.txt) images"
             # The Fly registry occasionally aborts large uploads ("s3aws:
             # append to zero-size path unsupported") — retry; layers that made
             # it are reused. Four pushes at a time keeps the first (cold) push
             # moving without saturating the registry.
-            awk '{print $3}' preview-ctx/preload/manifest.txt \
-              | xargs -P 4 -I {} sh -c '
+            if [ -s "$RUNNER_TEMP/push-refs.txt" ]; then
+              xargs -P 4 -I {} sh -c '
                   for _ in 1 2 3; do
                     docker push "{}" && exit 0
                     echo "push of {} failed, retrying" >&2
                     sleep 15
                   done
-                  exit 1'
+                  exit 1' < "$RUNNER_TEMP/push-refs.txt"
+            fi
             image="$registry:${{ github.sha }}"
             docker build -t "$image" preview-ctx
             pushed=""
