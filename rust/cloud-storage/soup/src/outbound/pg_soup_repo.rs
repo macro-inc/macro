@@ -192,7 +192,7 @@ pub(crate) async fn populate_properties(
             db,
             &entity_refs,
             property_ids,
-            Some(user_id.as_ref()),
+            Some(&user_id),
         )
         .await
         .map_err(|e| sqlx::Error::Decode(e.into()))?;

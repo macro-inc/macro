@@ -2,12 +2,12 @@
 
 use axum::{
     Json,
-    extract::{Extension, Path, Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::EntityType;
 use models_properties::api::{CreatePropertyDefinitionRequest, CreatePropertyScope};
 use models_properties::service::property_definition::PropertyDefinition;
@@ -98,11 +98,14 @@ pub enum PropertyDefinitionResponse {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), err)]
+#[tracing::instrument(skip(state, user, team), err)]
 pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     Query(query): Query<ListPropertiesQuery>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
     let callers_team = caller_team_id(&team);
@@ -110,10 +113,10 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     // Determine query parameters based on scope. Team and user ids are derived from the
     // authenticated caller, never from the request.
     let (team_id, user_id_opt, include_system) = match query.scope {
-        PropertyScope::User => (None, Some(user_context.user_id.as_str()), false),
+        PropertyScope::User => (None, Some(&user), false),
         PropertyScope::Team => (callers_team, None, false),
         PropertyScope::System => (None, None, true),
-        PropertyScope::All => (callers_team, Some(user_context.user_id.as_str()), true),
+        PropertyScope::All => (callers_team, Some(&user), true),
     };
 
     tracing::info!(
@@ -121,7 +124,7 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
         scope = ?query.scope,
         include_system = include_system,
         for_entity_type = ?query.for_entity_type,
-        user_id = %user_context.user_id,
+        user_id = %user,
         "listing properties"
     );
 
@@ -152,7 +155,7 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
         properties_count = response.len(),
         team_id = ?team_id,
         scope = ?query.scope,
-        user_id = %user_context.user_id,
+        user_id = %user,
         "successfully retrieved properties"
     );
 
@@ -199,16 +202,19 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user, team), err)]
 pub async fn create_property_definition<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
     // Derive the owner from the authenticated caller - clients never supply owner ids.
     let owner = match request.scope {
-        CreatePropertyScope::User => PropertyDefinitionOwner::User(user_context.user_id.as_str()),
+        CreatePropertyScope::User => PropertyDefinitionOwner::User(&user),
         CreatePropertyScope::Team => {
             let team_id =
                 caller_team_id(&team).ok_or(CreatePropertyDefinitionErr::TeamMembershipRequired)?;
@@ -270,18 +276,21 @@ impl IntoResponse for DeletePropertyDefinitionError {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), err)]
+#[tracing::instrument(skip(state, user, team), err)]
 pub async fn delete_property_definition<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
     tracing::info!("deleting property definition");
 
     state
         .properties_service
-        .delete_property_definition(property_uuid, &user_context.user_id, caller_team_id(&team))
+        .delete_property_definition(property_uuid, &user, caller_team_id(&team))
         .await?;
 
     tracing::info!("successfully deleted property definition");

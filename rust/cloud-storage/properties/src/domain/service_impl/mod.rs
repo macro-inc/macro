@@ -5,6 +5,7 @@ mod task_properties;
 
 use std::collections::HashMap;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::DataType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
@@ -112,7 +113,7 @@ where
     async fn owned_modifiable_definition(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> Result<PropertyDefinition, PropertiesErr>
     where
@@ -325,7 +326,7 @@ where
     )]
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -439,7 +440,7 @@ where
     )]
     async fn add_entity_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -502,7 +503,7 @@ where
     )]
     async fn remove_entity_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -553,7 +554,7 @@ where
     async fn list_property_definitions(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
         for_entity_type: Option<EntityType>,
     ) -> Result<Vec<PropertyDefinition>, PropertiesErr> {
@@ -577,7 +578,7 @@ where
     async fn list_property_definitions_with_options(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
         for_entity_type: Option<EntityType>,
     ) -> Result<Vec<PropertyDefinitionWithOptions>, PropertiesErr> {
@@ -652,7 +653,7 @@ where
     async fn delete_property_definition(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> Result<(), PropertiesErr> {
         // First check if the property exists and if it's a system property.
@@ -688,7 +689,7 @@ where
     async fn get_property_options(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<PropertyOption>, PropertiesErr> {
         let definition = self
@@ -716,7 +717,7 @@ where
     #[tracing::instrument(skip(self, request), fields(request = ?request), err)]
     async fn add_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
@@ -765,7 +766,7 @@ where
     #[tracing::instrument(skip(self, request), fields(request = ?request), err)]
     async fn update_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         option_id: Uuid,
@@ -829,7 +830,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         option_id: Uuid,
@@ -865,7 +866,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn list_tag_sets(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<TagSet>, PropertiesErr> {
         let mut sets = Vec::new();
@@ -1003,7 +1004,7 @@ where
     async fn delete_entity_property(
         &self,
         entity_property_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), PropertiesErr> {
         let property_info = self
             .repository
@@ -1058,7 +1059,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn check_entity_view_permission(
         &self,
-        user_id: &str,
+        user_id: Option<&MacroUserIdStr<'_>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), PropertiesErr> {
@@ -1076,7 +1077,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn check_entity_edit_permission(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), PropertiesErr> {

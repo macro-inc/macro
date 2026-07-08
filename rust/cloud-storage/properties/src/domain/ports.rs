@@ -41,10 +41,12 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     /// Returns `None` if the property doesn't exist, if the caller doesn't own it,
     /// or if it's a system property. The caller owns it when it is their user
     /// property, or a property of the team they belong to.
-    fn get_property_definition_with_owner(
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_property_definition_with_owner<'a>(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'a>,
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
 
@@ -56,7 +58,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     fn list_property_definitions<'a>(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&'a str>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
         include_system: bool,
     ) -> impl Future<Output = Result<Vec<PropertyDefinition>, Self::Err>> + Send;
 
@@ -68,7 +70,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     fn list_property_definitions_with_options<'a>(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&'a str>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
         include_system: bool,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
@@ -261,7 +263,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         entity_refs: Vec<EntityReference>,
         property_ids: Vec<Uuid>,
-        tag_viewer_user_id: Option<&'a str>,
+        tag_viewer_user_id: Option<&'a MacroUserIdStr<'a>>,
     ) -> impl Future<
         Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
     > + Send;
@@ -334,20 +336,24 @@ pub trait PermissionService: Send + Sync + 'static {
 
     /// Check if a user has edit access to an entity.
     /// Returns an error if the user does not have edit or owner access.
-    fn check_entity_edit_permission(
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn check_entity_edit_permission<'a>(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'a>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Check if a user has view access to an entity (any access level).
     /// The owner always has access; deleted entities are only visible to their
-    /// owner. For anonymous users (empty user_id), only allows access to
+    /// owner. For anonymous users (`None`), only allows access to
     /// publicly shared entities.
-    fn check_entity_view_permission(
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn check_entity_view_permission<'a>(
         &self,
-        user_id: &str,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;

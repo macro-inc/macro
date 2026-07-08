@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
@@ -96,7 +97,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// Requires edit access to the entity.
     fn set_entity_property(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -110,7 +111,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// concurrent changes instead of clobbering them.
     fn add_entity_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -121,7 +122,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// A no-op if absent. Requires edit access.
     fn remove_entity_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
         property_definition_id: Uuid,
@@ -142,7 +143,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn list_property_definitions(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
         for_entity_type: Option<EntityType>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinition>, PropertiesErr>> + Send;
@@ -152,7 +153,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn list_property_definitions_with_options(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
         for_entity_type: Option<EntityType>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, PropertiesErr>> + Send;
@@ -173,7 +174,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn delete_property_definition(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
@@ -181,7 +182,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn get_property_options(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
 
@@ -190,7 +191,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// tag color rules.
     fn add_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
@@ -201,7 +202,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// is reflected on every entity that references it.
     fn update_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         option_id: Uuid,
@@ -212,7 +213,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// its id from every entity value that references it.
     fn delete_property_option(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
         property_definition_id: Uuid,
         option_id: Uuid,
@@ -223,7 +224,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// returns an empty set.
     fn list_tag_sets(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Vec<TagSet>, PropertiesErr>> + Send;
 
@@ -279,14 +280,14 @@ pub trait PropertiesService: Send + Sync + 'static {
     fn delete_entity_property(
         &self,
         entity_property_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
     /// Check that a user has view access to an entity (any access level).
-    /// For anonymous users (empty user_id), only allows publicly shared entities.
+    /// For anonymous users (`None`), only allows publicly shared entities.
     fn check_entity_view_permission(
         &self,
-        user_id: &str,
+        user_id: Option<&MacroUserIdStr<'_>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
@@ -294,7 +295,7 @@ pub trait PropertiesService: Send + Sync + 'static {
     /// Check that a user has edit access to an entity (Edit or Owner level).
     fn check_entity_edit_permission(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;

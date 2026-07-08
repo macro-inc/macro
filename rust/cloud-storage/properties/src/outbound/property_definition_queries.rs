@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -64,9 +65,10 @@ pub async fn get_property_definition(
 pub async fn get_property_definition_with_owner(
     pool: &Pool<Postgres>,
     property_id: Uuid,
-    user_id: &str,
+    user_id: &MacroUserIdStr<'_>,
     team_id: Option<Uuid>,
 ) -> anyhow::Result<Option<PropertyDefinition>> {
+    let user_id: &str = user_id.as_ref();
     let row = sqlx::query!(
         r#"
         SELECT
@@ -117,9 +119,10 @@ pub async fn get_property_definition_with_owner(
 pub async fn list_property_definitions(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
-    user_id: Option<&str>,
+    user_id: Option<&MacroUserIdStr<'_>>,
     include_system: bool,
 ) -> anyhow::Result<Vec<PropertyDefinition>> {
+    let user_id: Option<&str> = user_id.map(|u| u.as_ref());
     let rows = sqlx::query!(
         r#"
         SELECT
@@ -176,9 +179,10 @@ pub async fn list_property_definitions(
 pub async fn list_property_definitions_with_options(
     pool: &Pool<Postgres>,
     team_id: Option<Uuid>,
-    user_id: Option<&str>,
+    user_id: Option<&MacroUserIdStr<'_>>,
     include_system: bool,
 ) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
+    let user_id: Option<&str> = user_id.map(|u| u.as_ref());
     let rows = sqlx::query!(
         r#"
         SELECT
@@ -311,6 +315,7 @@ pub async fn create_property_definition(
     options: Vec<PropertyOption>,
 ) -> anyhow::Result<PropertyDefinition> {
     let (team_id, user_id) = owner.into_ids();
+    let user_id: Option<&str> = user_id.map(|u| u.as_ref());
 
     let id = macro_uuid::generate_uuid_v7();
 
@@ -425,6 +430,7 @@ pub async fn get_tag_definition(
     owner: PropertyDefinitionOwner<'_>,
 ) -> anyhow::Result<Option<PropertyDefinition>> {
     let (team_id, user_id) = owner.into_ids();
+    let user_id: Option<&str> = user_id.map(|u| u.as_ref());
 
     let row = sqlx::query!(
         r#"

@@ -1,5 +1,6 @@
 //! PostgreSQL implementation for properties repository.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
@@ -73,7 +74,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn get_property_definition_with_owner(
         &self,
         property_definition_id: Uuid,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         team_id: Option<Uuid>,
     ) -> Result<Option<PropertyDefinition>, Self::Err> {
         property_definition_queries::get_property_definition_with_owner(
@@ -89,7 +90,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn list_property_definitions(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
     ) -> Result<Vec<PropertyDefinition>, Self::Err> {
         property_definition_queries::list_property_definitions(
@@ -105,7 +106,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn list_property_definitions_with_options(
         &self,
         team_id: Option<Uuid>,
-        user_id: Option<&str>,
+        user_id: Option<&MacroUserIdStr<'_>>,
         include_system: bool,
     ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
         property_definition_queries::list_property_definitions_with_options(
@@ -362,7 +363,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         entity_refs: Vec<EntityReference>,
         property_ids: Vec<Uuid>,
-        tag_viewer_user_id: Option<&str>,
+        tag_viewer_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err> {
         let properties_by_entity_id =
             entity_properties_get_query::get_bulk_entity_properties_values_filtered(

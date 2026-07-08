@@ -557,6 +557,7 @@ async fn check_notifications(test_case: NotificationTestCase) {
         )
     };
 
+    let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
         .handle_task_assignee_notifications(task_id, &assignees, &assigned_by)
         .await
@@ -616,7 +617,7 @@ async fn test_handle_task_assignee_notifications_no_new_assignees() {
 async fn test_handle_task_assignee_notifications_no_service() {
     check_notifications(NotificationTestCase {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
-        assigned_by: "assigner".to_string(),
+        assigned_by: "macro|assigner@macro.com".to_string(),
         assignees: vec![MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap()],
         existing_assignees: vec![],
         expected_notification_count: 0,
@@ -630,7 +631,7 @@ async fn test_handle_task_assignee_notifications_no_service() {
 async fn test_handle_task_assignee_notifications_empty_assignees() {
     check_notifications(NotificationTestCase {
         task_id: Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc),
-        assigned_by: "assigner".to_string(),
+        assigned_by: "macro|assigner@macro.com".to_string(),
         assignees: vec![],
         existing_assignees: vec![],
         expected_notification_count: 0,
@@ -692,6 +693,7 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
 
     let service = PropertiesServiceImpl::new(repo, Some(perm_service), Some(notif_service));
 
+    let assigned_by = MacroUserIdStr::parse_from_str(&assigned_by).unwrap();
     service
         .handle_task_assignees_property(&entity_id, value, &assigned_by)
         .await
@@ -711,7 +713,11 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
 
     // Should return Ok without calling any handlers
     service
-        .handle_task_assignees_property(&entity_id, None, "assigner")
+        .handle_task_assignees_property(
+            &entity_id,
+            None,
+            &MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap(),
+        )
         .await
         .unwrap();
 }
@@ -719,6 +725,10 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
 // ============================================================================
 // add/remove_entity_property_option unit tests
 // ============================================================================
+
+fn caller_user_id() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
+}
 
 fn multi_select_definition(id: Uuid, is_multi_select: bool) -> PropertyDefinition {
     PropertyDefinition {
@@ -762,7 +772,13 @@ async fn test_add_entity_property_option_happy_path() {
     );
 
     service
-        .add_entity_property_option("user1", "doc1", EntityType::Document, def_id, option_id)
+        .add_entity_property_option(
+            &caller_user_id(),
+            "doc1",
+            EntityType::Document,
+            def_id,
+            option_id,
+        )
         .await
         .unwrap();
 }
@@ -784,7 +800,7 @@ async fn test_add_entity_property_option_rejects_single_select() {
 
     let err = service
         .add_entity_property_option(
-            "user1",
+            &caller_user_id(),
             "doc1",
             EntityType::Document,
             def_id,
@@ -819,7 +835,7 @@ async fn test_add_entity_property_option_rejects_invalid_option() {
 
     let err = service
         .add_entity_property_option(
-            "user1",
+            &caller_user_id(),
             "doc1",
             EntityType::Document,
             def_id,
@@ -845,7 +861,7 @@ async fn test_add_entity_property_option_no_permission_service() {
 
     let err = service
         .add_entity_property_option(
-            "user1",
+            &caller_user_id(),
             "doc1",
             EntityType::Document,
             Uuid::from_u128(0xA1),
@@ -882,7 +898,13 @@ async fn test_remove_entity_property_option_happy_path() {
     );
 
     service
-        .remove_entity_property_option("user1", "doc1", EntityType::Document, def_id, option_id)
+        .remove_entity_property_option(
+            &caller_user_id(),
+            "doc1",
+            EntityType::Document,
+            def_id,
+            option_id,
+        )
         .await
         .unwrap();
 }

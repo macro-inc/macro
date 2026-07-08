@@ -10497,6 +10497,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_permissions",
  "models_properties",
  "notification",

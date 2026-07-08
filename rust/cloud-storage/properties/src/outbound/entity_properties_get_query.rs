@@ -616,8 +616,9 @@ pub async fn get_bulk_entity_properties_values_filtered(
     pool: &Pool<Postgres>,
     entity_refs: &[EntityReference],
     property_ids: &[Uuid],
-    tag_viewer_user_id: Option<&str>,
+    tag_viewer_user_id: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
 ) -> anyhow::Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
+    let tag_viewer_user_id: Option<&str> = tag_viewer_user_id.map(|u| u.as_ref());
     if entity_refs.is_empty() || (property_ids.is_empty() && tag_viewer_user_id.is_none()) {
         // If no property_ids specified, return empty map for each entity
         let mut result = HashMap::new();

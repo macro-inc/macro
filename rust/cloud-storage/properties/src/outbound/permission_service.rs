@@ -33,7 +33,7 @@ impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
     /// never created.
     async fn get_access_level(
         &self,
-        user_id: &str,
+        user_id: Option<&MacroUserIdStr<'_>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> anyhow::Result<Option<AccessLevel>> {
@@ -45,8 +45,7 @@ impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
             }
         };
 
-        let parsed_user_id = MacroUserIdStr::parse_from_str(user_id);
-        let user_id_ref = parsed_user_id.as_ref().ok().map(std::ops::Deref::deref);
+        let user_id_ref = user_id.map(std::ops::Deref::deref);
 
         let access_level = self
             .entity_access_service
@@ -64,10 +63,11 @@ impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
         // This handles owned threads where EmailThreadPermission/UserItemAccess were never created.
         if access_level.is_none()
             && entity_type == EntityType::Thread
+            && let Some(user_id) = user_id
             && let Ok(thread_id) = Uuid::parse_str(entity_id)
             && let Ok(Some(owner_id)) =
                 permission_queries::get_macro_id_from_thread_id(&self.db, thread_id).await
-            && owner_id == user_id
+            && owner_id == user_id.as_ref()
         {
             tracing::debug!("user owns thread via link_id, granting owner access");
             return Ok(Some(AccessLevel::Owner));
@@ -99,12 +99,12 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
     #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
     async fn check_entity_edit_permission(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'_>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), Self::Err> {
         match self
-            .get_access_level(user_id, entity_id, entity_type)
+            .get_access_level(Some(user_id), entity_id, entity_type)
             .await?
         {
             Some(AccessLevel::Edit) | Some(AccessLevel::Owner) => Ok(()),
@@ -112,10 +112,10 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         }
     }
 
-    #[tracing::instrument(skip(self), fields(user_id = %user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
+    #[tracing::instrument(skip(self), fields(user_id = ?user_id, entity_id = %entity_id, entity_type = ?entity_type), err)]
     async fn check_entity_view_permission(
         &self,
-        user_id: &str,
+        user_id: Option<&MacroUserIdStr<'_>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<(), Self::Err> {
@@ -129,7 +129,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
                         .await?;
 
                 // If you are the owner fast return
-                if owner.eq(user_id) {
+                if user_id.is_some_and(|u| owner == u.as_ref()) {
                     return Ok(());
                 }
 

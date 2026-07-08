@@ -150,7 +150,7 @@ async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow
         panic!("Expected EntityReference value");
     };
     assert_eq!(refs.len(), 1);
-    assert_eq!(refs[0].entity_id, "user1");
+    assert_eq!(refs[0].entity_id, "macro|user1@test.com");
     assert_eq!(refs[0].entity_type, EntityType::User);
 
     // Multiple entity references on doc2.
@@ -169,8 +169,8 @@ async fn get_entity_properties_entity_references(pool: Pool<Postgres>) -> anyhow
     };
     assert_eq!(refs.len(), 2);
     let user_ids: Vec<&str> = refs.iter().map(|r| r.entity_id.as_str()).collect();
-    assert!(user_ids.contains(&"user1"));
-    assert!(user_ids.contains(&"user2"));
+    assert!(user_ids.contains(&"macro|user1@test.com"));
+    assert!(user_ids.contains(&"macro|user2@test.com"));
 
     // Null entity reference on doc3.
     let properties = entity_properties_get_query::get_entity_properties_values(
@@ -349,7 +349,7 @@ async fn lookup_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn tagdoc_definition_ids(
     pool: &Pool<Postgres>,
     property_ids: &[Uuid],
-    tag_viewer: Option<&str>,
+    tag_viewer: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
 ) -> anyhow::Result<Vec<Uuid>> {
     let entity_refs = vec![EntityReference {
         entity_id: "tagdoc1".to_string(),
@@ -383,7 +383,12 @@ async fn get_bulk_filtered_includes_caller_visible_tags(
 
     // user1 sees the requested id plus their own and their team's tags,
     // never another user's personal tags.
-    let ids = tagdoc_definition_ids(&pool, &[priority], Some("user1")).await?;
+    let user1 =
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap();
+    let user3 =
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap();
+
+    let ids = tagdoc_definition_ids(&pool, &[priority], Some(&user1)).await?;
     assert_eq!(ids.len(), 3);
     assert!(ids.contains(&priority));
     assert!(ids.contains(&user1_tags));
@@ -391,7 +396,7 @@ async fn get_bulk_filtered_includes_caller_visible_tags(
     assert!(!ids.contains(&user2_tags));
 
     // A teammate without a personal set sees only the team tags.
-    let ids = tagdoc_definition_ids(&pool, &[priority], Some("user3")).await?;
+    let ids = tagdoc_definition_ids(&pool, &[priority], Some(&user3)).await?;
     assert_eq!(ids.len(), 2);
     assert!(ids.contains(&priority));
     assert!(ids.contains(&team1_tags));
@@ -401,7 +406,7 @@ async fn get_bulk_filtered_includes_caller_visible_tags(
     assert_eq!(ids, vec![priority]);
 
     // A viewer with no requested ids still gets their tags.
-    let ids = tagdoc_definition_ids(&pool, &[], Some("user1")).await?;
+    let ids = tagdoc_definition_ids(&pool, &[], Some(&user1)).await?;
     assert_eq!(ids.len(), 2);
     assert!(ids.contains(&user1_tags));
     assert!(ids.contains(&team1_tags));

@@ -2,12 +2,12 @@
 
 use axum::{
     Json,
-    extract::{Extension, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -97,15 +97,18 @@ impl IntoResponse for TagsError {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user, team), err)]
 pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
     let sets = state
         .properties_service
-        .list_tag_sets(&user_context.user_id, caller_team_id(&team))
+        .list_tag_sets(&user, caller_team_id(&team))
         .await?;
 
     Ok(Json(sets.into_iter().map(Into::into).collect()))
@@ -124,15 +127,18 @@ pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(user_id = %user_context.user_id, scope = ?request.scope), err)]
+#[tracing::instrument(skip(state, user, team), fields(scope = ?request.scope), err)]
 pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
     let owner = match request.scope {
-        TagScope::User => PropertyDefinitionOwner::User(user_context.user_id.as_str()),
+        TagScope::User => PropertyDefinitionOwner::User(&user),
         TagScope::Team => {
             let team_id = caller_team_id(&team).ok_or(TagsError::TeamMembershipRequired)?;
             PropertyDefinitionOwner::Team(team_id)

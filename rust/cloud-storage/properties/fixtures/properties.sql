@@ -9,21 +9,21 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO "User" (id, email, name, "stripeCustomerId", macro_user_id)
-VALUES ('user1', 'user1@test.com', 'Test User 1', 'cus_test1', 'a1111111-1111-1111-1111-111111111111'),
-       ('user2', 'user2@test.com', 'Test User 2', 'cus_test2', 'a2222222-2222-2222-2222-222222222222'),
-       ('user3', 'user3@test.com', 'Test User 3', 'cus_test3', 'a3333333-3333-3333-3333-333333333333')
+VALUES ('macro|user1@test.com', 'user1@test.com', 'Test User 1', 'cus_test1', 'a1111111-1111-1111-1111-111111111111'),
+       ('macro|user2@test.com', 'user2@test.com', 'Test User 2', 'cus_test2', 'a2222222-2222-2222-2222-222222222222'),
+       ('macro|user3@test.com', 'user3@test.com', 'Test User 3', 'cus_test3', 'a3333333-3333-3333-3333-333333333333')
 ON CONFLICT (id) DO NOTHING;
 
 -- Teams: Team 1 has two members (user1 owner, user3 member); Team 2 has user2.
 INSERT INTO team (id, name, owner_id)
-VALUES ('0e000000-0000-0000-0000-000000000001', 'Test Team 1', 'user1'),
-       ('0e000000-0000-0000-0000-000000000002', 'Test Team 2', 'user2')
+VALUES ('0e000000-0000-0000-0000-000000000001', 'Test Team 1', 'macro|user1@test.com'),
+       ('0e000000-0000-0000-0000-000000000002', 'Test Team 2', 'macro|user2@test.com')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO team_user (user_id, team_id, team_role)
-VALUES ('user1', '0e000000-0000-0000-0000-000000000001', 'owner'),
-       ('user3', '0e000000-0000-0000-0000-000000000001', 'member'),
-       ('user2', '0e000000-0000-0000-0000-000000000002', 'owner')
+VALUES ('macro|user1@test.com', '0e000000-0000-0000-0000-000000000001', 'owner'),
+       ('macro|user3@test.com', '0e000000-0000-0000-0000-000000000001', 'member'),
+       ('macro|user2@test.com', '0e000000-0000-0000-0000-000000000002', 'owner')
 ON CONFLICT DO NOTHING;
 
 -- Property definitions with various data types
@@ -42,8 +42,8 @@ VALUES
     ('99999999-9999-9999-9999-999999999999', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Website', 'LINK', false, NULL),
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '0e000000-0000-0000-0000-000000000001', NULL, 'Test Relevant Documents', 'ENTITY', false, 'DOCUMENT'),
     -- User-owned properties (user1)
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', NULL, 'user1', 'Test Personal Priority', 'SELECT_STRING', false, NULL),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', NULL, 'user1', 'Test Notes', 'STRING', false, NULL),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', NULL, 'macro|user1@test.com', 'Test Personal Priority', 'SELECT_STRING', false, NULL),
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', NULL, 'macro|user1@test.com', 'Test Notes', 'STRING', false, NULL),
     -- Team 2-owned property
     ('dddddddd-dddd-dddd-dddd-dddddddddddd', '0e000000-0000-0000-0000-000000000002', NULL, 'Test Shared Status', 'SELECT_STRING', false, NULL);
 
@@ -78,21 +78,21 @@ VALUES
     -- Document entities
     ('e0111111-1111-1111-1111-111111111111', 'doc1', 'DOCUMENT', '11111111-1111-1111-1111-111111111111', '{"type": "SelectOption", "value": ["10111111-1111-1111-1111-111111111113"]}'),
     ('e0111111-1111-1111-1111-111111111112', 'doc1', 'DOCUMENT', '22222222-2222-2222-2222-222222222222', '{"type": "SelectOption", "value": ["10222222-2222-2222-2222-222222222222"]}'),
-    ('e0111111-1111-1111-1111-111111111113', 'doc1', 'DOCUMENT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "user1"}]}'),
+    ('e0111111-1111-1111-1111-111111111113', 'doc1', 'DOCUMENT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user1@test.com"}]}'),
     ('e0111111-1111-1111-1111-111111111114', 'doc1', 'DOCUMENT', '55555555-5555-5555-5555-555555555555', '{"type": "Boolean", "value": false}'),
     ('e0111111-1111-1111-1111-111111111115', 'doc1', 'DOCUMENT', '66666666-6666-6666-6666-666666666666', '{"type": "Date", "value": "2025-12-31T23:59:59Z"}'),
     ('e0111111-1111-1111-1111-111111111116', 'doc1', 'DOCUMENT', '88888888-8888-8888-8888-888888888888', '{"type": "String", "value": "Important document for testing"}'),
     -- Document 2
     ('e0222222-2222-2222-2222-222222222221', 'doc2', 'DOCUMENT', '11111111-1111-1111-1111-111111111111', '{"type": "SelectOption", "value": ["10111111-1111-1111-1111-111111111111"]}'),
     ('e0222222-2222-2222-2222-222222222222', 'doc2', 'DOCUMENT', '22222222-2222-2222-2222-222222222222', '{"type": "SelectOption", "value": ["10222222-2222-2222-2222-222222222222", "10222222-2222-2222-2222-222222222223"]}'),
-    ('e0222222-2222-2222-2222-222222222223', 'doc2', 'DOCUMENT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "user1"}, {"entity_type": "USER", "entity_id": "user2"}]}'),
+    ('e0222222-2222-2222-2222-222222222223', 'doc2', 'DOCUMENT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user1@test.com"}, {"entity_type": "USER", "entity_id": "macro|user2@test.com"}]}'),
     ('e0222222-2222-2222-2222-222222222224', 'doc2', 'DOCUMENT', '55555555-5555-5555-5555-555555555555', '{"type": "Boolean", "value": true}'),
     -- Project entities
     ('e0333333-3333-3333-3333-333333333331', 'proj1', 'PROJECT', '11111111-1111-1111-1111-111111111111', '{"type": "SelectOption", "value": ["10111111-1111-1111-1111-111111111112"]}'),
     ('e0333333-3333-3333-3333-333333333332', 'proj1', 'PROJECT', '44444444-4444-4444-4444-444444444444', '{"type": "SelectOption", "value": ["10444444-4444-4444-4444-444444444444"]}'),
     ('e0333333-3333-3333-3333-333333333333', 'proj1', 'PROJECT', '77777777-7777-7777-7777-777777777777', '{"type": "Number", "value": 50000.50}'),
     ('e0333333-3333-3333-3333-333333333334', 'proj1', 'PROJECT', '99999999-9999-9999-9999-999999999999', '{"type": "Link", "value": ["https://example.com"]}'),
-    ('e0333333-3333-3333-3333-333333333335', 'proj1', 'PROJECT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "user1"}]}'),
+    ('e0333333-3333-3333-3333-333333333335', 'proj1', 'PROJECT', '33333333-3333-3333-3333-333333333333', '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user1@test.com"}]}'),
     -- Thread entities
     ('e0555555-5555-5555-5555-555555555551', 'thread1', 'THREAD', '11111111-1111-1111-1111-111111111111', '{"type": "SelectOption", "value": ["10111111-1111-1111-1111-111111111114"]}'),
     -- Entities with NULL values (property attached but not set)

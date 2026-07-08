@@ -4,10 +4,23 @@ use super::properties_pg_repo::PropertiesPgRepo;
 use crate::domain::model::PropertyDefinitionOwner;
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
+
+fn user_1() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
+}
+
+fn user_2() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap()
+}
+
+fn user_3() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap()
+}
 
 fn team_1() -> Uuid {
     "0e000000-0000-0000-0000-000000000001".parse().unwrap()
@@ -65,7 +78,7 @@ async fn list_property_definitions_by_user(pool: Pool<Postgres>) -> anyhow::Resu
     let repo = PropertiesPgRepo::new(pool);
 
     let properties = repo
-        .list_property_definitions(None, Some("user1"), false)
+        .list_property_definitions(None, Some(&user_1()), false)
         .await?;
 
     assert_eq!(properties.len(), 2); // User1 has 2 properties
@@ -90,25 +103,25 @@ async fn get_property_definition_with_owner_checks_ownership(
 
     // The team owner can access the team property.
     let property = repo
-        .get_property_definition_with_owner(team_property_id, "user1", Some(team_1()))
+        .get_property_definition_with_owner(team_property_id, &user_1(), Some(team_1()))
         .await?;
     assert!(property.is_some());
 
     // A different member of the same team can also access it.
     let property = repo
-        .get_property_definition_with_owner(team_property_id, "user3", Some(team_1()))
+        .get_property_definition_with_owner(team_property_id, &user_3(), Some(team_1()))
         .await?;
     assert!(property.is_some());
 
     // A user on a different team cannot access it.
     let property = repo
-        .get_property_definition_with_owner(team_property_id, "user2", Some(team_2()))
+        .get_property_definition_with_owner(team_property_id, &user_2(), Some(team_2()))
         .await?;
     assert!(property.is_none());
 
     // A user with no team cannot access it.
     let property = repo
-        .get_property_definition_with_owner(team_property_id, "user2", None)
+        .get_property_definition_with_owner(team_property_id, &user_2(), None)
         .await?;
     assert!(property.is_none());
 
@@ -117,13 +130,13 @@ async fn get_property_definition_with_owner_checks_ownership(
         .parse::<Uuid>()
         .unwrap();
     let property = repo
-        .get_property_definition_with_owner(user_property_id, "user1", Some(team_1()))
+        .get_property_definition_with_owner(user_property_id, &user_1(), Some(team_1()))
         .await?;
     assert!(property.is_some());
 
     // A different user cannot access someone else's user property.
     let property = repo
-        .get_property_definition_with_owner(user_property_id, "user3", Some(team_1()))
+        .get_property_definition_with_owner(user_property_id, &user_3(), Some(team_1()))
         .await?;
     assert!(property.is_none());
 
@@ -235,7 +248,7 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
 
     let property = repo
         .create_property_definition(
-            PropertyDefinitionOwner::User("user1"),
+            PropertyDefinitionOwner::User(&user_1()),
             "My User Property",
             DataType::Number,
             false,

@@ -2,12 +2,12 @@
 
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::api::{AddPropertyOptionRequest, UpdatePropertyOptionRequest};
 use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
@@ -55,18 +55,21 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(property_id = %property_uuid, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user, team), fields(property_id = %property_uuid), err)]
 pub async fn get_property_options<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
     tracing::info!("retrieving property options");
 
     let options = state
         .properties_service
-        .get_property_options(property_uuid, &user_context.user_id, caller_team_id(&team))
+        .get_property_options(property_uuid, &user, caller_team_id(&team))
         .await?;
 
     tracing::info!(
@@ -118,11 +121,14 @@ impl IntoResponse for AddPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(property_id = %property_uuid, request = ?request), err)]
+#[tracing::instrument(skip(state, user, team), fields(property_id = %property_uuid, request = ?request), err)]
 pub async fn add_property_option<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
@@ -130,12 +136,7 @@ pub async fn add_property_option<S: PropertiesService, A: EntityAccessService>(
 
     let option = state
         .properties_service
-        .add_property_option(
-            &user_context.user_id,
-            caller_team_id(&team),
-            property_uuid,
-            &request,
-        )
+        .add_property_option(&user, caller_team_id(&team), property_uuid, &request)
         .await?;
 
     Ok((StatusCode::CREATED, Json(option)))
@@ -186,18 +187,21 @@ impl IntoResponse for UpdatePropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context, team), fields(property_id = %def_uuid, option_id = %option_uuid, request = ?request), err)]
+#[tracing::instrument(skip(state, user, team), fields(property_id = %def_uuid, option_id = %option_uuid, request = ?request), err)]
 pub async fn update_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
     Json(request): Json<UpdatePropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), UpdatePropertyOptionErr> {
     let updated = state
         .properties_service
         .update_property_option(
-            &user_context.user_id,
+            &user,
             caller_team_id(&team),
             def_uuid,
             option_uuid,
@@ -249,23 +253,21 @@ impl IntoResponse for DeletePropertyOptionErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context, team), err)]
+#[tracing::instrument(skip(state, user, team), err)]
 pub async fn delete_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
     tracing::info!("deleting property option");
 
     state
         .properties_service
-        .delete_property_option(
-            &user_context.user_id,
-            caller_team_id(&team),
-            def_uuid,
-            option_uuid,
-        )
+        .delete_property_option(&user, caller_team_id(&team), def_uuid, option_uuid)
         .await?;
 
     tracing::info!("successfully deleted property option");

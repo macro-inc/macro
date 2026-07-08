@@ -59,14 +59,14 @@ pub struct PropertyOptionInfo {
 #[derive(Debug, Clone, Copy)]
 pub enum PropertyDefinitionOwner<'a> {
     /// Owned by a single user.
-    User(&'a str),
+    User(&'a MacroUserIdStr<'a>),
     /// Owned by a team.
     Team(Uuid),
 }
 
 impl<'a> PropertyDefinitionOwner<'a> {
     /// Split into the nullable (team_id, user_id) columns the row stores.
-    pub fn into_ids(self) -> (Option<Uuid>, Option<&'a str>) {
+    pub fn into_ids(self) -> (Option<Uuid>, Option<&'a MacroUserIdStr<'a>>) {
         match self {
             PropertyDefinitionOwner::User(user_id) => (None, Some(user_id)),
             PropertyDefinitionOwner::Team(team_id) => (Some(team_id), None),

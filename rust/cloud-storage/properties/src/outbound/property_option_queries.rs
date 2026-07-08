@@ -11,15 +11,12 @@ use crate::domain::model::UpdatePropertyOptionOutcome;
 
 /// Gets a single property option by ID.
 #[tracing::instrument(skip(pool))]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "runtime query keeps test builds offline-friendly"
-)]
 pub async fn get_property_option(
     pool: &Pool<Postgres>,
     option_id: Uuid,
 ) -> anyhow::Result<Option<PropertyOption>> {
-    let row = sqlx::query_as::<_, db::PropertyOption>(
+    let row = sqlx::query_as!(
+        db::PropertyOption,
         r#"
         SELECT 
             id,
@@ -33,8 +30,8 @@ pub async fn get_property_option(
         FROM property_options 
         WHERE id = $1
         "#,
+        option_id
     )
-    .bind(option_id)
     .fetch_optional(pool)
     .await?;
 
@@ -43,15 +40,12 @@ pub async fn get_property_option(
 
 /// Gets all property options for a property definition, ordered for display.
 #[tracing::instrument(skip(pool))]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "runtime query keeps test builds offline-friendly"
-)]
 pub async fn get_property_options(
     pool: &Pool<Postgres>,
     property_definition_id: Uuid,
 ) -> anyhow::Result<Vec<PropertyOption>> {
-    let rows = sqlx::query_as::<_, db::PropertyOption>(
+    let rows = sqlx::query_as!(
+        db::PropertyOption,
         r#"
         SELECT 
             id,
@@ -66,8 +60,8 @@ pub async fn get_property_options(
         WHERE property_definition_id = $1
         ORDER BY display_order, number_value, LOWER(string_value)
         "#,
+        property_definition_id
     )
-    .bind(property_definition_id)
     .fetch_all(pool)
     .await?;
 
@@ -79,10 +73,6 @@ pub async fn get_property_options(
 /// Gets property options for multiple properties in a single query.
 /// Returns a HashMap where the key is property_definition_id and value is the list of options.
 #[tracing::instrument(skip(pool))]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "runtime query keeps test builds offline-friendly"
-)]
 pub async fn get_property_options_batch(
     pool: &Pool<Postgres>,
     property_definition_ids: &[Uuid],
@@ -91,7 +81,8 @@ pub async fn get_property_options_batch(
         return Ok(HashMap::new());
     }
 
-    let rows = sqlx::query_as::<_, db::PropertyOption>(
+    let rows = sqlx::query_as!(
+        db::PropertyOption,
         r#"
         SELECT 
             id,
@@ -106,8 +97,8 @@ pub async fn get_property_options_batch(
         WHERE property_definition_id = ANY($1)
         ORDER BY property_definition_id, display_order, number_value, LOWER(string_value)
         "#,
+        property_definition_ids
     )
-    .bind(property_definition_ids)
     .fetch_all(pool)
     .await?;
 
@@ -175,10 +166,6 @@ pub async fn create_property_option(
 /// The option id is preserved, so every entity referencing this option by id in its
 /// `entity_properties.values` reflects the new value and color with no per-entity rewrite.
 #[tracing::instrument(skip(pool), err)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "runtime query mirrors get_property_option"
-)]
 pub async fn update_property_option(
     pool: &Pool<Postgres>,
     option_id: Uuid,
@@ -188,7 +175,8 @@ pub async fn update_property_option(
 ) -> anyhow::Result<UpdatePropertyOptionOutcome> {
     let (number_value, string_value) = value.to_db_values();
 
-    let result = sqlx::query_as::<_, db::PropertyOption>(
+    let result = sqlx::query_as!(
+        db::PropertyOption,
         r#"
         UPDATE property_options
         SET number_value = $2,
@@ -207,12 +195,12 @@ pub async fn update_property_option(
             created_at,
             updated_at
         "#,
+        option_id,
+        number_value,
+        string_value,
+        color,
+        display_order
     )
-    .bind(option_id)
-    .bind(number_value)
-    .bind(string_value)
-    .bind(color)
-    .bind(display_order)
     .fetch_optional(pool)
     .await;
 

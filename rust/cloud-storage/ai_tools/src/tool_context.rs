@@ -206,9 +206,11 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
         self.properties
             .set_entity_property(
-                user_id,
+                &user_id,
                 entity_id,
                 models_properties::EntityType::Task,
                 property_definition_id,

@@ -97,7 +97,7 @@ where
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
-        assigned_by_user_id: &str,
+        assigned_by_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), PropertiesErr> {
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
@@ -132,7 +132,7 @@ where
         &self,
         task_id: Uuid,
         assignee_ids: &[MacroUserIdStr<'_>],
-        assigned_by_user_id: &str,
+        assigned_by_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
             return Ok(());
@@ -167,7 +167,8 @@ where
         let recipient_ids: Vec<MacroUserIdStr<'_>> = assignee_ids
             .iter()
             .filter(|id| {
-                !current_assignee_ids.contains(id.as_ref()) && id.as_ref() != assigned_by_user_id
+                !current_assignee_ids.contains(id.as_ref())
+                    && id.as_ref() != assigned_by_user_id.as_ref()
             })
             .map(|id| id.copied())
             .collect();
@@ -177,8 +178,7 @@ where
             return Ok(());
         }
 
-        let assigned_by = MacroUserIdStr::parse_from_str(assigned_by_user_id)
-            .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?;
+        let assigned_by = assigned_by_user_id.copied();
 
         notification_service
             .send_task_assigned(TaskAssignedNotification {

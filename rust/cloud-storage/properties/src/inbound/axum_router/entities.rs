@@ -4,12 +4,13 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
-    extract::{Extension, Path, Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use model::user::UserContext;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::user::axum_extractor::{MacroUserExtractor, OptionalMacroUserExtractor};
 use models_properties::api::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
@@ -56,14 +57,16 @@ pub struct BulkEntityPropertiesRequest {
 /// properties are unaffected.
 pub fn retain_caller_visible_tags(
     properties: &mut Vec<EntityPropertyWithDefinition>,
-    caller_user_id: &str,
+    caller_user_id: Option<&MacroUserIdStr<'_>>,
 ) {
     properties.retain(|property| {
         if property.definition.data_type != DataType::Tag {
             return true;
         }
         match &property.definition.owner {
-            PropertyOwner::User { user_id } => user_id == caller_user_id,
+            PropertyOwner::User { user_id } => {
+                caller_user_id.is_some_and(|caller| user_id == caller.as_ref())
+            }
             PropertyOwner::Team { .. } | PropertyOwner::System => true,
         }
     });
@@ -116,12 +119,16 @@ impl IntoResponse for GetEntityPropertiesErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata), err)]
+#[tracing::instrument(skip(state, user), fields(entity_type = ?entity_type, include_metadata = query.include_metadata), err)]
 pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     Query(query): Query<EntityQueryParams>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    // Optional: this route allows anonymous access for publicly shared entities.
+    OptionalMacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: OptionalMacroUserExtractor,
 ) -> Result<Json<EntityPropertiesResponse>, GetEntityPropertiesErr> {
     tracing::info!(
         entity_id = %entity_id,
@@ -131,7 +138,7 @@ pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>
     // Note: This can fail if the entity is marked with "deletedAt"
     state
         .properties_service
-        .check_entity_view_permission(&user_context.user_id, &entity_id, entity_type)
+        .check_entity_view_permission(user.as_ref(), &entity_id, entity_type)
         .await?;
 
     let (user_properties, metadata_properties) = if query.include_metadata {
@@ -164,7 +171,7 @@ pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>
     let mut all_properties = user_properties;
     all_properties.extend(metadata_properties);
 
-    retain_caller_visible_tags(&mut all_properties, &user_context.user_id);
+    retain_caller_visible_tags(&mut all_properties, user.as_ref());
 
     let response = EntityPropertiesResponse {
         entity_id: entity_id.to_string(),
@@ -285,10 +292,13 @@ pub async fn get_bulk_entity_properties_internal<S: PropertiesService, A: Entity
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, request, user_context), fields(user_id = %user_context.user_id, entity_count = request.entities.len()), err)]
+#[tracing::instrument(skip(state, request, user), fields(entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessService>(
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
     // Unlike the internal endpoint, the public endpoint requires explicit property IDs.
@@ -303,7 +313,7 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
         match state
             .properties_service
             .check_entity_view_permission(
-                &user_context.user_id,
+                Some(&user),
                 &entity_ref.entity_id,
                 entity_ref.entity_type,
             )
@@ -337,7 +347,7 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
 
     let mut result = get_bulk_entity_properties_impl(&state, filtered_request).await?;
     for response in result.values_mut() {
-        retain_caller_visible_tags(&mut response.properties, &user_context.user_id);
+        retain_caller_visible_tags(&mut response.properties, Some(&user));
     }
     Ok(Json(result))
 }
@@ -384,24 +394,21 @@ impl IntoResponse for SetEntityPropertyErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context, request), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, has_value = request.value.is_some()), err)]
+#[tracing::instrument(skip(state, user, request), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, has_value = request.value.is_some()), err)]
 pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
     Json(request): Json<SetEntityPropertyRequest>,
 ) -> Result<StatusCode, SetEntityPropertyErr> {
     tracing::info!("setting entity property");
 
     state
         .properties_service
-        .set_entity_property(
-            &user_context.user_id,
-            &entity_id,
-            entity_type,
-            property_uuid,
-            request.value,
-        )
+        .set_entity_property(&user, &entity_id, entity_type, property_uuid, request.value)
         .await?;
 
     tracing::info!("successfully set entity property");
@@ -456,7 +463,7 @@ impl IntoResponse for EntityPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type), err)]
 pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id, property_uuid, option_uuid)): Path<(
         EntityType,
@@ -465,19 +472,16 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
         Uuid,
     )>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("adding entity property option");
 
     state
         .properties_service
-        .add_entity_property_option(
-            &user_context.user_id,
-            &entity_id,
-            entity_type,
-            property_uuid,
-            option_uuid,
-        )
+        .add_entity_property_option(&user, &entity_id, entity_type, property_uuid, option_uuid)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -504,7 +508,7 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type), err)]
 pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id, property_uuid, option_uuid)): Path<(
         EntityType,
@@ -513,19 +517,16 @@ pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccess
         Uuid,
     )>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("removing entity property option");
 
     state
         .properties_service
-        .remove_entity_property_option(
-            &user_context.user_id,
-            &entity_id,
-            entity_type,
-            property_uuid,
-            option_uuid,
-        )
+        .remove_entity_property_option(&user, &entity_id, entity_type, property_uuid, option_uuid)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -628,17 +629,20 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user), fields(entity_property_id = %entity_property_uuid), err)]
 pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService>(
     Path(entity_property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 
     state
         .properties_service
-        .delete_entity_property(entity_property_uuid, &user_context.user_id)
+        .delete_entity_property(entity_property_uuid, &user)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -686,18 +690,21 @@ impl IntoResponse for SetPropertyStatusCompleteErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, entity_type = ?entity_type, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, entity_type = ?entity_type), err)]
 pub async fn set_property_status_complete<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(user_context): Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id: user,
+        ..
+    }: MacroUserExtractor,
 ) -> Result<StatusCode, SetPropertyStatusCompleteErr> {
     tracing::info!("setting entity status to complete");
 
     // Check edit permissions
     state
         .properties_service
-        .check_entity_edit_permission(&user_context.user_id, &entity_id, entity_type)
+        .check_entity_edit_permission(&user, &entity_id, entity_type)
         .await?;
 
     // Delegate to service layer for business logic
