@@ -15,17 +15,18 @@ export const makeRemoveFromProjectAction = () => {
     entity.type === 'project' ||
     entity.type === 'email';
 
-  const execute = async (entities: EntityData[]) => {
+  const execute = async (entities: EntityData[]): Promise<boolean> => {
     // Failure toast is shown by the mutation
     const result = await removeMutation
       .mutateAsync({ entities })
       .catch(() => null);
-    if (!result) return;
+    if (!result) return false;
     toast.success(
       entities.length > 1
         ? `Removed ${entities.length} items from folder`
         : 'Removed from folder'
     );
+    return true;
   };
 
   const previewPanel = useMaybePreviewPanel();
@@ -37,7 +38,9 @@ export const makeRemoveFromProjectAction = () => {
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
     const inPreview = previewPanel !== undefined;
 
-    await execute(entities);
+    const success = await execute(entities);
+    // Rolled back on failure; keep selection and focus for a retry
+    if (!success) return;
 
     soup.selection.clear();
     if (nextRow) {
