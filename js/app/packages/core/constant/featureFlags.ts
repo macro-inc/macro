@@ -150,11 +150,10 @@ export const ENABLE_MARKDOWN_DIFF = resolveFeatureFlag(
   true
 );
 
-// TODO (seamus): markdown history is causing a quiet crash on some documents.
-// once I have a document that can consistently repro, i can debug and fix.
+// Toggle the new experimental history viewer — on in dev/preview, off in prod.
 export const ENABLE_HISTORY_COMPONENT = resolveFeatureFlag(
   'ENABLE_HISTORY_COMPONENT',
-  false
+  DEV_MODE_ENV
 );
 
 export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(
@@ -475,3 +474,11 @@ export const ENABLE_NEW_INBOX_OVERRIDE =
 export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
 export const ENABLE_TAGS_FE_OVERRIDE =
   resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
+
+// Narrow rollout gate for the search-view tag surfaces (facet row + row
+// chips), layered on top of enable-tags-fe. PostHog-controlled per
+// environment with a dev-mode default. Override with
+// VITE_ENABLE_TAGS_SEARCH_FE.
+export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
+export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
+  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;

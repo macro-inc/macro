@@ -32,3 +32,16 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
         self.publisher.publish(topic, key, &payload).await
     }
 }
+
+/// A [`MacroEventBroker`] that drops every event.
+///
+/// Useful as a default type parameter for services that publish events
+/// optionally, and in tests that don't care about published events.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopMacroEventBroker;
+
+impl MacroEventBroker for NoopMacroEventBroker {
+    async fn send_event<E: MacroEvent + ?Sized>(&self, _event: &E) -> Result<(), EventBrokerError> {
+        Ok(())
+    }
+}

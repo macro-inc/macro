@@ -1,3 +1,5 @@
+/// Kafka event models for the `macro.channels` topic.
+pub mod broker_events;
 /// Domain events emitted by channel workflows.
 pub mod events;
 /// Legacy channel list service implementation.

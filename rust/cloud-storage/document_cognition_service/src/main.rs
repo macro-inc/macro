@@ -224,6 +224,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -349,6 +352,9 @@ async fn main() -> anyhow::Result<()> {
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

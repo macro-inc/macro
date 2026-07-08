@@ -47,6 +47,9 @@ pub fn provision_indices(
     cmd.current_dir(&dir)
         .args(["run", "scripts/create_indices.ts"])
         .env("ENVIRONMENT", "local")
+        // The helper scripts are dry-run by default. Local bootstrap always
+        // applies for real.
+        .env("DRY_RUN", "false")
         .env("OPENSEARCH_URL", &url)
         .env("OPENSEARCH_USERNAME", &username)
         .env("OPENSEARCH_PASSWORD", &password);

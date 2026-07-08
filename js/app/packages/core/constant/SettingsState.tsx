@@ -2,6 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -127,11 +128,18 @@ export const useSettingsState = () => {
     }, 10);
   };
 
-  // Default activation: navigate to the settings route (both desktop and
-  // mobile). Remember where we came from so "Back to app" can return there.
-  // Opening without a specific tab always lands on Account rather than the
-  // last-viewed page — a fresh open shouldn't resume a prior session's tab.
+  // Default activation. On mobile, dock settings into the split layout so it
+  // inherits the split navigation chrome (back button, swipe-back gesture) —
+  // the full-page route's exit affordances all live in desktop-only UI. On
+  // desktop, navigate to the settings route, remembering where we came from so
+  // "Back to app" can return there. Opening without a specific tab always
+  // lands on Account rather than the last-viewed page — a fresh open shouldn't
+  // resume a prior session's tab.
   const openSettings = (tab?: SettingsTab) => {
+    if (isMobile()) {
+      openSettingsInSplit(tab ?? 'Account');
+      return;
+    }
     if (!isOnSettingsRoute()) {
       setSettingsReturnTo(toBaseRelative(location.pathname));
     }
@@ -225,7 +233,7 @@ export const useSettingsState = () => {
       return;
     }
 
-    // Nothing open → open the route.
+    // Nothing open → open settings (route on desktop, docked split on mobile).
     openSettings();
   };
 

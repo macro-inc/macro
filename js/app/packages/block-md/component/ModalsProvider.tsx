@@ -11,7 +11,6 @@ import type { EntityType } from '@core/types';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { blockNameToItemType } from '@service-storage/client';
 import { createSignal, type ParentProps } from 'solid-js';
-import { HistoryDrawer } from './History';
 
 export function ModalsProvider(props: ParentProps) {
   const blockId = useBlockId();
@@ -38,7 +37,6 @@ export function ModalsProvider(props: ParentProps) {
         notificationSource={notificationSource}
       />
       <ReferencesDrawer documentId={blockId} documentName={name()} />
-      <HistoryDrawer documentId={blockId} />
       <DetailsDrawer documentId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>

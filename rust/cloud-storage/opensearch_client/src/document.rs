@@ -1,9 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{
-        self,
-        document::{IndexedProperty, UpsertDocumentArgs},
-    },
+    upsert::{self, document::UpsertDocumentArgs, properties::IndexedProperty},
 };
 
 impl OpensearchClient {

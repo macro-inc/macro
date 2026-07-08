@@ -965,3 +965,109 @@ async fn denies_when_every_participant_is_on_requesters_domain(pool: PgPool) -> 
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Project containment source
+// ---------------------------------------------------------------------------
+
+/// A "Project" row owned by `owner_user_id`. Returns the project id (TEXT column).
+async fn insert_project(pool: &PgPool, owner_user_id: &str) -> String {
+    let project_id = Uuid::new_v4().to_string();
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Test Project', $2)"#,
+        project_id,
+        owner_user_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    project_id
+}
+
+async fn set_thread_project(pool: &PgPool, thread_id: Uuid, project_id: &str) {
+    sqlx::query!(
+        r#"UPDATE email_threads SET project_id = $2 WHERE id = $1"#,
+        thread_id,
+        project_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_project_access(
+    pool: &PgPool,
+    project_id: &str,
+    source_id: &str,
+    level: AccessLevel,
+) {
+    let project_uuid = Uuid::parse_str(project_id).unwrap();
+    let level_str = level.to_string();
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, 'project', $2, 'user', $3::text::"AccessLevel")"#,
+        project_uuid,
+        source_id,
+        level_str,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn project_access_grants_view_on_contained_thread(pool: PgPool) -> anyhow::Result<()> {
+    // Project access is capped at View regardless of the project-level grant.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let project_id = insert_project(&pool, OWNER).await;
+    set_thread_project(&pool, thread_id, &project_id).await;
+    insert_project_access(&pool, &project_id, REQUESTER, AccessLevel::Edit).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::View)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn denies_when_thread_project_not_shared_with_requester(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let project_id = insert_project(&pool, OWNER).await;
+    set_thread_project(&pool, thread_id, &project_id).await;
+    insert_project_access(&pool, &project_id, OTHER, AccessLevel::Edit).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_thread_grant_wins_over_project_view(pool: PgPool) -> anyhow::Result<()> {
+    // Thread-level Edit beats the project-derived View.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let project_id = insert_project(&pool, OWNER).await;
+    set_thread_project(&pool, thread_id, &project_id).await;
+    insert_project_access(&pool, &project_id, REQUESTER, AccessLevel::View).await;
+    insert_entity_access(&pool, thread_id, REQUESTER, AccessLevel::Edit).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Edit)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn no_project_grant_when_thread_has_no_project(pool: PgPool) -> anyhow::Result<()> {
+    // Requester can access a project, but the thread isn't in one.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    let (_, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    let project_id = insert_project(&pool, OWNER).await;
+    insert_project_access(&pool, &project_id, REQUESTER, AccessLevel::Edit).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}

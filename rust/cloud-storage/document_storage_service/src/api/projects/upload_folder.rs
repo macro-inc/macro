@@ -26,6 +26,7 @@ use models_bulk_upload::{
 use models_permissions::share_permission::SharePermissionV2;
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key};
 use sqlx::{Pool, Postgres};
+use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
 
@@ -128,6 +129,7 @@ pub async fn upload_folder_handler(
     upload_folder_handler_inner(
         ctx.s3_client.clone(),
         ctx.db.clone(),
+        ctx.sqs_client.clone(),
         user_context.macro_user_id,
         internal,
         req,
@@ -141,6 +143,7 @@ pub async fn upload_folder_handler(
 async fn upload_folder_handler_inner(
     s3_client: Arc<service::s3::S3>,
     db: Pool<Postgres>,
+    sqs_client: Arc<sqs_client::SQS>,
     user_id: MacroUserIdStr<'static>,
     internal: bool,
     req: UploadFolderRequest,
@@ -246,6 +249,31 @@ async fn upload_folder_handler_inner(
             .is_error(true)
             .message(&format!("unable to save folder contents to db: {}", e))
             .send(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    if !project_ids.is_empty() {
+        tokio::spawn({
+            let sqs_client = sqs_client.clone();
+            let project_ids = project_ids.clone();
+            async move {
+                let _ = sqs_client
+                    .bulk_send_message_to_search_event_queue(
+                        project_ids
+                            .iter()
+                            .map(|id| {
+                                SearchQueueMessage::UpsertProject(UpsertProject {
+                                    project_id: id.to_string(),
+                                    index_override: None,
+                                })
+                            })
+                            .collect(),
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to enqueue uploaded projects for search"),
+                    );
+            }
+        });
     }
 
     let data = UploadFolderResponseData {

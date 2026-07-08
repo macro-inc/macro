@@ -10,6 +10,8 @@ import { createDispatchTool, createImBlockedTool } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
+import { EDIT_PROVIDER_OPTIONS } from './model-options';
+import { snippet } from './snippet';
 import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
@@ -31,13 +33,16 @@ export async function supervisor(
   const docContext = `<document>\n${initialText}\n</document>`;
 
   let intent = '';
+  let interpretDurationMs: number | undefined;
   if (opts.interpret) {
+    const interpretStartedAt = Date.now();
     const interpretation = await interpreter(
       docContext,
       request,
       models.interpret,
       INTERPRET_SYSTEM
     );
+    interpretDurationMs = Date.now() - interpretStartedAt;
     tracker.add(
       models.interpret as { modelId: string },
       interpretation.totalUsage
@@ -53,7 +58,10 @@ export async function supervisor(
     dispatch: createDispatchTool({
       session,
       childModel: models.coding,
+      snippetModel: models.snippet,
+      snippetHighModel: models.snippetHigh,
       tracker,
+      runSnippet: snippet,
       params: opts.params,
       typingAnimations: opts.typingAnimations,
       sleep: opts.sleep,
@@ -64,19 +72,31 @@ export async function supervisor(
       runner: opts.runner,
       onOps: opts.onOps,
       onCoderResult: opts.onCoderResult,
+      onEditTrace: opts.onEditTrace,
     }),
   };
 
   const intentBlock = intent ? `<intent>\n${intent}\n</intent>\n\n` : '';
   const prompt = `Request: ${request}\n\n${intentBlock}${docContext}`;
 
+  // Wall-clock duration of each supervisor step, measured between step
+  // boundaries. Best-effort, but since between model calls it's probably good
+  // enough.
+  const stepDurationsMs: number[] = [];
+  let lastStepAt = Date.now();
   const result = await generateText({
     model: models.supervisor,
-    stopWhen: [stepCountIs(6), hasToolCall('reportBlocked')],
+    stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
     system: MASTER_SYSTEM,
     prompt,
     tools,
+    providerOptions: EDIT_PROVIDER_OPTIONS,
     abortSignal: opts.signal,
+    onStepFinish: () => {
+      const now = Date.now();
+      stepDurationsMs.push(now - lastStepAt);
+      lastStepAt = now;
+    },
   });
   tracker.add(models.supervisor as { modelId: string }, result.totalUsage);
 
@@ -90,7 +110,9 @@ export async function supervisor(
     text: result.text || 'Applied edits.',
     totalUsage: tracker,
     steps: result.steps,
+    stepDurationsMs,
     intent,
+    interpretDurationMs,
     clarification,
   };
 }

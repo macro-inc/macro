@@ -86,16 +86,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           <div
             class={cn(
               'mt-3 flex flex-wrap gap-2 @max-sm:w-full @max-sm:flex-col',
-              props.centered ? 'justify-center' : 'justify-start',
-              // Left-aligned states: pull the row left by the leading button's
-              // padding so its content lines up with the title/description (the
-              // pill background bleeds into the margin).
-              !props.centered &&
-                (props.primaryAction
-                  ? props.primaryAction.icon
-                    ? '-ml-3'
-                    : '-ml-4'
-                  : '-ml-2.5')
+              props.centered ? 'justify-center' : 'justify-start'
             )}
           >
             <Show when={props.primaryAction}>
