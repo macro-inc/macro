@@ -54,6 +54,8 @@ import Reply from '@phosphor/arrow-bend-up-left.svg';
 import Forward from '@phosphor/arrow-bend-up-right.svg';
 
 import ChevronDown from '@phosphor/caret-down.svg';
+import ClockIcon from '@phosphor/clock.svg';
+import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
 import Quotes from '@phosphor/quotes.svg';
@@ -1553,10 +1555,45 @@ export function BaseInput(props: {
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
+  const sendActionHidden = () =>
+    isMobile() &&
+    !hasBodyText() &&
+    // Forwards carry the quoted thread as content, so send is available without typing anything.
+    effectiveReplyType() !== 'forward';
+  const sendActionDisabled = () =>
+    uploadAttachmentMutation.isPending ||
+    sendMutation.isPending ||
+    !!form().sendTime();
+  const scheduleSendDisabled = () =>
+    form().recipients().to.length === 0 &&
+    form().recipients().cc.length === 0 &&
+    form().recipients().bcc.length === 0;
+  const scrollAreaSignatureHtml = () =>
+    isMobileDrawer() ? replySignatureHtml() : undefined;
+  const footerSignatureHtml = () =>
+    isMobileDrawer() ? undefined : replySignatureHtml();
   const mobileRecipientSelectorClass =
-    'min-w-0 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder';
+    'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:basis-full! [&_input]:w-full! [&_input]:min-w-28! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder';
   const mobileDrawerRowClass =
-    'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent items-center';
+    'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent';
+
+  const toggleQuotedText = () => {
+    const replyingTo = props.replyingTo();
+    if (!replyingTo) return;
+
+    const currentlyAppended = form().replyAppended();
+    form().setReplyAppended(!currentlyAppended);
+
+    editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+      replyingTo,
+      replyType: effectiveReplyType(),
+      visible: !currentlyAppended,
+    });
+
+    editor()?.update(() => {
+      $getRoot().getFirstChild()?.selectStart();
+    });
+  };
 
   const AttachButton = (buttonProps?: {
     variant?: 'ghost' | 'base';
@@ -1582,6 +1619,7 @@ export function BaseInput(props: {
     triggerVariant?: 'ghost' | 'base';
     triggerSize?: 'sm' | 'md';
     triggerClass?: string;
+    iconOnly?: boolean;
   }) => (
     <Dropdown>
       <Dropdown.Trigger
@@ -1589,20 +1627,27 @@ export function BaseInput(props: {
         size={dropdownProps?.triggerSize ?? 'md'}
         variant={dropdownProps?.triggerVariant}
         class={dropdownProps?.triggerClass}
+        noTouchResize={dropdownProps?.iconOnly}
       >
         <Switch>
           <Match when={effectiveReplyType() === 'reply'}>
             <Reply class="size-4 shrink-0" />
-            <span>Reply</span>
+            <Show when={!dropdownProps?.iconOnly}>
+              <span>Reply</span>
+            </Show>
           </Match>
 
           <Match when={effectiveReplyType() === 'reply-all'}>
             <ReplyAll class="size-4 shrink-0" />
-            <span>Reply All</span>
+            <Show when={!dropdownProps?.iconOnly}>
+              <span>Reply All</span>
+            </Show>
           </Match>
           <Match when={effectiveReplyType() === 'forward'}>
             <Forward class="size-4 shrink-0" />
-            <span>Forward</span>
+            <Show when={!dropdownProps?.iconOnly}>
+              <span>Forward</span>
+            </Show>
           </Match>
         </Switch>
         <ChevronDown class="size-3" />
@@ -1634,6 +1679,65 @@ export function BaseInput(props: {
     </Dropdown>
   );
 
+  const MobileOverflowMenu = () => (
+    <Dropdown>
+      <Dropdown.Trigger
+        as={Button}
+        variant="ghost"
+        size="icon-sm"
+        class="rounded-full border border-edge-muted/70 bg-transparent"
+        tooltip="More"
+      >
+        <DotsThree class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content portalScope="local" class="min-w-44">
+        <Dropdown.Group>
+          <Show when={ENABLE_EMAIL_SCHEDULED_SEND && !sendActionHidden()}>
+            <EmailDateSelector
+              sendTime={form().sendTime() ?? null}
+              onSendTimeChange={handleSendTimeChange}
+              disabled={scheduleSendDisabled()}
+              disablePortal={isMobile()}
+              trigger={(state) => (
+                <div
+                  aria-disabled={scheduleSendDisabled()}
+                  class={cn(
+                    'group rounded-lg w-full min-w-44 flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 group-data-[expanded]/date-selector-trigger:bg-ink/5',
+                    scheduleSendDisabled() &&
+                      'opacity-50 cursor-not-allowed hover:bg-transparent'
+                  )}
+                >
+                  <ClockIcon
+                    class={cn(
+                      'size-4 shrink-0',
+                      state.selectedDate && 'text-accent'
+                    )}
+                  />
+                  <span class="flex-1 truncate">Schedule send</span>
+                  <Show when={state.formattedDate}>
+                    {(date) => (
+                      <span class="max-w-20 truncate text-xs text-ink-extra-muted">
+                        {date()}
+                      </span>
+                    )}
+                  </Show>
+                </div>
+              )}
+            />
+          </Show>
+          <Dropdown.Item
+            onSelect={() => setShowFormatRibbon(!showFormatRibbon())}
+          >
+            <TextAa class="size-4 shrink-0" />
+            <span class="flex-1 truncate">
+              {showFormatRibbon() ? 'Hide formatting' : 'Show formatting'}
+            </span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+
   return (
     <Surface
       class={cn(
@@ -1657,35 +1761,34 @@ export function BaseInput(props: {
       solid
     >
       <Show when={props.mobileDrawer}>
-        {(drawer) => (
-          <div
-            data-corvu-no-drag=""
-            class="shrink-0 h-12 px-3 flex items-center justify-between"
-          >
-            <div class="flex items-center gap-1 min-w-0">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-full border border-edge-muted/70 bg-transparent"
-                tooltip="Close"
-                onClick={drawer().onClose}
-              >
-                <XIcon class="size-4" />
-              </Button>
-              <Show when={props.replyingTo()}>
-                <ReplyTypeDropdown
-                  triggerVariant="ghost"
-                  triggerSize="sm"
-                  triggerClass="rounded-full h-8 px-2 border border-edge-muted/70 bg-transparent"
-                />
-              </Show>
-            </div>
+        <div
+          data-corvu-no-drag=""
+          class="shrink-0 h-12 px-3 flex items-center justify-between"
+        >
+          <div class="flex items-center gap-1 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-full border border-edge-muted/70 bg-transparent"
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
+              onClick={deleteDraftAndReset}
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </div>
+          <div class="ml-auto flex items-center gap-1">
             <AttachButton
               variant="ghost"
               class="rounded-full border border-edge-muted/70 bg-transparent"
             />
+            <MobileOverflowMenu />
+            <SendButton
+              disabled={sendActionDisabled() || sendActionHidden()}
+              pending={sendMutation.isPending}
+              onClick={() => sendEmail()}
+            />
           </div>
-        )}
+        </div>
       </Show>
       <Show
         when={isMobileDrawer()}
@@ -1882,11 +1985,16 @@ export function BaseInput(props: {
         <div class="relative min-w-0 text-[17px] leading-6 text-ink-muted px-5 pt-1">
           <RecipientDropRow
             field="to"
-            class={mobileDrawerRowClass}
+            class={cn(mobileDrawerRowClass, 'items-start py-2')}
             dragState={recipientDragState}
             onDrop={handleRecipientDrop}
           >
-            <div class="shrink-0 text-ink-placeholder">To:</div>
+            <ReplyTypeDropdown
+              triggerVariant="ghost"
+              triggerSize="sm"
+              triggerClass="mt-0 h-[30px] shrink-0 rounded-full border border-edge-muted/70 bg-transparent px-2"
+              iconOnly
+            />
             <RecipientSelector<EmailRecipient['kind']>
               class={mobileRecipientSelectorClass}
               inputRef={setToRef}
@@ -1934,7 +2042,7 @@ export function BaseInput(props: {
           <Show when={showCc() || form().recipients().cc.length > 0}>
             <RecipientDropRow
               field="cc"
-              class={mobileDrawerRowClass}
+              class={cn(mobileDrawerRowClass, 'items-center py-2')}
               dragState={recipientDragState}
               onDrop={handleRecipientDrop}
             >
@@ -1962,7 +2070,7 @@ export function BaseInput(props: {
           <Show when={showBcc() || form().recipients().bcc.length > 0}>
             <RecipientDropRow
               field="bcc"
-              class={mobileDrawerRowClass}
+              class={cn(mobileDrawerRowClass, 'items-center py-2')}
               dragState={recipientDragState}
               onDrop={handleRecipientDrop}
             >
@@ -2003,7 +2111,9 @@ export function BaseInput(props: {
       </Show>
       <div
         class={cn(
-          'size-full flex flex-col min-h-0',
+          isMobileDrawer()
+            ? 'relative flex-1 flex flex-col min-h-0'
+            : 'size-full flex flex-col min-h-0',
           showExpandedRecipients() && 'mt-4'
         )}
       >
@@ -2025,7 +2135,7 @@ export function BaseInput(props: {
           class={cn(
             'relative min-h-18 max-h-[calc(60*var(--dvh,1dvh))] overflow-y-auto w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1',
             isMobileDrawer()
-              ? 'mobile:max-h-none flex-1 min-h-0 px-5 pt-6 pb-2'
+              ? 'mobile:max-h-none flex-1 min-h-0 px-5 pt-6 pb-4'
               : 'mobile:max-h-[calc(32*var(--dvh,1dvh))]'
           )}
           onclick={() => {
@@ -2081,6 +2191,32 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
+          <Show when={isMobileDrawer() && props.replyingTo()}>
+            <div
+              class="shrink-0 pt-2 pb-1"
+              data-corvu-no-drag=""
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Tooltip
+                label={
+                  form().replyAppended()
+                    ? 'Hide quoted text'
+                    : 'Show quoted text'
+                }
+              >
+                <KToggleButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                  class="rounded-full bg-transparent"
+                  pressed={form().replyAppended()}
+                  onChange={toggleQuotedText}
+                >
+                  <DotsThree class="size-4" />
+                </KToggleButton>
+              </Tooltip>
+            </div>
+          </Show>
           <Show when={!hasPaidAccess()}>
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton />
@@ -2130,111 +2266,92 @@ export function BaseInput(props: {
               )}
             </For>
           </div>
+          <Show when={scrollAreaSignatureHtml()}>
+            {(html) => (
+              <SignaturePreview
+                html={html()}
+                onDismiss={() => setIncludeSignature(false)}
+              />
+            )}
+          </Show>
         </div>
-        <Show when={replySignatureHtml()}>
-          {(html) => (
-            <SignaturePreview
-              html={html()}
-              onDismiss={() => setIncludeSignature(false)}
-            />
-          )}
-        </Show>
-        {/* No fixed height: the send button (size-7.5) is taller than the icon
-            buttons, and a fixed h-9 minus the vertical padding left it 4px short
-            — with items-end it bled upward over the signature bar above. */}
-        <div class="flex flex-row w-full justify-between items-end px-2 pb-2 pt-1.5 space-x-2">
-          <div class="flex flex-row items-center gap-1">
-            <Show when={!isMobileDrawer()}>
+        <Show when={!isMobileDrawer()}>
+          <Show when={footerSignatureHtml()}>
+            {(html) => (
+              <SignaturePreview
+                html={html()}
+                onDismiss={() => setIncludeSignature(false)}
+              />
+            )}
+          </Show>
+          {/* No fixed height: the send button (size-7.5) is taller than the icon
+              buttons, and a fixed h-9 minus the vertical padding left it 4px short
+              — with items-end it bled upward over the signature bar above. */}
+          <div class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-2 pb-2 pt-1.5">
+            <div class="flex flex-row items-center gap-1">
               <div class="relative flex">
                 <AttachButton />
               </div>
-            </Show>
 
-            <Button
-              onclick={() => {
-                setShowFormatRibbon(!showFormatRibbon());
-              }}
-              variant="ghost"
-              tooltip="Show formatting toolbar"
-              size="icon-sm"
-            >
-              <TextAa />
-            </Button>
-
-            <Tooltip
-              label={
-                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
-              }
-            >
-              <KToggleButton
-                as={Button}
-                size="icon-sm"
-                pressed={form().replyAppended()}
-                onChange={() => {
-                  const replyingToID = props.replyingTo()?.replying_to_id;
-                  if (!replyingToID) return;
-
-                  const currentlyAppended = form().replyAppended();
-                  form().setReplyAppended(!currentlyAppended);
-
-                  editor()?.dispatchCommand(
-                    TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
-                    {
-                      replyingTo: props.replyingTo(),
-                      replyType: effectiveReplyType(),
-                      visible: !currentlyAppended,
-                    }
-                  );
-
-                  editor()?.update(() => {
-                    $getRoot().getFirstChild()?.selectStart();
-                  });
+              <Button
+                onclick={() => {
+                  setShowFormatRibbon(!showFormatRibbon());
                 }}
+                variant="ghost"
+                tooltip="Show formatting toolbar"
+                size="icon-sm"
               >
-                <Quotes />
-              </KToggleButton>
-            </Tooltip>
-            <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
-            <Button
-              onclick={deleteDraftAndReset}
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-              size="icon-sm"
-            >
-              <Trash />
-            </Button>
-          </div>
+                <TextAa />
+              </Button>
 
-          <div class="flex flex-row items-center gap-1">
-            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
-              <EmailDateSelector
-                sendTime={form().sendTime() ?? null}
-                onSendTimeChange={handleSendTimeChange}
-                disabled={
-                  form().recipients().to.length === 0 &&
-                  form().recipients().cc.length === 0 &&
-                  form().recipients().bcc.length === 0
+              <Tooltip
+                label={
+                  form().replyAppended()
+                    ? 'Hide quoted text'
+                    : 'Show quoted text'
                 }
-                disablePortal={isMobile()}
+              >
+                <KToggleButton
+                  as={Button}
+                  size="icon-sm"
+                  pressed={form().replyAppended()}
+                  onChange={toggleQuotedText}
+                >
+                  <Quotes />
+                </KToggleButton>
+              </Tooltip>
+              <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
+              <Button
+                onclick={deleteDraftAndReset}
+                tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+                size="icon-sm"
+              >
+                <Trash />
+              </Button>
+            </div>
+
+            <div class="flex flex-row items-center gap-1">
+              <Show when={ENABLE_EMAIL_SCHEDULED_SEND && !sendActionHidden()}>
+                <EmailDateSelector
+                  sendTime={form().sendTime() ?? null}
+                  onSendTimeChange={handleSendTimeChange}
+                  disabled={scheduleSendDisabled()}
+                  disablePortal={isMobile()}
+                />
+              </Show>
+              <SendButton
+                disabled={
+                  uploadAttachmentMutation.isPending ||
+                  sendMutation.isPending ||
+                  !!form().sendTime()
+                }
+                pending={sendMutation.isPending}
+                hidden={sendActionHidden()}
+                onClick={() => sendEmail()}
               />
-            </Show>
-            <SendButton
-              disabled={
-                uploadAttachmentMutation.isPending ||
-                sendMutation.isPending ||
-                !!form().sendTime()
-              }
-              pending={sendMutation.isPending}
-              hidden={
-                isMobile() &&
-                !hasBodyText() &&
-                // Forwards carry the quoted thread as content, so send is
-                // available without typing anything.
-                effectiveReplyType() !== 'forward'
-              }
-              onClick={() => sendEmail()}
-            />
+            </div>
           </div>
-        </div>
+        </Show>
       </div>
     </Surface>
   );
