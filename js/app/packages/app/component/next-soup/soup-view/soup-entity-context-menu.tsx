@@ -1,14 +1,7 @@
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
-import {
-  type EntityData,
-  isChatEntity,
-  isDocumentEntity,
-  isEmailEntity,
-  isProjectEntity,
-  isTaskEntity,
-} from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { TagPickerPopover, useSoupDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -21,6 +14,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useRowTagsVisible } from './filters-bar/search/search-tags-flag';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
@@ -32,13 +26,13 @@ interface SoupEntityContextMenuProps {
 }
 
 function tagEntityType(entity: EntityData): EntityType | undefined {
-  if (isDocumentEntity(entity)) {
-    return isTaskEntity(entity) ? EntityType.TASK : EntityType.DOCUMENT;
-  }
-  if (isEmailEntity(entity)) return EntityType.THREAD;
-  if (isProjectEntity(entity)) return EntityType.PROJECT;
-  if (isChatEntity(entity)) return EntityType.CHAT;
-  return undefined;
+  return match(entity)
+    .when(isTaskEntity, () => EntityType.TASK)
+    .with({ type: 'document' }, () => EntityType.DOCUMENT)
+    .with({ type: 'email' }, () => EntityType.THREAD)
+    .with({ type: 'project' }, () => EntityType.PROJECT)
+    .with({ type: 'chat' }, () => EntityType.CHAT)
+    .otherwise(() => undefined);
 }
 
 // Detached tag picker anchored at the position the context menu opened from.
