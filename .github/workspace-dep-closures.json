@@ -327,6 +327,7 @@
       "documents",
       "email",
       "email_db_client",
+      "email_service_client",
       "email_utils",
       "email_validator",
       "embedding",
