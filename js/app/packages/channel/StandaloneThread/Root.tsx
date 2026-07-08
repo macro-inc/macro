@@ -7,8 +7,10 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  Match,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
 import { createFocusRequest } from '../Thread/focus-request';
 import { ThreadRail } from '../Thread/ThreadRail';
@@ -21,6 +23,7 @@ type RootProps = ParentProps<{
   data?: ApiChannelMessage;
   unreadMessageIds?: string[];
   fallback?: JSX.Element;
+  errorFallback?: (retry: () => void) => JSX.Element;
 }>;
 
 export function Root(props: RootProps) {
@@ -85,7 +88,12 @@ function RootInner(props: RootProps) {
     isExpanded() ? 0 : Math.max(unreadWindowStart(), 0);
 
   const showLoadingFallback = () =>
-    props.fallback !== undefined && !parent() && parentQuery.isPending;
+    props.fallback !== undefined &&
+    !parent() &&
+    (parentQuery.isPending || parentQuery.isFetching);
+
+  const showErrorFallback = () =>
+    props.errorFallback !== undefined && !parent() && parentQuery.isError;
 
   return (
     <StandaloneThreadContext.Provider
@@ -105,14 +113,21 @@ function RootInner(props: RootProps) {
         replyInputFocusRequest,
       }}
     >
-      <Show when={!showLoadingFallback()} fallback={props.fallback}>
-        <div class="relative">
-          <Show when={hasReplies() || isReplying()}>
-            <ThreadRail />
-          </Show>
-          {props.children}
-        </div>
-      </Show>
+      <Switch
+        fallback={
+          <div class="relative">
+            <Show when={hasReplies() || isReplying()}>
+              <ThreadRail />
+            </Show>
+            {props.children}
+          </div>
+        }
+      >
+        <Match when={showLoadingFallback()}>{props.fallback}</Match>
+        <Match when={showErrorFallback()}>
+          {props.errorFallback?.(() => void parentQuery.refetch())}
+        </Match>
+      </Switch>
     </StandaloneThreadContext.Provider>
   );
 }

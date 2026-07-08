@@ -8,6 +8,7 @@ type ReadonlyThreadProps = {
   data?: ApiChannelMessage;
   unreadMessageIds?: string[];
   fallback?: JSX.Element;
+  errorFallback?: (retry: () => void) => JSX.Element;
   onClickMessage?: (messageId: string, e: MouseEvent) => void;
 };
 
@@ -19,6 +20,7 @@ export function ReadonlyThread(props: ReadonlyThreadProps) {
       data={props.data}
       unreadMessageIds={props.unreadMessageIds}
       fallback={props.fallback}
+      errorFallback={props.errorFallback}
     >
       <StandaloneThread.ParentMessage
         onClickMessage={props.onClickMessage}

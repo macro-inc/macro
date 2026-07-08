@@ -17,12 +17,14 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
+import RefreshIcon from '@phosphor/arrow-clockwise.svg';
+import WarningIcon from '@phosphor/warning.svg';
 import { channelMessagesByIdsQueryOptions } from '@queries/channel/channel-messages';
 import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { queryClient } from '@queries/client';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Avatar, cn, NavRow, Surface, Tooltip } from '@ui';
+import { Avatar, Button, cn, NavRow, Surface, Tooltip } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -323,6 +325,27 @@ function prefetchGroupPreview(group: ChannelGroup) {
   }
 }
 
+function PreviewThreadError(props: { retry: () => void }) {
+  return (
+    <div class="flex items-center gap-3 px-3 py-2.5">
+      <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-failure/10 text-failure [&_svg]:size-4">
+        <WarningIcon />
+      </div>
+      <p class="min-w-0 flex-1 text-sm text-ink-muted">Failed to load thread</p>
+      <Button
+        variant="base"
+        size="sm"
+        depth={2}
+        class="w-fit shrink-0 bg-surface"
+        onClick={props.retry}
+      >
+        <RefreshIcon class="size-3.5" />
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 function PreviewThreadSkeleton() {
   return (
     <div class="flex flex-col gap-3 px-3 py-2 animate-pulse">
@@ -416,6 +439,7 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
             messageId={rootMessageId}
             unreadMessageIds={unreadInfo().unreadIdsByRoot.get(rootMessageId)}
             fallback={<PreviewThreadSkeleton />}
+            errorFallback={(retry) => <PreviewThreadError retry={retry} />}
             onClickMessage={(clickedMessageId, e) => {
               e.stopPropagation();
               const isReply = clickedMessageId !== rootMessageId;
