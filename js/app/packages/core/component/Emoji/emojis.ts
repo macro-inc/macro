@@ -4,6 +4,7 @@ import { createMemo, createSignal } from 'solid-js';
 import GroupedEmojiData from 'unicode-emoji-json/data-by-group.json';
 import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
 import CldrTags from './cldr-tags.json';
+import { emojiUsageCount, frequentEmojiChars } from './emojiUsage';
 
 export type SimpleEmoji = {
   emoji: string;
@@ -117,7 +118,12 @@ export function searchEmojis(query: string): SimpleEmoji[] {
   }
 
   const joined = tokens.join('_');
-  const scored: { entry: SimpleEmoji; score: number; order: number }[] = [];
+  const scored: {
+    entry: SimpleEmoji;
+    score: number;
+    usage: number;
+    order: number;
+  }[] = [];
   for (let order = 0; order < ORDERED_EMOJI_DATA.length; order++) {
     const entry = ORDERED_EMOJI_DATA[order];
     let score = tokenScore(joined, entry);
@@ -132,12 +138,24 @@ export function searchEmojis(query: string): SimpleEmoji[] {
       }
     }
     if (score >= 0) {
-      scored.push({ entry, score, order });
+      scored.push({ entry, score, usage: emojiUsageCount(entry.emoji), order });
     }
   }
 
-  scored.sort((a, b) => a.score - b.score || a.order - b.order);
+  // Usage only breaks ties within a match tier, so exact matches stay on top
+  // no matter how often another emoji is picked.
+  scored.sort(
+    (a, b) => a.score - b.score || b.usage - a.usage || a.order - b.order
+  );
   return scored.map(({ entry }) => entry);
+}
+
+const FREQUENT_EMOJI_LIMIT = 12;
+
+function frequentEmojis(): SimpleEmoji[] {
+  return frequentEmojiChars(FREQUENT_EMOJI_LIMIT)
+    .map((emoji) => EMOJI_BY_CHAR.get(emoji))
+    .filter((entry): entry is SimpleEmoji => entry !== undefined);
 }
 
 export const useEmojiData = () => {
@@ -145,14 +163,33 @@ export const useEmojiData = () => {
 
   const emojis = createMemo(() => {
     if (!query() || query().trim().length <= 1) {
-      return ORDERED_EMOJI_DATA;
+      const frequent = frequentEmojis();
+      if (frequent.length === 0) {
+        return ORDERED_EMOJI_DATA;
+      }
+      const frequentSet = new Set(frequent.map(({ emoji }) => emoji));
+      return [
+        ...frequent,
+        ...ORDERED_EMOJI_DATA.filter(({ emoji }) => !frequentSet.has(emoji)),
+      ];
     }
 
     return searchEmojis(query());
   });
 
+  const groups = createMemo(() => {
+    const frequent = frequentEmojis();
+    if (frequent.length === 0) {
+      return EMOJI_DATA_GROUPED;
+    }
+    return [
+      { name: 'Frequently used', emojis: frequent },
+      ...EMOJI_DATA_GROUPED,
+    ];
+  });
+
   return {
-    groups: EMOJI_DATA_GROUPED,
+    groups,
     emojis,
     filter: (query: string) => {
       setQuery(query);

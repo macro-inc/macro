@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { resolveEmoji, searchEmojis } from './emojis';
+import {
+  clearEmojiUsage,
+  frequentEmojiChars,
+  recordEmojiUsage,
+} from './emojiUsage';
 
 describe('searchEmojis', () => {
   const first = (query: string) => searchEmojis(query)[0]?.emoji;
@@ -56,6 +61,33 @@ describe('searchEmojis', () => {
 
   it('returns nothing for queries with no match', () => {
     expect(searchEmojis('zzzzqqq')).toHaveLength(0);
+  });
+});
+
+describe('emoji usage frecency', () => {
+  const first = (query: string) => searchEmojis(query)[0]?.emoji;
+
+  afterEach(() => {
+    clearEmojiUsage();
+  });
+
+  it('boosts frequently used emojis within the same match tier', () => {
+    expect(first('crying')).toBe('🤣');
+    recordEmojiUsage('😭');
+    expect(first('crying')).toBe('😭');
+  });
+
+  it('never outranks a better match tier', () => {
+    recordEmojiUsage('😭');
+    recordEmojiUsage('😭');
+    expect(first('cry')).toBe('😢');
+  });
+
+  it('orders frequently used emojis by count', () => {
+    recordEmojiUsage('🎉');
+    recordEmojiUsage('🎉');
+    recordEmojiUsage('🔥');
+    expect(frequentEmojiChars(2)).toEqual(['🎉', '🔥']);
   });
 });
 
