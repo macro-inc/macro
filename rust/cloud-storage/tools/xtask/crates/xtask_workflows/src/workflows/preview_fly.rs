@@ -255,11 +255,21 @@ fn deploy_to_fly() -> Step<Run> {
             # `|| true`: the create fails once the app exists; real failures
             # (auth, org) surface on the very next flyctl call.
             flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
-            # An app-scoped deploy token so the machine's inner dockerd can
-            # pull the mirrored stack images from this app's registry repo —
-            # and nothing else. Minted fresh each deploy; expiry bounds the
-            # blast radius of a leak (PR code can read machine secrets).
-            pull_token=$(flyctl tokens create deploy --app "$APP_NAME" --expiry 168h)
+            # A read-only, app-scoped, time-boxed pull token so the machine's
+            # inner dockerd can pull the mirrored stack images from this app's
+            # registry repo — and nothing else (PR code can read machine
+            # secrets, so scope matters). The org deploy token can't mint new
+            # tokens (createLimitedAccessToken is not authorized), but macaroon
+            # attenuation is pure client-side crypto: append an Apps caveat
+            # (numeric app id, mask "r") and a validity window to our own token.
+            app_id=$(curl -sf https://api.fly.io/graphql \
+              -H "Authorization: Bearer $FLY_API_TOKEN" \
+              -H "content-type: application/json" \
+              -d "{\"query\":\"{ app(name: \\\"$APP_NAME\\\") { internalNumericId } }\"}" \
+              | jq -re '.data.app.internalNumericId')
+            now=$(date +%s)
+            pull_token=$(printf '[{"type":"Apps","body":{"apps":{"%s":"r"}}},{"type":"ValidityWindow","body":{"not_before":%d,"not_after":%d}}]' \
+              "$app_id" $((now - 60)) $((now + 604800)) | flyctl tokens attenuate)
             flyctl secrets set --app "$APP_NAME" --stage \
               "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
               "REGISTRY_PULL_TOKEN=$pull_token"

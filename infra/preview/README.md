@@ -64,9 +64,9 @@ config its token is scoped to.
 - No real AWS: S3/SQS/DynamoDB are LocalStack, email is Mailpit. The
   cloud-reachable credentials on a machine are the preview Doppler config's
   contents — scope that config accordingly (assume PR code can read it) — and
-  `REGISTRY_PULL_TOKEN`, a deploy token scoped to this one preview app (it can
-  pull the app's registry repo and redeploy the app, nothing else; minted per
-  deploy with a 7-day expiry).
+  `REGISTRY_PULL_TOKEN`, the CI deploy token attenuated (client-side macaroon
+  caveats) to read-only on this one preview app with a 7-day validity window:
+  it can pull the app's registry repo, nothing else.
 - URLs are public. Anyone with the link can use the preview (and read its
   Mailpit). Don't put sensitive data in one. Edge auth (oauth2-proxy in front
   of Caddy) is a planned hardening step.
