@@ -403,20 +403,9 @@ export const GoToHotkeys = () => {
     enabledOverride: ENABLE_HOME_OVERRIDE,
   });
 
-  const links = createMemo((): SidebarItem[] => {
-    let links: SidebarItem[] = [...SIDEBAR_LINKS];
-
-    if (homeViewEnabled().enabled) {
-      links = [DASHBOARD_LINK, ...links];
-    }
-
-    if (ENABLE_CALLS()) {
-      const idx = links.findIndex((l) => l.id === 'channels');
-      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
-    }
-
-    return links;
-  });
+  const links = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(homeViewEnabled().enabled)
+  );
 
   const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
   const debounceSetHotkeyVisible = debounce(
@@ -736,6 +725,30 @@ const DASHBOARD_LINK: SidebarItem = {
 };
 
 /**
+ * Assemble the ordered sidebar link list: the static links plus the flag-gated
+ * Home and Calls entries in their correct positions. Shared by the rendered
+ * sidebar (`AppSidebar.visibleLinks`) and the always-mounted `GoToHotkeys`
+ * registrar so their link sets can't drift. Call from a reactive context — it
+ * reads `ENABLE_CALLS()`; `homeEnabled` is passed in so the caller tracks the
+ * feature-flag read. `visibleLinks` additionally drops `hiddenFromSidebar`
+ * entries, which have hotkeys but no sidebar row.
+ */
+const buildSidebarLinks = (homeEnabled: boolean): SidebarItem[] => {
+  let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+  if (homeEnabled) {
+    links = [DASHBOARD_LINK, ...links];
+  }
+
+  if (ENABLE_CALLS()) {
+    const idx = links.findIndex((l) => l.id === 'channels');
+    links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+  }
+
+  return links;
+};
+
+/**
  * Settings tabs surfaced as always-visible quick links above the settings
  * widget. Label/icon come from the settings tab config (see
  * `getSettingsTabItem`); this list only decides which tabs to promote.
@@ -767,20 +780,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
 
-  const visibleLinks = createMemo((): SidebarItem[] => {
-    let links: SidebarItem[] = [...SIDEBAR_LINKS];
-
-    if (homeViewEnabled().enabled) {
-      links = [DASHBOARD_LINK, ...links];
-    }
-
-    if (ENABLE_CALLS()) {
-      const idx = links.findIndex((l) => l.id === 'channels');
-      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
-    }
-
-    return links.filter((link) => !link.hiddenFromSidebar);
-  });
+  const visibleLinks = createMemo((): SidebarItem[] =>
+    buildSidebarLinks(homeViewEnabled().enabled).filter(
+      (link) => !link.hiddenFromSidebar
+    )
+  );
 
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
