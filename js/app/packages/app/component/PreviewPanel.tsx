@@ -175,14 +175,12 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       }}
       tabIndex={-1}
     >
-      {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
+      {/* Display the split header content here */}
       <div
         class="relative w-full flex items-center justify-between shrink-0 bg-surface px-2 py-2"
-        data-preview-split-toolbar
+        data-preview-split-header
       >
         <div
-          // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
-          // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
           class="flex h-full items-center gap-1"
           ref={(ref) => {
             scopedLayoutRefs.headerLeft = ref;
@@ -192,6 +190,26 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           class="flex h-full items-center gap-1"
           ref={(ref) => {
             scopedLayoutRefs.headerRight = ref;
+          }}
+        />
+      </div>
+
+      {/* Legacy: We've moved to a single top bar in most places but some blocks/places still try to display a toolbar as well.
+          This is for those blocks so we can see their toolbars int eh preview panel */}
+      <div
+        class="relative w-full flex items-center justify-between shrink-0 bg-surface px-2 py-2"
+        data-preview-split-toolbar
+      >
+        <div
+          class="flex h-full items-center gap-1"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarLeft = ref;
+          }}
+        />
+        <div
+          class="flex h-full items-center gap-1"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarRight = ref;
           }}
         />
       </div>
