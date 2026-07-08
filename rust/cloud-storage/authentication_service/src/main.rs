@@ -243,14 +243,15 @@ async fn main() -> anyhow::Result<()> {
     });
     tracing::trace!("initialized analytics client");
 
-    // Initialize Loops client. When no API key is configured this is a no-op,
-    // so local/dev environments don't need Loops credentials.
-    let loops_client = match config.loops_api_key.value() {
-        Some(api_key) => {
+    // Initialize Loops client. Only production sign-ups are added to Loops;
+    // in all other environments (or when no API key is configured) this is a
+    // no-op.
+    let loops_client = match (config.environment, config.loops_api_key.value()) {
+        (Environment::Production, Some(api_key)) => {
             tracing::info!("configuring Loops");
             LoopsClient::new(api_key.to_string())
         }
-        None => LoopsClient::noop(),
+        _ => LoopsClient::noop(),
     };
     tracing::trace!("initialized loops client");
 
