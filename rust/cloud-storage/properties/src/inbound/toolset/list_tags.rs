@@ -52,7 +52,7 @@ pub struct ListTagsResponse {
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[schemars(
     title = "ListTags",
-    description = "List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id. Call this before tag operations when you don't already know the user's tags."
+    description = "List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags."
 )]
 #[allow(unused)]
 // empty structs can't be deserialized;

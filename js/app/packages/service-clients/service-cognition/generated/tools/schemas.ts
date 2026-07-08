@@ -2462,6 +2462,7 @@ export const UserToolResponse = z.any().superRefine((x, ctx) => {
 });
 
 export const SetEntityProperty = z.object({
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
   boolean_value: z.union([z.boolean(), z.null()]).default(null),
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
@@ -2521,6 +2522,9 @@ export const SetEntityProperty = z.object({
   option_id: z.union([z.string().uuid(), z.null()]).default(null),
   option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
   property_definition_id: z.string().uuid(),
+  remove_option_ids: z
+    .union([z.array(z.string().uuid()), z.null()])
+    .default(null),
   string_value: z.union([z.string(), z.null()]).default(null),
 });
 

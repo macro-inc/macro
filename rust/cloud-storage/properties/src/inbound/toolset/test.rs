@@ -29,6 +29,24 @@ fn test_set_entity_property_schema_validation() {
 }
 
 #[test]
+fn test_set_entity_property_schema_documents_delta_options() {
+    let validated = generate_validated_input_schema::<SetEntityProperty>().unwrap();
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("add_option_ids"),
+        "schema should expose add_option_ids"
+    );
+    assert!(
+        schema_json.contains("remove_option_ids"),
+        "schema should expose remove_option_ids"
+    );
+    assert!(
+        validated.description.contains("atomically"),
+        "description should steer to atomic add/remove over full replace"
+    );
+}
+
+#[test]
 fn test_list_tags_schema_validation() {
     let result = generate_validated_input_schema::<ListTags>();
     assert!(result.is_ok(), "{:?}", result);
