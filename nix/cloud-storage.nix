@@ -719,6 +719,7 @@
           sccache
           rustToolchain
           python3
+          vitejs
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 
