@@ -251,7 +251,6 @@ pub async fn list_property_definitions_with_options(
 
         // Only process options if option_id is present (from LEFT JOIN)
         if let Some(option_id) = row.option_id
-            && (row.option_number_value.is_some() || row.option_string_value.is_some())
             && (row.data_type == DataType::SelectNumber
                 || row.data_type == DataType::SelectString
                 || row.data_type == DataType::Tag)

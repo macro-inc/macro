@@ -51,6 +51,11 @@ pub struct BulkEntityPropertiesRequest {
     pub property_ids: Vec<Uuid>,
 }
 
+/// Maximum number of entities allowed in a single bulk properties request.
+const MAX_BULK_ENTITIES: usize = 200;
+/// Maximum number of property IDs allowed in a single bulk properties request.
+const MAX_BULK_PROPERTY_IDS: usize = 200;
+
 /// Drops tag-typed properties the caller may not see. A user-owned tag set (personal labels)
 /// is visible only to its owner, so personal tags stay private even on a shared entity.
 /// Team- and system-owned tags are the shared vocabulary and are left in place. Non-tag
@@ -193,13 +198,19 @@ pub enum GetBulkEntityPropertiesErr {
     Properties(#[from] PropertiesErr),
     #[error("Entities array cannot be empty")]
     InvalidRequest,
+    #[error("Cannot request more than {MAX_BULK_ENTITIES} entities at once")]
+    TooManyEntities,
+    #[error("Cannot request more than {MAX_BULK_PROPERTY_IDS} property IDs at once")]
+    TooManyPropertyIds,
 }
 
 impl IntoResponse for GetBulkEntityPropertiesErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
             GetBulkEntityPropertiesErr::Properties(e) => properties_err_status(e),
-            GetBulkEntityPropertiesErr::InvalidRequest => StatusCode::BAD_REQUEST,
+            GetBulkEntityPropertiesErr::InvalidRequest
+            | GetBulkEntityPropertiesErr::TooManyEntities
+            | GetBulkEntityPropertiesErr::TooManyPropertyIds => StatusCode::BAD_REQUEST,
         };
 
         if status_code.is_server_error() {
@@ -214,6 +225,28 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
     }
 }
 
+/// Rejects requests whose `entities` or `property_ids` arrays exceed the allowed maximums,
+/// before any per-entity permission checks or DB calls are made.
+fn validate_bulk_request_size(
+    request: &BulkEntityPropertiesRequest,
+) -> Result<(), GetBulkEntityPropertiesErr> {
+    if request.entities.len() > MAX_BULK_ENTITIES {
+        tracing::error!(
+            entity_count = request.entities.len(),
+            "too many entities in bulk request"
+        );
+        return Err(GetBulkEntityPropertiesErr::TooManyEntities);
+    }
+    if request.property_ids.len() > MAX_BULK_PROPERTY_IDS {
+        tracing::error!(
+            property_id_count = request.property_ids.len(),
+            "too many property ids in bulk request"
+        );
+        return Err(GetBulkEntityPropertiesErr::TooManyPropertyIds);
+    }
+    Ok(())
+}
+
 /// Shared implementation for bulk entity properties retrieval
 async fn get_bulk_entity_properties_impl<S: PropertiesService, A: EntityAccessService>(
     state: &PropertiesRouterState<S, A>,
@@ -223,6 +256,7 @@ async fn get_bulk_entity_properties_impl<S: PropertiesService, A: EntityAccessSe
         tracing::error!("empty entities array in request");
         return Err(GetBulkEntityPropertiesErr::InvalidRequest);
     }
+    validate_bulk_request_size(&request)?;
 
     tracing::info!("retrieving bulk entity properties");
 
@@ -306,6 +340,7 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
     if request.entities.is_empty() || request.property_ids.is_empty() {
         return Ok(Json(HashMap::new()));
     }
+    validate_bulk_request_size(&request)?;
 
     // Filter to only entities the user has permission to view
     let mut permitted_entities = Vec::with_capacity(request.entities.len());
