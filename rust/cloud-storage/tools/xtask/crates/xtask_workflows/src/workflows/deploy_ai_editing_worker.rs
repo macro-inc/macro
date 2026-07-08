@@ -61,6 +61,7 @@ fn deploy() -> Job {
         .add_step(steps::checkout(false, false))
         .add_step(setup_bun())
         .add_step(install_deps())
+        .add_step(install_worker_deps())
         .add_step(deploy_step())
 }
 
@@ -72,6 +73,12 @@ fn install_deps() -> Step<Run> {
     Step::new("Install dependencies")
         .run("bun install --frozen-lockfile")
         .working_directory("js")
+}
+
+fn install_worker_deps() -> Step<Run> {
+    Step::new("Install worker dependencies")
+        .run("bun install --frozen-lockfile")
+        .working_directory("js/ai-editing-worker")
 }
 
 fn deploy_step() -> Step<Run> {
