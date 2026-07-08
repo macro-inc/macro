@@ -72,6 +72,7 @@ import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import GearIcon from '@phosphor/gear.svg';
 import HomeIcon from '@phosphor/house.svg';
@@ -1274,12 +1275,11 @@ const SidebarMailLink = (props: SidebarLinkProps) => {
         }}
         trailingWhenActive={
           canShow() ? (
-            <CaretDownIcon
-              class={cn(
-                'size-3 transition-transform duration-200',
-                !expanded() && 'rotate-180'
-              )}
-            />
+            expanded() ? (
+              <CaretDownIcon class="size-3" />
+            ) : (
+              <CaretRightIcon class="size-3" />
+            )
           ) : undefined
         }
       />

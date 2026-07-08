@@ -12,6 +12,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import {
   favoriteEntityKey,
   useFavoritesData,
@@ -122,12 +123,11 @@ const FavoritesGroup = (props: {
           onClick={() => setExpanded(!expanded())}
         >
           <h1>{props.label}</h1>
-          <CaretDownIcon
-            class={cn(
-              'size-3 transition-transform duration-200',
-              !expanded() && 'rotate-180'
-            )}
-          />
+          {expanded() ? (
+            <CaretDownIcon class="size-3" />
+          ) : (
+            <CaretRightIcon class="size-3" />
+          )}
         </button>
       </header>
 
