@@ -169,12 +169,16 @@ where
     }
 
     async fn track_team_analytics_event(&self, event: TeamAnalyticsEvent) {
-        if let Err(error) = self.team_analytics.track_team_event(event).await {
-            tracing::error!(
-                error = ?error,
-                "failed to track team analytics event"
-            );
-        }
+        self.team_analytics
+            .track_team_event(event)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    "failed to track team analytics event"
+                );
+            })
+            .ok();
     }
 
     /// Gets the teams subscription id
