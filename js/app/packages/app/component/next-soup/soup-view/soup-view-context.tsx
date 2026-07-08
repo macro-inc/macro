@@ -394,7 +394,13 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const applyInboxThreadFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
+    if (!isNewInbox()) {
+      return {
+        ...state,
+        include: { ...state.include, channelThreadId: [NIL_UUID] },
+      };
+    }
+
     const id = userId();
     if (!id) return state;
     return {
