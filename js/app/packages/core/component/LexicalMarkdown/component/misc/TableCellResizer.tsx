@@ -16,6 +16,7 @@ import { getDOMCellFromTarget } from '@lexical/table';
 import { calculateZoomLevel } from '@lexical/utils';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
+import { createLayoutTick } from './createLayoutTick';
 import {
   $applyResizeDrag,
   $captureResizeDrag,
@@ -45,13 +46,7 @@ export function TableCellResizer() {
   // Cell whose border carries the handle: the hovered cell on pointer
   // devices, the touched cell during a touch drag.
   const [activeCellElem, setActiveCellElem] = createSignal<HTMLElement>();
-  // Bumped on scroll/resize/updates to recompute viewport-fixed positions.
-  // Void body matters: an update listener's return value is treated as a
-  // cleanup function by Lexical and called on the next update.
-  const [layoutTick, setLayoutTick] = createSignal(0);
-  const bumpLayout = () => {
-    setLayoutTick((t) => t + 1);
-  };
+  const { layoutTick, bumpLayout } = createLayoutTick();
 
   const startResize = (
     cellElem: HTMLElement,
@@ -229,11 +224,6 @@ export function TableCellResizer() {
 
   const removeUpdateListener = editor()?.registerUpdateListener(bumpLayout);
 
-  document.addEventListener('scroll', bumpLayout, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener('resize', bumpLayout);
   let cleanupWidthObserver = () => {};
   const widthObserverEditor = editor();
   if (widthObserverEditor) {
@@ -248,8 +238,6 @@ export function TableCellResizer() {
     removeUpdateListener?.();
     cleanupRoot?.();
     cleanupWidthObserver();
-    document.removeEventListener('scroll', bumpLayout, { capture: true });
-    window.removeEventListener('resize', bumpLayout);
   });
 
   const cellRect = createMemo(() => {

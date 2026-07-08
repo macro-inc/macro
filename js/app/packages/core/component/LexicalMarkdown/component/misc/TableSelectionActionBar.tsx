@@ -1,7 +1,7 @@
 /**
  * @file Floating cut/copy/clear bar shown over a table cell selection on
  * touch devices, where there is no keyboard shortcut or context menu to
- * reach the clipboard.
+ * reach the clipboard (aka mobile).
  */
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
@@ -37,8 +37,7 @@ import {
   Show,
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-
-false && floatWithElement;
+import { createLayoutTick } from './createLayoutTick';
 
 export function TableSelectionActionBar() {
   const mdData = mdStore.get;
@@ -46,9 +45,7 @@ export function TableSelectionActionBar() {
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
-  // Bumped on scroll/resize/updates to recompute viewport-fixed positions.
-  const [layoutTick, setLayoutTick] = createSignal(0);
-  const bumpLayout = () => setLayoutTick((t) => t + 1);
+  const { layoutTick, bumpLayout } = createLayoutTick();
 
   const trackSelection = createCallback(() => {
     const currentEditor = editor();
@@ -96,18 +93,10 @@ export function TableSelectionActionBar() {
     COMMAND_PRIORITY_LOW
   );
 
-  document.addEventListener('scroll', bumpLayout, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener('resize', bumpLayout);
-
   onCleanup(() => {
     removeSelectionListener?.();
     removeUpdateListener?.();
     removeBlurListener?.();
-    document.removeEventListener('scroll', bumpLayout, { capture: true });
-    window.removeEventListener('resize', bumpLayout);
   });
 
   // Bounding rect of the union of the anchor and focus cells; an invisible

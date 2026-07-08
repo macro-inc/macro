@@ -46,6 +46,7 @@ import {
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
+import { createLayoutTick } from './createLayoutTick';
 
 false && clickOutside;
 false && floatWithElement;
@@ -121,9 +122,7 @@ export function TableMoveHandle() {
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
-  // Bumped on scroll/resize/updates to recompute viewport-fixed positions.
-  const [layoutTick, setLayoutTick] = createSignal(0);
-  const bumpLayout = () => setLayoutTick((t) => t + 1);
+  const { layoutTick, bumpLayout } = createLayoutTick();
 
   const [dragging, setDragging] = createSignal(false);
   const [dropTarget, setDropTarget] = createSignal<DropTarget>();
@@ -201,19 +200,11 @@ export function TableMoveHandle() {
     COMMAND_PRIORITY_LOW
   );
 
-  document.addEventListener('scroll', bumpLayout, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener('resize', bumpLayout);
-
   onCleanup(() => {
     removeSelectionListener?.();
     removeUpdateListener?.();
     removeFocusListener?.();
     removeBlurListener?.();
-    document.removeEventListener('scroll', bumpLayout, { capture: true });
-    window.removeEventListener('resize', bumpLayout);
   });
 
   // Top-right corner of the union of the anchor and focus cells (opposite

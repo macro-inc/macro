@@ -229,7 +229,7 @@ export function FloatingFormatMenu(props: {
         <Layer depth={2}>
           <div
             ref={setMenuRef}
-            class="fixed top-0 left-0 z-highlight-menu bg-surface shadow-xl ring-1 ring-edge rounded-lg p-1 flex flex-row items-center gap-1"
+            class="fixed top-0 left-0 z-50 bg-surface shadow-xl ring-1 ring-edge rounded-lg p-1 flex flex-row items-center gap-1"
             use:floatWithSelection={{
               selection: domSelection(),
               reactiveOnContainer: editor.getRootElement(),

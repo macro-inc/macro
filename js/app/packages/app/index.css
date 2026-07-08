@@ -212,10 +212,6 @@
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
 
-  /* Text-selection format popup (`z-highlight-menu`). Above editor-local
-     overlays like table delete highlights (z-10) and handles (z-20/z-30),
-     below modals. */
-  --z-index-highlight-menu: 50;
   --z-index-modal-overlay: 100;
   --z-index-modal:         110;
   --z-index-modal-content: 120;

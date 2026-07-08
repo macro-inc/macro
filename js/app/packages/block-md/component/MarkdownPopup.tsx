@@ -666,7 +666,7 @@ export function MarkdownPopup(props: {
       <ScopedPortal scope="local">
         <div
           ref={setAnchorRef}
-          class="absolute pointer-events-none z-highlight-menu"
+          class="absolute pointer-events-none z-50"
           style={{
             left: `${anchorRefPosition().left}px`,
             top: `${anchorRefPosition().top}px`,
