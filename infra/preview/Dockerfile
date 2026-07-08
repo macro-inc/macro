@@ -9,8 +9,10 @@
 #   artifacts/  binaries/ (zigbuild output), frontend-dist/ (same-origin
 #               bundle), snapshots/ (baked init snapshot)
 #   bin/xtask   prebuilt orchestrator (release, x86_64 glibc)
-#   preload/    docker-save tar of every image the stack runs, loaded into the
-#               inner daemon at boot so nothing is pulled or built in the VM
+#   preload/    manifest of every image the stack runs (image ID -> local tag
+#               -> registry ref); the entrypoint pulls them from the app's Fly
+#               registry repo at boot, skipping whatever the machine's
+#               persistent layer store already has
 #
 # Fly machines are full microVMs, so an inner Docker daemon runs the same
 # compose topology as `just run_local` — the preview IS the local stack.

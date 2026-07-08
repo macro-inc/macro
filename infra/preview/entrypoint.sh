@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Boot for the Fly preview machine: start the inner Docker daemon, load the
-# baked images, bring the stack up from the baked artifacts, then idle while
-# the containers serve. Everything expensive (compile, bundle, init) happened
-# in CI — this script only restores and starts.
+# Boot for the Fly preview machine: start the inner Docker daemon, pull the
+# stack images from the app's registry repo, bring the stack up from the baked
+# artifacts, then idle while the containers serve. Everything expensive
+# (compile, bundle, init) happened in CI — this script only restores and
+# starts.
 set -euo pipefail
 
 log() { echo "[preview] $*"; }
@@ -20,37 +21,33 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-# The inner daemon's state is ephemeral (fresh on every machine create /
-# redeploy); suspend/resume keeps it, so this only runs on real boots.
-# Per-image tars, loaded in parallel: one monolithic tar made this a serial,
-# single-threaded untar+sha256 of ~6GB (observed 15+ minutes on shared
-# cores). dockerd serializes layer registration internally, so concurrent
-# loads are safe; shared layers settle to one copy. /var/lib/docker is a
-# persistent volume, so the manifest (image ID per tag) lets redeploys skip
-# every image that is already in the store — only changed images pay the
-# load.
+# Pull the stack images from the app's Fly registry repo (CI mirrored them
+# there at deploy time). /var/lib/docker is a persistent volume, so the
+# manifest (image ID per tag) lets redeploys skip every image already in the
+# store, and pulls dedup at the layer level — only layers that actually
+# changed cross the network. Suspend/resume never re-runs this; only real
+# boots do. REGISTRY_PULL_TOKEN is an app-scoped deploy token staged as a Fly
+# secret by the workflow.
 if [ -f /srv/macro/preload/manifest.txt ]; then
-  log "loading baked images (parallel, warm store aware)"
+  if [ -n "${REGISTRY_PULL_TOKEN:-}" ]; then
+    docker login registry.fly.io -u x --password-stdin <<<"$REGISTRY_PULL_TOKEN"
+  fi
+  log "pulling stack images (parallel, warm store aware)"
   t0=$(date +%s)
   pids=""
-  while read -r id tag tarfile; do
+  while read -r id tag ref; do
     have=$(docker image inspect -f '{{.Id}}' "$tag" 2>/dev/null || true)
     if [ "$have" = "$id" ]; then
-      log "already loaded: $tag"
+      log "already present: $tag"
       continue
     fi
-    docker load -i "/srv/macro/preload/images/$tarfile" &
+    (docker pull -q "$ref" && docker tag "$ref" "$tag" && docker rmi "$ref" >/dev/null) &
     pids="$pids $!"
   done < /srv/macro/preload/manifest.txt
   rc=0
   for pid in $pids; do wait "$pid" || rc=1; done
-  [ "$rc" = 0 ] || { log "docker load failed"; exit 1; }
-  log "images loaded in $(($(date +%s) - t0))s"
-elif [ -f /srv/macro/preload/images.tar ]; then
-  log "loading baked images"
-  t0=$(date +%s)
-  docker load -i /srv/macro/preload/images.tar
-  log "images loaded in $(($(date +%s) - t0))s"
+  [ "$rc" = 0 ] || { log "image pull failed"; exit 1; }
+  log "images pulled in $(($(date +%s) - t0))s"
 fi
 
 # With a DOPPLER_TOKEN (a config-scoped service token, injected as a Fly
@@ -63,6 +60,7 @@ if [ -n "${DOPPLER_TOKEN:-}" ]; then
 fi
 
 log "bringing the stack up (snapshot restore)"
+t0=$(date +%s)
 /srv/macro/bin/xtask stack up \
   "${doppler_args[@]}" \
   --no-build \
@@ -70,5 +68,6 @@ log "bringing the stack up (snapshot restore)"
   --frontend-dist /srv/macro/artifacts/frontend-dist \
   --json
 
+log "stack up took $(($(date +%s) - t0))s"
 log "stack ready — proxy serving on :8090"
 exec sleep infinity

@@ -2,12 +2,15 @@
 //! cleanup workflow that destroys the app when the PR closes.
 //!
 //! Opt-in via the `preview` label. The deploy job builds every artifact on the
-//! runner (service binaries, same-origin frontend bundle, init snapshot,
-//! image-preload tar), stages them into a self-contained VM image
-//! (`infra/preview/`), and deploys it as the per-PR Fly app `macro-pr-<N>` —
-//! which suspends when idle and wakes on request. Runtime secrets reach the
-//! machine as a config-scoped Doppler service token (`DOPPLER_PREVIEW_TOKEN` →
-//! Fly secret `DOPPLER_TOKEN`), which the stack's env layer pulls at boot.
+//! runner (service binaries, same-origin frontend bundle, init snapshot),
+//! mirrors every stack image into the per-PR app's Fly registry repo, stages
+//! the rest into a slim VM image (`infra/preview/`), and deploys it as the
+//! per-PR Fly app `macro-pr-<N>` — which suspends when idle and wakes on
+//! request. The machine pulls the stack images at boot (layer-level dedup
+//! against its persistent /var/lib/docker volume) instead of shipping them
+//! inside the VM image. Runtime secrets reach the machine as a config-scoped
+//! Doppler service token (`DOPPLER_PREVIEW_TOKEN` → Fly secret
+//! `DOPPLER_TOKEN`), which the stack's env layer pulls at boot.
 //!
 //! NOTE: never a required status check — previews are opt-in by design.
 
@@ -89,7 +92,7 @@ fn deploy() -> Job {
         // from nix/cargo — build them before the expensive toolchain setup so
         // a broken Dockerfile fails in ~2 minutes, not ~12. This is also the
         // ONLY thing that builds them now: the infra-only bake never starts
-        // the app layer, so the preload tar takes exactly what's built here.
+        // the app layer, so the registry mirror ships exactly what's built here.
         .add_step(Step::new("Build compose service images (fail fast)").run(
             "docker compose -p macro -f docker-compose.yml build \
              search sync_service websocket_service lexical_service ai_editing_worker",
@@ -130,11 +133,11 @@ fn deploy() -> Job {
         )
         .add_step(bake_snapshot())
         .add_step(dump_stack_diagnostics())
-        .add_step(bake_preload_tar())
         .add_step(stage_context())
         .add_step(setup_flyctl())
         .add_step(deploy_to_fly())
         .add_step(dump_fly_diagnostics())
+        .add_step(dump_boot_timings())
         .add_step(comment_preview_url())
 }
 
@@ -148,6 +151,15 @@ fn dump_fly_diagnostics() -> Step<Run> {
             flyctl logs --app "$APP_NAME" --no-tail || true
         "#})
         .if_condition(Expression::new("failure()"))
+}
+
+/// The entrypoint logs how long each boot phase took (image pulls, stack up),
+/// but Fly's log retention is short and nobody looks at a healthy machine —
+/// surface the `[preview]` lines in CI so every deploy records its boot
+/// breakdown next to the deploy timings.
+fn dump_boot_timings() -> Step<Run> {
+    Step::new("Dump boot timings")
+        .run(r#"flyctl logs --app "$APP_NAME" --no-tail | grep -E '\[preview\]|✓' || true"#)
 }
 
 /// A cold `stack up --infra-only` on the runner runs the real init (migrate,
@@ -179,43 +191,6 @@ fn dump_stack_diagnostics() -> Step<Run> {
             done
         "#})
         .if_condition(Expression::new("failure()"))
-}
-
-fn bake_preload_tar() -> Step<Run> {
-    Step::new("Bake image preload tars").run(indoc::indoc! {r#"
-        set -euo pipefail
-        mkdir -p preview-ctx/preload/images
-        docker pull alpine:3
-        images=$(docker compose -p macro \
-          -f docker-compose.yml \
-          -f infra/local/generated/macro/docker-compose.override.yml \
-          --env-file infra/local/generated/macro/local.generated.env \
-          config --images | sort -u)
-        echo "baking images:" $images
-        # The infra-only bake never starts the app layer, so images only it
-        # runs (proxy, mailpit) haven't been pulled yet.
-        for img in $images; do
-          docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
-        done
-        # One tar per image, saved concurrently: a single 6GB tar made the
-        # VM's boot-time docker load serial and single-threaded (observed
-        # 15+ minutes on shared cores) — per-image tars let the entrypoint
-        # load them in parallel. Shared base layers get duplicated across
-        # tars; that costs a little disk, not boot time. The manifest maps
-        # tag -> image ID -> tar so the entrypoint can skip images already
-        # present in the machine's persistent /var/lib/docker volume.
-        : > preview-ctx/preload/manifest.txt
-        pids=""
-        for img in $images alpine:3; do
-          tarname="$(echo "$img" | tr '/:' '__').tar"
-          echo "$(docker image inspect -f '{{.Id}}' "$img") $img $tarname" \
-            >> preview-ctx/preload/manifest.txt
-          docker save -o "preview-ctx/preload/images/$tarname" "$img" &
-          pids="$pids $!"
-        done
-        for pid in $pids; do wait "$pid"; done
-        ls -lh preview-ctx/preload/images/
-    "#})
 }
 
 fn stage_context() -> Step<Run> {
@@ -263,7 +238,8 @@ fn setup_flyctl() -> Step<Use> {
 
 /// Create the app if needed, stage the Doppler service token as the machine's
 /// `DOPPLER_TOKEN` (the stack's env layer pulls preview secrets with it at
-/// boot), then push the staged image and deploy.
+/// boot), mirror the stack images into the app's registry repo, then push the
+/// slim VM image and deploy.
 fn deploy_to_fly() -> Step<Run> {
     Step::new("Deploy to Fly")
         .run(indoc::indoc! {r#"
@@ -279,7 +255,14 @@ fn deploy_to_fly() -> Step<Run> {
             # `|| true`: the create fails once the app exists; real failures
             # (auth, org) surface on the very next flyctl call.
             flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
-            flyctl secrets set --app "$APP_NAME" --stage "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN"
+            # An app-scoped deploy token so the machine's inner dockerd can
+            # pull the mirrored stack images from this app's registry repo —
+            # and nothing else. Minted fresh each deploy; expiry bounds the
+            # blast radius of a leak (PR code can read machine secrets).
+            pull_token=$(flyctl tokens create deploy --app "$APP_NAME" --expiry 168h)
+            flyctl secrets set --app "$APP_NAME" --stage \
+              "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN" \
+              "REGISTRY_PULL_TOKEN=$pull_token"
             # The volume behind fly.toml's /var/lib/docker mount (see the
             # comment there). `volumes create` is not idempotent — guard it.
             if ! flyctl volumes list --app "$APP_NAME" --json \
@@ -294,11 +277,48 @@ fn deploy_to_fly() -> Step<Run> {
                   [ -z "$id" ] || flyctl machine destroy "$id" --app "$APP_NAME" --force || true
                 done
             flyctl auth docker
-            image="registry.fly.io/$APP_NAME:${{ github.sha }}"
+            registry="registry.fly.io/$APP_NAME"
+            # Mirror every stack image into the app's registry repo instead of
+            # baking docker-save tars into the VM image (which made every
+            # deploy re-ship ~5GB the machine's volume already had). Pushes
+            # dedup at the layer level against the repo, so a redeploy only
+            # uploads layers that actually changed; the entrypoint pulls with
+            # the same dedup against the machine's persistent layer store. The
+            # manifest maps image ID -> local tag -> registry ref so boots can
+            # skip images already present. alpine:3 rides along for the
+            # snapshot-restore helper container.
+            images=$(docker compose -p macro \
+              -f docker-compose.yml \
+              -f infra/local/generated/macro/docker-compose.override.yml \
+              --env-file infra/local/generated/macro/local.generated.env \
+              config --images | sort -u)
+            echo "mirroring images:" $images
+            docker pull alpine:3
+            mkdir -p preview-ctx/preload
+            : > preview-ctx/preload/manifest.txt
+            for img in $images alpine:3; do
+              # The infra-only bake never starts the app layer, so images only
+              # it runs (proxy, mailpit) haven't been pulled yet.
+              docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
+              ref="$registry:img-$(echo "$img" | tr '/:' '__')"
+              docker tag "$img" "$ref"
+              echo "$(docker image inspect -f '{{.Id}}' "$img") $img $ref" \
+                >> preview-ctx/preload/manifest.txt
+            done
+            # The Fly registry occasionally aborts large uploads ("s3aws:
+            # append to zero-size path unsupported") — retry; layers that made
+            # it are reused. Four pushes at a time keeps the first (cold) push
+            # moving without saturating the registry.
+            awk '{print $3}' preview-ctx/preload/manifest.txt \
+              | xargs -P 4 -I {} sh -c '
+                  for _ in 1 2 3; do
+                    docker push "{}" && exit 0
+                    echo "push of {} failed, retrying" >&2
+                    sleep 15
+                  done
+                  exit 1'
+            image="$registry:${{ github.sha }}"
             docker build -t "$image" preview-ctx
-            # The preload layer is multi-GB and the Fly registry occasionally
-            # aborts such uploads ("s3aws: append to zero-size path
-            # unsupported") — retry; layers that made it are reused.
             pushed=""
             for _ in 1 2 3; do
               if docker push "$image"; then pushed=1; break; fi
@@ -316,8 +336,8 @@ fn deploy_to_fly() -> Step<Run> {
               sleep 15
             done) &
             keepalive=$!
-            # First boot does real work before 8090 opens (docker load of the
-            # preload tar, snapshot restore, compose up, FusionAuth's JVM) —
+            # First boot does real work before 8090 opens (pulling the stack
+            # images, snapshot restore, compose up, FusionAuth's JVM) —
             # give the health check more runway than flyctl's default wait.
             rc=0
             flyctl deploy --app "$APP_NAME" \

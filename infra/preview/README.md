@@ -19,11 +19,12 @@ is baked in CI** and the machine only restores:
 | Service binaries (`cargo x zigbuild`) | bind-mounted into the runtime image |
 | Frontend bundle (`same-origin` build) | served statically by the instance Caddy |
 | Init snapshot (migrations + FusionAuth kickstart + search indices) | volumes restored, init skipped |
-| Every Docker image (`docker save` preload tar) | `docker load` — nothing pulled or built |
+| Every Docker image, mirrored to the app's Fly registry repo | `docker pull` at boot — layer-dedup'd against the machine's persistent layer store, nothing built |
 
-Boot on a fresh machine ≈ image load + snapshot restore + JVM startup
-(a couple of minutes); wake from suspend ≈ seconds. Pushes to the PR redeploy
-the app (a new machine, same URL).
+Boot on a fresh machine ≈ image pulls + snapshot restore + JVM startup
+(a couple of minutes); a redeploy pulls only layers that changed; wake from
+suspend ≈ seconds. Pushes to the PR redeploy the app (a new machine, same
+URL).
 
 The whole product sits behind the stack's single-origin Caddy proxy
 (`:8090`), so one `internal_port` covers the frontend, APIs, WebSockets, and
@@ -60,19 +61,23 @@ config its token is scoped to.
 ## Security posture
 
 - Previews only build from same-repo branches (the workflow refuses forks).
-- No real AWS: S3/SQS/DynamoDB are LocalStack, email is Mailpit. The only
+- No real AWS: S3/SQS/DynamoDB are LocalStack, email is Mailpit. The
   cloud-reachable credentials on a machine are the preview Doppler config's
-  contents — scope that config accordingly (assume PR code can read it).
+  contents — scope that config accordingly (assume PR code can read it) — and
+  `REGISTRY_PULL_TOKEN`, a deploy token scoped to this one preview app (it can
+  pull the app's registry repo and redeploy the app, nothing else; minted per
+  deploy with a 7-day expiry).
 - URLs are public. Anyone with the link can use the preview (and read its
   Mailpit). Don't put sensitive data in one. Edge auth (oauth2-proxy in front
   of Caddy) is a planned hardening step.
 
 ## Known costs & future optimizations
 
-- The VM image is large (several GB — it embeds the preload tar), so deploys
-  push more bytes than a typical app. If it hurts: swap the preload tar for a
-  Fly volume that caches `/var/lib/docker` across deploys, or pull public
-  images at boot.
+- The stack images are mirrored into the per-PR app's registry repo, so the
+  first deploy of a PR pushes (and its first boot pulls) the full set; after
+  that both sides move only changed layers. There is no cross-PR sharing —
+  a shared registry (GHCR/Namespace) would fix that at the cost of new
+  org-level credentials.
 - The aux images (sync/websocket/lexical) rebuild in CI on every preview
   deploy. Runner-level Docker layer caching covers most of it.
 - `cpus = 8, memory = 16gb` (shared) is a deliberate over-provision; measure
