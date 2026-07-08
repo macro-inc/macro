@@ -498,6 +498,9 @@
           "400": {
             "description": "Invalid request or entity type"
           },
+          "403": {
+            "description": "No edit access to the entity"
+          },
           "404": {
             "description": "Entity or property not found"
           },
@@ -648,7 +651,7 @@
             "description": "Entity property removed successfully"
           },
           "403": {
-            "description": "Property is required and cannot be removed"
+            "description": "Property is required and cannot be removed, or no edit access"
           },
           "404": {
             "description": "Entity property not found"

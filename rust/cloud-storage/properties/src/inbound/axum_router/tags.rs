@@ -3,7 +3,6 @@
 use axum::{
     Json,
     extract::State,
-    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
@@ -13,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use super::{PropertiesRouterState, PropertyTeamExtractor, caller_team_id, properties_err_status};
+use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{self as properties_model, PropertyDefinitionOwner};
+use crate::domain::model as properties_model;
 use crate::domain::service::PropertiesService;
 
 /// Which owner a tag set belongs to.
@@ -33,6 +32,15 @@ impl From<properties_model::TagScope> for TagScope {
         match scope {
             properties_model::TagScope::User => TagScope::User,
             properties_model::TagScope::Team => TagScope::Team,
+        }
+    }
+}
+
+impl From<TagScope> for properties_model::TagScope {
+    fn from(scope: TagScope) -> Self {
+        match scope {
+            TagScope::User => properties_model::TagScope::User,
+            TagScope::Team => properties_model::TagScope::Team,
         }
     }
 }
@@ -67,15 +75,12 @@ pub struct EnsureTagSetRequest {
 pub enum TagsError {
     #[error(transparent)]
     Properties(#[from] PropertiesErr),
-    #[error("You must be on a team to use team tags")]
-    TeamMembershipRequired,
 }
 
 impl IntoResponse for TagsError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             TagsError::Properties(e) => properties_err_status(e),
-            TagsError::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 
         if status_code.is_server_error() {
@@ -108,7 +113,7 @@ pub async fn list_tags<S: PropertiesService, A: EntityAccessService>(
 ) -> Result<Json<Vec<TagSetResponse>>, TagsError> {
     let sets = state
         .properties_service
-        .list_tag_sets(&user, caller_team_id(&team))
+        .list_tag_sets(&user, team.entity_access_receipt.as_ref())
         .await?;
 
     Ok(Json(sets.into_iter().map(Into::into).collect()))
@@ -137,15 +142,14 @@ pub async fn ensure_tag_set<S: PropertiesService, A: EntityAccessService>(
     team: PropertyTeamExtractor<A>,
     Json(request): Json<EnsureTagSetRequest>,
 ) -> Result<Json<TagSetResponse>, TagsError> {
-    let owner = match request.scope {
-        TagScope::User => PropertyDefinitionOwner::User(&user),
-        TagScope::Team => {
-            let team_id = caller_team_id(&team).ok_or(TagsError::TeamMembershipRequired)?;
-            PropertyDefinitionOwner::Team(team_id)
-        }
-    };
-
-    let set = state.properties_service.ensure_tag_set(owner).await?;
+    let set = state
+        .properties_service
+        .ensure_tag_set(
+            &user,
+            team.entity_access_receipt.as_ref(),
+            request.scope.into(),
+        )
+        .await?;
 
     Ok(Json(set.into()))
 }

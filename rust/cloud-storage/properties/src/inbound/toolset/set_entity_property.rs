@@ -214,6 +214,16 @@ where
         let entity_type = EntityType::from(self.entity_type);
         let set_value = self.to_set_property_value();
 
+        // Prove the requesting user can edit the entity before writing anything.
+        let access = service_context
+            .service
+            .mint_edit_receipt(&request_context.user_id, &self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have edit access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
+
         // Delta mode: add/remove specific options atomically so concurrent
         // edits to the same multi-select value are never overwritten.
         let add_option_ids = self.add_option_ids.as_deref().unwrap_or_default();
@@ -231,13 +241,7 @@ where
             for option_id in add_option_ids {
                 service_context
                     .service
-                    .add_entity_property_option(
-                        &request_context.user_id,
-                        &self.entity_id,
-                        entity_type,
-                        self.property_definition_id,
-                        *option_id,
-                    )
+                    .add_entity_property_option(&access, self.property_definition_id, *option_id)
                     .await
                     .map_err(|e| ToolCallError {
                         description: format!("Failed to add option {option_id}: {e}"),
@@ -248,9 +252,7 @@ where
                 service_context
                     .service
                     .remove_entity_property_option(
-                        &request_context.user_id,
-                        &self.entity_id,
-                        entity_type,
+                        &access,
                         self.property_definition_id,
                         *option_id,
                     )
@@ -269,13 +271,7 @@ where
 
         service_context
             .service
-            .set_entity_property(
-                &request_context.user_id,
-                &self.entity_id,
-                entity_type,
-                self.property_definition_id,
-                set_value,
-            )
+            .set_entity_property(&access, self.property_definition_id, set_value)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to set property: {e}"),

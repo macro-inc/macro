@@ -5822,6 +5822,7 @@ dependencies = [
  "serde_json",
  "soup",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

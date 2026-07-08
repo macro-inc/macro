@@ -176,14 +176,13 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
 
+        let access = self
+            .properties
+            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+            .await?;
+
         self.properties
-            .set_entity_property(
-                &user_id,
-                entity_id,
-                models_properties::EntityType::Task,
-                property_definition_id,
-                value,
-            )
+            .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(Into::into)
     }
