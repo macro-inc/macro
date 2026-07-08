@@ -199,12 +199,11 @@ where
 
         let entity_type = EntityType::from(self.entity_type);
         let set_value = self.to_set_property_value();
-        let user_id: &str = request_context.user_id.0.as_ref();
 
         service_context
             .service
             .set_entity_property(
-                user_id,
+                &request_context.user_id,
                 &self.entity_id,
                 entity_type,
                 self.property_definition_id,

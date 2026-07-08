@@ -94,7 +94,6 @@ models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification" }
 prompt = { path = "../prompt" }
-properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",

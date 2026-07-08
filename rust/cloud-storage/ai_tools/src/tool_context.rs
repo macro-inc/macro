@@ -224,9 +224,11 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
         self.properties
             .set_entity_property(
-                user_id,
+                &user_id,
                 entity_id,
                 models_properties::EntityType::Task,
                 property_definition_id,
@@ -522,15 +524,11 @@ pub struct NoOpNotificationService;
 impl properties::NotificationService for NoOpNotificationService {
     type Err = anyhow::Error;
 
-    async fn send_notification<'a>(
+    async fn send_task_assigned<'a>(
         &self,
-        _message: notification::domain::models::SendNotificationRequest<
-            'a,
-            model_notifications::TaskAssignedMetadata,
-            notification::domain::models::apple::PushNotificationData,
-        >,
-    ) -> Result<uuid::Uuid, Self::Err> {
-        Ok(uuid::Uuid::nil())
+        _notification: properties::domain::model::TaskAssignedNotification<'a>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
     }
 }
 

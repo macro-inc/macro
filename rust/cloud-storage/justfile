@@ -70,7 +70,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./properties_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./macro_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_refresh_handler/.env

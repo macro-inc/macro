@@ -1,6 +1,8 @@
 //! Domain models for properties.
 
-use models_properties::service::property_option::PropertyOptionValue;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType};
 use uuid::Uuid;
@@ -49,4 +51,72 @@ pub struct PropertyOptionInfo {
     pub display_order: i32,
     /// The option's value.
     pub value: PropertyOptionValue,
+}
+
+/// The owner of a user- or team-created property definition. Encodes the
+/// "exactly one of user / team" invariant in the type, so neither a both-owners
+/// nor a no-owner row is representable. System properties are not created here.
+#[derive(Debug, Clone, Copy)]
+pub enum PropertyDefinitionOwner<'a> {
+    /// Owned by a single user.
+    User(&'a MacroUserIdStr<'a>),
+    /// Owned by a team.
+    Team(Uuid),
+}
+
+impl<'a> PropertyDefinitionOwner<'a> {
+    /// Split into the nullable (team_id, user_id) columns the row stores.
+    pub fn into_ids(self) -> (Option<Uuid>, Option<&'a MacroUserIdStr<'a>>) {
+        match self {
+            PropertyDefinitionOwner::User(user_id) => (None, Some(user_id)),
+            PropertyDefinitionOwner::Team(team_id) => (Some(team_id), None),
+        }
+    }
+}
+
+/// Which owner a tag set belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagScope {
+    /// The caller's personal tag set.
+    User,
+    /// The caller's team tag set.
+    Team,
+}
+
+/// A tag set the caller can use. `definition` is `None` until the set is
+/// provisioned (on first label create), in which case `options` is empty.
+#[derive(Debug, Clone)]
+pub struct TagSet {
+    /// The owner scope of the tag set.
+    pub scope: TagScope,
+    /// The tag property definition, if provisioned.
+    pub definition: Option<PropertyDefinition>,
+    /// The tag options (labels) in the set.
+    pub options: Vec<PropertyOption>,
+}
+
+/// Outcome of an in-place property option update.
+#[derive(Debug, Clone)]
+pub enum UpdatePropertyOptionOutcome {
+    /// The option was updated.
+    Updated(PropertyOption),
+    /// No option with the given id exists.
+    NotFound,
+    /// Another option on the same property already has the requested value.
+    DuplicateValue,
+}
+
+/// A task-assignment notification expressed in domain terms.
+///
+/// Outbound adapters enrich this (task name, sender profile picture) and
+/// translate it to the concrete notification infrastructure, fanning out one
+/// notification per recipient.
+#[derive(Debug, Clone)]
+pub struct TaskAssignedNotification<'a> {
+    /// The task the recipients were assigned to.
+    pub task_id: Uuid,
+    /// The user who assigned the task.
+    pub assigned_by: MacroUserIdStr<'a>,
+    /// The newly assigned users to notify.
+    pub recipient_ids: Vec<MacroUserIdStr<'a>>,
 }

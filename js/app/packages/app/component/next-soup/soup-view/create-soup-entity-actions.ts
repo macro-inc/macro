@@ -25,6 +25,7 @@ import {
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
   makeMoveToProjectAction,
+  makeRemoveFromProjectAction,
   makeRenameAction,
   makeShareAction,
 } from '../actions';
@@ -56,8 +57,19 @@ type BuildActionGroups = (
   context: {
     activeListView: string;
     activeTab: string | undefined;
+    /** Set when the list is a folder's contents (project block view) */
+    viewedProjectId?: string;
   }
 ) => SoupEntityActionGroup[];
+
+/** The folder whose contents the split is showing, if any. */
+export const viewedProjectIdFromContent = (content: {
+  type: string;
+  id: string;
+}): string | undefined =>
+  content.type === 'project' && content.id !== 'root' && content.id !== 'trash'
+    ? content.id
+    : undefined;
 
 export function createSoupEntityActions(): {
   buildActionGroups: BuildActionGroups;
@@ -84,6 +96,7 @@ export function createSoupEntityActions(): {
   const copyAction = makeCopyAction();
   const favoriteAction = makeFavoriteAction();
   const moveToProjectAction = makeMoveToProjectAction();
+  const removeFromProjectAction = makeRemoveFromProjectAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
@@ -100,7 +113,7 @@ export function createSoupEntityActions(): {
   const buildActionGroups: BuildActionGroups = (
     soup,
     entities,
-    { activeTab, activeListView }
+    { activeTab, activeListView, viewedProjectId }
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
@@ -248,6 +261,14 @@ export function createSoupEntityActions(): {
         id: 'move-to-folder',
         label: 'Move to folder',
         onClick: handle(moveToProjectAction.executeWithSoup),
+      });
+    }
+
+    if (viewedProjectId && canExecuteAll(removeFromProjectAction.canExecute)) {
+      middleItems.push({
+        id: 'remove-from-folder',
+        label: 'Remove from folder',
+        onClick: handle(removeFromProjectAction.executeWithSoup),
       });
     }
 

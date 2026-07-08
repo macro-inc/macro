@@ -55,7 +55,7 @@ pub(in crate::api::search) async fn enrich_documents(
         .collect();
 
     let properties_map = if !entity_refs.is_empty() {
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
             &ctx.db,
             &entity_refs,
         )

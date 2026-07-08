@@ -344,14 +344,14 @@ impl BackfillSource for PgBackfillSource {
             .map_err(|e| BackfillError::Source(anyhow::Error::new(e)))?;
 
         let entity_ids =
-            properties_db_client::entity_properties::get::get_entity_ids_with_properties(
+            properties::outbound::entity_properties_get_query::get_entity_ids_with_properties(
                 &self.db,
                 entity_type,
                 PROPERTIES_PAGE_SIZE as i64,
                 offset as i64,
             )
             .await
-            .map_err(|e| BackfillError::Source(e.into()))?;
+            .map_err(BackfillError::Source)?;
 
         let rows_consumed = entity_ids.len();
         let messages: Vec<SearchQueueMessage> = entity_ids

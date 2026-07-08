@@ -958,6 +958,61 @@ impl<
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn associate_installations_for_github_user(
+        &self,
+        github_user_id: &str,
+    ) -> Result<(), GithubError> {
+        let installation_ids = self
+            .repo
+            .get_installation_ids_by_installer(github_user_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        if installation_ids.is_empty() {
+            tracing::debug!(github_user_id, "no installations recorded for github user");
+            return Ok(());
+        }
+
+        let sources = self.sources_for_github_user(github_user_id).await?;
+        if sources.is_empty() {
+            tracing::debug!(
+                github_user_id,
+                "no macro sources found for github user, skipping installation association"
+            );
+            return Ok(());
+        }
+
+        for installation_id in installation_ids {
+            let installation_id: u64 = match installation_id.parse() {
+                Ok(id) => id,
+                Err(error) => {
+                    tracing::error!(
+                        error=?error,
+                        installation_id,
+                        "stored installation id is not a u64"
+                    );
+                    continue;
+                }
+            };
+
+            // Keep going on failure so one broken installation doesn't block
+            // associating the rest.
+            self.associate_installation_with_sources(installation_id, &sources)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error=?error,
+                        installation_id,
+                        "failed to associate installation with sources"
+                    );
+                })
+                .ok();
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn generate_installation_access_token(
         &self,
         installation_id: u64,

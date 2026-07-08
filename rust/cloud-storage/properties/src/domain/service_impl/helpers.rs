@@ -5,7 +5,7 @@ use models_properties::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-/// Extract option IDs from a PropertyValue (matches properties_db_client pattern).
+/// Extract option IDs from a PropertyValue.
 pub fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> Vec<Uuid> {
     match value {
         Some(PropertyValue::SelectOption(ids)) => ids.clone(),

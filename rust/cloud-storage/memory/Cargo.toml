@@ -42,7 +42,6 @@ frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 notification = { path = "../notification", features = ["ai_tool"] }
-properties = { path = "../properties" }
 readonly_pool = { path = "../readonly_pool" }
 search_service_client = { path = "../search_service_client" }
 soup = { path = "../soup", features = ["all"] }

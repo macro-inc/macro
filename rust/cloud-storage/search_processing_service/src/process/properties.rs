@@ -3,7 +3,7 @@ use std::str::FromStr;
 use anyhow::Context;
 use models_properties::EntityType;
 use opensearch_client::{OpensearchClient, upsert::properties::IndexedProperty};
-use properties_db_client::entity_properties::get::{
+use properties::outbound::entity_properties_get_query::{
     IndexedEntityProperty, get_entity_properties_for_index,
 };
 use sqs_client::search::document::DocumentPropertiesUpdate;

@@ -308,9 +308,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
-    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
+    let notification_service = NotificationServiceImpl::new(
+        SqsNotificationIngress {
+            queue: ingress_queue,
+        },
+        db.clone(),
+    );
     let properties_service = Arc::new(
         PropertiesServiceImpl::new(
             PropertiesPgRepo::new(db.clone()),
