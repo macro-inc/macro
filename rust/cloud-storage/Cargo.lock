@@ -3288,7 +3288,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_properties",
- "properties_db_client",
+ "properties",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",

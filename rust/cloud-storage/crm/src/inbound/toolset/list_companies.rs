@@ -4,6 +4,8 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{models::TeamRole, ports::EntityAccessService};
+use models_properties::EntityType as PropertyEntityType;
+use properties::{EntityPropertiesKey, PropertiesService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use system_properties::SystemPropertyKey;
@@ -105,17 +107,18 @@ pub struct ListCompanies {
 }
 
 #[async_trait]
-impl<CSvc, ESvc> AsyncTool<CrmToolContext<CSvc, ESvc>> for ListCompanies
+impl<CSvc, ESvc, PSvc> AsyncTool<CrmToolContext<CSvc, ESvc, PSvc>> for ListCompanies
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     type Output = ListCompaniesResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CrmToolContext<CSvc, ESvc>>,
+        service_context: ServiceContext<CrmToolContext<CSvc, ESvc, PSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List CRM companies");
@@ -184,7 +187,8 @@ where
             companies.retain(|c| matches_search(c, &needle));
         }
 
-        let stage_catalog = load_stage_option_catalog(&service_context.pool, team_id).await?;
+        let stage_catalog =
+            load_stage_option_catalog(&*service_context.properties, team_id).await?;
 
         // Resolve the stage filter to option ids up front so an unknown
         // stage fails with an actionable error instead of an empty list.
@@ -221,13 +225,9 @@ where
             SystemPropertyKey::REVENUE_UUID,
         ];
         property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
-        let properties_map =
-            properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
-                &service_context.pool,
-                &entity_refs,
-                &property_ids,
-                None,
-            )
+        let properties_map = service_context
+            .properties
+            .get_bulk_entity_properties(entity_refs, property_ids)
             .await
             .map_err(|e| ToolCallError {
                 description: "failed to load company properties".to_string(),
@@ -237,8 +237,12 @@ where
         let mut items: Vec<CompanyListItem> = Vec::new();
         let mut total_matching = 0usize;
         for company in companies {
+            let props_key = EntityPropertiesKey {
+                entity_id: company.company.id.to_string(),
+                entity_type: PropertyEntityType::Company,
+            };
             let props = properties_map
-                .get(&company.company.id.to_string())
+                .get(&props_key)
                 .map(Vec::as_slice)
                 .unwrap_or(&[]);
             let crm_props = extract_company_crm_props(props, &stage_catalog);

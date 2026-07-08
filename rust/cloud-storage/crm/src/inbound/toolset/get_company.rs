@@ -10,6 +10,7 @@ use entity_access::domain::{
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::{DataType, EntityType as PropertyEntityType};
+use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -132,17 +133,18 @@ pub struct GetCompany {
 }
 
 #[async_trait]
-impl<CSvc, ESvc> AsyncTool<CrmToolContext<CSvc, ESvc>> for GetCompany
+impl<CSvc, ESvc, PSvc> AsyncTool<CrmToolContext<CSvc, ESvc, PSvc>> for GetCompany
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     type Output = GetCompanyResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, company_id=%self.company_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CrmToolContext<CSvc, ESvc>>,
+        service_context: ServiceContext<CrmToolContext<CSvc, ESvc, PSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Get CRM company");
@@ -200,19 +202,17 @@ where
             .map_err(crm_error)?
             .ok_or_else(|| crm_error(CrmError::CompanyNotFoundForTeam))?;
 
-        let properties =
-            properties_db_client::entity_properties::get::get_entity_properties_values(
-                &service_context.pool,
-                &company_id,
-                PropertyEntityType::Company,
-            )
+        let properties = service_context
+            .properties
+            .get_entity_properties_with_definitions(&company_id, PropertyEntityType::Company)
             .await
             .map_err(|e| ToolCallError {
                 description: "failed to load company properties".to_string(),
                 internal_error: e.into(),
             })?;
 
-        let stage_catalog = load_stage_option_catalog(&service_context.pool, team_id).await?;
+        let stage_catalog =
+            load_stage_option_catalog(&*service_context.properties, team_id).await?;
         let crm_props = extract_company_crm_props(&properties, &stage_catalog);
 
         let name = record.name.clone();

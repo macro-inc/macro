@@ -9,9 +9,8 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:models_properties",
-  "dep:properties_db_client",
+  "dep:properties",
   "dep:schemars",
-  "dep:sqlx",
   "dep:system_properties",
   "entity_access/ports",
   "ports",
@@ -49,7 +48,9 @@ entity_access = { path = "../entity_access", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 models_properties = { path = "../models_properties", optional = true }
-properties_db_client = { path = "../properties_db_client", optional = true }
+properties = { path = "../properties", default-features = false, features = [
+  "ports",
+], optional = true }
 schemars = { workspace = true, optional = true }
 system_properties = { path = "../system_properties", optional = true }
 

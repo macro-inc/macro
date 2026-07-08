@@ -127,20 +127,25 @@ pub fn build_channel_tool_context_with_dispatcher(
 }
 
 /// Type alias for the CRM AI tool context.
-pub type ToolCrmToolContext = CrmToolContext<ToolCrmService, ToolEntityAccessService>;
+pub type ToolCrmToolContext =
+    CrmToolContext<ToolCrmService, ToolEntityAccessService, ToolPropertiesService>;
 
 /// Build the CRM AI tool context from a Postgres pool.
 pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
-    CrmToolContext::new(
-        crm::domain::service::CrmServiceImpl::new(
-            crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
-            crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-        ),
+    let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
-        pool,
-    )
+    );
+    let properties = build_properties_service(pool.clone(), entity_access_service.clone());
+    CrmToolContext {
+        service: Arc::new(crm::domain::service::CrmServiceImpl::new(
+            crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+            crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+        )),
+        entity_access_service,
+        properties,
+    }
 }
 
 /// Type alias for the team member listing service used by AI tools.

@@ -23,6 +23,7 @@ use models_properties::service::entity_property_with_definition::EntityPropertyW
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityType as PropertyEntityType};
+use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::Serialize;
 use system_properties::{StageOption, SystemPropertyKey};
@@ -34,59 +35,64 @@ pub use get_company::{GetCompany, GetCompanyResponse};
 pub use list_companies::{ListCompanies, ListCompaniesResponse};
 
 /// Service context for CRM AI tools.
-pub struct CrmToolContext<CSvc, ESvc>
+pub struct CrmToolContext<CSvc, ESvc, PSvc>
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     /// The CRM service used to read company records.
     pub service: Arc<CSvc>,
     /// The entity access service used to resolve the caller's team
     /// membership and CRM entity permissions.
     pub entity_access_service: Arc<ESvc>,
-    /// Postgres pool used to read company property values (Stage /
-    /// Owner / Revenue plus custom properties) via `properties_db_client`.
-    pub pool: sqlx::PgPool,
+    /// The properties domain service used to read company property values
+    /// (Stage / Owner / Revenue plus custom properties) and the team's
+    /// property definitions.
+    pub properties: Arc<PSvc>,
 }
 
-impl<CSvc, ESvc> Clone for CrmToolContext<CSvc, ESvc>
+impl<CSvc, ESvc, PSvc> Clone for CrmToolContext<CSvc, ESvc, PSvc>
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
-            pool: self.pool.clone(),
+            properties: self.properties.clone(),
         }
     }
 }
 
-impl<CSvc, ESvc> CrmToolContext<CSvc, ESvc>
+impl<CSvc, ESvc, PSvc> CrmToolContext<CSvc, ESvc, PSvc>
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     /// Create a new CRM tool context.
-    pub fn new(service: CSvc, entity_access_service: ESvc, pool: sqlx::PgPool) -> Self {
+    pub fn new(service: CSvc, entity_access_service: ESvc, properties: Arc<PSvc>) -> Self {
         Self {
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
-            pool,
+            properties,
         }
     }
 }
 
 /// Create the CRM toolset.
-pub fn crm_toolset<CSvc, ESvc>() -> AsyncToolCollection<CrmToolContext<CSvc, ESvc>>
+pub fn crm_toolset<CSvc, ESvc, PSvc>() -> AsyncToolCollection<CrmToolContext<CSvc, ESvc, PSvc>>
 where
     CSvc: CrmService,
     ESvc: EntityAccessService,
+    PSvc: PropertiesService,
 {
     AsyncToolCollection::new()
-        .add_tool::<ListCompanies, CrmToolContext<CSvc, ESvc>>()
-        .add_tool::<GetCompany, CrmToolContext<CSvc, ESvc>>()
+        .add_tool::<ListCompanies, CrmToolContext<CSvc, ESvc, PSvc>>()
+        .add_tool::<GetCompany, CrmToolContext<CSvc, ESvc, PSvc>>()
 }
 
 /// A company's pipeline stage: the select option id currently set plus its
@@ -166,21 +172,20 @@ impl StageOptionCatalog {
 /// Load the stage option catalog for `team_id`: options of the system
 /// Stage definition (id `00000001-0000-0000-0000-000000000010`) plus any
 /// team-scoped select definition named "Stage".
-pub(crate) async fn load_stage_option_catalog(
-    pool: &sqlx::PgPool,
+pub(crate) async fn load_stage_option_catalog<PSvc>(
+    properties: &PSvc,
     team_id: Uuid,
-) -> Result<StageOptionCatalog, ToolCallError> {
-    let defs = properties_db_client::property_definitions::get::get_properties_with_options(
-        pool,
-        Some(team_id),
-        None,
-        true,
-    )
-    .await
-    .map_err(|e| ToolCallError {
-        description: "failed to load the team's stage options".to_string(),
-        internal_error: e.into(),
-    })?;
+) -> Result<StageOptionCatalog, ToolCallError>
+where
+    PSvc: PropertiesService,
+{
+    let defs = properties
+        .list_property_definitions_with_options(Some(team_id), None, true, None)
+        .await
+        .map_err(|e| ToolCallError {
+            description: "failed to load the team's stage options".to_string(),
+            internal_error: e.into(),
+        })?;
 
     let mut labels = HashMap::new();
     let mut team_stage_definition_ids = Vec::new();
