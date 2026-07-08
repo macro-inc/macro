@@ -19,4 +19,5 @@ fn all_topic_names_is_non_empty_and_unique() {
 fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroExampleTopic.as_str()));
     assert!(all_topic_names().contains(&MacroDocumentsTopic.as_str()));
+    assert!(all_topic_names().contains(&MacroChannelsTopic.as_str()));
 }
