@@ -5,6 +5,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
 import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
+import { PullToRefresh } from '@app/component/mobile/PullToRefresh';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -1109,6 +1110,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     HTMLDivElement | undefined
   >();
 
+  // The virtualizer's scroll container, for mobile pull-to-refresh.
+  const [listScrollerRef, setListScrollerRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1265,6 +1271,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
               <Show when={isMobile() && source.isPlaceholderData()}>
                 <MobileTabLoadingBar />
               </Show>
+              <PullToRefresh
+                scrollContainer={listScrollerRef}
+                onRefresh={source.refresh}
+              />
               <StaticMarkdownContext>
                 <Switch>
                   <Match when={source.isFetching() && !rows().length}>
@@ -1342,6 +1352,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             setLocalEntityListRef(el);
                             soupNavigationTouchHighlight(el);
                           }}
+                          scrollerRef={setListScrollerRef}
                           virtualizerClass={'scrollbar-hidden space-y-2'}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
@@ -1656,6 +1667,8 @@ const DEFAULT_OVERSCAN = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
+  /** Receives the inner scroll container (the element that owns scrollTop). */
+  scrollerRef?: (el: HTMLDivElement) => void;
   virtualizerRef?: (handle: VirtualizerHandle) => void;
   class?: string;
   virtualizerClass?: string;
@@ -1723,6 +1736,7 @@ const SoupList = (props: SoupListProps) => {
           but still slide beneath it. `startMargin` keeps virtua's scroll
           math correct for the leading spacer. */}
       <div
+        ref={props.scrollerRef}
         class={cn('overscroll-none', props.virtualizerClass)}
         style={{
           display: 'block',

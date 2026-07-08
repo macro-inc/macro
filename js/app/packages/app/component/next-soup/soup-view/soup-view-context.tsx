@@ -60,6 +60,7 @@ import {
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -99,6 +100,11 @@ type DataSource<T> = {
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
+  /**
+   * Full refresh (e.g. mobile pull-to-refresh): invalidate every soup query
+   * plus notification state. Resolves once the active refetches settle.
+   */
+  refresh: () => Promise<void>;
 };
 
 type SoupViewInitializeOptions = {
@@ -995,6 +1001,18 @@ export const SoupViewContextProvider: FlowComponent<
         if (searchQuery.isEnabled) {
           searchQuery.fetchNextPage();
         }
+      },
+      refresh: async () => {
+        if (!enabled()) return;
+
+        // Drop the pages beyond the first (same trim as filter changes) so a
+        // deep-scrolled list doesn't refetch every loaded page sequentially.
+        invalidateCache();
+
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+          invalidateUserNotifications(),
+        ]);
       },
     },
     items,
