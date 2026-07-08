@@ -25,7 +25,10 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
-import { deduplicateEntities } from '@app/component/next-soup/utils';
+import {
+  deduplicateEntities,
+  scopeChannelNotificationsForEntity,
+} from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
@@ -498,12 +501,16 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const attachNotifications = (entity: EntityData) => {
+    const notifications = useNotificationsForEntity(
+      notificationSource,
+      toNotificationEntity(entity)
+    );
     return {
       ...entity,
-      notifications: useNotificationsForEntity(
-        notificationSource,
-        toNotificationEntity(entity)
-      ),
+      notifications: () =>
+        isNewInbox()
+          ? scopeChannelNotificationsForEntity(entity, notifications())
+          : notifications(),
     };
   };
 

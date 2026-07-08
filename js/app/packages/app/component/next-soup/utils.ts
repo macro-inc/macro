@@ -35,7 +35,6 @@ import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
   getAllNotificationsFromGroup,
-  getThreadId,
   type NotificationSource,
   setDoneOverride,
   stackNotifications,
@@ -698,16 +697,42 @@ function channelThreadNotificationIds(
 ): Set<string> {
   const ids = new Set<string>();
 
+  if (threadId !== undefined) {
+    for (const notification of notifications) {
+      const metadata = notification.notification_metadata;
+
+      const belongsToThread = match(metadata)
+        .with(
+          { tag: 'channel_message_send' },
+          (m) => m.content.messageId === threadId
+        )
+        .with(
+          { tag: 'channel_mention' },
+          (m) => (m.content.threadId ?? m.content.messageId) === threadId
+        )
+        .with(
+          { tag: 'channel_message_reply' },
+          (m) => m.content.threadId === threadId
+        )
+        .otherwise(() => false);
+
+      if (!belongsToThread) {
+        continue;
+      }
+      ids.add(notification.id);
+    }
+
+    return ids;
+  }
+
   for (const stack of stackNotifications(notifications)) {
-    // We display a separte item for thread replies and mentions
+    // New inbox renders thread replies and mentions separately from channels.
     if (
       stack.type !== 'channel_message_reply' &&
       stack.type !== 'channel_mention'
     ) {
       continue;
     }
-
-    if (threadId !== undefined && getThreadId(stack) !== threadId) continue;
 
     for (const notification of getAllNotificationsFromGroup(stack)) {
       ids.add(notification.id);
@@ -717,13 +742,10 @@ function channelThreadNotificationIds(
   return ids;
 }
 
-function notificationsForMarkDone(
+export function scopeChannelNotificationsForEntity(
   entity: EntityData,
-  notifications: UnifiedNotification[],
-  scopeChannelNotificationsToEntity: boolean
+  notifications: UnifiedNotification[]
 ): UnifiedNotification[] {
-  if (!scopeChannelNotificationsToEntity) return notifications;
-
   if (entity.type === 'channel') {
     const threadNotificationIds = channelThreadNotificationIds(notifications);
     return notifications.filter(
@@ -742,6 +764,16 @@ function notificationsForMarkDone(
   }
 
   return notifications;
+}
+
+function notificationsForMarkDone(
+  entity: EntityData,
+  notifications: UnifiedNotification[],
+  scopeChannelNotificationsToEntity: boolean
+): UnifiedNotification[] {
+  if (!scopeChannelNotificationsToEntity) return notifications;
+
+  return scopeChannelNotificationsForEntity(entity, notifications);
 }
 
 /**

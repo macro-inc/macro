@@ -15,6 +15,19 @@ import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { NO_ASSIGNEE } from './configs/base';
 
+function getPredicateNotifications(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const attachedNotifications = (entity as WithNotification<EntityData>)
+    .notifications;
+  if (attachedNotifications) return attachedNotifications();
+
+  return notificationSource.notificationsByEntity()[
+    compositeEntity(toNotificationEntity(entity))
+  ];
+}
+
 /**
  * Unread filter - entity has unread content.
  *
@@ -28,10 +41,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
       return !entity.isRead;
     }
 
-    const notifications =
-      notificationSource.notificationsByEntity()[
-        compositeEntity(toNotificationEntity(entity))
-      ];
+    const notifications = getPredicateNotifications(entity, notificationSource);
 
     return notifications?.some((n) => !n.viewed_at) ?? false;
   };
@@ -48,10 +58,7 @@ export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
     if (entity.type === 'email') return !entity.done;
 
-    const notifications =
-      notificationSource.notificationsByEntity()[
-        compositeEntity(toNotificationEntity(entity))
-      ];
+    const notifications = getPredicateNotifications(entity, notificationSource);
 
     return notifications?.some(({ done }) => !done);
   };
