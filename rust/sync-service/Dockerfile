@@ -1,4 +1,7 @@
-FROM rust:1.90-bookworm
+# Builder: compiles the worker (Rust -> wasm + JS shim). Nothing from this
+# stage's toolchain (rustc, clang, npm dev deps, the cargo target dir) is
+# needed at runtime, so it all stays here.
+FROM rust:1.90-bookworm AS builder
 
 # Install Node.js 22.x
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
@@ -25,6 +28,16 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY bebop-schema/Cargo.toml bebop-schema/Cargo.toml
 
+# The macro_sync_service_jwt path dependency (`../cloud-storage/...`) resolves
+# to /cloud-storage/... from /app. It lives outside this build context, so
+# compose passes it in as an additional named context (see docker-compose.yml).
+# Its deps are `workspace = true`, so the real cloud-storage workspace root
+# manifest comes along too (single source of truth for version pins), with its
+# member list shrunk to just this crate — the other members aren't in the image.
+COPY --from=macro_sync_service_jwt . /cloud-storage/macro_sync_service_jwt
+COPY --from=cloud_storage_manifest Cargo.toml /cloud-storage/Cargo.toml
+RUN sed -i '/^members = \[$/,/^\]$/c\members = ["macro_sync_service_jwt"]' /cloud-storage/Cargo.toml
+
 # Create dummy src to build dependencies only (cached layer)
 RUN mkdir -p src bebop-schema/src && \
     echo "use worker::*; #[event(fetch)] async fn fetch(_: Request, _: Env, _: Context) -> Result<Response> { Response::ok(\"ok\") }" > src/lib.rs && \
@@ -46,6 +59,25 @@ COPY . .
 
 # Build the actual application
 RUN worker-build --release
+
+# Runtime: wrangler dev serving the prebuilt worker. Needs node + the
+# production npm deps (wrangler brings miniflare/workerd along), the built
+# worker, the wrangler config, and the D1 migrations — nothing else.
+FROM node:22-bookworm-slim
+
+# curl for the compose healthcheck; ca-certificates for wrangler's TLS.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY wrangler.docker.toml ./
+COPY database/ database/
+COPY --from=builder /app/build build/
 
 EXPOSE 8787
 
