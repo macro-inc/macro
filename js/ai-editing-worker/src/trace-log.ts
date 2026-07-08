@@ -1,5 +1,6 @@
 import type { StepResult, ToolSet } from 'ai';
 import type { UsageEntry } from './ai-editing/token-tracker';
+import type { DispatchEditTrace } from './ai-editing/tools';
 
 /** Raw inputs collected during a run, normalized into a TraceSession. */
 export type TraceMeta = {
@@ -13,6 +14,8 @@ export type TraceMeta = {
   interpretDurationMs?: number;
   /** JS code blocks run by each coder, indexed by dispatch round then edit index. */
   coderCodeBlocks?: string[][][];
+  /** Snippet + timing traces, indexed by dispatch round then edit index. */
+  dispatchEditTraces?: DispatchEditTrace[][];
   /** Wall-clock duration of each supervisor step, in ms. */
   stepDurationsMs?: number[];
 };
@@ -47,6 +50,7 @@ export type TraceSession = {
   steps: TraceStep[];
   usage: Usage;
   coderCodeBlocks?: string[][][];
+  dispatchEditTraces?: DispatchEditTrace[][];
 };
 
 /** Normalize the AI SDK's rich step objects into the serializable session. */
@@ -78,18 +82,28 @@ export function buildTraceSession(
     })),
     usage,
     coderCodeBlocks: meta.coderCodeBlocks,
+    dispatchEditTraces: meta.dispatchEditTraces,
   };
 }
 
+type TraceDispatchEdit = {
+  editing_instruction: string;
+  context?: { start_line: number; end_line: number };
+  snippets?: Record<string, string>;
+  snippet_specs?: Record<string, string | { brief: string; effort?: string }>;
+};
+
+/** Render an epoch-ms timestamp relative to the session start, e.g. `t+2.1s`. */
+function relTime(ms: number | undefined, t0: number | undefined): string {
+  if (ms == null || t0 == null) return '?';
+  return `t+${((ms - t0) / 1000).toFixed(1)}s`;
+}
+
 function formatDispatchArgs(
-  args: {
-    edits: Array<{
-      editing_instruction: string;
-      context?: { start_line: number; end_line: number };
-      snippets?: Record<string, string>;
-    }>;
-  },
-  codesPerEdit?: string[][]
+  args: { edits: TraceDispatchEdit[] },
+  codesPerEdit?: string[][],
+  editTraces?: DispatchEditTrace[],
+  t0?: number
 ): string {
   return args.edits
     .map((e, i) => {
@@ -107,6 +121,32 @@ function formatDispatchArgs(
             .join('\n')}\n   \`\`\``;
         }
       }
+      if (e.snippet_specs && Object.keys(e.snippet_specs).length > 0) {
+        for (const [key, spec] of Object.entries(e.snippet_specs)) {
+          const brief = typeof spec === 'string' ? spec : spec.brief;
+          const effort = typeof spec === 'string' ? undefined : spec.effort;
+          out += `\n   snippet_specs.${key}${effort === 'high' ? ' [high]' : ''}: ${brief}`;
+        }
+      }
+      const trace = editTraces?.[i];
+      if (trace) {
+        for (const s of trace.snippets) {
+          const window = `${relTime(s.startedAt, t0)} → ${
+            s.resolvedAt == null ? 'unresolved' : relTime(s.resolvedAt, t0)
+          }`;
+          out += `\n   snippet ${s.key}${s.effort === 'high' ? ' · high' : ''} · ${window}${s.error ? ` · ⚠ ${s.error}` : ''}`;
+          if (s.text) {
+            out += `\n   \`\`\`\n${s.text
+              .split('\n')
+              .map((l) => `   ${l}`)
+              .join('\n')}\n   \`\`\``;
+          }
+        }
+        const runCodes = trace.runCodeAt
+          .map((ms) => relTime(ms, t0))
+          .join(', ');
+        out += `\n   coder ${relTime(trace.coderStartedAt, t0)} → ${relTime(trace.coderFinishedAt, t0)}${runCodes ? ` · runCode at ${runCodes}` : ''}`;
+      }
       const codes = codesPerEdit?.[i];
       if (codes && codes.length > 0) {
         for (const code of codes) {
@@ -123,22 +163,18 @@ function formatDispatchArgs(
 
 function formatToolCall(
   call: TraceToolCall,
-  codesPerEdit?: string[][]
+  codesPerEdit?: string[][],
+  editTraces?: DispatchEditTrace[],
+  t0?: number
 ): string {
   const lines: string[] = [];
   const { output } = call;
 
   if (call.toolName === 'dispatch') {
-    const { edits } = call.input as {
-      edits: Array<{
-        editing_instruction: string;
-        context?: { start_line: number; end_line: number };
-        snippets?: Record<string, string>;
-      }>;
-    };
+    const { edits } = call.input as { edits: TraceDispatchEdit[] };
     lines.push(`**dispatch** — ${edits.length} edit(s)`);
     lines.push('');
-    lines.push(formatDispatchArgs({ edits }, codesPerEdit));
+    lines.push(formatDispatchArgs({ edits }, codesPerEdit, editTraces, t0));
     if (output != null) {
       const res = String(output);
       const docStart = res.indexOf('<document>');
@@ -194,7 +230,9 @@ function formatStep(
   i: number,
   elapsedMs: number | undefined,
   dispatchRoundRef: { current: number },
-  coderCodeBlocks?: string[][][]
+  coderCodeBlocks?: string[][][],
+  dispatchEditTraces?: DispatchEditTrace[][],
+  t0?: number
 ): string {
   const lines: string[] = [
     `### Step ${i + 1}${formatTiming(step.durationMs, elapsedMs)}`,
@@ -206,12 +244,12 @@ function formatStep(
   }
 
   for (const call of step.toolCalls) {
-    const codesPerEdit =
-      call.toolName === 'dispatch'
-        ? coderCodeBlocks?.[dispatchRoundRef.current++]
-        : undefined;
+    const round =
+      call.toolName === 'dispatch' ? dispatchRoundRef.current++ : undefined;
+    const codesPerEdit = round == null ? undefined : coderCodeBlocks?.[round];
+    const editTraces = round == null ? undefined : dispatchEditTraces?.[round];
     lines.push('');
-    lines.push(formatToolCall(call, codesPerEdit));
+    lines.push(formatToolCall(call, codesPerEdit, editTraces, t0));
   }
 
   lines.push('');
@@ -255,6 +293,7 @@ export function renderTraceMarkdown(session: TraceSession): string {
   sections.push('', '---', '', '## Supervisor');
 
   const dispatchRoundRef = { current: 0 };
+  const t0 = Date.parse(session.startedAt);
   let elapsedMs = 0;
   let sawDuration = false;
   for (let i = 0; i < session.steps.length; i++) {
@@ -270,7 +309,9 @@ export function renderTraceMarkdown(session: TraceSession): string {
         i,
         sawDuration ? elapsedMs : undefined,
         dispatchRoundRef,
-        session.coderCodeBlocks
+        session.coderCodeBlocks,
+        session.dispatchEditTraces,
+        Number.isNaN(t0) ? undefined : t0
       )
     );
   }

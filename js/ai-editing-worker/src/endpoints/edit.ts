@@ -45,6 +45,11 @@ const EditBody = z.object({
     supervisor: ModelListSchema,
     interpret: ModelListSchema,
     coding: ModelListSchema,
+    /** Snippet-composition model; falls back to the coding list when omitted. */
+    snippet: ModelListSchema.optional(),
+    /** Model for `effort: "high"` snippet specs; falls back to the supervisor
+     * list when omitted, so high effort escalates to the strongest model. */
+    snippetHigh: ModelListSchema.optional(),
   }),
   typingAnimations: z.boolean().optional(),
   /** Animation speed multiplier applied while nobody is watching the doc. */
@@ -118,6 +123,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         supervisor: resolveModel(models.supervisor),
         interpret: resolveModel(models.interpret),
         coding: resolveModel(models.coding),
+        snippet: resolveModel(models.snippet ?? models.coding),
+        snippetHigh: resolveModel(models.snippetHigh ?? models.supervisor),
       },
       typingAnimations,
       sleep,

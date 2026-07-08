@@ -11,6 +11,7 @@ import { numberLines, serializeWithXml } from '../utils';
 import { coder } from './coder';
 import { interpreter } from './interpreter';
 import { EDIT_PROVIDER_OPTIONS } from './model-options';
+import { snippet } from './snippet';
 import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
@@ -57,7 +58,10 @@ export async function supervisor(
     dispatch: createDispatchTool({
       session,
       childModel: models.coding,
+      snippetModel: models.snippet,
+      snippetHighModel: models.snippetHigh,
       tracker,
+      runSnippet: snippet,
       params: opts.params,
       typingAnimations: opts.typingAnimations,
       sleep: opts.sleep,
@@ -68,6 +72,7 @@ export async function supervisor(
       runner: opts.runner,
       onOps: opts.onOps,
       onCoderResult: opts.onCoderResult,
+      onEditTrace: opts.onEditTrace,
     }),
   };
 

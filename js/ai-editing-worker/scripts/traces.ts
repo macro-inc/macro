@@ -56,7 +56,9 @@ if (!documentId && !id) {
 }
 
 const db = DB_BY_ENV[env]!;
-const location = local ? [] : ["--remote"];
+// The `local` env is only ever an on-disk SQLite shard (see wrangler.toml), so
+// there is no remote to hit — query it locally regardless of the --local flag.
+const location = local || env === "local" ? [] : ["--remote"];
 
 // Guard against breaking out of the SQL string literal. Ids are uuids / doc ids.
 function lit(value: string): string {
@@ -93,7 +95,7 @@ if (id || latest) {
 	}
 } else {
 	const rows = await query(
-		`SELECT id, datetime(created_at/1000,'unixepoch') AS at_utc, length(markdown) AS md_chars FROM edit_traces WHERE document_id = ${lit(documentId!)} ORDER BY created_at DESC`,
+		`SELECT id, datetime(created_at/1000,'unixepoch') AS at_utc, length(trace_json) AS json_chars FROM edit_traces WHERE document_id = ${lit(documentId!)} ORDER BY created_at DESC`,
 	);
 	if (rows.length === 0) {
 		console.error("no traces for that document");

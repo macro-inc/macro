@@ -41,7 +41,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             // or down.
             "models": {
                 "supervisor": [
-                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
+                    { "provider": "anthropic", "model": "claude-opus-4-8" },
                     { "provider": "openai", "model": "gpt-5.5" },
                 ],
                 "interpret": [
@@ -51,6 +51,17 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 "coding": [
                     { "provider": "cerebras", "model": "gpt-oss-120b" },
                     { "provider": "anthropic", "model": "claude-haiku-4-5" },
+                ],
+                // Snippet composition: fast/cheap by default, escalating to a
+                // strong prose model when the supervisor marks a spec
+                // `effort: "high"`.
+                "snippet": [
+                    { "provider": "cerebras", "model": "gpt-oss-120b" },
+                    { "provider": "anthropic", "model": "claude-haiku-4-5" },
+                ],
+                "snippetHigh": [
+                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
+                    { "provider": "cerebras", "model": "gpt-oss-120b" },
                 ],
             },
             "interpret": false,

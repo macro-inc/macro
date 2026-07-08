@@ -8,15 +8,13 @@ import {
 import { MARKDOWN_LORO_SCHEMA } from '../../lexical-core/markdown-loro-schema';
 import { supervisor } from './ai-editing/agents';
 import type { DocumentOp } from './ai-editing/editor';
+import type { DispatchEditTrace } from './ai-editing/tools';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
 import { createWorkerSyncSource } from './sources';
-import {
-  buildTraceSession,
-  type TraceSession,
-} from './trace-log';
+import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Model = {
   provider: 'anthropic' | 'cerebras' | 'openai';
@@ -33,6 +31,9 @@ export type ResolvedModels = {
   supervisor: LanguageModel;
   interpret: LanguageModel;
   coding: LanguageModel;
+  snippet: LanguageModel;
+  /** Stronger composition model for `effort: "high"` snippet specs. */
+  snippetHigh: LanguageModel;
 };
 
 export type RunEditArgs = {
@@ -103,6 +104,8 @@ export async function runEditSession(
   const allOps: DocumentOp[] = [];
   // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
+  // snippet + timing traces, per edit, per batch
+  const dispatchEditTraces: DispatchEditTrace[][] = [];
   const sessionId = crypto.randomUUID();
   const startedAt = new Date();
   const initialDocument = serializeWithXml(workspace.session);
@@ -123,6 +126,7 @@ export async function runEditSession(
       runner: args.runner,
       onOps: (ops) => allOps.push(...ops),
       onCoderResult: (codes) => coderCodeBlocks.push(codes),
+      onEditTrace: (edits) => dispatchEditTraces.push(edits),
     });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
@@ -142,6 +146,7 @@ export async function runEditSession(
         intent,
         interpretDurationMs,
         coderCodeBlocks,
+        dispatchEditTraces,
         stepDurationsMs,
       },
       steps as any,
