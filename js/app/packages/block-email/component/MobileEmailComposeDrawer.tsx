@@ -50,7 +50,11 @@ export function MobileEmailComposeDrawer(props: {
         >
           <MobileDrawer.Portal>
             <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-            <MobileDrawer.Content aria-label="Reply composer" maxHeight={90} targetHeight={90}>
+            <MobileDrawer.Content
+              aria-label="Reply composer"
+              maxHeight={90}
+              targetHeight={90}
+            >
               <MobileDrawer.Handle class="pb-1" />
 
               <div class="relative flex-1 min-h-0">
