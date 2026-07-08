@@ -13,7 +13,7 @@ import { setGlobalNavigate } from '@app/signal/splitLayout';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSettingsPath } from '@core/constant/SettingsState';
+import { isSettingsPath } from '@core/constant/settingsPath';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';

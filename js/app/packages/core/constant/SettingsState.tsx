@@ -9,8 +9,6 @@ import { createMemo, createSignal } from 'solid-js';
 import { isSettingsPath, SETTINGS_PATH, toBaseRelative } from './settingsPath';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
 
-export { isSettingsPath };
-
 export type SettingsTab =
   | 'Account'
   | 'Billing'
