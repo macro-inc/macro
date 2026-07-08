@@ -645,9 +645,6 @@ export function Channel(props: ChannelProps) {
                         mode: 'channel',
                         id: `channel-input-${props.channelId}`,
                         placeholder: 'Message channel',
-                        isDraggingOverChannel:
-                          dragState.isDraggingOverChannel(),
-                        isValidChannelDrag: dragState.isValidChannelDrag(),
                       }}
                       participants={participants.users}
                       attachmentTracker={attachmentTracker}

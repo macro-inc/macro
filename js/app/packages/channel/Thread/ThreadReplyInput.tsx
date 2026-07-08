@@ -110,7 +110,6 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
                 placeholder: 'Send a reply',
                 value: props.replyInputState()?.value,
                 attachments: props.replyInputState()?.attachments,
-                isDraggingOverChannel: entityDropZone.isDraggingOver(),
                 mode: 'reply',
               }}
               participants={participants.users}
