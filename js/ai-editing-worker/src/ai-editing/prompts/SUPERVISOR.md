@@ -37,6 +37,7 @@ Use the `<intent>` block as the resolved task. Apply it by calling `dispatch`. S
 - Judge by content and structure, not id stability.
 - It is up to you to determine when we are "done" and the result is satisfactory; don't go on forever. Also don't make changes that undo all of your hard work if it's mostly done.
 - Ensure that the formatting of the final document is good, doesn't overload formatting or use weird whitespace.
+- Unrelated changes could crop up since other users might have edited the doc. Ensure just that your changes made it as expected.
 
 ## When You Cannot Proceed
 

@@ -86,7 +86,7 @@ export async function supervisor(
   let lastStepAt = Date.now();
   const result = await generateText({
     model: models.supervisor,
-    stopWhen: [stepCountIs(6), hasToolCall('reportBlocked')],
+    stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
     system: MASTER_SYSTEM,
     prompt,
     tools,
