@@ -1,6 +1,9 @@
 use super::DocumentStorageServiceClient;
 use anyhow::Result;
 
+const ASSOCIATE_GITHUB_INSTALLATIONS_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(15);
+
 impl DocumentStorageServiceClient {
     /// Associates GitHub App installations installed by the given GitHub user
     /// with that user's Macro sources. Intended to be called after a github
@@ -13,6 +16,7 @@ impl DocumentStorageServiceClient {
                 "{}/internal/github/installations/{}/associate",
                 self.url, github_user_id
             ))
+            .timeout(ASSOCIATE_GITHUB_INSTALLATIONS_TIMEOUT)
             .send()
             .await?;
 

@@ -29,7 +29,7 @@ pub struct Params {
         (status = 500, body = GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err(Debug))]
 pub async fn associate_github_installations_handler(
     State(ctx): State<ApiContext>,
     Path(Params { github_user_id }): Path<Params>,
