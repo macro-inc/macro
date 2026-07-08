@@ -11,7 +11,7 @@ impl OpensearchClient {
     }
 
     /// Upserts only the parent doc (no content chunks) into the opensearch index
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn upsert_parent_document(
         &self,
         upsert_document_args: &UpsertDocumentArgs,
