@@ -8,6 +8,8 @@ use serde::Serialize;
 /// Base URL for the Loops API.
 const LOOPS_API_BASE_URL: &str = "https://app.loops.so/api";
 
+const REQUEST_TIMEOUT_SECONDS: u64 = 15;
+
 /// Client for the Loops (loops.so) API.
 ///
 /// When no API key is configured the client is a no-op, mirroring the
@@ -29,7 +31,10 @@ impl LoopsClient {
     pub fn new(api_key: String) -> Self {
         Self {
             inner: Some(Inner {
-                client: reqwest::Client::new(),
+                client: reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECONDS))
+                    .build()
+                    .unwrap(),
                 api_key,
             }),
         }
