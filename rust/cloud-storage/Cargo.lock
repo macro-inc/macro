@@ -13430,6 +13430,7 @@ name = "teams"
 version = "0.1.0"
 dependencies = [
  "ai_toolset",
+ "analytics_client",
  "anyhow",
  "async-stripe",
  "async-trait",
