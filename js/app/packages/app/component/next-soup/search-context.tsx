@@ -12,6 +12,7 @@ const SEARCH_ENTITY_TYPES = [
   EntityType.CHAT,
   EntityType.DOCUMENT,
   EntityType.PROJECT,
+  EntityType.TASK,
 ] as const;
 
 type SearchEntityType = (typeof SEARCH_ENTITY_TYPES)[number];
