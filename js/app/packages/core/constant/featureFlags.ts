@@ -414,6 +414,20 @@ export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
 
+/**
+ * Non-reactive check for imperative call sites (e.g. the soup GraphQL
+ * client's normalized-cache gate). Env override first (dev), else the same
+ * PostHog flag that gates the GraphQL transport — so cache and transport
+ * activate together in previews/production.
+ */
+export function ENABLE_GRAPHQL_SOUP(): boolean {
+  if (ENABLE_GRAPHQL_SOUP_OVERRIDE !== undefined) {
+    return ENABLE_GRAPHQL_SOUP_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_GRAPHQL_SOUP_FLAG) ?? false;
+}
+
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'
@@ -461,3 +475,11 @@ export const ENABLE_NEW_INBOX_OVERRIDE =
 export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
 export const ENABLE_TAGS_FE_OVERRIDE =
   resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
+
+// Narrow rollout gate for the search-view tag surfaces (facet row + row
+// chips), layered on top of enable-tags-fe. PostHog-controlled per
+// environment with a dev-mode default. Override with
+// VITE_ENABLE_TAGS_SEARCH_FE.
+export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
+export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
+  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;

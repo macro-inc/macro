@@ -9,7 +9,8 @@ use super::{documents::save_document, history::delete_history};
 use super::{
     documents::{
         get_document, get_document_key, get_document_permissions, get_document_text,
-        get_full_pdf_modification_data, list_documents_with_access, location, put_document_update,
+        get_full_pdf_modification_data, initialize_how_to_guide, list_documents_with_access,
+        location, put_document_update,
     },
     user::populate_items,
 };
@@ -100,6 +101,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     EntityAccessService,
                 >,
             ),
+        )
+        .route(
+            "/documents/initialize_how_to_guide",
+            post(initialize_how_to_guide::handler).layer(ensure_user_exists_middleware.clone()),
         )
         .route(
             "/documents/list_with_access",

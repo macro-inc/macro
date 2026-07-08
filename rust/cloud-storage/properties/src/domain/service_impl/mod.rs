@@ -22,6 +22,19 @@ use super::service::PropertiesService;
 
 use helpers::{extract_option_ids_from_property_value, is_property_applicable_to};
 
+/// Entity types whose search index denormalizes property values, i.e. whose
+/// property mutations must enqueue a search reindex.
+fn is_search_indexed(entity_type: EntityType) -> bool {
+    matches!(
+        entity_type,
+        EntityType::Task
+            | EntityType::Document
+            | EntityType::Thread
+            | EntityType::Chat
+            | EntityType::Project
+    )
+}
+
 /// Implementation of PropertiesService using a repository and optional permission service.
 #[derive(Debug)]
 pub struct PropertiesServiceImpl<R, P, N>
@@ -63,14 +76,14 @@ where
         self
     }
 
-    /// Best-effort publish of a property reindex for entities that live in
-    /// the documents search index (tasks/documents). Logs and continues on
+    /// Best-effort publish of a property reindex for entity types whose
+    /// search index denormalizes property values. Logs and continues on
     /// failure so a missed reindex never fails the mutation itself.
     async fn enqueue_property_upsert(&self, entity_id: &str, entity_type: EntityType) {
         let Some(search_indexer) = self.search_indexer.as_ref() else {
             return;
         };
-        if !matches!(entity_type, EntityType::Task | EntityType::Document) {
+        if !is_search_indexed(entity_type) {
             return;
         }
         if let Err(error) = search_indexer

@@ -1,6 +1,7 @@
 use crate::{MatchType, SearchHighlight, SearchOn};
 use chrono::{DateTime, Utc};
 use item_filters::EmailFilters;
+use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -85,6 +86,10 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub inbox_visible: bool,
     pub is_draft: bool,
     pub is_important: bool,
+    /// Entity properties (e.g. tags) on the thread.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
 }

@@ -15,6 +15,7 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
@@ -219,6 +220,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           secretsManagerPolicy.arn,
           s3Policy.arn,
           connectionTablePolicyArn,
+          // Producer/consumer access to the macro event Kafka cluster.
+          getKafkaClusterPolicy(),
         ],
         tags: this.tags,
       },

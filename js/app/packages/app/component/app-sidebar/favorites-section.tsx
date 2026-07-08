@@ -1,18 +1,17 @@
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
+import { FavoriteIcon } from '@app/component/FavoriteIcon';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
-  favoriteDisplayName,
   favoriteIconType,
   favoriteSplitContent,
+  useFavoriteDisplayName,
+  useFavoriteDmRecipientId,
 } from '@app/util/favorites';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import {
-  EntityIcon,
-  type EntityIconSelector,
-} from '@core/component/EntityIcon';
+import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import {
   favoriteEntityKey,
   useFavoritesData,
@@ -38,6 +37,9 @@ export type FavoriteDragData = {
   dragType: 'favorite';
   iconType: EntityIconSelector;
   name: string;
+  /** Other participant of a DM channel favorite; the drag overlay shows
+   * their avatar instead of the entity icon. */
+  dmRecipientId?: string;
   /** Read by the `pointerWithin` collision detector to skip collapsed rows. */
   isDropTargetDisabled: () => boolean;
 };
@@ -120,10 +122,10 @@ const FavoritesGroup = (props: {
           onClick={() => setExpanded(!expanded())}
         >
           <h1>{props.label}</h1>
-          <CaretDownIcon
+          <CaretRightIcon
             class={cn(
               'size-3 transition-transform duration-200',
-              expanded() && 'rotate-180'
+              expanded() && 'rotate-90'
             )}
           />
         </button>
@@ -166,8 +168,8 @@ const FavoriteRow = (props: { favorite: Favorite; disabled: boolean }) => {
   const removeMutation = useRemoveFavoriteMutation();
   const [dndState] = useDragDropContext() ?? [];
 
-  const iconType = () => favoriteIconType(props.favorite);
-  const displayName = () => favoriteDisplayName(props.favorite);
+  const displayName = useFavoriteDisplayName(props.favorite);
+  const dmRecipientId = useFavoriteDmRecipientId(props.favorite);
 
   // `For` keys rows by favorite identity, so the favorite (and drag data
   // derived from it) is stable for the row's lifetime.
@@ -177,12 +179,21 @@ const FavoriteRow = (props: { favorite: Favorite; disabled: boolean }) => {
   // (clipped to 0 height for the expand/collapse animation), so without this
   // their stale layout rects would capture drops. Gating on `disabled` keeps
   // collapsed rows out of collision detection entirely.
+  //
+  // `name` and `dmRecipientId` are getters so the drag overlay chip reads
+  // the row's live values (names resolve asynchronously through the preview
+  // cache, DM recipients through the channels list).
   const sortable = createSortable(
     favoriteEntityKey(props.favorite.entityType, props.favorite.entityId),
     {
       dragType: 'favorite',
       iconType: favoriteIconType(props.favorite),
-      name: favoriteDisplayName(props.favorite),
+      get name() {
+        return displayName();
+      },
+      get dmRecipientId() {
+        return dmRecipientId();
+      },
       isDropTargetDisabled: () => props.disabled,
     } satisfies FavoriteDragData
   );
@@ -241,7 +252,7 @@ const FavoriteRow = (props: { favorite: Favorite; disabled: boolean }) => {
             fullWidth
             onClick={open}
           >
-            <EntityIcon size="xs" targetType={iconType()} />
+            <FavoriteIcon favorite={props.favorite} />
             <span class="truncate">{displayName()}</span>
           </NavRow>
         </ContextMenu.Trigger>

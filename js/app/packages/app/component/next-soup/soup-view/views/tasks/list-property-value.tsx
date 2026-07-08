@@ -30,6 +30,38 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
 
   const isEmpty = () => !hasValue(props.property);
 
+  // STRING / NUMBER / BOOLEAN / LINK edit in place rather than via the
+  // EditTrigger + popover pair.
+  const isInlineType = () =>
+    props.property.valueType === 'STRING' ||
+    props.property.valueType === 'NUMBER' ||
+    props.property.valueType === 'BOOLEAN' ||
+    props.property.valueType === 'LINK';
+
+  if (isInlineType()) {
+    return (
+      <Property.Root
+        property={props.property}
+        canEdit={ctx.canEdit}
+        onSave={ctx.saveHandler.saveProperty}
+        onRefresh={ctx.onRefresh}
+      >
+        <Property.Tooltip property={props.property}>
+          <Layer depth={2}>
+            {/* Stop clicks from bubbling to the row (which opens the entity). */}
+            <div
+              class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 text-left @max-[840px]/u-list:hidden"
+              onClick={(e) => e.stopPropagation()}
+              role="presentation"
+            >
+              <Property.InlineEditor />
+            </div>
+          </Layer>
+        </Property.Tooltip>
+      </Property.Root>
+    );
+  }
+
   return (
     <Property.Root
       property={props.property}

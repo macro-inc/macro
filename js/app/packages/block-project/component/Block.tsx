@@ -9,6 +9,7 @@ import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { SidePanel } from '@app/component/side-panel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
@@ -31,6 +32,7 @@ import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { ModalsProvider } from './ModalsProvider';
+import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';
 import { TopBar } from './TopBar';
 
 // HACK: prevent lint error on custom directive
@@ -148,39 +150,46 @@ const Block: Component = () => {
           <Show when={isDragging() && !isSpecialProject}>
             <FileDropOverlay>Upload to this folder</FileDropOverlay>
           </Show>
-          <TopBar />
-          <Show
-            when={ENABLE_PROJECT_VIEW_PREVIEW}
-            fallback={
-              <ProjectEntityList
-                projectId={projectId}
-                soup={projectSoup}
-                // Scope is already attached by the block container so we can use that
-                // Change this when we remove blocks
-                scopeId={blockHotkeyScopeSignal.get()}
-              />
-            }
-          >
-            <div class="flex size-full">
-              <SplitPanelContext.Provider
-                value={{
-                  ...splitPanelContext,
-                  halfSplitState: () =>
-                    projectSoup.previewEntity() && projectSoup.focus.item()
-                      ? { side: 'left', percentage: 30 }
-                      : undefined,
-                }}
+          <SidePanel.Layout defaultOpen={false}>
+            <Show when={!isSpecialProject}>
+              <ProjectSidePanelSections />
+            </Show>
+            <div class="flex size-full min-w-0 flex-col overflow-hidden">
+              <TopBar />
+              <Show
+                when={ENABLE_PROJECT_VIEW_PREVIEW}
+                fallback={
+                  <ProjectEntityList
+                    projectId={projectId}
+                    soup={projectSoup}
+                    // Scope is already attached by the block container so we can use that
+                    // Change this when we remove blocks
+                    scopeId={blockHotkeyScopeSignal.get()}
+                  />
+                }
               >
-                <ProjectEntityList
-                  projectId={projectId}
-                  soup={projectSoup}
-                  // Scope is already attached by the block container so we can use that
-                  // Change this when we remove blocks
-                  scopeId={blockHotkeyScopeSignal.get()}
-                />
-              </SplitPanelContext.Provider>
+                <div class="flex size-full">
+                  <SplitPanelContext.Provider
+                    value={{
+                      ...splitPanelContext,
+                      halfSplitState: () =>
+                        projectSoup.previewEntity() && projectSoup.focus.item()
+                          ? { side: 'left', percentage: 30 }
+                          : undefined,
+                    }}
+                  >
+                    <ProjectEntityList
+                      projectId={projectId}
+                      soup={projectSoup}
+                      // Scope is already attached by the block container so we can use that
+                      // Change this when we remove blocks
+                      scopeId={blockHotkeyScopeSignal.get()}
+                    />
+                  </SplitPanelContext.Provider>
+                </div>
+              </Show>
             </div>
-          </Show>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>
@@ -208,6 +217,8 @@ const ProjectEntityList = (props: {
             // Filter emails by project
             emailProjectId: [props.projectId],
           },
+          // Default 'inbox' view would hide archived/outbound-only threads
+          emailView: 'all',
         })}
       >
         <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />

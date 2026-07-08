@@ -510,7 +510,6 @@ export * from './favoriteEntityRef';
 export * from './favoriteEntityRefEntityType';
 export * from './favoriteEntityType';
 export * from './favoriteFileType';
-export * from './favoriteName';
 export * from './favoritesList';
 export * from './fileSystemNodeWithIds';
 export * from './fileSystemNodeWithIdsOneOf';

@@ -2,6 +2,7 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
+import { tryMacroId, useDisplayName } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -129,7 +130,6 @@ function TeamInviteAcceptanceContent() {
                 <Match when={isLoading()}>
                   <LoadingBlock />
                 </Match>
-
                 <Match when={!invite()}>
                   <InviteNotFound />
                 </Match>
@@ -233,6 +233,8 @@ function InviteDetails(props: {
   };
   const isDisabled = () => props.isJoining || props.isDeclining;
 
+  const [invitedBy] = useDisplayName(tryMacroId(props.invitedBy));
+
   return (
     <div class="flex flex-col items-center gap-6 text-center w-full">
       <div class="flex flex-col gap-2">
@@ -241,9 +243,8 @@ function InviteDetails(props: {
           Join {displayTeamName()}
         </h2>
         <p class="text-sm text-ink-muted">
-          <span class="text-ink">{props.invitedBy}</span> has invited you to
-          join as a <span class="font-medium text-accent">{roleDisplay()}</span>
-          .
+          <span class="text-ink">{invitedBy()}</span> has invited you to join as
+          a <span class="font-medium text-accent">{roleDisplay()}</span>.
         </p>
       </div>
 

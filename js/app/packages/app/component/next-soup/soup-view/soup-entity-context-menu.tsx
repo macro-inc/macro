@@ -19,6 +19,16 @@ export const SoupEntityContextMenu: FlowComponent<
   const { soup } = useSoupView();
   const drawerManager = useSoupEntityActionDrawer();
 
+  // If the right-clicked row is part of a multi-selection, act on the whole
+  // selection; otherwise act on just that row.
+  const menuEntities = () => {
+    const selected = soup.selection.selected();
+    if (selected.length > 1 && soup.selection.isSelected(props.entity.id)) {
+      return selected;
+    }
+    return [props.entity];
+  };
+
   return (
     <Switch>
       <Match when={isMobile()}>
@@ -41,14 +51,9 @@ export const SoupEntityContextMenu: FlowComponent<
           </ContextMenu.Trigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
-              {(selectedEntity) => (
-                <ContextMenuContent class="text-xs text-ink-muted">
-                  <SoupEntityActionsMenu
-                    entities={[selectedEntity()]}
-                    soup={soup}
-                  />
-                </ContextMenuContent>
-              )}
+              <ContextMenuContent class="text-xs text-ink-muted">
+                <SoupEntityActionsMenu entities={menuEntities()} soup={soup} />
+              </ContextMenuContent>
             </Show>
           </ContextMenu.Portal>
         </ContextMenu>

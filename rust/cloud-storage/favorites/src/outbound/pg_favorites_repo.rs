@@ -42,7 +42,6 @@ struct FavoriteRow {
     entity_id: String,
     sort_order: f64,
     created_at: DateTime<Utc>,
-    name: Option<String>,
     file_type: Option<String>,
     document_sub_type: Option<String>,
     channel_type: Option<String>,
@@ -60,7 +59,6 @@ impl FavoriteRow {
             entity_id: self.entity_id,
             sort_order: self.sort_order,
             created_at: self.created_at,
-            name: self.name,
             file_type: self.file_type,
             document_sub_type: self.document_sub_type,
             channel_type: self.channel_type,
@@ -94,7 +92,6 @@ impl FavoritesRepo for PgFavoritesRepo {
                 entity_id as "entity_id!",
                 sort_order as "sort_order!",
                 created_at as "created_at!",
-                NULL::text as "name?",
                 NULL::text as "file_type?",
                 NULL::text as "document_sub_type?",
                 NULL::text as "channel_type?",
@@ -125,8 +122,9 @@ impl FavoritesRepo for PgFavoritesRepo {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Vec<Favorite>, Self::Err> {
-        // Resolves display metadata for the favorited entity where possible and
-        // omits favorites whose target is deleted.
+        // Resolves display metadata for the favorited entity where possible
+        // and omits favorites whose target is deleted. Display names are not
+        // hydrated here: clients resolve them from entity previews.
         let rows = sqlx::query_as!(
             FavoriteRow,
             r#"
@@ -135,20 +133,13 @@ impl FavoritesRepo for PgFavoritesRepo {
                 f.entity_id as "entity_id!",
                 f.sort_order as "sort_order!",
                 f.created_at as "created_at!",
-                CASE f.entity_type
-                    WHEN 'document' THEN d.name
-                    WHEN 'chat' THEN c.name
-                    WHEN 'project' THEN p.name
-                    WHEN 'channel' THEN ch.name::text
-                    WHEN 'email_thread' THEN em.subject
-                END as "name?",
                 d."fileType" as "file_type?",
                 dt.sub_type::text as "document_sub_type?",
                 ch.channel_type::text as "channel_type?",
                 cm.channel_id::text as "channel_id?"
             FROM favorite f
-            -- The comms/email tables key on uuid while favorite.entity_id is
-            -- text. Compare in uuid (casting the favorite side) so their
+            -- The comms tables key on uuid while favorite.entity_id is text.
+            -- Compare in uuid (casting the favorite side) so their
             -- primary-key indexes are usable; casting the table side to text
             -- forced a full scan of each table on every listing. The regex
             -- guard keeps non-uuid entity_ids from failing the cast: they
@@ -165,14 +156,6 @@ impl FavoritesRepo for PgFavoritesRepo {
             LEFT JOIN "Project" p ON f.entity_type = 'project' AND p.id = f.entity_id
             LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
             LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
-            LEFT JOIN email_threads et ON f.entity_type = 'email_thread' AND et.id = fid.entity_uuid
-            LEFT JOIN LATERAL (
-                SELECT m.subject
-                FROM email_messages m
-                WHERE m.thread_id = et.id AND m.is_draft = false
-                ORDER BY m.internal_date_ts DESC NULLS LAST
-                LIMIT 1
-            ) em ON f.entity_type = 'email_thread'
             WHERE f.user_id = $1
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))
                 AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c."deletedAt" IS NULL))

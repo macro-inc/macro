@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'email_thread'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: items share permission\n            SELECT\n                \"publicAccessLevel\"::text AS access_level\n            FROM \"SharePermission\"\n            WHERE \"isPublic\" = true\n            AND \"publicAccessLevel\" IS NOT NULL\n            AND id IN (\n                SELECT \"sharePermissionId\" FROM \"EmailThreadPermission\" WHERE \"threadId\" = $3\n            )\n\n            UNION ALL\n            -- Source 3: access to the thread's containing project grants View\n            SELECT 'view' AS access_level\n            FROM email_threads t\n            JOIN entity_access pea ON pea.entity_id::text = t.project_id\n                AND pea.entity_type = 'project'\n                AND pea.source_id = ANY($2)\n            WHERE t.id = $1::uuid\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2038e9067126322569af303a5008cc0e58c09fa4cc0ac7d907ea2d7f0cf91e31"
+}

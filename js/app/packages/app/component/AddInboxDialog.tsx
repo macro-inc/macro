@@ -5,9 +5,9 @@ import { createSignal, onCleanup } from 'solid-js';
 const [isOpen, setIsOpen] = createSignal(false);
 
 /**
- * Requests the add-inbox confirmation dialog. The dialog itself is rendered
- * by the settings Account panel, so callers elsewhere (e.g. the mail inbox
- * selector) open settings first and the dialog appears once it mounts.
+ * Requests the add-inbox confirmation dialog. Rendered at the app root
+ * (Layout), gated on this signal, so it opens immediately and independent of
+ * the settings surface.
  *
  * Entitlement is enforced by the backend: `POST /link/gmail` answers 402 when
  * the user isn't allowed another inbox, and `useAddInboxFlow` maps that to the
@@ -15,6 +15,8 @@ const [isOpen, setIsOpen] = createSignal(false);
  * without a client-side gate that would have to mirror the backend's rule.
  */
 export const openAddInboxDialog = () => setIsOpen(true);
+
+export const isAddInboxDialogOpen = isOpen;
 
 /**
  * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off

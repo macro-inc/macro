@@ -186,11 +186,13 @@ export type EmailEntity = EntityBase & {
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
+  properties?: SoupProperty[];
 };
 
 export type ProjectEntity = EntityBase & {
   type: 'project';
   projectId?: string;
+  properties?: SoupProperty[];
 };
 
 export type CallStatus = StorageCallStatus;
@@ -244,6 +246,10 @@ export type CrmCompanyEntity = EntityBase & {
    * endpoint. */
   hidden: boolean;
   domains: CrmCompanyDomain[];
+  /** CRM properties (Stage / Owner / Revenue + custom) attached to the
+   * company. Populated by the soup queries; search results don't carry
+   * them. */
+  properties?: SoupProperty[];
 };
 
 export type CrmContactEntity = EntityBase & {
@@ -358,7 +364,9 @@ export const isEmailEntity = (entity: EntityData): entity is EmailEntity => {
   return entity.type === 'email';
 };
 
-const _isProjectEntity = (entity: EntityData): entity is ProjectEntity => {
+export const isProjectEntity = (
+  entity: EntityData
+): entity is ProjectEntity => {
   return entity.type === 'project';
 };
 
