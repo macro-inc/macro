@@ -819,7 +819,6 @@ export const SoupViewContextProvider: FlowComponent<
           count: group.entities.length,
           isExpanded: () => soup.grouping.isExpanded(key),
           toggle: () => soup.grouping.toggle(key),
-          renderHeader: DateGroupHeader,
         };
         dateRows.push(
           soup.buildRow({

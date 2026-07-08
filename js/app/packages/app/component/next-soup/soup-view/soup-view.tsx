@@ -21,11 +21,11 @@ import { useSoup } from '@app/component/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
-import { useSearchTagsFlag } from '@app/component/next-soup/soup-view/filters-bar/search/search-tags-flag';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
+import { SoupSectionHeader } from '@app/component/next-soup/soup-view/section-header';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
@@ -44,6 +44,7 @@ import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companie
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/component/next-soup/soup-view/views/companies/CompanyListHeader';
 import { InboxListEntity } from '@app/component/next-soup/soup-view/views/inbox/InboxListEntity';
+import { TaskGroupHeader } from '@app/component/next-soup/soup-view/views/tasks/task-group-header';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
 import {
@@ -72,7 +73,6 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_NEW_INBOX_FLAG,
   ENABLE_NEW_INBOX_OVERRIDE,
@@ -86,8 +86,6 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { useDisplayName } from '@core/user/displayName';
-import { type MacroId, tryMacroId } from '@core/user/macroId';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
@@ -103,13 +101,10 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
 import KanbanIcon from '@phosphor/kanban.svg';
 import ListIcon from '@phosphor/list.svg';
 import Spinner from '@phosphor/spinner.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
@@ -142,108 +137,17 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
+import { DateGroupHeader } from '@app/component/next-soup/soup-view/views/inbox/date-group-header';
 
 const WIDE_SPLIT_PANEL_BREAKPOINT = window.innerWidth * 0.25;
 
-export const SoupSectionHeader = (props: {
-  children: JSX.Element;
-  onClick?: () => void;
-  highlighted?: boolean;
-  class?: string;
-}) => {
-  return (
-    <Layer depth={2}>
-      <Dynamic
-        component={props.onClick ? 'button' : 'div'}
-        type={props.onClick ? 'button' : undefined}
-        onClick={props.onClick}
-        data-highlighted={props.highlighted || undefined}
-        class={cn(
-          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
-          'text-text-muted bg-surface border border-edge-muted relative',
-          props.onClick && 'hover:bg-active',
-          props.class,
-          props.highlighted && 'bg-active'
-        )}
-      >
-        {props.children}
-      </Dynamic>
-    </Layer>
-  );
-};
-
-const AssigneeGroupContent = (props: {
-  assigneeId: MacroId;
-  fallbackLabel: string;
-}) => {
-  const [assigneeName] = useDisplayName(props.assigneeId, {
-    emailFallback: 'local-part',
-  });
-  return (
-    <>
-      <UserIcon
-        id={props.assigneeId}
-        size="sm"
-        suppressClick
-        showTooltip={false}
-      />
-      <span class="truncate">
-        {assigneeName() || props.assigneeId || props.fallbackLabel}
-      </span>
-    </>
-  );
-};
-
-const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
-  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
-  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
-  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
-};
-
-const DefaultGroupHeader = (
+export const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
-  const { groupByField } = useSoupView();
-  const assigneeId = createMemo(() => {
-    const field = groupByField();
-    if (
-      field?.type !== 'property' ||
-      (field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.ASSIGNEES &&
-        field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.COMPANY_OWNER) ||
-      props.group.key === ''
-    ) {
-      return;
-    }
-    return tryMacroId(props.group.key);
-  });
-
-  const statusTint = createMemo(() => {
-    const field = groupByField();
-    if (
-      field?.type !== 'property' ||
-      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
-    ) {
-      return;
-    }
-
-    const optionId = props.group.value ?? props.group.key;
-    if (typeof optionId !== 'string') return;
-
-    return STATUS_GROUP_HEADER_TINTS[optionId];
-  });
-
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
       highlighted={props.highlighted}
-      class={statusTint()}
     >
       <Layer depth={3}>
         <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
@@ -254,33 +158,8 @@ const DefaultGroupHeader = (
           />
         </div>
       </Layer>
-      <Switch>
-        <Match when={assigneeId()}>
-          {(id) => (
-            <AssigneeGroupContent
-              assigneeId={id()}
-              fallbackLabel={props.group.label}
-            />
-          )}
-        </Match>
-        <Match
-          when={typeof props.group.value !== 'string' || !props.group.value}
-        >
-          <CircleDashed class="size-3.5 text-ink-extra-muted" />
 
-          <span class="truncate">{props.group.label}</span>
-        </Match>
-        <Match
-          when={typeof props.group.value === 'string' && props.group.value}
-        >
-          {(value) => (
-            <>
-              <PropertyValueIcon optionId={value()} class="size-3.5" />
-              <span class="truncate">{props.group.label}</span>
-            </>
-          )}
-        </Match>
-      </Switch>
+      <span class="truncate">{props.group.label}</span>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',
@@ -1037,6 +916,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
     return ListEntity;
   };
 
+  const groupHeaderComponent = () => {
+    if (currentView() === 'tasks') return TaskGroupHeader;
+    if (isNewInboxEnabled()) return DateGroupHeader;
+    return DefaultGroupHeader;
+  };
+
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
@@ -1480,7 +1365,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                       <Dynamic
                                         component={
                                           group().renderHeader ??
-                                          DefaultGroupHeader
+                                          groupHeaderComponent()
                                         }
                                         group={group()}
                                         highlighted={row.isFocused()}
