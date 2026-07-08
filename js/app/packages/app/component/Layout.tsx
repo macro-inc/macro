@@ -1,6 +1,5 @@
 import {
   AppSidebar,
-  GoToHotkeys,
   type SidebarState,
 } from '@app/component/app-sidebar/sidebar';
 import {
@@ -143,7 +142,6 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
           <GlobalShortcuts />
           <Show when={!isMobile()}>
-            <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
               <CommandMenu />
