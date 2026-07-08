@@ -355,6 +355,7 @@
       "item_filters",
       "last_online_tracker",
       "lexical_client",
+      "loops_client",
       "macro_auth",
       "macro_aws_config",
       "macro_cache_client",
@@ -2782,6 +2783,10 @@
       "macro_env_var",
       "macro_user_id",
       "remote_env_var",
+      "workspace-hack"
+    ],
+    "loops_client": [
+      "loops_client",
       "workspace-hack"
     ],
     "macro_auth": [
