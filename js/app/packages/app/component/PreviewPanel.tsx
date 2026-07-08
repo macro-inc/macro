@@ -51,10 +51,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
     ...props.splitPanelContext.layoutRefs,
   };
-  // In preview we intentionally do NOT render the split header/title row.
-  // We only provide toolbar slots (Share, etc).
-  scopedLayoutRefs.headerLeft = undefined;
-  scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
     // Isolate the previewed project's preview state from the outer panel so
@@ -181,7 +177,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
-        class="relative w-full flex items-center justify-between shrink-0 h-10 bg-surface px-2"
+        class="relative w-full flex items-center justify-between shrink-0 bg-surface px-2 py-2"
         data-preview-split-toolbar
       >
         <div
@@ -189,13 +185,13 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
           class="flex h-full items-center gap-1"
           ref={(ref) => {
-            scopedLayoutRefs.toolbarLeft = ref;
+            scopedLayoutRefs.headerLeft = ref;
           }}
         />
         <div
           class="flex h-full items-center gap-1"
           ref={(ref) => {
-            scopedLayoutRefs.toolbarRight = ref;
+            scopedLayoutRefs.headerRight = ref;
           }}
         />
       </div>
