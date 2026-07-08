@@ -1,6 +1,5 @@
 import GithubShortcodes from 'emojibase-data/en/shortcodes/github.json';
 import EmojiLib from 'emojilib';
-import Fuse from 'fuse.js';
 import { createMemo, createSignal } from 'solid-js';
 import GroupedEmojiData from 'unicode-emoji-json/data-by-group.json';
 import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
@@ -69,21 +68,83 @@ export function resolveEmoji(key: string): string | undefined {
   return EMOJI_BY_NAME.get(key.replaceAll(':', '').toLowerCase());
 }
 
+// Lower tier = better match. Exact beats prefix beats word-boundary beats
+// substring, and shortcodes beat keywords at every level.
+function tokenScore(token: string, entry: SimpleEmoji): number {
+  if (entry.shortcodes.includes(token)) {
+    return 0;
+  }
+  if (entry.terms.includes(token)) {
+    return 1;
+  }
+  if (entry.shortcodes.some((code) => code.startsWith(token))) {
+    return 2;
+  }
+  if (entry.terms.some((term) => term.startsWith(token))) {
+    return 3;
+  }
+  if (entry.shortcodes.some((code) => code.includes(`_${token}`))) {
+    return 4;
+  }
+  if (
+    entry.terms.some(
+      (term) => term.includes(`_${token}`) || term.includes(` ${token}`)
+    )
+  ) {
+    return 5;
+  }
+  if (entry.shortcodes.some((code) => code.includes(token))) {
+    return 6;
+  }
+  if (entry.terms.some((term) => term.includes(token))) {
+    return 7;
+  }
+  return -1;
+}
+
+export function searchEmojis(query: string): SimpleEmoji[] {
+  const tokens = query
+    .trim()
+    .toLowerCase()
+    .split(/[\s_]+/)
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return ORDERED_EMOJI_DATA;
+  }
+
+  const joined = tokens.join('_');
+  const scored: { entry: SimpleEmoji; score: number; order: number }[] = [];
+  for (let order = 0; order < ORDERED_EMOJI_DATA.length; order++) {
+    const entry = ORDERED_EMOJI_DATA[order];
+    let score = tokenScore(joined, entry);
+    if (tokens.length > 1) {
+      const perToken = tokens.map((token) => tokenScore(token, entry));
+      if (perToken.every((tier) => tier >= 0)) {
+        const mean =
+          perToken.reduce((sum, tier) => sum + tier, 0) / tokens.length;
+        if (score < 0 || mean < score) {
+          score = mean;
+        }
+      }
+    }
+    if (score >= 0) {
+      scored.push({ entry, score, order });
+    }
+  }
+
+  scored.sort((a, b) => a.score - b.score || a.order - b.order);
+  return scored.map(({ entry }) => entry);
+}
+
 export const useEmojiData = () => {
   const [query, setQuery] = createSignal('');
-
-  const fuse = new Fuse(ORDERED_EMOJI_DATA, {
-    keys: ['terms'],
-  });
 
   const emojis = createMemo(() => {
     if (!query() || query().trim().length <= 1) {
       return ORDERED_EMOJI_DATA;
     }
 
-    const result = fuse.search(query());
-    const ret = result.map(({ item }) => item);
-    return ret;
+    return searchEmojis(query());
   });
 
   return {

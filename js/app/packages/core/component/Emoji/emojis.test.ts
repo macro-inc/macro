@@ -1,5 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEmoji } from './emojis';
+import { resolveEmoji, searchEmojis } from './emojis';
+
+describe('searchEmojis', () => {
+  const first = (query: string) => searchEmojis(query)[0]?.emoji;
+
+  it('ranks exact name matches first', () => {
+    expect(first('heart')).toBe('❤️');
+    expect(first('fire')).toBe('🔥');
+    expect(first('cry')).toBe('😢');
+    expect(first('sob')).toBe('😭');
+    expect(first('tada')).toBe('🎉');
+    expect(first('joy')).toBe('😂');
+    expect(first('100')).toBe('💯');
+    expect(first('rocket')).toBe('🚀');
+    expect(first('dog')).toBe('🐶');
+  });
+
+  it('ranks name prefix matches above name word-boundary matches', () => {
+    const emojis = searchEmojis('hear').map(({ emoji }) => emoji);
+    expect(emojis.indexOf('❤️')).toBeGreaterThanOrEqual(0);
+    expect(emojis.indexOf('❤️')).toBeLessThan(emojis.indexOf('💔'));
+  });
+
+  it('matches multi-word queries', () => {
+    expect(first('thumbs up')).toBe('\u{1f44d}');
+    expect(first('broken heart')).toBe('💔');
+  });
+
+  it('matches by keyword when no name matches', () => {
+    expect(searchEmojis('sad').map(({ emoji }) => emoji)).toContain('😢');
+  });
+
+  it('returns the full ordered list for empty queries', () => {
+    expect(searchEmojis('').length).toBeGreaterThan(1800);
+    expect(searchEmojis('  ').length).toBeGreaterThan(1800);
+  });
+
+  it('returns nothing for queries with no match', () => {
+    expect(searchEmojis('zzzzqqq')).toHaveLength(0);
+  });
+});
 
 describe('resolveEmoji', () => {
   it('resolves canonical github shortcodes', () => {
