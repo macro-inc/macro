@@ -1,4 +1,8 @@
-import { $createQuoteNode, $isQuoteNode } from '@lexical/rich-text';
+import {
+  $createQuoteNode,
+  $isHeadingNode,
+  $isQuoteNode,
+} from '@lexical/rich-text';
 import { mergeRegister } from '@lexical/utils';
 import {
   $createParagraphNode,
@@ -11,12 +15,25 @@ import {
   COMMAND_PRIORITY_LOW,
   COMMAND_PRIORITY_NORMAL,
   type ElementNode,
+  INSERT_PARAGRAPH_COMMAND,
   KEY_ENTER_COMMAND,
   type LexicalEditor,
   type RangeSelection,
 } from 'lexical';
-import { isEmptyOrMatches } from '../../utils';
 
+const isEmptyOrMatches = (str: string, regex: RegExp) =>
+  str === '' || regex.test(str);
+
+/**
+ * Normalizes Enter behavior for the markdown editor:
+ * - Enter in a heading creates a paragraph next, including when splitting a
+ *   heading in the middle.
+ * - Enter at the start of a non-empty quote inserts a quote before it.
+ * - Enter in an empty quote converts it back to a paragraph.
+ * - Enter into an empty paragraph clears pending inline text format and style.
+ * - Shift+Enter at the start of an empty paragraph falls back to a normal
+ *   paragraph split instead of inserting a line break.
+ */
 function $testSelectionPosition(
   selection: RangeSelection,
   parent: ElementNode
@@ -94,6 +111,74 @@ function $handleEnterAtBlockStart(): boolean {
   return false;
 }
 
+function $clearInlineStylesIfEmptyParagraph(node: ElementNode): void {
+  if (!$isParagraphNode(node) || node.getTextContent().trim() !== '') {
+    return;
+  }
+
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    selection.setFormat(0);
+    selection.setStyle('');
+  }
+}
+
+function $clearInlineStylesAtEmptyParagraphSelection(): void {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return;
+  }
+
+  const node = selection.anchor.getNode();
+  const paragraph = $isParagraphNode(node) ? node : node.getTopLevelElement();
+  if ($isElementNode(paragraph)) {
+    $clearInlineStylesIfEmptyParagraph(paragraph);
+  }
+}
+
+function scheduleInlineStyleCleanup(editor: LexicalEditor): void {
+  setTimeout(() => {
+    editor.update(() => {
+      $clearInlineStylesAtEmptyParagraphSelection();
+    });
+  }, 0);
+}
+
+/**
+ * Lexical keeps the heading type when a heading is split in the middle. Notion
+ * always makes the next block a paragraph, including the split-off text.
+ */
+function $handleEnterFromHeading(): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
+    return false;
+  }
+
+  const anchorBlock = selection.anchor.getNode().getTopLevelElement();
+  const focusBlock = selection.focus.getNode().getTopLevelElement();
+  if (!$isHeadingNode(anchorBlock) || anchorBlock !== focusBlock) {
+    return false;
+  }
+
+  const nextBlock = selection.insertParagraph();
+  if (!$isElementNode(nextBlock)) {
+    return false;
+  }
+
+  if ($isHeadingNode(nextBlock)) {
+    const paragraph = $createParagraphNode();
+    paragraph.setDirection(nextBlock.getDirection());
+    paragraph.setIndent(nextBlock.getIndent());
+    nextBlock.replace(paragraph, true);
+    paragraph.selectStart();
+    $clearInlineStylesIfEmptyParagraph(paragraph);
+    return true;
+  }
+
+  $clearInlineStylesIfEmptyParagraph(nextBlock);
+  return true;
+}
+
 function registerNormalizeEnterPlugin(editor: LexicalEditor) {
   return mergeRegister(
     editor.registerCommand(
@@ -103,9 +188,23 @@ function registerNormalizeEnterPlugin(editor: LexicalEditor) {
         if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
           return false;
         }
+        if ($handleEnterFromHeading()) {
+          event.preventDefault();
+          return true;
+        }
         const res = $handleEnterAtBlockStart();
         if (res) event.preventDefault();
+        else scheduleInlineStyleCleanup(editor);
         return res;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_PARAGRAPH_COMMAND,
+      () => {
+        scheduleInlineStyleCleanup(editor);
+        return false;
       },
       COMMAND_PRIORITY_NORMAL
     ),

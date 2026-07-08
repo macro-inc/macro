@@ -70,7 +70,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./notification/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./properties_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./macro_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_refresh_handler/.env
@@ -84,6 +83,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./roles_and_permissions/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./teams/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./frecency/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./favorites/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./system_properties/.env
@@ -103,7 +103,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./memory/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./ai_usage/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./backfill_entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_management/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./mobile_welcome_email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_db_utils/.env

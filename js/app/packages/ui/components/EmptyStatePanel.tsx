@@ -2,7 +2,7 @@ import { openExternalUrl } from '@core/util/url';
 import { type Component, type JSXElement, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
-import { Button } from './Button';
+import { PillButton } from './PillButton';
 
 export interface EmptyStateAction {
   label: string;
@@ -23,7 +23,12 @@ export interface EmptyStatePanelProps {
    */
   documentationUrl?: string;
   documentationLabel?: string;
-  align?: 'left' | 'center';
+  /**
+   * Centered, vertically-balanced variant for very simple states (e.g. "no
+   * results") that are just a graphic and a line of text. Defaults to the
+   * left-aligned column that stacks with the chat input.
+   */
+  centered?: boolean;
   children?: JSXElement;
   class?: string;
 }
@@ -31,27 +36,32 @@ export interface EmptyStatePanelProps {
 const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
 
 export function EmptyStatePanel(props: EmptyStatePanelProps) {
-  const isCentered = () => props.align === 'center';
-
   return (
     <div
       role="status"
       class={cn(
-        'flex size-full flex-col overflow-y-auto px-8 pb-8',
-        '@max-sm:px-4 @max-sm:text-center @max-sm:items-center',
-        isCentered()
-          ? 'items-center text-center'
-          : 'items-center pt-24 @max-sm:pt-12',
+        // At wide widths the column aligns with the chat input bar (px-2 +
+        // max-w-3xl). At medium/narrow widths the bar's edge-hugging padding is
+        // too tight, so we widen the padding and let the centered column keep
+        // comfortable space from the split's edges (content stays left-aligned).
+        'flex size-full flex-col overflow-y-auto px-10 pb-8 @4xl:px-2',
+        props.centered && 'items-center text-center',
         props.class
       )}
     >
-      <Show when={isCentered()}>
-        <div class="min-h-12 flex-1" aria-hidden="true" />
-      </Show>
+      {/* A FIXED top spacer (not content-proportional) so the title lands on
+          the same baseline for every empty state, regardless of what's below
+          it. The graphic box has a fixed height too, so the title's vertical
+          position is constant; the bottom grows to fill. On mobile the viewport
+          is short and the wrapper already adds a top inset, so the spacer is
+          reduced to keep content from overflowing the visible area. */}
+      <div aria-hidden="true" class="shrink-0 basis-[28%] mobile:basis-[8%]" />
       <div
         class={cn(
-          'flex w-full max-w-xl flex-col gap-4 @max-sm:items-center',
-          isCentered() ? 'items-center' : 'items-start'
+          // Explicit vertical rhythm: a generous gap below the graphic, then a
+          // tight title→description pairing.
+          'mx-auto flex w-full shrink-0 flex-col',
+          props.centered ? 'max-w-md items-center' : 'max-w-3xl items-start'
         )}
       >
         <Show when={props.graphic}>
@@ -60,7 +70,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
               aria-hidden="true"
               class={cn(
                 DEFAULT_GRAPHIC_CLASS,
-                '-mb-8 opacity-70',
+                'empty-state-graphic mb-2 opacity-70',
                 props.graphicClass
               )}
             >
@@ -72,53 +82,50 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           <h2 class="text-base font-semibold text-ink">{props.title}</h2>
         </Show>
         <Show when={props.description}>
-          <div class="text-sm/6 text-ink-muted">{props.description}</div>
+          <div class="mt-3 text-sm/6 text-ink-muted">{props.description}</div>
         </Show>
         <Show when={props.primaryAction || props.documentationUrl}>
           <div
             class={cn(
-              'mt-2 flex flex-wrap gap-2',
-              isCentered() ? 'justify-center' : 'justify-start',
-              '@max-sm:w-full @max-sm:flex-col @max-sm:justify-center'
+              'mt-3 flex flex-wrap gap-2 @max-sm:w-full @max-sm:flex-col',
+              props.centered ? 'justify-center' : 'justify-start'
             )}
           >
             <Show when={props.primaryAction}>
               {(action) => (
-                <Button
-                  variant="cta"
-                  size="md"
-                  class={cn(
-                    'rounded-full',
-                    action().icon ? 'pl-3 pr-4' : 'px-4'
-                  )}
+                <PillButton
+                  tone="cta"
+                  icon={action().icon}
                   onClick={action().onClick}
                 >
-                  <Show when={action().icon}>
-                    {(icon) => <Dynamic component={icon()} class="size-4" />}
-                  </Show>
                   {action().label}
-                </Button>
+                </PillButton>
               )}
             </Show>
             <Show when={props.documentationUrl}>
               {(url) => (
-                <Button
-                  variant="base"
-                  size="md"
-                  class="rounded-full border-edge bg-ink/5 px-4"
+                <PillButton
+                  tone="subtle"
                   onClick={() => openExternalUrl(url())}
                 >
                   {props.documentationLabel ?? 'Documentation'}
-                </Button>
+                </PillButton>
               )}
             </Show>
           </div>
         </Show>
-        <Show when={props.children}>{props.children}</Show>
+        <Show when={props.children}>
+          <div
+            class={cn(
+              'mt-5 w-full',
+              props.centered && 'flex flex-col items-center'
+            )}
+          >
+            {props.children}
+          </div>
+        </Show>
       </div>
-      <Show when={isCentered()}>
-        <div class="flex-[2]" aria-hidden="true" />
-      </Show>
+      <div aria-hidden="true" class="grow" />
     </div>
   );
 }

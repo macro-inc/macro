@@ -16,6 +16,7 @@ use embedding::{
 use uuid::Uuid;
 
 use super::{TaskDedupConfig, TaskDedupService};
+use crate::EmbeddingMarkdown;
 use crate::domain::models::{
     JudgeResult, NewTask, TaskDedupError, TaskDuplicate, TaskSearchParameters,
 };
@@ -416,7 +417,7 @@ fn new_task(document_id: &str) -> NewTask {
         owner: "owner".to_string(),
         team_id: None,
         title: "Query title".to_string(),
-        markdown: "query body".to_string(),
+        markdown: EmbeddingMarkdown::from_client_trusted("query body".to_string()),
     }
 }
 
@@ -438,7 +439,7 @@ fn build(
     notifier: Arc<MockNotifier>,
     matches: Arc<MockMatchRepo>,
 ) -> Harness {
-    let service = TaskDedupService::new(
+    let service = TaskDedupService::with_config(
         config,
         MockEmbedder,
         vector_db.clone(),
@@ -455,6 +456,28 @@ fn build(
         notifier,
         matches,
     }
+}
+
+/// A vector score just above the production similarity floor, so floor tests
+/// keep passing when the floor is retuned.
+fn above_floor() -> f32 {
+    TaskDedupConfig::default().min_vector_similarity as f32 + 0.05
+}
+
+/// A vector score just below the production similarity floor.
+fn below_floor() -> f32 {
+    TaskDedupConfig::default().min_vector_similarity as f32 - 0.05
+}
+
+/// A rerank score just above the production rerank floor, so floor tests keep
+/// passing when the floor is retuned.
+fn above_rerank_floor() -> f64 {
+    TaskDedupConfig::default().min_rerank_score + 0.05
+}
+
+/// A rerank score just below the production rerank floor.
+fn below_rerank_floor() -> f64 {
+    TaskDedupConfig::default().min_rerank_score - 0.05
 }
 
 fn judge(duplicates: &[&str]) -> Arc<MockJudge> {
@@ -541,7 +564,10 @@ async fn detect_creates_match_reranks_and_notifies() {
 async fn detect_skips_candidates_below_vector_similarity() {
     let h = build(
         TaskDedupConfig::default(),
-        MockVectorDb::with_results(vec![("A", "cand-a", 0.9), ("B", "cand-b", 0.5)]),
+        MockVectorDb::with_results(vec![
+            ("A", "cand-a", above_floor()),
+            ("B", "cand-b", below_floor()),
+        ]),
         MockReranker::new(&[]),
         judge(&["cand-a", "cand-b"]),
         Arc::new(MockNotifier::default()),
@@ -550,7 +576,7 @@ async fn detect_skips_candidates_below_vector_similarity() {
 
     h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
-    // B (0.5 < 0.74) never reaches the reranker or the judge.
+    // B (below the similarity floor) never reaches the reranker or the judge.
     let calls = h.reranker.calls();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].1, vec!["cand-a".to_string()]);
@@ -612,6 +638,67 @@ async fn detect_uses_rerank_order_to_pick_judged_candidate() {
         upserts[0].duplicate_task_id.clone(),
     );
     assert_eq!(pair, ("B".to_string(), "NEW".to_string()));
+}
+
+/// Judge that yields a few times per call while tracking how many calls are in
+/// flight, so tests can assert the concurrency bound is both used and respected.
+#[derive(Default)]
+struct ConcurrencyProbeJudge {
+    in_flight: std::sync::atomic::AtomicUsize,
+    max_in_flight: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait]
+impl TaskDuplicateJudge for ConcurrencyProbeJudge {
+    async fn judge(&self, _left: &str, _right: &str) -> JudgeResult {
+        use std::sync::atomic::Ordering;
+        let current = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        self.max_in_flight.fetch_max(current, Ordering::SeqCst);
+        // Yield so other buffered judge futures get polled while this one is
+        // "in flight"; without this every call completes before the next starts
+        // and the probe can't observe overlap.
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        self.in_flight.fetch_sub(1, Ordering::SeqCst);
+        JudgeResult {
+            is_duplicate: false,
+            model: None,
+            reason: None,
+        }
+    }
+}
+
+#[tokio::test]
+async fn detect_runs_judge_calls_concurrently_up_to_limit() {
+    let config = TaskDedupConfig {
+        judge_concurrency: 2,
+        ..Default::default()
+    };
+    let probe = Arc::new(ConcurrencyProbeJudge::default());
+    let service = TaskDedupService::with_config(
+        config,
+        MockEmbedder,
+        MockVectorDb::with_results(vec![
+            ("A", "cand-a", 0.9),
+            ("B", "cand-b", 0.9),
+            ("C", "cand-c", 0.9),
+            ("D", "cand-d", 0.9),
+        ]),
+        MockReranker::new(&[]),
+        probe.clone(),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
+
+    service.detect_new_task(new_task("NEW")).await.unwrap();
+
+    // All four candidates were judged with exactly the configured overlap: the
+    // bound was saturated (calls did run concurrently) and never exceeded.
+    let max = probe
+        .max_in_flight
+        .load(std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(max, 2);
 }
 
 #[tokio::test]
@@ -679,11 +766,14 @@ async fn similarity_search_filters_ranks_and_persists_nothing() {
     let h = build(
         TaskDedupConfig::default(),
         MockVectorDb::with_results(vec![
-            ("X", "cx", 0.9),
-            ("Y", "cy", 0.5), // below floor
-            ("Z", "cz", 0.8),
+            ("X", "cx", above_floor()),
+            ("Y", "cy", below_floor()),
+            ("Z", "cz", above_floor()),
         ]),
-        MockReranker::new(&[]),
+        MockReranker::new(&[
+            ("cx", above_rerank_floor() + 0.01),
+            ("cz", above_rerank_floor()),
+        ]),
         judge(&[]),
         Arc::new(MockNotifier::default()),
         Arc::new(MockMatchRepo::default()),
@@ -691,7 +781,12 @@ async fn similarity_search_filters_ranks_and_persists_nothing() {
 
     let results = h
         .service
-        .similarity_search("owner", None, "title", "body")
+        .similarity_search(
+            "owner",
+            None,
+            "title",
+            &EmbeddingMarkdown::from_client_trusted("body".to_string()),
+        )
         .await
         .unwrap();
 
@@ -729,7 +824,7 @@ async fn similarity_search_orders_by_rerank_score() {
     let h = build(
         TaskDedupConfig::default(),
         MockVectorDb::with_results(vec![("X", "cx", 0.9), ("Z", "cz", 0.8)]),
-        MockReranker::new(&[("cx", 0.1), ("cz", 0.9)]),
+        MockReranker::new(&[("cx", above_rerank_floor()), ("cz", 0.9)]),
         judge(&[]),
         Arc::new(MockNotifier::default()),
         Arc::new(MockMatchRepo::default()),
@@ -737,12 +832,63 @@ async fn similarity_search_orders_by_rerank_score() {
 
     let results = h
         .service
-        .similarity_search("owner", None, "title", "body")
+        .similarity_search(
+            "owner",
+            None,
+            "title",
+            &EmbeddingMarkdown::from_client_trusted("body".to_string()),
+        )
         .await
         .unwrap();
 
     let ids: Vec<&str> = results.iter().map(|r| r.task_id.as_str()).collect();
     assert_eq!(ids, vec!["Z", "X"]);
+}
+
+#[tokio::test]
+async fn similarity_search_drops_results_below_rerank_floor() {
+    let h = build(
+        TaskDedupConfig::default(),
+        // Both clear the vector floor; only X clears the rerank floor.
+        MockVectorDb::with_results(vec![("X", "cx", 0.9), ("Y", "cy", 0.9)]),
+        MockReranker::new(&[("cx", above_rerank_floor()), ("cy", below_rerank_floor())]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
+
+    let results = h
+        .service
+        .similarity_search(
+            "owner",
+            None,
+            "title",
+            &EmbeddingMarkdown::from_client_trusted("body".to_string()),
+        )
+        .await
+        .unwrap();
+
+    let ids: Vec<&str> = results.iter().map(|r| r.task_id.as_str()).collect();
+    assert_eq!(ids, vec!["X"]);
+}
+
+#[tokio::test]
+async fn detect_judges_candidates_below_rerank_floor() {
+    // The rerank floor gates only the draft similarity search; detection keeps
+    // sending below-floor candidates to the judge, which is its relevance gate.
+    let h = build(
+        TaskDedupConfig::default(),
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.9)]),
+        MockReranker::new(&[("cand-a", below_rerank_floor())]),
+        judge(&["cand-a"]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
+
+    h.service.detect_new_task(new_task("NEW")).await.unwrap();
+
+    assert_eq!(judged_right_sides(&h.judge), vec!["cand-a".to_string()]);
+    assert_eq!(h.matches.upserted_matches.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -758,7 +904,11 @@ async fn similarity_search_truncates_to_duplicate_limit() {
             ("B", "cb", 0.90),
             ("C", "cc", 0.85),
         ]),
-        MockReranker::new(&[]),
+        MockReranker::new(&[
+            ("ca", above_rerank_floor() + 0.02),
+            ("cb", above_rerank_floor() + 0.01),
+            ("cc", above_rerank_floor()),
+        ]),
         judge(&[]),
         Arc::new(MockNotifier::default()),
         Arc::new(MockMatchRepo::default()),
@@ -766,7 +916,12 @@ async fn similarity_search_truncates_to_duplicate_limit() {
 
     let results = h
         .service
-        .similarity_search("owner", None, "title", "body")
+        .similarity_search(
+            "owner",
+            None,
+            "title",
+            &EmbeddingMarkdown::from_client_trusted("body".to_string()),
+        )
         .await
         .unwrap();
 

@@ -21,7 +21,7 @@ import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
 
-type PluginFunction = (editor: LexicalEditor) => () => void;
+export type PluginFunction = (editor: LexicalEditor) => () => void;
 
 /**
  * Create a binding between a LexicalEditor and the ability to register plugins
@@ -34,7 +34,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     history(timeGap = 400, loroManager?: LoroManager) {
       if (type === 'markdown-sync' && loroManager) {
         cleanupFunctions.push(
-          registerLoroHistory(editor, loroManager.getDoc(), timeGap)
+          registerLoroHistory(editor, loroManager.doc, timeGap)
         );
       } else {
         cleanupFunctions.push(

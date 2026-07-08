@@ -1,10 +1,16 @@
 //! Domain policies for channel side effects.
 
 use crate::domain::{
+    broker_events::{
+        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelEventAttachment, ChannelMacroEvent,
+        ChannelMessageAttachmentCreatedMetadata, ChannelMessageAttachmentRemovedMetadata,
+        ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
+        ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
+    },
     events::ChannelEvent,
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
+        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
         TypingAction,
     },
     ports::{
@@ -13,6 +19,8 @@ use crate::domain::{
         ChannelSideEffectContext,
     },
 };
+use bot_id::BotIdStr;
+use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
@@ -40,27 +48,38 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 /// Bot mentions normally arrive tagged `bot`, but Macro AI is surfaced through
 /// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
 /// bot is recognized as a bot mention too.
+///
+/// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
+/// rejected (historical bare-UUID content is normalized by migration).
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
         .filter_map(|mention| match mention.entity_type.as_str() {
-            BOT_MENTION_ENTITY_TYPE => BotId::parse_uuid_str(&mention.entity_id).ok(),
-            "user" => BotId::parse_uuid_str(&mention.entity_id)
-                .ok()
-                .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
+            BOT_MENTION_ENTITY_TYPE => mention_bot_id(&mention.entity_id),
+            "user" => {
+                mention_bot_id(&mention.entity_id).filter(|id| *id == bot_id::MACRO_AI_BOT_ID)
+            }
             _ => None,
         })
         .filter(|id| seen.insert(*id))
         .collect()
 }
 
+/// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
+fn mention_bot_id(entity_id: &str) -> Option<BotId> {
+    BotIdStr::parse_from_str(entity_id)
+        .ok()
+        .map(|id| id.bot_id())
+}
+
 /// Whether a `user`-tagged mention actually targets a bot (and so must not be
-/// treated as a user recipient). Real user ids are not bare UUIDs, so this only
-/// matches the Macro AI bot surfaced through the user-mention UI.
+/// treated as a user recipient). Real user ids are `macro|<email>` strings,
+/// never `bot|<uuid>` principals, so this only matches the Macro AI bot
+/// surfaced through the user-mention UI.
 fn is_bot_user_mention(mention: &SimpleMention) -> bool {
     mention.entity_type == "user"
-        && BotId::parse_uuid_str(&mention.entity_id).ok() == Some(bot_id::MACRO_AI_BOT_ID)
+        && mention_bot_id(&mention.entity_id) == Some(bot_id::MACRO_AI_BOT_ID)
 }
 
 /// Realtime update requested by the channel domain.
@@ -275,13 +294,14 @@ pub enum ChannelNotificationEffect {
 
 /// Domain service that derives and dispatches side effects for channel events.
 #[derive(Clone)]
-pub struct ChannelSideEffectService<C, R, N, S, K> {
+pub struct ChannelSideEffectService<C, R, N, S, K, B = NoopMacroEventBroker> {
     context: C,
     realtime: R,
     notifications: N,
     search: S,
     contacts: K,
     bot_triggers: Option<ChannelBotTriggerSender>,
+    macro_event_broker: B,
 }
 
 struct MessagePostedSideEffects {
@@ -307,7 +327,10 @@ struct InviteNotificationRequest {
 }
 
 impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
-    /// Create a channel side-effect service.
+    /// Create a channel side-effect service that drops broker events.
+    ///
+    /// Use [`Self::with_macro_event_broker`] to publish channel events to the
+    /// macro event broker.
     pub fn new(context: C, realtime: R, notifications: N, search: S, contacts: K) -> Self {
         Self {
             context,
@@ -316,13 +339,32 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
             search,
             contacts,
             bot_triggers: None,
+            macro_event_broker: NoopMacroEventBroker,
         }
     }
+}
 
+impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B> {
     /// Configure a sender for bot triggers derived from channel messages.
     pub fn with_bot_trigger_sender(mut self, bot_triggers: ChannelBotTriggerSender) -> Self {
         self.bot_triggers = Some(bot_triggers);
         self
+    }
+
+    /// Configure a macro event broker to publish channel events to.
+    pub fn with_macro_event_broker<B2: MacroEventBroker>(
+        self,
+        macro_event_broker: B2,
+    ) -> ChannelSideEffectService<C, R, N, S, K, B2> {
+        ChannelSideEffectService {
+            context: self.context,
+            realtime: self.realtime,
+            notifications: self.notifications,
+            search: self.search,
+            contacts: self.contacts,
+            bot_triggers: self.bot_triggers,
+            macro_event_broker,
+        }
     }
 
     /// Dispatch bot triggers for any bots mentioned in a user-authored message.
@@ -385,19 +427,23 @@ where
     }
 }
 
-impl<C, R, N, S, K> ChannelEventHandler for ChannelSideEffectService<C, R, N, S, K>
+impl<C, R, N, S, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, S, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
     S: ChannelSearchIndexer + Clone,
     K: ChannelContactsDispatcher + Clone,
+    B: MacroEventBroker + Clone,
 {
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
+        let broker_events = broker_events_for_event(&event);
 
         match event {
             ChannelEvent::ChannelCreated { .. } => {}
+            ChannelEvent::ChannelUpdated { .. } => {}
+            ChannelEvent::ParticipantsRemoved { .. } => {}
             ChannelEvent::ChannelDeleted { channel_id, .. } => {
                 self.search.remove_message(channel_id, None).await;
             }
@@ -523,7 +569,7 @@ where
                 self.publish_realtime(ChannelRealtimeEffect::Typing {
                     recipients,
                     channel_id,
-                    user_id: actor.to_storage_string(),
+                    user_id: actor.as_ref().to_string(),
                     action,
                     thread_id,
                     nonce,
@@ -558,10 +604,23 @@ where
             let err: anyhow::Error = err.into();
             tracing::error!(error=?err, "unable to enqueue channel contact sync");
         }
+
+        // Published after the other side effects so broker latency never
+        // delays realtime updates or notifications; failures are logged and
+        // dropped.
+        for broker_event in broker_events {
+            let _ = self
+                .macro_event_broker
+                .send_event(&broker_event)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish channel event");
+                });
+        }
     }
 }
 
-impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K>
+impl<C, R, N, S, K, B> ChannelSideEffectService<C, R, N, S, K, B>
 where
     C: ChannelSideEffectContext + Clone,
     R: ChannelRealtimePublisher + Clone,
@@ -620,18 +679,14 @@ where
 
     /// Resolve the public bot profile when the message sender is a bot.
     async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
-        match &message.sender_id {
-            Sender::Bot(bot_id) => {
-                if *bot_id == bot_id::MACRO_AI_BOT_ID {
-                    return Some(BotSenderProfile {
-                        name: bot_id::MACRO_AI_NAME.to_string(),
-                        avatar_url: None,
-                    });
-                }
-                self.context.get_bot_sender_profile(*bot_id).await
-            }
-            Sender::User(_) => None,
+        let bot_id = message.sender_id.as_bot()?.bot_id();
+        if bot_id == bot_id::MACRO_AI_BOT_ID {
+            return Some(BotSenderProfile {
+                name: bot_id::MACRO_AI_NAME.to_string(),
+                avatar_url: None,
+            });
         }
+        self.context.get_bot_sender_profile(bot_id).await
     }
 
     async fn publish_realtime(&self, effect: ChannelRealtimeEffect) {
@@ -658,15 +713,17 @@ where
             has_attachments,
             bot_profile,
         } = inputs;
-        let resolved_sender = match &message.sender_id {
-            Sender::User(user_id) => ResolvedNotificationSender {
+        let resolved_sender = if let Some(user_id) = message.sender_id.as_user() {
+            let user_id = user_id.clone();
+            ResolvedNotificationSender {
                 sender: NotificationSender::User(user_id.clone()),
                 profile_picture_url: self
                     .context
                     .get_sender_profile_picture_url(user_id.clone())
                     .await,
-            },
-            Sender::Bot(bot_id) => match bot_profile {
+            }
+        } else if let Some(bot_id) = message.sender_id.as_bot().map(|id| id.bot_id()) {
+            match bot_profile {
                 Some(profile) => ResolvedNotificationSender {
                     sender: NotificationSender::Bot { name: profile.name },
                     profile_picture_url: profile.avatar_url,
@@ -675,7 +732,9 @@ where
                     tracing::warn!(bot_id = %bot_id, "missing bot profile, skipping message notifications");
                     return;
                 }
-            },
+            }
+        } else {
+            return;
         };
         let context = match self
             .build_posted_message_context(
@@ -1084,7 +1143,7 @@ struct PostedMessageNotificationContext {
 /// Bots are not user recipients and are not valid `MacroUserIdStr`s, so they are
 /// skipped before parsing to avoid spurious parse warnings.
 fn is_bot_principal(id: &str) -> bool {
-    BotId::parse_storage_str(id).is_ok()
+    BotIdStr::parse_from_str(id).is_ok()
 }
 
 fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
@@ -1113,25 +1172,213 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
     match event {
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
-            actor: Sender::User(_),
+            actor,
             participant_user_ids,
             ..
-        } => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
-            invited_by: Sender::User(_),
+            invited_by,
             active_participant_user_ids,
             ..
-        } => Some(active_participant_user_ids.iter().cloned().collect()),
+        } if invited_by.as_user().is_some() => {
+            Some(active_participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantJoined {
             channel_type: ChannelType::Public | ChannelType::Private | ChannelType::Team,
-            user_id: Sender::User(_),
+            user_id,
             active_participant_user_ids,
             ..
-        } if active_participant_user_ids.len() > 1 => {
+        } if user_id.as_user().is_some() && active_participant_user_ids.len() > 1 => {
             Some(active_participant_user_ids.iter().cloned().collect())
         }
         _ => None,
+    }
+}
+
+/// Map an internal channel event to the wire events published to the
+/// `macro.channels` topic.
+///
+/// Ephemeral events (typing) and reaction changes publish nothing.
+fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
+    match event {
+        ChannelEvent::ChannelCreated {
+            channel_id,
+            actor,
+            channel_type,
+            channel_name,
+            participant_user_ids,
+        } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
+            channel_id: *channel_id,
+            actor: actor.clone(),
+            channel_type: *channel_type,
+            channel_name: channel_name.clone(),
+            participant_user_ids: participant_user_ids.clone(),
+        })],
+        ChannelEvent::ChannelUpdated {
+            channel_id,
+            actor,
+            previous_name,
+            channel_name,
+        } => vec![ChannelMacroEvent::updated(ChannelUpdatedMetadata {
+            channel_id: *channel_id,
+            actor: actor.clone(),
+            previous_name: previous_name.clone(),
+            channel_name: channel_name.clone(),
+        })],
+        ChannelEvent::ChannelDeleted { channel_id, actor } => {
+            vec![ChannelMacroEvent::deleted(ChannelDeletedMetadata {
+                channel_id: *channel_id,
+                actor: actor.clone(),
+            })]
+        }
+        ChannelEvent::MessagePosted {
+            channel_id,
+            metadata,
+            message,
+            mentions,
+            attachments,
+            ..
+        } => {
+            let mut events = vec![ChannelMacroEvent::message_posted(
+                ChannelMessagePostedMetadata {
+                    channel_id: *channel_id,
+                    message_id: message.id,
+                    thread_id: message.thread_id,
+                    sender: message.sender_id.clone(),
+                    triggered_by: message.triggered_by.clone(),
+                    channel_type: metadata.channel_type,
+                    content: message.content.clone(),
+                    mentions: mentions.clone(),
+                    attachments: attachments
+                        .iter()
+                        .map(ChannelEventAttachment::from)
+                        .collect(),
+                    created_at: message.created_at,
+                },
+            )];
+            if !attachments.is_empty() {
+                events.push(ChannelMacroEvent::message_attachment_created(
+                    ChannelMessageAttachmentCreatedMetadata {
+                        channel_id: *channel_id,
+                        message_id: message.id,
+                        actor: message.sender_id.clone(),
+                        attachments: attachments
+                            .iter()
+                            .map(ChannelEventAttachment::from)
+                            .collect(),
+                    },
+                ));
+            }
+            events
+        }
+        ChannelEvent::MessageChanged {
+            channel_id,
+            actor,
+            message,
+            ..
+        } => vec![ChannelMacroEvent::message_patched(
+            ChannelMessagePatchedMetadata {
+                channel_id: *channel_id,
+                message_id: message.id,
+                thread_id: message.thread_id,
+                actor: actor.clone(),
+                content: message.content.clone(),
+                edited_at: message.edited_at,
+                updated_at: message.updated_at,
+            },
+        )],
+        ChannelEvent::MessageDeleted {
+            channel_id,
+            actor,
+            message,
+            ..
+        } => vec![ChannelMacroEvent::message_deleted(
+            ChannelMessageDeletedMetadata {
+                channel_id: *channel_id,
+                message_id: message.id,
+                thread_id: message.thread_id,
+                actor: actor.clone(),
+                deleted_at: message.deleted_at,
+            },
+        )],
+        ChannelEvent::AttachmentsChanged {
+            channel_id,
+            actor,
+            message_id,
+            added,
+            removed,
+            ..
+        } => {
+            let mut events = Vec::new();
+            if !added.is_empty() {
+                events.push(ChannelMacroEvent::message_attachment_created(
+                    ChannelMessageAttachmentCreatedMetadata {
+                        channel_id: *channel_id,
+                        message_id: *message_id,
+                        actor: actor.clone(),
+                        attachments: added.iter().map(ChannelEventAttachment::from).collect(),
+                    },
+                ));
+            }
+            if !removed.is_empty() {
+                events.push(ChannelMacroEvent::message_attachment_removed(
+                    ChannelMessageAttachmentRemovedMetadata {
+                        channel_id: *channel_id,
+                        message_id: *message_id,
+                        actor: actor.clone(),
+                        attachments: removed.iter().map(ChannelEventAttachment::from).collect(),
+                    },
+                ));
+            }
+            events
+        }
+        ChannelEvent::ParticipantsAdded {
+            channel_id,
+            channel_type,
+            invited_by,
+            recipient_user_ids,
+            ..
+        } => vec![ChannelMacroEvent::participant_added(
+            ChannelParticipantAddedMetadata {
+                channel_id: *channel_id,
+                channel_type: *channel_type,
+                added_by: invited_by.clone(),
+                added_user_ids: recipient_user_ids.clone(),
+            },
+        )],
+        ChannelEvent::ParticipantJoined {
+            channel_id,
+            channel_type,
+            user_id,
+            ..
+        } => user_id
+            .as_user()
+            .map(|joined| {
+                vec![ChannelMacroEvent::participant_added(
+                    ChannelParticipantAddedMetadata {
+                        channel_id: *channel_id,
+                        channel_type: *channel_type,
+                        added_by: user_id.clone(),
+                        added_user_ids: vec![joined.clone()],
+                    },
+                )]
+            })
+            .unwrap_or_default(),
+        ChannelEvent::ParticipantsRemoved {
+            channel_id,
+            channel_type,
+            actor,
+            removed_user_ids,
+        } => vec![ChannelMacroEvent::participant_removed(
+            ChannelParticipantRemovedMetadata {
+                channel_id: *channel_id,
+                channel_type: *channel_type,
+                removed_by: actor.clone(),
+                removed_user_ids: removed_user_ids.clone(),
+            },
+        )],
+        ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
     }
 }
 

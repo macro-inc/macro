@@ -21,6 +21,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
+  makeFavoriteAction,
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
@@ -72,6 +73,8 @@ export const useEntityActionHotkeys = (
   const copyEntityIdAction = makeCopyEntityIdAction();
 
   const shareAction = makeShareAction();
+
+  const favoriteAction = makeFavoriteAction();
 
   const getEntitiesForAction = (): EntityData[] => {
     if (
@@ -204,6 +207,35 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
+  registerHotkey({
+    hotkey: ['opt+f'],
+    hotkeyToken: TOKENS.entity.action.favorite,
+    scopeId,
+    description: () => {
+      const entities = getEntitiesForAction();
+      const allFavorited =
+        entities.length > 0 &&
+        entities.every((entity) => favoriteAction.isFavorited(entity));
+      return allFavorited ? 'Unfavorite' : 'Favorite';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(favoriteAction.canExecute)) return false;
+
+      favoriteAction.executeWithSoup(entities, soup);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(favoriteAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

@@ -32,7 +32,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
+import { isMacroAiId, macroAiMentionUser } from '../macroAi';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
@@ -220,7 +220,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // `@`-mention typeahead as participants and re-tagged as a bot at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
     const base = props.participants?.() ?? [];
-    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+    return base.some((user) => isMacroAiId(user.id))
       ? base
       : [macroAiMentionUser(), ...base];
   };
@@ -384,7 +384,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
-          class="mobile:rounded-full"
+          class="mobile:rounded-full mobile:island"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -413,8 +413,13 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class={cn('rounded-xl mobile:rounded-3xl', isCollapsed() && 'hidden')}
-        depth={2}
+        class={cn(
+          'rounded-xl mobile:rounded-3xl mobile:island',
+          isCollapsed() && 'hidden'
+        )}
+        bgToken={isMobile() ? 'chrome' : undefined}
+        hideBorder={isMobile()}
+        depth={isMobile() ? 3 : 2}
         solid
       >
         <Input.DropZone

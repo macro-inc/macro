@@ -34,8 +34,11 @@ import {
 import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
+  getAllNotificationsFromGroup,
   type NotificationSource,
   setDoneOverride,
+  stackNotifications,
+  type UnifiedNotification,
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -397,6 +400,7 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
+      reopen: entity.type === 'channel' && !location ? 'latest' : undefined,
     }
   );
 
@@ -687,6 +691,91 @@ export type MarkEntitiesDoneContext = {
   applyUndone: () => void;
 };
 
+function channelThreadNotificationIds(
+  notifications: UnifiedNotification[],
+  threadId?: string
+): Set<string> {
+  const ids = new Set<string>();
+
+  if (threadId !== undefined) {
+    for (const notification of notifications) {
+      const metadata = notification.notification_metadata;
+
+      const belongsToThread = match(metadata)
+        .with(
+          { tag: 'channel_message_send' },
+          (m) => m.content.messageId === threadId
+        )
+        .with(
+          { tag: 'channel_mention' },
+          (m) => (m.content.threadId ?? m.content.messageId) === threadId
+        )
+        .with(
+          { tag: 'channel_message_reply' },
+          (m) => m.content.threadId === threadId
+        )
+        .otherwise(() => false);
+
+      if (!belongsToThread) {
+        continue;
+      }
+      ids.add(notification.id);
+    }
+
+    return ids;
+  }
+
+  for (const stack of stackNotifications(notifications)) {
+    // New inbox renders thread replies and mentions separately from channels.
+    if (
+      stack.type !== 'channel_message_reply' &&
+      stack.type !== 'channel_mention'
+    ) {
+      continue;
+    }
+
+    for (const notification of getAllNotificationsFromGroup(stack)) {
+      ids.add(notification.id);
+    }
+  }
+
+  return ids;
+}
+
+export function scopeChannelNotificationsForEntity(
+  entity: EntityData,
+  notifications: UnifiedNotification[]
+): UnifiedNotification[] {
+  if (entity.type === 'channel') {
+    const threadNotificationIds = channelThreadNotificationIds(notifications);
+    return notifications.filter(
+      (notification) => !threadNotificationIds.has(notification.id)
+    );
+  }
+
+  if (entity.type === 'channel_thread') {
+    const threadNotificationIds = channelThreadNotificationIds(
+      notifications,
+      entity.messageId
+    );
+    return notifications.filter((notification) =>
+      threadNotificationIds.has(notification.id)
+    );
+  }
+
+  return notifications;
+}
+
+function notificationsForMarkDone(
+  entity: EntityData,
+  notifications: UnifiedNotification[],
+  scopeChannelNotificationsToEntity: boolean
+): UnifiedNotification[] {
+  if (!scopeChannelNotificationsToEntity) return notifications;
+
+  return scopeChannelNotificationsForEntity(entity, notifications);
+}
+
 /**
  * Extract the email ids and notification ids targeted by a mark-done on these
  * entities. The ids are snapshotted here so mutationFn/undoFn/redoFn operate
@@ -695,17 +784,36 @@ export type MarkEntitiesDoneContext = {
 export function resolveMarkEntitiesDoneVariables(args: {
   entities: EntityData[];
   notificationSource: NotificationSource;
+  /**
+   * Channel and channel_thread entities share the same notification bucket.
+   * When true, channel mark-done skips thread-stack notifications, and
+   * channel_thread mark-done only targets that thread's stack.
+   */
+  scopeChannelNotificationsToEntity?: boolean;
 }): { emailIds: string[]; notificationIds: string[] } {
-  const { entities, notificationSource } = args;
+  const {
+    entities,
+    notificationSource,
+    scopeChannelNotificationsToEntity = false,
+  } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
-    return (
+    const notificationsForEntity =
       notificationSource.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))
-      ] ?? []
+      ] ?? [];
+
+    return notificationsForMarkDone(
+      entity,
+      notificationsForEntity,
+      scopeChannelNotificationsToEntity
     ).map((n) => n.id);
   });
-  return { emailIds, notificationIds };
+
+  return {
+    emailIds: [...new Set(emailIds)],
+    notificationIds: [...new Set(notificationIds)],
+  };
 }
 
 /**

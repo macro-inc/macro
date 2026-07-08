@@ -72,6 +72,8 @@ impl GithubRepo for PgGithubRepo {
         SELECT id, macro_id, fusionauth_user_id as "fusionauth_user_id: Uuid", github_username, github_user_id, created_at, updated_at
         FROM github_links
         WHERE github_user_id = $1
+        ORDER BY created_at ASC
+        LIMIT 1
         "#,
         github_user_id
         )
@@ -93,6 +95,25 @@ impl GithubRepo for PgGithubRepo {
             Some(l) => Ok(l),
             None => Err(sqlx::Error::RowNotFound),
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn count_github_links_by_github_user_id(
+        &self,
+        github_user_id: &str,
+    ) -> Result<i64, Self::Err> {
+        let count = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*)
+            FROM github_links
+            WHERE github_user_id = $1
+            "#,
+            github_user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count.unwrap_or(0))
     }
 
     #[tracing::instrument(skip(self), err)]

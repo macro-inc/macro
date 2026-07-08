@@ -1,18 +1,24 @@
+import { GITHUB_EVENT_TYPES } from '@notifications/github-event-types';
 import { describe, expect, it } from 'vitest';
 import {
   getActionVerb,
+  getGithubSenderAvatarUrl,
   getGithubSenderLogin,
   getTypeNoun,
   getUniqueGithubLogins,
   getUniqueSenderIds,
+  isGithubNotificationType,
 } from '../src/extractors-notification/notification-description-helpers';
 import type { Notification } from '../src/types/notification';
 
-const githubNotification = (login: string | null | undefined): Notification =>
+const githubNotification = (
+  login: string | null | undefined,
+  avatarUrl?: string | null
+): Notification =>
   ({
     notification_metadata: {
       tag: 'github_pr_comment',
-      content: { senderGithubLogin: login },
+      content: { senderGithubLogin: login, senderGithubAvatarUrl: avatarUrl },
     },
   }) as unknown as Notification;
 
@@ -98,6 +104,52 @@ describe('notification-description helpers', () => {
         notification_metadata: { tag: 'channel_mention', content: {} },
       } as unknown as Notification;
       expect(getGithubSenderLogin(notification)).toBeUndefined();
+    });
+  });
+
+  describe('isGithubNotificationType', () => {
+    it('returns true for every GitHub event type', () => {
+      for (const type of GITHUB_EVENT_TYPES) {
+        expect(isGithubNotificationType(type)).toBe(true);
+      }
+    });
+
+    it('returns false for non-GitHub types', () => {
+      expect(isGithubNotificationType('channel_mention')).toBe(false);
+      expect(isGithubNotificationType('new_email')).toBe(false);
+      expect(isGithubNotificationType('task_assigned')).toBe(false);
+    });
+  });
+
+  describe('getGithubSenderAvatarUrl', () => {
+    it('prefers the avatar URL from the notification metadata', () => {
+      expect(
+        getGithubSenderAvatarUrl(
+          githubNotification(
+            'octocat',
+            'https://avatars.githubusercontent.com/u/12345?v=4'
+          )
+        )
+      ).toBe('https://avatars.githubusercontent.com/u/12345?v=4');
+    });
+
+    it('derives the avatar from the login when no URL is present', () => {
+      expect(getGithubSenderAvatarUrl(githubNotification('octocat'))).toBe(
+        'https://github.com/octocat.png?size=80'
+      );
+    });
+
+    it('returns undefined without a URL or login', () => {
+      expect(
+        getGithubSenderAvatarUrl(githubNotification(null))
+      ).toBeUndefined();
+    });
+
+    it('returns undefined for non-GitHub notifications', () => {
+      const notification = {
+        notification_metadata: { tag: 'channel_mention', content: {} },
+      } as unknown as Notification;
+      expect(getGithubSenderAvatarUrl(notification)).toBeUndefined();
     });
   });
 

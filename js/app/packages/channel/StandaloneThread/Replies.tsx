@@ -1,5 +1,10 @@
 import { createMemo, For, Show } from 'solid-js';
-import { Message, type MessageActions, type MessageData } from '../Message';
+import {
+  Message,
+  type MessageActions,
+  type MessageData,
+  MessageFlag,
+} from '../Message';
 import { Thread } from '../Thread';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
 import { ThreadRail } from '../Thread/ThreadRail';
@@ -22,7 +27,9 @@ export function Replies(props: RepliesProps) {
   const ctx = useStandaloneThread();
 
   const listMetaByReplyId = createMemo(() =>
-    buildThreadReplyListMeta(ctx.displayReplies())
+    buildThreadReplyListMeta(ctx.displayReplies(), (reply) =>
+      ctx.unreadMessageIds().has(reply.id)
+    )
   );
 
   const collapsedRepliesCount = () =>
@@ -38,7 +45,15 @@ export function Replies(props: RepliesProps) {
     getThreadLatestReplyAt(ctx.parent()?.thread.latest_reply_at, ctx.replies());
 
   const shouldShowCollapsedIndicator = () =>
-    !ctx.isReplying() && !ctx.isExpanded() && collapsedRepliesCount() > 0;
+    !ctx.isReplying() &&
+    !ctx.isExpanded() &&
+    ctx.hiddenEarlierReplyCount() === 0 &&
+    collapsedRepliesCount() > 0;
+
+  const earlierReplyUsers = () =>
+    getUniqueReplyUserIds(
+      ctx.replies().slice(0, ctx.hiddenEarlierReplyCount())
+    );
 
   const replyAction = () => {
     const parent = ctx.parent();
@@ -61,6 +76,15 @@ export function Replies(props: RepliesProps) {
           firstThreadReplyNewMessage={false}
         />
         <Thread.RepliesContainer>
+          <Show when={ctx.hiddenEarlierReplyCount() > 0}>
+            <Thread.ActionsFooter>
+              <Thread.CollapsedIndicator
+                collapsedRepliesCount={ctx.hiddenEarlierReplyCount()}
+                participants={earlierReplyUsers()}
+                onClick={() => ctx.setIsExpanded(true)}
+              />
+            </Thread.ActionsFooter>
+          </Show>
           <For each={ctx.displayReplies()}>
             {(reply) => {
               const replyMessage = () =>
@@ -70,7 +94,10 @@ export function Replies(props: RepliesProps) {
                 props.getMessageActions?.(replyMessage());
               return (
                 <div class="relative">
-                  <ThreadRail />
+                  <ThreadRail newMessage={meta()?.isNewMessage} />
+                  <Show when={meta()?.isFirstNewMessage}>
+                    <MessageFlag text="New" highlightBelow class="h-8" />
+                  </Show>
                   <Message.Root
                     message={replyMessage()}
                     actions={replyActions()}

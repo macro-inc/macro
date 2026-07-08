@@ -55,6 +55,10 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use favorites::{
+    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    outbound::pg_favorites_repo::PgFavoritesRepo,
+};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -67,7 +71,10 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_service_urls::{
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 #[cfg(feature = "graphql")]
@@ -88,12 +95,12 @@ use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
-    TaskDedupConfig, TaskDedupService,
+    TaskDedupService,
     outbound::{
+        cohere::CohereReranker,
         connection_gateway::ConnectionGatewayTaskDedupNotifier,
         judge::AgentDuplicateJudge,
         postgres::{PgTaskMatchRepo, PgTaskVectorDb},
-        reranker::NoOpReranker,
     },
 };
 
@@ -253,6 +260,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
@@ -260,6 +270,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+        ),
         0,
     ));
     let system_properties_service =
@@ -295,9 +308,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
-    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
+    let notification_service = NotificationServiceImpl::new(
+        SqsNotificationIngress {
+            queue: ingress_queue,
+        },
+        db.clone(),
+    );
     let properties_service = Arc::new(
         PropertiesServiceImpl::new(
             PropertiesPgRepo::new(db.clone()),
@@ -371,6 +387,11 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -383,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
         connection_service,
         entity_access_management_service.clone(),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker.clone(),
     ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
@@ -586,7 +608,6 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
-    let task_dedup_config = TaskDedupConfig::default();
     // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's
@@ -596,11 +617,15 @@ async fn main() -> anyhow::Result<()> {
         !openai_api_key.trim().is_empty(),
         "OpenAI API key is required for task dedup embeddings",
     );
+    let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
+    anyhow::ensure!(
+        !cohere_api_key.trim().is_empty(),
+        "Cohere API key is required for task dedup reranking",
+    );
     let task_dedup_service = Arc::new(TaskDedupService::new(
-        task_dedup_config.clone(),
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
-        NoOpReranker,
+        CohereReranker::new(cohere_api_key),
         Arc::new(AgentDuplicateJudge::new(ai_usage::pg_recorder(db.clone()))),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
@@ -619,7 +644,8 @@ async fn main() -> anyhow::Result<()> {
         SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender)
+    .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -668,13 +694,23 @@ async fn main() -> anyhow::Result<()> {
         foreign_entity_service_for_soup,
     ));
 
+    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
             email_service,
             entity_access_service.clone(),
+        )
+        .with_favorites_reader(Arc::new(
+            service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
+        )),
+        favorites_state: FavoritesRouterState::new(
+            favorites_service.clone(),
+            entity_access_service.clone(),
         ),
+        favorites_service,
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]
@@ -711,7 +747,7 @@ async fn main() -> anyhow::Result<()> {
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
-            document_permission_jwt_secret: config.document_permission_jwt_secret_key.as_ref().to_string(),
+            document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),
         channels_state: ChannelsRouterState::from_arc(
@@ -737,6 +773,13 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "delete_document_worker")]
     {
+        let editing_worker_client = Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            )
+            .with_internal_auth_key(Some(api_context.config.internal_api_key.to_string())),
+        );
+
         // Spawn the delete document worker.
         let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
             worker: Arc::new(delete_document_worker),
@@ -744,6 +787,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: api_context.s3_client.clone(),
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
+            editing_worker_client,
         };
 
         tokio::spawn(async move {

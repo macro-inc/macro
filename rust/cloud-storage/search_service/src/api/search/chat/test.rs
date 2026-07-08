@@ -45,7 +45,7 @@ fn create_chat_history(chat_id: &str) -> macro_db_client::chat::get::ChatHistory
 #[test]
 fn test_empty_input() {
     let input = vec![];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+    let result = construct_search_result(input, HashMap::new(), HashMap::new()).unwrap();
     assert_eq!(result.len(), 0);
 }
 
@@ -73,7 +73,7 @@ fn test_single_chat_with_content() {
         },
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -116,7 +116,7 @@ fn test_single_chat_without_content() {
         create_chat_history("11111111-1111-1111-1111-111111111111"),
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -154,7 +154,7 @@ fn test_single_chat_multiple_messages() {
         create_chat_history("11111111-1111-1111-1111-111111111111"),
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -203,7 +203,7 @@ fn test_multiple_chats() {
         create_chat_history("22222222-2222-2222-2222-222222222222"),
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 2);
 
@@ -244,7 +244,7 @@ fn test_mixed_content_presence() {
         create_chat_history("11111111-1111-1111-1111-111111111111"),
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(
@@ -288,7 +288,7 @@ fn test_user_id_taken_from_first_result() {
         create_chat_history("11111111-1111-1111-1111-111111111111"),
     );
 
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     // user_id should come from the first result (base_search_result)
@@ -321,7 +321,7 @@ fn test_chat_history_timestamps() {
     chat_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied from the chat history
     assert_eq!(result.len(), 1);
@@ -355,7 +355,7 @@ fn test_chat_history_missing_entry() {
     chat_histories.insert("different_chat".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     // Chats without history info should not be returned
     assert_eq!(result.len(), 0);
@@ -387,7 +387,7 @@ fn test_chat_history_deleted() {
         },
     );
 
-    let result = construct_search_result(input_deleted, chat_histories).unwrap();
+    let result = construct_search_result(input_deleted, chat_histories, HashMap::new()).unwrap();
 
     // Deleted chat should be returned with metadata including deleted_at
     assert_eq!(result.len(), 1);
@@ -406,7 +406,7 @@ fn test_chat_history_deleted() {
     let chat_histories_not_found = HashMap::new(); // No entry = not found
 
     let result_not_found =
-        construct_search_result(input_not_found, chat_histories_not_found).unwrap();
+        construct_search_result(input_not_found, chat_histories_not_found, HashMap::new()).unwrap();
 
     // Chat not in DB should not be returned
     assert_eq!(result_not_found.len(), 0);
@@ -437,7 +437,7 @@ fn test_chat_history_null_viewed_at() {
     chat_histories.insert("11111111-1111-1111-1111-111111111111".to_string(), history);
 
     // Call the function under test
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input, chat_histories, HashMap::new()).unwrap();
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
@@ -487,9 +487,12 @@ fn test_sort_stability() {
         chat_histories.insert(chat_id.to_string(), create_chat_history(chat_id));
     }
 
-    let result1 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
+    let result1 =
+        construct_search_result(input.clone(), chat_histories.clone(), HashMap::new()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), chat_histories.clone(), HashMap::new()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), chat_histories.clone(), HashMap::new()).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);

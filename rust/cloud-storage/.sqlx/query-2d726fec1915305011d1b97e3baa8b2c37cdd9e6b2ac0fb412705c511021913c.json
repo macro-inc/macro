@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id as entity_id,\n                c.name,\n                regexp_replace(\n                    c.name,\n                    $7,\n                    '<macro_em>\\1</macro_em>',\n                    'gi'\n                ) as name_highlighted,\n                c.\"updatedAt\" as updated_at\n            FROM \"Chat\" c\n            WHERE (c.\"userId\" = $1 OR c.id = ANY($2))\n                AND c.\"deletedAt\" IS NULL\n                AND c.name ILIKE $3\n                AND (\n                    $5::timestamptz IS NULL\n                    OR (c.\"updatedAt\", c.id) < ($5, $6)\n                )\n                AND (\n                    cardinality($8::text[]) = 0\n                    OR EXISTS (\n                        SELECT 1 FROM entity_properties ep\n                        WHERE ep.entity_id = c.id\n                            AND ep.entity_type = 'CHAT'\n                            AND ep.values->'value' ?| $8::text[]\n                    )\n                )\n            ORDER BY c.\"updatedAt\" DESC, c.id DESC\n            LIMIT $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name_highlighted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "2d726fec1915305011d1b97e3baa8b2c37cdd9e6b2ac0fb412705c511021913c"
+}

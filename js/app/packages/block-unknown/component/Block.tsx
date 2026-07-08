@@ -1,3 +1,4 @@
+import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
 import {
@@ -19,12 +20,17 @@ export default function BlockUnknown() {
     <DocumentBlockContainer>
       <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col relative">
         <ModalsProvider>
-          <div class="relative">
-            <TopBar />
-          </div>
-          <div class="w-full grow relative overflow-hidden">
-            <Unknown />
-          </div>
+          <SidePanel.Layout>
+            <FileSidePanelSections />
+            <div class="flex size-full min-w-0 flex-col overflow-hidden">
+              <div class="relative">
+                <TopBar />
+              </div>
+              <div class="w-full grow relative overflow-hidden">
+                <Unknown />
+              </div>
+            </div>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>
@@ -57,11 +63,11 @@ const Unknown = () => {
 
         <div class="flex flex-row gap-2 items-center">
           <Button variant="active" onClick={shareCtx.open}>
-            <ShareFat /> Share
+            <ShareFat class="size-4" /> Share
           </Button>
 
           <Button variant="active" onClick={downloadDocument}>
-            <DownloadSimple /> Download
+            <DownloadSimple class="size-4" /> Download
           </Button>
         </div>
       </div>

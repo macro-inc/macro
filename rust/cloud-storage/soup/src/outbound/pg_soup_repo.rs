@@ -11,6 +11,8 @@ use crate::{
     },
 };
 use either::Either;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
@@ -125,11 +127,24 @@ impl SoupRepo for PgSoupRepo {
         unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
     }
 
-    fn populate_properties(
+    fn populate_properties<'a>(
         &self,
-        items: &mut [SoupItem],
+        user_id: MacroUserIdStr<'a>,
+        items: &'a mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
-        populate_properties(&self.pool.0, items)
+        populate_properties(&self.pool.0, user_id, items)
+    }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        properties::outbound::property_definition_queries::get_caller_tag_definitions_with_options(
+            &self.pool.0,
+            user_id.as_ref(),
+        )
+        .await
+        .map_err(|e| sqlx::Error::Decode(e.into()))
     }
 
     fn expanded_grouped_cursor_soup<'a>(
@@ -166,11 +181,13 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 /// Fetches and populates properties for a slice of SoupItems.
 ///
 /// This helper collects entity references from items that support properties,
-/// fetches their properties in bulk, and assigns them to each item.
+/// fetches their properties in bulk, and assigns them to each item. System
+/// properties are always included, plus the caller's own and team tag properties.
 /// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &sqlx::PgPool,
+    user_id: MacroUserIdStr<'_>,
     items: &mut [SoupItem],
 ) -> Result<(), sqlx::Error> {
     let entity_refs = items
@@ -184,13 +201,14 @@ pub(crate) async fn populate_properties(
 
     let property_ids = SystemPropertyKey::all_system_property_keys();
     let properties_map =
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
             property_ids,
+            Some(&user_id),
         )
         .await
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        .map_err(|e| sqlx::Error::Decode(e.into()))?;
 
     // `items` may repeat an id (one row per group it belongs to), so use
     // `.get()` not `.remove()` — every occurrence needs the props.
@@ -200,11 +218,11 @@ pub(crate) async fn populate_properties(
             SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
             SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
             SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
-            // Channels, calls, CRM companies, and foreign entities are not in entity_properties.
+            SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+            // Channels, calls, and foreign entities are not in entity_properties.
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
-            | SoupItem::CrmCompany(_)
             | SoupItem::ForeignEntity(_) => None,
         };
         if let Some(props) = props {
@@ -215,10 +233,10 @@ pub(crate) async fn populate_properties(
                 SoupItem::Project(x) => x.properties = soup_props,
                 SoupItem::EmailThread(x) => x.properties = soup_props,
                 SoupItem::Chat(x) => x.properties = soup_props,
+                SoupItem::CrmCompany(x) => x.properties = soup_props,
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::Call(_)
-                | SoupItem::CrmCompany(_)
                 | SoupItem::ForeignEntity(_) => {}
             }
         }

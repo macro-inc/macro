@@ -20,7 +20,7 @@ import {
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { optimisticUpdateSoupEntity } from '../soup/cache';
+import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
@@ -285,6 +285,10 @@ type SendMessageParams = {
   message: ApiDraftInput;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
+  /** Skip the post-send soup refresh, e.g. when the thread is about to be
+   *  marked done and removed from soup views — the refetch would race the
+   *  removal and re-insert the row. */
+  skipSoupRefetch?: boolean;
 };
 
 /**
@@ -303,13 +307,18 @@ export function useSendMessageMutation(
       ),
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
-        onSuccess: (data) => {
+        onSuccess: (data, vars) => {
           analytics.track('email_message_sent');
           const threadID = data.message.thread_db_id;
           if (threadID) {
             queryClient.invalidateQueries({
               queryKey: emailKeys.threadMessages(threadID).queryKey,
             });
+            // Refresh the thread's soup item so inbox views stop showing it
+            // as a draft once the message is sent.
+            if (!vars.skipSoupRefetch) {
+              refetchSoupEntity(threadID, 'emailThread');
+            }
           }
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,

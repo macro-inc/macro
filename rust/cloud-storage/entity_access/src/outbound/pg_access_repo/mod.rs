@@ -2,6 +2,8 @@
 
 mod queries;
 
+pub use queries::{SourceIds, get_user_source_ids};
+
 #[cfg(test)]
 mod test;
 

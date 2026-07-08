@@ -32,7 +32,10 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
+  AddFavoriteRequest,
   CallRecordPreview,
+  Favorite,
+  FavoritesList,
   ForeignEntity,
   GithubPullRequestsResponse,
   GroupedSoupGroupPage,
@@ -43,6 +46,7 @@ import type {
   PostGroupedSoupAstRequest,
   PostSoupAstRequest,
   PostSoupRequest,
+  ReorderFavoritesRequest,
   SoupPage,
   View,
   ViewsResponse,
@@ -1212,11 +1216,7 @@ export const storageServiceClient = {
     ).map((result) => result.duplicates);
   },
 
-  async searchSimilarTasks(params: {
-    taskName: string;
-    markdown?: string;
-    shareWithTeam?: boolean;
-  }) {
+  async searchSimilarTasks(params: { taskName: string; markdown?: string }) {
     return (
       await dssFetch<TaskSimilaritySearchResponse>(
         `/documents/similarity_search`,
@@ -1225,7 +1225,6 @@ export const storageServiceClient = {
           body: JSON.stringify({
             taskName: params.taskName,
             markdown: params.markdown,
-            shareWithTeam: params.shareWithTeam ?? false,
           }),
         }
       )
@@ -2096,6 +2095,33 @@ export const storageServiceClient = {
     async deleteView(params) {
       return await dssFetch(`/saved_views/${params.savedViewId}`, {
         method: 'DELETE',
+        body: JSON.stringify(params),
+      });
+    },
+  },
+
+  favorites: {
+    async getFavorites() {
+      return await dssFetch<FavoritesList>('/favorites');
+    },
+    async addFavorite(params: AddFavoriteRequest) {
+      return await dssFetch<Favorite>('/favorites', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+    async removeFavoriteByEntity(params: {
+      entityType: AddFavoriteRequest['entityType'];
+      entityId: string;
+    }) {
+      return await dssFetch(
+        `/favorites/${params.entityType}/${encodeURIComponent(params.entityId)}`,
+        { method: 'DELETE' }
+      );
+    },
+    async reorderFavorites(params: ReorderFavoritesRequest) {
+      return await dssFetch('/favorites/reorder', {
+        method: 'PATCH',
         body: JSON.stringify(params),
       });
     },

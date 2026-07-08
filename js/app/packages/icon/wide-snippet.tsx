@@ -9,7 +9,7 @@ export const AnimatedSnippetIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.125"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
@@ -51,20 +51,20 @@ export const AnimatedSnippetIcon = (props: {
       />
       <rect
         x="5.6"
-        y="2.9"
+        y="2.7125"
         width="6.8"
-        height="1.125"
-        rx="0.5625"
+        height="1.5"
+        rx="0.75"
         fill="currentColor"
         stroke="none"
       />
       <rect
         class="line-2"
         x="5.6"
-        y="7.02"
+        y="6.8325"
         width="6.8"
-        height="1.125"
-        rx="0.5625"
+        height="1.5"
+        rx="0.75"
         fill="currentColor"
         stroke="none"
       />

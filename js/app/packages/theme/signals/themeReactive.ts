@@ -69,6 +69,11 @@ const ALL_THEME_SIGNALS = [
   themeReactive.c4.l[0], themeReactive.c4.c[0], themeReactive.c4.h[0],
 ];
 
+function syncThemeLightAttribute(): void {
+  document.documentElement.dataset.themeLight =
+    themeReactive.b0.l[0]() > themeReactive.c0.l[0]() ? 'true' : 'false';
+}
+
 createEffect(
   on(
     ALL_THEME_SIGNALS,
@@ -121,6 +126,7 @@ createEffect(
       if(themeReactive.c4.c[0]() !== previousTheme.c4.c){document.documentElement.style.setProperty( '--c4c', `${themeReactive.c4.c[0]()}`    ); previousTheme.c4.c = themeReactive.c4.c[0]()}
       if(themeReactive.c4.h[0]() !== previousTheme.c4.h){document.documentElement.style.setProperty( '--c4h', `${themeReactive.c4.h[0]()}deg` ); previousTheme.c4.h = themeReactive.c4.h[0]()}
 
+      syncThemeLightAttribute();
       setThemeUpdate();
       setIsThemeSaved(false);
     },

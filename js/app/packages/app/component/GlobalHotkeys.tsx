@@ -128,7 +128,7 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
+  const { openSettings, settingsOpen, selectTab, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
@@ -274,11 +274,11 @@ export default function GlobalShortcuts() {
     keyDownHandler: createNewSplit,
   });
 
-  // Settings open in a modal by default; tab selection is applied even when
-  // settings are already open.
-  const openSettingsModal = (tab?: SettingsTab) => {
+  // Open settings to a specific tab, switching the page in place if settings
+  // are already open.
+  const openSettingsAt = (tab?: SettingsTab) => {
     if (settingsOpen()) {
-      if (tab) setActiveTabId(tab);
+      if (tab) selectTab(tab);
       return;
     }
     openSettings(tab);
@@ -301,7 +301,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettingsModal('Account');
+      openSettingsAt('Account');
       return true;
     },
     runWithInputFocused: true,

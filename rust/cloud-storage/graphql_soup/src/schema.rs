@@ -46,11 +46,26 @@ impl SoupService for SchemaOnlySoupService {
     ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
         Err(soup::domain::models::SoupErr::CommsErr)
     }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        _user_id: macro_user_id::user_id::MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        soup::domain::models::SoupErr,
+    >{
+        Err(soup::domain::models::SoupErr::CommsErr)
+    }
 }
 
 /// Object-safe-ish wrapper for sharing a concrete Soup service with GraphQL.
-#[derive(Clone)]
 pub struct SharedSoupService<S>(Arc<S>);
+
+impl<S> Clone for SharedSoupService<S> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
 
 impl<S> SharedSoupService<S> {
     /// Create a shared Soup service wrapper.
@@ -81,6 +96,16 @@ where
     ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
         self.0.get_user_soup_grouped(req).await
     }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        soup::domain::models::SoupErr,
+    >{
+        self.0.caller_tag_sets(user_id).await
+    }
 }
 
 /// Root GraphQL query object for Soup.
@@ -95,6 +120,13 @@ impl<S> SoupQueryRoot<S> {
     }
 }
 
+/// The authenticated user (viewer). All user-scoped data hangs off this
+/// object so clients (and their normalized caches) observe data ownership
+/// structurally rather than implicitly through the session.
+pub struct GraphqlUser<S> {
+    service: S,
+}
+
 /// Build a GraphQL schema for Soup suitable for SDL export or introspection.
 pub fn build_schema() -> SchemaOnlySoupSchema {
     build_schema_with_service(SchemaOnlySoupService)
@@ -103,7 +135,7 @@ pub fn build_schema() -> SchemaOnlySoupSchema {
 /// Build a GraphQL schema for Soup backed by the provided service.
 pub fn build_schema_with_service<S>(service: S) -> SoupSchema<S>
 where
-    S: SoupService,
+    S: SoupService + Clone,
 {
     Schema::build(
         SoupQueryRoot::new(service),
@@ -124,8 +156,27 @@ where
 #[Object]
 impl<S> SoupQueryRoot<S>
 where
+    S: SoupService + Clone,
+{
+    /// The authenticated user.
+    async fn user(&self) -> GraphqlUser<S> {
+        GraphqlUser {
+            service: self.service.clone(),
+        }
+    }
+}
+
+#[Object(name = "GraphqlUser")]
+impl<S> GraphqlUser<S>
+where
     S: SoupService,
 {
+    /// Stable id of the authenticated user.
+    async fn id(&self, ctx: &Context<'_>) -> async_graphql::Result<async_graphql::ID> {
+        let request_context = ctx.data::<GraphqlSoupRequestContext>()?;
+        Ok(async_graphql::ID(request_context.macro_user_id.to_string()))
+    }
+
     /// Fetch a page of Soup items using the existing Soup filter AST format.
     async fn soup(&self, ctx: &Context<'_>, input: SoupInput) -> async_graphql::Result<SoupPage> {
         let request_context = ctx.data::<GraphqlSoupRequestContext>()?;

@@ -43,10 +43,8 @@ pub(in crate::api::search) async fn enrich_documents(
         .await
         .map_err(SearchError::InternalError)?;
 
-    // Fetch properties for markdown documents (tasks, etc.)
-    let md_entity_refs: Vec<EntityReference> = document_histories
+    let entity_refs: Vec<EntityReference> = document_histories
         .iter()
-        .filter(|(_, info)| info.file_type.as_deref() == Some("md"))
         .map(|(id, info)| {
             let entity_type = info
                 .sub_type
@@ -56,10 +54,10 @@ pub(in crate::api::search) async fn enrich_documents(
         })
         .collect();
 
-    let properties_map = if !md_entity_refs.is_empty() {
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+    let properties_map = if !entity_refs.is_empty() {
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
             &ctx.db,
-            &md_entity_refs,
+            &entity_refs,
         )
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch entity properties"))

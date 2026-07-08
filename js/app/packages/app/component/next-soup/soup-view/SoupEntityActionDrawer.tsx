@@ -5,7 +5,10 @@ import { triggerFocusInput } from '@core/directive/focusInput';
 import { InlineEntity } from '@entity';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import { createSoupEntityActions } from './create-soup-entity-actions';
+import {
+  createSoupEntityActions,
+  viewedProjectIdFromContent,
+} from './create-soup-entity-actions';
 import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
 import { useSoupView } from './soup-view-context';
 
@@ -24,9 +27,11 @@ export function SoupEntityActionDrawer() {
     const e = drawerState.entity();
     const s = drawerState.soup();
     if (!e || !s) return [];
+    const content = panel.handle.content();
     return buildActionGroups(s, [e], {
       activeTab: activeTab(),
-      activeListView: panel.handle.content().id,
+      activeListView: content.id,
+      viewedProjectId: viewedProjectIdFromContent(content),
     });
   };
 

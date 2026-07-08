@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 use macro_sha_count_client::Redis;
 use sync_service_client::SyncServiceClient;
 
@@ -17,6 +18,7 @@ pub struct DeleteDocumentWorkerContext {
     pub s3_client: Arc<S3>,
     pub redis_client: Arc<Redis>,
     pub sync_service_client: Arc<SyncServiceClient>,
+    pub editing_worker_client: Arc<ReqwestEditingWorkerClient>,
 }
 
 /// Runs the delete document worker in an infinite loop, restarting on failure.

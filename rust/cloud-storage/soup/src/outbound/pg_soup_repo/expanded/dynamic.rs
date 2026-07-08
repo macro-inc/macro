@@ -477,6 +477,39 @@ fn clone_expr<T: Clone>(expr: &Expr<T>) -> Expr<T> {
     }
 }
 
+/// Push NOT down to the literals (De Morgan), eliminating double negation.
+/// Valid under SQL three-valued logic (De Morgan holds in Kleene logic), so
+/// this never changes which rows match. The payoff is plan quality: Postgres
+/// only turns *syntactically* top-level `NOT EXISTS (...)` conjuncts into
+/// anti-joins — a `NOT (EXISTS a OR EXISTS b)` stays a per-row SubPlan
+/// filter, which both costs more and wrecks the row estimates that
+/// join-order choice depends on.
+fn push_not_inward<T: Clone>(expr: &Expr<T>, negated: bool) -> Expr<T> {
+    match expr {
+        Expr::Not(inner) => push_not_inward(inner, !negated),
+        Expr::And(a, b) => {
+            let (a, b) = (push_not_inward(a, negated), push_not_inward(b, negated));
+            if negated {
+                Expr::or(a, b)
+            } else {
+                Expr::and(a, b)
+            }
+        }
+        Expr::Or(a, b) => {
+            let (a, b) = (push_not_inward(a, negated), push_not_inward(b, negated));
+            if negated {
+                Expr::and(a, b)
+            } else {
+                Expr::or(a, b)
+            }
+        }
+        Expr::Literal(lit) => {
+            let lit = Expr::val(lit.clone());
+            if negated { Expr::is_not(lit) } else { lit }
+        }
+    }
+}
+
 fn strip_notification_conjunction<T: Clone>(
     expr: &Expr<T>,
     notification_predicate: impl Fn(&T) -> Option<NotificationPredicate> + Copy,
@@ -541,8 +574,14 @@ fn build_notification_items_cte(
         .map(|item_type| format!("'{item_type}'"))
         .collect::<Vec<_>>()
         .join(", ");
+    // NOT MATERIALIZED: the set is small (a user's active notifications) and
+    // inlining it lets estimates flow into the arm joins, so the planner can
+    // drive an arm from the notification side instead of nested-looping the
+    // full accessible corpus against it (the materialized fence defaulted the
+    // CTE estimate to ~1 row, which picked a join-filter nested loop that
+    // compared every accessible item against every notification).
     builder.push(format!(
-        r#"NotificationItems AS MATERIALIZED (
+        r#"NotificationItems AS NOT MATERIALIZED (
         SELECT DISTINCT n.event_item_type, n.event_item_id
         FROM user_notification un
         JOIN notification n ON n.id = un.notification_id
@@ -575,6 +614,12 @@ fn build_task_include_cbm_atm_nc_clause() -> String {
     .to_string()
 }
 
+/// NULL-safe equality for nullable columns: FALSE (not UNKNOWN) on NULL, so
+/// `NOT` includes NULL rows — e.g. root projects under a negated `pid` filter.
+fn nullable_eq(col: &str, val: impl std::fmt::Display) -> String {
+    format!("({col} = '{val}' AND {col} IS NOT NULL)")
+}
+
 fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     match lit {
         DateLiteral::GreaterThan(dt) => format!("{col} > '{}'::timestamptz", dt.to_rfc3339()),
@@ -590,6 +635,7 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
+    let expr = push_not_inward(expr, false);
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
@@ -599,7 +645,7 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Id(i)) => format!("d.id = '{i}'"),
         filter_ast::ExprFrame::Literal(DocumentLiteral::ProjectId(p)) => {
-            format!(r#"d."projectId" = '{p}'"#)
+            nullable_eq(r#"d."projectId""#, p)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
         filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
@@ -631,10 +677,23 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
             build_task_include_cbm_atm_nc_clause()
         }
-        // false is equivalent to disabled/no-op.
-        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => String::new(),
+        // false is equivalent to disabled/no-op. Rendered as TRUE (not an
+        // empty string): an empty operand inside And/Or/Not produces invalid
+        // SQL like `( AND x)` or `(NOT )`, and TRUE also gives NOT the right
+        // meaning (a disabled predicate matches everything, its negation
+        // nothing).
+        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => {
+            "TRUE".to_string()
+        }
+        // EXISTS instead of a predicate on the LEFT-JOINed `dt` alias: this
+        // keeps the top clause free of the join when only SubType literals
+        // are present, and `NOT (EXISTS ...)` becomes a plannable anti-join
+        // (the old `(dt.sub_type IS NOT NULL AND ...)` OR-shape collapsed row
+        // estimates to ~1 on broad arms, picking pathological nested loops).
         filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
-            format!("(dt.sub_type IS NOT NULL AND dt.sub_type = '{st}')")
+            format!(
+                "EXISTS (SELECT 1 FROM document_sub_type dst_f WHERE dst_f.document_id = d.id AND dst_f.sub_type = '{st}')"
+            )
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(true)) => {
             r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
@@ -662,20 +721,24 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
+    let expr = push_not_inward(expr, false);
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ChatLiteral::ProjectId(p)) => {
-            format!(r#"c."projectId" = '{p}'"#)
+            nullable_eq(r#"c."projectId""#, p)
         }
-        // todo? I'm not sure what a chat role filter looks like
-        filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => String::new(),
+        // todo? I'm not sure what a chat role filter looks like.
+        // No-op literals render as TRUE, not an empty string — an empty
+        // operand inside And/Or/Not produces invalid SQL like `( AND x)`.
+        filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => "TRUE".to_string(),
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
             format!(r#"c."userId" = '{o}'"#)
         }
-        filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
+        // all chats are important
+        filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => "TRUE".to_string(),
         // all chats are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
         filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
@@ -702,12 +765,13 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
+    let expr = push_not_inward(expr, false);
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
-            format!(r#"p."parentId" = '{p}'"#)
+            nullable_eq(r#"p."parentId""#, p)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(p)) => {
             format!(r#"p.id = '{p}'"#)
@@ -715,7 +779,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
             format!(r#"p."userId" = '{o}'"#)
         }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
+        // all projects are important; TRUE (not empty) keeps the literal
+        // valid SQL inside And/Or/Not.
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => "TRUE".to_string(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
         filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
@@ -876,32 +942,60 @@ fn top_needs_user_history(sort_method: SimpleSortMethod) -> bool {
     )
 }
 
-fn document_top_clause(sort_method: SimpleSortMethod) -> String {
+/// Per-arm access gate. Semantically identical to the old
+/// `AccessibleItems AS MATERIALIZED` CTE + `INNER JOIN` (an item is visible
+/// iff at least one `entity_access` row matches one of the user's sources;
+/// IN dedupes exactly like the CTE's DISTINCT did), but expressed as a
+/// flattenable semi-join so the planner can pick a direction per arm:
+/// hash the user's accessible set when the arm is broad, or probe
+/// `entity_access` per candidate row (via
+/// `idx_entity_access_entity_text_type_source`) when the arm's own filters
+/// are selective. The materialized form pinned the worst plan — the whole
+/// corpus was computed and probed against the item table on every page.
+fn access_semi_join(id_sql: &str, entity_type: &str) -> String {
+    format!(
+        r#"{id_sql} IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    JOIN user_source_ids us ON us.source_id = ea.source_id
+                    WHERE ea.entity_type = '{entity_type}'
+                )"#
+    )
+}
+
+fn document_top_clause(sort_method: SimpleSortMethod, needs_sub_type_join: bool) -> String {
+    let sub_type_join = if needs_sub_type_join {
+        r#"                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+"#
+    } else {
+        ""
+    };
     format!(
         r#"
                 SELECT
                     'document'::text as item_type,
                     d.id,
                     {}::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
-                LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-"#,
-        top_sort_expr("d", sort_method)
+                FROM "Document" d
+{}"#,
+        top_sort_expr("d", sort_method),
+        sub_type_join
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod) -> &'static str {
-    if top_needs_user_history(sort_method) {
-        r#"
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
-                WHERE d."deletedAt" IS NULL
+fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
     } else {
-        r#"
-                WHERE d."deletedAt" IS NULL
-"#
-    }
+        ""
+    };
+    format!(
+        r#"{user_history_join}                WHERE d."deletedAt" IS NULL
+                AND {}
+"#,
+        access_semi_join("d.id", "document")
+    )
 }
 
 fn chat_top_clause(sort_method: SimpleSortMethod) -> String {
@@ -917,17 +1011,20 @@ fn chat_top_clause(sort_method: SimpleSortMethod) -> String {
                     'chat'::text as item_type,
                     c.id,
                     {}::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
+                FROM "Chat" c
 {}"#,
         top_sort_expr("c", sort_method),
         user_history_join
     )
 }
 
-fn chat_top_where_clause() -> &'static str {
-    r#"                WHERE c."deletedAt" IS NULL
-"#
+fn chat_top_where_clause() -> String {
+    format!(
+        r#"                WHERE c."deletedAt" IS NULL
+                AND {}
+"#,
+        access_semi_join("c.id", "chat")
+    )
 }
 
 fn project_top_clause(sort_method: SimpleSortMethod) -> String {
@@ -946,17 +1043,20 @@ fn project_top_clause(sort_method: SimpleSortMethod) -> String {
                     'project'::text as item_type,
                     p.id,
                     {}::timestamptz as sort_ts
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
+                FROM "Project" p
 {}"#,
         top_sort_expr("p", sort_method),
         user_history_join
     )
 }
 
-fn project_top_where_clause() -> &'static str {
-    r#"                WHERE p."deletedAt" IS NULL
-"#
+fn project_top_where_clause() -> String {
+    format!(
+        r#"                WHERE p."deletedAt" IS NULL
+                AND {}
+"#,
+        access_semi_join("p.id", "project")
+    )
 }
 
 fn push_accessible_items_cte(
@@ -1112,13 +1212,6 @@ fn build_query(
             filter_ast.project_filter.as_deref()
         };
 
-    push_accessible_items_cte(
-        &mut builder,
-        include_documents,
-        include_chats,
-        include_projects,
-    );
-
     if let Some(predicate) = optimized_notification_predicate {
         let mut item_types = Vec::with_capacity(3);
         if include_documents && document_notification.is_some() {
@@ -1141,12 +1234,15 @@ fn build_query(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
-        // Document top clause (lightweight)
-        builder.push(document_top_clause(sort_method));
+        // Document top clause (lightweight). The document_sub_type join is
+        // only needed by filters that reference `dt` (Importance / CBM);
+        // SubType literals render as their own EXISTS probes.
+        let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        builder.push(document_top_clause(sort_method, needs_task_property_joins));
         if optimized_notification_predicate.is_some() && document_notification.is_some() {
             builder.push(build_notification_join("d", "document"));
         }
-        if document_filter_needs_task_property_joins(document_filter) {
+        if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
         builder.push(document_top_where_clause(sort_method));
@@ -1488,11 +1584,18 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(completed_option_id)
         .bind(status_property_id)
         .bind(assignees_property_id)
+        // Unnamed statement: the SQL text varies per filter shape and per
+        // interpolated literal (dates change daily), so a cached prepared
+        // statement is rarely reused but flips to a generic plan after five
+        // executions — and the generic plan misestimates the CTEs badly
+        // enough to run 10x slower. Planning with the real bind values every
+        // time costs ~1ms and keeps the plan stable.
+        .persistent(false)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }
@@ -1820,6 +1923,10 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     }
 
     let rows: Vec<GroupedSoupRow> = query
+        // Unnamed statement — same rationale as expanded_dynamic_cursor_soup:
+        // filter-shaped SQL text gets no reuse from the statement cache but
+        // does get generic-plan flips.
+        .persistent(false)
         .try_map(|row| GroupedSoupRow::from_row(&row))
         .fetch_all(db)
         .await?;
@@ -1835,7 +1942,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .into_iter()
         .unzip();
 
-    populate_properties(db, &mut soup_items).await?;
+    populate_properties(db, user_id.copied(), &mut soup_items).await?;
 
     let items = soup_items
         .into_iter()

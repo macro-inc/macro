@@ -49,7 +49,13 @@ channels.
 2. **Read the docs.** Macro's docs are published at docs.macro.com. Every page is
    also served as plain Markdown — append `.md` to the page URL — so you can read
    it with the WebFetch tool.
-3. **Cite the docs.** Link the user to the specific docs page you used.
+3. **Cite the docs.** Link the user to the specific docs page you used, but always
+   link the human-facing page, never the raw Markdown. The `.md` form is only for
+   your own WebFetch reads; when you show a user a link, drop the trailing `.md`
+   and strip any query string. Read `https://docs.macro.com/getting-started.md`,
+   but link `https://docs.macro.com/getting-started`. Never route a user to a
+   `.md` URL or to one carrying tracking parameters (e.g. `?_gl=…`) — surface only
+   the clean route.
 
 ## How to find the right page
 
@@ -57,9 +63,10 @@ channels.
   first when you are unsure which page covers the question, then open the page it
   points to.
 - Any page is readable as Markdown by appending `.md`, e.g.
-  https://docs.macro.com/product/tasks.md
+  https://docs.macro.com/product/tasks.md. To link that page for a user, use the
+  route without the suffix: https://docs.macro.com/product/tasks
 
-### Quick links (all readable as Markdown with a trailing `.md`)
+### Quick links (fetch with a trailing `.md`; link users to the route without it)
 
 - Get started: https://docs.macro.com/getting-started.md
 - Products (https://docs.macro.com/product/<name>.md): email, channels, tasks,
@@ -81,9 +88,10 @@ channels.
 1. Identify what the user is asking about (a block, a concept, billing, etc.).
 2. Fetch the relevant docs.macro.com `.md` page with WebFetch (or llms.txt first
    if you are unsure which page to read).
-3. Answer concisely, grounded in the docs, and link the page you used.
+3. Answer concisely, grounded in the docs, and link the page you used — as the
+   clean route, without the `.md` suffix or any query string.
 4. If you are still uncertain, point the user to the docs: "For the most current
-   details, see <URL>.""##;
+   details, see <URL>." (again, a clean route, never a `.md` or tracking URL)."##;
 
 /// `selfKnowledge` returns an overview of Macro plus a routing map into the live
 /// docs at docs.macro.com. It takes no arguments and does no I/O — it hands the

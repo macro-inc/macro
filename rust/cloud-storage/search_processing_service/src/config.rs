@@ -21,6 +21,7 @@ maybe_env_vars! {
     pub struct BackfillChannelsPageSize;
     pub struct BackfillDocumentsPageSize;
     pub struct BackfillEmailsPageSize;
+    pub struct BackfillProjectsPageSize;
     pub struct BackfillJobTtlSeconds;
 }
 
@@ -33,6 +34,7 @@ pub struct BackfillPageSizes {
     pub channels: usize,
     pub documents: usize,
     pub emails: usize,
+    pub projects: usize,
 }
 
 const DEFAULT_CALLS_PAGE: usize = 2000;
@@ -40,6 +42,7 @@ const DEFAULT_CHATS_PAGE: usize = 5000;
 const DEFAULT_CHANNELS_PAGE: usize = 5000;
 const DEFAULT_DOCUMENTS_PAGE: usize = 1000;
 const DEFAULT_EMAILS_PAGE: usize = 1000;
+const DEFAULT_PROJECTS_PAGE: usize = 2000;
 const DEFAULT_BACKFILL_JOB_TTL_SECONDS: u64 = 24 * 60 * 60;
 
 fn parse_page_size(name: &str, raw_value: Option<&str>, default: usize) -> anyhow::Result<usize> {
@@ -126,6 +129,8 @@ pub struct Config {
     pub backfill_documents_page_size: BackfillDocumentsPageSize,
     /// DB page size used when backfilling emails.
     pub backfill_emails_page_size: BackfillEmailsPageSize,
+    /// DB page size used when backfilling projects.
+    pub backfill_projects_page_size: BackfillProjectsPageSize,
 
     /// DynamoDB table name backing the backfill job registry. Items carry an
     /// `expires_at` epoch attribute that DynamoDB's TTL sweeps in the
@@ -171,6 +176,11 @@ impl Config {
                 "BACKFILL_EMAILS_PAGE_SIZE",
                 self.backfill_emails_page_size.value(),
                 DEFAULT_EMAILS_PAGE,
+            )?,
+            projects: parse_page_size(
+                "BACKFILL_PROJECTS_PAGE_SIZE",
+                self.backfill_projects_page_size.value(),
+                DEFAULT_PROJECTS_PAGE,
             )?,
         })
     }

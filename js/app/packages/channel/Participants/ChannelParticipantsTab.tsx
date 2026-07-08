@@ -56,6 +56,9 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const removeParticipant = (participantId: string) => {
     if (!isEditable()) return;
 
+    const participant = participants().find((p) => p.user_id === participantId);
+    if (participant?.role === 'owner') return;
+
     removeParticipantsMutation.mutate({
       channelId: props.channelId,
       participants: [participantId],

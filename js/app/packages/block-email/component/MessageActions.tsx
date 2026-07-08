@@ -8,7 +8,9 @@ import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { type Setter, Show } from 'solid-js';
+import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
+import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
 export type EmailMessageAction = (typeof EMAIL_MESSAGE_ACTIONS)[number];
@@ -20,6 +22,7 @@ export function MessageActions(props: {
   isLastMessage?: boolean;
   hiddenActions?: EmailMessageAction[];
 }) {
+  const ctx = useEmailContext();
   const formRegistry = getEmailFormRegistry();
   const userEmail = useEmail();
   const shouldShowReplyAll = () =>
@@ -37,13 +40,14 @@ export function MessageActions(props: {
 
   const onChangeReplyType = (type: ReplyType) => {
     return createCallback(() => {
-      props.setShowReply(true);
-      const form = formRegistry.getOrInit({
-        type: 'replying_to',
-        messageID: props.message.db_id ?? '',
+      openEmailReplyComposerForMessage({
+        ctx,
+        formRegistry,
+        message: props.message,
+        replyType: type,
+        isLastMessage: props.isLastMessage,
+        setShowReply: props.setShowReply,
       });
-      form.setReplyType(type);
-      form.setShouldFocusInput(true);
     });
   };
 

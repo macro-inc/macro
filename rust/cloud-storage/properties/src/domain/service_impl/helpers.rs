@@ -5,7 +5,7 @@ use models_properties::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-/// Extract option IDs from a PropertyValue (matches properties_db_client pattern).
+/// Extract option IDs from a PropertyValue.
 pub fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> Vec<Uuid> {
     match value {
         Some(PropertyValue::SelectOption(ids)) => ids.clone(),
@@ -20,6 +20,14 @@ pub fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> 
         || property_id == SystemPropertyKey::SUBTASKS_UUID
     {
         return entity_type == EntityType::Task;
+    }
+
+    // CRM-company-only properties: Stage, Owner, Revenue
+    if property_id == SystemPropertyKey::STAGE_UUID
+        || property_id == SystemPropertyKey::COMPANY_OWNER_UUID
+        || property_id == SystemPropertyKey::REVENUE_UUID
+    {
+        return entity_type == EntityType::Company;
     }
 
     true

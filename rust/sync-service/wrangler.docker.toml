@@ -30,7 +30,7 @@ bucket_name = "document-snapshot-bucket-dev"
 
 [vars]
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
-SPS_URL = "https://search-processing-dev.macro.com"
+SPS_URL = "http://search-processing-service:8080"
 DSS_URL = "http://document_storage_service:8080"
 DSS_INTERNAL_AUTH_KEY = "local"
 

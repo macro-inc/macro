@@ -207,7 +207,7 @@ pub async fn unexpanded_generic_cursor_soup(
     .fetch_all(db)
     .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }

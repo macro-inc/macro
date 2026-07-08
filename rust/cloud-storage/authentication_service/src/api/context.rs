@@ -41,6 +41,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
+    teams::outbound::team_analytics::AnalyticsClientTeamAnalytics,
 >;
 
 type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;

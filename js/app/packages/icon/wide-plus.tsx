@@ -9,7 +9,7 @@ export const AnimatedPlusIcon = (props: {
       viewBox="0 0 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.125"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
@@ -47,10 +47,10 @@ export const AnimatedPlusIcon = (props: {
       />
       <rect
         class="frame"
-        x="0.5625"
-        y="0.5625"
-        width="16.875"
-        height="16.875"
+        x="0.75"
+        y="0.75"
+        width="16.5"
+        height="16.5"
         rx="1.5"
       />
       <line class="plus-v" x1="9" y1="6.75" x2="9" y2="11.25" />

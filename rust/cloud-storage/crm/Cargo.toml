@@ -5,6 +5,16 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:models_properties",
+  "dep:properties",
+  "dep:schemars",
+  "dep:system_properties",
+  "entity_access/ports",
+  "ports",
+]
 axum = [
   "dep:axum",
   "dep:macro_uuid",
@@ -15,7 +25,7 @@ axum = [
   "entity_access/inbound",
   "entity_access/ports",
 ]
-default = ["inbound", "outbound", "ports"]
+default = ["ai_tools", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:reqwest", "dep:sqlx", "dep:unfurl", "ports"]
 ports = []
@@ -33,6 +43,16 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 entity_access = { path = "../entity_access", default-features = false }
+
+# AI toolset dependencies
+ai_toolset = { path = "../ai_toolset", optional = true }
+async-trait = { workspace = true, optional = true }
+models_properties = { path = "../models_properties", optional = true }
+properties = { path = "../properties", default-features = false, features = [
+  "ports",
+], optional = true }
+schemars = { workspace = true, optional = true }
+system_properties = { path = "../system_properties", optional = true }
 
 # Axum / inbound dependencies
 axum = { workspace = true, optional = true }

@@ -1,8 +1,4 @@
-import {
-  type SettingsTab,
-  setAgentSettingsSubTab,
-  useSettingsState,
-} from '@core/constant/SettingsState';
+import { useSettingsState } from '@core/constant/SettingsState';
 import ArrowRightIcon from '@phosphor-icons/core/assets/bold/arrow-right-bold.svg?component-solid';
 import AtIcon from '@phosphor-icons/core/assets/bold/at-bold.svg?component-solid';
 import PaperPlaneTiltIcon from '@phosphor-icons/core/assets/bold/paper-plane-tilt-bold.svg?component-solid';
@@ -42,15 +38,10 @@ function EmptyStateCard(props: {
 export function EmptyChatState(props: { minHeight: number }) {
   const { openSettings } = useSettingsState();
 
-  const openConnectors = () => {
-    setAgentSettingsSubTab('connectors');
-    openSettings('Agent' as SettingsTab);
-  };
-
-  const openMcpServer = () => {
-    setAgentSettingsSubTab('mcp_server');
-    openSettings('Agent' as SettingsTab);
-  };
+  // Connector management lives on the Connections tab; the Agent tab
+  // holds the Macro MCP server setup instructions.
+  const openIntegrations = () => openSettings('Connected');
+  const openMcpServer = () => openSettings('Agent');
 
   return (
     <div
@@ -76,9 +67,9 @@ export function EmptyChatState(props: { minHeight: number }) {
         />
         <EmptyStateCard
           icon={<PlugsConnectedIcon class="size-4" />}
-          title="Connect MCP servers"
-          description="Give the agent access to external tools like Linear, PostHog, Datadog, and more."
-          action={{ label: 'Add connectors', onClick: openConnectors }}
+          title="Connect your tools"
+          description="Give the agent access to external tools like Linear, Notion, PostHog, and more."
+          action={{ label: 'Connect integrations', onClick: openIntegrations }}
         />
         <EmptyStateCard
           icon={<PuzzlePieceIcon class="size-4" />}

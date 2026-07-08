@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectSearchResponseItemWithMetadataAllOfMetadata } from './projectSearchResponseItemWithMetadataAllOfMetadata';
+import type { ProjectSearchResponseItemWithMetadataAllOfProperties } from './projectSearchResponseItemWithMetadataAllOfProperties';
 
 export type ProjectSearchResponseItemWithMetadataAllOf = {
   metadata?: ProjectSearchResponseItemWithMetadataAllOfMetadata;
+  /** Entity properties (e.g. tags) on the project. */
+  properties?: ProjectSearchResponseItemWithMetadataAllOfProperties;
 };

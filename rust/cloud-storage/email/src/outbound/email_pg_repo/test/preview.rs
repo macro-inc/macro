@@ -1,5 +1,51 @@
 use super::*;
 
+// ── previews_for_view_cursor: sent routing ──────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_multi_inbox")
+    )
+)]
+async fn test_sent_view_without_filter_routes_to_dynamic_multi_inbox(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The sent tab sends no filter tree; the routing must still take the
+    // dynamic path and cover every linked inbox without a sender filter.
+    let repo = EmailPgRepo::new(pool);
+    let query = crate::domain::models::PreviewCursorQuery {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
+        link_ids: vec![
+            Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?,
+            Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?,
+        ],
+        limit: 50,
+        query: Query::new(None, SimpleSortMethod::UpdatedAt, None),
+        team_id: None,
+    };
+
+    let results = repo
+        .previews_for_view_cursor(
+            query,
+            MacroUserIdStr::parse_from_str("macro|user1@test.com")?.to_owned(),
+        )
+        .await?;
+
+    let ids: Vec<String> = results.iter().map(|r| r.id.to_string()).collect();
+    assert_eq!(
+        ids,
+        vec![
+            "20000201-0000-0000-0000-000000000201".to_string(),
+            "20000002-0000-0000-0000-000000000002".to_string(),
+        ],
+        "Sent view should return each inbox's sent thread, newest first"
+    );
+
+    Ok(())
+}
+
 // ── attachments_by_thread_ids ───────────────────────────────────────
 
 #[sqlx::test(

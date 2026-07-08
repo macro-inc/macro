@@ -131,15 +131,7 @@
               </td>
               {% endif %}
               <td style="vertical-align: middle; line-height: 1.2">
-                <span
-                  style="
-                    color: #626262;
-                    font-family:
-                      &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
-                      Courier, monospace;
-                  "
-                  >{{ invited_by }}</span
-                > has invited you to the <strong>{{ team_name }}</strong> team
+                {{ invited_by.email_part().as_ref() }} has invited you to the <strong>{{ team_name }}</strong> team
               </td>
             </tr>
           </tbody>

@@ -9,7 +9,8 @@ use super::{documents::save_document, history::delete_history};
 use super::{
     documents::{
         get_document, get_document_key, get_document_permissions, get_document_text,
-        get_full_pdf_modification_data, list_documents_with_access, location, put_document_update,
+        get_full_pdf_modification_data, initialize_how_to_guide, list_documents_with_access,
+        location, put_document_update,
     },
     user::populate_items,
 };
@@ -25,6 +26,8 @@ use macro_middleware::{
     auth::ensure_user_exists,
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
 };
+
+mod associate_github_installations;
 
 /// Internal routes. All routes are authenticated via the internal_access middleware
 /// These routes are not part of the public Swagger documentation and should never be
@@ -102,6 +105,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
+            "/documents/initialize_how_to_guide",
+            post(initialize_how_to_guide::handler).layer(ensure_user_exists_middleware.clone()),
+        )
+        .route(
             "/documents/list_with_access",
             get(list_documents_with_access::list_documents_with_access_handler),
         )
@@ -172,6 +179,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/validate_item_ids",
             post(validate_item_ids::handler).layer(ensure_user_exists_middleware),
+        )
+        // Github routes
+        .route(
+            "/github/installations/{github_user_id}/associate",
+            post(associate_github_installations::associate_github_installations_handler),
         )
         .route("/health", get(async move || "healthy"))
 }

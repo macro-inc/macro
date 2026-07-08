@@ -122,3 +122,25 @@ pub fn create_refresh_token_cookie(token: &str) -> Cookie<'static> {
     ));
     cookie
 }
+
+/// If this account was created during the auth flow that is completing (the
+/// create-user webhook marks it in the cache), appends `signed_up=true` to the
+/// redirect URL so the app can attribute the session as a signup for
+/// analytics. Best-effort: never fails the login.
+pub async fn append_signed_up_param_if_new_user(
+    macro_cache_client: &macro_cache_client::MacroCache,
+    email: &str,
+    redirect_url: &mut Url,
+) {
+    match macro_cache_client.take_user_just_signed_up(email).await {
+        Ok(true) => {
+            redirect_url
+                .query_pairs_mut()
+                .append_pair("signed_up", "true");
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::error!(error=?e, "unable to check just-signed-up marker");
+        }
+    }
+}

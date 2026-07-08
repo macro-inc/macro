@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import {
   isKrispNoiseFilterSupported,
   KrispNoiseFilter,
@@ -122,20 +123,27 @@ function microphoneCaptureOptions(
   deviceId?: string | null
 ): AudioCaptureOptions {
   const useBrowserProcessing = mode === 'browser';
+  const noiseSuppressionSupported =
+    supportsNativeAudioProcessingConstraint('noiseSuppression');
 
   return {
-    // AGC can raise residual background artifacts during quiet speech/silence.
-    // Keep it disabled for every mode; Krisp/browser NS should not be stacked
-    // with a gain stage that makes suppressed noise audible again.
+    // Browser AGC runs inside the capture pipeline (AEC → AGC → NS), i.e.
+    // upstream of any track processor — it feeds Krisp a healthy input level
+    // and cannot re-amplify the filter's residue (that would need a gain
+    // stage after the processor, which doesn't exist here). AGC-off left
+    // quiet mics at low SNR, and Krisp/browser NS then gated their speech.
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: false }
+      ? { autoGainControl: true }
       : {}),
     echoCancellation: true,
-    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+    ...(noiseSuppressionSupported
       ? { noiseSuppression: useBrowserProcessing }
       : {}),
+    // Voice isolation is a second, platform-level suppression stage; running
+    // it on top of noiseSuppression cascades filters and attenuates voice.
+    // Use it only as the fallback when noiseSuppression is unsupported.
     ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
-      ? { voiceIsolation: useBrowserProcessing }
+      ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
   };
@@ -145,16 +153,25 @@ function nativeAudioProcessingConstraints(
   mode: MicNoiseSuppressionMode
 ): NativeAudioProcessingConstraints {
   const useBrowserProcessing = mode === 'browser';
+  const noiseSuppressionSupported =
+    supportsNativeAudioProcessingConstraint('noiseSuppression');
 
   return {
+    // applyConstraints() replaces the track's entire constraint set, so echo
+    // cancellation must be restated here or every mode change silently drops
+    // it back to unconstrained.
+    echoCancellation: true,
+    // AGC stays on in every mode — see microphoneCaptureOptions.
     ...(supportsNativeAudioProcessingConstraint('autoGainControl')
-      ? { autoGainControl: false }
+      ? { autoGainControl: true }
       : {}),
-    ...(supportsNativeAudioProcessingConstraint('noiseSuppression')
+    ...(noiseSuppressionSupported
       ? { noiseSuppression: useBrowserProcessing }
       : {}),
+    // See microphoneCaptureOptions: voiceIsolation is only the fallback when
+    // noiseSuppression is unsupported, never a second stacked layer.
     ...(supportsNativeAudioProcessingConstraint('voiceIsolation')
-      ? { voiceIsolation: useBrowserProcessing }
+      ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
   };
 }
@@ -467,6 +484,21 @@ function createCallState() {
       | NativeAudioProcessingConstraints
       | undefined;
 
+    // A requested constraint the engine reports back differently in settings
+    // means the processing state was never actually applied (live-track
+    // applyConstraints is not honored everywhere) — the key signal behind
+    // "toggled noise suppression and nothing changed" reports.
+    const constraintMismatch = (
+      ['autoGainControl', 'echoCancellation', 'noiseSuppression'] as const
+    ).some((name) => {
+      const requested = constraints?.[name];
+      return (
+        typeof requested === 'boolean' &&
+        settings?.[name] !== undefined &&
+        settings[name] !== requested
+      );
+    });
+
     console.debug('[call] mic audio processing', {
       event,
       preferredMode: persistedNoiseSuppressionMode(),
@@ -475,6 +507,7 @@ function createCallState() {
       hasMicTrack: !!micTrack,
       micReadyState: mediaStreamTrack?.readyState,
       hasProcessor: !!micTrack?.getProcessor(),
+      constraintMismatch,
       settings: {
         autoGainControl: settings?.autoGainControl,
         echoCancellation: settings?.echoCancellation,
@@ -491,12 +524,51 @@ function createCallState() {
       },
       ...extra,
     });
+
+    analytics.track('call_audio_processing', {
+      event,
+      channelId: store.activeChannelId ?? '',
+      callId: store.activeCallId ?? undefined,
+      preferredMode: persistedNoiseSuppressionMode(),
+      activeMode: store.noiseSuppressionMode,
+      krispSupported: isKrispNoiseFilterSupported(),
+      hasProcessor: !!micTrack?.getProcessor(),
+      constraintMismatch,
+      autoGainControl: settings?.autoGainControl,
+      echoCancellation: settings?.echoCancellation,
+      noiseSuppression: settings?.noiseSuppression,
+      voiceIsolation: settings?.voiceIsolation,
+      channelCount: settings?.channelCount,
+      sampleRate: settings?.sampleRate,
+      ...extra,
+    });
   }
 
   // --- internal helpers ---
 
+  // Noise-suppression processor work can be reached concurrently (background
+  // media setup, mute toggle, device switch, NS toggle). Overlapping runs can
+  // attach duplicate Krisp instances or land an attach after the user toggled
+  // off, so it is serialized; each queued run re-reads the persisted mode,
+  // which means the latest user intent wins regardless of arrival order.
+  let micProcessingQueue: Promise<void> = Promise.resolve();
+
+  function enqueueMicProcessing<T>(task: () => Promise<T>): Promise<T> {
+    const run = micProcessingQueue.then(task);
+    micProcessingQueue = run.then(
+      () => {},
+      () => {}
+    );
+    return run;
+  }
+
   /** Apply the preferred mic noise suppression mode to the current mic track. */
-  async function ensureNoiseSuppressionOnMicTrack(r: Room) {
+  function ensureNoiseSuppressionOnMicTrack(r: Room): Promise<void> {
+    return enqueueMicProcessing(() => applyNoiseSuppressionToMicTrack(r));
+  }
+
+  /** Serialized body of ensureNoiseSuppressionOnMicTrack — do not call directly. */
+  async function applyNoiseSuppressionToMicTrack(r: Room) {
     if (room() !== r) return;
 
     const preferredMode = persistedNoiseSuppressionMode();
@@ -552,7 +624,15 @@ function createCallState() {
       setKrispFilter(krisp);
       await micTrack.setProcessor(krisp);
       if (room() !== r || !isLiveLocalTrack(micTrack)) {
-        await krisp.destroy();
+        // The room/track went away mid-attach. Destroying a processor that
+        // is still wired into the track's audio graph leaves a dead node in
+        // the pipeline — detach it via stopProcessor() instead (which
+        // destroys the processor internally).
+        if (micTrack.getProcessor() === krisp) {
+          await micTrack.stopProcessor();
+        } else {
+          await krisp.destroy();
+        }
         if (krispFilter() === krisp) setKrispFilter(null);
         return;
       }
@@ -814,8 +894,12 @@ function createCallState() {
       await r.switchActiveDevice('audioinput', deviceId);
       setStore('activeAudioInputDeviceId', deviceId);
 
-      // If mic is currently live, republish with the new device to ensure it
-      // actually takes effect (switchActiveDevice alone can be unreliable).
+      // If the mic is live, cycle mute/unmute as a nudge for devices where
+      // switchActiveDevice's internal track restart doesn't take. Note this
+      // is NOT a republish: setMicrophoneEnabled(true, opts) ignores the
+      // capture options when the muted publication survives
+      // (stopMicTrackOnMute is false), so the device change itself always
+      // comes from switchActiveDevice above.
       if (!store.isAudioMuted) {
         await r.localParticipant.setMicrophoneEnabled(false);
         await r.localParticipant.setMicrophoneEnabled(
@@ -1012,7 +1096,10 @@ function createCallState() {
       if (newMuted) {
         await r.localParticipant.setMicrophoneEnabled(false);
       } else {
-        // Re-enable with the user's selected device
+        // Re-enable the mic. When the muted publication survived
+        // (stopMicTrackOnMute is false) this only unmutes and the capture
+        // options are ignored; they matter when the track was stopped and
+        // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
         await r.localParticipant.setMicrophoneEnabled(
           true,
@@ -1077,6 +1164,12 @@ function createCallState() {
     try {
       await r.localParticipant.setScreenShareEnabled(newSharing);
       setStore('isScreenSharing', newSharing);
+      analytics.track('call_action', {
+        action: 'screen_share_toggled',
+        channelId: store.activeChannelId ?? '',
+        callId: store.activeCallId ?? undefined,
+        enabled: newSharing,
+      });
     } catch (e) {
       console.error('failed to toggle screen share', e);
     }
@@ -1100,13 +1193,11 @@ function createCallState() {
     if (!r) return;
 
     try {
-      if (newMode === 'off') {
-        await detachKrispFromMicTrack(r);
-        await applyNativeAudioProcessingToMicTrack(r, 'off');
-        logMicAudioProcessing('noise-suppression-toggled-off', r);
-      } else {
-        await ensureNoiseSuppressionOnMicTrack(r);
-      }
+      // Both directions run through the serialized ensure path: its 'off'
+      // branch detaches Krisp and clears native processing, and queueing
+      // means a toggle issued while an attach is in flight still converges
+      // on the mode the user picked last.
+      await ensureNoiseSuppressionOnMicTrack(r);
     } catch (e) {
       console.error('failed to toggle noise suppression', e);
     }

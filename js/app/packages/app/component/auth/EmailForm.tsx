@@ -89,10 +89,10 @@ export const sendEmailCode = action(async (formData: FormData) => {
 
 export function useResetEmailCode(setStage: (next: Stage) => void) {
   const submission = useSubmission(sendEmailCode);
-  return createCallback(() => {
+  return () => {
     submission.clear();
     setStage(Stage.Email);
-  });
+  };
 }
 
 export function EmailForm(props: { setStage: (next: Stage) => void }) {

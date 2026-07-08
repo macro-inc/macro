@@ -9,6 +9,7 @@ use crate::domain::models::{EventBrokerError, MacroEvent};
 use crate::domain::ports::{EventPublisher, MacroEventBroker};
 
 /// Orchestrates serializing events and handing them to an [`EventPublisher`].
+#[derive(Clone)]
 pub struct MacroEventBrokerService<P: EventPublisher> {
     publisher: P,
 }
@@ -29,5 +30,18 @@ impl<P: EventPublisher> MacroEventBroker for MacroEventBrokerService<P> {
         let payload = serde_json::to_vec(envelope)?;
 
         self.publisher.publish(topic, key, &payload).await
+    }
+}
+
+/// A [`MacroEventBroker`] that drops every event.
+///
+/// Useful as a default type parameter for services that publish events
+/// optionally, and in tests that don't care about published events.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopMacroEventBroker;
+
+impl MacroEventBroker for NoopMacroEventBroker {
+    async fn send_event<E: MacroEvent + ?Sized>(&self, _event: &E) -> Result<(), EventBrokerError> {
+        Ok(())
     }
 }

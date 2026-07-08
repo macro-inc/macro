@@ -3,11 +3,17 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+/// The age after which an in-progress user link is considered expired: it no longer counts
+/// toward a user's in-progress link cap, and is eligible for cleanup by
+/// [`delete_day_old_in_progress_user_links`].
+const IN_PROGRESS_USER_LINK_MAX_AGE: chrono::Duration = chrono::Duration::hours(24);
+
 pub async fn count_existing_in_progress_user_links_for_user(
     db: &sqlx::Pool<sqlx::Postgres>,
     macro_user_id: &str,
 ) -> anyhow::Result<i64> {
     let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
+    let cutoff = (chrono::Utc::now() - IN_PROGRESS_USER_LINK_MAX_AGE).naive_utc();
     let count = sqlx::query!(
         r#"
             SELECT
@@ -16,8 +22,10 @@ pub async fn count_existing_in_progress_user_links_for_user(
                 in_progress_user_link
             WHERE
                 macro_user_id = $1
+                AND created_at > $2
         "#,
-        &macro_user_id
+        &macro_user_id,
+        cutoff
     )
     .map(|row| row.count)
     .fetch_one(db)
@@ -70,9 +78,7 @@ where
 pub async fn delete_day_old_in_progress_user_links(
     db: &sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
-    let now = chrono::Utc::now();
-    let yesterday = now - chrono::Duration::hours(24);
-    let yesterday = yesterday.naive_utc();
+    let yesterday = (chrono::Utc::now() - IN_PROGRESS_USER_LINK_MAX_AGE).naive_utc();
 
     sqlx::query!(
         r#"

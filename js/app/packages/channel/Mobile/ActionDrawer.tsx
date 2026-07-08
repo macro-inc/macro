@@ -1,5 +1,6 @@
 import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
+import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { focusInput } from '@core/directive/focusInput';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CheckSquareIcon from '@phosphor/check-square.svg';
@@ -230,7 +231,10 @@ export function ActionDrawer() {
                       title={`React ${emoji}`}
                       aria-label={`React ${emoji}`}
                       class="size-12 flex items-center justify-center bg-edge rounded-full text-[28px]"
-                      onClick={(event) => handleReaction(emoji, event)}
+                      onClick={(event) => {
+                        recordEmojiUsage(emoji);
+                        handleReaction(emoji, event);
+                      }}
                     >
                       {emoji}
                     </button>

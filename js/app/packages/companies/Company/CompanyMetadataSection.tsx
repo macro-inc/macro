@@ -1,4 +1,4 @@
-import type { CrmCompanyEntity } from '@entity';
+import { type CrmCompanyEntity, formatDateAndTime } from '@entity';
 import { For, type JSX, Show } from 'solid-js';
 
 function Field(props: { label: string; children: JSX.Element }) {
@@ -25,6 +25,16 @@ export function CompanyMetadataSection(props: { company?: CrmCompanyEntity }) {
             >
               {(domain) => <div class="truncate">{domain.domain}</div>}
             </For>
+          </Field>
+          {/* `updatedAt` carries `crm_companies.last_interaction`, which the
+              backend keeps fresh from synced workspace emails. */}
+          <Field label="Last interaction">
+            <Show
+              when={company().updatedAt}
+              fallback={<span class="text-ink-muted">None</span>}
+            >
+              {(ts) => <span>{formatDateAndTime(ts())}</span>}
+            </Show>
           </Field>
         </div>
       )}

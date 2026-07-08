@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{CommentThread, LocationQueryParams},
-    ports::{DocumentService, create::DocumentCreationService},
+    ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
     response::LocationResponseV3,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -90,17 +90,18 @@ pub struct ReadContent {
 }
 
 #[async_trait]
-impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for ReadContent
+impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for ReadContent
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     type Output = ReadContentResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, document_id=?self.document_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Read metadata");
@@ -207,8 +208,9 @@ where
 async fn get_document_content_from_location<
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 >(
-    service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+    service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
     document_context: &DocumentBasic,
     entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> anyhow::Result<String> {

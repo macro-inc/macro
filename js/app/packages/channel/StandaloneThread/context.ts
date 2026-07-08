@@ -14,6 +14,8 @@ export type StandaloneThreadContextValue = {
   parent: Accessor<ApiChannelMessage | undefined>;
   replies: Accessor<ApiThreadReply[]>;
   displayReplies: Accessor<ApiThreadReply[]>;
+  unreadMessageIds: Accessor<ReadonlySet<string>>;
+  hiddenEarlierReplyCount: Accessor<number>;
   hasReplies: Accessor<boolean>;
   isExpanded: Accessor<boolean>;
   setIsExpanded: Setter<boolean>;

@@ -11,7 +11,6 @@ use embedding::entity::Task;
 use embedding::{EmbeddingModel, VectorStore};
 use futures::StreamExt;
 use lexical_client::LexicalClient;
-use lexical_client::parse_markdown::MarkdownTarget;
 use macro_env_var::env_var;
 use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
@@ -408,14 +407,11 @@ async fn fetch_md_task(ctx: &Context, document_id: &str) -> Result<Task<'static>
         .await
         .map_err(anyhow::Error::from)?;
 
-    let body = ctx
-        .lexical
-        .get_markdown(document_id, MarkdownTarget::Embedding)
-        .await?;
+    let body = ctx.lexical.get_embedding_markdown(document_id).await?;
 
     Ok(Task {
         title: Cow::Owned(title),
-        body: Cow::Owned(body),
+        body: Cow::Owned(body.into_string()),
     })
 }
 

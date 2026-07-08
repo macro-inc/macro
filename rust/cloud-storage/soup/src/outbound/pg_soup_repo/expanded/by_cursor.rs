@@ -258,7 +258,7 @@ r#"
         .fetch_all(db)
         .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }
@@ -452,7 +452,7 @@ r#"
         .fetch_all(db)
         .await?;
 
-    populate_properties(db, &mut items).await?;
+    populate_properties(db, user_id.copied(), &mut items).await?;
 
     Ok(items)
 }

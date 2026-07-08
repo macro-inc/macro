@@ -287,8 +287,11 @@ struct StubSyncRepo {
     tasks: Mutex<HashMap<String, HashSet<String>>>,
     /// Maps (installation_id, normalized team_slug, team_task_id) -> task ID.
     team_task_references: Mutex<HashMap<(String, String, i32), MacroTaskId>>,
-    /// Maps github_user_id -> macro_id for installation event lookups.
-    github_links: Mutex<HashMap<String, String>>,
+    /// Maps github_user_id -> macro_ids for installation event lookups.
+    ///
+    /// A github_user_id may map to multiple Macro users because multiple Macro
+    /// users can share one GitHub account.
+    github_links: Mutex<HashMap<String, Vec<String>>>,
     /// Maps lowercase github login -> macro_ids for mention lookups.
     github_login_links: Mutex<HashMap<String, Vec<String>>>,
     /// Maps macro_id -> team_ids for installation event lookups.
@@ -299,6 +302,8 @@ struct StubSyncRepo {
     installation_source_rows: Mutex<HashMap<String, HashSet<GithubAppInstallationSource>>>,
     /// Recorded installation source upserts: (installation_id, sources).
     installation_sources: Mutex<Vec<(String, Vec<GithubAppInstallationSource>)>>,
+    /// Installer github user id keyed by installation id.
+    installation_installers: Mutex<HashMap<String, String>>,
 }
 
 impl StubSyncRepo {
@@ -312,6 +317,7 @@ impl StubSyncRepo {
             team_members: Mutex::new(HashMap::new()),
             installation_source_rows: Mutex::new(HashMap::new()),
             installation_sources: Mutex::new(Vec::new()),
+            installation_installers: Mutex::new(HashMap::new()),
         }
     }
 
@@ -319,7 +325,9 @@ impl StubSyncRepo {
         self.github_links
             .lock()
             .unwrap()
-            .insert(github_user_id.to_string(), macro_id.to_string());
+            .entry(github_user_id.to_string())
+            .or_default()
+            .push(macro_id.to_string());
         self
     }
 
@@ -386,6 +394,18 @@ impl StubSyncRepo {
 
     fn installation_sources(&self) -> Vec<(String, Vec<GithubAppInstallationSource>)> {
         self.installation_sources.lock().unwrap().clone()
+    }
+
+    fn with_installation_installer(self, installation_id: &str, github_user_id: &str) -> Self {
+        self.installation_installers
+            .lock()
+            .unwrap()
+            .insert(installation_id.to_string(), github_user_id.to_string());
+        self
+    }
+
+    fn installation_installers(&self) -> HashMap<String, String> {
+        self.installation_installers.lock().unwrap().clone()
     }
 }
 
@@ -461,16 +481,18 @@ impl GithubSyncRepo for StubSyncRepo {
         Ok(resolved)
     }
 
-    async fn get_macro_id_by_github_user_id(
+    async fn get_macro_ids_by_github_user_ids(
         &self,
-        github_user_id: &str,
-    ) -> Result<Option<String>, Self::Err> {
-        Ok(self
-            .github_links
-            .lock()
-            .unwrap()
-            .get(github_user_id)
-            .cloned())
+        github_user_ids: &[String],
+    ) -> Result<HashMap<String, Vec<String>>, Self::Err> {
+        let links = self.github_links.lock().unwrap();
+        Ok(github_user_ids
+            .iter()
+            .filter_map(|github_user_id| {
+                let macro_ids = links.get(github_user_id)?.clone();
+                Some((github_user_id.clone(), macro_ids))
+            })
+            .collect())
     }
 
     async fn get_macro_ids_by_github_logins(
@@ -541,6 +563,34 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap()
             .push((installation_id.to_string(), sources.to_vec()));
         Ok(())
+    }
+
+    async fn upsert_installation_installer(
+        &self,
+        installation_id: &str,
+        github_user_id: &str,
+    ) -> Result<(), Self::Err> {
+        self.installation_installers
+            .lock()
+            .unwrap()
+            .insert(installation_id.to_string(), github_user_id.to_string());
+        Ok(())
+    }
+
+    async fn get_installation_ids_by_installer(
+        &self,
+        github_user_id: &str,
+    ) -> Result<Vec<String>, Self::Err> {
+        let mut installation_ids: Vec<String> = self
+            .installation_installers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, installer)| installer.as_str() == github_user_id)
+            .map(|(installation_id, _)| installation_id.clone())
+            .collect();
+        installation_ids.sort();
+        Ok(installation_ids)
     }
 }
 
@@ -3814,8 +3864,127 @@ async fn installation_created_no_github_link() {
     let service = make_sync_service();
     let event = installation_created_event(99999, 11111);
 
-    // No github link for sender — should succeed without inserting anything
+    // No github link for sender — should succeed without inserting any sources
     service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.list_open_pull_requests_calls().is_empty());
+
+    // The installer is still recorded so a later link can associate the
+    // installation retroactively.
+    assert_eq!(
+        service.repo.installation_installers(),
+        HashMap::from([("11111".to_string(), "99999".to_string())])
+    );
+}
+
+#[tokio::test]
+async fn installation_created_records_installer_with_github_link() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+
+    let service = make_sync_service_with_repo(repo);
+    let event = installation_created_event(12345, 11111);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.repo.installation_installers(),
+        HashMap::from([("11111".to_string(), "12345".to_string())])
+    );
+}
+
+#[tokio::test]
+async fn associate_installations_for_github_user_associates_and_backfills() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+
+    // The installation was created before the user linked github: only the
+    // installer is recorded, no sources. The github link now exists.
+    let repo = StubSyncRepo::new()
+        .with_installation_installer("99999", "12345")
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_id]);
+
+    let service = make_sync_service_with_repo(repo);
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("backfilled PR");
+    service.client.set_open_pull_requests(vec![pull_request]);
+
+    service
+        .associate_installations_for_github_user("12345")
+        .await
+        .unwrap();
+
+    let sources = service.repo.installation_sources();
+    assert_eq!(
+        sources,
+        vec![(
+            "99999".to_string(),
+            vec![GithubAppInstallationSource::Team(team_id)],
+        )]
+    );
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string()]
+    );
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(foreign_entities[0].stored_for_id, team_id.to_string());
+    assert_eq!(foreign_entities[0].stored_for_auth_entity, "team");
+}
+
+#[tokio::test]
+async fn associate_installations_for_github_user_associates_multiple_installations() {
+    let repo = StubSyncRepo::new()
+        .with_installation_installer("11111", "12345")
+        .with_installation_installer("22222", "12345")
+        .with_installation_installer("33333", "someone-else")
+        .with_github_link("12345", "macro|user@user.com");
+
+    let service = make_sync_service_with_repo(repo);
+
+    service
+        .associate_installations_for_github_user("12345")
+        .await
+        .unwrap();
+
+    let user_source = vec![GithubAppInstallationSource::User(
+        "macro|user@user.com".to_string(),
+    )];
+    assert_eq!(
+        service.repo.installation_sources(),
+        vec![
+            ("11111".to_string(), user_source.clone()),
+            ("22222".to_string(), user_source),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn associate_installations_for_github_user_without_installations_is_noop() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+
+    let service = make_sync_service_with_repo(repo);
+
+    service
+        .associate_installations_for_github_user("12345")
+        .await
+        .unwrap();
+
+    assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.list_open_pull_requests_calls().is_empty());
+}
+
+#[tokio::test]
+async fn associate_installations_for_github_user_without_link_is_noop() {
+    let repo = StubSyncRepo::new().with_installation_installer("99999", "12345");
+
+    let service = make_sync_service_with_repo(repo);
+
+    service
+        .associate_installations_for_github_user("12345")
+        .await
+        .unwrap();
 
     assert!(service.repo.installation_sources().is_empty());
     assert!(service.client.list_open_pull_requests_calls().is_empty());
@@ -3976,6 +4145,48 @@ async fn review_requested_notifies_only_mapped_reviewer_in_team() {
     assert_eq!(
         content.get("displayName").and_then(|value| value.as_str()),
         Some("my-org/my-repo#42")
+    );
+}
+
+#[tokio::test]
+async fn review_requested_fans_out_to_all_macro_users_sharing_reviewer_github_account() {
+    // The requested reviewer's GitHub account (id 333) is shared by two Macro
+    // users, both of whom are members of the source team. The notification
+    // should fan out to both of them.
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(
+            team_id,
+            vec![
+                "macro|alice@user.com",
+                "macro|bob@user.com",
+                "macro|bob2@user.com",
+            ],
+        )
+        .with_github_link("222", "macro|alice@user.com")
+        .with_github_link("333", "macro|bob@user.com")
+        .with_github_link("333", "macro|bob2@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((333, "bob-gh")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "expected only the review-requested notification"
+    );
+
+    let request = &requests[0];
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_review_requested");
+    assert_eq!(
+        notification_request_recipients(request),
+        vec![
+            "macro|bob2@user.com".to_string(),
+            "macro|bob@user.com".to_string(),
+        ]
     );
 }
 

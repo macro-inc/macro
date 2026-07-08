@@ -11,7 +11,8 @@ import type { PropertyDefinitionDetailResponse } from '@service-properties/gener
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
-import { createMemo } from 'solid-js';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { type Accessor, createMemo } from 'solid-js';
 import { useEntityProperties } from '../hooks';
 import type { PropertyDefinitionDomain } from '../types';
 
@@ -24,6 +25,14 @@ export type ResolvedTag = {
 
 function optionLabel(option: PropertyOptionResponse): string {
   return option.value.type === 'string' ? option.value.value : '';
+}
+
+function compareTags(a: ResolvedTag, b: ResolvedTag): number {
+  return (
+    a.label.localeCompare(b.label) ||
+    a.scope.localeCompare(b.scope) ||
+    a.optionId.localeCompare(b.optionId)
+  );
 }
 
 function definitionDomain(
@@ -42,12 +51,15 @@ function definitionDomain(
   };
 }
 
-export function useDocTags(entityId: string, entityType: EntityType) {
+function createDocTags(
+  entityId: string,
+  entityType: EntityType,
+  appliedOptionIdsForDefinition: (definitionId: string) => string[]
+) {
   const tagsQuery = useTagsQuery();
   const ensureTagSet = useEnsureTagSetMutation();
   const addOption = useAddEntityPropertyOptionMutation();
   const removeOption = useRemoveEntityPropertyOptionMutation();
-  const { properties } = useEntityProperties(entityId, entityType, false);
 
   const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
 
@@ -74,16 +86,6 @@ export function useDocTags(entityId: string, entityType: EntityType) {
     return map;
   });
 
-  const appliedOptionIdsForDefinition = (definitionId: string): string[] => {
-    const property = properties().find(
-      (prop) => prop.propertyDefinitionId === definitionId
-    );
-    if (!property) return [];
-    return property.valueType === 'SELECT_STRING' && property.value
-      ? property.value
-      : [];
-  };
-
   const appliedTags = createMemo((): ResolvedTag[] => {
     const resolved: ResolvedTag[] = [];
     const lookup = optionById();
@@ -93,7 +95,7 @@ export function useDocTags(entityId: string, entityType: EntityType) {
         if (tag) resolved.push(tag);
       }
     }
-    return resolved;
+    return resolved.sort(compareTags);
   });
 
   const isApplied = (optionId: string): boolean =>
@@ -156,4 +158,37 @@ export function useDocTags(entityId: string, entityType: EntityType) {
     removeTag,
     toggleTag,
   };
+}
+
+export function useDocTags(entityId: string, entityType: EntityType) {
+  const { properties } = useEntityProperties(entityId, entityType, false);
+
+  return createDocTags(entityId, entityType, (definitionId) => {
+    const property = properties().find(
+      (prop) => prop.propertyDefinitionId === definitionId
+    );
+    if (!property) return [];
+    return property.valueType === 'SELECT_STRING' && property.value
+      ? property.value
+      : [];
+  });
+}
+
+/**
+ * Doc-tags backed by an entity's already-loaded soup properties instead of a
+ * per-entity fetch. List rows use this so tags render with no extra requests.
+ * Mutations patch the soup cache optimistically, so the source stays live.
+ */
+export function useSoupDocTags(
+  entityId: string,
+  entityType: EntityType,
+  properties: Accessor<SoupProperty[] | undefined>
+) {
+  return createDocTags(entityId, entityType, (definitionId) => {
+    const property = properties()?.find(
+      (prop) => prop.definition.id === definitionId
+    );
+    const value = property?.value;
+    return value?.type === 'SelectOption' ? value.value : [];
+  });
 }

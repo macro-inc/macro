@@ -7,9 +7,7 @@ import {
   EmailProvider,
   useEmailContext,
 } from '@block-email/component/EmailContext';
-import { EmailInput } from '@block-email/component/EmailInput';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -23,7 +21,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { buildMentionMarkdownString } from '@lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -37,11 +35,14 @@ import {
 } from 'solid-js';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
+import type { ReplyType } from '../util/replyType';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailParticipants } from './EmailParticipants';
+import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
+import { MobileEmailComposeDrawer } from './MobileEmailComposeDrawer';
 import { ModalsProvider } from './ModalsProvider';
 import { EmailSidePanelSections } from './sidepanel/EmailSidePanelSections';
 import { TopBar } from './TopBar';
@@ -49,6 +50,8 @@ import { TopBar } from './TopBar';
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
 const SCROLL_AFTER_SEND_DELAY_MS = 100;
+const SCROLL_SETTLE_STABLE_FRAMES = 15;
+const SCROLL_SETTLE_MAX_MS = 2000;
 
 type EmailViewProps = {
   title: string;
@@ -199,6 +202,56 @@ function EmailContent(props: EmailViewProps) {
     return true;
   };
 
+  // Message bodies keep resizing briefly after render (images load, inline
+  // cid: images fail and collapse), so a scroll computed against that
+  // transient layout gets displaced — browser scroll anchoring can clamp it
+  // to the very top of the thread. Re-assert the initial scroll whenever the
+  // content height changes until layout settles or the user scrolls.
+  let cancelActiveScrollPin: (() => void) | undefined;
+  const pinInitialScroll = (messageId: string) => {
+    cancelActiveScrollPin?.();
+    const list = untrack(context.messagesListRef);
+    if (!list) return;
+
+    let cancelled = false;
+    let stableFrames = 0;
+    let lastHeight = list.scrollHeight;
+    const startedAt = performance.now();
+
+    const cancel = () => {
+      cancelled = true;
+      list.removeEventListener('wheel', cancel);
+      list.removeEventListener('touchstart', cancel);
+      list.removeEventListener('pointerdown', cancel);
+    };
+    cancelActiveScrollPin = cancel;
+    list.addEventListener('wheel', cancel, { passive: true });
+    list.addEventListener('touchstart', cancel, { passive: true });
+    list.addEventListener('pointerdown', cancel, { passive: true });
+
+    const tick = () => {
+      if (cancelled || !list.isConnected) return cancel();
+      if (list.scrollHeight !== lastHeight) {
+        lastHeight = list.scrollHeight;
+        stableFrames = 0;
+        performScrollToMessage(messageId, {
+          behavior: 'instant',
+          focus: false,
+        });
+      } else {
+        stableFrames++;
+      }
+      if (
+        stableFrames >= SCROLL_SETTLE_STABLE_FRAMES ||
+        performance.now() - startedAt > SCROLL_SETTLE_MAX_MS
+      ) {
+        return cancel();
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+
   const scrollToLastMessage = (
     behavior: ScrollBehavior = 'instant',
     focus = false
@@ -254,14 +307,17 @@ function EmailContent(props: EmailViewProps) {
       const lastUnreadMessageId_ = untrack(firstUnreadMessageId);
       // Check if there is an unread message
       if (lastUnreadMessageId_) {
-        setTimeout(() =>
+        setTimeout(() => {
           performScrollToMessage(lastUnreadMessageId_!, {
             behavior: 'instant',
-          })
-        );
+          });
+          pinInitialScroll(lastUnreadMessageId_!);
+        });
         context.messages.setFocused(lastUnreadMessageId_!);
       } else {
         scrollToLastMessage('instant', false);
+        const lastMessageId = untrack(context.messages.list).at(-1)?.db_id;
+        if (lastMessageId) pinInitialScroll(lastMessageId);
       }
     }
 
@@ -285,9 +341,10 @@ function EmailContent(props: EmailViewProps) {
           fetchNextPage();
           await waitForQueryLoad();
           // Scroll to the message after DOM updates
-          setTimeout(() =>
-            performScrollToMessage(messageId, { behavior: 'instant' })
-          );
+          setTimeout(() => {
+            performScrollToMessage(messageId, { behavior: 'instant' });
+            pinInitialScroll(messageId);
+          });
         } else {
           // Message not found, fallback to last message
           setTimeout(() => scrollToLastMessage('instant', true));
@@ -301,15 +358,18 @@ function EmailContent(props: EmailViewProps) {
     else if (targetIndex === 0) {
       fetchNextPage();
       await waitForQueryLoad();
-      setTimeout(() =>
-        performScrollToMessage(messageId, { behavior: 'instant' })
-      );
+      setTimeout(() => {
+        performScrollToMessage(messageId, { behavior: 'instant' });
+        pinInitialScroll(messageId);
+      });
     }
-
     // Case 3: Message is in current batch with sufficient context
-    setTimeout(() =>
-      performScrollToMessage(messageId, { behavior: 'instant' })
-    );
+    else {
+      setTimeout(() => {
+        performScrollToMessage(messageId, { behavior: 'instant' });
+        pinInitialScroll(messageId);
+      });
+    }
   }
 
   // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
@@ -381,17 +441,6 @@ function EmailContent(props: EmailViewProps) {
   const navigateToPreviousMessage = () => navigateMessage('prev');
   const navigateToNextMessage = () => navigateMessage('next');
 
-  onMount(() => {
-    registerEmailHotkeys(scopeId(), {
-      blockSender: context.blockSender,
-      markDone: context.archiveThread,
-      markSenderSignal: context.markSenderSignal,
-      markSenderNoise: context.markSenderNoise,
-      navigateToPreviousMessage,
-      navigateToNextMessage,
-    });
-  });
-
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
   let hasRun = false;
   createEffect(() => {
@@ -405,29 +454,86 @@ function EmailContent(props: EmailViewProps) {
 
   let markdownDomRef!: HTMLDivElement;
 
+  const getHotkeyTarget = () => {
+    const messages = context.messages.list();
+    if (messages.length === 0) return;
+
+    const focusedId = context.messages.focusedID();
+    const focusedMessage = focusedId
+      ? messages.find((message) => message.db_id === focusedId)
+      : undefined;
+    const message = focusedMessage ?? messages.at(-1);
+    if (!message?.db_id) return;
+
+    return {
+      message,
+      isLastMessage: messages.at(-1)?.db_id === message.db_id,
+    };
+  };
+
+  const isMessageRenderedExpanded = (
+    target: NonNullable<ReturnType<typeof getHotkeyTarget>>
+  ) => {
+    const messageId = target.message.db_id;
+    if (!messageId) return false;
+
+    const isNewMessage = target.message.labels.some(
+      (label) => label.provider_label_id === 'UNREAD'
+    );
+
+    return (
+      context.messages.isBodyExpanded(messageId) ||
+      target.isLastMessage ||
+      isNewMessage
+    );
+  };
+
+  const openHotkeyTarget = (replyType: ReplyType) => {
+    const target = getHotkeyTarget();
+    if (!target) return false;
+
+    return openEmailReplyComposerForMessage({
+      ctx: context,
+      message: target.message,
+      replyType,
+      isLastMessage: target.isLastMessage,
+    });
+  };
+
+  onMount(() => {
+    registerEmailHotkeys(scopeId(), {
+      replyToFocusedMessage: () => openHotkeyTarget('reply'),
+      forwardFocusedMessage: () => openHotkeyTarget('forward'),
+      blockSender: context.blockSender,
+      markDone: context.archiveThread,
+      markSenderSignal: context.markSenderSignal,
+      markSenderNoise: context.markSenderNoise,
+      navigateToPreviousMessage,
+      navigateToNextMessage,
+    });
+  });
+
   registerScopeSignalHotkey(scopeId, {
     hotkey: 'enter',
-    description: 'Focus Email Input',
+    description: 'Reply to message',
     keyDownHandler: () => {
       const focusedId = context.messages.focusedID();
+      const target = getHotkeyTarget();
 
-      // If a message is focused and collapsed, expand it
-      if (focusedId && !context.messages.isBodyExpanded(focusedId)) {
-        context.messages.setExpandedBodyId(focusedId, true);
-        return true;
-      }
-
-      // If message is expanded and not the last message, trigger reply to that message
-      if (focusedId && context.messages.isBodyExpanded(focusedId)) {
-        const messages = context.messages.list();
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.db_id !== focusedId) {
-          context.messages.setReplyingToMessageId(focusedId);
+      if (focusedId && target?.message.db_id === focusedId) {
+        if (!isMessageRenderedExpanded(target)) {
+          context.messages.setExpandedBodyId(focusedId, true);
           return true;
         }
+
+        return openEmailReplyComposerForMessage({
+          ctx: context,
+          message: target.message,
+          replyType: 'reply',
+          isLastMessage: target.isLastMessage,
+        });
       }
 
-      // Otherwise, focus the main email input
       if (markdownDomRef) {
         markdownDomRef.focus();
         return true;
@@ -488,12 +594,17 @@ function EmailContent(props: EmailViewProps) {
     if (prevThreadId !== tid) {
       prevThreadId = tid;
       context.messages.setBottomReplyOpen(false);
+      context.mobileReplyComposer.close();
     }
     const filtered = context.messages.list();
     const lastMessage = filtered.at(-1);
     if (!lastMessage?.db_id) return;
     if (context.drafts.getDraftForMessage(lastMessage.db_id)) {
-      context.messages.setBottomReplyOpen(true);
+      if (isMobile()) {
+        context.mobileReplyComposer.openForMessage(lastMessage.db_id);
+      } else {
+        context.messages.setBottomReplyOpen(true);
+      }
     }
   });
 
@@ -527,10 +638,11 @@ function EmailContent(props: EmailViewProps) {
   // The bottom reply area renders when the user can compose and there's a
   // message to reply to or a draft to edit. Returns the reply info so it can
   // drive the keyed <Show> around the reply area.
-  const replyArea = () =>
-    context.permissions().isOwner &&
-    context.drafts.initialDraftsSettled() &&
-    emailReplyInfo();
+  const replyArea = () => {
+    if (!context.permissions().isOwner) return;
+    if (!context.drafts.initialDraftsSettled()) return;
+    return emailReplyInfo();
+  };
 
   // The expanded compose input, as opposed to the collapsed reply buttons
   // (which float in the mobile accessory region).
@@ -539,6 +651,11 @@ function EmailContent(props: EmailViewProps) {
 
   // Whether the compose input is rendered in normal flow.
   const replyInputInFlow = () => Boolean(replyArea() && replyInputOpen());
+
+  const mobileBottomReplyMessage = createMemo(() => {
+    if (context.mobileReplyComposer.open()) return;
+    return replyArea()?.replyingTo;
+  });
 
   return (
     <ModalsProvider subject={props.title}>
@@ -629,6 +746,9 @@ function EmailContent(props: EmailViewProps) {
                   </Show>
                   <MessageList
                     initialLoadComplete={context.initialLoadComplete()}
+                    markdownDomRef={(el) => {
+                      markdownDomRef = el;
+                    }}
                     onScrollPositionChange={handleScrollPositionChange}
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
@@ -638,55 +758,17 @@ function EmailContent(props: EmailViewProps) {
                     scrollContainer={context.messagesListRef}
                   />
                 </div>
-                <Show when={replyArea()}>
-                  {(info) => (
-                    <div
-                      class={cn(
-                        'shrink-0 w-full pb-4',
-                        // Edge-to-edge mobile: the in-flow input clears the
-                        // bottom chrome itself; when collapsed, the reply
-                        // buttons float in the accessory region instead and
-                        // this wrapper drops out of the layout.
-                        replyInputInFlow()
-                          ? 'mobile:pb-[calc(var(--mobile-content-inset-bottom,0)+1rem)]'
-                          : 'mobile:hidden'
-                      )}
-                    >
-                      <div class="relative w-full flex flex-row justify-center bg-surface macro-message-width macro-message-padding mx-auto">
-                        <FloatingInputLoader
-                          isLoading={context.query.isFetching}
-                          loadingText="Loading messages"
-                        />
-                        <Show
-                          when={replyInputOpen()}
-                          fallback={
-                            <Show when={info().replyingTo}>
-                              {(lastMessage) => (
-                                <BottomReplyButtons
-                                  lastMessage={lastMessage()}
-                                />
-                              )}
-                            </Show>
-                          }
-                        >
-                          <EmailInput
-                            replyingTo={() => info().replyingTo}
-                            draft={info().draft}
-                            setShowReply={(v) => {
-                              const next =
-                                typeof v === 'function'
-                                  ? v(context.messages.bottomReplyOpen())
-                                  : v;
-                              context.messages.setBottomReplyOpen(next);
-                            }}
-                            markdownDomRef={(el) => {
-                              markdownDomRef = el;
-                            }}
-                          />
-                        </Show>
-                      </div>
-                    </div>
+                <Show when={isMobile() && mobileBottomReplyMessage()}>
+                  {(lastMessage) => (
+                    <BottomReplyButtons lastMessage={lastMessage()} />
                   )}
+                </Show>
+                <Show when={isMobile()}>
+                  <MobileEmailComposeDrawer
+                    markdownDomRef={(el) => {
+                      markdownDomRef = el;
+                    }}
+                  />
                 </Show>
               </div>
             </EmailFormContextProvider>

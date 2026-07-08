@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
+import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
@@ -54,12 +55,13 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
-        label: 'Connected accounts',
+        label: 'Connections',
         icon: CpuIcon,
       },
-      { tab: 'Agent', label: 'MCPs', icon: PlugIcon },
+      { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
     ],
   },
   {
@@ -70,6 +72,48 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
 
 /** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
 const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
+
+/**
+ * URL slugs for each settings tab, used to build the settings page path
+ * (`/settings/<slug>`, and the `settings/<slug>` pair when docked in a split).
+ * Kept separate from labels so we can rename a tab's UI label without breaking
+ * existing/bookmarked URLs.
+ */
+const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
+  Account: 'account',
+  Billing: 'billing',
+  Subscription: 'subscription',
+  Organization: 'organization',
+  Appearance: 'appearance',
+  Mobile: 'mobile',
+  'AI Memory': 'ai-memory',
+  Inbox: 'inbox',
+  Shortcuts: 'shortcuts',
+  'Mobile App': 'mobile-app',
+  Agent: 'mcp-server',
+  Team: 'team',
+  CRM: 'crm',
+  Connected: 'connections',
+  Email: 'email',
+  GitHub: 'github',
+  Admin: 'admin',
+};
+
+const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
+  (Object.entries(SETTINGS_TAB_SLUGS) as [SettingsTab, string][]).map(
+    ([tab, slug]) => [slug, tab]
+  )
+);
+
+/** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
+export const settingsTabToSlug = (tab: SettingsTab): string =>
+  SETTINGS_TAB_SLUGS[tab];
+
+/** Resolve a URL slug back to its settings tab, or `undefined` if unknown. */
+export const settingsSlugToTab = (
+  slug: string | null | undefined
+): SettingsTab | undefined =>
+  slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
 
 /**
  * Look up a single tab's presentation (label + icon). Lets consumers that
@@ -100,6 +144,7 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
+      case 'CRM':
         return teamsFlag().enabled;
       case 'Connected':
         return true;

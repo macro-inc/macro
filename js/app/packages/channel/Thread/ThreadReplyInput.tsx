@@ -61,7 +61,6 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               replyInputHandle={props.replyInputHandle}
               setReplyInputHandle={props.setReplyInputHandle}
               focusRequest={props.focusRequest}
-              isDraggingOverChannel={entityDropZone.isDraggingOver}
               onReady={setLocalReplyInputHandle}
               onExit={() => props.setIsReplying(false)}
             />

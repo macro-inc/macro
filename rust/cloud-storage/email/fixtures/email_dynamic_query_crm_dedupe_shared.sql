@@ -62,4 +62,4 @@ VALUES
 -- Direct share of faye's thread with dave
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
 VALUES
-    ('55550003-0000-0000-0000-000000000001'::uuid, 'thread', 'macro|dave@beta.com', 'user', 'view');
+    ('55550003-0000-0000-0000-000000000001'::uuid, 'email_thread', 'macro|dave@beta.com', 'user', 'view');

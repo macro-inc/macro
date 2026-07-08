@@ -150,17 +150,25 @@ export const ENABLE_MARKDOWN_DIFF = resolveFeatureFlag(
   true
 );
 
-// TODO (seamus): markdown history is causing a quiet crash on some documents.
-// once I have a document that can consistently repro, i can debug and fix.
+// Toggle the new experimental history viewer — on in dev/preview, off in prod.
 export const ENABLE_HISTORY_COMPONENT = resolveFeatureFlag(
   'ENABLE_HISTORY_COMPONENT',
-  false
+  DEV_MODE_ENV
 );
 
 export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(
   'ENABLE_BEARER_TOKEN_AUTH',
   false
 );
+
+export const ENABLE_GIT_BLAME_FLAG = 'enable-git-blame';
+export const ENABLE_GIT_BLAME_OVERRIDE =
+  resolveFeatureFlag('ENABLE_GIT_BLAME', DEV_MODE_ENV) || undefined;
+
+export function ENABLE_GIT_BLAME(): boolean {
+  if (ENABLE_GIT_BLAME_OVERRIDE !== undefined) return ENABLE_GIT_BLAME_OVERRIDE;
+  return analytics.posthog.isFeatureEnabled(ENABLE_GIT_BLAME_FLAG) ?? false;
+}
 
 export const ENABLE_MARKDOWN_SEARCH_TEXT = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SEARCH_TEXT',
@@ -400,6 +408,25 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
 
+export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
+export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_GRAPHQL_SOUP'
+);
+
+/**
+ * Non-reactive check for imperative call sites (e.g. the soup GraphQL
+ * client's normalized-cache gate). Env override first (dev), else the same
+ * PostHog flag that gates the GraphQL transport — so cache and transport
+ * activate together in previews/production.
+ */
+export function ENABLE_GRAPHQL_SOUP(): boolean {
+  if (ENABLE_GRAPHQL_SOUP_OVERRIDE !== undefined) {
+    return ENABLE_GRAPHQL_SOUP_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_GRAPHQL_SOUP_FLAG) ?? false;
+}
+
 export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
 export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'
@@ -443,11 +470,26 @@ export const ENABLE_NEW_PRICING_OVERRIDE =
 export const ENABLE_NEW_INBOX_FLAG = 'enable-new-inbox-view';
 export const ENABLE_NEW_INBOX_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_INBOX', DEV_MODE_ENV) || undefined;
+export function ENABLE_NEW_INBOX() {
+  if (ENABLE_NEW_INBOX_OVERRIDE !== undefined) {
+    return ENABLE_NEW_INBOX_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
+}
 
 export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
 export const ENABLE_TAGS_FE_OVERRIDE =
   resolveFeatureFlag('ENABLE_TAGS_FE', DEV_MODE_ENV) || undefined;
 
+// Narrow rollout gate for the search-view tag surfaces (facet row + row
+// chips), layered on top of enable-tags-fe. PostHog-controlled per
+// environment with a dev-mode default. Override with
+// VITE_ENABLE_TAGS_SEARCH_FE.
+export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
+export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
+  resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
+  
 // Channel mode where replying and editing do not happen inline, but in a single unified input instead.
 export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
   'UNIFIED_CHANNEL_INPUT',

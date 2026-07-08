@@ -1,0 +1,5181 @@
+{
+  "tasks": [
+    {
+      "id": "019f1dee-42ec-729e-b7fe-0bfa152c689f",
+      "title": "virtualize the recipient selector list",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f19ed-6865-73cc-abed-b556238a8693",
+      "title": "make ipad usable",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f19c0-9297-7be4-b722-6c4a5263576c",
+      "title": "loading channel sometimes slow / animation fucked",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1999-8b48-7be5-ba71-0615f28141ec",
+      "title": "create kafka cluster and topics",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1999-c675-7eab-87c8-7e0ce1c82386",
+      "title": "setup kafka support for local running",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f199a-21b9-73c1-99e8-f43331932c60",
+      "title": "begin using MacroEventBroker",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1968-aac2-78dd-83db-ed81590a135a",
+      "title": "chore(ci): migrate assign author & labels to workflow + namespace",
+      "body": "",
+      "owner": "macro|riley.patel@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|riley.patel@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f1665-9b3c-7e1d-85f9-8b39ed0f19f2",
+      "title": "fix: emails shared from share menu don't show up in referencium",
+      "body": "",
+      "owner": "macro|riley.patel@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|riley.patel@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f14fa-947e-785e-82f9-2c1bed8c28d0",
+      "title": "handle team subscription trialing status",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f13bf-7819-731e-b591-b3ab794fa98c",
+      "title": "Profile drop up much better",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f13bf-1bb4-7f82-b077-b940f7cb5f7f",
+      "title": "Decrease contrast on borders",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f13bf-4910-708c-939b-ce47b08ec026",
+      "title": "lower opacity read in signal",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f13b1-6224-7c80-87a9-7c9fd1f2cb4f",
+      "title": "[feat][md] reset all inline styles on new paragraph (for the weak-minded)",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0921-e492-7a86-bec4-2d261fc2a1ff",
+      "title": "Set up deploy preview GitHub workflow for solid-site repo",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0464-c38c-749f-bc39-63722b8c39de",
+      "title": "drag down to refresh",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f044c-8a63-79c3-8da2-7abbafc80ee7",
+      "title": "toggle open not working for create menu",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f002f-b095-7e71-8d21-5282fe360ced",
+      "title": "[bug][md] numeric list merging bricked ahhhhhhhh",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0006-f044-7926-87ef-07ab05197f9b",
+      "title": "split header make better and kill second bar on documents",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0006-05e3-7d11-988c-21078ff0fb97",
+      "title": "simple create menu",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0006-8610-7dd0-8ea8-2e9f4502846d",
+      "title": "ask macro button above document title",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019f0005-14f0-716f-af3e-aaedfac9fffc",
+      "title": "update sidebar styles and sizing",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019effa8-4e3a-77f8-9db4-41c087f3924a",
+      "title": "sidebar text should be 13px",
+      "body": "",
+      "owner": "macro|riley.patel@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|riley.patel@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019effa8-4e36-7b07-a420-8188fa09b947",
+      "title": "sidebar icons should be 14px",
+      "body": "",
+      "owner": "macro|riley.patel@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|riley.patel@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019efb92-91fb-7070-b1c3-7e9c28a56589",
+      "title": "Remove settings dropup from sidebar",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019efa55-e411-71aa-bb99-53441a974eff",
+      "title": "[fix] lazy or ambiguous issue report, no action needed",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000005"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019efa3a-e0f1-73d2-acb6-08d4028ad434",
+      "title": "remove old containerEnvVar from pulumi service args",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000002"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef724-a12a-78bc-ac45-17a5ee2bbee9",
+      "title": "localhost:3000 not working on gab's phone",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000005"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef6d9-4ffb-78be-bc2b-93d4b94bc919",
+      "title": "This is a task",
+      "body": "",
+      "owner": "macro|riley.patel@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|riley.patel@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef5de-6cf1-7cda-aaf2-99f4314a9d93",
+      "title": "[feat][task] add full gh sidepanel section to the task sidebar",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef5dd-c95d-7ca7-a561-cafefc6132d0",
+      "title": "[bug][gh] gh profile pictures not loading on dev because of content policies",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000002"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef4e2-dd0e-754f-8202-d6fe136ecd08",
+      "title": "[bug][referencium] inline created tasks not included in referencium",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef1a9-677d-7980-95ab-5e458a1143ef",
+      "title": "[chore][ai] unchud model routing / env vars",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef157-84b1-709c-a968-4c2f5d836aa3",
+      "title": "[dss] allow deletion of documents if they are task and requester is an assignee",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef181-cf82-72ca-a1cd-5f377d1e77eb",
+      "title": "in ios 18 macro share target creates broken images if macro is foregrounded",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ef4dd-5dec-7ac4-a4aa-64ec8fc103c9",
+      "title": "[feat][soup] display email sync progress in soup view",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              },
+              {
+                "entity_id": "macro|emerson.gray@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefec-19b5-7042-80d0-cace6c814bc6",
+      "title": "use reddit style reply box for mobile, not inline",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefea-2b89-7cf6-8f44-4b2a62011523",
+      "title": "Split Scroll State in History Stack",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefe9-26d3-7875-903b-cf05459bb255",
+      "title": "upload files from phone",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefe8-9652-7e99-82f5-6a04f14510f8",
+      "title": "fix custom property ui and re-enable",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefe6-ff62-7fe3-a726-93e5d964cdbe",
+      "title": "add multi-inbox support to email view filter",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000005"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefe6-4a53-7f11-8078-1bea895cc20f",
+      "title": "New button should use More Popover tech",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefdf-5abe-7f87-b242-815fe16ea842",
+      "title": "stop profile pictures from flashing so much",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefda-1b9c-7c4b-8165-e11aef364ade",
+      "title": "add discussion to bottom of markdown documents",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": {
+            "type": "Date",
+            "value": "2026-06-23T03:59:59.999Z"
+          }
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefd5-1fa9-7807-82c0-332b7af55546",
+      "title": "account page in settings is still ugly",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefd4-e1d3-765b-bf94-020c881add21",
+      "title": "when on free premium should be auto selected for upgrading",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefd3-d24e-77b2-8f5c-d15385f9e01e",
+      "title": "onboarding tutorial is too big",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefd3-b141-777b-9d66-a51550b32f8d",
+      "title": "onboarding tutorial is out of date (for example command menu button is no longer in bottom left)",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefbf-8ab8-75a2-a1f2-31ca08039858",
+      "title": "ai projection queue system",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefb8-805b-7018-ad5c-4d838705c800",
+      "title": "[bug][channel] use channel participants in edit message input mentions",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefb4-66ff-7649-8004-3efcde748256",
+      "title": "[bug][md] copy-pasting an image in to markdown breaks undo behavior",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefb1-84f4-7d87-a462-b89923b7eed2",
+      "title": "make props editable from inline, from card view, and from hover card",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefa0-f689-7a58-bb2f-5830ab9b6759",
+      "title": "use short display name fallback in side-panel notifs and references",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefa0-2821-7dd9-a28c-e4e8f09dd0eb",
+      "title": "document preview card swap clibboard for link icon",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eefa1-9a70-7eca-bcfa-ecd76cf49fd5",
+      "title": "vertical overflow handling for desktop sidebar",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eef91-c0a3-739c-b0d2-467048aa02a5",
+      "title": "Add support for BYOK",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eef71-8e93-7e7d-bedf-678ddb666faf",
+      "title": "entity access blog post",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019eef71-b946-7cef-a223-a7a5474d35f5",
+      "title": "macro config blogpost",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ee0ba-c0bf-7b13-b9b4-e0cdd86e87b6",
+      "title": "channel reply input scrolled out of view causes main input to disappear",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ee04e-06cb-7192-bc15-8305628e5886",
+      "title": "app store page real screenshots",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ee04d-b9d5-7b77-82a9-444a7ecae6da",
+      "title": "app store icon white not orange",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019edcac-6596-7205-8b14-9a03a44d9ad1",
+      "title": "tall videos causing janky mobile scrolling experience",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000002"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019edca1-a072-71f0-8cc7-577c18ebd381",
+      "title": "unable to click individual notifications on mobile",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019edc14-5749-782f-b142-30c32a91de68",
+      "title": "investigate routing to /loading",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000001"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed7bc-5fc2-7ef8-a7e1-02ef498cd31f",
+      "title": "mobile task info panel padding",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed7b9-4edc-7851-9ed3-63d324241dfd",
+      "title": "fix compose message in new mobile",
+      "body": "",
+      "owner": "macro|reese.walsh@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|reese.walsh@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed6fe-ee97-7a7e-a5d7-605e85949c4a",
+      "title": "Exclude self in ai search",
+      "body": "",
+      "owner": "macro|casey.nguyen@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|casey.nguyen@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed7b8-cf63-7725-9c99-e2114d19b4fd",
+      "title": "deploy generic service workflow fails to build dss lambdas",
+      "body": "",
+      "owner": "macro|avery.diaz@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|avery.diaz@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed610-6dd4-78e9-a6a1-5693a4609ab0",
+      "title": "[bug][md] what the chud is going on with code box accessory in markdown shell",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0003-000000000003"
+            ]
+          }
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed231-ffe2-72fb-a131-8ea24abfa6ae",
+      "title": "can type on top of the md skeleton",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    },
+    {
+      "id": "019ed210-20e9-7c30-ac04-eaafe0aab3ac",
+      "title": "[bug][core] resize zone is not zoom compensated",
+      "body": "",
+      "owner": "macro|logan.pierce@macro.com",
+      "source": "prod",
+      "properties": [
+        {
+          "data_type": "ENTITY",
+          "property": "Assignees",
+          "values": {
+            "type": "EntityReference",
+            "value": [
+              {
+                "entity_id": "macro|logan.pierce@macro.com",
+                "entity_type": "USER"
+              }
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Status",
+          "values": {
+            "type": "SelectOption",
+            "value": [
+              "00000001-0000-0000-0002-000000000004"
+            ]
+          }
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Priority",
+          "values": null
+        },
+        {
+          "data_type": "DATE",
+          "property": "Due Date",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Parent Task",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Subtasks",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Depends On",
+          "values": null
+        },
+        {
+          "data_type": "SELECT_STRING",
+          "property": "Effort",
+          "values": null
+        },
+        {
+          "data_type": "NUMBER",
+          "property": "Story Points",
+          "values": null
+        },
+        {
+          "data_type": "ENTITY",
+          "property": "Relevant Documents",
+          "values": null
+        }
+      ]
+    }
+  ],
+  "pairs": []
+}

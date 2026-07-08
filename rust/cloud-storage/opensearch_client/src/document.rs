@@ -1,9 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{
-        self,
-        document::{IndexedProperty, UpsertDocumentArgs},
-    },
+    upsert::{self, document::UpsertDocumentArgs, properties::IndexedProperty},
 };
 
 impl OpensearchClient {
@@ -11,6 +8,17 @@ impl OpensearchClient {
     #[tracing::instrument(skip(self))]
     pub async fn upsert_document(&self, upsert_document_args: &UpsertDocumentArgs) -> Result<()> {
         upsert::document::upsert_document(&self.inner, upsert_document_args, None).await
+    }
+
+    /// Upserts only the parent doc (no content chunks) into the opensearch index
+    #[tracing::instrument(skip(self), err)]
+    pub async fn upsert_parent_document(
+        &self,
+        upsert_document_args: &UpsertDocumentArgs,
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        upsert::document::upsert_parent_document(&self.inner, upsert_document_args, index_override)
+            .await
     }
 
     /// Bulk upserts documents into the opensearch index

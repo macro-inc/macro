@@ -1,12 +1,18 @@
 use anyhow::Context;
 use chrono::Utc;
 use models_email::service::label::system_labels;
+use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
+};
+use properties::outbound::entity_properties_get_query::{
+    get_entity_properties_for_index, get_entity_properties_for_index_batch,
 };
 use sqlx::PgPool;
 use sqs_client::search::email::{EmailMessage, EmailThreadBatchMessage, EmailThreadMessage};
 use uuid::Uuid;
+
+use crate::process::properties::to_indexed_properties;
 
 pub async fn process_upsert_message(
     opensearch_client: &OpensearchClient,
@@ -53,6 +59,19 @@ pub async fn process_upsert_message(
         .map(|date| EpochSeconds::new(date.timestamp()))
         .transpose()?
         .unwrap_or(now);
+
+    // A full index overwrites the doc, so thread properties must ride along
+    // or a reindex would drop them. A fetch failure propagates (retry)
+    // instead of being mistaken for "no properties".
+    let properties = to_indexed_properties(
+        get_entity_properties_for_index(
+            db,
+            &message_info.thread_db_id.to_string(),
+            EntityType::Thread,
+        )
+        .await
+        .context("failed to fetch thread properties for search index")?,
+    );
 
     let upsert_email_message_args: UpsertEmailArgs = UpsertEmailArgs {
         message_id: upsert_email_message.message_id.clone(),
@@ -109,6 +128,7 @@ pub async fn process_upsert_message(
             .internal_date_ts
             .map(|date| EpochSeconds::new(date.timestamp()))
             .transpose()?,
+        properties,
     };
 
     opensearch_client
@@ -133,6 +153,14 @@ pub async fn process_upsert_thread_message(
         .context("failed to parse thread_id as UUID")?;
 
     let now = EpochSeconds::new(Utc::now().timestamp())?;
+
+    // A full index overwrites each doc, so thread properties must ride along
+    // or a reindex would drop them.
+    let properties = to_indexed_properties(
+        get_entity_properties_for_index(db, &thread_id.to_string(), EntityType::Thread)
+            .await
+            .context("failed to fetch thread properties for search index")?,
+    );
 
     loop {
         let messages =
@@ -216,6 +244,7 @@ pub async fn process_upsert_thread_message(
                     content,
                     updated_at_seconds: updated_at,
                     sent_at_seconds: sent_at,
+                    properties: properties.clone(),
                 });
             } else {
                 tracing::warn!("no content found for email message");
@@ -266,6 +295,17 @@ pub async fn process_upsert_thread_batch_message(
         )
         .await
         .context("failed to get batch thread messages")?;
+
+    // A full index overwrites each doc, so thread properties must ride along
+    // or a reindex would drop them.
+    let thread_id_strings: Vec<String> = thread_ids.iter().map(Uuid::to_string).collect();
+    let properties_by_thread =
+        get_entity_properties_for_index_batch(db, &thread_id_strings, EntityType::Thread)
+            .await
+            .context("failed to fetch thread properties for search index")?
+            .into_iter()
+            .map(|(thread_id, properties)| (thread_id, to_indexed_properties(properties)))
+            .collect::<std::collections::HashMap<_, _>>();
 
     let mut upsert_email_message_args = Vec::new();
 
@@ -331,6 +371,10 @@ pub async fn process_upsert_thread_batch_message(
                 content,
                 updated_at_seconds: updated_at,
                 sent_at_seconds: sent_at,
+                properties: properties_by_thread
+                    .get(&message.thread_db_id.to_string())
+                    .cloned()
+                    .unwrap_or_default(),
             });
         } else {
             tracing::warn!("no content found for email message");

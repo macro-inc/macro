@@ -26,7 +26,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 pub struct DocumentPermissionsToken {
     /// The users id if present
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
+    pub user_id: Option<MacroUserIdStr<'static>>,
     /// The document id
     pub document_id: String,
     /// The access level of the user for the document

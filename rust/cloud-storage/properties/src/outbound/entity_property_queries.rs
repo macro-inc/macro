@@ -1,7 +1,7 @@
 //! General entity property query helpers.
 
-use models_properties::EntityType;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -208,4 +208,37 @@ pub async fn count_valid_property_options(
     .await?;
 
     Ok(count.0)
+}
+
+/// Deletes an entity property by its ID.
+#[tracing::instrument(skip(pool))]
+pub async fn delete_entity_property(
+    pool: &Pool<Postgres>,
+    entity_property_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "DELETE FROM entity_properties WHERE id = $1",
+        entity_property_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Deletes all properties attached to an entity.
+#[tracing::instrument(skip(pool))]
+pub async fn delete_entity_properties(
+    pool: &Pool<Postgres>,
+    entity_reference: &EntityReference,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "DELETE FROM entity_properties WHERE entity_id = $1 AND entity_type = $2",
+        entity_reference.entity_id,
+        entity_reference.entity_type as _,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

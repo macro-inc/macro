@@ -306,7 +306,7 @@
       tauriLinuxdeployAppimagePluginSource = pkgs.fetchurl {
         # Do not use the mutable "continuous" release: tag-push builds must be reproducible.
         url = "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage";
-        hash = "sha256-mS1QKiSOFKsYVEjd9vbn0lVYy4TUYjw1TDrzUMJfzLM=";
+        hash = "sha256-psPPOB4jSR61J5Tsuiqb1F5k2okJetKF4l72l0nuKa4=";
       };
       tauriLinuxdeployAppimagePluginExtracted = pkgs.appimageTools.extractType2 {
         pname = "linuxdeploy-plugin-appimage";
