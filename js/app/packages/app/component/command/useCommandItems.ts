@@ -351,8 +351,11 @@ function useQuickAccessBuckets(): Record<
 
 export function useCommandItems(
   query: () => string,
-  categoryFilter: () => CategoryFilter
+  categoryFilter: () => CategoryFilter,
+  options?: { showSearchRow?: boolean }
 ) {
+  const showSearchRow = options?.showSearchRow ?? true;
+
   const buckets = useQuickAccessBuckets();
 
   // When in command scope or entity action mode, always show commands regardless of category filter
@@ -378,6 +381,7 @@ export function useCommandItems(
   });
 
   const shouldShowSearchRow = (q: string) => {
+    if (!showSearchRow) return false;
     if (!q.trim()) return false;
     if (CommandState.commandScopeCommands().length > 0) return false;
     if (CommandState.isEntityActionMode()) return false;
@@ -405,7 +409,9 @@ export function useCommandItems(
         const rest = ranked.filter((item) => !topCommandIds.has(item.id));
 
         return [
-          ...(trimmedQuery ? [makeSearchItem(q, categoryFilter())] : []),
+          ...(trimmedQuery && showSearchRow
+            ? [makeSearchItem(q, categoryFilter())]
+            : []),
           ...topCommands,
           ...rest,
         ];

@@ -66,7 +66,9 @@ function MobileSearchInner() {
 
   const query = debouncedDependent(SearchState.query, 60);
 
-  const filteredItems = useCommandItems(query, SearchState.categoryFilter);
+  const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
+    showSearchRow: false,
+  });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
 
