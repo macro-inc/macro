@@ -113,7 +113,7 @@ export function HistoryProvider(props: {
   // which may attribute them to whoever's token the AI worker connected with.
   const resolvePeerUser = (peers: Map<string, string>, peer: string): string =>
     isAiPeer(BigInt(peer))
-      ? `${MACRO_AGENT_BOT_ID} (AI)`
+      ? MACRO_AGENT_BOT_ID
       : (peers.get(peer) ?? 'unknown');
 
   // One stable useDisplayName per unique userId — batched into a single fetch.
