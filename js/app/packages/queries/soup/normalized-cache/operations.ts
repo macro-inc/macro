@@ -74,14 +74,30 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
-  cancelSoupQueries();
-
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
   const dependentKeys = normKey
     ? normalizer.getDependentQueriesByIds([normKey])
     : [];
+
+  // Cancel only the queries this patch touches. A blanket cancel strands
+  // unrelated in-flight refetches (e.g. an invalidated destination folder's
+  // list refetching on mount): the fetch dies and nothing retries it.
+  // Skip cold initial fetches (data === undefined); cancelling those can leave
+  // the query stuck pending, which is why cancelSoupQueries has the same guard.
+  for (const queryKey of dependentKeys) {
+    if (
+      partialMatchKey(queryKey, soupKeys.items._def) ||
+      partialMatchKey(queryKey, soupKeys.astItems._def)
+    ) {
+      queryClient.cancelQueries({
+        queryKey,
+        exact: true,
+        predicate: (query) => query.state.data !== undefined,
+      });
+    }
+  }
   const previousDependents = dependentKeys.map(
     (key: QueryKey) =>
       [key, queryClient.getQueryData<SoupItemsInfiniteData>(key)] as const
