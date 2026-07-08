@@ -416,6 +416,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             projectId: result.metadata?.project_id ?? undefined,
+            properties: result.properties ?? undefined,
             search,
           },
         ];

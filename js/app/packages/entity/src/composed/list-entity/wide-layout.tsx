@@ -16,6 +16,7 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isChatEntity,
   isDocumentEntity,
   isEmailEntity,
   isGithubPrEntity,
@@ -232,6 +233,17 @@ export function WideLayout(props: LayoutProps) {
             <RowTags
               entityId={entity().id}
               entityType={EntityType.PROJECT}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
+          when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.CHAT}
               properties={entity().properties}
             />
           )}

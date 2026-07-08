@@ -465,9 +465,9 @@ export function useSearchFacets(
     },
   });
 
-  // Tags show only where tagging applies (all/documents/tasks/emails), gated
-  // behind both the broad tags flag and the search-view rollout flag, and
-  // hidden when the caller has no tags defined.
+  // Tags show only where tagging applies (all/documents/tasks/emails/agents),
+  // gated behind both the broad tags flag and the search-view rollout flag,
+  // and hidden when the caller has no tags defined.
   const tagFacets = (): SearchFacetVM[] =>
     searchTags() && tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
 
@@ -491,6 +491,7 @@ export function useSearchFacets(
           ...tagFacets(),
         ];
       case 'document-or-file':
+      case 'agent':
       case 'all':
         return [type, ...tagFacets()];
       default:
