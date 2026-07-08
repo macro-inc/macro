@@ -61,6 +61,70 @@ export function TagPicker(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
+
+  const handleOpenChange = (value: boolean) => {
+    setOpen(value);
+    props.onOpenChange?.(value);
+  };
+
+  return (
+    <Popover
+      open={open()}
+      onOpenChange={handleOpenChange}
+      placement="bottom-start"
+      gutter={4}
+    >
+      <Popover.Trigger
+        type="button"
+        class={props.triggerClass}
+        aria-label={props.triggerLabel}
+      >
+        {props.children}
+      </Popover.Trigger>
+      <TagPickerBody
+        docTags={props.docTags}
+        onClose={() => handleOpenChange(false)}
+      />
+    </Popover>
+  );
+}
+
+/**
+ * Trigger-less TagPicker anchored at an arbitrary point, for callers that
+ * open the picker from somewhere else (e.g. a context-menu action).
+ */
+export function TagPickerPopover(props: {
+  docTags: DocTags;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  getAnchorRect: () => { x: number; y: number } | undefined;
+}) {
+  return (
+    <Popover
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      getAnchorRect={props.getAnchorRect}
+      placement="bottom-start"
+      gutter={4}
+    >
+      <TagPickerBody
+        docTags={props.docTags}
+        onClose={() => props.onOpenChange(false)}
+        // Focus starts outside the popover (the opener, e.g. a context menu,
+        // is still tearing down when it mounts), so dismissing on
+        // focus-outside would close it immediately. Pointer-down outside and
+        // Escape still dismiss.
+        dismissOnFocusOutside={false}
+      />
+    </Popover>
+  );
+}
+
+function TagPickerBody(props: {
+  docTags: DocTags;
+  onClose: () => void;
+  dismissOnFocusOutside?: boolean;
+}) {
   const [search, setSearch] = createSignal('');
   const [createScope, setCreateScope] = createSignal<TagScope>('user');
   const [createColor, setCreateColor] = createSignal<string>(DEFAULT_TAG_COLOR);
@@ -120,109 +184,94 @@ export function TagPicker(props: {
   };
 
   const closePicker = () => {
-    setOpen(false);
     setSearch('');
     setEditingId(null);
+    props.onClose();
   };
 
   return (
-    <Popover
-      open={open()}
-      onOpenChange={(value) => {
-        setOpen(value);
-        props.onOpenChange?.(value);
-      }}
-      placement="bottom-start"
-      gutter={4}
-    >
-      <Popover.Trigger
-        type="button"
-        class={props.triggerClass}
-        aria-label={props.triggerLabel}
-      >
-        {props.children}
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Layer depth={3}>
-          <Popover.Content
-            class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring-1 ring-edge-muted"
-            onCloseAutoFocus={(event) => event.preventDefault()}
-          >
-            <div class="flex items-center gap-2 border-b border-edge-muted px-2 py-2">
-              <SearchIcon class="size-4 text-ink-muted" />
-              <input
-                class="w-full bg-transparent caret-accent outline-none"
-                value={search()}
-                placeholder="Search or create label"
-                onInput={(event) => setSearch(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    handleCreate();
-                  } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    closePicker();
-                  }
-                }}
-              />
-            </div>
-
-            <div class="max-h-72 scroll-pb-1.5 overflow-y-auto p-1.5">
-              <For each={['user', 'team'] as const}>
-                {(scope) => (
-                  <Show when={scope === 'user' || hasTeamSet()}>
-                    <Show when={filteredSet(scope).length > 0}>
-                      <div class="px-2 pb-1 pt-2 text-xs text-ink-extra-muted">
-                        {SCOPE_LABEL[scope]}
-                      </div>
-                      <For each={filteredSet(scope)}>
-                        {(option) => (
-                          <TagPickerRow
-                            scope={scope}
-                            option={option}
-                            docTags={props.docTags}
-                            editing={editingId() === option.id}
-                            onEdit={() => setEditingId(option.id)}
-                            onEditClose={() => setEditingId(null)}
-                          />
-                        )}
-                      </For>
-                    </Show>
-                  </Show>
-                )}
-              </For>
-
-              <Show when={search().trim() && !exactMatchExists()}>
-                <CreateRow
-                  label={search().trim()}
-                  scope={createScope()}
-                  color={createColor()}
-                  hasTeamSet={hasTeamSet()}
-                  pending={addOption.isPending || ensureTagSet.isPending}
-                  onScope={setCreateScope}
-                  onColor={setCreateColor}
-                  onCreate={handleCreate}
-                  onCancel={() => setSearch('')}
-                />
-              </Show>
-
-              <Show
-                when={
-                  props.docTags
-                    .tagSets()
-                    .every((set) => set.options.length === 0) &&
-                  !search().trim()
+    <Popover.Portal>
+      <Layer depth={3}>
+        <Popover.Content
+          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring-1 ring-edge-muted"
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onFocusOutside={(event) => {
+            if (props.dismissOnFocusOutside === false) event.preventDefault();
+          }}
+        >
+          <div class="flex items-center gap-2 border-b border-edge-muted px-2 py-2">
+            <SearchIcon class="size-4 text-ink-muted" />
+            <input
+              class="w-full bg-transparent caret-accent outline-none"
+              value={search()}
+              placeholder="Search or create label"
+              onInput={(event) => setSearch(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleCreate();
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closePicker();
                 }
-              >
-                <div class="px-2 py-4 text-center text-ink-muted">
-                  Type to create your first label
-                </div>
-              </Show>
-            </div>
-          </Popover.Content>
-        </Layer>
-      </Popover.Portal>
-    </Popover>
+              }}
+            />
+          </div>
+
+          <div class="max-h-72 scroll-pb-1.5 overflow-y-auto p-1.5">
+            <For each={['user', 'team'] as const}>
+              {(scope) => (
+                <Show when={scope === 'user' || hasTeamSet()}>
+                  <Show when={filteredSet(scope).length > 0}>
+                    <div class="px-2 pb-1 pt-2 text-xs text-ink-extra-muted">
+                      {SCOPE_LABEL[scope]}
+                    </div>
+                    <For each={filteredSet(scope)}>
+                      {(option) => (
+                        <TagPickerRow
+                          scope={scope}
+                          option={option}
+                          docTags={props.docTags}
+                          editing={editingId() === option.id}
+                          onEdit={() => setEditingId(option.id)}
+                          onEditClose={() => setEditingId(null)}
+                        />
+                      )}
+                    </For>
+                  </Show>
+                </Show>
+              )}
+            </For>
+
+            <Show when={search().trim() && !exactMatchExists()}>
+              <CreateRow
+                label={search().trim()}
+                scope={createScope()}
+                color={createColor()}
+                hasTeamSet={hasTeamSet()}
+                pending={addOption.isPending || ensureTagSet.isPending}
+                onScope={setCreateScope}
+                onColor={setCreateColor}
+                onCreate={handleCreate}
+                onCancel={() => setSearch('')}
+              />
+            </Show>
+
+            <Show
+              when={
+                props.docTags
+                  .tagSets()
+                  .every((set) => set.options.length === 0) && !search().trim()
+              }
+            >
+              <div class="px-2 py-4 text-center text-ink-muted">
+                Type to create your first label
+              </div>
+            </Show>
+          </div>
+        </Popover.Content>
+      </Layer>
+    </Popover.Portal>
   );
 }
 

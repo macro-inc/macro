@@ -59,6 +59,9 @@ type BuildActionGroups = (
     activeTab: string | undefined;
     /** Set when the list is a folder's contents (project block view) */
     viewedProjectId?: string;
+    // Provided only where the menu host can anchor a tag picker for the
+    // right-clicked row.
+    openTagPicker?: () => void;
   }
 ) => SoupEntityActionGroup[];
 
@@ -113,7 +116,7 @@ export function createSoupEntityActions(): {
   const buildActionGroups: BuildActionGroups = (
     soup,
     entities,
-    { activeTab, activeListView, viewedProjectId }
+    { activeTab, activeListView, viewedProjectId, openTagPicker }
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
@@ -253,6 +256,14 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    if (entities.length === 1 && openTagPicker) {
+      middleItems.push({
+        id: 'add-label',
+        label: 'Add label',
+        onClick: openTagPicker,
       });
     }
 

@@ -13,6 +13,7 @@ interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   soup: SoupState;
   onActionComplete?: () => void;
+  onEditTags?: () => void;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -26,6 +27,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       activeTab: activeTab(),
       activeListView: content.id,
       viewedProjectId: viewedProjectIdFromContent(content),
+      openTagPicker: props.onEditTags,
     });
   };
 
