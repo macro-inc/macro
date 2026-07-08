@@ -1,8 +1,12 @@
 use anyhow::Context;
+use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::chat_message::UpsertChatMessageArgs,
 };
+use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqs_client::search::chat::{ChatMessage, RemoveChatMessage};
+
+use crate::process::properties::to_indexed_properties;
 
 /// Handles the processing of chat messages
 #[tracing::instrument(skip(opensearch_client, db))]
@@ -37,6 +41,15 @@ pub async fn insert_chat_message(
         return Ok(());
     }
 
+    // The parent doc is a full overwrite, so its properties must ride every
+    // write or values set by the property-update path get wiped. A fetch
+    // failure propagates (retry) rather than being mistaken for "empty".
+    let properties = to_indexed_properties(
+        get_entity_properties_for_index(db, chat_message.chat_id.as_str(), EntityType::Chat)
+            .await
+            .context("failed to fetch chat properties for search index")?,
+    );
+
     opensearch_client
         .upsert_chat_message(
             &UpsertChatMessageArgs {
@@ -48,6 +61,7 @@ pub async fn insert_chat_message(
                 title: info.name,
                 content: info.content,
                 role: info.role,
+                properties,
             },
             index_override,
         )

@@ -95,6 +95,11 @@ define_system_properties! {
     Sender,            SENDER_UUID,             0x0d, "Sender";
     Recipients,        RECIPIENTS_UUID,         0x0e, "Recipients";
     Subject,           SUBJECT_UUID,            0x0f, "Subject";
+
+    // CRM companies
+    Stage,             STAGE_UUID,              0x10, "Stage";
+    CompanyOwner,      COMPANY_OWNER_UUID,      0x11, "Owner";
+    Revenue,           REVENUE_UUID,            0x12, "Revenue";
 }
 
 impl SystemPropertyKey {
@@ -115,6 +120,11 @@ impl SystemPropertyKey {
                 Self::EFFORT_UUID,
                 Self::STORY_POINTS_UUID,
                 Self::RELEVANT_DOCUMENTS_UUID,
+            ],
+            EntityType::Company => &[
+                Self::STAGE_UUID,
+                Self::COMPANY_OWNER_UUID,
+                Self::REVENUE_UUID,
             ],
             // Other entity types don't have required properties yet
             // Add new cases here as needed:
@@ -161,7 +171,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 15);
+        assert_eq!(all_keys.len(), 18);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -177,6 +187,18 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::SENDER_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::RECIPIENTS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::SUBJECT_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::STAGE_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::COMPANY_OWNER_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::REVENUE_UUID));
+    }
+
+    #[test]
+    fn test_required_property_ids_for_company() {
+        let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Company);
+        assert_eq!(required.len(), 3);
+        assert!(required.contains(&SystemPropertyKey::STAGE_UUID));
+        assert!(required.contains(&SystemPropertyKey::COMPANY_OWNER_UUID));
+        assert!(required.contains(&SystemPropertyKey::REVENUE_UUID));
     }
 
     #[test]
@@ -261,6 +283,9 @@ mod tests {
             SystemPropertyKey::Sender,
             SystemPropertyKey::Recipients,
             SystemPropertyKey::Subject,
+            SystemPropertyKey::Stage,
+            SystemPropertyKey::CompanyOwner,
+            SystemPropertyKey::Revenue,
         ];
 
         for variant in variants {

@@ -1,27 +1,109 @@
 import type { StepResult, ToolSet } from 'ai';
 import type { UsageEntry } from './ai-editing/token-tracker';
+import type { DispatchEditTrace } from './ai-editing/tools';
 
+/** Raw inputs collected during a run, normalized into a TraceSession. */
 export type TraceMeta = {
+  sessionId: string;
   documentId: string;
   prompt: string;
   startedAt: Date;
   initialDocument?: string;
   intent?: string;
+  /** Wall-clock duration of the interpreter pass, in ms. */
+  interpretDurationMs?: number;
   /** JS code blocks run by each coder, indexed by dispatch round then edit index. */
   coderCodeBlocks?: string[][][];
+  /** Snippet + timing traces, indexed by dispatch round then edit index. */
+  dispatchEditTraces?: DispatchEditTrace[][];
+  /** Wall-clock duration of each supervisor step, in ms. */
+  stepDurationsMs?: number[];
 };
 
 type Usage = UsageEntry[];
 
+export type TraceToolCall = {
+  toolName: string;
+  input: unknown;
+  output: unknown;
+};
+
+export type TraceStep = {
+  text?: string;
+  durationMs?: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolCalls: TraceToolCall[];
+};
+
+/** Structured, serializable record of an edit session — the stored source of
+ * truth. Markdown is rendered from it on demand via renderTraceMarkdown. */
+export type TraceSession = {
+  version: 1;
+  sessionId: string;
+  documentId: string;
+  prompt: string;
+  startedAt: string;
+  initialDocument?: string;
+  intent?: string;
+  interpretDurationMs?: number;
+  steps: TraceStep[];
+  usage: Usage;
+  coderCodeBlocks?: string[][][];
+  dispatchEditTraces?: DispatchEditTrace[][];
+};
+
+/** Normalize the AI SDK's rich step objects into the serializable session. */
+export function buildTraceSession(
+  meta: TraceMeta,
+  steps: StepResult<ToolSet>[],
+  usage: Usage
+): TraceSession {
+  return {
+    version: 1,
+    sessionId: meta.sessionId,
+    documentId: meta.documentId,
+    prompt: meta.prompt,
+    startedAt: meta.startedAt.toISOString(),
+    initialDocument: meta.initialDocument,
+    intent: meta.intent,
+    interpretDurationMs: meta.interpretDurationMs,
+    steps: steps.map((step, i) => ({
+      text: step.text || undefined,
+      durationMs: meta.stepDurationsMs?.[i],
+      inputTokens: step.usage.inputTokens ?? 0,
+      outputTokens: step.usage.outputTokens ?? 0,
+      toolCalls: step.toolCalls.map((call, j) => ({
+        toolName: call.toolName,
+        input: call.input,
+        output: (step.toolResults?.[j] as { output?: unknown } | undefined)
+          ?.output,
+      })),
+    })),
+    usage,
+    coderCodeBlocks: meta.coderCodeBlocks,
+    dispatchEditTraces: meta.dispatchEditTraces,
+  };
+}
+
+type TraceDispatchEdit = {
+  editing_instruction: string;
+  context?: { start_line: number; end_line: number };
+  snippets?: Record<string, string>;
+  snippet_specs?: Record<string, string | { brief: string; effort?: string }>;
+};
+
+/** Render an epoch-ms timestamp relative to the session start, e.g. `t+2.1s`. */
+function relTime(ms: number | undefined, t0: number | undefined): string {
+  if (ms == null || t0 == null) return '?';
+  return `t+${((ms - t0) / 1000).toFixed(1)}s`;
+}
+
 function formatDispatchArgs(
-  args: {
-    edits: Array<{
-      editing_instruction: string;
-      context?: { start_line: number; end_line: number };
-      snippets?: Record<string, string>;
-    }>;
-  },
-  codesPerEdit?: string[][]
+  args: { edits: TraceDispatchEdit[] },
+  codesPerEdit?: string[][],
+  editTraces?: DispatchEditTrace[],
+  t0?: number
 ): string {
   return args.edits
     .map((e, i) => {
@@ -31,11 +113,39 @@ function formatDispatchArgs(
       let out = `${i + 1}. ${e.editing_instruction}${range}`;
       if (e.snippets && Object.keys(e.snippets).length > 0) {
         for (const [key, value] of Object.entries(e.snippets)) {
-          out += `\n   snippets.${key}:\n   \`\`\`\n${value
+          const text =
+            typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+          out += `\n   snippets.${key}:\n   \`\`\`\n${text
             .split('\n')
             .map((l) => `   ${l}`)
             .join('\n')}\n   \`\`\``;
         }
+      }
+      if (e.snippet_specs && Object.keys(e.snippet_specs).length > 0) {
+        for (const [key, spec] of Object.entries(e.snippet_specs)) {
+          const brief = typeof spec === 'string' ? spec : spec.brief;
+          const effort = typeof spec === 'string' ? undefined : spec.effort;
+          out += `\n   snippet_specs.${key}${effort === 'high' ? ' [high]' : ''}: ${brief}`;
+        }
+      }
+      const trace = editTraces?.[i];
+      if (trace) {
+        for (const s of trace.snippets) {
+          const window = `${relTime(s.startedAt, t0)} → ${
+            s.resolvedAt == null ? 'unresolved' : relTime(s.resolvedAt, t0)
+          }`;
+          out += `\n   snippet ${s.key}${s.effort === 'high' ? ' · high' : ''} · ${window}${s.error ? ` · ⚠ ${s.error}` : ''}`;
+          if (s.text) {
+            out += `\n   \`\`\`\n${s.text
+              .split('\n')
+              .map((l) => `   ${l}`)
+              .join('\n')}\n   \`\`\``;
+          }
+        }
+        const runCodes = trace.runCodeAt
+          .map((ms) => relTime(ms, t0))
+          .join(', ');
+        out += `\n   coder ${relTime(trace.coderStartedAt, t0)} → ${relTime(trace.coderFinishedAt, t0)}${runCodes ? ` · runCode at ${runCodes}` : ''}`;
       }
       const codes = codesPerEdit?.[i];
       if (codes && codes.length > 0) {
@@ -52,23 +162,19 @@ function formatDispatchArgs(
 }
 
 function formatToolCall(
-  call: { toolName: string; input: unknown },
-  output: unknown,
-  codesPerEdit?: string[][]
+  call: TraceToolCall,
+  codesPerEdit?: string[][],
+  editTraces?: DispatchEditTrace[],
+  t0?: number
 ): string {
   const lines: string[] = [];
+  const { output } = call;
 
   if (call.toolName === 'dispatch') {
-    const { edits } = call.input as {
-      edits: Array<{
-        editing_instruction: string;
-        context?: { start_line: number; end_line: number };
-        snippets?: Record<string, string>;
-      }>;
-    };
+    const { edits } = call.input as { edits: TraceDispatchEdit[] };
     lines.push(`**dispatch** — ${edits.length} edit(s)`);
     lines.push('');
-    lines.push(formatDispatchArgs({ edits }, codesPerEdit));
+    lines.push(formatDispatchArgs({ edits }, codesPerEdit, editTraces, t0));
     if (output != null) {
       const res = String(output);
       const docStart = res.indexOf('<document>');
@@ -111,80 +217,102 @@ function formatToolCall(
   return lines.join('\n');
 }
 
+/** Step header timing, e.g. `· 0.9s · t+1.4s` (this step / cumulative). */
+function formatTiming(durationMs?: number, elapsedMs?: number): string {
+  const parts: string[] = [];
+  if (durationMs != null) parts.push(`${(durationMs / 1000).toFixed(1)}s`);
+  if (elapsedMs != null) parts.push(`t+${(elapsedMs / 1000).toFixed(1)}s`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
 function formatStep(
-  step: StepResult<ToolSet>,
+  step: TraceStep,
   i: number,
+  elapsedMs: number | undefined,
   dispatchRoundRef: { current: number },
-  coderCodeBlocks?: string[][][]
+  coderCodeBlocks?: string[][][],
+  dispatchEditTraces?: DispatchEditTrace[][],
+  t0?: number
 ): string {
-  const lines: string[] = [`### Step ${i + 1}`];
+  const lines: string[] = [
+    `### Step ${i + 1}${formatTiming(step.durationMs, elapsedMs)}`,
+  ];
 
   if (step.text) {
     lines.push('');
     lines.push(step.text.trim());
   }
 
-  for (let j = 0; j < step.toolCalls.length; j++) {
-    const call = step.toolCalls[j]!;
-    const result = step.toolResults?.[j];
-    const codesPerEdit =
-      call.toolName === 'dispatch'
-        ? coderCodeBlocks?.[dispatchRoundRef.current++]
-        : undefined;
+  for (const call of step.toolCalls) {
+    const round =
+      call.toolName === 'dispatch' ? dispatchRoundRef.current++ : undefined;
+    const codesPerEdit = round == null ? undefined : coderCodeBlocks?.[round];
+    const editTraces = round == null ? undefined : dispatchEditTraces?.[round];
     lines.push('');
-    lines.push(
-      formatToolCall(
-        call as unknown as { toolName: string; input: unknown },
-        result != null
-          ? (result as unknown as { output: unknown }).output
-          : undefined,
-        codesPerEdit
-      )
-    );
+    lines.push(formatToolCall(call, codesPerEdit, editTraces, t0));
   }
 
-  const { inputTokens, outputTokens } = step.usage;
   lines.push('');
   lines.push(
-    `*${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out*`
+    `*${step.inputTokens.toLocaleString()} in / ${step.outputTokens.toLocaleString()} out*`
   );
 
   return lines.join('\n');
 }
 
-function formatTrace(
-  meta: TraceMeta,
-  steps: StepResult<ToolSet>[],
-  usage: Usage
-): string {
+/** Render the stored session into the human-readable markdown trace. */
+export function renderTraceMarkdown(session: TraceSession): string {
   const sections: string[] = [
     '# AI Edit Trace',
-    `- **document:** ${meta.documentId}`,
-    `- **timestamp:** ${meta.startedAt.toISOString()}`,
-    `- **prompt:** ${meta.prompt}`,
+    `- **document:** ${session.documentId}`,
+    `- **timestamp:** ${session.startedAt}`,
+    `- **prompt:** ${session.prompt}`,
   ];
 
-  if (meta.initialDocument) {
+  if (session.initialDocument) {
     sections.push(
       '',
       '**document before:**',
       '```xml',
-      meta.initialDocument,
+      session.initialDocument,
       '```'
     );
   }
 
-  if (meta.intent) {
-    sections.push('', '---', '', '## Interpreter', '', meta.intent);
+  if (session.intent) {
+    sections.push(
+      '',
+      '---',
+      '',
+      `## Interpreter${formatTiming(session.interpretDurationMs)}`,
+      '',
+      session.intent
+    );
   }
 
   sections.push('', '---', '', '## Supervisor');
 
   const dispatchRoundRef = { current: 0 };
-  for (let i = 0; i < steps.length; i++) {
+  const t0 = Date.parse(session.startedAt);
+  let elapsedMs = 0;
+  let sawDuration = false;
+  for (let i = 0; i < session.steps.length; i++) {
+    const step = session.steps[i]!;
+    if (step.durationMs != null) {
+      elapsedMs += step.durationMs;
+      sawDuration = true;
+    }
     sections.push('');
     sections.push(
-      formatStep(steps[i]!, i, dispatchRoundRef, meta.coderCodeBlocks)
+      formatStep(
+        step,
+        i,
+        sawDuration ? elapsedMs : undefined,
+        dispatchRoundRef,
+        session.coderCodeBlocks,
+        session.dispatchEditTraces,
+        Number.isNaN(t0) ? undefined : t0
+      )
     );
   }
 
@@ -196,19 +324,11 @@ function formatTrace(
     '| model | input | output |',
     '|---|---|---|'
   );
-  for (const u of usage) {
+  for (const u of session.usage) {
     sections.push(
       `| ${u.model} | ${u.inputTokens.toLocaleString()} | ${u.outputTokens.toLocaleString()} |`
     );
   }
 
   return sections.join('\n');
-}
-
-export function buildTraceLog(
-  meta: TraceMeta,
-  steps: StepResult<ToolSet>[],
-  usage: Usage
-): string {
-  return formatTrace(meta, steps, usage);
 }

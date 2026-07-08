@@ -21,6 +21,8 @@ env_vars!(
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     pub struct McpCredentialsKeySecretName;
     pub struct DocumentPermissionJwt;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 );
 
 maybe_env_vars!(
@@ -71,6 +73,8 @@ pub struct Config {
     pub ai_editing_worker_url: String,
     /// JWT secret for minting document permission tokens for the editing worker.
     pub document_permission_jwt: DocumentPermissionJwt,
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
 }
 
 impl Config {
@@ -119,6 +123,7 @@ impl Config {
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
+            kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
         }
     }
 }

@@ -416,6 +416,7 @@ where
         routing,
         loaded_buffer,
         register_loaded,
+        request_context.searchable_tools.clone(),
         request_context.cancel.clone(),
     );
     // Driver-side sender for parts derived from rig stream items (thinking,
@@ -427,6 +428,7 @@ where
         .stream_prompt(prompt)
         .with_history(history)
         .multi_turn(max_turns)
+        .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
         .with_hook(bridge)
         .await;
 

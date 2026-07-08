@@ -10,6 +10,8 @@ import { type Bindings, getEnv } from '../env';
 import { type Model, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
+import { renderTraceMarkdown } from '../trace-log';
+import { insertEditTrace } from '../traces-db';
 
 type Provider = 'anthropic' | 'cerebras' | 'openai';
 
@@ -43,6 +45,11 @@ const EditBody = z.object({
     supervisor: ModelListSchema,
     interpret: ModelListSchema,
     coding: ModelListSchema,
+    /** Snippet-composition model; falls back to the coding list when omitted. */
+    snippet: ModelListSchema.optional(),
+    /** Model for `effort: "high"` snippet specs; falls back to the supervisor
+     * list when omitted, so high effort escalates to the strongest model. */
+    snippetHigh: ModelListSchema.optional(),
   }),
   typingAnimations: z.boolean().optional(),
   /** Animation speed multiplier applied while nobody is watching the doc. */
@@ -108,7 +115,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, trace, clarification } = await runEditSession({
+    const { usage, ops, session, clarification } = await runEditSession({
       wsUrl,
       documentId,
       prompt,
@@ -116,6 +123,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         supervisor: resolveModel(models.supervisor),
         interpret: resolveModel(models.interpret),
         coding: resolveModel(models.coding),
+        snippet: resolveModel(models.snippet ?? models.coding),
+        snippetHigh: resolveModel(models.snippetHigh ?? models.supervisor),
       },
       typingAnimations,
       sleep,
@@ -124,7 +133,28 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       runner: runInSandbox,
       signal,
     }).finally(presence.stop);
-    return c.json({ ok: true, usage, ops, trace, clarification });
+
+    const db = c.env.TRACES_DB;
+    if (db) {
+      c.executionCtx.waitUntil(
+        insertEditTrace(db, {
+          id: session.sessionId,
+          document_id: documentId,
+          created_at: Date.now(),
+          trace_json: JSON.stringify(session),
+        }).catch((e) => {
+          console.error('failed to persist edit trace:', e);
+        })
+      );
+    }
+
+    return c.json({
+      ok: true,
+      usage,
+      ops,
+      trace: debug ? renderTraceMarkdown(session) : undefined,
+      clarification,
+    });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));
     if (!signal.aborted) {

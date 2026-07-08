@@ -5,7 +5,7 @@ import IconX from '@phosphor/x.svg';
 import { Button, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';
-import { Show, type VoidComponent } from 'solid-js';
+import { type JSX, Show, type VoidComponent } from 'solid-js';
 
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
@@ -16,6 +16,10 @@ interface EmailDateSelectorProps {
   disablePortal?: boolean;
   /** Disable the schedule button */
   disabled?: boolean;
+  trigger?: (state: {
+    selectedDate: Date | null;
+    formattedDate: string | undefined;
+  }) => JSX.Element;
 }
 export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   props
@@ -36,6 +40,13 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
             ? format(state.selectedDate, 'MMM d, yyyy  h:mm a')
             : undefined;
         const showExpanded = () => !isCompact() && !!formattedDate();
+
+        if (props.trigger) {
+          return props.trigger({
+            selectedDate: state.selectedDate,
+            formattedDate: formattedDate(),
+          });
+        }
 
         return (
           <Show

@@ -45,6 +45,9 @@ anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
 entity_access = { path = "../entity_access" }
+entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+  "ports",
+] }
 futures = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }

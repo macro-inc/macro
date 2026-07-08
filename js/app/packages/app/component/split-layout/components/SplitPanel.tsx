@@ -28,6 +28,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
+import { splitPanelLayer } from '../layers';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
@@ -222,7 +223,8 @@ export function SplitPanel(props: SplitPanelProps) {
             >
               <Panel.Header
                 class={cn(
-                  'block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  splitPanelLayer.controls,
                   // On mobile the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.
                   'mobile:min-h-0 mobile:border-b-0',

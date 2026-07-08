@@ -94,6 +94,7 @@ macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_event_broker = { path = "../macro_event_broker" }
 macro_service_urls = { path = "../macro_service_urls" }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_env_var = { path = "../macro_env_var" }
@@ -123,7 +124,6 @@ models_soup = { path = "../models_soup", features = ["schema"] }
 notification = { path = "../notification" }
 opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
-properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
 rate_limit = { path = "../rate_limit", default-features = false, features = ["axum"] }

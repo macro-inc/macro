@@ -71,7 +71,10 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_service_urls::{
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 #[cfg(feature = "graphql")]
@@ -257,6 +260,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let readonly_email_service = ReadonlyEmailPreviewAdapter(EmailServiceImpl::new(
@@ -264,6 +270,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(readonly_db.clone()),
+        ),
         0,
     ));
     let system_properties_service =
@@ -299,9 +308,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
-    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
+    let notification_service = NotificationServiceImpl::new(
+        SqsNotificationIngress {
+            queue: ingress_queue,
+        },
+        db.clone(),
+    );
     let properties_service = Arc::new(
         PropertiesServiceImpl::new(
             PropertiesPgRepo::new(db.clone()),
@@ -375,6 +387,11 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
+
     let document_service = Arc::new(DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -387,6 +404,7 @@ async fn main() -> anyhow::Result<()> {
         connection_service,
         entity_access_management_service.clone(),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker.clone(),
     ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
@@ -626,7 +644,8 @@ async fn main() -> anyhow::Result<()> {
         SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender)
+    .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -688,9 +707,10 @@ async fn main() -> anyhow::Result<()> {
             service::soup_favorites_reader::DssSoupFavoritesReader(favorites_service.clone()),
         )),
         favorites_state: FavoritesRouterState::new(
-            favorites_service,
+            favorites_service.clone(),
             entity_access_service.clone(),
         ),
+        favorites_service,
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]
@@ -753,6 +773,13 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "delete_document_worker")]
     {
+        let editing_worker_client = Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            )
+            .with_internal_auth_key(Some(api_context.config.internal_api_key.to_string())),
+        );
+
         // Spawn the delete document worker.
         let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
             worker: Arc::new(delete_document_worker),
@@ -760,6 +787,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: api_context.s3_client.clone(),
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
+            editing_worker_client,
         };
 
         tokio::spawn(async move {

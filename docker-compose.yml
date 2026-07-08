@@ -391,6 +391,12 @@ services:
     build:
       context: ./rust/sync-service
       dockerfile: Dockerfile
+      # macro_sync_service_jwt is a `../cloud-storage/...` path dependency that
+      # lives outside this build context; hand it in as a named context so a
+      # fresh image build works (a stale cached image hides this otherwise).
+      additional_contexts:
+        - macro_sync_service_jwt=./rust/cloud-storage/macro_sync_service_jwt
+        - cloud_storage_manifest=./rust/cloud-storage
     ports:
       - "8787:8787"
     volumes:
@@ -423,7 +429,9 @@ services:
       - "8933:8933"
     volumes:
       - ./js:/app
-      - /app/ai-editing-worker/.wrangler
+      # .wrangler (incl. the local D1 trace shard) persists to the host via the
+      # ./js mount above, so `bun run traces --env local --local` works from the
+      # host without docker exec. An anonymous volume used to shadow this path.
     depends_on:
       - sync_service
     networks:

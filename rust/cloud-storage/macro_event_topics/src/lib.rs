@@ -49,4 +49,8 @@ macro_rules! topics {
 topics! {
     /// Example kafka topic.
     MacroExampleTopic => "macro.example",
+    /// Document lifecycle events (created / updated / deleted / copied).
+    MacroDocumentsTopic => "macro.documents",
+    /// Channel lifecycle, message, participant, and attachment events.
+    MacroChannelsTopic => "macro.channels",
 }

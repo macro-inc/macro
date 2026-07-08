@@ -1,29 +1,29 @@
-import { createEffect, createSignal, For, Show } from 'solid-js';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import {
+  FEATURED_MCP_SERVERS,
+  type FeaturedMcpServer,
+  QUICK_CONNECT_ICON_MAP,
+  type SvgIcon,
+} from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
+import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import {
+  useAddMcpServerMutation,
+  useDeleteMcpServerMutation,
+  useMcpServersQuery,
+  useStartMcpAuthMutation,
+  useUpdateMcpServerMutation,
+} from '@queries/mcp-servers';
 import type {
   ServerResponse,
   StartAuthResponse,
 } from '@service-cognition/generated/schemas';
-import {
-  useMcpServersQuery,
-  useAddMcpServerMutation,
-  useUpdateMcpServerMutation,
-  useDeleteMcpServerMutation,
-  useStartMcpAuthMutation,
-} from '@queries/mcp-servers';
-import {
-  FEATURED_MCP_SERVERS,
-  QUICK_CONNECT_ICON_MAP,
-  type FeaturedMcpServer,
-  type SvgIcon,
-} from '@core/component/AI/constant/mcpServers';
-import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
+import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ConnectAction } from './integration-ui';
+import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 
 /** Best-effort hostname for an MCP server URL — friendlier than the raw URL. */
 function hostFromUrl(url: string): string {
@@ -147,7 +147,9 @@ function AddServerForm(props: {
               variant="active"
               size="sm"
               depth={3}
-              disabled={!name().trim() || !url().trim() || addMutation.isPending}
+              disabled={
+                !name().trim() || !url().trim() || addMutation.isPending
+              }
               onClick={handleSubmit}
             >
               {addMutation.isPending ? 'Adding...' : 'Add'}
@@ -439,7 +441,9 @@ export function IntegrationsSection() {
 
       <Show when={!serversQuery.isError}>
         <SettingsCard>
-          <For each={servers()}>{(server) => <ServerRow server={server} />}</For>
+          <For each={servers()}>
+            {(server) => <ServerRow server={server} />}
+          </For>
           <For each={suggestions()}>
             {(server) => <FeaturedServerRow server={server} />}
           </For>

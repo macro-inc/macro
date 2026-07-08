@@ -17,44 +17,50 @@ use crm::domain::service::CrmService;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
+use entity_access_management::domain::ports::EntityAccessManagementService;
 use frecency::domain::ports::FrecencyQueryService;
+use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct EmailServiceImpl<T, U, E, CS> {
+pub struct EmailServiceImpl<T, U, E, CS, Eam> {
     pub(crate) email_repo: T,
     pub(crate) frecency_service: U,
     pub(crate) enqueuer: E,
     pub(crate) crm_service: CS,
+    pub(crate) entity_access_management_service: Eam,
     pub(crate) sent_undo_delay_secs: u32,
 }
 
-impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS>
+impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: CrmService,
+    Eam: EntityAccessManagementService,
 {
     pub fn new(
         email_repo: T,
         frecency_service: U,
         enqueuer: E,
         crm_service: CS,
+        entity_access_management_service: Eam,
         sent_undo_delay_secs: u32,
-    ) -> EmailServiceImpl<T, U, E, CS> {
+    ) -> EmailServiceImpl<T, U, E, CS, Eam> {
         EmailServiceImpl {
             email_repo,
             frecency_service,
             enqueuer,
             crm_service,
+            entity_access_management_service,
             sent_undo_delay_secs,
         }
     }
 }
 
-impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS> {
+impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam> {
     /// Validate and normalize email filter input.
     fn validate_email_filter_input(
         input: UpsertEmailFilterInput,
@@ -114,12 +120,13 @@ impl<T, U, E, CS> EmailServiceImpl<T, U, E, CS> {
     }
 }
 
-impl<T, U, E, CS> EmailService for EmailServiceImpl<T, U, E, CS>
+impl<T, U, E, CS, Eam> EmailService for EmailServiceImpl<T, U, E, CS, Eam>
 where
     T: EmailRepo,
     U: FrecencyQueryService,
     E: EmailMessageEnqueuer,
     CS: CrmService,
+    Eam: EntityAccessManagementService,
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
@@ -266,6 +273,32 @@ where
 
         if !updated {
             return Err(EmailErr::ThreadNotFound);
+        }
+
+        // Sync denormalized entity_access rows for the containing project.
+        // Best-effort: the project assignment itself already succeeded.
+        if old_project_id.as_deref() != project_id {
+            if let Some(old) = old_project_id
+                .as_deref()
+                .and_then(|p| Uuid::parse_str(p).ok())
+            {
+                let _ = self
+                    .entity_access_management_service
+                    .remove_entity_from_project(&thread_id, EntityType::EmailThread, &old)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, project_id=%old, "unable to remove thread project access"),
+                    );
+            }
+            if let Some(new) = project_id.and_then(|p| Uuid::parse_str(p).ok()) {
+                let _ = self
+                    .entity_access_management_service
+                    .add_entity_to_project(&thread_id, EntityType::EmailThread, &new)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, project_id=%new, "unable to add thread project access"),
+                    );
+            }
         }
 
         Ok(old_project_id)

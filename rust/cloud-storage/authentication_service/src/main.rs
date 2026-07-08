@@ -39,8 +39,8 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
-        customer_repo::CustomerRepositoryImpl, team_channels_repo::TeamChannelsRepositoryImpl,
-        team_repo::TeamRepositoryImpl,
+        customer_repo::CustomerRepositoryImpl, team_analytics::AnalyticsClientTeamAnalytics,
+        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -205,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
-    let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
+    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
         google_analytics: config
             .ga_measurement_id
             .value()
@@ -240,7 +240,7 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
             }
         }),
-    });
+    }));
     tracing::trace!("initialized analytics client");
 
     // Initialize Loops client. Only production sign-ups are added to Loops;
@@ -274,8 +274,9 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+    let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
 
-    let teams_service_impl = TeamServiceImpl::new(
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
         team_channels_repo_impl,
@@ -283,6 +284,7 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress_service.clone(),
         crm_enqueuer,
         team_crm_settings_repo_impl,
+        team_analytics,
     );
 
     let foreign_entity_service =
@@ -361,8 +363,8 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
-            analytics_client: Arc::new(analytics_client),
             loops_client: Arc::new(loops_client),
+            analytics_client,
             stripe_price_id: config.stripe_price_id.to_string(),
         },
         config.port,

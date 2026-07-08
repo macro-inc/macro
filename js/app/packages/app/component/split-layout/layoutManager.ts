@@ -8,6 +8,7 @@ import type {
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { isMobile } from '@core/mobile/isMobile';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
@@ -91,9 +92,16 @@ function getAliasOrType(content: SplitContent): string {
  * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
  * settings page is open — matching the full-page `/settings/:tab` route. Reads
  * the active-tab signal, so the URL updates reactively as the tab changes.
+ *
+ * On mobile the panel keeps its internal `component/settings` form instead:
+ * mobile serializes only the foreground split, and a bare `settings/<tab>`
+ * path would be claimed by the full-page `/settings/:tab` route — unmounting
+ * the split layout whose back button / swipe-back gesture are the reason
+ * settings docks into a split on mobile in the first place.
  */
 function contentUrlSegments(content: SplitContent): string[] {
   if (content.type === 'component' && content.id === 'settings') {
+    if (isMobile()) return ['component', 'settings'];
     return ['settings', settingsTabToSlug(activeTabId())];
   }
   return [getAliasOrType(content), content.id].map(String);
@@ -151,6 +159,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {

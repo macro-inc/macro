@@ -13,10 +13,11 @@ export const AnimatedNewSplitIcon = (props: {
       viewBox="0 0 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.125"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
+      overflow="visible"
       class={`animated-new-split-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated new split icon</title>*/}

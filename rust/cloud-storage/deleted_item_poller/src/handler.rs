@@ -5,7 +5,9 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
+use sqs_client::search::{
+    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project::RemoveProject,
+};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
@@ -34,6 +36,22 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
     }
 
     tracing::debug!(projects_to_delete=?projects_to_delete, "projects to delete");
+
+    // Idempotent safety net — the soft delete already removed these from the
+    // search index.
+    ctx.sqs_client
+        .bulk_send_message_to_search_event_queue(
+            projects_to_delete
+                .iter()
+                .map(|id| {
+                    SearchQueueMessage::RemoveProject(RemoveProject {
+                        project_id: id.to_string(),
+                        index_override: None,
+                    })
+                })
+                .collect(),
+        )
+        .await?;
 
     // We can actually perform the project deletion here as we will automatically be queuing all
     // the items in the project for deletion as well

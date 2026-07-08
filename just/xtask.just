@@ -1,7 +1,9 @@
-# xtask owns all local/dev orchestration; these recipes are thin delegates.
-# `local-stack` (off by default so bare CI builds of xtask skip librdkafka)
-# enables the Kafka topic provisioning that run-local needs.
-xtask := "cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml -p xtask --features local-stack --"
+# The xtask_local crate owns all local/dev orchestration; these recipes are
+# thin delegates. They target xtask_local directly (rather than the `cargo x`
+# launcher) so the `local-stack` feature — off by default so bare CI builds
+# skip librdkafka — can be enabled to turn on the Kafka topic provisioning that
+# run-local needs.
+xtask := "cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml -p xtask_local --features local-stack --"
 
 # Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
 #   just run_local                      # default instance

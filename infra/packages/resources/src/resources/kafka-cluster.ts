@@ -50,6 +50,7 @@ export class KafkaCluster extends pulumi.ComponentResource {
   public logGroup: aws.cloudwatch.LogGroup;
   public cluster: aws.msk.Cluster;
   public topics: Map<string, aws.msk.Topic>;
+  public clientAccessPolicy: aws.iam.Policy;
 
   constructor(
     name: string,
@@ -222,5 +223,65 @@ export class KafkaCluster extends pulumi.ComponentResource {
         )
       );
     }
+
+    // MSK IAM resource ARNs are derived from the cluster ARN:
+    //   arn:aws:kafka:REGION:ACCT:cluster/NAME/UUID → arn:aws:kafka:REGION:ACCT:topic/NAME/UUID/<topic>
+    // so a trailing /* covers every topic (and group) on this cluster.
+    const allTopicArns = this.cluster.arn.apply(
+      (arn) => `${arn.replace(':cluster/', ':topic/')}/*`
+    );
+    const allGroupArns = this.cluster.arn.apply(
+      (arn) => `${arn.replace(':cluster/', ':group/')}/*`
+    );
+
+    // Managed policy granting full client (producer + consumer) access to this
+    // cluster and all of its topics and consumer groups. Attach it to the ECS
+    // task role of any service that publishes or consumes events. Topic
+    // management (create/alter/delete) is deliberately excluded — topics are
+    // owned by this component.
+    this.clientAccessPolicy = new aws.iam.Policy(
+      'client-access-policy',
+      {
+        name: `${name}-client-access`,
+        description: `Producer + consumer access to the ${name} Kafka cluster and all its topics and consumer groups`,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'Cluster',
+              Effect: 'Allow',
+              Action: [
+                'kafka-cluster:Connect',
+                'kafka-cluster:DescribeCluster',
+                // Cluster-scoped by MSK; needed if a producer enables idempotence.
+                'kafka-cluster:WriteDataIdempotently',
+              ],
+              Resource: [this.cluster.arn],
+            },
+            {
+              Sid: 'Topics',
+              Effect: 'Allow',
+              Action: [
+                'kafka-cluster:DescribeTopic',
+                'kafka-cluster:ReadData',
+                'kafka-cluster:WriteData',
+              ],
+              Resource: [allTopicArns],
+            },
+            {
+              Sid: 'Groups',
+              Effect: 'Allow',
+              Action: [
+                'kafka-cluster:DescribeGroup',
+                'kafka-cluster:AlterGroup',
+              ],
+              Resource: [allGroupArns],
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
   }
 }

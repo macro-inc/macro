@@ -109,376 +109,473 @@ export const ContentSearch = z.object({
     )
     .optional(),
   query: z.string(),
+  tags: z
+    .union([
+      z.array(
+        z.object({
+          label: z.string(),
+          scope: z.union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [z.literal('personal'), z.literal('team')];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ]),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const SearchToolResponse = z.object({
   results: z.array(
-    z.any().superRefine((x, ctx) => {
-      const schemas = [
-        z.intersection(
-          z.object({
-            document_id: z.string().uuid(),
-            document_name: z.string(),
-            document_search_results: z.array(
+    z
+      .object({
+        tags: z
+          .array(
+            z.object({
+              label: z.string(),
+              scope: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+            })
+          )
+          .optional(),
+      })
+      .and(
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.intersection(
               z.object({
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                node_id: z.union([z.string(), z.null()]).optional(),
-                raw_content: z.union([z.string(), z.null()]).optional(),
-                score: z.union([z.number(), z.null()]).optional(),
-              })
-            ),
-            file_type: z.union([z.string(), z.null()]).optional(),
-            id: z.string().uuid(),
-            metadata: z
-              .union([
-                z.object({
-                  created_at: z.string().datetime({ offset: true }),
-                  deleted_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                  project_id: z.union([z.string(), z.null()]).optional(),
-                  updated_at: z.string().datetime({ offset: true }),
-                  viewed_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                }),
-                z.null(),
-              ])
-              .optional(),
-            name: z.string(),
-            owner_id: z.string(),
-            sub_type: z
-              .union([
-                z.any().superRefine((x, ctx) => {
-                  const schemas = [z.literal('task'), z.literal('snippet')];
-                  const errors = schemas.reduce<z.ZodError[]>(
-                    (errors, schema) =>
-                      ((result) =>
-                        result.error ? [...errors, result.error] : errors)(
-                        schema.safeParse(x)
-                      ),
-                    []
-                  );
-                  if (schemas.length - errors.length !== 1) {
-                    ctx.addIssue({
-                      path: ctx.path,
-                      code: 'invalid_union',
-                      unionErrors: errors,
-                      message: 'Invalid input: Should pass single schema',
-                    });
-                  }
-                }),
-                z.null(),
-              ])
-              .optional(),
-          }),
-          z.object({ type: z.literal('document') })
-        ),
-        z.intersection(
-          z.object({
-            chat_id: z.string().uuid(),
-            chat_search_results: z.array(
-              z.object({
-                chat_message_id: z
-                  .union([z.string().uuid(), z.null()])
-                  .optional(),
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                role: z.union([z.string(), z.null()]).optional(),
-                score: z.union([z.number(), z.null()]).optional(),
-              })
-            ),
-            id: z.string().uuid(),
-            metadata: z
-              .union([
-                z.object({
-                  created_at: z.string().datetime({ offset: true }),
-                  deleted_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                  project_id: z.union([z.string(), z.null()]).optional(),
-                  updated_at: z.string().datetime({ offset: true }),
-                  viewed_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                }),
-                z.null(),
-              ])
-              .optional(),
-            name: z.string(),
-            owner_id: z.string(),
-            user_id: z.string(),
-          }),
-          z.object({ type: z.literal('chat') })
-        ),
-        z.intersection(
-          z.object({
-            created_at: z.string().datetime({ offset: true }),
-            email_message_search_results: z.array(
-              z.object({
-                bcc: z.array(z.string()),
-                cc: z.array(z.string()),
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                labels: z.array(z.string()),
-                message_id: z.union([z.string().uuid(), z.null()]).optional(),
-                pretty_sender: z.string(),
-                recipients: z.array(z.string()),
-                score: z.union([z.number(), z.null()]).optional(),
-                sender: z.string(),
-                sent_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-              })
-            ),
-            id: z.string().uuid(),
-            inbox_visible: z.boolean(),
-            is_draft: z.boolean(),
-            is_important: z.boolean(),
-            is_read: z.boolean(),
-            link_id: z.string().uuid(),
-            name: z.union([z.string(), z.null()]).optional(),
-            owner_id: z.string(),
-            participants: z.array(
-              z.object({
-                email: z.string(),
-                name: z.union([z.string(), z.null()]).optional(),
-              })
-            ),
-            snippet: z.union([z.string(), z.null()]).optional(),
-            subject: z.union([z.string(), z.null()]).optional(),
-            thread_id: z.string().uuid(),
-            updated_at: z.string().datetime({ offset: true }),
-            user_id: z.string(),
-            viewed_at: z
-              .union([z.string().datetime({ offset: true }), z.null()])
-              .optional(),
-          }),
-          z.object({ type: z.literal('email') })
-        ),
-        z.intersection(
-          z.object({
-            channel_id: z.string().uuid(),
-            channel_message_search_results: z.array(
-              z.object({
-                created_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-                deleted_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                message_id: z.union([z.string().uuid(), z.null()]).optional(),
-                score: z.union([z.number(), z.null()]).optional(),
-                sender_id: z.union([z.string(), z.null()]).optional(),
-                thread_id: z.union([z.string().uuid(), z.null()]).optional(),
-                updated_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-              })
-            ),
-            channel_type: z.string(),
-            id: z.string().uuid(),
-            metadata: z
-              .union([
-                z.object({
-                  created_at: z.string().datetime({ offset: true }),
-                  interacted_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                  updated_at: z.string().datetime({ offset: true }),
-                  viewed_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                }),
-                z.null(),
-              ])
-              .optional(),
-            owner_id: z.union([z.string(), z.null()]).optional(),
-          }),
-          z.object({ type: z.literal('channel') })
-        ),
-        z.intersection(
-          z.object({
-            created_at: z.string().datetime({ offset: true }),
-            id: z.string().uuid(),
-            metadata: z
-              .union([
-                z.object({
-                  created_at: z.string().datetime({ offset: true }),
-                  deleted_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                  parent_project_id: z.union([z.string(), z.null()]).optional(),
-                  updated_at: z.string().datetime({ offset: true }),
-                  viewed_at: z
-                    .union([z.string().datetime({ offset: true }), z.null()])
-                    .optional(),
-                }),
-                z.null(),
-              ])
-              .optional(),
-            name: z.string(),
-            owner_id: z.string(),
-            project_search_results: z.array(
-              z.object({
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                score: z.union([z.number(), z.null()]).optional(),
-              })
-            ),
-            updated_at: z.string().datetime({ offset: true }),
-          }),
-          z.object({ type: z.literal('project') })
-        ),
-        z.intersection(
-          z.object({
-            call_id: z.string().uuid(),
-            call_search_results: z.array(
-              z.object({
-                ended_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-                highlight: z.object({
-                  bcc: z.array(z.string()).optional(),
-                  cc: z.array(z.string()).optional(),
-                  content: z.array(z.string()).optional(),
-                  name: z.union([z.string(), z.null()]).optional(),
-                  recipients: z.array(z.string()).optional(),
-                  sender: z.union([z.string(), z.null()]).optional(),
-                  user_id: z.union([z.string(), z.null()]).optional(),
-                }),
-                score: z.union([z.number(), z.null()]).optional(),
-                sequence_num: z.union([z.number().int(), z.null()]).optional(),
-                speaker_id: z.union([z.string(), z.null()]).optional(),
-                started_at: z
-                  .union([z.string().datetime({ offset: true }), z.null()])
-                  .optional(),
-                transcript_id: z
-                  .union([z.string().uuid(), z.null()])
-                  .optional(),
-              })
-            ),
-            channel_id: z.string().uuid(),
-            id: z.string().uuid(),
-            metadata: z
-              .union([
-                z.object({
-                  attended: z.boolean(),
-                  channel_name: z.union([z.string(), z.null()]).optional(),
-                  created_by: z.string(),
-                  duration_ms: z.number().int(),
-                  ended_at: z.string().datetime({ offset: true }),
-                  started_at: z.string().datetime({ offset: true }),
-                  status: z.any().superRefine((x, ctx) => {
-                    const schemas = [
-                      z.literal('ATTENDED'),
-                      z.literal('MISSED'),
-                      z.literal('UNATTENDED'),
-                    ];
-                    const errors = schemas.reduce<z.ZodError[]>(
-                      (errors, schema) =>
-                        ((result) =>
-                          result.error ? [...errors, result.error] : errors)(
-                          schema.safeParse(x)
-                        ),
-                      []
-                    );
-                    if (schemas.length - errors.length !== 1) {
-                      ctx.addIssue({
-                        path: ctx.path,
-                        code: 'invalid_union',
-                        unionErrors: errors,
-                        message: 'Invalid input: Should pass single schema',
-                      });
-                    }
-                  }),
-                  updated_at: z.string().datetime({ offset: true }),
-                }),
-                z.null(),
-              ])
-              .optional(),
-            name: z.union([z.string(), z.null()]).optional(),
-            owner_id: z.string(),
-            participant_ids: z.array(z.string()),
-          }),
-          z.object({ type: z.literal('call') })
-        ),
-        z.intersection(
-          z.object({
-            createdAt: z.string().datetime({ offset: true }),
-            description: z.union([z.string(), z.null()]).optional(),
-            domains: z.array(
-              z.object({
-                companyId: z.string().uuid(),
-                createdAt: z.string().datetime({ offset: true }),
-                domain: z.string(),
+                document_id: z.string().uuid(),
+                document_name: z.string(),
+                document_search_results: z.array(
+                  z.object({
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    node_id: z.union([z.string(), z.null()]).optional(),
+                    raw_content: z.union([z.string(), z.null()]).optional(),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+                file_type: z.union([z.string(), z.null()]).optional(),
                 id: z.string().uuid(),
-              })
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      deleted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      project_id: z.union([z.string(), z.null()]).optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                name: z.string(),
+                owner_id: z.string(),
+                sub_type: z
+                  .union([
+                    z.any().superRefine((x, ctx) => {
+                      const schemas = [z.literal('task'), z.literal('snippet')];
+                      const errors = schemas.reduce<z.ZodError[]>(
+                        (errors, schema) =>
+                          ((result) =>
+                            result.error ? [...errors, result.error] : errors)(
+                            schema.safeParse(x)
+                          ),
+                        []
+                      );
+                      if (schemas.length - errors.length !== 1) {
+                        ctx.addIssue({
+                          path: ctx.path,
+                          code: 'invalid_union',
+                          unionErrors: errors,
+                          message: 'Invalid input: Should pass single schema',
+                        });
+                      }
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+              }),
+              z.object({ type: z.literal('document') })
             ),
-            hidden: z.boolean(),
-            id: z.string().uuid(),
-            name: z.union([z.string(), z.null()]).optional(),
-            nameHighlighted: z.union([z.string(), z.null()]).optional(),
-            teamId: z.string().uuid(),
-            updatedAt: z.string().datetime({ offset: true }),
-          }),
-          z.object({ type: z.literal('company') })
-        ),
-      ];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    })
+            z.intersection(
+              z.object({
+                chat_id: z.string().uuid(),
+                chat_search_results: z.array(
+                  z.object({
+                    chat_message_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    role: z.union([z.string(), z.null()]).optional(),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      deleted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      project_id: z.union([z.string(), z.null()]).optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                name: z.string(),
+                owner_id: z.string(),
+                user_id: z.string(),
+              }),
+              z.object({ type: z.literal('chat') })
+            ),
+            z.intersection(
+              z.object({
+                created_at: z.string().datetime({ offset: true }),
+                email_message_search_results: z.array(
+                  z.object({
+                    bcc: z.array(z.string()),
+                    cc: z.array(z.string()),
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    labels: z.array(z.string()),
+                    message_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    pretty_sender: z.string(),
+                    recipients: z.array(z.string()),
+                    score: z.union([z.number(), z.null()]).optional(),
+                    sender: z.string(),
+                    sent_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                  })
+                ),
+                id: z.string().uuid(),
+                inbox_visible: z.boolean(),
+                is_draft: z.boolean(),
+                is_important: z.boolean(),
+                is_read: z.boolean(),
+                link_id: z.string().uuid(),
+                name: z.union([z.string(), z.null()]).optional(),
+                owner_id: z.string(),
+                participants: z.array(
+                  z.object({
+                    email: z.string(),
+                    name: z.union([z.string(), z.null()]).optional(),
+                  })
+                ),
+                snippet: z.union([z.string(), z.null()]).optional(),
+                subject: z.union([z.string(), z.null()]).optional(),
+                thread_id: z.string().uuid(),
+                updated_at: z.string().datetime({ offset: true }),
+                user_id: z.string(),
+                viewed_at: z
+                  .union([z.string().datetime({ offset: true }), z.null()])
+                  .optional(),
+              }),
+              z.object({ type: z.literal('email') })
+            ),
+            z.intersection(
+              z.object({
+                channel_id: z.string().uuid(),
+                channel_message_search_results: z.array(
+                  z.object({
+                    created_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    deleted_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    message_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    score: z.union([z.number(), z.null()]).optional(),
+                    sender_id: z.union([z.string(), z.null()]).optional(),
+                    thread_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                    updated_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                  })
+                ),
+                channel_type: z.string(),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      interacted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                owner_id: z.union([z.string(), z.null()]).optional(),
+              }),
+              z.object({ type: z.literal('channel') })
+            ),
+            z.intersection(
+              z.object({
+                created_at: z.string().datetime({ offset: true }),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      created_at: z.string().datetime({ offset: true }),
+                      deleted_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      parent_project_id: z
+                        .union([z.string(), z.null()])
+                        .optional(),
+                      updated_at: z.string().datetime({ offset: true }),
+                      viewed_at: z
+                        .union([
+                          z.string().datetime({ offset: true }),
+                          z.null(),
+                        ])
+                        .optional(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                name: z.string(),
+                owner_id: z.string(),
+                project_search_results: z.array(
+                  z.object({
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+                updated_at: z.string().datetime({ offset: true }),
+              }),
+              z.object({ type: z.literal('project') })
+            ),
+            z.intersection(
+              z.object({
+                call_id: z.string().uuid(),
+                call_search_results: z.array(
+                  z.object({
+                    ended_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    highlight: z.object({
+                      bcc: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      content: z.array(z.string()).optional(),
+                      name: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                    sequence_num: z
+                      .union([z.number().int(), z.null()])
+                      .optional(),
+                    speaker_id: z.union([z.string(), z.null()]).optional(),
+                    started_at: z
+                      .union([z.string().datetime({ offset: true }), z.null()])
+                      .optional(),
+                    transcript_id: z
+                      .union([z.string().uuid(), z.null()])
+                      .optional(),
+                  })
+                ),
+                channel_id: z.string().uuid(),
+                id: z.string().uuid(),
+                metadata: z
+                  .union([
+                    z.object({
+                      attended: z.boolean(),
+                      channel_name: z.union([z.string(), z.null()]).optional(),
+                      created_by: z.string(),
+                      duration_ms: z.number().int(),
+                      ended_at: z.string().datetime({ offset: true }),
+                      started_at: z.string().datetime({ offset: true }),
+                      status: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('ATTENDED'),
+                          z.literal('MISSED'),
+                          z.literal('UNATTENDED'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                      updated_at: z.string().datetime({ offset: true }),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                name: z.union([z.string(), z.null()]).optional(),
+                owner_id: z.string(),
+                participant_ids: z.array(z.string()),
+              }),
+              z.object({ type: z.literal('call') })
+            ),
+            z.intersection(
+              z.object({
+                createdAt: z.string().datetime({ offset: true }),
+                description: z.union([z.string(), z.null()]).optional(),
+                domains: z.array(
+                  z.object({
+                    companyId: z.string().uuid(),
+                    createdAt: z.string().datetime({ offset: true }),
+                    domain: z.string(),
+                    id: z.string().uuid(),
+                  })
+                ),
+                hidden: z.boolean(),
+                id: z.string().uuid(),
+                name: z.union([z.string(), z.null()]).optional(),
+                nameHighlighted: z.union([z.string(), z.null()]).optional(),
+                teamId: z.string().uuid(),
+                updatedAt: z.string().datetime({ offset: true }),
+              }),
+              z.object({ type: z.literal('company') })
+            ),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
+      )
   ),
 });
 
@@ -507,6 +604,49 @@ export const EditDocumentResponse = z.object({
   summary: z.string(),
 });
 
+export const GetCompany = z.object({ company_id: z.string().uuid() });
+
+export const GetCompanyResponse = z.object({
+  contacts: z.array(
+    z.object({
+      email: z.string(),
+      id: z.string().uuid(),
+      lastInteraction: z.string().datetime({ offset: true }),
+      name: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+  description: z.union([z.string(), z.null()]).optional(),
+  domains: z.array(z.string()),
+  emailSync: z.boolean(),
+  firstInteraction: z.string().datetime({ offset: true }),
+  hidden: z.boolean(),
+  id: z.string().uuid(),
+  lastInteraction: z.string().datetime({ offset: true }),
+  name: z.union([z.string(), z.null()]).optional(),
+  ownerUserId: z.union([z.string(), z.null()]).optional(),
+  properties: z.array(
+    z.object({
+      currentValue: z.any().optional(),
+      dataType: z.string(),
+      displayName: z.string(),
+      isMultiSelect: z.boolean(),
+      isSystem: z.boolean(),
+      options: z.array(
+        z.object({ displayValue: z.string(), id: z.string().uuid() })
+      ),
+      propertyDefinitionId: z.string().uuid(),
+    })
+  ),
+  revenue: z.union([z.number(), z.null()]).optional(),
+  stage: z
+    .union([
+      z.object({ label: z.string(), optionId: z.string().uuid() }),
+      z.null(),
+    ])
+    .optional(),
+  summary: z.string(),
+});
+
 export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
@@ -517,6 +657,7 @@ export const GetEntityProperties = z.object({
     'thread',
     'channel',
     'user',
+    'company',
   ]),
 });
 
@@ -524,6 +665,7 @@ export const GetEntityPropertiesResponse = z.object({
   properties: z.array(
     z.object({
       currentValue: z.any().optional(),
+      currentValueLabels: z.union([z.array(z.string()), z.null()]).optional(),
       dataType: z.string(),
       displayName: z.string(),
       isMultiSelect: z.boolean(),
@@ -536,6 +678,30 @@ export const GetEntityPropertiesResponse = z.object({
         })
       ),
       propertyDefinitionId: z.string().uuid(),
+      scope: z
+        .union([
+          z.any().superRefine((x, ctx) => {
+            const schemas = [z.literal('personal'), z.literal('team')];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          z.null(),
+        ])
+        .optional(),
     })
   ),
   summary: z.string(),
@@ -612,6 +778,35 @@ export const ListCallRecordsResponse = z.object({
   ),
 });
 
+export const ListCompanies = z.object({
+  include_hidden: z.union([z.boolean(), z.null()]).default(null),
+  limit: z.union([z.number().int().gte(0).lte(65535), z.null()]).default(null),
+  owner_user_id: z.union([z.string(), z.null()]).default(null),
+  search: z.union([z.string(), z.null()]).default(null),
+  stage: z.union([z.string(), z.null()]).default(null),
+});
+
+export const ListCompaniesResponse = z.object({
+  companies: z.array(
+    z.object({
+      domains: z.array(z.string()),
+      hidden: z.boolean(),
+      id: z.string().uuid(),
+      lastInteraction: z.string().datetime({ offset: true }),
+      name: z.union([z.string(), z.null()]).optional(),
+      ownerUserId: z.union([z.string(), z.null()]).optional(),
+      revenue: z.union([z.number(), z.null()]).optional(),
+      stage: z
+        .union([
+          z.object({ label: z.string(), optionId: z.string().uuid() }),
+          z.null(),
+        ])
+        .optional(),
+    })
+  ),
+  summary: z.string(),
+});
+
 export const ListEntities = z.object({
   callf: z.any().default(null),
   cf: z.any().default(null),
@@ -685,6 +880,38 @@ export const ListEntities = z.object({
       }
     })
     .optional(),
+  tags: z
+    .union([
+      z.array(
+        z.object({
+          label: z.string(),
+          scope: z.union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [z.literal('personal'), z.literal('team')];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ]),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const ListEntitiesResponse = z.object({
@@ -694,21 +921,117 @@ export const ListEntitiesResponse = z.object({
         z.object({
           id: z.string().uuid(),
           name: z.string(),
+          tags: z.array(
+            z.object({
+              label: z.string(),
+              scope: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+            })
+          ),
           type: z.literal('document'),
         }),
         z.object({
           id: z.string().uuid(),
           name: z.string(),
+          tags: z.array(
+            z.object({
+              label: z.string(),
+              scope: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+            })
+          ),
           type: z.literal('aiChat'),
         }),
         z.object({
           id: z.string().uuid(),
           name: z.string(),
+          tags: z.array(
+            z.object({
+              label: z.string(),
+              scope: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+            })
+          ),
           type: z.literal('project'),
         }),
         z.object({
           id: z.string().uuid(),
           subject: z.union([z.string(), z.null()]).optional(),
+          tags: z.array(
+            z.object({
+              label: z.string(),
+              scope: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('personal'), z.literal('team')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+            })
+          ),
           type: z.literal('email'),
         }),
         z.object({
@@ -841,6 +1164,42 @@ export const ListNotificationsResponse = z.object({
   ),
 });
 
+export const ListTags = z.record(z.any());
+
+export const ListTagsResponse = z.object({
+  summary: z.string(),
+  tagSets: z.array(
+    z.object({
+      propertyDefinitionId: z.string().uuid(),
+      scope: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('personal'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      tags: z.array(
+        z.object({
+          color: z.union([z.string(), z.null()]).optional(),
+          id: z.string().uuid(),
+          label: z.string(),
+        })
+      ),
+    })
+  ),
+});
+
 export const ListTeamMembers = z.record(z.any());
 
 export const ListTeamMembersResponse = z.object({
@@ -907,6 +1266,38 @@ export const NameSearch = z.object({
     )
     .optional(),
   name: z.string(),
+  tags: z
+    .union([
+      z.array(
+        z.object({
+          label: z.string(),
+          scope: z.union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [z.literal('personal'), z.literal('team')];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ]),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const ReadCallRecord = z.object({ callId: z.string().uuid() });
@@ -1985,6 +2376,9 @@ export const RenameDocumentResponse = z.object({
 export const SearchTools = z.object({ query: z.string() });
 
 export const SearchToolsResponse = z.object({
+  additional_matches: z.array(
+    z.object({ description: z.string(), name: z.string() })
+  ),
   results: z.array(z.object({ description: z.string(), name: z.string() })),
 });
 
@@ -2092,6 +2486,7 @@ export const UserToolResponse = z.any().superRefine((x, ctx) => {
 });
 
 export const SetEntityProperty = z.object({
+  add_option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
   boolean_value: z.union([z.boolean(), z.null()]).default(null),
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
@@ -2109,6 +2504,7 @@ export const SetEntityProperty = z.object({
           'thread',
           'channel',
           'user',
+          'company',
         ]),
       }),
       z.null(),
@@ -2127,6 +2523,7 @@ export const SetEntityProperty = z.object({
             'thread',
             'channel',
             'user',
+            'company',
           ]),
         })
       ),
@@ -2141,6 +2538,7 @@ export const SetEntityProperty = z.object({
     'thread',
     'channel',
     'user',
+    'company',
   ]),
   link_url: z.union([z.string(), z.null()]).default(null),
   link_urls: z.union([z.array(z.string()), z.null()]).default(null),
@@ -2148,6 +2546,9 @@ export const SetEntityProperty = z.object({
   option_id: z.union([z.string().uuid(), z.null()]).default(null),
   option_ids: z.union([z.array(z.string().uuid()), z.null()]).default(null),
   property_definition_id: z.string().uuid(),
+  remove_option_ids: z
+    .union([z.array(z.string().uuid()), z.null()])
+    .default(null),
   string_value: z.union([z.string(), z.null()]).default(null),
 });
 

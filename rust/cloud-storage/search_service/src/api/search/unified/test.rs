@@ -50,6 +50,7 @@ fn test_sort_unified_search_results() {
         }),
         // Chat with updated_at = 3000 (newest)
         UnifiedSearchResponseItem::Chat(ChatSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(ChatMetadata {
                 created_at: DateTime::from_timestamp(2900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(3000, 0).unwrap(),
@@ -76,6 +77,7 @@ fn test_sort_unified_search_results() {
             inbox_visible: true,
             is_draft: false,
             is_important: false,
+            properties: None,
             extra: EmailSearchResponseItem {
                 id: email_id,
                 name: Some("Middle Email".to_string()),
@@ -90,6 +92,7 @@ fn test_sort_unified_search_results() {
         }),
         // Project with updated_at = 2000 (second newest)
         UnifiedSearchResponseItem::Project(ProjectSearchResponseItemWithMetadata {
+            properties: None,
             metadata: Some(ProjectMetadata {
                 created_at: DateTime::from_timestamp(1900, 0).unwrap(),
                 updated_at: DateTime::from_timestamp(2000, 0).unwrap(),

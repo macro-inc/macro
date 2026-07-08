@@ -2,7 +2,10 @@ import 'quill/dist/quill.snow.css';
 import './SignatureEditor.css';
 import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import { createStaticUploadFile, createUploadFile } from '@core/util/uploadFile';
+import {
+  createStaticUploadFile,
+  createUploadFile,
+} from '@core/util/uploadFile';
 import { Tooltip } from '@ui';
 import Quill, { type Parchment } from 'quill';
 import { createEffect, For, onCleanup, onMount } from 'solid-js';
@@ -111,7 +114,11 @@ export default function SignatureEditor(props: {
       // getSemanticHTML drops the placeholder <br> from blank lines, and with
       // margins zeroed an empty <p> collapses to nothing — put the <br> back so
       // blank separator lines keep their one-line height in the sent email.
-      if (el.tagName === 'P' && !el.textContent && !el.querySelector('br, img')) {
+      if (
+        el.tagName === 'P' &&
+        !el.textContent &&
+        !el.querySelector('br, img')
+      ) {
         el.append(doc.createElement('br'));
       }
     }

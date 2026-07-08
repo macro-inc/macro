@@ -27,6 +27,8 @@ import {
   Suspense,
 } from 'solid-js';
 import type { MarkdownData } from '../definition';
+import { HistoryProvider } from '../history/HistoryContext';
+import { OldOverlay } from '../history/OldOverlay';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
@@ -168,56 +170,62 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         tabIndex={-1}
       >
         <ModalsProvider>
-          <SidePanel.Layout>
-            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
-              <MarkdownSidePanelSections
-                canEdit={canEdit()}
-                documentName={displayName() ?? ''}
-              />
-            </Show>
-            <div class="flex flex-col size-full">
-              <div class="relative shrink-0">
-                <Suspense>
-                  <Show
-                    when={!isInstructionsMd()}
-                    fallback={<InstructionsTopBar />}
-                  >
-                    <TopBar name={displayName} />
-                  </Show>
-                </Suspense>
-                <Suspense>
-                  <Show when={!isInstructionsMd()}>
-                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
-                      <FindAndReplace />
+          <HistoryProvider documentId={() => blockId}>
+            <OldOverlay />
+            <SidePanel.Layout>
+              <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
+                <MarkdownSidePanelSections
+                  canEdit={canEdit()}
+                  documentName={displayName() ?? ''}
+                />
+              </Show>
+              <div class="flex flex-col size-full">
+                <div class="relative shrink-0">
+                  <Suspense>
+                    <Show
+                      when={!isInstructionsMd()}
+                      fallback={<InstructionsTopBar />}
+                    >
+                      <TopBar name={displayName} />
+                    </Show>
+                  </Suspense>
+                  <Suspense>
+                    <Show when={!isInstructionsMd()}>
+                      <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
+                        <FindAndReplace />
+                      </div>
+                    </Show>
+                  </Suspense>
+                </div>
+                <DocumentDebouncedNotificationReadMarker
+                  notificationSource={notificationSource}
+                  documentId={blockId}
+                />
+                <div
+                  class="w-full grow overflow-hidden relative"
+                  data-block-content
+                >
+                  <Scroll class="relative" ref={setScrollRef}>
+                    <div class="relative portal-scope mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                      <Suspense>
+                        <Show
+                          when={!isInstructionsMd()}
+                          fallback={
+                            <InstructionsNotebook loroManager={loroManager} />
+                          }
+                        >
+                          <Notebook
+                            loroManager={loroManager}
+                            documentId={blockId}
+                          />
+                        </Show>
+                      </Suspense>
                     </div>
-                  </Show>
-                </Suspense>
+                  </Scroll>
+                </div>
               </div>
-              <DocumentDebouncedNotificationReadMarker
-                notificationSource={notificationSource}
-                documentId={blockId}
-              />
-              <div
-                class="w-full grow overflow-hidden relative"
-                data-block-content
-              >
-                <Scroll class="relative" ref={setScrollRef}>
-                  <div class="relative portal-scope mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
-                    <Suspense>
-                      <Show
-                        when={!isInstructionsMd()}
-                        fallback={
-                          <InstructionsNotebook loroManager={loroManager} />
-                        }
-                      >
-                        <Notebook loroManager={loroManager} />
-                      </Show>
-                    </Suspense>
-                  </div>
-                </Scroll>
-              </div>
-            </div>
-          </SidePanel.Layout>
+            </SidePanel.Layout>
+          </HistoryProvider>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

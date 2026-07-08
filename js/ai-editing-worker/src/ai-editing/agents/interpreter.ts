@@ -1,4 +1,5 @@
 import { generateText, type LanguageModel, stepCountIs, type Tool } from 'ai';
+import { EDIT_PROVIDER_OPTIONS } from './model-options';
 
 export async function interpreter(
   documentContext: string,
@@ -13,6 +14,7 @@ export async function interpreter(
     model,
     system,
     prompt,
+    providerOptions: EDIT_PROVIDER_OPTIONS,
     ...(tools ? { tools, stopWhen: stepCountIs(12) } : {}),
   });
 

@@ -12,6 +12,7 @@ export {
   refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromQueriesReferencing,
 } from './operations';
 export type {
   SoupEntityTag,

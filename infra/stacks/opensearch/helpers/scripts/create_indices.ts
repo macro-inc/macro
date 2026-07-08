@@ -11,6 +11,9 @@ import {
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
   EMAILS_INDEX,
+  IS_DRY_RUN,
+  PROJECTS_ALIAS,
+  PROJECTS_INDEX,
   SHARD_SETTINGS,
   SLOWLOG_SETTINGS,
 } from '../constants';
@@ -141,6 +144,10 @@ async function createIndexWithAlias(
       console.log(`${indexName}: ${plan.reason}`);
       return;
     case 'add_alias':
+      if (IS_DRY_RUN) {
+        console.log(`[DRY-RUN] Would add alias ${aliasName} -> ${indexName}`);
+        return;
+      }
       console.log(`Adding alias ${aliasName} -> ${indexName}`);
       await opensearchClient.indices.putAlias({
         index: indexName,
@@ -148,6 +155,12 @@ async function createIndexWithAlias(
       });
       return;
     case 'create_with_alias':
+      if (IS_DRY_RUN) {
+        console.log(
+          `[DRY-RUN] Would create ${indexName} with alias ${aliasName}`
+        );
+        return;
+      }
       console.log(
         `${indexName} does not exist, creating with alias ${aliasName}`
       );
@@ -158,6 +171,10 @@ async function createIndexWithAlias(
       return;
     case 'create_without_alias':
       console.log(`${indexName}: ${plan.nextStep}`);
+      if (IS_DRY_RUN) {
+        console.log(`[DRY-RUN] Would create ${indexName} without alias`);
+        return;
+      }
       await opensearchClient.indices.create({
         index: indexName,
         body,
@@ -315,6 +332,68 @@ const DOCUMENT_BODY = {
   },
 };
 
+// `projects_v1` is flat: one doc per project, `_id` = project id. Projects
+// have no content to chunk, so no join field. Access control follows the
+// documents pattern — only `owner_id` is indexed; the caller's accessible
+// project ids are resolved from Postgres at query time.
+const PROJECTS_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      entity_id: {
+        type: 'keyword',
+      },
+      name: {
+        type: 'text',
+        fields: {
+          keyword: {
+            type: 'keyword',
+            ignore_above: 128,
+          },
+        },
+      },
+      owner_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      parent_project_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      created_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_seconds: {
+        type: 'date',
+        format: 'epoch_second',
+        index: false,
+        doc_values: true,
+      },
+      // Entity properties (tags, custom). Same nested shape as the documents
+      // index so the shared property/tag query builders apply unchanged.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
+    },
+  },
+};
+
 const EMAIL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
@@ -412,6 +491,18 @@ const EMAIL_BODY = {
         type: 'text',
         analyzer: 'standard',
       },
+      // Thread-level entity properties (e.g. tags), denormalized onto every
+      // message doc of the thread. Same nested shape as the documents index
+      // so the shared property/tag filters apply unchanged.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
     },
   },
 };
@@ -443,6 +534,18 @@ const CHATS_V2_BODY = {
         format: 'epoch_second',
         index: false,
         doc_values: true,
+      },
+      // Parent-only entity properties (tags, custom). Same nested shape as
+      // DOCUMENT_BODY so property filters match definition_id + value within
+      // the same entry rather than cross-matching across properties.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
       },
       // Child-only fields
       chat_message_id: { type: 'keyword', index: false, doc_values: true },
@@ -517,7 +620,9 @@ const CALL_RECORDS_V2_BODY = {
 
 async function createIndices() {
   const opensearchClient = client();
-  console.log('Creating indices...');
+  console.log(
+    `Creating indices... ${IS_DRY_RUN ? '(DRY-RUN MODE — set DRY_RUN=false to apply)' : '(LIVE MODE)'}`
+  );
 
   try {
     await createIndexWithAlias(opensearchClient, {
@@ -547,6 +652,11 @@ async function createIndices() {
       indexName: CALL_RECORDS_INDEX,
       aliasName: CALL_RECORDS_ALIAS,
       body: CALL_RECORDS_V2_BODY,
+    });
+    await createIndexWithAlias(opensearchClient, {
+      indexName: PROJECTS_INDEX,
+      aliasName: PROJECTS_ALIAS,
+      body: PROJECTS_BODY,
     });
     console.log('done');
   } catch (error) {

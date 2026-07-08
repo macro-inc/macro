@@ -1,6 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    upsert::{self, BulkUpsertResult, email::UpsertEmailArgs},
+    upsert::{self, BulkUpsertResult, email::UpsertEmailArgs, properties::IndexedProperty},
 };
 
 impl OpensearchClient {
@@ -18,6 +18,17 @@ impl OpensearchClient {
         index_override: Option<&str>,
     ) -> Result<BulkUpsertResult> {
         upsert::email::bulk_upsert_email_messages(&self.inner, messages, index_override).await
+    }
+
+    /// Refresh only the denormalized `properties` on every message doc of a
+    /// thread.
+    #[tracing::instrument(skip(self, properties), err)]
+    pub async fn update_email_thread_properties(
+        &self,
+        thread_id: &str,
+        properties: &[IndexedProperty],
+    ) -> Result<()> {
+        upsert::email::update_email_thread_properties(&self.inner, thread_id, properties).await
     }
 
     /// Deletes a particular email message

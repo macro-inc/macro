@@ -27,11 +27,13 @@ import {
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { splitPanelLayer } from '../split-layout/layers';
 import {
   SidePanelContext,
   type SidePanelContextType,
   type SidePanelSectionEntry,
 } from './context';
+import { registerSidePanelInstance } from './registry';
 
 const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
@@ -47,7 +49,8 @@ const MAIN_MIN_PX = 320;
  *
  * Two rendering modes based on available width:
  *   - Wide (>= NARROW_THRESHOLD_PX, non-mobile): side panel renders as a
- *     resizable split next to the main content. Defaults to open.
+ *     resizable split next to the main content. Defaults to open unless
+ *     `defaultOpen` is false.
  *   - Narrow (mobile or narrower than threshold): side panel renders as a
  *     full-screen overlay covering the main content. Defaults to closed;
  *     the main content stays mounted underneath.
@@ -56,13 +59,13 @@ const MAIN_MIN_PX = 320;
  *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
-function Layout(props: ParentProps) {
+function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
-  const [isWideOpen, setIsWideOpen] = createSignal(true);
+  const [isWideOpen, setIsWideOpen] = createSignal(props.defaultOpen ?? true);
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());
 
@@ -72,6 +75,10 @@ function Layout(props: ParentProps) {
     setter(typeof next === 'function' ? next : () => next);
   };
   const toggle = () => setIsOpen((prev) => !prev);
+
+  // Let global chrome shortcuts (cmd+.) hide/show this panel alongside the
+  // app sidebar.
+  onCleanup(registerSidePanelInstance({ setIsOpen, isNarrow }));
 
   const register = (entry: SidePanelSectionEntry) => {
     setSections((prev) => {
@@ -102,6 +109,7 @@ function Layout(props: ParentProps) {
     setIsOpen,
     toggle,
     isNarrow,
+    setOpenSectionIds: setOpenIds,
   };
 
   return (
@@ -166,15 +174,22 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <SidePanelOutlet
-            sections={props.sections}
-            openIds={props.openIds}
-            setOpenIds={props.setOpenIds}
-          />
+          <div class={cn('relative size-full', splitPanelLayer.controls)}>
+            <SidePanelOutlet
+              sections={props.sections}
+              openIds={props.openIds}
+              setOpenIds={props.setOpenIds}
+            />
+          </div>
         </Resize.Panel>
       </Show>
       <Show when={showOverlay()}>
-        <div class="absolute inset-0 z-10 flex flex-col bg-surface">
+        <div
+          class={cn(
+            'absolute inset-0 flex flex-col bg-surface',
+            splitPanelLayer.controls
+          )}
+        >
           <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
@@ -347,6 +362,7 @@ function useSidePanel() {
     toggle: ctx.toggle,
     isNarrow: ctx.isNarrow,
     hasSections: ctx.hasSections,
+    setOpenSectionIds: ctx.setOpenSectionIds,
   };
 }
 

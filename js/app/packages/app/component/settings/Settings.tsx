@@ -1,3 +1,22 @@
+import { Billing } from '@app/component/settings/Billing';
+import { useLogout } from '@core/auth/logout';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
+import {
+  type SettingsTab,
+  settingsTabFromSplitPath,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { isMobile } from '@core/mobile/isMobile';
+import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
+import ArrowsIn from '@phosphor/arrows-in.svg';
+import ArrowsOut from '@phosphor/arrows-out.svg';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
+import SignOutIcon from '@phosphor/sign-out.svg';
+import { useLocation } from '@solidjs/router';
+import { Button, cn, Layer, SideNav } from '@ui';
 import {
   createRenderEffect,
   createSignal,
@@ -8,40 +27,22 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { useLocation } from '@solidjs/router';
-import {
-  type SettingsTab,
-  settingsTabFromSplitPath,
-  useSettingsState,
-} from '@core/constant/SettingsState';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
-import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
-import { useLogout } from '@core/auth/logout';
-import { isMobile } from '@core/mobile/isMobile';
-import { MobileApp } from './MobileApp';
-import { Agent } from './Agent';
-import { Admin } from './Admin';
-import { Appearance } from './Appearance';
-import { Account } from './Account';
-import { ConnectedAccounts } from './ConnectedAccounts';
-import { Shortcuts } from './Shortcuts';
-import { Team } from './Team';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { FloatRegion } from '../mobile/float-regions/FloatRegion';
 import { PillTabs } from '../mobile/PillTabs';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
-import { Button, cn, Layer, SideNav } from '@ui';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
-import { Billing } from '@app/component/settings/Billing';
+import { Account } from './Account';
+import { Admin } from './Admin';
+import { Agent } from './Agent';
+import { Appearance } from './Appearance';
+import { ConnectedAccounts } from './ConnectedAccounts';
+import { Crm } from './Crm';
+import { MobileApp } from './MobileApp';
+import { Shortcuts } from './Shortcuts';
+import { Team } from './Team';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -143,19 +144,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex(tab => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
   }
 
   function handleNextTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
+    const nextIndex =
+      getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
 
   function handlePreviousTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
+    const nextIndex =
+      getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
@@ -181,7 +184,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register number keys 1-9 for direct tab navigation
   for (let i = 1; i <= 9; i++) {
     const keyNum = i;
-    function handleNumberKey() { return navigateToTabIndex(keyNum - 1); }
+    function handleNumberKey() {
+      return navigateToTabIndex(keyNum - 1);
+    }
     registerHotkey({
       description: `Go to settings tab ${keyNum}`,
       hotkey: `${keyNum}` as ValidHotkey,
@@ -206,7 +211,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <FloatRegion region="accessory">
         <div class="flex items-center px-(--mobile-chrome-gutter)">
           <PillTabs
-            items={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+            items={flatTabs().map((tab) => ({
+              value: tab.tab,
+              label: tab.label,
+            }))}
             value={activeTabId()}
             onChange={handleTabChange}
           />
@@ -380,6 +388,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Team')}>
                   <Suspense>
                     <Team />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('CRM')}>
+                  <Suspense>
+                    <Crm />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Connected')}>

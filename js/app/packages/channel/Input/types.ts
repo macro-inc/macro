@@ -27,8 +27,6 @@ type InputDataBase = {
   placeholder?: string;
   value?: string;
   isDraggedOver?: boolean;
-  isDraggingOverChannel?: boolean;
-  isValidChannelDrag?: boolean;
   showFormatRibbon?: boolean;
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];

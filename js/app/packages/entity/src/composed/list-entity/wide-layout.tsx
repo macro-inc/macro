@@ -1,3 +1,4 @@
+import { useRowTagsVisible } from '@app/component/next-soup/soup-view/filters-bar/search/search-tags-flag';
 import { useRowTagFilter } from '@app/component/next-soup/soup-view/filters-bar/use-row-tag-filter';
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { EntityRowTags } from '@property/tags';
@@ -15,10 +16,12 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isChatEntity,
   isDocumentEntity,
   isEmailEntity,
   isGithubPrEntity,
   isProjectContainedEntity,
+  isProjectEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
@@ -32,15 +35,16 @@ import {
 } from './foreign';
 import type { LayoutProps } from './shared';
 
-function DocumentRowTags(props: {
+function RowTags(props: {
   entityId: string;
+  entityType: EntityType;
   properties: SoupProperty[] | undefined;
 }) {
   const filterByTag = useRowTagFilter();
   return (
     <EntityRowTags
       entityId={props.entityId}
-      entityType={EntityType.DOCUMENT}
+      entityType={props.entityType}
       properties={props.properties}
       onFilterByTag={filterByTag}
     />
@@ -49,6 +53,7 @@ function DocumentRowTags(props: {
 
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
+  const rowTagsVisible = useRowTagsVisible();
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInbox(() =>
@@ -150,6 +155,19 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
+        <Show
+          when={
+            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
+          }
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.PROJECT}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (
             <span class="ph-no-capture text-ink-extra-muted text-xs">
@@ -185,19 +203,50 @@ export function WideLayout(props: LayoutProps) {
         <Show when={isTaskEntity(props.entity) && props.entity}>
           {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
-        <Show when={isDocumentEntity(props.entity) && props.entity}>
+        <Show
+          when={
+            rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
+          }
+        >
           {(entity) => {
             const properties = () => {
               const doc = entity();
               return 'properties' in doc ? doc.properties : undefined;
             };
             return (
-              <DocumentRowTags
+              <RowTags
                 entityId={entity().id}
+                entityType={
+                  isTaskEntity(entity()) ? EntityType.TASK : EntityType.DOCUMENT
+                }
                 properties={properties()}
               />
             );
           }}
+        </Show>
+        <Show
+          when={rowTagsVisible() && isEmailEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            // No filter-by-tag affordance. The soup email path does not apply
+            // tag filters, so filtering would leave email rows unfiltered.
+            <EntityRowTags
+              entityId={entity().id}
+              entityType={EntityType.THREAD}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
+          when={rowTagsVisible() && isChatEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.CHAT}
+              properties={entity().properties}
+            />
+          )}
         </Show>
       </Entity.Slot>
       <Entity.Slot

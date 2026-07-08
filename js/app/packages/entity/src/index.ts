@@ -30,8 +30,12 @@ export {
   type BuildEntityDataArgs,
   buildEntityData,
 } from './utils/buildEntityData';
+export {
+  type CrmCompanyEntityWithProperties,
+  getCompanyOwnerId,
+  getCompanyStageOptionId,
+} from './utils/company-properties';
 export { createEntityDraggable } from './utils/draggable';
-
 export { unreadFilterFn } from './utils/filter';
 export {
   filterNotDoneNotifications,
@@ -40,6 +44,7 @@ export {
 } from './utils/notification';
 export { useIsShared } from './utils/shared';
 export {
+  COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
   getTaskStatusOptionId,

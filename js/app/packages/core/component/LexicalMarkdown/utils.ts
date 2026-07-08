@@ -170,7 +170,7 @@ export function initializeEditorWithState(
   state?: SerializedEditorState,
   peerId?: () => string | undefined
 ) {
-  if (!state || state.root.children.length === 0) return;
+  if (!state || state.root.children?.length === 0) return;
   try {
     const parsed = editor.parseEditorState(state);
     editor.setEditorState(parsed);

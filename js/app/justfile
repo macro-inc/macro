@@ -23,7 +23,7 @@ ios-prepare-tauri-api:
 
 # Tauri build hook (run automatically via beforeDevCommand) — not meant to be run directly
 [private]
-dev-tauri:
+dev-tauri: ensure-cache-wasm
     printf development > tauri/src-tauri/.macro-tauri-env
     cd packages/app && bun run --bun dev
 
@@ -48,24 +48,27 @@ local-dcs:
 local-dss:
     cd packages/app && VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev
 
-local-search:
+local-search: ensure-cache-wasm
     cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev
 
-local-email:
+local-email: ensure-cache-wasm
     cd packages/app && VITE_LOCAL_SERVERS='email-service' bun run --bun dev
 
-build-dev:
+# All app builds need the gitignored wasm pkg (packages/graphql-cache/wasm):
+# without it the cache worker's dynamic import 404s at runtime and the
+# normalized cache silently degrades to network-only.
+build-dev: build-cache-wasm
     cd packages/app && MODE=development NODE_ENV=production bun run --bun build
 
-build-staging:
+build-staging: build-cache-wasm
     cd packages/app && MODE=staging NODE_ENV=production bun run --bun build
 
-build-prod:
+build-prod: build-cache-wasm
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
-build-tauri:
+build-tauri: build-cache-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
@@ -150,3 +153,15 @@ cycles:
 
 cycles-ci:
     bunx --bun biome lint --changed --only=nursery/noImportCycles
+
+# Build the GraphQL cache wasm module into packages/graphql-cache/wasm
+# (gitignored). Unconditional — CI app builds must never skip it (schema or
+# engine changes alter the wasm without a cache-wasm version bump).
+build-cache-wasm:
+    wasm-pack build {{justfile_directory()}}/../../rust/cloud-storage/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/packages/graphql-cache/wasm
+
+# Dev fast path: build the wasm pkg only when missing or its version drifts
+# from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
+# dev machines). See rust/cloud-storage/tools/xtask/crates/xtask_cache_wasm/src/main.rs.
+ensure-cache-wasm:
+    cd {{justfile_directory()}}/../../rust/cloud-storage && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm

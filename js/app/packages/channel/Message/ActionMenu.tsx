@@ -1,3 +1,4 @@
+import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import StarIcon from '@icon/wide-star.svg';
 import TaskIcon from '@icon/wide-task.svg';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
@@ -140,6 +141,7 @@ export function ActionMenu(props: ActionMenuProps) {
                     size="icon-sm"
                     variant="ghost"
                     onClick={(event) => {
+                      recordEmojiUsage(emoji);
                       handleReaction(emoji, event);
                     }}
                     tooltip={`React ${emoji}`}

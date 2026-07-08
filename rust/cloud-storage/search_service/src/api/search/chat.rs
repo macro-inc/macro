@@ -1,9 +1,11 @@
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
+use models_properties::{EntityReference, EntityType};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchResponseItem, ChatSearchResponseItemWithMetadata,
 };
+use models_soup::SoupProperty;
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -32,9 +34,35 @@ pub(in crate::api::search) async fn enrich_chats(
             .await
             .map_err(SearchError::InternalError)?;
 
+    // Fetch chat properties (e.g. tags) so rows can render and re-check
+    // them, mirroring the documents/emails enrichment.
+    let chat_entity_refs: Vec<EntityReference> = chat_ids
+        .iter()
+        .map(|id| EntityReference::new(id.to_string(), EntityType::Chat))
+        .collect();
+    let properties_map: HashMap<String, Vec<SoupProperty>> =
+        properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values(
+            &ctx.db,
+            &chat_entity_refs,
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch chat properties"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, props)| {
+            (
+                id,
+                props
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(results, chat_histories).map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, chat_histories, properties_map)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -42,6 +70,7 @@ pub(in crate::api::search) async fn enrich_chats(
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
+    properties_map: HashMap<String, Vec<SoupProperty>>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<ChatMessageSearchResult>> = search_results
@@ -83,8 +112,13 @@ pub fn construct_search_result(
                     project_id: info.project_id.clone(),
                     deleted_at: info.deleted_at,
                 };
+                let properties = properties_map
+                    .get(&entity_id.to_string())
+                    .cloned()
+                    .filter(|p| !p.is_empty());
                 Some(ChatSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
+                    properties,
                     extra: ChatSearchResponseItem {
                         id: entity_id,
                         chat_id: entity_id,

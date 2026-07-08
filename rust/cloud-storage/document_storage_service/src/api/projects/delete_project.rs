@@ -17,7 +17,9 @@ use model::{
     user::UserContext,
 };
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
-use sqs_client::search::{SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId};
+use sqs_client::search::{
+    SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project::RemoveProject,
+};
 use utoipa::ToSchema;
 
 #[derive(serde::Deserialize)]
@@ -74,6 +76,31 @@ pub async fn delete_project_handler(
             }
         };
 
+    if !project_ids.is_empty() {
+        tokio::spawn({
+            let sqs_client = ctx.sqs_client.clone();
+            let project_ids = project_ids.clone();
+            async move {
+                let _ = sqs_client
+                    .bulk_send_message_to_search_event_queue(
+                        project_ids
+                            .iter()
+                            .map(|id| {
+                                SearchQueueMessage::RemoveProject(RemoveProject {
+                                    project_id: id.to_string(),
+                                    index_override: None,
+                                })
+                            })
+                            .collect(),
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to enqueue delete projects for search"),
+                    );
+            }
+        });
+    }
+
     if let Some(parent_id) = &project.parent_id {
         tracing::info!(
             parent_id,
@@ -81,6 +108,7 @@ pub async fn delete_project_handler(
         );
         macro_project_utils::update_project_modified(
             &ctx.db,
+            Some(ctx.sqs_client.as_ref()),
             macro_project_utils::ProjectModifiedArgs {
                 project_id: None,
                 old_project_id: Some(parent_id),
@@ -255,6 +283,31 @@ pub async fn permanently_delete_project_handler(
             .message("unable to commit transaction")
             .is_error(true)
             .send(StatusCode::INTERNAL_SERVER_ERROR));
+    }
+
+    if !project_ids.is_empty() {
+        tokio::spawn({
+            let sqs_client = ctx.sqs_client.clone();
+            let project_ids = project_ids.clone();
+            async move {
+                let _ = sqs_client
+                    .bulk_send_message_to_search_event_queue(
+                        project_ids
+                            .iter()
+                            .map(|id| {
+                                SearchQueueMessage::RemoveProject(RemoveProject {
+                                    project_id: id.to_string(),
+                                    index_override: None,
+                                })
+                            })
+                            .collect(),
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to enqueue delete projects for search"),
+                    );
+            }
+        });
     }
 
     if !chat_ids.is_empty() {

@@ -10,12 +10,13 @@ use super::get_project::get_sub_items::get_all_deleted_sub_project_ids;
 /// Reverts a project deletion
 /// Reverts all sub-items of the project as well
 /// Adds all items back to the users history as well
+/// Returns the ids of the projects that were restored
 #[tracing::instrument(skip(db))]
 pub async fn revert_delete_project(
     db: &sqlx::Pool<sqlx::Postgres>,
     project_id: &str,
     project_parent_id: Option<&str>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<String>> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
     let project_ids = get_all_deleted_sub_project_ids(&mut transaction, project_id)
@@ -148,7 +149,7 @@ pub async fn revert_delete_project(
         .await
         .context("unable to commit transaction")?;
 
-    Ok(())
+    Ok(project_ids_vec)
 }
 
 #[cfg(test)]

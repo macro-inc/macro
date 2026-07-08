@@ -339,6 +339,7 @@ where
 
         let participants_clone = req.participants.clone();
         let channel_type = req.channel_type;
+        let channel_name = req.name.clone();
 
         let channel_id = self
             .create_channel_record(actor.copied(), org_id, req)
@@ -348,6 +349,7 @@ where
             channel_id,
             actor: Sender::new_from_user(actor.clone()),
             channel_type,
+            channel_name,
             participant_user_ids: created_channel_participant_ids(actor, participants_clone)
                 .into_iter()
                 .collect(),
@@ -445,10 +447,20 @@ where
                 "cannot change channel_name for direct message channels".to_string(),
             ));
         }
+        let channel_name = req.channel_name.clone();
         self.repo
             .patch_channel(channel_id, actor.as_ref().to_string(), req)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        if channel_name.is_some() {
+            self.events.dispatch(ChannelEvent::ChannelUpdated {
+                channel_id,
+                actor,
+                previous_name: info.name,
+                channel_name,
+            });
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -915,10 +927,11 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn remove_participants(
         &self,
-        _actor: Sender,
+        actor: Sender,
         channel_id: Uuid,
         req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let actor_user = require_user_actor(&actor)?;
         let info = self
             .repo
             .get_channel_info(channel_id)
@@ -942,12 +955,22 @@ where
                 "cannot remove the channel owner".to_string(),
             ));
         }
-        for participant in req.participants {
+        for participant in &req.participants {
             self.repo
-                .remove_participant(channel_id, participant)
+                .remove_participant(channel_id, participant.clone())
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
+        self.events.dispatch(ChannelEvent::ParticipantsRemoved {
+            channel_id,
+            channel_type: info.channel_type,
+            actor: actor_user,
+            removed_user_ids: req
+                .participants
+                .into_iter()
+                .filter_map(|id| MacroUserIdStr::try_from(id).ok())
+                .collect(),
+        });
         Ok(())
     }
 
@@ -1022,7 +1045,14 @@ where
         self.repo
             .remove_participant(channel_id, actor_user.as_ref().to_string())
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        self.events.dispatch(ChannelEvent::ParticipantsRemoved {
+            channel_id,
+            channel_type: info.channel_type,
+            actor: actor_user.clone(),
+            removed_user_ids: vec![actor_user],
+        });
+        Ok(())
     }
 }
 
@@ -1059,6 +1089,7 @@ where
         }
 
         let channel_type = create_req.channel_type;
+        let channel_name = create_req.name.clone();
         let owner_sender = ChannelSender::new_from_user(owner_id.clone());
         let participant_user_ids =
             created_channel_participant_ids(owner_id.clone(), create_req.participants.clone())
@@ -1071,6 +1102,7 @@ where
             channel_id,
             actor: owner_sender,
             channel_type,
+            channel_name,
             participant_user_ids,
         });
         Ok(GetOrCreateChannelResponse {
@@ -1128,12 +1160,14 @@ where
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         }
 
-        if !attachments_to_add.is_empty() {
+        let added_attachments = if attachments_to_add.is_empty() {
+            Vec::new()
+        } else {
             self.repo
                 .add_attachments(message_id, channel_id, attachments_to_add.clone())
                 .await
-                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        }
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?
+        };
 
         let items = extract_share_items(&attachments_to_add, &[]);
         if !items.is_empty()
@@ -1171,6 +1205,8 @@ where
             actor,
             message_id,
             attachments: all_attachments,
+            added: added_attachments,
+            removed: attachments_to_delete,
             recipients: participant_ids(&participants),
             nonce,
         });
