@@ -1,8 +1,14 @@
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import type { ChatMessageStream } from '@service-connection/stream';
+import type { Accessor } from 'solid-js';
 export type StreamItem = ReturnType<ChatMessageStream['data']>[number];
 export type NetworkDelay = (index: number) => number;
 export type Splitter = (items: StreamItem[]) => StreamItem[];
+
+export type BufferedChatMessageStream = ChatMessageStream & {
+  /* True while a stream plugin is holding output back for more input. */
+  isHolding: Accessor<boolean>;
+};
 
 /**
  * Rewrites the units a buffered stream emits, sitting between the buffering

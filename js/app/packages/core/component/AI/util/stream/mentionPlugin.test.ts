@@ -2,12 +2,23 @@ import type { ChatStream } from '@service-cognition/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   createMentionBufferPlugin,
+  MAX_MACRO_XML_LENGTH,
   MAX_MENTION_LENGTH,
   MENTION_CLOSE,
   MENTION_OPEN,
 } from './mentionPlugin';
 
 const MENTION = `${MENTION_OPEN}{"documentId":"6a2b138d-dfbe-439a-a78b-282471a1e165","documentName":"","blockName":"md","blockParams":{}}${MENTION_CLOSE}`;
+const OTHER_MACRO_XML_TAGS = [
+  '<m-user-mention>{"userId":"u1","email":"a@example.com"}</m-user-mention>',
+  '<m-date-mention>{"date":"2026-07-08","displayFormat":"Today"}</m-date-mention>',
+  '<m-contact-mention>{"contactId":"c1","name":"Ness Chu"}</m-contact-mention>',
+  '<m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>',
+  '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+  '<m-theme-mention>{"name":"onboarding","data":{}}</m-theme-mention>',
+  '<m-await>{"awaitId":"a1","text":"Waiting","inline":true}</m-await>',
+  '<m-future-widget>{"value":1}</m-future-widget>',
+];
 
 function textPart(text: string, message_id = 'message'): ChatStream {
   return {
@@ -47,7 +58,7 @@ function feedChars(
   return Array.from(text).flatMap((char) => plugin.transform(textPart(char)));
 }
 
-describe('mention buffer plugin', () => {
+describe('Macro XML buffer plugin', () => {
   it('passes plain text straight through', () => {
     const plugin = createMentionBufferPlugin();
     const out = plugin.transform(textPart('hello world'));
@@ -69,20 +80,22 @@ describe('mention buffer plugin', () => {
     expect(plugin.isHolding()).toBe(false);
   });
 
-  it('never releases a partial mention while the tag is streaming', () => {
-    const plugin = createMentionBufferPlugin();
-    let emitted = '';
-    for (const char of Array.from(`a ${MENTION} b`)) {
-      emitted += textOf(plugin.transform(textPart(char)));
-      /* at no point may a fragment of the tag be visible */
-      if (emitted.includes('<')) {
-        expect(emitted).toContain(MENTION);
+  it('never releases a partial Macro XML tag while it is streaming', () => {
+    for (const macroXml of [MENTION, ...OTHER_MACRO_XML_TAGS]) {
+      const plugin = createMentionBufferPlugin();
+      let emitted = '';
+      for (const char of Array.from(`a ${macroXml} b`)) {
+        emitted += textOf(plugin.transform(textPart(char)));
+        /* at no point may a fragment of the tag be visible */
+        if (emitted.includes('<')) {
+          expect(emitted).toContain(macroXml);
+        }
       }
+      expect(emitted).toBe(`a ${macroXml} b`);
     }
-    expect(emitted).toBe(`a ${MENTION} b`);
   });
 
-  it('releases text with a non-mention tag unchanged', () => {
+  it('releases text with non-Macro XML tags unchanged', () => {
     const plugin = createMentionBufferPlugin();
     const text = '1 < 2 and <div> is html <m-other-tag>';
     const out = textOf(feedChars(plugin, text)) + textOf(plugin.flush());
@@ -116,6 +129,22 @@ describe('mention buffer plugin', () => {
     const runaway = `${MENTION_OPEN}{"documentId":"${'x'.repeat(MAX_MENTION_LENGTH)}`;
     const out = textOf(feedChars(plugin, runaway));
     /* once past the cap the whole tag is released and later text flows freely */
+    expect(out).toBe(runaway);
+    expect(plugin.isHolding()).toBe(false);
+  });
+
+  it('gives up on any open Macro XML tag that grows past the size cap', () => {
+    const plugin = createMentionBufferPlugin();
+    const runaway = `<m-future-widget>${'x'.repeat(MAX_MACRO_XML_LENGTH)}`;
+    const out = textOf(feedChars(plugin, runaway));
+    expect(out).toBe(runaway);
+    expect(plugin.isHolding()).toBe(false);
+  });
+
+  it('gives up on an unterminated Macro XML tag name that grows past the size cap', () => {
+    const plugin = createMentionBufferPlugin();
+    const runaway = `<m-${'x'.repeat(MAX_MACRO_XML_LENGTH)}`;
+    const out = textOf(feedChars(plugin, runaway));
     expect(out).toBe(runaway);
     expect(plugin.isHolding()).toBe(false);
   });

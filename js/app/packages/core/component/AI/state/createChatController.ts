@@ -50,10 +50,13 @@ export type ChatController = {
   setStream: Setter<ChatMessageStream | undefined>;
   /**
    * Ref to the renderer's parsed editor state for the streaming message's
-   * tail text part. The renderer sets it; the stream's mention buffering
+   * tail text part. The renderer sets it; the stream's Macro XML buffering
    * reads it to skip buffering tags that land in code blocks.
    */
-  setStreamTailState: (state: Accessor<EditorState | null>) => void;
+  setStreamTailState: (
+    state: Accessor<EditorState | null> | undefined,
+    key?: string
+  ) => void;
 };
 
 export type ChatControllerOptions = {
@@ -84,11 +87,12 @@ export function createChatController(
 
   /*
    The renderer's parsed editor state for the streaming message's tail text
-   part (set from AssistantMessageParts as it renders). Mention buffering
+   part (set from AssistantMessageParts as it renders). Macro XML buffering
    reads the node tree the renderer already built — never parses — to skip
    buffering tags that land in code blocks, where they render literally.
   */
   let streamTailState: Accessor<EditorState | null> | undefined;
+  let streamTailStateKey: string | undefined;
   function streamTailInCode(): boolean {
     const state = streamTailState?.();
     return state ? tailContext(state).inCode : false;
@@ -168,12 +172,13 @@ export function createChatController(
     if (event.type === 'stream_connected' && 'stream' in event) {
       /* the previous message's tail state must not answer for this stream */
       streamTailState = undefined;
+      streamTailStateKey = undefined;
       const makeStream = () =>
         bufferedStream(event.stream, [
           createMentionBufferPlugin(streamTailInCode),
         ]);
       const { owner = getOwner() } = event;
-      let newStream: ChatMessageStream;
+      let newStream: ReturnType<typeof bufferedStream>;
       if (owner) {
         const ownedStream = runWithOwner(owner, makeStream);
         if (!ownedStream) return;
@@ -245,8 +250,16 @@ export function createChatController(
 
     dispatch,
     setStream,
-    setStreamTailState: (state) => {
+    setStreamTailState: (state, key) => {
+      if (!state) {
+        if (key === undefined || key === streamTailStateKey) {
+          streamTailState = undefined;
+          streamTailStateKey = undefined;
+        }
+        return;
+      }
       streamTailState = state;
+      streamTailStateKey = key;
     },
   };
 }

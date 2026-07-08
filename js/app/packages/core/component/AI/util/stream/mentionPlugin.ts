@@ -6,11 +6,14 @@ import type { StreamPlugin } from './types';
 
 export const MENTION_OPEN = '<m-document-mention>';
 export const MENTION_CLOSE = '</m-document-mention>';
+export const MACRO_XML_PREFIX = '<m-';
+const MACRO_XML_OPEN_TAG = /^<(m-[a-zA-Z0-9_-]+)>/;
 /*
-  A well-formed mention (tags + JSON payload) is a few hundred characters.
-  A held mention that grows past this will never close — stop holding it.
+  Most inline Macro XML tags are compact. If a held tag grows past this,
+  stop holding so malformed tags and large block payloads do not stay hidden.
 */
-export const MAX_MENTION_LENGTH = 1024;
+export const MAX_MACRO_XML_LENGTH = 4096;
+export const MAX_MENTION_LENGTH = MAX_MACRO_XML_LENGTH;
 
 type ChatResponse = Extract<ChatStream, { type: 'chat_message_response' }>;
 type TextContent = Extract<AssistantMessagePart, { type: 'text' }>;
@@ -33,13 +36,13 @@ function toTextPart(template: TextResponse, text: string): TextResponse {
 export type IsCodeContext = () => boolean;
 
 /**
- * Holds back text that looks like an in-progress `<m-document-mention>` tag so
- * the viewer never sees the raw tag dripping in character by character; a
- * completed mention is released as one atomic text part so it renders as a
- * mention chip immediately. Text held for a tag that turns out not to be a
- * mention is released unchanged, and an open tag that grows past
- * MAX_MENTION_LENGTH is given up on — combined with the buffered stream's
- * flush-on-quiet and flush-on-done, an unclosed mention is never held forever.
+ * Holds back text that looks like an in-progress Macro XML tag (`<m-...>`) so
+ * the viewer never sees raw internal markup dripping in character by character;
+ * a completed tag is released as one atomic text part so it renders as its
+ * parsed node immediately. Text held for a tag that turns out not to be Macro
+ * XML is released unchanged, and an open tag that grows past
+ * MAX_MACRO_XML_LENGTH is given up on — combined with the buffered stream's
+ * flush-on-quiet and flush-on-done, an unclosed tag is never held forever.
  *
  * A tag streaming into a code context (fenced block or inline code) renders
  * literally, so it is never held; `isCodeContext` reports what the message
@@ -84,9 +87,14 @@ export function createMentionBufferPlugin(
     return [toTextPart(template, text)];
   }
 
+  function canBecomeMacroXml(text: string): boolean {
+    if (MACRO_XML_PREFIX.startsWith(text)) return true;
+    return /^<m-[a-zA-Z0-9_-]*$/.test(text);
+  }
+
   /*
-   Release everything held that can no longer become (part of) a mention.
-   Only holds from a '<' that is still a viable mention prefix onward.
+   Release everything held that can no longer become (part of) Macro XML.
+   Only holds from a '<' that is still a viable Macro XML prefix onward.
   */
   function drain(): ChatStream[] {
     const out: ChatStream[] = [];
@@ -104,26 +112,26 @@ export function createMentionBufferPlugin(
         out.push(...release(tagStart));
         continue;
       }
-      const viableMention =
-        text.startsWith(MENTION_OPEN) || MENTION_OPEN.startsWith(text);
-      if (viableMention && !isCodeContext()) {
-        if (text.startsWith(MENTION_OPEN)) {
-          const close = text.indexOf(MENTION_CLOSE);
-          /* a complete mention -> release it as one atomic part */
+      const openTag = text.match(MACRO_XML_OPEN_TAG);
+      const viableMacroXml = !!openTag || canBecomeMacroXml(text);
+      if (viableMacroXml && !isCodeContext()) {
+        if (text.length > MAX_MACRO_XML_LENGTH) {
+          out.push(...release(text.length));
+          break;
+        }
+        if (openTag) {
+          const closeTag = `</${openTag[1]}>`;
+          const close = text.indexOf(closeTag, openTag[0].length);
+          /* a complete Macro XML tag -> release it as one atomic part */
           if (close !== -1) {
-            out.push(...releaseMerged(close + MENTION_CLOSE.length));
+            out.push(...releaseMerged(close + closeTag.length));
             continue;
           }
-          /* an open mention this large will never close -> give up on it */
-          if (text.length > MAX_MENTION_LENGTH) {
-            out.push(...release(text.length));
-            break;
-          }
         }
-        /* mention (or a prefix that may become one) still streaming -> hold */
+        /* Macro XML (or a prefix that may become it) still streaming -> hold */
         break;
       }
-      /* not a mention here (wrong tag, or inside code where the tag renders
+      /* not Macro XML here (wrong tag, or inside code where the tag renders
          literally) -> release up to the next '<' */
       const next = text.indexOf('<', 1);
       out.push(...release(next === -1 ? text.length : next));
@@ -134,7 +142,7 @@ export function createMentionBufferPlugin(
   return {
     transform(part) {
       if (!isTextResponse(part)) {
-        /* a non-text part interrupts any mention; release held text first to preserve order */
+        /* a non-text part interrupts any held XML; release held text first to preserve order */
         return [...release(pending().length), part];
       }
       if (part.content.text.length === 0) return [];

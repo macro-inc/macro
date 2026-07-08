@@ -8,6 +8,7 @@ import type { AssistantMessagePart } from '@service-cognition/generated/schemas/
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSelector,
   Match,
@@ -107,6 +108,20 @@ export function AssistantMessageParts(props: {
       (part) =>
         part.type !== 'toolCallResponseJson' && part.type !== 'toolCallErr'
     );
+  });
+  const streamingTailTextIndex = createMemo(() => {
+    if (!props.isStreaming) return;
+    const visibleParts = parts();
+    const index = visibleParts.length - 1;
+    const tail = visibleParts[index];
+    if (tail?.type !== 'text' || tail.text.trim().length === 0) return;
+    return index;
+  });
+
+  createEffect(() => {
+    if (!props.isStreaming || streamingTailTextIndex() === undefined) {
+      chat.setStreamTailState(undefined);
+    }
   });
 
   const isThinkingDone = createMemo(() => {
@@ -316,10 +331,11 @@ export function AssistantMessageParts(props: {
                   generating={() => outer.isStreaming}
                   setStateRef={
                     outer.isStreaming &&
-                    props.item().index === outer.parts.length - 1
+                    props.item().index === streamingTailTextIndex()
                       ? chat.setStreamTailState
                       : undefined
                   }
+                  stateRefKey={`${outer.message.id}:${props.item().key}`}
                 />
               </Show>
             );

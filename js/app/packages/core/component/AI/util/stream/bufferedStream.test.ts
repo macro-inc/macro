@@ -6,7 +6,6 @@ import { $convertFromMarkdownString } from '@lexical/markdown';
 import { ALL_TRANSFORMERS, SupportedNodeTypes } from '@lexical-core';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import {
-  type ChatMessageStream,
   type ChatStreamController,
   createStreamController,
 } from '@service-connection/stream';
@@ -46,7 +45,7 @@ let disposers: (() => void)[] = [];
 
 function setup(plugins?: StreamPlugin[]) {
   let source!: ChatStreamController;
-  let out!: ChatMessageStream;
+  let out!: ReturnType<typeof bufferedStream>;
   const dispose = createRoot((dispose) => {
     source = createStreamController<'chat'>({
       entity_type: 'chat',
@@ -81,7 +80,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('bufferedStream mention buffering', () => {
+describe('bufferedStream Macro XML buffering', () => {
   it('never shows a partial mention tag and emits the mention atomically', () => {
     const { source, text } = setup();
     const full = `See this ${MENTION} for details`;
@@ -108,10 +107,12 @@ describe('bufferedStream mention buffering', () => {
     vi.advanceTimersByTime(TICK_MS * (unclosed.length + 10));
     /* the open tag is still held back */
     expect(text()).toBe('Hi ');
+    expect(out.isHolding()).toBe(true);
 
     source.setDone();
     expect(text()).toBe(unclosed);
     expect(out.isDone()).toBe(true);
+    expect(out.isHolding()).toBe(false);
   });
 
   it('force-flushes a mention that stalls open without a stream end', () => {

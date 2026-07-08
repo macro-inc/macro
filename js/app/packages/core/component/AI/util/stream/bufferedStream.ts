@@ -7,10 +7,10 @@ import {
   type ChatStreamController,
   createStreamController,
 } from '@service-connection/stream';
-import { createEffect, on } from 'solid-js';
+import { createEffect, createSignal, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { createMentionBufferPlugin } from './mentionPlugin';
-import type { StreamPlugin } from './types';
+import type { BufferedChatMessageStream, StreamPlugin } from './types';
 
 /* Target latency between character */
 const TARGET_LATENCY_MS = 6;
@@ -439,8 +439,8 @@ function flushPlugins(plugins: StreamPlugin[]): ChatStream[] {
  * they arrive, it replays them character-by-character at a steady cadence for a
  * typewriter feel, while still snapping forward to the live position whenever it
  * falls too far behind (e.g. on reconnect). Every outgoing unit is routed
- * through the plugin chain (by default the mention buffer, which keeps partial
- * `<m-document-mention>` tags from rendering as raw text); with no plugins the
+ * through the plugin chain (by default the Macro XML buffer, which keeps partial
+ * `<m-...>` tags from rendering as raw text); with no plugins the
  * returned stream emits the same content in the same order as the source —
  * only the chunking and timing differ.
  *
@@ -450,14 +450,26 @@ function flushPlugins(plugins: StreamPlugin[]): ChatStream[] {
 export function bufferedStream(
   source: ChatMessageStream,
   plugins: StreamPlugin[] = [createMentionBufferPlugin()]
-): ChatMessageStream {
+): BufferedChatMessageStream {
   const controller = createStreamController<'chat'>(source.id);
+  const [isHolding, setIsHolding] = createSignal(false);
 
   let holdFlushTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  function updateHolding() {
+    setIsHolding(plugins.some((plugin) => plugin.isHolding()));
+  }
 
   function push(parts: ChatStream[]) {
     if (parts.length === 0) return;
     controller.setData((p) => [...p, ...parts]);
+  }
+
+  function forceFlushHeld() {
+    if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
+    holdFlushTimeout = undefined;
+    push(flushPlugins(plugins));
+    updateHolding();
   }
 
   function emit(parts: ChatStream[]) {
@@ -471,16 +483,15 @@ export function bufferedStream(
     if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
     holdFlushTimeout = undefined;
     if (plugins.some((plugin) => plugin.isHolding())) {
-      holdFlushTimeout = setTimeout(
-        () => push(flushPlugins(plugins)),
-        PLUGIN_HOLD_FLUSH_MS
-      );
+      holdFlushTimeout = setTimeout(forceFlushHeld, PLUGIN_HOLD_FLUSH_MS);
     }
+    updateHolding();
   }
 
   function finish() {
     if (holdFlushTimeout) clearTimeout(holdFlushTimeout);
     push(flushPlugins(plugins));
+    updateHolding();
     controller.setDone();
   }
 
@@ -509,5 +520,8 @@ export function bufferedStream(
     })
   );
 
-  return controller.stream;
+  return {
+    ...controller.stream,
+    isHolding,
+  };
 }

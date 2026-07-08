@@ -23,7 +23,11 @@ export function ChatMessageMarkdown(props: {
   generating: Accessor<boolean>;
   rootRef?: (ref: HTMLDivElement) => void;
   /* receives this message's parsed editor state accessor */
-  setStateRef?: (state: Accessor<EditorState | null>) => void;
+  setStateRef?: (
+    state: Accessor<EditorState | null> | undefined,
+    key?: string
+  ) => void;
+  stateRefKey?: string;
 }) {
   const text = () => {
     if (props.generating()) {
@@ -40,6 +44,7 @@ export function ChatMessageMarkdown(props: {
       theme={aiChatTheme}
       rootRef={props.rootRef}
       setStateRef={props.setStateRef}
+      stateRefKey={props.stateRefKey}
       target="internal"
     />
   );
