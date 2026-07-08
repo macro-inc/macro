@@ -1243,7 +1243,7 @@ function TeamManagement(props: {
                 rel="noopener noreferrer"
                 class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
               >
-                Install app
+                Configure app
                 <ArrowUpRightIcon class="size-3.5 opacity-70" />
               </a>
             </IntegrationRow>
