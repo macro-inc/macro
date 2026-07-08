@@ -34,6 +34,8 @@ function fileToFileSystemFileEntry(file: File): FileSystemFileEntry {
 }
 
 // differs from fileDrop in that it handles both files and folders
+// With undefined options the directive stays passive: it cancels the default
+// drop navigation but lets drag events propagate to ancestor drop zones.
 export function fileFolderDrop(
   element: HTMLElement,
   accessor: Accessor<FileFolderDropDirectiveOptions | undefined>
@@ -42,8 +44,10 @@ export function fileFolderDrop(
   let internalDragActivated = false;
 
   const handleDragOver = (e: DragEvent) => {
-    if (accessor()?.disabled) return;
+    const options = accessor();
+    if (options?.disabled) return;
     e.preventDefault();
+    if (!options) return;
     e.stopPropagation();
 
     // Upgrade an internal drag to active once the 20px threshold is exceeded.
@@ -53,18 +57,19 @@ export function fileFolderDrop(
       internalDragExceedsThreshold()
     ) {
       internalDragActivated = true;
-      accessor()?.onDragStart?.(true);
+      options.onDragStart?.(true);
     }
   };
 
   const handleDragEnter = (e: DragEvent) => {
-    if (accessor()?.disabled) return;
+    const options = accessor();
+    if (options?.disabled) return;
     e.preventDefault();
+    if (!options) return;
     e.stopPropagation();
     dragCounter++;
 
     if (dragCounter === 1) {
-      const options = accessor();
       const items = e.dataTransfer?.items;
 
       // Mark drag start call back as valid if we're dragging a file.
@@ -96,24 +101,26 @@ export function fileFolderDrop(
   };
 
   const handleDragLeave = (e: DragEvent) => {
-    if (accessor()?.disabled) return;
+    const options = accessor();
+    if (options?.disabled) return;
     e.preventDefault();
+    if (!options) return;
     e.stopPropagation();
     dragCounter--;
 
     if (dragCounter === 0) {
       internalDragActivated = false;
-      const options = accessor();
-      options?.onDragEnd?.();
+      options.onDragEnd?.();
     }
   };
 
   const handleDrop = async (e: DragEvent) => {
-    if (accessor()?.disabled) return;
+    const options = accessor();
+    if (options?.disabled) return;
     e.preventDefault();
+    if (!options) return;
     e.stopPropagation();
 
-    const options = accessor();
     dragCounter = 0;
     internalDragActivated = false;
     options?.onDragEnd?.();
