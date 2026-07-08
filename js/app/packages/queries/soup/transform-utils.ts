@@ -346,6 +346,18 @@ export const useSearchResponseItemMapper = () => {
             results: result.document_search_results,
           });
         }
+        // The index stores unformatted document names, so server name
+        // highlights lack the extension suffix the display name carries.
+        if (search.nameHighlight) {
+          search = {
+            ...search,
+            nameHighlight: formatDocumentName(
+              search.nameHighlight,
+              result.file_type,
+              { fullyQualifiedBlockName: true }
+            ),
+          };
+        }
         const properties = result.properties ?? undefined;
         return [
           {
