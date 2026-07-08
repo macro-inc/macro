@@ -2,6 +2,7 @@ import { Billing } from '@app/component/settings/Billing';
 import { useLogout } from '@core/auth/logout';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
+  isSoloSettings,
   type SettingsTab,
   settingsTabFromSplitPath,
   useSettingsState,
@@ -67,7 +68,7 @@ export function SettingsPanelComponentWrapper() {
     const tab = settingsTabFromSplitPath(location.pathname);
     if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
-  return <SettingsPanel />;
+  return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
 }
 
 type SettingsPanelProps = {
@@ -80,7 +81,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const {
     closeSettings,
     moveSettingsToSplit,
-    moveSettingsToFullscreen,
+    moveSettingsToSolo,
     activeTabId,
     selectTab,
   } = useSettingsState();
@@ -222,7 +223,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     );
   }
 
-  // "Back to app" — the full-page route's only close affordance. Laid out like a nav row.
+  // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
       type="button"
@@ -275,13 +276,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </div>
           </Show>
         </SplitHeaderLeft>
-        {/* Pop the split back out into the full-page settings route (desktop only). */}
+        {/* Collapse the other splits so settings becomes the sole one (desktop only). */}
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
               class="p-1 rounded-lg"
               label="Open fullscreen"
-              onClick={() => moveSettingsToFullscreen()}
+              onClick={() => moveSettingsToSolo()}
             >
               <ArrowsOut class="size-4" />
             </Button>

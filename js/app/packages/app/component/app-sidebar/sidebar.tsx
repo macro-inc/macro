@@ -347,17 +347,10 @@ const registerSidebarHotkeys = ({
   isSlim,
   onOpenChange,
 }: SidebarHotkeyDeps) => {
-  registerHotkey({
-    scopeId: 'global',
-    hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Send Invites',
-    keyDownHandler: (e) => {
-      e?.preventDefault();
-      setInviteModalOpen(true);
-      return true;
-    },
-  });
-
+  // Scoped to the sidebar's lifecycle on purpose: it toggles sidebar +
+  // side-panel state, which is force-hidden (and thus a no-op) on full-cover
+  // routes like solo settings, where `AppSidebar` unmounts. Genuinely global
+  // shortcuts that must survive those routes live in `GoToHotkeys` instead.
   registerHotkey({
     hotkey: 'cmd+.',
     scopeId: 'global',
@@ -391,13 +384,25 @@ const resetGoToHotkeysState = () => {
 };
 
 /**
- * Registers the "g" leader key and the per-link "go to" nav hotkeys (e.g.
- * "g i" for inbox). Rendered unconditionally from `Layout` — unlike
- * `AppSidebar`, which unmounts on full-cover routes like settings — so these
- * shortcuts keep working everywhere in the app.
+ * Hosts the always-on global shortcuts that must keep working even on
+ * full-cover routes like solo settings: the "g" leader key with its per-link
+ * "go to" nav hotkeys (e.g. "g i" for inbox), plus Send Invites. Rendered
+ * unconditionally from `Layout` — unlike `AppSidebar`, which unmounts on those
+ * routes — so none of them go dead there.
  */
 export const GoToHotkeys = () => {
   const { openWithSplit } = useSplitLayout();
+
+  registerHotkey({
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.inviteTeam,
+    description: 'Send Invites',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      setInviteModalOpen(true);
+      return true;
+    },
+  });
 
   const homeViewEnabled = useFeatureFlag('enable-home-view', {
     enabledOverride: ENABLE_HOME_OVERRIDE,

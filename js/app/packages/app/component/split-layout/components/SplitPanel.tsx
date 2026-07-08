@@ -4,6 +4,7 @@ import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isSoloSettings } from '@core/constant/SettingsState';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { isMobile } from '@core/mobile/isMobile';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
@@ -142,7 +143,9 @@ export function SplitPanel(props: SplitPanelProps) {
   }
 
   const shouldHideSplitHeader = createMemo(
-    () => isMobile() && isListViewID(props.handle.content().id)
+    () =>
+      (isMobile() && isListViewID(props.handle.content().id)) ||
+      isSoloSettings()
   );
 
   return (

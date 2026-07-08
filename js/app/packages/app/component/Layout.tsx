@@ -9,20 +9,15 @@ import {
 } from '@app/component/sidebarVisibility';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { setGlobalNavigate } from '@app/signal/splitLayout';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSettingsPath } from '@core/constant/settingsPath';
+import { isSoloSettings } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { makePersisted } from '@solid-primitives/storage';
-import {
-  type RouteSectionProps,
-  useLocation,
-  useNavigate,
-} from '@solidjs/router';
+import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
@@ -85,12 +80,9 @@ export function Layout(props: RouteSectionProps) {
       !isMobile() &&
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname) &&
-      // Settings is a full-cover route with its own tab nav — hide app chrome.
-      !isSettingsPath(location.pathname)
+      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
+      !isSoloSettings()
   );
-  createEffect(() => {
-    console.log('VIZ', sidebarVisible());
-  });
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -103,12 +95,6 @@ function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
-
-  // Expose the router `navigate` at module scope so `openWithSplit` can escape
-  // the settings full-cover route even when called outside a router owner (e.g.
-  // from an async create-hotkey handler). See `globalNavigate` in splitLayout.
-  const navigate = useNavigate();
-  setGlobalNavigate(() => navigate);
 
   useAppSquishHandlers();
 

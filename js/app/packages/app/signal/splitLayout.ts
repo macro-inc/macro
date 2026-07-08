@@ -1,5 +1,4 @@
 import { until } from '@solid-primitives/promise';
-import type { Navigator } from '@solidjs/router';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import type { SplitManager } from '../component/split-layout/layoutManager';
 
@@ -8,15 +7,6 @@ import type { SplitManager } from '../component/split-layout/layoutManager';
  */
 export const [globalSplitManager, setGlobalSplitManager] =
   createSignal<SplitManager>();
-
-/**
- * The router's `navigate` function, captured from a component mounted under the
- * `<Router>` (see `Layout`). Exposed at module scope so code that runs outside a
- * router owner — e.g. `useSplitLayout().openWithSplit` called lazily from an
- * async event handler — can navigate without invoking the `useNavigate` router
- * primitive, which throws when called outside a Route.
- */
-export const [globalNavigate, setGlobalNavigate] = createSignal<Navigator>();
 
 /**
  * Resolves once the global split manager is initialized. Safe to call from

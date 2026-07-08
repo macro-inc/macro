@@ -1,12 +1,6 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { isSettingsPath } from '@core/constant/settingsPath';
 import { isMobile } from '@core/mobile/isMobile';
 import { useContext } from 'solid-js';
-import {
-  globalNavigate,
-  globalSplitManager,
-  whenSplitManagerReady,
-} from '../../signal/splitLayout';
+import { globalSplitManager } from '../../signal/splitLayout';
 import { SplitPanelContext } from './context';
 import type {
   OpenWithSplitOptions,
@@ -25,24 +19,7 @@ export function useSplitLayout() {
     const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
-      // Read the path from `window` rather than `useLocation()`: this function
-      // is frequently invoked lazily from async event handlers (e.g. create
-      // hotkeys), where the `useLocation`/`useNavigate` router primitives are
-      // outside a router owner and would throw. `window.location.pathname`
-      // includes the router base identically to `location.pathname`.
-      if (!isSettingsPath(window.location.pathname)) {
-        console.error('No split manager found');
-        return;
-      }
-
-      // Settings is a full-cover route with no split layout mounted, so
-      // hotkey/command-menu navigation triggered from there has nowhere to
-      // open content. Leave settings for the default workspace route, then
-      // finish the open once its split manager mounts.
-      globalNavigate()?.(DEFAULT_ROUTE, { replace: true });
-      void whenSplitManagerReady().then((manager) =>
-        manager.openWithSplit(content, { ...options, preferNewSplit })
-      );
+      console.error('No split manager found');
       return;
     }
 
@@ -100,6 +77,18 @@ export function useSplitLayout() {
     return splitManager.createPopoverSplit({ content: content });
   }
 
+  function replaceAllSplits(
+    content: SplitContent,
+    options?: { referredFrom?: ReferredFrom }
+  ) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('No split manager found');
+      return;
+    }
+    return splitManager.replaceAllSplits(content, options);
+  }
+
   function resetSplit() {
     if (!splitPanelContext) {
       console.error('No split panel context found');
@@ -125,5 +114,6 @@ export function useSplitLayout() {
     insertSplit,
     resetSplit,
     popoverSplit,
+    replaceAllSplits,
   };
 }
