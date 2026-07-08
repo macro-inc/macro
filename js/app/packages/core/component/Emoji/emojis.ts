@@ -73,36 +73,38 @@ export function resolveEmoji(key: string): string | undefined {
   return EMOJI_BY_NAME.get(key.replaceAll(':', '').toLowerCase());
 }
 
-// Lower tier = better match. Exact beats prefix beats word-boundary beats
-// substring, and shortcodes beat keywords at every level.
+// Lower tier = better match. Exact shortcode first, then one shared tier for
+// exact keywords and shortcode prefixes (CLDR keywords are inconsistent
+// enough that neither should dominate the other — "thumbs" is a keyword of
+// thumbs_down only), then keyword prefixes, word boundaries, and substrings.
 function tokenScore(token: string, entry: SimpleEmoji): number {
   if (entry.shortcodes.includes(token)) {
     return 0;
   }
-  if (entry.terms.includes(token)) {
+  if (
+    entry.terms.includes(token) ||
+    entry.shortcodes.some((code) => code.startsWith(token))
+  ) {
     return 1;
   }
-  if (entry.shortcodes.some((code) => code.startsWith(token))) {
+  if (entry.terms.some((term) => term.startsWith(token))) {
     return 2;
   }
-  if (entry.terms.some((term) => term.startsWith(token))) {
-    return 3;
-  }
   if (entry.shortcodes.some((code) => code.includes(`_${token}`))) {
-    return 4;
+    return 3;
   }
   if (
     entry.terms.some(
       (term) => term.includes(`_${token}`) || term.includes(` ${token}`)
     )
   ) {
-    return 5;
+    return 4;
   }
   if (entry.shortcodes.some((code) => code.includes(token))) {
-    return 6;
+    return 5;
   }
   if (entry.terms.some((term) => term.includes(token))) {
-    return 7;
+    return 6;
   }
   return -1;
 }

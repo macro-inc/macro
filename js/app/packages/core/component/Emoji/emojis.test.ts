@@ -32,6 +32,11 @@ describe('searchEmojis', () => {
     expect(first('broken heart')).toBe('💔');
   });
 
+  it('ranks name prefixes and exact keywords in one tier by emoji order', () => {
+    expect(first('thumbs')).toBe('\u{1f44d}');
+    expect(first('lol')).not.toBe('🍭');
+  });
+
   it('matches by keyword when no name matches', () => {
     expect(searchEmojis('sad').map(({ emoji }) => emoji)).toContain('😢');
   });
