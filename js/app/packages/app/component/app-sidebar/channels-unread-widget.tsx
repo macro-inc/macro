@@ -400,9 +400,13 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
         const targetRect = target.getBoundingClientRect();
         const bottomDelta = targetRect.bottom - containerRect.bottom;
         const topDelta = targetRect.top - containerRect.top;
-        if (bottomDelta > 0) {
+        // A message taller than the card can never fit, so align its top
+        // once instead of oscillating between top and bottom alignment.
+        if (targetRect.height >= containerRect.height) {
+          if (Math.abs(topDelta) > 1) container.scrollTop += topDelta;
+        } else if (bottomDelta > 1) {
           container.scrollTop += bottomDelta;
-        } else if (topDelta < 0) {
+        } else if (topDelta < -1) {
           container.scrollTop += topDelta;
         }
       } else {
