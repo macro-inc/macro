@@ -717,10 +717,25 @@ async fn register_watch_recovering(
                 .stop_watch(access_token)
                 .await
                 .context("Failed to stop stale Gmail watch before retry")?;
-            Ok(client.register_watch(access_token).await?)
+            client
+                .register_watch(access_token)
+                .await
+                .map_err(classify_watch_error)
         }
-        Err(e) => Err(e.into()),
+        Err(e) => Err(classify_watch_error(e)),
     }
+}
+
+/// Maps a watch-registration failure to its init error. Google refreshes tokens
+/// regardless of granted scopes, so a grant missing the Gmail scope passes the
+/// token fetch and is first rejected here with a 403 — an expected outcome
+/// (scope declined at consent), logged at debug so it doesn't page.
+fn classify_watch_error(e: GmailError) -> InitError {
+    if matches!(e, GmailError::Forbidden) {
+        tracing::debug!("gmail watch rejected for insufficient scope, no usable gmail grant");
+        return InitError::NoGmailGrant;
+    }
+    e.into()
 }
 
 /// Fetches a Gmail access token scoped to a specific linked email. Use this instead

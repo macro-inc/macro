@@ -46,3 +46,25 @@ fn other_token_fetch_failures_stay_bad_request() {
         ));
     }
 }
+
+#[test]
+fn watch_forbidden_classifies_as_no_gmail_grant() {
+    assert!(matches!(
+        classify_watch_error(GmailError::Forbidden),
+        InitError::NoGmailGrant
+    ));
+}
+
+#[test]
+fn other_watch_failures_stay_gmail_errors() {
+    for err in [
+        GmailError::Unauthorized,
+        GmailError::RateLimitExceeded,
+        GmailError::ApiError("(500): boom".to_string()),
+    ] {
+        assert!(matches!(
+            classify_watch_error(err),
+            InitError::GmailError(_)
+        ));
+    }
+}
