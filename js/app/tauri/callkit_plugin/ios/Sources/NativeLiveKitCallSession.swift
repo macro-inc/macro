@@ -157,7 +157,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.allowBluetoothHFP, .mixWithOthers]
+                options: [.allowBluetooth, .mixWithOthers]
             )
             try session.setPreferredIOBufferDuration(0.02)
             print("[CallKit] Configured AVAudioSession category for voice call reason=\(reason) \(describeAudioSession())")

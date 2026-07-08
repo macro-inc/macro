@@ -99,6 +99,7 @@ import {
   cn,
   Dropdown,
   HoverCard,
+  Layer,
   SendButton,
   Surface,
   Tooltip,
@@ -1555,6 +1556,7 @@ export function BaseInput(props: {
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
+  const composePortalScope = () => (isMobileDrawer() ? 'local' : undefined);
   const sendActionHidden = () =>
     isMobile() &&
     !hasBodyText() &&
@@ -1742,7 +1744,7 @@ export function BaseInput(props: {
     <Surface
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
-        isMobileDrawer() && 'h-full',
+        isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
         props.unframed ? 'rounded-none' : 'rounded-xl'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
@@ -1760,35 +1762,37 @@ export function BaseInput(props: {
       depth={2}
       solid
     >
-      <Show when={props.mobileDrawer}>
-        <div
-          data-corvu-no-drag=""
-          class="shrink-0 h-12 px-3 flex items-center justify-between"
-        >
-          <div class="flex items-center gap-1 min-w-0">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              class="rounded-full border border-edge-muted/70 bg-transparent"
-              tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
-              onClick={deleteDraftAndReset}
-            >
-              <XIcon class="size-4" />
-            </Button>
+      <Show when={isMobileDrawer()}>
+        <Layer depth={0}>
+          <div
+            data-corvu-no-drag=""
+            class="sticky top-0 right-0 left-0 z-10 shrink-0 p-3 pt-0 flex items-center justify-between bg-surface"
+          >
+            <div class="flex items-center gap-1 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-full border border-edge-muted/70 bg-transparent"
+                tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
+                onClick={deleteDraftAndReset}
+              >
+                <XIcon class="size-4" />
+              </Button>
+            </div>
+            <div class="ml-auto flex items-center gap-1">
+              <AttachButton
+                variant="ghost"
+                class="rounded-full border border-edge-muted/70 bg-transparent"
+              />
+              <MobileOverflowMenu />
+              <SendButton
+                disabled={sendActionDisabled() || sendActionHidden()}
+                pending={sendMutation.isPending}
+                onClick={() => sendEmail()}
+              />
+            </div>
           </div>
-          <div class="ml-auto flex items-center gap-1">
-            <AttachButton
-              variant="ghost"
-              class="rounded-full border border-edge-muted/70 bg-transparent"
-            />
-            <MobileOverflowMenu />
-            <SendButton
-              disabled={sendActionDisabled() || sendActionHidden()}
-              pending={sendMutation.isPending}
-              onClick={() => sendEmail()}
-            />
-          </div>
-        </div>
+        </Layer>
       </Show>
       <Show
         when={isMobileDrawer()}
@@ -1841,6 +1845,7 @@ export function BaseInput(props: {
                         links={emailLinksQuery.data?.links ?? []}
                         activeLinkId={activeLinkId()}
                         onSelect={persistDraftOnSenderSwitch}
+                        portalScope={composePortalScope()}
                       />
                     </div>
                     <div class="flex items-center ml-auto shrink-0">
@@ -1982,7 +1987,7 @@ export function BaseInput(props: {
           </>
         }
       >
-        <div class="relative min-w-0 text-[17px] leading-6 text-ink-muted px-5 pt-1">
+        <div class="pt-1 relative min-w-0 leading-6 text-ink-muted px-5">
           <RecipientDropRow
             field="to"
             class={cn(mobileDrawerRowClass, 'items-start py-2')}
@@ -1999,6 +2004,7 @@ export function BaseInput(props: {
               class={mobileRecipientSelectorClass}
               inputRef={setToRef}
               options={ctx.recipientOptions}
+              portalScope={composePortalScope()}
               selfEmail={activeInboxEmail()}
               selectedOptions={form().recipients().to}
               setSelectedOptions={withDraftSave((v) =>
@@ -2036,6 +2042,7 @@ export function BaseInput(props: {
               links={emailLinksQuery.data?.links ?? []}
               activeLinkId={activeLinkId()}
               onSelect={persistDraftOnSenderSwitch}
+              portalScope={composePortalScope()}
             />
           </div>
 
@@ -2051,6 +2058,7 @@ export function BaseInput(props: {
                 class={mobileRecipientSelectorClass}
                 inputRef={setCcRef}
                 options={ctx.recipientOptions}
+                portalScope={composePortalScope()}
                 selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().cc}
                 setSelectedOptions={withDraftSave((v) =>
@@ -2079,6 +2087,7 @@ export function BaseInput(props: {
                 class={mobileRecipientSelectorClass}
                 inputRef={setBccRef}
                 options={ctx.recipientOptions}
+                portalScope={composePortalScope()}
                 selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().bcc}
                 setSelectedOptions={withDraftSave((v) =>
@@ -2112,7 +2121,7 @@ export function BaseInput(props: {
       <div
         class={cn(
           isMobileDrawer()
-            ? 'relative flex-1 flex flex-col min-h-0'
+            ? 'relative flex-1 flex flex-col'
             : 'size-full flex flex-col min-h-0',
           showExpandedRecipients() && 'mt-4'
         )}
@@ -2133,10 +2142,10 @@ export function BaseInput(props: {
         <div
           ref={setScrollContainer}
           class={cn(
-            'relative min-h-18 max-h-[calc(60*var(--dvh,1dvh))] overflow-y-auto w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1',
+            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-4 py-1',
             isMobileDrawer()
-              ? 'mobile:max-h-none flex-1 min-h-0 px-5 pt-6 pb-4'
-              : 'mobile:max-h-[calc(32*var(--dvh,1dvh))]'
+              ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
+              : 'max-h-[calc(60*var(--dvh,1dvh))] overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]'
           )}
           onclick={() => {
             editor()?.focus();
@@ -2187,7 +2196,7 @@ export function BaseInput(props: {
                 ? 'Use `@` to reference files'
                 : 'Reply — @mention to share or cc people'
             }
-            portalScope="split"
+            portalScope={isMobileDrawer() ? 'local' : 'split'}
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
