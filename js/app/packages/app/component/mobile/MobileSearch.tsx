@@ -224,10 +224,22 @@ function SearchInputBar(props: { onBack: () => void }) {
         <input
           id="mobile-search-input"
           type="text"
+          enterkeyhint="search"
           class="h-full min-w-0 flex-1 border-0 bg-transparent text-ink outline-none ring-0 placeholder:text-ink-placeholder focus:outline-none focus:ring-0"
           placeholder="Search..."
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            // Enter (the keyboard's Search key) activates full-text search,
+            // same as the "Full-text search for ..." row. Not while an IME
+            // composition is being confirmed, and not while picking a nested
+            // command's options, where the input filters commands.
+            if (e.key !== 'Enter' || e.isComposing) return;
+            if (SearchState.isInCommandScope()) return;
+            SearchState.enableFullTextMode();
+            // Drop the virtual keyboard so the results get the full frame.
+            e.currentTarget.blur();
+          }}
         />
       </div>
     </div>
