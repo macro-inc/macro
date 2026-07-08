@@ -271,6 +271,19 @@ fn deploy_to_fly() -> Step<Run> {
             # (auth, org) surface on the very next flyctl call.
             flyctl apps create "$APP_NAME" --org "$FLY_ORG" || true
             flyctl secrets set --app "$APP_NAME" --stage "DOPPLER_TOKEN=$DOPPLER_PREVIEW_TOKEN"
+            # The volume behind fly.toml's /var/lib/docker mount (see the
+            # comment there). `volumes create` is not idempotent — guard it.
+            if ! flyctl volumes list --app "$APP_NAME" --json \
+                 | jq -e 'map(select(.name == "docker_data")) | length > 0' >/dev/null; then
+              flyctl volumes create docker_data --app "$APP_NAME" --region ewr --size 40 --yes
+            fi
+            # Machines created before the volume existed can't take the
+            # [mounts] config update — recreate them.
+            flyctl machine list --app "$APP_NAME" --json \
+              | jq -r '.[] | select((.config.mounts // []) | length == 0) | .id' \
+              | while read -r id; do
+                  [ -z "$id" ] || flyctl machine destroy "$id" --app "$APP_NAME" --force || true
+                done
             flyctl auth docker
             image="registry.fly.io/$APP_NAME:${{ github.sha }}"
             docker build -t "$image" preview-ctx

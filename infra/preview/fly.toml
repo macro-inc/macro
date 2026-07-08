@@ -24,6 +24,16 @@ primary_region = "ewr"
     method = "GET"
     path = "/auth/health"
 
+# The inner Docker store must NOT live on the machine rootfs: Fly's rootfs is
+# an overlay (nested overlayfs forbids the whiteout device nodes layer
+# unpacking needs — every Debian-based image failed with EPERM) and has only
+# a few GB of headroom (ENOSPC mid-load). A volume is real ext4, properly
+# sized, and persists across redeploys — so later pushes reuse the layer
+# store. The deploy step creates the volume if it doesn't exist.
+[[mounts]]
+  source = "docker_data"
+  destination = "/var/lib/docker"
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 8
