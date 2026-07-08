@@ -1,7 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import WideChannel from '@icon/wide-channel.svg';
-import WideFileMd from '@icon/wide-file-md.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
@@ -51,7 +50,16 @@ const ListEntitiesToolResponse = (props: {
       case 'channel':
         return <WideChannel class="size-4" />;
       case 'document':
-        return <WideFileMd class="size-4" />;
+        return (
+          <EntityIcon
+            targetType={fileTypeToBlockName(
+              item.subType ?? item.fileType,
+              true
+            )}
+            size="xs"
+            theme="monochrome"
+          />
+        );
       case 'aiChat':
         return <EntityIcon targetType="chat" size="xs" theme="monochrome" />;
       case 'project':
