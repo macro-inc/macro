@@ -36,8 +36,6 @@ type ThreadReplyChannelInputProps = {
   /** Where the reply input is hosted. Defaults to 'inline' (in the thread). */
   host?: 'inline' | 'unified';
   collapsible?: boolean;
-  /** Live entity-drag flag forwarded to the input. */
-  isDraggingOverChannel?: Accessor<boolean>;
   /** Observe the mounted input's handle (e.g. for entity drops). */
   onReady?: (handle: InputHandle) => void;
 };
@@ -101,7 +99,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         placeholder: 'Send a reply',
         value: props.replyInputState()?.value,
         attachments: props.replyInputState()?.attachments,
-        isDraggingOverChannel: props.isDraggingOverChannel?.(),
         mode: 'reply',
         host: props.host,
       }}
