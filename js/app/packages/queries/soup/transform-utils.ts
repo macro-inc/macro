@@ -281,6 +281,9 @@ export function mapChannelSearchResultItem(
     });
 }
 
+const formatDisplayName = (text: string, fileType?: string | null) =>
+  formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
+
 export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
@@ -351,10 +354,9 @@ export const useSearchResponseItemMapper = () => {
         if (search.nameHighlight) {
           search = {
             ...search,
-            nameHighlight: formatDocumentName(
+            nameHighlight: formatDisplayName(
               search.nameHighlight,
-              result.file_type,
-              { fullyQualifiedBlockName: true }
+              result.file_type
             ),
           };
         }
@@ -369,10 +371,9 @@ export const useSearchResponseItemMapper = () => {
                   ? { type: 'snippet' }
                   : null,
             id: result.document_id,
-            name: formatDocumentName(
+            name: formatDisplayName(
               result.name || blockNameToDefaultFile(result.file_type),
-              result.file_type,
-              { fullyQualifiedBlockName: true }
+              result.file_type
             ),
             ownerId: result.owner_id,
             createdAt: result.metadata?.created_at,
