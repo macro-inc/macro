@@ -9,6 +9,9 @@ const {
 	"supervisor-model": supervisorModelFlag,
 	"interpret-model": interpretModelFlag,
 	"coding-model": codingModelFlag,
+	"snippet-model": snippetModelFlag,
+	"snippet-high-model": snippetHighModelFlag,
+	interpret,
 	debug,
 	out,
 	prompt: promptFlag,
@@ -24,6 +27,9 @@ const {
 	.option("supervisor-model", { type: "string", demandOption: true, describe: "provider:model for the supervisor" })
 	.option("interpret-model", { type: "string", demandOption: true, describe: "provider:model for the interpret pass" })
 	.option("coding-model", { type: "string", demandOption: true, describe: "provider:model for the coding agents" })
+	.option("snippet-model", { type: "string", describe: "provider:model for snippet composition (defaults to --coding-model)" })
+	.option("snippet-high-model", { type: "string", describe: "provider:model for effort:high snippet composition (defaults to --supervisor-model)" })
+	.option("interpret", { type: "boolean", default: true, describe: "run the intent-interpretation pass before editing (use --no-interpret to skip)" })
 	.option("debug", { type: "boolean", default: false, describe: "include the supervisor step trace + replay trace in the response" })
 	.option("out", { type: "string", describe: "write the replay trace JSON to this file (implies --debug)" })
 	.option("prompt-file", { type: "string", describe: "read the prompt from this file instead of --prompt" })
@@ -73,7 +79,10 @@ const res = await fetch(`${workerUrl}/edit`, {
 			supervisor: [parseModel(supervisorModelFlag)],
 			interpret: [parseModel(interpretModelFlag)],
 			coding: [parseModel(codingModelFlag)],
+			snippet: [parseModel(snippetModelFlag ?? codingModelFlag)],
+			snippetHigh: [parseModel(snippetHighModelFlag ?? supervisorModelFlag)],
 		},
+		interpret,
 		debug: wantDebug,
 	}),
 	timeout: false,

@@ -150,11 +150,10 @@ export const ENABLE_MARKDOWN_DIFF = resolveFeatureFlag(
   true
 );
 
-// TODO (seamus): markdown history is causing a quiet crash on some documents.
-// once I have a document that can consistently repro, i can debug and fix.
+// Toggle the new experimental history viewer — on in dev/preview, off in prod.
 export const ENABLE_HISTORY_COMPONENT = resolveFeatureFlag(
   'ENABLE_HISTORY_COMPONENT',
-  false
+  DEV_MODE_ENV
 );
 
 export const ENABLE_BEARER_TOKEN_AUTH = resolveFeatureFlag(

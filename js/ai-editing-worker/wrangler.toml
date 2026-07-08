@@ -23,6 +23,11 @@ fallthrough = true
 [observability]
 enabled = true
 
+[[d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
+
 [vars]
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage.macro.com"
@@ -40,12 +45,23 @@ SEARCH_SERVICE_BASE = "http://search-processing-service:8080"
 CONTACTS_SERVICE_BASE = "http://contacts-service:8080"
 AUTH_SERVICE_BASE = "http://connection-gateway:8080"
 
+# Local dev uses an on-disk SQLite shard, so the id is only a reference.
+[[env.local.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
+
 [env.dev.vars]
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://cloud-storage-dev.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
 CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
 AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+
+[[env.dev.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces"
+database_id = "16d34e99-3bc6-44e4-a287-1ea65183bd28"
 
 [env.playground]
 name = "ai-editing-worker-playground"
@@ -57,6 +73,11 @@ SEARCH_SERVICE_BASE = "https://cloud-storage-dev.macro.com"
 CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
 AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
 
+[[env.playground.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces-playground"
+database_id = "28cdeacb-6468-449b-a1c7-a193b220501e"
+
 [env.prod]
 name = "ai-editing-worker"
 
@@ -66,3 +87,8 @@ DSS_BASE = "https://cloud-storage.macro.com"
 SEARCH_SERVICE_BASE = "https://cloud-storage.macro.com"
 CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
 AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+
+[[env.prod.d1_databases]]
+binding = "TRACES_DB"
+database_name = "ai-editing-traces-prod"
+database_id = "2af569f1-2edb-4e6a-99a2-f2f9ee82c0d1"

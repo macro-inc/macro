@@ -7,10 +7,8 @@ import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
-  ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
 import { useSidePanel } from '@app/component/side-panel';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -30,40 +28,26 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import {
-  ENABLE_HISTORY_COMPONENT,
-  ENABLE_MARKDOWN_LIVE_COLLABORATION,
-} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { useCanEdit } from '@core/signal/permissions';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { blockNameToItemType } from '@service-storage/client';
-import {
-  type Accessor,
-  createEffect,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { useHistory } from '../history/HistoryContext';
 import {
   DispatchAgentButton,
   useDispatchAgentSplitFileActions,
 } from './DispatchAgentMenu';
-import { HISTORY_DRAWER_ID } from './History';
 
 export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
-  const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
   const scopeId = blockHotkeyScopeSignal.get;
@@ -75,7 +59,6 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
 
-  const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
@@ -136,6 +119,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
   const sidePanel = useSidePanel();
   const splitPanel = useSplitPanel();
+  const _history = useHistory();
 
   // Register at the split scope so `]` works from anywhere in the split
   // (header, toolbar, drawer), but tie disposal to this TopBar so the
@@ -157,28 +141,6 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   }
 
   const tools: BlockTool[] = [
-    {
-      label: 'Ask Macro',
-      icon: ChatWithAgentIcon,
-      action: () =>
-        openChatWithAgent({
-          type: 'document',
-          id: blockId,
-          name: name(),
-          fileType: 'md',
-        }),
-      condition: isMobile,
-    },
-    {
-      label: 'History',
-      icon: ClockIcon,
-      action: historyControl.toggle,
-      isActive: historyControl.isOpen,
-      condition: () =>
-        ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-        ENABLE_HISTORY_COMPONENT &&
-        canEdit(),
-    },
     // {
     //   label: 'Copy Branch Name',
     //   icon: GitBranch,
@@ -281,38 +243,9 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 }
 
 export function InstructionsTopBar() {
-  const canEdit = useCanEdit();
-  const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
-
-  const tools: BlockTool[] = [
-    {
-      label: 'History',
-      icon: ClockIcon,
-      action: historyControl.toggle,
-      isActive: historyControl.isOpen,
-      condition: () =>
-        ENABLE_MARKDOWN_LIVE_COLLABORATION &&
-        ENABLE_HISTORY_COMPONENT &&
-        canEdit(),
-    },
-  ];
-
   return (
-    <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="AI Instructions" iconType="md" />
-      </SplitHeaderLeft>
-      <For each={tools}>
-        {(tool) => (
-          <Show when={!tool.condition || tool.condition()}>
-            {tool.buttonComponent ? (
-              <tool.buttonComponent />
-            ) : (
-              <ToolButton tool={tool} />
-            )}
-          </Show>
-        )}
-      </For>
-    </>
+    <SplitHeaderLeft>
+      <StaticSplitLabel label="AI Instructions" iconType="md" />
+    </SplitHeaderLeft>
   );
 }

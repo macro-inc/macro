@@ -1,4 +1,5 @@
 use anyhow::Context;
+use documents_hex::domain::ports::editing::EditingWorkerService;
 use models_properties::{EntityReference, EntityType};
 use properties_db_client::entity_properties::delete as entity_properties_delete;
 
@@ -97,6 +98,15 @@ pub async fn handle(
         .await
         .inspect_err(|e| {
             tracing::trace!(error=?e, "could not delete file from sync service");
+        });
+
+    // Delete AI edit traces (they hold full document content)
+    let _ = ctx
+        .editing_worker_client
+        .delete_traces(document_id)
+        .await
+        .inspect_err(|e| {
+            tracing::trace!(error=?e, "could not delete ai edit traces");
         });
 
     // Delete document properties

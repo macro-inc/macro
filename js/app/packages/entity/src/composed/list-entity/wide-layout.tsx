@@ -20,6 +20,7 @@ import {
   isEmailEntity,
   isGithubPrEntity,
   isProjectContainedEntity,
+  isProjectEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
@@ -218,6 +219,19 @@ export function WideLayout(props: LayoutProps) {
             <EntityRowTags
               entityId={entity().id}
               entityType={EntityType.THREAD}
+              properties={entity().properties}
+            />
+          )}
+        </Show>
+        <Show
+          when={
+            rowTagsVisible() && isProjectEntity(props.entity) && props.entity
+          }
+        >
+          {(entity) => (
+            <RowTags
+              entityId={entity().id}
+              entityType={EntityType.PROJECT}
               properties={entity().properties}
             />
           )}

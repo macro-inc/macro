@@ -1,6 +1,16 @@
 import type { NotificationType } from '@core/types';
+import { GITHUB_EVENT_TYPES } from '@notifications/github-event-types';
 import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
+
+/**
+ * Whether the notification type is one of the GitHub PR event types, whose
+ * sender is always presented as the GitHub identity.
+ * @internal
+ */
+export function isGithubNotificationType(type: NotificationType): boolean {
+  return (GITHUB_EVENT_TYPES as readonly string[]).includes(type);
+}
 
 /**
  * Gets unique sender IDs from a notification stack
@@ -17,9 +27,10 @@ export function getUniqueSenderIds(notifications: Notification[]): string[] {
 }
 
 /**
- * GitHub PR notifications are triggered by GitHub users who usually aren't Macro
- * users, so `sender_id` is empty. Their GitHub login lives in the notification
- * metadata instead. Pull it out so the description can name who acted.
+ * The GitHub login of the user who triggered a GitHub PR notification, carried
+ * in the notification metadata. GitHub notifications always name the sender by
+ * this login — never by the linked Macro user's name — even when the actor is
+ * a Macro user and the notification has a `sender_id`.
  * @internal
  */
 export function getGithubSenderLogin(
@@ -37,6 +48,33 @@ export function getGithubSenderLogin(
     return login ?? undefined;
   }
   return undefined;
+}
+
+/**
+ * The GitHub avatar for the sender of a GitHub PR notification. Prefers the
+ * avatar URL captured from the webhook, falling back to the login-derived
+ * GitHub avatar endpoint.
+ * @internal
+ */
+export function getGithubSenderAvatarUrl(
+  notification: Notification
+): string | undefined {
+  const metadata = notification.notification_metadata;
+  const content = (metadata as { content?: unknown }).content;
+  if (
+    content &&
+    typeof content === 'object' &&
+    'senderGithubAvatarUrl' in content
+  ) {
+    const url = (content as { senderGithubAvatarUrl?: string | null })
+      .senderGithubAvatarUrl;
+    if (url) return url;
+  }
+
+  const login = getGithubSenderLogin(notification);
+  return login
+    ? `https://github.com/${encodeURIComponent(login)}.png?size=80`
+    : undefined;
 }
 
 /**

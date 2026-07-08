@@ -49,6 +49,6 @@ export const DEFAULT_RANGES: RandomRanges = {
 };
 
 export const DEFAULT_QUEUE_PARAMS: DocumentOpQueueParams = {
-  speed: 800,
+  speed: 1200,
   ranges: DEFAULT_RANGES,
 };

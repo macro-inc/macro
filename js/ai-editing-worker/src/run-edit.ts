@@ -8,12 +8,13 @@ import {
 import { MARKDOWN_LORO_SCHEMA } from '../../lexical-core/markdown-loro-schema';
 import { supervisor } from './ai-editing/agents';
 import type { DocumentOp } from './ai-editing/editor';
+import type { DispatchEditTrace } from './ai-editing/tools';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
 import { createWorkerSyncSource } from './sources';
-import { buildTraceLog } from './trace-log';
+import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Model = {
   provider: 'anthropic' | 'cerebras' | 'openai';
@@ -30,6 +31,9 @@ export type ResolvedModels = {
   supervisor: LanguageModel;
   interpret: LanguageModel;
   coding: LanguageModel;
+  snippet: LanguageModel;
+  /** Stronger composition model for `effort: "high"` snippet specs. */
+  snippetHigh: LanguageModel;
 };
 
 export type RunEditArgs = {
@@ -54,7 +58,8 @@ export type { UsageEntry };
 export type RunEditResult = {
   usage: UsageEntry[];
   ops: DocumentOp[];
-  trace?: string;
+  /** Structured trace of the session; stored as JSON, rendered to markdown on demand. */
+  session: TraceSession;
   clarification?: string;
 };
 
@@ -99,24 +104,30 @@ export async function runEditSession(
   const allOps: DocumentOp[] = [];
   // code, per coder, per batch
   const coderCodeBlocks: string[][][] = [];
+  // snippet + timing traces, per edit, per batch
+  const dispatchEditTraces: DispatchEditTrace[][] = [];
+  const sessionId = crypto.randomUUID();
   const startedAt = new Date();
   const initialDocument = serializeWithXml(workspace.session);
   try {
-    const { totalUsage, steps, intent, clarification } = await supervisor(
-      workspace.session,
-      args.prompt,
-      args.models,
-      {
-        borrowWriter: () => workspace.borrowWriter(),
-        typingAnimations: args.typingAnimations,
-        sleep: args.sleep,
-        signal: args.signal,
-        interpret: args.interpret,
-        runner: args.runner,
-        onOps: (ops) => allOps.push(...ops),
-        onCoderResult: (codes) => coderCodeBlocks.push(codes),
-      }
-    );
+    const {
+      totalUsage,
+      steps,
+      stepDurationsMs,
+      intent,
+      interpretDurationMs,
+      clarification,
+    } = await supervisor(workspace.session, args.prompt, args.models, {
+      borrowWriter: () => workspace.borrowWriter(),
+      typingAnimations: args.typingAnimations,
+      sleep: args.sleep,
+      signal: args.signal,
+      interpret: args.interpret,
+      runner: args.runner,
+      onOps: (ops) => allOps.push(...ops),
+      onCoderResult: (codes) => coderCodeBlocks.push(codes),
+      onEditTrace: (edits) => dispatchEditTraces.push(edits),
+    });
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
     // commit reached the server before we disconnect.
@@ -125,25 +136,27 @@ export async function runEditSession(
 
     const usage = totalUsage.toEntries();
 
-    const trace = buildTraceLog(
+    const session = buildTraceSession(
       {
+        sessionId,
         documentId: args.documentId,
         prompt: args.prompt,
         startedAt,
         initialDocument,
         intent,
+        interpretDurationMs,
         coderCodeBlocks,
+        dispatchEditTraces,
+        stepDurationsMs,
       },
       steps as any,
       usage
     );
 
-    console.log(JSON.stringify({ documentId: args.documentId, debug: trace }));
-
     return {
       usage,
       ops: allOps,
-      trace: args.debug ? trace : undefined,
+      session,
       clarification,
     };
   } finally {

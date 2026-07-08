@@ -267,6 +267,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <Message.Body>
                 <EmailMessageBody
                   message={props.message}
+                  personalSenders={context.messages.personalSenders}
                   isBodyExpanded={isBodyExpanded}
                   setExpandedMessageBody={(id) =>
                     context.messages.setExpandedBodyId(id, true)
