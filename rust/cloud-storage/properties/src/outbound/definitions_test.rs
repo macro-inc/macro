@@ -1,6 +1,7 @@
 //! Integration tests for property definition operations on PropertiesPgRepo.
 
 use super::properties_pg_repo::PropertiesPgRepo;
+use super::property_definition_queries;
 use crate::domain::model::PropertyDefinitionOwner;
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -434,6 +435,57 @@ async fn delete_nonexistent_property_definition_is_noop(
 
     // Deleting non-existent property should succeed (no error)
     repo.delete_property_definition(property_id).await?;
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties", "tags"))
+)]
+async fn get_caller_tag_definitions_with_options(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let user1_tags: Uuid = "aa111111-1111-1111-1111-111111111111".parse()?;
+    let team1_tags: Uuid = "aa222222-2222-2222-2222-222222222222".parse()?;
+    let user2_tags: Uuid = "aa333333-3333-3333-3333-333333333333".parse()?;
+
+    // user1 gets their personal set (first) and their team's set, with
+    // options, never another user's personal set.
+    let sets = property_definition_queries::get_caller_tag_definitions_with_options(
+        &pool,
+        "macro|user1@test.com",
+    )
+    .await?;
+    assert_eq!(sets.len(), 2);
+    assert_eq!(sets[0].definition.id, user1_tags);
+    assert_eq!(sets[0].property_options.len(), 2);
+    assert_eq!(
+        sets[0].property_options[0].value,
+        PropertyOptionValue::String("bug-report".to_string())
+    );
+    assert_eq!(
+        sets[0].property_options[0].color,
+        Some("#ff0000".to_string())
+    );
+    assert_eq!(sets[1].definition.id, team1_tags);
+    assert_eq!(sets[1].property_options.len(), 1);
+
+    // A teammate without a personal set only gets the team set.
+    let sets = property_definition_queries::get_caller_tag_definitions_with_options(
+        &pool,
+        "macro|user3@test.com",
+    )
+    .await?;
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].definition.id, team1_tags);
+
+    // user2 only gets their own personal set (Team 2 has no tag set).
+    let sets = property_definition_queries::get_caller_tag_definitions_with_options(
+        &pool,
+        "macro|user2@test.com",
+    )
+    .await?;
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].definition.id, user2_tags);
 
     Ok(())
 }

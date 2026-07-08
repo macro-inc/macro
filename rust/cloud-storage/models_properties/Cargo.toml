@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

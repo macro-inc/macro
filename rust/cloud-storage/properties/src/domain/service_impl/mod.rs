@@ -269,10 +269,35 @@ where
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> Result<Vec<EntityPropertyInfo>, PropertiesErr> {
+        // Check view permission first (permission service is required)
+        let permission_service = self
+            .permission_service
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionServiceNotConfigured)?;
+        let viewer = MacroUserIdStr::parse_from_str(tag_viewer_user_id)
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+        permission_service
+            .check_entity_view_permission(Some(&viewer), entity_id, entity_type)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+
         Ok(self
             .repository
-            .get_entity_properties(entity_id, entity_type)
+            .get_entity_properties(entity_id, entity_type, tag_viewer_user_id)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_caller_tag_sets(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_caller_tag_definitions(user_id)
             .await
             .map_err(anyhow::Error::from)?)
     }

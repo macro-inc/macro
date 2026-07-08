@@ -237,12 +237,21 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 
     /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Tag properties are restricted to the viewer's own and their teams' definitions.
     /// Returns properties sorted by display name.
     fn get_entity_properties(
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
+
+    /// Get the tag definitions visible to a user — their own plus their teams' —
+    /// with options attached.
+    fn get_caller_tag_definitions(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
     /// Get all properties attached to multiple entities, keyed by entity id and type.
     /// Returns properties sorted by display name for each entity.

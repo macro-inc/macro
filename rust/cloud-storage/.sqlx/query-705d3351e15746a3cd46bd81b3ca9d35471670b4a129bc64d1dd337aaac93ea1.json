@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            ep.property_definition_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.is_system,\n            ep.values as \"values: serde_json::Value\"\n        FROM entity_properties ep\n        INNER JOIN property_definitions pd ON pd.id = ep.property_definition_id\n        WHERE ep.entity_id = $1\n          AND ep.entity_type = $2\n        ORDER BY LOWER(pd.display_name)\n        ",
+  "query": "\n        SELECT\n            ep.property_definition_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.is_system,\n            ep.values as \"values: serde_json::Value\"\n        FROM entity_properties ep\n        INNER JOIN property_definitions pd ON pd.id = ep.property_definition_id\n        WHERE ep.entity_id = $1\n          AND ep.entity_type = $2\n          AND (\n            pd.data_type <> $4\n            OR pd.user_id = $3\n            OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $3)\n          )\n        ORDER BY LOWER(pd.display_name)\n        ",
   "describe": {
     "columns": [
       {
@@ -70,6 +70,25 @@
               ]
             }
           }
+        },
+        "Text",
+        {
+          "Custom": {
+            "name": "property_data_type",
+            "kind": {
+              "Enum": [
+                "BOOLEAN",
+                "DATE",
+                "NUMBER",
+                "STRING",
+                "SELECT_NUMBER",
+                "SELECT_STRING",
+                "ENTITY",
+                "LINK",
+                "TAG"
+              ]
+            }
+          }
         }
       ]
     },
@@ -82,5 +101,5 @@
       true
     ]
   },
-  "hash": "8d5ffbdd5be9b1031c7da47bc2d4bcbee35802a575387ef081a09031b42f7de9"
+  "hash": "705d3351e15746a3cd46bd81b3ca9d35471670b4a129bc64d1dd337aaac93ea1"
 }

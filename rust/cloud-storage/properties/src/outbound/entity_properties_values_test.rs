@@ -416,6 +416,48 @@ async fn get_bulk_filtered_includes_caller_visible_tags(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties", "tags"))
+)]
+async fn get_entity_properties_scopes_tags_to_viewer(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let user1_tags = Uuid::parse_str("aa111111-1111-1111-1111-111111111111")?;
+    let team1_tags = Uuid::parse_str("aa222222-2222-2222-2222-222222222222")?;
+    let user2_tags = Uuid::parse_str("aa333333-3333-3333-3333-333333333333")?;
+
+    // user1 sees non-tag properties plus their own and their team's tags,
+    // never user2's personal tags.
+    let props = entity_properties_get_query::get_entity_properties(
+        &pool,
+        "tagdoc1",
+        EntityType::Document,
+        "macro|user1@test.com",
+    )
+    .await?;
+    let ids: Vec<Uuid> = props.iter().map(|p| p.property_definition_id).collect();
+    assert_eq!(ids.len(), 3);
+    assert!(ids.contains(&priority));
+    assert!(ids.contains(&user1_tags));
+    assert!(ids.contains(&team1_tags));
+    assert!(!ids.contains(&user2_tags));
+
+    // user2 sees non-tag properties plus only their own tags.
+    let props = entity_properties_get_query::get_entity_properties(
+        &pool,
+        "tagdoc1",
+        EntityType::Document,
+        "macro|user2@test.com",
+    )
+    .await?;
+    let ids: Vec<Uuid> = props.iter().map(|p| p.property_definition_id).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&priority));
+    assert!(ids.contains(&user2_tags));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
 async fn delete_entity_property_removes_property(pool: Pool<Postgres>) -> anyhow::Result<()> {

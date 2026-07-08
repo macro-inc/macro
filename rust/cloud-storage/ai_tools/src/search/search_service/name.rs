@@ -1,10 +1,13 @@
 use super::context::SearchToolContext;
-use super::types::{PAGE_SIZE, SearchMatchType, SearchToolResponse};
+use super::types::{
+    PAGE_SIZE, SearchMatchType, SearchToolResponse, annotate_result_tags, resolve_tag_filters,
+};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::tag_sets::TagFilter;
 use models_search::unified::{
     UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include,
 };
@@ -14,7 +17,7 @@ use serde::Deserialize;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.",
+    description = "Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, and projects include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
     title = "NameSearch"
 )]
 pub struct NameSearch {
@@ -40,6 +43,16 @@ pub struct NameSearch {
     )]
     #[serde(default)]
     pub inbox: Option<String>,
+
+    #[schemars(description = "\
+Restrict results to items carrying at least one of the given tags (OR semantics). Each entry \
+names a tag by its label, matched case-insensitively against the user's own tags; only set \
+scope (\"personal\" or \"team\") when the user distinguishes between their personal and team \
+tags. An unknown label fails with the list of available tags — call ListTags first when \
+unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can \
+match, so channels and call records are dropped while a tag filter is active.")]
+    #[serde(default)]
+    pub tags: Option<Vec<TagFilter>>,
 }
 
 #[async_trait]
@@ -87,8 +100,22 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             )?;
             email_filters.link_ids = vec![link.id.to_string()];
         }
+        let mut tag_sets = None;
+        let mut tag_option_ids = Vec::new();
+        if let Some(filters) = self.tags.as_deref().filter(|t| !t.is_empty()) {
+            let (sets, option_ids) = resolve_tag_filters(
+                &search_context,
+                (*request_context.user_id).as_ref(),
+                filters,
+            )
+            .await?;
+            tag_sets = Some(sets);
+            tag_option_ids = option_ids;
+        }
+
         let base_filters = EntityFilters {
             email_filters,
+            tag_option_ids,
             ..Default::default()
         };
         let search_request = UnifiedSearchRequest {
@@ -120,6 +147,14 @@ impl AsyncTool<SearchToolContext> for NameSearch {
         if let Some(self_chat_id) = search_context.self_chat_id {
             results.retain(|item| item.entity_id() != self_chat_id);
         }
+
+        let results = annotate_result_tags(
+            &search_context,
+            (*request_context.user_id).as_ref(),
+            results,
+            tag_sets,
+        )
+        .await?;
 
         Ok(SearchToolResponse { results })
     }

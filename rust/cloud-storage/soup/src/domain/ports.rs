@@ -6,6 +6,7 @@ use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::item::SoupItem;
 use serde::Serialize;
 
@@ -45,6 +46,13 @@ pub trait SoupRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
         items: &'a mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetches the tag definitions visible to a user — their own plus their
+    /// teams' — with options attached.
+    fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
     /// Fetches expanded soup items with group metadata.
     fn expanded_grouped_cursor_soup<'a>(
@@ -86,4 +94,11 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         req: GroupedSortRequest<'_>,
     ) -> impl Future<Output = Result<Vec<GroupedSoupItem>, SoupErr>> + Send;
+
+    /// Fetch the tag definitions visible to a user — their own plus their
+    /// teams' — with options attached.
+    fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
 }

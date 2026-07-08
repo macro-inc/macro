@@ -57,11 +57,20 @@ pub trait PropertiesService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
     /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Tag properties are restricted to the viewer's own and their teams' definitions.
     fn get_entity_properties(
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, PropertiesErr>> + Send;
+
+    /// Get the tag sets visible to a caller — their personal set plus their
+    /// teams' sets — with options attached.
+    fn list_caller_tag_sets(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, PropertiesErr>> + Send;
 
     /// Get all properties attached to multiple entities, keyed by entity id and type.
     fn get_entity_properties_batch(

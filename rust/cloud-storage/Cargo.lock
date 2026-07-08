@@ -215,6 +215,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_search",
+ "models_soup",
  "non_empty",
  "notification",
  "prompt",
@@ -8694,6 +8695,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "document_sub_type",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
