@@ -2840,10 +2840,13 @@
       "models_entity_access_management",
       "models_pagination",
       "models_permissions",
+      "models_properties",
       "non_empty",
       "prompt",
+      "properties_db_client",
       "s3_key",
       "sqs_client",
+      "system_properties",
       "unfurl",
       "workspace-hack"
     ],
