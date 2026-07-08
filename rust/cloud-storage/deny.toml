@@ -195,6 +195,7 @@ deny = [
     "workspace-hack",          # cargo-hakari generated crate
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
+    "channels",                  # Dev logging only
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
