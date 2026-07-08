@@ -446,6 +446,45 @@ type GraphqlSoupCrmCompany {
 	notifications: [GraphqlSoupNotification!]!
 }
 
+enum GraphqlSoupDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String/text values.
+	"""
+	STRING
+	"""
+	Select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	Select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	Tag property - user- or team-scoped colored labels (always multi-select).
+	"""
+	TAG
+	"""
+	Entity reference property.
+	"""
+	ENTITY
+	"""
+	Link value Property.
+	"""
+	LINK
+}
+
 type GraphqlSoupDocument {
 	id: ID!
 	name: String!
@@ -631,7 +670,7 @@ type GraphqlSoupProperty {
 	"""
 	propertyDefinitionId: ID!
 	displayName: String!
-	dataType: String!
+	dataType: GraphqlSoupDataType!
 	isMultiSelect: Boolean!
 	specificEntityType: String
 	isSystem: Boolean!
@@ -644,8 +683,19 @@ GraphQL entity reference stored in a property value.
 """
 type GraphqlSoupPropertyEntityReference {
 	entityId: String!
-	entityType: String!
+	entityType: GraphqlSoupPropertyEntityType!
 	specificMessageId: ID
+}
+
+enum GraphqlSoupPropertyEntityType {
+	CHANNEL
+	CHAT
+	COMPANY
+	DOCUMENT
+	PROJECT
+	TASK
+	THREAD
+	USER
 }
 
 """
