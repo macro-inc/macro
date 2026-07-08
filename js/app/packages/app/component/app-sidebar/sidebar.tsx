@@ -284,13 +284,8 @@ type AppSidebarProps = {
 };
 
 type SidebarHotkeyDeps = {
-  links: () => SidebarItem[];
-  hotkeyVisible: () => boolean;
-  setHotkeyVisible: (visible: boolean) => void;
-  resetHotkeysState: VoidFunction;
   isSlim: () => boolean;
   onOpenChange: (open: boolean) => void;
-  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'];
 };
 
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
@@ -349,16 +344,85 @@ function navigateToSidebarView(args: {
 }
 
 const registerSidebarHotkeys = ({
-  links,
   isSlim,
   onOpenChange,
-  openWithSplit,
-  hotkeyVisible,
-  setHotkeyVisible,
-  resetHotkeysState,
 }: SidebarHotkeyDeps) => {
-  const debounceResetHotkeysState = debounce(resetHotkeysState, 2000);
-  const debounceSetHotkeyVisible = debounce(() => setHotkeyVisible(true), 200);
+  registerHotkey({
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.inviteTeam,
+    description: 'Send Invites',
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      setInviteModalOpen(true);
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkey: 'cmd+.',
+    scopeId: 'global',
+    hotkeyToken: TOKENS.global.toggleSidebar,
+    description: 'Toggle sidebar and side panels',
+    runWithInputFocused: true,
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      const show = isSlim();
+      onOpenChange(show);
+      setAllSidePanelsOpen(show);
+      return true;
+    },
+  });
+};
+
+/**
+ * Whether the "g" leader key is currently awaiting a destination key. Lives
+ * at module scope so it can drive the hint overlay on `AppSidebar`'s nav
+ * icons even though the registration below is owned by `GoToHotkeys`, which
+ * stays mounted regardless of whether the sidebar itself is visible.
+ */
+const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
+
+const resetGoToHotkeysState = () => {
+  setGoToHotkeyVisible(false);
+  // To prevent the next key from triggering the hotkey handler,
+  // we reset the pressed keys state and exit the command scope
+  clearPressedKeys();
+  activateClosestDOMScope();
+};
+
+/**
+ * Registers the "g" leader key and the per-link "go to" nav hotkeys (e.g.
+ * "g i" for inbox). Rendered unconditionally from `Layout` — unlike
+ * `AppSidebar`, which unmounts on full-cover routes like settings — so these
+ * shortcuts keep working everywhere in the app.
+ */
+export const GoToHotkeys = () => {
+  const { openWithSplit } = useSplitLayout();
+
+  const homeViewEnabled = useFeatureFlag('enable-home-view', {
+    enabledOverride: ENABLE_HOME_OVERRIDE,
+  });
+
+  const links = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links;
+  });
+
+  const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
+  const debounceSetHotkeyVisible = debounce(
+    () => setGoToHotkeyVisible(true),
+    200
+  );
 
   // Register 'g' as a leader key that activates the global GO_TO command scope
   registerHotkey({
@@ -389,7 +453,7 @@ const registerSidebarHotkeys = ({
     // If a hotkey is going to be fired, but the hotkeys are not
     // visible, then it's not a sidebar nav hotkey and we can
     // ignore it and reset our visible state
-    if (!hotkeyVisible()) {
+    if (!goToHotkeyVisible()) {
       debounceSetHotkeyVisible.clear();
       return false;
     }
@@ -403,36 +467,10 @@ const registerSidebarHotkeys = ({
       return false;
     }
 
-    resetHotkeysState();
+    resetGoToHotkeysState();
     debounceResetHotkeysState.clear();
 
     return true;
-  });
-
-  registerHotkey({
-    scopeId: 'global',
-    hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Send Invites',
-    keyDownHandler: (e) => {
-      e?.preventDefault();
-      setInviteModalOpen(true);
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkey: 'cmd+.',
-    scopeId: 'global',
-    hotkeyToken: TOKENS.global.toggleSidebar,
-    description: 'Toggle sidebar and side panels',
-    runWithInputFocused: true,
-    keyDownHandler: (e) => {
-      e?.preventDefault();
-      const show = isSlim();
-      onOpenChange(show);
-      setAllSidePanelsOpen(show);
-      return true;
-    },
   });
 
   // Register navigation shortcuts in the global GO_TO command scope.
@@ -442,8 +480,8 @@ const registerSidebarHotkeys = ({
     const disposers = links().map((link) => {
       const openSidebarView = (e?: KeyboardEvent) => {
         e?.preventDefault();
-        if (hotkeyVisible()) {
-          resetHotkeysState();
+        if (goToHotkeyVisible()) {
+          resetGoToHotkeysState();
           debounceResetHotkeysState.clear();
         }
 
@@ -489,6 +527,8 @@ const registerSidebarHotkeys = ({
       }
     });
   });
+
+  return null;
 };
 
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
@@ -707,7 +747,6 @@ const PROMOTED_SETTINGS_TABS: SettingsTab[] = [
 ];
 
 export const AppSidebar = (props: AppSidebarProps) => {
-  const layout = useSplitLayout();
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const callCtx = useCallContextOptional();
@@ -728,8 +767,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
     enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
   });
 
-  const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
-
   const visibleLinks = createMemo((): SidebarItem[] => {
     let links: SidebarItem[] = [...SIDEBAR_LINKS];
 
@@ -744,30 +781,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
     return links.filter((link) => !link.hiddenFromSidebar);
   });
-
-  const hotkeyLinks = createMemo((): SidebarItem[] => {
-    let links: SidebarItem[] = [...SIDEBAR_LINKS];
-
-    if (homeViewEnabled().enabled) {
-      links = [DASHBOARD_LINK, ...links];
-    }
-
-    if (ENABLE_CALLS()) {
-      const idx = links.findIndex((l) => l.id === 'channels');
-      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
-    }
-
-    return links;
-  });
-
-  const resetHotkeysState = () => {
-    setHotkeyVisible(false);
-
-    // To prevent the next key from triggering the hotkey handler,
-    // we reset the pressed keys state and exit the command scope
-    clearPressedKeys();
-    activateClosestDOMScope();
-  };
 
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
@@ -789,13 +802,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   registerSidebarHotkeys({
-    links: hotkeyLinks,
-    hotkeyVisible,
-    setHotkeyVisible,
-    resetHotkeysState,
     isSlim,
     onOpenChange: handleSidebarOpenChange,
-    openWithSplit: layout.openWithSplit,
   });
 
   return (
@@ -848,7 +856,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   component={link.id === 'mail' ? SidebarMailLink : SidebarLink}
                   {...link}
                   sidebarState={props.sidebarState ?? 'expanded'}
-                  hotkeyVisible={hotkeyVisible()}
+                  hotkeyVisible={goToHotkeyVisible()}
                 />
               </li>
             )}

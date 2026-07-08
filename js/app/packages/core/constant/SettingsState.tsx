@@ -1,13 +1,15 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { ROUTER_BASE } from '@app/constants/routerBase';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
+import { isSettingsPath, SETTINGS_PATH, toBaseRelative } from './settingsPath';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
+
+export { isSettingsPath };
 
 export type SettingsTab =
   | 'Account'
@@ -32,30 +34,8 @@ export type SettingsTab =
 // which case we fall back to DEFAULT_ROUTE.
 const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
 
-const SETTINGS_PATH = '/settings';
-
 const settingsPathFor = (tab: SettingsTab) =>
   `${SETTINGS_PATH}/${settingsTabToSlug(tab)}`;
-
-/**
- * Strip the router base from a `location.pathname` (which includes it, e.g.
- * `/app/settings`) so it can be compared to — and reused with — the
- * base-relative paths that `navigate()` and route definitions use.
- */
-const toBaseRelative = (pathname: string) => {
-  if (ROUTER_BASE === '/') return pathname;
-  if (pathname === ROUTER_BASE) return '/';
-  if (pathname.startsWith(`${ROUTER_BASE}/`)) {
-    return pathname.slice(ROUTER_BASE.length);
-  }
-  return pathname;
-};
-
-/** Whether a `location.pathname` (base included) is the settings route. */
-export const isSettingsPath = (pathname: string) => {
-  const path = toBaseRelative(pathname);
-  return path === SETTINGS_PATH || path.startsWith(`${SETTINGS_PATH}/`);
-};
 
 /**
  * Drop a settings split from a split-layout path, if present. Handles both the
