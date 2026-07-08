@@ -1,5 +1,6 @@
 import {
   AppSidebar,
+  GoToHotkeys,
   type SidebarState,
 } from '@app/component/app-sidebar/sidebar';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@app/component/sidebarVisibility';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
+import { setGlobalNavigate } from '@app/signal/splitLayout';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
@@ -16,7 +18,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
 import { makePersisted } from '@solid-primitives/storage';
-import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import {
+  type RouteSectionProps,
+  useLocation,
+  useNavigate,
+} from '@solidjs/router';
 import { cn } from '@ui';
 import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
@@ -98,6 +104,12 @@ function LayoutInner(props: RouteSectionProps) {
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
 
+  // Expose the router `navigate` at module scope so `openWithSplit` can escape
+  // the settings full-cover route even when called outside a router owner (e.g.
+  // from an async create-hotkey handler). See `globalNavigate` in splitLayout.
+  const navigate = useNavigate();
+  setGlobalNavigate(() => navigate);
+
   useAppSquishHandlers();
 
   // save last_path to cookie
@@ -142,6 +154,7 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
           <GlobalShortcuts />
           <Show when={!isMobile()}>
+            <GoToHotkeys />
             <Suspense>
               <FavoritesCommands />
               <CommandMenu />
