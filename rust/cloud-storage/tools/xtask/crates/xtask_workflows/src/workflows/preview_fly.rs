@@ -80,6 +80,13 @@ fn deploy() -> Job {
             "MACRO_STACK_SNAPSHOT_DIR",
             vars::PREVIEW_SNAPSHOT_VOLUME_DIR,
         ))
+        // No incremental in CI: incremental caches are what bloated the cache
+        // volume to 41G (making it the workspace's eviction victim — observed
+        // volume loss between runs), and sccache refuses to cache incremental
+        // compiles, so they also locked workspace crates out of sccache.
+        // Cargo's fingerprint reuse (what makes warm runs fast) is unaffected.
+        // Local run_local keeps incremental for the edit-rebuild loop.
+        .add_env(("CARGO_INCREMENTAL", "0"))
         .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume_with_cargo_target())
         // Namespace remote builder: persistent BuildKit layer cache across

@@ -19,6 +19,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP_NAME: macro-pr-${{ github.event.pull_request.number }}
       MACRO_STACK_SNAPSHOT_DIR: /home/runner/.cache/macro-preview-snapshots
+      CARGO_INCREMENTAL: '0'
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
