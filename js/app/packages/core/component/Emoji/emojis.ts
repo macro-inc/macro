@@ -1,3 +1,4 @@
+import GithubShortcodes from 'emojibase-data/en/shortcodes/github.json';
 import EmojiLib from 'emojilib';
 import Fuse from 'fuse.js';
 import { createMemo, createSignal } from 'solid-js';
@@ -7,70 +8,65 @@ import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
 export type SimpleEmoji = {
   emoji: string;
   slug: string;
+  shortcodes: string[];
   terms: string[];
 };
 
-/** custom aliases to make commonly used emojis easier to find */
-const EMOJI_ALIASES: Record<string, string> = {
-  '😀': 'smile',
-  '😃': 'laughing',
-  '😂': 'joy',
-  // unicode for the heart emoji is kind of stupid, need to write it like this
-  [String.fromCodePoint(0x2764, 0xfe0f)]: 'heart',
-};
-
-function resolveEmojiSlug(emoji: string): string | undefined {
-  if (EMOJI_ALIASES[emoji]) {
-    return EMOJI_ALIASES[emoji];
-  }
-  return EmojiLib[emoji]?.at(0);
+// emojibase appends FE0F variation selectors where unicode-emoji-json (and our
+// stored reactions) use the bare canonical form, so both sides of the shortcode
+// join drop FE0F. Emitted emoji strings always come from unicode-emoji-json.
+function fe0fInsensitiveKey(codepoints: string[]): string {
+  return codepoints.filter((hex) => hex !== 'FE0F').join('-');
 }
 
-function resolveEmojiTerms(emoji: string): string[] {
-  return EmojiLib[emoji] ?? [];
+const SHORTCODES_BY_KEY = new Map<string, string[]>(
+  Object.entries(GithubShortcodes).map(([hexcode, codes]) => [
+    fe0fInsensitiveKey(hexcode.split('-')),
+    Array.isArray(codes) ? codes : [codes],
+  ])
+);
+
+function emojiKey(emoji: string): string {
+  return fe0fInsensitiveKey(
+    [...emoji].map(
+      (char) => char.codePointAt(0)?.toString(16).toUpperCase() ?? ''
+    )
+  );
 }
 
-const ORDERED_EMOJI_DATA: SimpleEmoji[] = OrderedEmojiData.map((emoji) => {
-  return {
-    emoji: emoji,
-    slug: resolveEmojiSlug(emoji) ?? emoji,
-    terms: resolveEmojiTerms(emoji),
-  };
-});
+function buildEmoji(emoji: string): SimpleEmoji {
+  const terms = EmojiLib[emoji] ?? [];
+  const github = SHORTCODES_BY_KEY.get(emojiKey(emoji));
+  const shortcodes = github ?? [terms.at(0) ?? emoji];
+  return { emoji, slug: shortcodes[0], shortcodes, terms };
+}
+
+const ORDERED_EMOJI_DATA: SimpleEmoji[] = OrderedEmojiData.map(buildEmoji);
+
+const EMOJI_BY_CHAR = new Map(
+  ORDERED_EMOJI_DATA.map((entry) => [entry.emoji, entry])
+);
 
 const EMOJI_DATA_GROUPED = GroupedEmojiData.map((group) => {
   return {
     name: group.name,
-    emojis: group.emojis.map((emoji) => {
-      return {
-        emoji: emoji.emoji,
-        slug: resolveEmojiSlug(emoji.slug) ?? emoji.slug,
-        terms: resolveEmojiTerms(emoji.slug),
-      };
-    }),
+    emojis: group.emojis.map(
+      ({ emoji }) => EMOJI_BY_CHAR.get(emoji) ?? buildEmoji(emoji)
+    ),
   };
 });
 
-function _resolveEmojiFromUnicode(emoji: string): SimpleEmoji | undefined {
-  return ORDERED_EMOJI_DATA.find(({ emoji: emoji_ }) => emoji_ === emoji);
+const EMOJI_BY_NAME = new Map<string, string>();
+for (const { emoji, shortcodes } of ORDERED_EMOJI_DATA) {
+  for (const name of shortcodes) {
+    if (!EMOJI_BY_NAME.has(name)) {
+      EMOJI_BY_NAME.set(name, emoji);
+    }
+  }
 }
 
 export function resolveEmoji(key: string): string | undefined {
-  const value = key.replaceAll(':', '');
-
-  if (Object.values(EMOJI_ALIASES).includes(value)) {
-    const found = Object.entries(EMOJI_ALIASES).find(
-      ([_, alias]) => alias === value
-    );
-
-    if (found) {
-      return found[0];
-    }
-  }
-
-  const found = ORDERED_EMOJI_DATA.find(({ terms }) => terms?.at(0) === value);
-
-  return found?.emoji;
+  return EMOJI_BY_NAME.get(key.replaceAll(':', '').toLowerCase());
 }
 
 export const useEmojiData = () => {
