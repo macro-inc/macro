@@ -1,0 +1,123 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/pulumi_preview_pr.rs
+name: Pulumi Preview on PR
+on:
+  pull_request:
+    branches:
+    - main
+    paths:
+    - rust/cloud-storage/**
+    - .github/workflows/pulumi_preview_pr.yml
+    - .github/workflows/reusable_preview_service.yml
+    - .github/actions/preview-cloud-storage-pulumi/**
+    - .github/services-config.json
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: namespace-profile-linux-small
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - id: changed-files
+      name: Get changed files
+      uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
+      with:
+        files: |-
+          rust/cloud-storage/**
+          .github/services-config.json
+    - id: detect
+      name: Detect affected services
+      run: |
+        services=()
+
+        # Read service config
+        config=$(cat .github/services-config.json)
+
+        # Check each service for changes
+        for service in $(echo "$config" | jq -r '.services | keys[]'); do
+          service_changed=false
+
+          # Get paths for this service
+          source_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].source_path // ""')
+          stack_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].stack_path // ""')
+          additional_paths=$(echo "$config" | jq -r --arg s "$service" '.services[$s].additional_paths[]? // ""')
+
+          # Check if any changed files match service paths. CHANGED_FILES is a
+          # space-separated list passed via env — never inlined into the script
+          # body, so a crafted filename can't inject shell syntax.
+          for file in $CHANGED_FILES; do
+            if [[ -n "$source_path" && "$file" == $source_path ]]; then
+              service_changed=true
+            elif [[ -n "$stack_path" && "$file" == $stack_path ]]; then
+              service_changed=true
+            elif [[ -n "$additional_paths" ]]; then
+              for path in $additional_paths; do
+                if [[ "$file" == $path ]]; then
+                  service_changed=true
+                fi
+              done
+            fi
+          done
+
+          if [[ "$service_changed" == "true" ]]; then
+            services+=("$service")
+          fi
+        done
+
+        if [ ${#services[@]} -eq 0 ]; then
+          echo "has-changes=false" >> $GITHUB_OUTPUT
+          echo "services=[]" >> $GITHUB_OUTPUT
+          echo "No services affected by changes"
+        else
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s -c .)
+          echo "services=${services_json}" >> $GITHUB_OUTPUT
+          echo "Services to preview: ${services[@]}"
+        fi
+      env:
+        CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+  preview-services:
+    needs:
+    - detect-changes
+    if: ${{ needs.detect-changes.outputs.has-changes == 'true' }}
+    name: Preview ${{ matrix.service }}
+    uses: ./.github/workflows/reusable_preview_service.yml
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+      fail-fast: false
+    with:
+      environment: dev
+      service-name: ${{ matrix.service }}
+      github-token: ${{ github.token }}
+    secrets: inherit
+  preview-status:
+    needs:
+    - detect-changes
+    - preview-services
+    if: always()
+    name: Preview Status
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Summary
+      run: |
+        if [[ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]]; then
+          echo "ℹ️ No services were affected by the changes in this PR"
+        elif [[ "${{ needs.preview-services.result }}" == "failure" ]]; then
+          echo "❌ One or more Pulumi previews failed"
+          exit 1
+        elif [[ "${{ needs.preview-services.result }}" == "success" ]]; then
+          echo "✅ All Pulumi previews completed successfully"
+        elif [[ "${{ needs.preview-services.result }}" == "skipped" ]]; then
+          echo "ℹ️ No services were affected by the changes in this PR"
+        fi
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true

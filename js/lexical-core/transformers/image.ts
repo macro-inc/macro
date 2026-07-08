@@ -1,10 +1,14 @@
 import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import { $createImageNode, $isImageNode, ImageNode } from '../nodes/ImageNode';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal transformer for images with constrained dimensions
 export const I_IMAGE_CONSTRAINED: ElementTransformer = {
-  dependencies: [ImageNode],
+  dependencies: [ImageNode, UnknownMentionNode],
   type: 'element',
   regExp: /<m-image>(.*?)<\/m-image>/,
   export: (node: LexicalNode) => {
@@ -32,9 +36,9 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
 
     return `<m-image>${data}</m-image>`;
   },
-  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
+  replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data = JSON.parse(match[1]);
+      const data = JSON.parse(match[1] ?? '');
       if (!data.url) throw new Error('Missing url field');
 
       const imageNode = $createImageNode({
@@ -51,6 +55,7 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
       parent.append(imageNode);
     } catch (e) {
       console.error('Failed to parse m-image:', e);
+      replaceElementWithUnknownMention(parent, 'Unknown Image');
     }
   },
 };

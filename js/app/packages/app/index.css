@@ -121,19 +121,34 @@
 
   --color-surface:         var(--b0);
   --color-drop-shadow:     oklch(0.15 0 0 / 0.04);
-  --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
-  --color-hover:           var(--b2);
-  --color-active:          var(--b1);
   --color-overlay:         oklch(var(--b1l) var(--b1c) var(--b1h) / 0.8);
+  
   --color-edge-muted:      var(--b3);
   --color-edge:            var(--b4);
-  --color-rail:            color-mix(in oklch, var(--b0) 75%, var(--c0));
+  --color-rail:            color-mix(in oklch, var(--b4) 90%, var(--c0));
 
   --color-ink:             var(--c0);
   --color-ink-muted:       var(--c1);
   --color-ink-extra-muted: var(--c2);
   --color-ink-disabled:    var(--c3);
   --color-ink-placeholder: var(--c4);
+
+  /* Below are our semantic surface tokens, which either pick up color overrides from the theme, or are set to --b0, which allows them to be controlled by our Layer system */
+  /* NOTE: these are NOT all wired up. We erased a lot of our semantic design tokens when moving to Layer system, these are part of a migration back towards semantic tokens. */
+  /* To wire them up you should change the generic '*-surface' class on a component to instead use one of these tokens. */
+  --color-page:            var(--theme-page, var(--b0));
+  --color-panel:           var(--theme-panel, var(--b0));
+  --color-inset:           var(--theme-inset, var(--b0));
+  --color-dialog:          var(--theme-dialog, var(--b0));
+  --color-menu:            var(--theme-menu, var(--b0));
+  --color-input:           var(--theme-input, var(--b0));
+  --color-message:         var(--theme-message, color-mix(in oklch, var(--b1) 50%, var(--b2)));
+  --color-hover:           var(--theme-hover, var(--b2));
+  --color-active:          var(--theme-active, var(--b1));
+  --color-button:          var(--theme-button, var(--b0));
+  /* Used for floating mobile navigation chrome */
+  --color-chrome:          var(--theme-chrome, color-mix(in oklch, var(--color-menu) 85%, var(--color-active)));
+  
 
   /* Below are hardcoded colors */
   --color-failure:     oklch(0.637 0.237 25.331);
@@ -228,13 +243,17 @@
   }
 }
 
+@custom-variant light-mode (&:where(html[data-theme-light="true"] *));
+@custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
+
+
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
    (e.g. `size-10 rounded-full` or `h-10 rounded-full px-3`). Defined as a
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  @apply bg-surface text-ink ring ring-edge shadow-md;
+  @apply bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 }
 
 [data-press-pulse] {
@@ -642,4 +661,26 @@ input[type="number"] {
 .chat-markdown-container pre {
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+/* Empty-state illustration entrance: a one-shot 3D rise that tilts the
+   graphic up into place from its base. The illustration's internal layers
+   stagger-fade on their own (see the <style> inside each SVG). Plays once
+   when the empty state mounts. */
+.empty-state-graphic {
+  animation: empty-state-rise 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center bottom;
+}
+@keyframes empty-state-rise {
+  from {
+    transform: perspective(620px) rotateX(15deg) translateY(9px) scale(0.97);
+  }
+  to {
+    transform: perspective(620px) rotateX(0deg) translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .empty-state-graphic {
+    animation: none;
+  }
 }

@@ -1,9 +1,11 @@
+import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
 } from '@property/api/converters';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type {
   Property,
   PropertyApiValues,
@@ -89,12 +91,11 @@ function optimisticUpdateSoupEntityProperty(
   value: SoupPropertyValue
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
-  // crmCompany has no properties; channel / call are also property-less.
+  // channel / call / foreign entities are property-less.
   if (
     !current ||
     current.tag === 'channel' ||
     current.tag === 'call' ||
-    current.tag === 'crmCompany' ||
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
     !current.data.properties
@@ -406,6 +407,61 @@ export function useRemoveEntityPropertyOptionMutation(
   }));
 }
 
+/**
+ * Task system property ids → the `property` name reported on `update_entity`.
+ * Non-task properties (custom properties, tags, ...) are not tracked here.
+ */
+const TRACKED_TASK_PROPERTIES: Record<string, string> = {
+  [SYSTEM_PROPERTY_IDS.STATUS]: 'status',
+  [SYSTEM_PROPERTY_IDS.PRIORITY]: 'priority',
+  [SYSTEM_PROPERTY_IDS.ASSIGNEES]: 'assignees',
+  [SYSTEM_PROPERTY_IDS.DUE_DATE]: 'due_date',
+};
+
+/**
+ * Emits a generic `update_entity` event for a saved task system property.
+ * Gated on the property being one of the task system properties, so saves on
+ * other entities/properties never fire. Call only on save success.
+ */
+function trackTaskPropertySave(
+  entityId: string,
+  propertyId: string,
+  apiValues: PropertyApiValues
+) {
+  const property = TRACKED_TASK_PROPERTIES[propertyId];
+  if (!property) return;
+
+  const detail: Record<string, unknown> = {};
+  if (property === 'status') {
+    const newStatus =
+      apiValues.valueType === 'SELECT_STRING'
+        ? (apiValues.values?.[0] ?? undefined)
+        : undefined;
+    if (!newStatus) return;
+    detail.newStatus = newStatus;
+    detail.completed = newStatus === PROPERTY_OPTION_IDS.STATUS.COMPLETED;
+  } else if (property === 'priority') {
+    detail.newPriority =
+      apiValues.valueType === 'SELECT_STRING'
+        ? (apiValues.values?.[0] ?? undefined)
+        : undefined;
+  } else if (property === 'assignees') {
+    detail.assigneeCount =
+      apiValues.valueType === 'ENTITY' ? (apiValues.refs?.length ?? 0) : 0;
+  } else if (property === 'due_date') {
+    detail.hasDueDate =
+      apiValues.valueType === 'DATE' && apiValues.value != null;
+  }
+
+  analytics.track('update_entity', {
+    entityType: 'task',
+    entityId,
+    property,
+    source: 'property_editor',
+    ...detail,
+  });
+}
+
 type BulkSaveEntityPropertiesParams = {
   properties: Array<{
     entityId: string;
@@ -503,6 +559,15 @@ export function useBulkSaveEntityPropertiesMutation(
               invalidateSoupEntity(p.entityId);
             }
           });
+          if (!error) {
+            for (const p of variables.properties) {
+              trackTaskPropertySave(
+                p.entityId,
+                getPropertyDefinitionId(p.property),
+                p.apiValues
+              );
+            }
+          }
         },
       },
       callbacks

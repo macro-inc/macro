@@ -50,12 +50,26 @@ export interface EntityPropertiesSectionProps {
   propertyFilter?: (property: Property) => boolean;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   showAddProperty?: boolean;
+  showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
+  /**
+   * Placeholder properties shown (and editable) even when the entity has no
+   * value row for them yet — e.g. builtin CRM company defaults. Fetched
+   * properties with the same definition id take precedence.
+   */
+  defaultProperties?: () => Property[];
 }
+
+const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'DOCUMENT',
+  'TASK',
+  'THREAD',
+  'PROJECT',
+]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
@@ -78,13 +92,30 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       )
   );
 
+  // Fetched properties merged with any default placeholders whose
+  // definition the entity doesn't carry yet.
+  const mergedProperties = createMemo(() => {
+    const fetched = properties();
+    const defaults = props.defaultProperties?.() ?? [];
+    if (defaults.length === 0) return fetched;
+    const fetchedDefinitionIds = new Set(
+      fetched.map((property) => property.propertyDefinitionId)
+    );
+    return [
+      ...fetched,
+      ...defaults.filter(
+        (property) => !fetchedDefinitionIds.has(property.propertyDefinitionId)
+      ),
+    ];
+  });
+
   const filteredPinnedProperties = createMemo(() => {
     const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
     const pinnedIds = props.pinnedPropertyIds?.() ?? [];
     const usesPinnedFilter =
       props.defaultPinnedPropertyIds !== undefined ||
       props.pinnedPropertyIds !== undefined;
-    const pinned = properties().filter((property) => {
+    const pinned = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
         return false;
       }
@@ -197,7 +228,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           <Show
             when={
               tagsFlag().enabled &&
-              (props.entityType === 'DOCUMENT' || props.entityType === 'TASK')
+              props.showTags !== false &&
+              TAGGABLE_ENTITY_TYPES.has(props.entityType)
             }
           >
             <div class="mb-2 flex items-center gap-3">

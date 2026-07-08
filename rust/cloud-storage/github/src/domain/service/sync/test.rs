@@ -287,8 +287,11 @@ struct StubSyncRepo {
     tasks: Mutex<HashMap<String, HashSet<String>>>,
     /// Maps (installation_id, normalized team_slug, team_task_id) -> task ID.
     team_task_references: Mutex<HashMap<(String, String, i32), MacroTaskId>>,
-    /// Maps github_user_id -> macro_id for installation event lookups.
-    github_links: Mutex<HashMap<String, String>>,
+    /// Maps github_user_id -> macro_ids for installation event lookups.
+    ///
+    /// A github_user_id may map to multiple Macro users because multiple Macro
+    /// users can share one GitHub account.
+    github_links: Mutex<HashMap<String, Vec<String>>>,
     /// Maps lowercase github login -> macro_ids for mention lookups.
     github_login_links: Mutex<HashMap<String, Vec<String>>>,
     /// Maps macro_id -> team_ids for installation event lookups.
@@ -319,7 +322,9 @@ impl StubSyncRepo {
         self.github_links
             .lock()
             .unwrap()
-            .insert(github_user_id.to_string(), macro_id.to_string());
+            .entry(github_user_id.to_string())
+            .or_default()
+            .push(macro_id.to_string());
         self
     }
 
@@ -461,16 +466,18 @@ impl GithubSyncRepo for StubSyncRepo {
         Ok(resolved)
     }
 
-    async fn get_macro_id_by_github_user_id(
+    async fn get_macro_ids_by_github_user_ids(
         &self,
-        github_user_id: &str,
-    ) -> Result<Option<String>, Self::Err> {
-        Ok(self
-            .github_links
-            .lock()
-            .unwrap()
-            .get(github_user_id)
-            .cloned())
+        github_user_ids: &[String],
+    ) -> Result<HashMap<String, Vec<String>>, Self::Err> {
+        let links = self.github_links.lock().unwrap();
+        Ok(github_user_ids
+            .iter()
+            .filter_map(|github_user_id| {
+                let macro_ids = links.get(github_user_id)?.clone();
+                Some((github_user_id.clone(), macro_ids))
+            })
+            .collect())
     }
 
     async fn get_macro_ids_by_github_logins(
@@ -3976,6 +3983,48 @@ async fn review_requested_notifies_only_mapped_reviewer_in_team() {
     assert_eq!(
         content.get("displayName").and_then(|value| value.as_str()),
         Some("my-org/my-repo#42")
+    );
+}
+
+#[tokio::test]
+async fn review_requested_fans_out_to_all_macro_users_sharing_reviewer_github_account() {
+    // The requested reviewer's GitHub account (id 333) is shared by two Macro
+    // users, both of whom are members of the source team. The notification
+    // should fan out to both of them.
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(
+            team_id,
+            vec![
+                "macro|alice@user.com",
+                "macro|bob@user.com",
+                "macro|bob2@user.com",
+            ],
+        )
+        .with_github_link("222", "macro|alice@user.com")
+        .with_github_link("333", "macro|bob@user.com")
+        .with_github_link("333", "macro|bob2@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((333, "bob-gh")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "expected only the review-requested notification"
+    );
+
+    let request = &requests[0];
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_review_requested");
+    assert_eq!(
+        notification_request_recipients(request),
+        vec![
+            "macro|bob2@user.com".to_string(),
+            "macro|bob@user.com".to_string(),
+        ]
     );
 }
 

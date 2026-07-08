@@ -68,11 +68,11 @@ VALUES
 
 -- Direct share: thread 101 shared with user1
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-VALUES ('20000101-0000-0000-0000-000000000101'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view');
+VALUES ('20000101-0000-0000-0000-000000000101'::uuid, 'email_thread', 'macro|user1@test.com', 'user', 'view');
 
 -- Denormalized row: thread 102 inherits access from the shared project
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
-VALUES ('20000102-0000-0000-0000-000000000102'::uuid, 'thread', 'macro|user1@test.com', 'user', 'view', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
+VALUES ('20000102-0000-0000-0000-000000000102'::uuid, 'email_thread', 'macro|user1@test.com', 'user', 'view', 'cccccccc-cccc-cccc-cccc-cccccccccccc');
 
 -- == Messages for user2's threads ==
 INSERT INTO email_messages (

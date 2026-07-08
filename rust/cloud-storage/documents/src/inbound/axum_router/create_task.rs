@@ -102,7 +102,8 @@ pub async fn create_task_handler<
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");
         DocumentError::Internal(e.into())
-    })?;
+    })?
+    .into_inner();
 
     Ok(Json(CreateTaskResponse {
         document_id,

@@ -745,7 +745,7 @@ async fn post_message_route_uses_entity_access_and_mutation_service() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert_eq!(posts[0].2.content, "hello");
 }
@@ -1728,7 +1728,7 @@ impl ChannelService for ActivityService {
             .push((actor.clone(), channel_id, activity_type));
         Ok(Activity {
             id: Uuid::nil(),
-            user_id: actor.to_storage_string(),
+            user_id: actor.as_ref().to_string(),
             channel_id,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -1789,7 +1789,7 @@ async fn post_activity_records_and_returns_activity() {
 
     let posts = posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].0.to_storage_string(), "macro|test@example.com");
+    assert_eq!(posts[0].0.as_ref(), "macro|test@example.com");
     assert_eq!(posts[0].1, channel_id);
     assert!(matches!(posts[0].2, ActivityType::View));
 }

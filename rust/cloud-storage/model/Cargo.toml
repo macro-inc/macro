@@ -12,7 +12,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
-macro_user_id = { path = "../macro_user_id" }
+macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type", features = ["utoipa"] }
 model_user = { path = "../model_user", features = ["axum"] }

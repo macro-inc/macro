@@ -1069,6 +1069,30 @@ export interface DocumentSearchResult {
   score?: number | null;
 }
 /**
+ * Apply AI-driven edits to a Macro document in place -- rewriting, inserting, formatting, or restructuring. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
+ */
+export interface EditDocument {
+  /**
+   * The ID of the document to edit.
+   */
+  document_id: string;
+  /**
+   * Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up.
+   */
+  instructions: string;
+}
+export interface EditDocumentResponse {
+  /**
+   * If present, invoke this tool again with this information appended to `instructions`.
+   */
+  clarification?: string | null;
+  /**
+   * A short outcome for the model -- whether the edit was applied or
+   * interrupted -- never the underlying list of edit operations.
+   */
+  summary: string;
+}
+/**
  * A recipient for an email.
  */
 export interface EmailRecipient {
@@ -1810,9 +1834,10 @@ export interface ProjectMetadata {
   viewed_at?: string | null;
 }
 /**
- * ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update the project record
- * every time the project updates (specifically for updated_at and viewed_at)
+ * ProjectSearchResponseItem object with project metadata we fetch from macrodb.
+ * The index carries created_at/updated_at for ranking, but viewed_at is
+ * per-user and deleted_at changes without a reindex, so metadata stays
+ * database-sourced.
  */
 export interface ProjectSearchResponseItemWithMetadata {
   created_at: string;

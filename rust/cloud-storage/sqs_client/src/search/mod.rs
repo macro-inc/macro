@@ -6,6 +6,7 @@ use crate::{
         chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, DocumentPropertiesUpdate, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadBatchMessage, EmailThreadMessage},
+        project::{RemoveProject, UpsertProject},
     },
 };
 use anyhow::Context;
@@ -18,6 +19,7 @@ pub mod channel;
 pub mod chat;
 pub mod document;
 pub mod email;
+pub mod project;
 
 use crate::{MAX_BATCH_SIZE, PrimaryId};
 
@@ -86,6 +88,9 @@ pub enum SearchQueueMessage {
     // Call
     CallRecord(CallRecordMessage),
     RemoveCallRecord(RemoveCallRecord),
+    // Project
+    UpsertProject(UpsertProject),
+    RemoveProject(RemoveProject),
 
     // User
     RemoveUserProfile(String),
@@ -122,6 +127,8 @@ impl PrimaryId for SearchQueueMessage {
                 message.channel_id,
                 message.call_id.clone().unwrap_or_default()
             ),
+            SearchQueueMessage::UpsertProject(message) => message.project_id.clone(),
+            SearchQueueMessage::RemoveProject(message) => message.project_id.clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
         }
@@ -151,6 +158,9 @@ impl SearchQueueMessage {
             // Calls
             SearchQueueMessage::CallRecord(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveCallRecord(_) => Operation::Remove,
+            // Projects
+            SearchQueueMessage::UpsertProject(_) => Operation::UpdateMetadata,
+            SearchQueueMessage::RemoveProject(_) => Operation::Remove,
             // Users
             SearchQueueMessage::RemoveUserProfile(_) => Operation::Remove,
         }

@@ -29,6 +29,7 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
             propertyFilter={(property) => property.isMetadata === true}
             getEmptyLabel={getEmailMetadataEmptyLabel}
             showAddProperty={false}
+            showTags={false}
           />
         </Suspense>
       </SidePanel.Section>

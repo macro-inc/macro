@@ -93,9 +93,12 @@ function SimilarTasksInner(props: {
         </button>
         <Show when={expanded()}>
           <ListLayoutProvider ref={listRef}>
+            {/* Named `u-list` container so the task rows pick up the narrow
+                (<=840px) container queries and collapse status/priority/
+                assignee pills to icons, leaving the width for task names. */}
             <div
               ref={setListRef}
-              class="flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
+              class="@container/u-list flex max-h-48 flex-col overflow-y-auto scrollbar-hidden"
             >
               <For each={entities()}>
                 {(entity) => (

@@ -3,10 +3,12 @@ use crate::api::search::simple::SearchError;
 use email_db_client::contacts::get::ThreadContactsMap;
 use indexmap::IndexMap;
 use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
+use models_properties::{EntityReference, EntityType};
 use models_search::email::{
     EmailSearchParticipant, EmailSearchResponseItem, EmailSearchResponseItemWithMetadata,
     EmailSearchResult,
 };
+use models_soup::SoupProperty;
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
@@ -71,10 +73,41 @@ pub(in crate::api::search) async fn enrich_emails(
     )
     .map_err(SearchError::InternalError)?;
 
+    // Fetch thread properties (e.g. tags) so rows can render and re-check
+    // them, mirroring the documents enrichment.
+    let thread_entity_refs: Vec<EntityReference> = thread_ids
+        .iter()
+        .map(|id| EntityReference::new(id.to_string(), EntityType::Thread))
+        .collect();
+    let properties_map: HashMap<String, Vec<SoupProperty>> =
+        properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+            &ctx.db,
+            &thread_entity_refs,
+        )
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to fetch thread properties"))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, props)| {
+            (
+                id,
+                props
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(results, thread_histories, message_senders_map, contacts_map)
-            .map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(
+        results,
+        thread_histories,
+        message_senders_map,
+        contacts_map,
+        properties_map,
+    )
+    .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -84,6 +117,7 @@ pub fn construct_search_result(
     thread_histories: HashMap<Uuid, ThreadHistoryInfo>,
     message_senders: HashMap<Uuid, MessageSenderInfo>,
     contacts_map: ThreadContactsMap,
+    properties_map: HashMap<String, Vec<SoupProperty>>,
 ) -> anyhow::Result<Vec<EmailSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<EmailSearchResult>> = search_results
@@ -159,6 +193,10 @@ pub fn construct_search_result(
                     })
                     .unwrap_or_default();
 
+                let properties = properties_map
+                    .get(&entity_id.to_string())
+                    .cloned()
+                    .filter(|p| !p.is_empty());
                 Some(EmailSearchResponseItemWithMetadata {
                     created_at: info.created_at,
                     updated_at: info.updated_at,
@@ -168,6 +206,7 @@ pub fn construct_search_result(
                     inbox_visible: info.inbox_visible,
                     is_draft: info.is_draft,
                     is_important: info.is_important,
+                    properties,
                     extra: EmailSearchResponseItem {
                         id: entity_id,
                         thread_id: entity_id,

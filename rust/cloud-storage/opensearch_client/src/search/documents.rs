@@ -5,6 +5,7 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
+        properties::{PROPERTIES_PATH, build_tag_filter},
         query::Keys,
     },
 };
@@ -53,9 +54,6 @@ pub enum DocumentSearchMode {
     /// Match a document by its name or its content.
     NameContent,
 }
-
-/// Nested path holding denormalized entity properties on the parent doc.
-const PROPERTIES_PATH: &str = "properties";
 
 /// A property-equality filter applied against the indexed `properties` nested
 /// field. Matches parents that have a nested entry whose `definition_id`
@@ -286,25 +284,6 @@ fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>
         NestedQuery::new(PROPERTIES_PATH, inner.build().into())
             .ignore_unmapped(true)
             .into(),
-    )
-}
-
-/// Build a `nested` query over `properties` matching parents that have any
-/// nested entry whose `values` contains one of `option_ids`. Unlike
-/// [`build_property_filter`] there is no `definition_id` constraint: tag option
-/// ids are globally unique, so this matches a tag regardless of which
-/// definition owns it. Returns `None` when there are no option ids.
-fn build_tag_filter<'a>(option_ids: &[String]) -> Option<QueryType<'a>> {
-    if option_ids.is_empty() {
-        return None;
-    }
-    Some(
-        NestedQuery::new(
-            PROPERTIES_PATH,
-            QueryType::terms(format!("{PROPERTIES_PATH}.values"), option_ids.to_vec()),
-        )
-        .ignore_unmapped(true)
-        .into(),
     )
 }
 

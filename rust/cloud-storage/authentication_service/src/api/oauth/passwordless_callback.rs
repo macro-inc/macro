@@ -9,7 +9,9 @@ use tower_cookies::Cookies;
 
 use crate::api::{
     context::ApiContext,
-    utils::{create_access_token_cookie, create_refresh_token_cookie},
+    utils::{
+        append_signed_up_param_if_new_user, create_access_token_cookie, create_refresh_token_cookie,
+    },
 };
 use fusionauth::error::FusionAuthClientError;
 
@@ -156,5 +158,21 @@ pub async fn handler(
             .into_response());
     }
 
-    Ok(Redirect::to(&passwordless_response.state.redirect_uri).into_response())
+    let mut redirect_uri = passwordless_response.state.redirect_uri.clone();
+    match url::Url::parse(&redirect_uri) {
+        Ok(mut url) => {
+            append_signed_up_param_if_new_user(
+                &ctx.macro_cache_client,
+                &passwordless_response.user.email.to_lowercase(),
+                &mut url,
+            )
+            .await;
+            redirect_uri = url.to_string();
+        }
+        Err(e) => {
+            tracing::error!(error=?e, "unable to parse redirect uri for signup attribution");
+        }
+    }
+
+    Ok(Redirect::to(&redirect_uri).into_response())
 }

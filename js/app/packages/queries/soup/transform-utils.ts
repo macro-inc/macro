@@ -398,6 +398,7 @@ export const useSearchResponseItemMapper = () => {
             participants,
             search,
             snippet: result.snippet ?? undefined,
+            properties: result.properties ?? undefined,
           },
         ];
       }
@@ -447,6 +448,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             projectId: result.metadata?.parent_project_id ?? undefined,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -549,6 +551,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       projectId: item.data.parentId ?? undefined,
       type: item.tag,
       name: item.data.name || 'New Project',
+      properties: item.data.properties,
     }))
     .with({ tag: 'emailThread' }, (item) => {
       const participants = item.data.participants?.map((p) => ({
@@ -773,6 +776,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
           domain: d.domain,
           createdAt: d.createdAt,
         })),
+        properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
     .exhaustive();

@@ -1,4 +1,3 @@
-import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
@@ -100,11 +99,6 @@ const createBlock = async (spec: {
     return;
   }
 
-  analytics.track('create_entity', {
-    entityType: blockName,
-    source: 'launcher',
-  });
-
   // If we are creating a new markdown document "from scratch" then we can let
   // them instantly start editing
   const createMdParams =
@@ -168,9 +162,12 @@ const createComponent = async (spec: {
 
 export function runCreateAction(
   blockName: BlockName | BlockAlias,
-  options: { shouldInsert?: boolean } = {}
+  options: { shouldInsert?: boolean; source?: string } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
+  // Creation analytics fire at the data-layer chokepoints (create.ts /
+  // projects.ts); `source` just attributes which surface initiated it.
+  const source = options.source ?? 'create_menu';
 
   switch (blockName) {
     case 'md':
@@ -182,6 +179,7 @@ export function runCreateAction(
             title: '',
             content: '',
             projectId: undefined,
+            source,
           }),
         shouldInsert,
       });
@@ -194,6 +192,7 @@ export function runCreateAction(
           const result = await createCanvasFileFromJsonString({
             json: JSON.stringify({ nodes: [], edges: [] }),
             title: 'New Canvas',
+            source,
           });
           if ('error' in result) return;
           return result.documentId ?? undefined;
@@ -215,6 +214,7 @@ export function runCreateAction(
           createSnippet({
             title: '',
             content: '',
+            source,
           }),
         shouldInsert,
       });
@@ -240,7 +240,7 @@ export function runCreateAction(
       createBlock({
         blockName: 'chat',
         createFn: async () => {
-          const result = await createChat();
+          const result = await createChat(undefined, { source });
           if ('error' in result) {
             return;
           }
@@ -252,7 +252,7 @@ export function runCreateAction(
     case 'project':
       createBlock({
         blockName: 'project',
-        createFn: () => createProject({ name: 'New Folder' }),
+        createFn: () => createProject({ name: 'New Folder', source }),
         shouldInsert,
       });
       return;
@@ -265,6 +265,7 @@ export function runCreateAction(
             code: 'print("Hello, World!")',
             extension: 'py',
             title: 'New Code File',
+            source,
           });
           if (result.isErr()) return;
           return result.value.documentId ?? undefined;

@@ -3,6 +3,7 @@ import {
   ContextMenuContent,
   MenuItem,
   MenuSeparator,
+  SubTrigger,
 } from '@core/component/ContextMenu';
 import {
   EntityIcon,
@@ -253,13 +254,32 @@ function SplitLabelContextMenu(props: ParentProps) {
   });
   const hasActions = createMemo(() => sections().length > 0);
 
-  const item = (action: SplitFileMenuAction) => (
-    <MenuItem
-      icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-      text={action.label}
-      onClick={() => action.action()}
-    />
-  );
+  const item = (action: SplitFileMenuAction) => {
+    const children = () => action.children?.filter(Boolean) ?? [];
+
+    return (
+      <Show
+        when={children().length > 0}
+        fallback={
+          <MenuItem
+            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+            text={action.label}
+            onClick={() => action.action?.()}
+          />
+        }
+      >
+        <ContextMenu.Sub>
+          <SubTrigger
+            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+            text={action.label}
+          />
+          <ContextMenuContent submenu width="w-fit">
+            <For each={children()}>{item}</For>
+          </ContextMenuContent>
+        </ContextMenu.Sub>
+      </Show>
+    );
+  };
 
   const openOnDoubleClick = (e: MouseEvent) => {
     if (!hasActions()) return;

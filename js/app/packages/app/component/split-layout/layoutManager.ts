@@ -7,10 +7,13 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { isMobile } from '@core/mobile/isMobile';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
+import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -83,6 +86,27 @@ function getAliasOrType(content: SplitContent): string {
     : content.aliasContext?.alias || content.type;
 }
 
+/**
+ * The `type/id` URL pair for a split's content. The docked settings panel is
+ * stored internally as the `component/settings` content, but it serializes as
+ * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
+ * settings page is open — matching the full-page `/settings/:tab` route. Reads
+ * the active-tab signal, so the URL updates reactively as the tab changes.
+ *
+ * On mobile the panel keeps its internal `component/settings` form instead:
+ * mobile serializes only the foreground split, and a bare `settings/<tab>`
+ * path would be claimed by the full-page `/settings/:tab` route — unmounting
+ * the split layout whose back button / swipe-back gesture are the reason
+ * settings docks into a split on mobile in the first place.
+ */
+function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component' && content.id === 'settings') {
+    if (isMobile()) return ['component', 'settings'];
+    return ['settings', settingsTabToSlug(activeTabId())];
+  }
+  return [getAliasOrType(content), content.id].map(String);
+}
+
 function keyOfSplitContent(s: SplitContent): SplitKey {
   return `${s.type}:${s.id}`;
 }
@@ -135,6 +159,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {
@@ -809,8 +834,7 @@ export function createSplitLayout(
   const getUrlSegments = () => {
     return state.splits
       .filter((s) => !isExcluded(s))
-      .flatMap((s) => [getAliasOrType(s.content), s.content.id])
-      .map(String);
+      .flatMap((s) => contentUrlSegments(s.content));
   };
 
   const getUrl = () => {
@@ -925,9 +949,8 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () =>
-        [getAliasOrType(content()), content().id].map(String),
-      getUrl: () => getAliasOrType(content()) + '/' + content().id,
+      getUrlSegments: () => contentUrlSegments(content()),
+      getUrl: () => contentUrlSegments(content()).join('/'),
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,

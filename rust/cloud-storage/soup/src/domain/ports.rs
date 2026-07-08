@@ -4,6 +4,7 @@ use crate::domain::models::{
 };
 use either::Either;
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use serde::Serialize;
@@ -37,10 +38,12 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
 
-    /// Populates properties for a slice of SoupItems.
-    fn populate_properties(
+    /// Populates properties for a slice of SoupItems. The user id scopes which
+    /// tag properties are visible (the caller's own and their team's).
+    fn populate_properties<'a>(
         &self,
-        items: &mut [SoupItem],
+        user_id: MacroUserIdStr<'a>,
+        items: &'a mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Fetches expanded soup items with group metadata.

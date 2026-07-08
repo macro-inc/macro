@@ -6,6 +6,7 @@ export const EntityType = {
   email: 'email',
   channel_message: 'channel_message',
   automation: 'automation',
+  channel_thread: 'channel_thread',
 } as const;
 
 export type EntityType = (typeof EntityType)[keyof typeof EntityType];

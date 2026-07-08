@@ -2,11 +2,22 @@ import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import type { Awareness } from './awareness';
+import { BroadcastChannelChatter, type Chatter, noopChatter } from './chatter';
 import { logSyncService } from './logger';
-import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
+import {
+  LoroStateTag,
+  type StateUpdate,
+  type SyncEngineManager,
+} from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 
@@ -31,22 +42,17 @@ export type SyncSources = {
 };
 
 export type SyncEngineParams<S extends GenericRootSchema, D> = {
-  loroManager: LoroManager<S>;
+  loroManager: SyncEngineManager<S>;
   awareness: Awareness<D>;
   syncs: SyncSources;
   bindings: EngineBindings<S>;
   readonly?: () => boolean;
   onRunningChange?: (v: boolean) => void;
   snapshotStore?: LoroSnapshotStore;
+  makeChatter?: (documentId: string) => Chatter;
 };
 
 type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
-
-const CROSS_TAB_CHANNEL_PREFIX = 'macro-loro-';
-
-type CrossTabMessage =
-  | { type: 'update'; data: RawUpdate }
-  | { type: 'awareness'; data: RawUpdate };
 
 export class SyncEngine<S extends GenericRootSchema, D> {
   private _isRunning = false;
@@ -55,7 +61,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     return this._isRunning;
   }
 
-  private readonly loroManager: LoroManager<S>;
+  private readonly loroManager: SyncEngineManager<S>;
   private readonly awareness: Awareness<D>;
   private readonly syncs: SyncSources;
   private readonly bindings: EngineBindings<S>;
@@ -66,7 +72,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly snapshotStore?: LoroSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
-  private crossTabChannel?: BroadcastChannel;
+  private readonly makeChatter: (documentId: string) => Chatter;
+  private chatter?: Chatter;
+  private chatterUnsub?: () => void;
 
   constructor({
     loroManager,
@@ -76,6 +84,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     readonly = () => false,
     onRunningChange = () => {},
     snapshotStore,
+    makeChatter = () => noopChatter(),
   }: SyncEngineParams<S, D>) {
     this.loroManager = loroManager;
     this.awareness = awareness;
@@ -85,6 +94,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.defaultSnapshotThunk = syncs.live.requestSnapshot;
     this.onRunningChange = onRunningChange;
     this.snapshotStore = snapshotStore;
+    this.makeChatter = makeChatter;
   }
 
   private log(
@@ -103,35 +113,28 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   public start(): boolean {
     if (this._isRunning) return true; // already running — idempotent
 
-    if (!this.loroManager.isInitialized()) {
+    if (!this.loroManager.initialized) {
       this.log('warn', 'engine.start: manager not initialized, aborting');
       return false;
     }
 
     this.unsubscribe?.();
-    this.unsubscribe = this.loroManager
-      .getDoc()
-      .subscribeLocalUpdates((update) => {
-        this.handleLocalUpdates(update);
-      });
+    this.unsubscribe = this.loroManager.doc.subscribeLocalUpdates((update) => {
+      this.handleLocalUpdates(update);
+    });
 
-    this.crossTabChannel = new BroadcastChannel(
-      `${CROSS_TAB_CHANNEL_PREFIX}${this.syncs.live.documentId}`
+    this.chatter = this.makeChatter(this.syncs.live.documentId);
+    this.chatterUnsub = this.chatter.subscribe((msg) =>
+      match(msg)
+        .with({ type: 'update' }, (m) => void this.handleRemoteUpdate(m.data))
+        .with({ type: 'awareness' }, (m) =>
+          this.awareness.importRemoteAwareness(m.data)
+        )
+        .exhaustive()
     );
-    this.crossTabChannel.onmessage = (e: MessageEvent<CrossTabMessage>) => {
-      match(e.data)
-        .with(
-          { type: 'update' },
-          (msg) => void this.handleRemoteUpdate(msg.data)
-        )
-        .with({ type: 'awareness' }, (msg) =>
-          this.awareness.importRemoteAwareness(msg.data)
-        )
-        .exhaustive();
-    };
 
     this.syncs.live.listen((event) => this.handleSourceEvent(event));
-    this.syncs.live.registerPeerId(this.loroManager.getPeerId());
+    this.syncs.live.registerPeerId(this.loroManager.peerId);
 
     if (this.snapshotStore && this.snapshotInterval === undefined) {
       this.snapshotInterval = setInterval(
@@ -150,8 +153,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
 
-    this.crossTabChannel?.close();
-    this.crossTabChannel = undefined;
+    this.chatterUnsub?.();
+    this.chatter?.close();
+    this.chatterUnsub = undefined;
+    this.chatter = undefined;
 
     if (this.snapshotInterval !== undefined) {
       clearInterval(this.snapshotInterval);
@@ -173,7 +178,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
       if (syncResult.isErr()) {
         this.log('error', 'syncStateToLoro: failed, resetting engine', {
-          err: syncResult.error,
+          err: syncResult,
         });
         this.reset();
       }
@@ -207,7 +212,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       const resetResult = await this.loroManager.reset(snapshot.value);
       if (resetResult.isErr()) {
         this.log('error', 'engine.reset: loro manager reset failed', {
-          err: resetResult.error,
+          err: resetResult,
         });
         return;
       }
@@ -234,17 +239,14 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     const awarenessUpdate = this.awareness.getEncodedLocalAwareness();
     if (!awarenessUpdate) return;
     this.syncs.live.pushAwareness(awarenessUpdate);
-    this.crossTabChannel?.postMessage({
-      type: 'awareness',
-      data: awarenessUpdate,
-    });
+    this.chatter?.post({ type: 'awareness', data: awarenessUpdate });
   }
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
     this.log('debug', 'engine: local update, appending to WAL');
     void this.syncs.wal.append(update);
-    this.crossTabChannel?.postMessage({ type: 'update', data: update });
+    this.chatter?.post({ type: 'update', data: update });
   }
 
   private async persistSnapshot() {
@@ -253,7 +255,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     void this.syncs.wal.flush(); // unawaited
 
     try {
-      const doc = this.loroManager.getDoc();
+      const doc = this.loroManager.doc;
       this.log('debug', 'engine: persisting snapshot', { doc: doc.toJSON() });
       const snapshot = doc.export({
         mode: 'shallow-snapshot',
@@ -279,7 +281,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       await Promise.resolve();
       if (importResult.isErr()) {
         this.log('error', 'engine: failed to import remote update, resetting', {
-          err: importResult.error,
+          err: importResult,
         });
         this.reset();
         return;
@@ -306,7 +308,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           'info',
           'engine: reconnect, requesting updates since current version'
         );
-        this.requestAndHandleUpdatesSince(this.loroManager.getDoc().version());
+        this.requestAndHandleUpdatesSince(this.loroManager.doc.version());
         break;
     }
   }
@@ -319,8 +321,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       this.log('error', 'engine: requestUpdatesSince failed', {
-        err: updates.isErr() ? updates.error : 'update is undefined',
-        attempt,
+        err: 'error' in updates ? updates.error : 'update is undefined',
       });
       if (updates.isErr() && attempt < REQUEST_UPDATES_MAX_ATTEMPTS) {
         await new Promise((resolve) =>
@@ -357,10 +358,18 @@ export function createSyncEngine<
 ): ReactiveSyncEngine<S, D> {
   const [isRunning, setIsRunning] = createSignal(false);
 
-  const engine = new SyncEngine({ ...params, onRunningChange: setIsRunning });
+  const engine = new SyncEngine({
+    ...params,
+    onRunningChange: setIsRunning,
+    // In the browser, gossip local edits to other tabs of the same doc.
+    makeChatter:
+      params.makeChatter ?? ((id) => new BroadcastChannelChatter(id)),
+  });
   const { loroManager, awareness } = params;
 
-  createEffect(on(loroManager.state, (update) => engine.onStateUpdate(update)));
+  onCleanup(
+    loroManager.onStateChange((update) => engine.onStateUpdate(update))
+  );
   createEffect(on(awareness.local, () => engine.onLocalAwarenessChange()));
 
   return {

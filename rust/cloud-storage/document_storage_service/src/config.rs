@@ -23,6 +23,8 @@ env_vars! {
     pub struct OpensearchPassword;
     pub struct GithubSyncAppUrl;
     pub struct GithubSyncAppClientId;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
     pub struct LivekitServerUrl;
     pub struct LivekitApiKey;
     pub struct LivekitApiSecret;
@@ -38,7 +40,7 @@ env_vars! {
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     #[derive(Clone)]
-    pub struct DocumentPermissionJwtSecretKey;
+    pub struct DocumentPermissionJwt;
     pub struct GithubWebhookSecretKey;
     pub struct GithubSyncAppPemSecretKey;
     pub struct CalWebhookSecretKey;
@@ -92,6 +94,7 @@ pub struct Config {
     pub opensearch_password: OpensearchPassword,
     pub github_sync_app_url: GithubSyncAppUrl,
     pub github_sync_app_client_id: GithubSyncAppClientId,
+    pub kafka_brokers: KafkaBrokers,
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
@@ -136,7 +139,7 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key:
         LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
 
-    pub document_permission_jwt_secret_key: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
+    pub document_permission_jwt: DocumentPermissionJwt,
 
     pub livekit_transcription_agent_name: LivekitTranscriptionAgentName,
     pub internal_call_secret: InternalCallSecret,

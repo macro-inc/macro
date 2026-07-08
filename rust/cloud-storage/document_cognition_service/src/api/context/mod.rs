@@ -57,13 +57,14 @@ pub type DcsMemoryService =
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
 
-/// The AI projections service wired to the Postgres projection repo and the SQS
-/// materialization queue.
+/// The AI projections service wired to the Postgres projection repo, the SQS
+/// materialization queue, and the connection-gateway update notifier.
 pub type DcsAiProjectionService =
     ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
         ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
         sqs_client::SQS,
         ai_projections::outbound::agent_generator::AgentProjectionGenerator,
+        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier,
     >;
 
 /// Concrete MCP router state for DCS.

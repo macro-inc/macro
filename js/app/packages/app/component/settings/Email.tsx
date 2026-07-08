@@ -1,45 +1,41 @@
-import { toast } from '@core/component/Toast/Toast';
-import { match } from 'ts-pattern';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SIGNATURES,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { useEmail, useUserId } from '@core/context/user';
+import {
+  useAddInboxFlow,
+  useEmailLinks,
+  useEmailLinksStatus,
+} from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
-import {
-  type BackfillJob,
-  BackfillJobStatus,
-  type Link as EmailLink,
-  SyncStatus,
-} from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@core/context/user';
+import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
   getBackfillProgress,
   useBackfillJobsQuery,
 } from '@queries/email/backfill';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import {
-  useAddInboxFlow,
-  useEmailLinks,
-  useEmailLinksStatus,
-} from '@core/email-link';
-import {
-  AddInboxDialog,
-  openAddInboxDialog,
-  useAddInboxGate,
-} from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
-import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
+import {
+  type BackfillJob,
+  BackfillJobStatus,
+  type Link as EmailLink,
+  SyncStatus,
+} from '@service-email/generated/schemas';
+import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
+import { openAddInboxDialog } from '../AddInboxDialog';
 import { ConnectAction, StatusDot } from './integration-ui';
+import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 import {
   clearSignatureState,
   isSignatureExpanded,
@@ -59,7 +55,6 @@ export function EmailCard() {
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
-  const guardAddInbox = useAddInboxGate();
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -229,7 +224,7 @@ export function EmailCard() {
                   size="icon-sm"
                   depth={3}
                   aria-label="Add inbox"
-                  onClick={() => guardAddInbox(openAddInboxDialog)}
+                  onClick={openAddInboxDialog}
                 >
                   <PlusIcon class="size-4" />
                 </Button>
@@ -238,8 +233,6 @@ export function EmailCard() {
           </Show>
         </Show>
       </SettingsCard>
-
-      <AddInboxDialog />
 
       <Dialog
         open={removeTarget() !== null}
@@ -442,7 +435,9 @@ function InboxRow(props: {
                   props.hasCompletedBackfill
                 }
               >
-                <span class="text-xs text-ink-muted">Initial sync complete</span>
+                <span class="text-xs text-ink-muted">
+                  Initial sync complete
+                </span>
               </Match>
             </Switch>
           </Show>
@@ -518,4 +513,3 @@ function InboxRow(props: {
     </div>
   );
 }
-

@@ -39,10 +39,25 @@ export function SoupFiltersBar() {
       soup.setPreviewEntity(undefined);
       return;
     }
-    const focused = soup.focus.id();
+
+    let focused = soup.focus.id();
+
     if (!focused) {
-      return;
+      const allRows = soup.rows();
+
+      const firstEntityIndex = allRows.findIndex(
+        (row) => !row.getIsGrouped() && !row.getIsLoadMore()
+      );
+
+      if (firstEntityIndex === -1) return;
+
+      const result = soup.navigate.toIndex(firstEntityIndex);
+
+      if (!result) return;
+
+      focused = result.row.id;
     }
+
     analytics.track('preview_panel_use');
     soup.setPreviewEntity(focused);
   };

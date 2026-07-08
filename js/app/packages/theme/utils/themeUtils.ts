@@ -1,5 +1,5 @@
 import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setDarkModeTheme, setHtmlColor, setIsThemeSaved, setLightModeTheme, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
-import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
+import { semanticTokens, type ThemeV2, type ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
@@ -56,6 +56,16 @@ export function applyTheme(id: string): void{
     theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
   }
   setCurrentThemeId(theme.id);
+
+  // Set theme overrides
+  for (const token of semanticTokens) {
+    const themeOverride = theme.overrides?.find((o) => o.token === token)
+    if (themeOverride) {
+      document.documentElement.style.setProperty(`--theme-${token}`, `oklch(${themeOverride.value.l} ${themeOverride.value.c} ${themeOverride.value.h})`)
+    } else {
+      document.documentElement.style.removeProperty(`--theme-${token}`)
+    }
+  }
 
   batch(() => {
     (Object.keys(theme!.tokens) as Array<keyof ThemeV2Tokens>).forEach((tokenKey) => {

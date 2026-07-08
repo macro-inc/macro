@@ -49,6 +49,12 @@ use email::{
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use favorites::{
+    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    outbound::pg_favorites_repo::PgFavoritesRepo,
+};
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -105,6 +111,7 @@ type DssEmailService = EmailServiceImpl<
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
     email::domain::ports::NoOpEnqueuer,
     DssCrmService,
+    EntityAccessManagementService,
 >;
 
 /// CRM router state.
@@ -205,6 +212,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
+    MacroEventBrokerService<KafkaEventPublisher>,
 >;
 
 /// Type alias for the documents router state.
@@ -227,6 +235,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            MacroEventBrokerService<KafkaEventPublisher>,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
@@ -280,6 +289,12 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
+/// Type alias for the favorites service.
+pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
+
+/// Type alias for the favorites router state.
+pub(crate) type DssFavoritesState = FavoritesRouterState<FavoritesServiceType, EntityAccessService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -327,6 +342,8 @@ pub(crate) struct ApiContext {
     pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
     #[cfg(feature = "graphql")]
     pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
+    pub favorites_state: DssFavoritesState,
+    pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,

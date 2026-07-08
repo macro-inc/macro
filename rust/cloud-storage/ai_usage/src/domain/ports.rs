@@ -56,6 +56,8 @@ pub enum AiFeature {
     ChannelBot,
     /// AI projection materialization.
     AiProjection,
+    /// In-document AI editing (the ai-editing-worker).
+    AiEditing,
 }
 
 /// Resolved price for one completion.
@@ -266,11 +268,9 @@ pub trait UsageRecorder: Send + Sync {
 
 /// A [`UsageRecorder`] that drops every event. Used at call sites that cannot
 /// (or should not) record, mirroring the `NoOp*` adapters used elsewhere.
-#[cfg(test)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoOpUsageRecorder;
 
-#[cfg(test)]
 impl UsageRecorder for NoOpUsageRecorder {
     fn record(&self, _event: UsageEvent) {}
 }

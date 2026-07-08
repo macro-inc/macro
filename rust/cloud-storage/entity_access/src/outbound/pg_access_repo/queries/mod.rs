@@ -34,7 +34,7 @@ mod test;
 
 /// Type safety for source ids for entity_access table
 #[derive(Debug, Clone)]
-pub(in crate::outbound::pg_access_repo) struct SourceIds(pub Vec<String>);
+pub struct SourceIds(pub Vec<String>);
 
 /// Grabs the users source ids for the entity access table
 /// NOTE: This could return an empty list in the event the user is not logged in and attempting to review a resource
@@ -48,7 +48,7 @@ pub(in crate::outbound::pg_access_repo) struct SourceIds(pub Vec<String>);
         convert = r#"{format!("{}", user_id.map(AsRef::as_ref).unwrap_or(""))}"#,
     )
 )]
-pub(in crate::outbound::pg_access_repo) async fn get_user_source_ids(
+pub async fn get_user_source_ids(
     pool: &Pool<Postgres>,
     user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> anyhow::Result<SourceIds> {

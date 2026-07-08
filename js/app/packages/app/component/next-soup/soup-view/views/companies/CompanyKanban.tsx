@@ -1,0 +1,248 @@
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { UserIcon } from '@core/component/UserIcon';
+import {
+  COMPANY_STAGE_OPTIONS,
+  Entity,
+  type EntityData,
+  formatTimestamp,
+  getCompanyOwnerId,
+  getCompanyStageOptionId,
+  isCrmCompanyEntity,
+} from '@entity';
+import { buildCompanyDefaultProperties } from '@entity/extractors-property';
+import CircleDashed from '@phosphor/circle-dashed.svg';
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Property } from '@property/types';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { useIsTeamAdmin } from '@queries/team/teams';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { cn, Layer } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+
+/** Column key for companies without a Stage value. */
+const NO_STAGE_KEY = '';
+
+type StageColumn = {
+  key: string;
+  label: string;
+};
+
+const STAGE_COLUMNS: StageColumn[] = [
+  ...COMPANY_STAGE_OPTIONS.map((option) => ({
+    key: option.value as string,
+    label: option.label,
+  })),
+  { key: NO_STAGE_KEY, label: 'No stage' },
+];
+
+/**
+ * Kanban board for the Customers view: one column per Stage option (plus
+ * "No stage"), fed by the same filtered soup entities as the list. Cards
+ * drag between columns to update the company's Stage property (team
+ * admins/owners only, matching CRM edit access).
+ */
+export function CompanyKanban() {
+  const { source, soup } = useSoupView();
+  const panel = useSplitPanelOrThrow();
+  const isTeamAdmin = useIsTeamAdmin();
+  const saveMutation = useBulkSaveEntityPropertiesMutation();
+
+  const stageProperty = createMemo(
+    (): Property =>
+      buildCompanyDefaultProperties().find(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STAGE
+      )!
+  );
+
+  const companies = createMemo(() => source.data().filter(isCrmCompanyEntity));
+
+  const columns = createMemo(() => {
+    const buckets = new Map<string, EntityData[]>(
+      STAGE_COLUMNS.map((column) => [column.key, []])
+    );
+    for (const company of companies()) {
+      const key = getCompanyStageOptionId(company) ?? NO_STAGE_KEY;
+      (buckets.get(buckets.has(key) ? key : NO_STAGE_KEY) ?? []).push(company);
+    }
+    return STAGE_COLUMNS.map((column) => ({
+      ...column,
+      entities: buckets.get(column.key) ?? [],
+    }));
+  });
+
+  const [draggedId, setDraggedId] = createSignal<string>();
+  const [dropTarget, setDropTarget] = createSignal<string>();
+
+  const moveToStage = (entityId: string, stageKey: string) => {
+    const entity = companies().find((company) => company.id === entityId);
+    if (!entity) return;
+    const currentStage = getCompanyStageOptionId(entity) ?? NO_STAGE_KEY;
+    if (currentStage === stageKey) return;
+
+    saveMutation.mutate({
+      properties: [
+        {
+          entityId,
+          entityType: EntityType.COMPANY,
+          property: stageProperty(),
+          apiValues: {
+            valueType: 'SELECT_STRING',
+            values: stageKey === NO_STAGE_KEY ? null : [stageKey],
+          },
+        },
+      ],
+    });
+  };
+
+  const openCompany = (entity: EntityData, event: MouseEvent) => {
+    soup.focus.set(entity.id);
+    void openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.shiftKey,
+      splitHandle: panel.handle,
+      referredFrom: 'companies',
+    });
+  };
+
+  return (
+    <div class="size-full min-w-0 overflow-x-auto overflow-y-hidden">
+      <div class="flex h-full gap-3 p-3">
+        <For each={columns()}>
+          {(column) => (
+            <div
+              class={cn(
+                'flex h-full w-64 shrink-0 flex-col rounded-lg border border-edge-muted bg-surface',
+                dropTarget() === column.key &&
+                  draggedId() &&
+                  'border-accent/50 bg-accent/5'
+              )}
+              onDragOver={(e) => {
+                if (!draggedId()) return;
+                e.preventDefault();
+                setDropTarget(column.key);
+              }}
+              onDragLeave={(e) => {
+                if (
+                  e.relatedTarget instanceof Node &&
+                  e.currentTarget.contains(e.relatedTarget)
+                ) {
+                  return;
+                }
+                if (dropTarget() === column.key) setDropTarget(undefined);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = draggedId() ?? e.dataTransfer?.getData('text/plain');
+                setDropTarget(undefined);
+                setDraggedId(undefined);
+                if (id) moveToStage(id, column.key);
+              }}
+            >
+              <div class="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-ink-muted">
+                <Show
+                  when={column.key !== NO_STAGE_KEY}
+                  fallback={
+                    <CircleDashed class="size-3.5 text-ink-extra-muted" />
+                  }
+                >
+                  <PropertyValueIcon optionId={column.key} class="size-3.5" />
+                </Show>
+                <span class="truncate">{column.label}</span>
+                <span class="ml-auto shrink-0 tabular-nums px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted font-medium">
+                  {column.entities.length}
+                </span>
+              </div>
+              <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden flex flex-col gap-2 px-2 pb-2">
+                <For each={column.entities}>
+                  {(entity) => (
+                    <CompanyKanbanCard
+                      entity={entity}
+                      draggable={isTeamAdmin()}
+                      dragging={draggedId() === entity.id}
+                      onDragStart={(e) => {
+                        e.dataTransfer?.setData('text/plain', entity.id);
+                        if (e.dataTransfer) {
+                          e.dataTransfer.effectAllowed = 'move';
+                        }
+                        setDraggedId(entity.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedId(undefined);
+                        setDropTarget(undefined);
+                      }}
+                      onClick={(e) => openCompany(entity, e)}
+                    />
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+function CompanyKanbanCard(props: {
+  entity: EntityData;
+  draggable: boolean;
+  dragging: boolean;
+  onDragStart: (e: DragEvent) => void;
+  onDragEnd: () => void;
+  onClick: (e: MouseEvent) => void;
+}) {
+  const ownerId = () =>
+    isCrmCompanyEntity(props.entity)
+      ? getCompanyOwnerId(props.entity)
+      : undefined;
+  const primaryDomain = () =>
+    isCrmCompanyEntity(props.entity)
+      ? props.entity.domains[0]?.domain
+      : undefined;
+
+  return (
+    <Layer depth={2}>
+      <div
+        draggable={props.draggable}
+        onDragStart={props.onDragStart}
+        onDragEnd={props.onDragEnd}
+        onClick={props.onClick}
+        class={cn(
+          'flex flex-col gap-1.5 rounded-lg border border-edge-muted bg-panel p-2.5 text-sm',
+          'hover:border-edge transition-colors',
+          props.dragging && 'opacity-40'
+        )}
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="size-4 shrink-0">
+            <Entity.Icon entity={props.entity} />
+          </div>
+          <span class="ph-no-capture truncate font-semibold min-w-0">
+            <Entity.Title entity={props.entity} />
+          </span>
+          <Show when={ownerId()}>
+            {(id) => (
+              <span class="ml-auto shrink-0">
+                <UserIcon id={id()} size="sm" suppressClick />
+              </span>
+            )}
+          </Show>
+        </div>
+        <div class="flex items-center gap-2 min-w-0 text-xs text-ink-extra-muted">
+          <Show when={primaryDomain()}>
+            {(domain) => <span class="truncate min-w-0">{domain()}</span>}
+          </Show>
+          {/* Last interaction — updatedAt carries crm_companies.last_interaction. */}
+          <Show when={props.entity.updatedAt}>
+            {(ts) => (
+              <span class="ml-auto shrink-0">{formatTimestamp(ts())}</span>
+            )}
+          </Show>
+        </div>
+      </div>
+    </Layer>
+  );
+}

@@ -10,6 +10,10 @@ use axum::{
 use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
 use macro_user_id::user_id::MacroUserIdStr;
 
+/// Validated Macro JWT from the `Authorization: Bearer` header.
+#[derive(Clone)]
+pub struct JwtAccessToken(pub String);
+
 const RESOURCE_METADATA_PATH: &str = "/.well-known/oauth-protected-resource/mcp";
 
 fn absolute_resource_metadata_url(request: &Request<Body>) -> String {
@@ -104,6 +108,7 @@ pub async fn validate_bearer(
     };
 
     request.extensions_mut().insert(user_id);
+    request.extensions_mut().insert(JwtAccessToken(token));
 
     next.run(request).await
 }

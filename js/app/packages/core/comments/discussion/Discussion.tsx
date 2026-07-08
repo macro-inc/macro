@@ -10,7 +10,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { tryMacroId, useDisplayName } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
@@ -68,9 +69,9 @@ export function Discussion() {
         <StaticMarkdownContext>
           <div class="py-2 text-xs">
             <div>
-              <For each={source.threads()}>
-                {(thread) => <DiscussionThreadView thread={thread} />}
-              </For>
+              <Key each={source.threads()} by="id">
+                {(thread) => <DiscussionThreadView thread={thread()} />}
+              </Key>
             </div>
 
             <Show when={source.canEdit()}>
@@ -198,25 +199,25 @@ export function DiscussionThreadView(props: { thread: ViewThread }) {
                     firstThreadReplyNewMessage={false}
                   />
                   <Thread.RepliesContainer>
-                    <For each={replies()}>
+                    <Key each={replies()} by="id">
                       {(reply) => (
                         <div class="relative">
                           <ThreadRail />
                           <DiscussionMessageView
-                            comment={reply}
-                            actions={makeActions(reply, false)}
+                            comment={reply()}
+                            actions={makeActions(reply(), false)}
                             editingId={editingId()}
                             onEditSave={(snapshot) =>
-                              handleEdit(reply, snapshot)
+                              handleEdit(reply(), snapshot)
                             }
                             onEditCancel={() => setEditingId(null)}
                             isHighlighted={
-                              source.targetCommentId() === reply.id
+                              source.targetCommentId() === reply().id
                             }
                           />
                         </div>
                       )}
-                    </For>
+                    </Key>
 
                     <Show when={isReplying() && canEdit()}>
                       <div class="ph-no-capture">

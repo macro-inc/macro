@@ -2,7 +2,12 @@
 //! This crate exposes the [CowLike] trait
 //! And the ArcCowStr
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
+
+use either::Either;
 
 /// Defines Cow-like behaviour for some type T
 /// We often cant use acutal Cows because of the limitations
@@ -68,5 +73,25 @@ impl<'a> Eq for ArcCowStr<'a> {}
 impl<'a> std::hash::Hash for ArcCowStr<'a> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.as_ref().hash(state);
+    }
+}
+
+impl<'a, T, U> CowLike<'a> for Either<T, U>
+where
+    T: CowLike<'a>,
+    U: CowLike<'a>,
+{
+    type Owned<'b> = Either<T::Owned<'b>, U::Owned<'b>>;
+
+    fn into_owned(self) -> Self::Owned<'static> {
+        self.map_left(CowLike::into_owned)
+            .map_right(CowLike::into_owned)
+    }
+
+    fn copied(&'a self) -> Self {
+        match self {
+            Either::Left(l) => Either::Left(l.copied()),
+            Either::Right(r) => Either::Right(r.copied()),
+        }
     }
 }

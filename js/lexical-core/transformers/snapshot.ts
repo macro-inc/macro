@@ -8,10 +8,14 @@ import {
   $isSnapshotNode,
   SnapshotNode,
 } from '../nodes/SnapshotNode';
+import {
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // Internal Snapshot Node - uses XML-based format for serialization
 export const I_SNAPSHOT_NODE: TextMatchTransformer = {
-  dependencies: [SnapshotNode],
+  dependencies: [SnapshotNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-snapshot>(.*?)<\/m-snapshot>/,
   importRegExp: /<m-snapshot>(.*?)<\/m-snapshot>/,
@@ -57,6 +61,7 @@ export const I_SNAPSHOT_NODE: TextMatchTransformer = {
       node.replace(snapshotNode);
     } catch (e) {
       console.error('Error in I_SNAPSHOT_NODE replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Snapshot');
     }
   },
 };

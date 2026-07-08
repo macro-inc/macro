@@ -86,7 +86,7 @@ export function EmailComposeToolbar(props: {
             />
           }
         >
-          <div class="flex flex-row items-center gap-2">
+          <div class="flex flex-row items-center gap-1">
             <Show when={!ctx.hideAttachments}>
               <div class="relative" ref={attachButtonRef}>
                 <Button
@@ -114,25 +114,19 @@ export function EmailComposeToolbar(props: {
             >
               <TextAa />
             </Button>
-            <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
-              <EmailDateSelector
-                sendTime={ctx.sendTime()}
-                onSendTimeChange={ctx.onSendTimeChange}
-                disabled={ctx.scheduleSendDisabled?.()}
-              />
-            </Show>
             <Show when={ctx.hasDraft()}>
+              <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
               <Button
                 onclick={ctx.onDelete}
                 tooltip="Delete draft"
-                class="aspect-square *:h-5 p-1"
+                size="icon-sm"
               >
                 <Trash />
               </Button>
             </Show>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1">
             <Show when={ctx.onSaveDraft}>
               <Button
                 disabled={
@@ -144,6 +138,13 @@ export function EmailComposeToolbar(props: {
               >
                 {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
               </Button>
+            </Show>
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
+              <EmailDateSelector
+                sendTime={ctx.sendTime()}
+                onSendTimeChange={ctx.onSendTimeChange}
+                disabled={ctx.scheduleSendDisabled?.()}
+              />
             </Show>
             <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
               <SendButton
@@ -192,14 +193,6 @@ function MobileToolbar(props: {
               </Button>
             </div>
           </Show>
-          <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
-            <EmailDateSelector
-              sendTime={ctx.sendTime()}
-              onSendTimeChange={ctx.onSendTimeChange}
-              disabled={ctx.scheduleSendDisabled?.()}
-              compact
-            />
-          </Show>
           <Show when={ctx.onSaveDraft}>
             <Button
               variant="base"
@@ -211,6 +204,14 @@ function MobileToolbar(props: {
             >
               {ctx.isSavingDraft?.() ? 'Saving…' : 'Draft'}
             </Button>
+          </Show>
+          <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
+            <EmailDateSelector
+              sendTime={ctx.sendTime()}
+              onSendTimeChange={ctx.onSendTimeChange}
+              disabled={ctx.scheduleSendDisabled?.()}
+              compact
+            />
           </Show>
           <SendButton
             disabled={

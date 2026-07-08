@@ -322,6 +322,7 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
+        user_id: MacroUserIdStr<'_>,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         use frecency::domain::models::AggregateFrecency;
@@ -360,7 +361,7 @@ where
             .collect();
 
         self.soup_storage
-            .populate_properties(&mut items)
+            .populate_properties(user_id, &mut items)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -446,25 +447,38 @@ where
             limit,
         } = req;
 
-        Ok(Either::Right(
-            self.crm_service
-                .list_companies_for_soup(
-                    &access,
-                    user_id.as_ref(),
-                    &company_ids,
-                    hidden,
-                    sort,
-                    cursor,
-                    limit,
-                )
+        let mut items: Vec<SoupItem> = self
+            .crm_service
+            .list_companies_for_soup(
+                &access,
+                user_id.as_ref(),
+                &company_ids,
+                hidden,
+                sort,
+                cursor,
+                limit,
+            )
+            .await
+            .map_err(|_| SoupErr::CrmErr)?
+            .into_iter()
+            .map(|company| SoupItem::CrmCompany(SoupCrmCompany::from(company)))
+            .collect();
+
+        // Companies are fetched outside the main soup queries (which hydrate
+        // their own items), so attach entity properties here.
+        if !items.is_empty() {
+            self.soup_storage
+                .populate_properties(user_id, &mut items)
                 .await
-                .map_err(|_| SoupErr::CrmErr)?
-                .into_iter()
-                .map(|company| FrecencySoupItem {
-                    item: SoupItem::CrmCompany(SoupCrmCompany::from(company)),
-                    frecency_score: None,
-                }),
-        ))
+                .map_err(anyhow::Error::from)?;
+        }
+
+        Ok(Either::Right(items.into_iter().map(|item| {
+            FrecencySoupItem {
+                item,
+                frecency_score: None,
+            }
+        })))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -567,7 +581,7 @@ where
                     },
                 );
 
-                let email_soup_fut = self.handle_email_request(email_request);
+                let email_soup_fut = self.handle_email_request(req.user.copied(), email_request);
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 
