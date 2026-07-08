@@ -140,7 +140,7 @@ import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 
-const WIDE_SPLIT_PANEL_BREAKPOINT = window.innerWidth * 0.25;
+const WIDE_SPLIT_PANEL_BREAKPOINT = 512;
 
 export const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }

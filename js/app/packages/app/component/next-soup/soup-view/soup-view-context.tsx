@@ -20,7 +20,6 @@ import {
 } from '@app/component/next-soup/filters/filter-store/query-store';
 import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
-import { DateGroupHeader } from '@app/component/next-soup/soup-view/date-group-header';
 import { dateBucket } from '@app/component/next-soup/soup-view/group-by-date';
 import {
   INBOX_FILTER_ENTRY_KEY,
