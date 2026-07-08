@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH participant_ids AS (\n                SELECT user_id\n                FROM call_record_participants\n                WHERE call_record_id = $1\n            ),\n            participant_team_ids AS (\n                SELECT DISTINCT tu.team_id\n                FROM team_user tu\n                JOIN participant_ids p ON p.user_id = tu.user_id\n            ),\n            candidate_user_ids AS (\n                SELECT user_id FROM participant_ids\n                UNION\n                SELECT tu.user_id\n                FROM team_user tu\n                JOIN participant_team_ids t ON t.team_id = tu.team_id\n            )\n            SELECT DISTINCT user_id AS \"user_id!\"\n            FROM candidate_user_ids\n            ORDER BY user_id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ee374b0fcc0e59609fbc6368541c65cc9e27d786fd2648040cc9f2c6a3295d8e"
+}

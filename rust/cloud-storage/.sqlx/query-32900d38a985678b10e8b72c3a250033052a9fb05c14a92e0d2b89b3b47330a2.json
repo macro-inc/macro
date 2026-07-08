@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.id AS \"link_id!\"\n            FROM\n                public.email_links l\n            JOIN\n                public.email_user_history h ON l.id = h.link_id\n            WHERE\n                l.macro_id NOT LIKE '%@macro.com'\n            GROUP BY\n                l.id\n            HAVING\n                MAX(h.updated_at) < NOW() - (make_interval(days => $1))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "32900d38a985678b10e8b72c3a250033052a9fb05c14a92e0d2b89b3b47330a2"
+}

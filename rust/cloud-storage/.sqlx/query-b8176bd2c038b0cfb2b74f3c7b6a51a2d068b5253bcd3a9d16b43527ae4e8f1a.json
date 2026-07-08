@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH allocated AS (\n            INSERT INTO team_task_counter (team_id, last_task_num)\n            VALUES ($1, 1)\n            ON CONFLICT (team_id) DO UPDATE\n            SET last_task_num = team_task_counter.last_task_num + 1,\n                updated_at = NOW()\n            RETURNING last_task_num AS task_num\n        )\n        INSERT INTO team_task (team_id, document_id, task_num)\n        SELECT $1, $2, task_num\n        FROM allocated\n        RETURNING task_num AS \"task_num!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_num!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b8176bd2c038b0cfb2b74f3c7b6a51a2d068b5253bcd3a9d16b43527ae4e8f1a"
+}

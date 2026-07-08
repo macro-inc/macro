@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO comms_activity (id, user_id, channel_id, interacted_at)\n            VALUES ($1, $2, $3, NOW())\n            ON CONFLICT (user_id, channel_id) DO UPDATE\n            SET interacted_at = NOW(), updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c7aee79058a9904924fdd338d6823a3b0caf86fa2ff09ea307703a57ed72c68"
+}

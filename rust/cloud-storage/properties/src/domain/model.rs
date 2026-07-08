@@ -100,7 +100,10 @@ impl<T: RequiredPermission> PropertiesAccessReceipt<T> {
     }
 
     /// Dangerously mint a receipt for an authenticated user without the
-    /// underlying access check. **NOTE** Intended for tests.
+    /// underlying access check. **NOTE** Intended for tests, and for callers
+    /// that have already verified the user's access to the entity through
+    /// another authoritative seam (e.g. a CRM team-scoped listing) — never as
+    /// a way to skip a check that hasn't happened.
     pub fn dangerously_assert_authenticated_user(
         user_id: MacroUserIdStr<'static>,
         entity_id: &str,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH upsert AS (\n                INSERT INTO team_crm_settings (team_id, crm_enabled)\n                VALUES ($1, TRUE)\n                ON CONFLICT (team_id) DO UPDATE\n                SET crm_enabled = EXCLUDED.crm_enabled,\n                    updated_at  = now()\n                WHERE team_crm_settings.crm_enabled IS DISTINCT FROM EXCLUDED.crm_enabled\n                RETURNING 1\n            )\n            SELECT EXISTS (SELECT 1 FROM upsert) AS \"changed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e951a324bc8638caa7d3d8b3793b5dbe6ce6bfec8f307f22aa7b2bab42a5a13a"
+}

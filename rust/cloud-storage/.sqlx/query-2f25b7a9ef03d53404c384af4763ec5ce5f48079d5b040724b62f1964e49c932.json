@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH message AS (\n                SELECT id\n                FROM comms_messages\n                WHERE id = $2 AND channel_id = $1\n            ),\n            deleted AS (\n                DELETE FROM comms_reactions r\n                USING message m\n                WHERE r.message_id = m.id\n                  AND r.emoji = $3\n                  AND r.user_id = $4\n            )\n            SELECT EXISTS (SELECT 1 FROM message) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2f25b7a9ef03d53404c384af4763ec5ce5f48079d5b040724b62f1964e49c932"
+}

@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_filters (link_id, email_domain, is_important)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (link_id, lower(email_domain)) WHERE email_domain IS NOT NULL\n        DO UPDATE SET is_important = EXCLUDED.is_important\n        RETURNING id, link_id, email_address, email_domain, is_important, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_domain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_important",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c4d2fed1a0fb95c20ef9b4049cc5cacfb7f0a441c630528d2cde076211ff63f9"
+}

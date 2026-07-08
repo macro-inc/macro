@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_crm_settings (team_id, crm_enabled)\n            VALUES ($1, FALSE)\n            ON CONFLICT (team_id) DO UPDATE\n            SET crm_enabled = FALSE,\n                updated_at  = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a547a92f2099dbeb0b1fb2fc9dba7bf0f464619f047b5d967914f7b476722db5"
+}

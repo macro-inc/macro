@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_activity (id, user_id, channel_id, created_at, updated_at)\n        VALUES ($1, $2, $3, NOW(), NOW())\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ada2f8355f9c5ecd4072938c3243296615904f9af24c4e18dda50992b47d5af"
+}

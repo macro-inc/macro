@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            entity_type,\n            entity_id\n        FROM\n            comms_entity_mentions\n        WHERE\n            source_entity_id = $1 AND source_entity_type = 'message'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ce218da82b99295aed3a609a21f5feaf304a4d50bbabe9151bb0bbaef7bcef16"
+}

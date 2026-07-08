@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO github_pr_tasks (id, github_key, task_id)\n        SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::text[])\n        ON CONFLICT (github_key, task_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76f6793eaead8c4f3a2aa4b02ad573beda79b93bfd874acc1b2059cbe041d8a3"
+}

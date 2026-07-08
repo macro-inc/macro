@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id AS \"message_id!\",\n            m.thread_id,\n            m.sender_id AS \"sender_id!\",\n            m.content AS \"content!\",\n            m.created_at AS \"created_at!\",\n            m.updated_at AS \"updated_at!\",\n            m.deleted_at::timestamptz AS \"deleted_at?\",\n            COALESCE(\n                ARRAY(\n                    SELECT entity_type || ':' || entity_id\n                    FROM comms_entity_mentions em\n                    WHERE em.source_entity_type = 'message'\n                      AND em.source_entity_id = m.id::text\n                ),\n                '{}'::text[]\n            ) AS \"mentions!\"\n        FROM comms_messages m\n        WHERE m.channel_id = $1\n          AND m.deleted_at IS NULL\n        ORDER BY m.created_at DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sender_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "mentions!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "993f8bd336bc9ba45ab51edac700887af626bf74de28e395ab8a1875bc9fe9ac"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT github_user_id, macro_id\n            FROM github_links\n            WHERE github_user_id = ANY($1::text[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "086b8b198aff7df79c9b4a15829542effa0b1675e87a78ae2063e55850ac50f4"
+}

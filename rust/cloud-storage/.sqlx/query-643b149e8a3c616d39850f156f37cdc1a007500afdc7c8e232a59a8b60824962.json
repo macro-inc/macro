@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                channel_id,\n                user_id,\n                role AS \"role: ParticipantRole\",\n                joined_at,\n                left_at::timestamptz AS \"left_at?\"\n            FROM comms_channel_participants\n            WHERE channel_id = $1 AND left_at IS NULL\n            ORDER BY joined_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role: ParticipantRole",
+        "type_info": {
+          "Custom": {
+            "name": "comms_participant_role",
+            "kind": {
+              "Enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "joined_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "left_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "643b149e8a3c616d39850f156f37cdc1a007500afdc7c8e232a59a8b60824962"
+}

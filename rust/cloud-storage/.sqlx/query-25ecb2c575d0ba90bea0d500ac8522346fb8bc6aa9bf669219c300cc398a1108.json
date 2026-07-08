@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH message AS (\n                SELECT id\n                FROM comms_messages\n                WHERE id = $2 AND channel_id = $1\n            ),\n            inserted AS (\n                INSERT INTO comms_reactions (message_id, emoji, user_id)\n                SELECT id, $3, $4\n                FROM message\n                ON CONFLICT DO NOTHING\n            )\n            SELECT EXISTS (SELECT 1 FROM message) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "25ecb2c575d0ba90bea0d500ac8522346fb8bc6aa9bf669219c300cc398a1108"
+}

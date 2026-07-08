@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"DocumentPermission\" (\"documentId\", \"sharePermissionId\")\n            VALUES ($1, $2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0322d49329ea2e6d6bd515f2013a3bc08f9153d9fb263062a46a80cec5c151f0"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT share_permission_id as \"share_permission_id!\"\n        FROM (\n            SELECT share_permission_id FROM calls WHERE id = $1\n            UNION ALL\n            SELECT share_permission_id FROM call_records WHERE id = $1\n        ) t\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c707e1d4017c4ab2983364705b6ea9b62060b16ba2e7714d5690cc8311a5e201"
+}

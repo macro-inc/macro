@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            d.id\n        FROM \"Document\" d\n        JOIN \"ItemLastAccessed\" ila ON d.id = ila.item_id\n        AND ila.item_type = 'document'\n        AND ila.last_accessed < NOW() - ($2 || ' days')::INTERVAL\n        WHERE d.owner IN (\n            SELECT \n                u.\"id\"\n            FROM \"User\" u\n            WHERE u.\"organizationId\" = $1\n        );\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "35e9ea6799e4075ef4573116cc4dfb7c5904a23c2d859d838f607d1bd296777d"
+}

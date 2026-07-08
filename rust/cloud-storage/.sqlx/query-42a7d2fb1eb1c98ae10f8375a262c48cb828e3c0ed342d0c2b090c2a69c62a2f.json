@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call_records SET share_with_team = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "42a7d2fb1eb1c98ae10f8375a262c48cb828e3c0ed342d0c2b090c2a69c62a2f"
+}

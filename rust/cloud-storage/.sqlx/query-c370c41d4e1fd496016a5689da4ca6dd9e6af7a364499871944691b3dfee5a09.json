@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE calls\n                SET recording_started_at = $1\n                WHERE id = $2\n                  AND (\n                    recording_started_at IS NULL\n                    OR recording_started_at = date_trunc('second', recording_started_at)\n                    OR $1 < recording_started_at\n                  )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c370c41d4e1fd496016a5689da4ca6dd9e6af7a364499871944691b3dfee5a09"
+}

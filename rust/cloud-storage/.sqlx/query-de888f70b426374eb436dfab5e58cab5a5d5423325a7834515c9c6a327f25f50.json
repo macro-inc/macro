@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT tu.team_id\n        FROM \"Document\" d\n        JOIN team_user tu ON tu.user_id = d.owner\n        WHERE d.id = $1\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "de888f70b426374eb436dfab5e58cab5a5d5423325a7834515c9c6a327f25f50"
+}

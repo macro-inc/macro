@@ -251,11 +251,7 @@ where
             for option_id in remove_option_ids {
                 service_context
                     .service
-                    .remove_entity_property_option(
-                        &access,
-                        self.property_definition_id,
-                        *option_id,
-                    )
+                    .remove_entity_property_option(&access, self.property_definition_id, *option_id)
                     .await
                     .map_err(|e| ToolCallError {
                         description: format!("Failed to remove option {option_id}: {e}"),

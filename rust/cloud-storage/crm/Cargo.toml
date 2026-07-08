@@ -8,6 +8,7 @@ version = "0.1.0"
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
+  "dep:macro_user_id",
   "dep:models_properties",
   "dep:properties",
   "dep:schemars",
@@ -47,6 +48,7 @@ entity_access = { path = "../entity_access", default-features = false }
 # AI toolset dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
 models_properties = { path = "../models_properties", optional = true }
 properties = { path = "../properties", default-features = false, features = [
   "ports",

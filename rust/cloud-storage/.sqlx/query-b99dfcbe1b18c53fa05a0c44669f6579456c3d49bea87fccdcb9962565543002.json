@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls SET recording_key = $2 WHERE egress_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b99dfcbe1b18c53fa05a0c44669f6579456c3d49bea87fccdcb9962565543002"
+}

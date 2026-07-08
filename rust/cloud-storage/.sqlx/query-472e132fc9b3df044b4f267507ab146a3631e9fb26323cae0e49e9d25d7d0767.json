@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(u.email, NULLIF(split_part(request_user.user_id, '|', 2), ''), request_user.user_id) AS \"user_email!\",\n                gl.github_username AS \"github_username?\",\n                t.slug AS \"team_slug?\",\n                tt.task_num AS \"team_task_id?\"\n            FROM (SELECT $1::text AS user_id) request_user\n            LEFT JOIN \"User\" u ON u.id = request_user.user_id\n            LEFT JOIN LATERAL (\n                SELECT github_username\n                FROM github_links\n                WHERE macro_id = request_user.user_id\n                ORDER BY updated_at DESC\n                LIMIT 1\n            ) gl ON true\n            LEFT JOIN LATERAL (\n                SELECT team_id\n                FROM team_user\n                WHERE user_id = request_user.user_id\n                ORDER BY team_id\n                LIMIT 1\n            ) tu ON true\n            LEFT JOIN team t ON t.id = tu.team_id\n            LEFT JOIN team_task tt ON tt.team_id = tu.team_id AND tt.document_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_email!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "github_username?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_slug?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_task_id?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "472e132fc9b3df044b4f267507ab146a3631e9fb26323cae0e49e9d25d7d0767"
+}

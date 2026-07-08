@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team\n            SET plan = $2\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "team_plan",
+            "kind": {
+              "Enum": [
+                "idea",
+                "pre_seed",
+                "seed",
+                "series_a",
+                "growth"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5e833a5efdd06f446538cca125c29318b92959b2ddab117bfd98273a45d1838"
+}
