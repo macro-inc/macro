@@ -43,10 +43,11 @@ import {
 import { CompanyKanban } from '@app/component/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/component/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/component/next-soup/soup-view/views/companies/CompanyListHeader';
+import { DateGroupHeader } from '@app/component/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/component/next-soup/soup-view/views/inbox/InboxListEntity';
-import { TaskGroupHeader } from '@app/component/next-soup/soup-view/views/tasks/task-group-header';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/component/next-soup/soup-view/views/tasks/TaskListHeader';
+import { TaskGroupHeader } from '@app/component/next-soup/soup-view/views/tasks/task-group-header';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -134,10 +135,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { useSearchTagsFlag } from './filters-bar/search/search-tags-flag';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
-import { DateGroupHeader } from '@app/component/next-soup/soup-view/views/inbox/date-group-header';
 
 const WIDE_SPLIT_PANEL_BREAKPOINT = window.innerWidth * 0.25;
 
