@@ -34,8 +34,12 @@ import {
 import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
+  getAllNotificationsFromGroup,
+  getThreadId,
   type NotificationSource,
   setDoneOverride,
+  stackNotifications,
+  type UnifiedNotification,
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -688,6 +692,58 @@ export type MarkEntitiesDoneContext = {
   applyUndone: () => void;
 };
 
+function channelThreadNotificationIds(
+  notifications: UnifiedNotification[],
+  threadId?: string
+): Set<string> {
+  const ids = new Set<string>();
+
+  for (const stack of stackNotifications(notifications)) {
+    // We display a separte item for thread replies and mentions
+    if (
+      stack.type !== 'channel_message_reply' &&
+      stack.type !== 'channel_mention'
+    ) {
+      continue;
+    }
+
+    if (threadId !== undefined && getThreadId(stack) !== threadId) continue;
+
+    for (const notification of getAllNotificationsFromGroup(stack)) {
+      ids.add(notification.id);
+    }
+  }
+
+  return ids;
+}
+
+function notificationsForMarkDone(
+  entity: EntityData,
+  notifications: UnifiedNotification[],
+  scopeChannelNotificationsToEntity: boolean
+): UnifiedNotification[] {
+  if (!scopeChannelNotificationsToEntity) return notifications;
+
+  if (entity.type === 'channel') {
+    const threadNotificationIds = channelThreadNotificationIds(notifications);
+    return notifications.filter(
+      (notification) => !threadNotificationIds.has(notification.id)
+    );
+  }
+
+  if (entity.type === 'channel_thread') {
+    const threadNotificationIds = channelThreadNotificationIds(
+      notifications,
+      entity.messageId
+    );
+    return notifications.filter((notification) =>
+      threadNotificationIds.has(notification.id)
+    );
+  }
+
+  return notifications;
+}
+
 /**
  * Extract the email ids and notification ids targeted by a mark-done on these
  * entities. The ids are snapshotted here so mutationFn/undoFn/redoFn operate
@@ -696,17 +752,36 @@ export type MarkEntitiesDoneContext = {
 export function resolveMarkEntitiesDoneVariables(args: {
   entities: EntityData[];
   notificationSource: NotificationSource;
+  /**
+   * Channel and channel_thread entities share the same notification bucket.
+   * When true, channel mark-done skips thread-stack notifications, and
+   * channel_thread mark-done only targets that thread's stack.
+   */
+  scopeChannelNotificationsToEntity?: boolean;
 }): { emailIds: string[]; notificationIds: string[] } {
-  const { entities, notificationSource } = args;
+  const {
+    entities,
+    notificationSource,
+    scopeChannelNotificationsToEntity = false,
+  } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
-    return (
+    const notificationsForEntity =
       notificationSource.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))
-      ] ?? []
+      ] ?? [];
+
+    return notificationsForMarkDone(
+      entity,
+      notificationsForEntity,
+      scopeChannelNotificationsToEntity
     ).map((n) => n.id);
   });
-  return { emailIds, notificationIds };
+
+  return {
+    emailIds: [...new Set(emailIds)],
+    notificationIds: [...new Set(notificationIds)],
+  };
 }
 
 /**
