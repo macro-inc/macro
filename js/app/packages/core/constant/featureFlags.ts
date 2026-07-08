@@ -471,6 +471,13 @@ export const ENABLE_NEW_PRICING_OVERRIDE =
 export const ENABLE_NEW_INBOX_FLAG = 'enable-new-inbox-view';
 export const ENABLE_NEW_INBOX_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_INBOX', DEV_MODE_ENV) || undefined;
+export function ENABLE_NEW_INBOX() {
+  if (ENABLE_NEW_INBOX_OVERRIDE !== undefined) {
+    return ENABLE_NEW_INBOX_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_NEW_INBOX_FLAG) ?? false;
+}
 
 export const ENABLE_TAGS_FE_FLAG = 'enable-tags-fe';
 export const ENABLE_TAGS_FE_OVERRIDE =
