@@ -31,7 +31,11 @@ use super::{env_layer, fusionauth, gen_compose, repo_root, workspace_root};
 /// volume set) so old snapshots can't be restored into a new scheme.
 /// 2: Kafka's volume joined the set (topics live in the broker data dir, so a
 /// restore carries them and the rdkafka-backed provisioning is skipped).
-const FORMAT: u32 = 2;
+/// 3: invalidates snapshots saved while the FusionAuth kickstart could still
+/// be mid-flight (the readiness gate only checked `/api/status`, so a save
+/// could freeze a tenant-less FusionAuth DB — and the key never changed, so
+/// the bad snapshot was sticky).
+const FORMAT: u32 = 3;
 
 /// The throwaway container image used to tar/untar volumes. Alpine for its
 /// size; only needs `tar` + `sh`.
