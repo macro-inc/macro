@@ -179,9 +179,9 @@ fn dump_stack_diagnostics() -> Step<Run> {
 }
 
 fn bake_preload_tar() -> Step<Run> {
-    Step::new("Bake image preload tar").run(indoc::indoc! {r#"
+    Step::new("Bake image preload tars").run(indoc::indoc! {r#"
         set -euo pipefail
-        mkdir -p preview-ctx/preload
+        mkdir -p preview-ctx/preload/images
         docker pull alpine:3
         images=$(docker compose -p macro \
           -f docker-compose.yml \
@@ -194,7 +194,18 @@ fn bake_preload_tar() -> Step<Run> {
         for img in $images; do
           docker image inspect "$img" >/dev/null 2>&1 || docker pull "$img"
         done
-        docker save -o preview-ctx/preload/images.tar $images alpine:3
+        # One tar per image, saved concurrently: a single 6GB tar made the
+        # VM's boot-time docker load serial and single-threaded (observed
+        # 15+ minutes on shared cores) — per-image tars let the entrypoint
+        # load them in parallel. Shared base layers get duplicated across
+        # tars; that costs a little disk, not boot time.
+        pids=""
+        for img in $images alpine:3; do
+          docker save -o "preview-ctx/preload/images/$(echo "$img" | tr '/:' '__').tar" "$img" &
+          pids="$pids $!"
+        done
+        for pid in $pids; do wait "$pid"; done
+        ls -lh preview-ctx/preload/images/
     "#})
 }
 
@@ -290,7 +301,7 @@ fn deploy_to_fly() -> Step<Run> {
             flyctl deploy --app "$APP_NAME" \
               --config infra/preview/fly.toml \
               --image "$image" \
-              --wait-timeout 900 \
+              --wait-timeout 1800 \
               --yes || rc=$?
             kill "$keepalive" 2>/dev/null || true
             exit "$rc"

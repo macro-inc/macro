@@ -22,7 +22,23 @@ fi
 
 # The inner daemon's state is ephemeral (fresh on every machine create /
 # redeploy); suspend/resume keeps it, so this only runs on real boots.
-if [ -f /srv/macro/preload/images.tar ]; then
+# Per-image tars, loaded in parallel: one monolithic tar made this a serial,
+# single-threaded untar+sha256 of ~6GB (observed 15+ minutes on shared
+# cores). dockerd serializes layer registration internally, so concurrent
+# loads are safe; shared layers settle to one copy.
+if compgen -G '/srv/macro/preload/images/*.tar' >/dev/null; then
+  log "loading baked images (parallel)"
+  t0=$(date +%s)
+  pids=""
+  for tar in /srv/macro/preload/images/*.tar; do
+    docker load -i "$tar" &
+    pids="$pids $!"
+  done
+  rc=0
+  for pid in $pids; do wait "$pid" || rc=1; done
+  [ "$rc" = 0 ] || { log "docker load failed"; exit 1; }
+  log "images loaded in $(($(date +%s) - t0))s"
+elif [ -f /srv/macro/preload/images.tar ]; then
   log "loading baked images"
   t0=$(date +%s)
   docker load -i /srv/macro/preload/images.tar
