@@ -89,6 +89,14 @@ fn deploy() -> Job {
         .add_env(("CARGO_INCREMENTAL", "0"))
         .add_step(steps::checkout(false, true))
         .add_step(steps::mount_cache_volume_with_cargo_target())
+        // CARGO_INCREMENTAL=0 stops incremental caches being written, but the
+        // ~25G already on older volumes never gets cleaned by cargo — it's
+        // exactly the weight that made this pool the workspace quota's
+        // eviction victim. Deleting is idempotent and instant when clean.
+        .add_step(Step::new("Prune stale incremental caches").run(
+            "rm -rf rust/cloud-storage/target/*/debug/incremental \
+             rust/cloud-storage/target/debug/incremental",
+        ))
         // Namespace remote builder: persistent BuildKit layer cache across
         // runs, same as the deploy workflows use. The aux-image builds and the
         // preview-image build both go through it.

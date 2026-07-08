@@ -35,6 +35,8 @@ jobs:
           ${{ github.workspace }}/rust/cloud-storage/target
           /home/runner/.cache/macro-preview-snapshots
       continue-on-error: true
+    - name: Prune stale incremental caches
+      run: rm -rf rust/cloud-storage/target/*/debug/incremental rust/cloud-storage/target/debug/incremental
     - name: Set up Namespace Docker builder
       uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd
     - name: Build compose service images (fail fast)
