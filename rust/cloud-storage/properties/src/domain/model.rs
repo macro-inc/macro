@@ -4,7 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType};
+use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
 /// Key identifying the properties attached to one entity.
@@ -28,6 +28,8 @@ impl From<&EntityReference> for EntityPropertiesKey {
 pub struct EntityPropertyInfo {
     /// The property definition ID (used to set values via `set_entity_property`).
     pub property_definition_id: Uuid,
+    /// Who owns the property definition (user, team, or system).
+    pub owner: PropertyOwner,
     /// Human-readable name of the property.
     pub display_name: String,
     /// The data type of the property.

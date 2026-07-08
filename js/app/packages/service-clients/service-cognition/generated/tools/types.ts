@@ -1462,6 +1462,10 @@ export interface ToolPropertyItem {
    * The property definition ID. Use this when calling SetEntityProperty.
    */
   propertyDefinitionId: string;
+  /**
+   * For tag properties, whether this is the user's personal set or a team set.
+   */
+  scope?: TagScope | null;
 }
 /**
  * A property option in the tool response.

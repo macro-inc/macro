@@ -17,6 +17,8 @@ use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 /// Database row from the joined query.
 struct PropertyRow {
     property_definition_id: Uuid,
+    team_id: Option<Uuid>,
+    user_id: Option<String>,
     display_name: String,
     data_type: DataType,
     is_multi_select: bool,
@@ -49,6 +51,8 @@ pub async fn get_entity_properties(
         r#"
         SELECT
             ep.property_definition_id,
+            pd.team_id,
+            pd.user_id,
             pd.display_name,
             pd.data_type as "data_type: DataType",
             pd.is_multi_select,
@@ -148,6 +152,11 @@ pub async fn get_entity_properties(
 
         result.push(EntityPropertyInfo {
             property_definition_id: row.property_definition_id,
+            owner: models_properties::PropertyOwner::from_optional_ids(
+                row.team_id,
+                row.user_id,
+                row.is_system,
+            ),
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,

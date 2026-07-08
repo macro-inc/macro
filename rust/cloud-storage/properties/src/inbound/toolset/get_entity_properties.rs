@@ -4,8 +4,10 @@ use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use models_properties::PropertyOwner;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::service::tag_sets::TagScope;
 use models_properties::{DataType, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -86,6 +88,9 @@ pub struct ToolPropertyItem {
     /// select and tag properties with a value set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_value_labels: Option<Vec<String>>,
+    /// For tag properties, whether this is the user's personal set or a team set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<TagScope>,
     /// Available options for select-type properties.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<ToolPropertyOption>,
@@ -187,6 +192,14 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         _ => None,
     });
 
+    let scope = (info.data_type == DataType::Tag)
+        .then(|| match info.owner {
+            PropertyOwner::User { .. } => Some(TagScope::Personal),
+            PropertyOwner::Team { .. } => Some(TagScope::Team),
+            PropertyOwner::System => None,
+        })
+        .flatten();
+
     let current_value = info.value.map(|v| property_value_to_json(&v));
 
     let options = info.options.into_iter().map(to_tool_option).collect();
@@ -199,6 +212,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         is_system: info.is_system,
         current_value,
         current_value_labels,
+        scope,
         options,
     }
 }
