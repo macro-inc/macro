@@ -398,6 +398,7 @@ export const useSearchResponseItemMapper = () => {
             participants,
             search,
             snippet: result.snippet ?? undefined,
+            properties: result.properties ?? undefined,
           },
         ];
       }

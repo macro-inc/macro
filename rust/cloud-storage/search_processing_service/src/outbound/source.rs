@@ -1,21 +1,29 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use model::document::FileType;
+use models_properties::EntityType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, call::CallRecordMessage, channel::ChannelMessageUpdate, chat::ChatMessage,
-    email::EmailThreadBatchMessage,
+    document::DocumentPropertiesUpdate, email::EmailThreadBatchMessage, project::UpsertProject,
 };
 
 use crate::config::BackfillPageSizes;
 use crate::domain::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, SourcePage,
+    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
+    SourcePage,
 };
 use crate::domain::ports::BackfillSource;
 
 const DEFAULT_EMAIL_BATCH_SIZE: usize = 50;
+
+/// Page size for the properties backfill's distinct-entity-id scan. A fixed
+/// value rather than a config knob: property rows are few and one message is
+/// enqueued per entity.
+const PROPERTIES_PAGE_SIZE: usize = 5000;
 
 /// Postgres-backed [`BackfillSource`] for every search-indexed entity. One
 /// struct, one DB pool, per-entity page sizes — collapses what used to be
@@ -325,5 +333,85 @@ impl BackfillSource for PgBackfillSource {
             messages,
             rows_consumed,
         })
+    }
+
+    async fn fetch_entity_properties(
+        &self,
+        req: &PropertiesBackfillRequest,
+        offset: usize,
+    ) -> Result<SourcePage, BackfillError> {
+        let entity_type = EntityType::from_str(&req.entity_type)
+            .map_err(|e| BackfillError::Source(anyhow::Error::new(e)))?;
+
+        let entity_ids =
+            properties_db_client::entity_properties::get::get_entity_ids_with_properties(
+                &self.db,
+                entity_type,
+                PROPERTIES_PAGE_SIZE as i64,
+                offset as i64,
+            )
+            .await
+            .map_err(|e| BackfillError::Source(e.into()))?;
+
+        let rows_consumed = entity_ids.len();
+        let messages: Vec<SearchQueueMessage> = entity_ids
+            .into_iter()
+            .map(|entity_id| {
+                SearchQueueMessage::UpdateDocumentProperties(DocumentPropertiesUpdate {
+                    document_id: entity_id,
+                    entity_type: entity_type.to_string(),
+                })
+            })
+            .collect();
+
+        Ok(SourcePage {
+            messages,
+            rows_consumed,
+        })
+    }
+
+    async fn fetch_projects(
+        &self,
+        req: &ProjectBackfillRequest,
+        cursor: Option<ProjectBackfillCursor>,
+    ) -> Result<(SourcePage, Option<ProjectBackfillCursor>), BackfillError> {
+        let db_cursor = cursor.map(|c| (c.updated_at, c.project_id));
+        let batch = macro_db_client::projects::get_projects_for_search_backfill(
+            &self.db,
+            self.page_sizes.projects as i64,
+            db_cursor,
+            req.updated_after,
+            req.updated_before,
+        )
+        .await
+        .map_err(BackfillError::Source)?;
+
+        // `updated_at` is NOT NULL in the schema but sqlx types it as Option
+        // because of the timestamptz cast; if it ever came back None we'd
+        // rather stop pagination than build a bogus cursor.
+        let next_cursor = batch.last().and_then(|p| {
+            p.updated_at.map(|updated_at| ProjectBackfillCursor {
+                updated_at,
+                project_id: p.project_id.clone(),
+            })
+        });
+        let rows_consumed = batch.len();
+        let messages: Vec<SearchQueueMessage> = batch
+            .into_iter()
+            .map(|p| {
+                SearchQueueMessage::UpsertProject(UpsertProject {
+                    project_id: p.project_id,
+                    index_override: req.index_override.clone(),
+                })
+            })
+            .collect();
+
+        Ok((
+            SourcePage {
+                messages,
+                rows_consumed,
+            },
+            next_cursor,
+        ))
     }
 }

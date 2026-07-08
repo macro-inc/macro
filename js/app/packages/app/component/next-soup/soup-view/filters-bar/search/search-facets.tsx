@@ -465,9 +465,9 @@ export function useSearchFacets(
     },
   });
 
-  // Tags show only where tagging applies (all/documents/tasks), gated behind
-  // both the broad tags flag and the search-view rollout flag, and hidden
-  // when the caller has no tags defined.
+  // Tags show only where tagging applies (all/documents/tasks/emails), gated
+  // behind both the broad tags flag and the search-view rollout flag, and
+  // hidden when the caller has no tags defined.
   const tagFacets = (): SearchFacetVM[] =>
     searchTags() && tagSource.enabled() && tagSource.hasTags() ? [tags] : [];
 
@@ -475,8 +475,8 @@ export function useSearchFacets(
     switch (controller.type()) {
       case 'email':
         return inboxPicker.hasMultiple()
-          ? [type, importance, inbox]
-          : [type, importance];
+          ? [type, importance, inbox, ...tagFacets()]
+          : [type, importance, ...tagFacets()];
       case 'channels':
         return [type, channelIn, channelFrom];
       case 'calls':

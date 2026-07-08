@@ -33,7 +33,7 @@ import {
 import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
+import { openAddInboxDialog } from '../AddInboxDialog';
 import { ConnectAction, StatusDot } from './integration-ui';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 import {
@@ -233,8 +233,6 @@ export function EmailCard() {
           </Show>
         </Show>
       </SettingsCard>
-
-      <AddInboxDialog />
 
       <Dialog
         open={removeTarget() !== null}

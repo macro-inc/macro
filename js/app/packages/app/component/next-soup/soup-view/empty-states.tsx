@@ -236,7 +236,15 @@ export function EmptyState(props: {
         />
       </Match>
 
-      <Match when={props.listView === 'folders'}>
+      <Match
+        when={
+          props.listView === 'folders' ||
+          // The Files split (the `documents` list view) surfaces folders under
+          // its own Folders tab, so honor that tab here too — otherwise it
+          // would fall through to the generic "No documents" fallback.
+          (props.listView === 'documents' && soup.activeTab() === 'folders')
+        }
+      >
         <EmptyStatePanel
           graphic={EmptyStateFolderGraphic}
           title="No folders"

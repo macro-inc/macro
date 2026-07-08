@@ -28,6 +28,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { AddInboxDialog, isAddInboxDialogOpen } from './AddInboxDialog';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
@@ -153,6 +154,9 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <Show when={isAddInboxDialogOpen()}>
+            <AddInboxDialog />
+          </Show>
         </Show>
         <Show
           when={

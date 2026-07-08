@@ -1605,3 +1605,178 @@ async fn remove_participants_allows_removing_non_owner() {
         vec!["macro|recipient@test.com".to_string()]
     );
 }
+
+#[tokio::test]
+async fn create_channel_event_carries_channel_name() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel(
+        sender("macro|sender@test.com"),
+        None,
+        crate::domain::models::CreateChannelRequest {
+            name: Some("general".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            participants: HashSet::from([macro_id("macro|recipient@test.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated { channel_name: Some(name), .. }] if name == "general"
+    ));
+}
+
+#[tokio::test]
+async fn patch_channel_dispatches_channel_updated() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest {
+            channel_name: Some("Renamed".to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelUpdated { previous_name: Some(previous), channel_name: Some(new), actor, .. }]
+            if previous == "Project" && new == "Renamed" && actor == &macro_id("macro|sender@test.com")
+    ));
+}
+
+#[tokio::test]
+async fn noop_patch_channel_dispatches_nothing() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.patch_channel(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PatchChannelRequest { channel_name: None },
+    )
+    .await
+    .unwrap();
+
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn remove_participants_dispatches_participants_removed() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.remove_participants(
+        sender("macro|sender@test.com"),
+        channel_id,
+        RemoveParticipantsRequest {
+            participants: vec!["macro|recipient@test.com".to_string()],
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ParticipantsRemoved { actor, removed_user_ids, .. }]
+            if actor == &macro_id("macro|sender@test.com")
+                && removed_user_ids == &vec![macro_id("macro|recipient@test.com")]
+    ));
+}
+
+#[tokio::test]
+async fn leave_channel_dispatches_participants_removed_for_self() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    // A private channel needs more than 2 participants to allow leaving.
+    repo.state
+        .lock()
+        .unwrap()
+        .participants
+        .push(ChannelParticipant {
+            channel_id,
+            user_id: "macro|third@test.com".to_string(),
+            role: ParticipantRole::Member,
+            joined_at: Utc::now(),
+            left_at: None,
+        });
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.leave_channel(sender("macro|recipient@test.com"), channel_id)
+        .await
+        .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ParticipantsRemoved { actor, removed_user_ids, .. }]
+            if actor == &macro_id("macro|recipient@test.com")
+                && removed_user_ids == &vec![macro_id("macro|recipient@test.com")]
+    ));
+}
+
+#[tokio::test]
+async fn patch_message_attachments_event_carries_deltas() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let existing = MutatedAttachment {
+        id: Uuid::new_v4(),
+        channel_id,
+        message_id,
+        entity_type: "document".to_string(),
+        entity_id: "doc-old".to_string(),
+        width: None,
+        height: None,
+        created_at: Utc::now(),
+    };
+    repo.state.lock().unwrap().attachments = vec![existing.clone()];
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.patch_message_attachments(
+        sender("macro|sender@test.com"),
+        channel_id,
+        message_id,
+        vec![existing.id.to_string()],
+        vec![NewChannelAttachment {
+            entity_type: "document".to_string(),
+            entity_id: "doc-new".to_string(),
+            width: None,
+            height: None,
+        }],
+        None,
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    match events.as_slice() {
+        [ChannelEvent::AttachmentsChanged { added, removed, .. }] => {
+            assert_eq!(added.len(), 1);
+            assert_eq!(added[0].entity_id, "doc-new");
+            assert_eq!(removed.len(), 1);
+            assert_eq!(removed[0].id, existing.id);
+        }
+        other => panic!("expected one AttachmentsChanged event, got {other:?}"),
+    }
+}

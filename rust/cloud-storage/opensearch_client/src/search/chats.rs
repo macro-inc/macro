@@ -5,6 +5,7 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
+        properties::build_tag_filter,
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -55,6 +56,7 @@ pub(crate) struct ChatQueryBuilder {
     inner: SearchQueryBuilder<ChatSearchConfig>,
     /// The role of the chat message
     role: Vec<String>,
+    tag_option_ids: Vec<String>,
 }
 
 impl ChatQueryBuilder {
@@ -62,6 +64,7 @@ impl ChatQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             role: Vec::new(),
+            tag_option_ids: Vec::new(),
         }
     }
 
@@ -78,6 +81,11 @@ impl ChatQueryBuilder {
 
     pub fn role(mut self, role: Vec<String>) -> Self {
         self.role = role;
+        self
+    }
+
+    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
+        self.tag_option_ids = tag_option_ids;
         self
     }
 
@@ -109,6 +117,12 @@ impl ChatQueryBuilder {
 
         // Access control on parent fields (user_id and/or entity_id).
         bool_query.filter(self.build_parent_filter()?);
+
+        // Tag filter: a single nested clause matching any of the option ids in
+        // the parent's `properties.values`, with no definition_id constraint.
+        if let Some(nested) = build_tag_filter(&self.tag_option_ids) {
+            bool_query.filter(nested);
+        }
 
         // One has_child clause per term, ANDed via bool.must. Each
         // carries its own inner_hits so highlights + message-nav data
@@ -226,6 +240,7 @@ pub struct ChatSearchArgs {
     pub role: Vec<String>,
     pub collapse: bool,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 impl From<ChatSearchArgs> for ChatQueryBuilder {
@@ -239,6 +254,7 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
             .role(args.role)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
+            .tag_option_ids(args.tag_option_ids)
     }
 }
 

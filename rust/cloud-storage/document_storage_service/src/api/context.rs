@@ -235,6 +235,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<NotificationIngressType>,
             SqsChannelSearchIndexer,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            MacroEventBrokerService<KafkaEventPublisher>,
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,

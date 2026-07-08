@@ -19,7 +19,8 @@ use sqs_client::search::SearchQueueMessage;
 use super::models::{
     BackfillError, CallBackfillCursor, CallBackfillRequest, ChannelBackfillRequest,
     ChatBackfillCursor, ChatBackfillRequest, DocumentBackfillCursor, DocumentBackfillRequest,
-    EmailBackfillRequest, SourcePage,
+    EmailBackfillRequest, ProjectBackfillCursor, ProjectBackfillRequest, PropertiesBackfillRequest,
+    SourcePage,
 };
 
 /// Publishes batches of search-event messages.
@@ -84,4 +85,22 @@ pub trait BackfillSource: Send + Sync + 'static {
         req: &EmailBackfillRequest,
         offset: usize,
     ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+
+    /// Distinct entity ids holding property rows of the requested type,
+    /// paginated by plain offset over `entity_properties`.
+    fn fetch_entity_properties(
+        &self,
+        req: &PropertiesBackfillRequest,
+        offset: usize,
+    ) -> impl Future<Output = Result<SourcePage, BackfillError>> + Send;
+    /// Projects paginate by keyset cursor (mirroring documents): each call
+    /// passes the cursor of the last row from the previous page (or `None`
+    /// for the first page), and the implementation returns the page plus
+    /// the cursor to feed back into the next call. An empty page signals
+    /// end-of-source.
+    fn fetch_projects(
+        &self,
+        req: &ProjectBackfillRequest,
+        cursor: Option<ProjectBackfillCursor>,
+    ) -> impl Future<Output = Result<(SourcePage, Option<ProjectBackfillCursor>), BackfillError>> + Send;
 }

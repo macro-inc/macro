@@ -96,6 +96,8 @@ type EmailContextValues = {
     setReplyingToMessageId: (id: string | undefined) => void;
     bottomReplyOpen: Accessor<boolean>;
     setBottomReplyOpen: (open: boolean) => void;
+    // Sender emails (lowercased) with a CATEGORY_PERSONAL message in the thread
+    personalSenders: Accessor<Set<string>>;
   };
   thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
@@ -583,6 +585,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
+            // Google's CATEGORY_PERSONAL classification is inconsistent across
+            // identical messages, so promote it per-sender across the thread
+            personalSenders: createMemo(() => {
+              const senders = new Set<string>();
+              for (const message of threadQuery.data?.messages ?? []) {
+                const email = message.from?.email?.toLowerCase();
+                if (!email) continue;
+                if (
+                  message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')
+                ) {
+                  senders.add(email);
+                }
+              }
+              return senders;
+            }),
             expandedBodyIds: expandedMessageBodyIds,
             setExpandedBodyId: onExpandMessageBody,
             isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,

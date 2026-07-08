@@ -399,7 +399,7 @@ async fn main() -> anyhow::Result<()> {
         connection_service,
         entity_access_management_service.clone(),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-        macro_event_broker,
+        macro_event_broker.clone(),
     ));
 
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
@@ -639,7 +639,8 @@ async fn main() -> anyhow::Result<()> {
         SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender);
+    .with_bot_trigger_sender(bot_trigger_sender)
+    .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,

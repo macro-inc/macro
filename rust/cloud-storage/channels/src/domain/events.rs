@@ -32,6 +32,8 @@ pub enum ChannelEvent {
         actor: ChannelSender<'static>,
         /// Type of channel that was created.
         channel_type: ChannelType,
+        /// Stored channel name; `None` for direct message / unnamed channels.
+        channel_name: Option<String>,
         /// Active participants after creation.
         participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
@@ -73,6 +75,10 @@ pub enum ChannelEvent {
         message_id: Uuid,
         /// Current attachment set for the message.
         attachments: Vec<MutatedAttachment>,
+        /// Attachments added by this mutation.
+        added: Vec<MutatedAttachment>,
+        /// Attachments removed by this mutation.
+        removed: Vec<MutatedAttachment>,
         /// Realtime recipients at mutation time.
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Client mutation nonce echoed to realtime listeners.
@@ -163,5 +169,28 @@ pub enum ChannelEvent {
         user_id: Sender,
         /// Active participants after the join.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
+    },
+    /// Channel metadata was updated (rename).
+    ChannelUpdated {
+        /// Updated channel id.
+        channel_id: Uuid,
+        /// The user who updated the channel.
+        actor: MacroUserIdStr<'static>,
+        /// Stored channel name before the update.
+        previous_name: Option<String>,
+        /// New channel name.
+        channel_name: Option<String>,
+    },
+    /// Participants were removed from a channel (admin removal or self-leave).
+    ParticipantsRemoved {
+        /// Channel the participants were removed from.
+        channel_id: Uuid,
+        /// Type of channel the participants were removed from.
+        channel_type: ChannelType,
+        /// The user who removed the participants; equals the sole removed
+        /// user for a self-service leave.
+        actor: MacroUserIdStr<'static>,
+        /// Users removed by this mutation.
+        removed_user_ids: Vec<MacroUserIdStr<'static>>,
     },
 }

@@ -8,9 +8,7 @@ use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
-    OpensearchClient,
-    date_format::EpochSeconds,
-    upsert::document::{IndexedProperty, UpsertDocumentArgs},
+    OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
 };
 use properties_db_client::entity_properties::get::get_entity_properties_for_index;
 use s3_key::{
@@ -23,9 +21,10 @@ use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
     parsers::{canvas::parse_canvas, markdown::parse_markdown_legacy},
     process::document::document_info::{DocumentInfo, get_document_info},
+    process::properties::to_indexed_properties,
 };
 
-use super::{DocumentPropertiesUpdate, SearchExtractorMessage};
+use super::SearchExtractorMessage;
 
 async fn upsert_document(
     opensearch_client: &OpensearchClient,
@@ -102,15 +101,7 @@ async fn attach_indexed_properties(
     if properties.is_empty() {
         return Ok(());
     }
-    let indexed: Vec<IndexedProperty> = properties
-        .into_iter()
-        .map(|p| IndexedProperty {
-            definition_id: p.definition_id,
-            values: p.values,
-            number_value: p.number_value,
-            date_value: p.date_value,
-        })
-        .collect();
+    let indexed = to_indexed_properties(properties);
     for upsert in upserts.iter_mut() {
         upsert.properties = indexed.clone();
     }
@@ -426,34 +417,6 @@ pub async fn update_search_with_sync_document(
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
     tracing::info!(document_id = %document_id, chunk_count, "sync document indexed");
 
-    Ok(())
-}
-
-/// Refresh only the indexed `properties` of a document after a property
-/// mutation, without re-extracting its content.
-pub async fn update_search_with_property_update(
-    opensearch_client: &OpensearchClient,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    message: &DocumentPropertiesUpdate,
-) -> anyhow::Result<()> {
-    let entity_type = EntityType::from_str(&message.entity_type)
-        .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
-    let properties = get_entity_properties_for_index(db, &message.document_id, entity_type)
-        .await
-        .context("failed to fetch properties for reindex")?;
-    let indexed: Vec<IndexedProperty> = properties
-        .into_iter()
-        .map(|p| IndexedProperty {
-            definition_id: p.definition_id,
-            values: p.values,
-            number_value: p.number_value,
-            date_value: p.date_value,
-        })
-        .collect();
-    opensearch_client
-        .update_document_properties(&message.document_id, &indexed)
-        .await
-        .context("failed to update document properties in search index")?;
     Ok(())
 }
 

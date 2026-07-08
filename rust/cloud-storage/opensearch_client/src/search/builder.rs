@@ -198,7 +198,10 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// access to/has requested.
     /// This could either be a single term/terms query for ids_only or just user_id
     /// Or a bool query that contains both of these items
-    fn build_filter_query<'a>(&'a self, user_id_key: Option<&str>) -> Result<QueryType<'a>> {
+    pub(crate) fn build_filter_query<'a>(
+        &'a self,
+        user_id_key: Option<&str>,
+    ) -> Result<QueryType<'a>> {
         if self.ids_only {
             // We only need to search over the entity ids provided
             if self.ids.is_empty() {
