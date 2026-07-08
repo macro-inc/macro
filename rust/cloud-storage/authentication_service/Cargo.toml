@@ -44,7 +44,7 @@ chrono = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
 cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
-email_service_client = { path = "../email_service_client" }
+email = { path = "../email", features = ["http_client"] }
 doppleganger = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 email_validator = { path = "../email_validator" }

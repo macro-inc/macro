@@ -159,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized document storage service client");
 
     let email_service_client =
-        email_service_client::EmailServiceClientExternal::new(EmailServiceUrl::new()?.to_string());
+        email::outbound::EmailServiceHttpClient::new(EmailServiceUrl::new()?.to_string());
     tracing::trace!("initialized email service client");
 
     let macro_cache_client =

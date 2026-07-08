@@ -1,7 +1,4 @@
 mod get_previews;
-mod init_email;
-
-pub use init_email::InitEmailOutcome;
 
 #[derive(Clone, Debug)]
 pub struct EmailServiceClientExternal {
@@ -17,6 +14,7 @@ impl EmailServiceClientExternal {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn request(
         &self,
         method: reqwest::Method,

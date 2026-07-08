@@ -11,7 +11,7 @@ use axum::{
     Json,
     response::{IntoResponse, Redirect, Response},
 };
-use email_service_client::InitEmailOutcome;
+use email::domain::ports::{FirstInboxProvisionOutcome, FirstInboxProvisioner};
 use macro_env::Environment;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
@@ -43,11 +43,14 @@ fn spawn_first_inbox_provision(ctx: &ApiContext, identity_provider_id: &str, acc
             return;
         }
 
-        match email_service_client.init_email(&access_token).await {
-            Ok(InitEmailOutcome::Provisioned) => {
+        match email_service_client
+            .provision_first_inbox(&access_token)
+            .await
+        {
+            Ok(FirstInboxProvisionOutcome::Provisioned) => {
                 tracing::info!("first-inbox provision: inbox initialized on login");
             }
-            Ok(InitEmailOutcome::Skipped) => {}
+            Ok(FirstInboxProvisionOutcome::Skipped) => {}
             Err(e) => {
                 tracing::warn!(error=?e, "first-inbox provision: init failed");
             }

@@ -4,11 +4,11 @@ use super::*;
 fn success_statuses_are_provisioned() {
     assert_eq!(
         classify_init_status(StatusCode::OK),
-        Some(InitEmailOutcome::Provisioned)
+        Some(FirstInboxProvisionOutcome::Provisioned)
     );
     assert_eq!(
         classify_init_status(StatusCode::CREATED),
-        Some(InitEmailOutcome::Provisioned)
+        Some(FirstInboxProvisionOutcome::Provisioned)
     );
 }
 
@@ -16,7 +16,7 @@ fn success_statuses_are_provisioned() {
 fn bad_request_is_skipped() {
     assert_eq!(
         classify_init_status(StatusCode::BAD_REQUEST),
-        Some(InitEmailOutcome::Skipped)
+        Some(FirstInboxProvisionOutcome::Skipped)
     );
 }
 
