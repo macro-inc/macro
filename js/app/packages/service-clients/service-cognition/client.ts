@@ -20,6 +20,7 @@ import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
+import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
 import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
@@ -30,6 +31,7 @@ import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
 import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
+import type { UpsertProjectionRequest } from './generated/schemas/upsertProjectionRequest';
 import type * as toolTypes from './generated/tools/tool.ts';
 
 type ToolCallArgs = {
@@ -360,6 +362,19 @@ export const cognitionApiServiceClient = {
   async structuredCompletion(args: StructuredCompletionRequest) {
     return (
       await dcsFetch<StructuredCompletionResponse>(`/structured-completion`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  /** Gets or creates an AI projection and the requesting user's instance of
+   * it, triggering (or, with `await: true`, awaiting) materialization when
+   * needed. Completion updates are also pushed over the connection gateway as
+   * `ai_projection_updated` messages. */
+  async upsertAiProjection(args: UpsertProjectionRequest) {
+    return (
+      await dcsFetch<ProjectionStateResponse>(`/ai-projections`, {
         method: 'POST',
         body: JSON.stringify(args),
       })

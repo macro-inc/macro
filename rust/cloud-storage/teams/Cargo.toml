@@ -24,6 +24,7 @@ axum = [
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = [
+  "dep:analytics_client",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:models_email",
@@ -77,6 +78,7 @@ model_notifications = { path = "../model_notifications", optional = true }
 notification = { path = "../notification", optional = true, default-features = false }
 
 # Outbound dependencies
+analytics_client = { path = "../analytics_client", optional = true }
 sqlx = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [

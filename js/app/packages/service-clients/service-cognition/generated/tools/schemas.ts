@@ -85,6 +85,29 @@ export const ContentSearch = z.object({
     )
     .default([]),
   inbox: z.union([z.string(), z.null()]).default(null),
+  matchType: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('partial'), z.literal('exact')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('partial')
+    )
+    .optional(),
   query: z.string(),
 });
 
@@ -474,6 +497,16 @@ export const DisplayResults = z.object({ view: z.any() });
 
 export const DisplayResultsResponse = z.object({ message: z.string() });
 
+export const EditDocument = z.object({
+  document_id: z.string(),
+  instructions: z.string(),
+});
+
+export const EditDocumentResponse = z.object({
+  clarification: z.union([z.string(), z.null()]).optional(),
+  summary: z.string(),
+});
+
 export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([
@@ -850,6 +883,29 @@ export const NameSearch = z.object({
     )
     .default([]),
   inbox: z.union([z.string(), z.null()]).default(null),
+  matchType: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('partial'), z.literal('exact')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('partial')
+    )
+    .optional(),
   name: z.string(),
 });
 
@@ -1929,7 +1985,25 @@ export const RenameDocumentResponse = z.object({
 export const SearchTools = z.object({ query: z.string() });
 
 export const SearchToolsResponse = z.object({
+  additional_matches: z.array(
+    z.object({ description: z.string(), name: z.string() })
+  ),
   results: z.array(z.object({ description: z.string(), name: z.string() })),
+});
+
+export const SelfKnowledge = z.record(z.any());
+
+export const SelfKnowledgeResponse = z.object({ about: z.string() });
+
+export const SendChannelMessage = z.object({
+  channel_id: z.string().uuid(),
+  content: z.string(),
+  thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const SendChannelMessageResponse = z.object({
+  channel_id: z.string().uuid(),
+  message_id: z.string(),
 });
 
 export const SendEmail = z.object({
@@ -1950,6 +2024,7 @@ export const SendEmail = z.object({
       })
     )
     .optional(),
+  includeSignature: z.union([z.boolean(), z.null()]).default(null),
   replyingToId: z.union([z.string().uuid(), z.null()]).default(null),
   subject: z.string(),
   to: z.array(

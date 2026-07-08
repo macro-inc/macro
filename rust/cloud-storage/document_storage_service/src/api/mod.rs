@@ -30,6 +30,8 @@ mod middleware;
 mod activity;
 mod annotations;
 mod documents;
+#[cfg(feature = "graphql")]
+mod graphql_soup;
 mod health;
 mod history;
 mod instructions;
@@ -87,6 +89,13 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
+fn items_router(state: ApiContext) -> Router<ApiContext> {
+    let router = soup::inbound::axum_router::soup_router(state.soup_router_state.clone());
+    #[cfg(feature = "graphql")]
+    let router = router.merge(graphql_soup::router());
+    router
+}
+
 fn api_router(state: ApiContext) -> Router {
     let github_sync_service_router_state = GithubSyncRouterState {
         service: state.github_sync_service.clone(),
@@ -135,10 +144,7 @@ fn api_router(state: ApiContext) -> Router {
             ]),
         )
         .nest("/instructions", instructions::router())
-        .nest(
-            "/items",
-            soup::inbound::axum_router::soup_router(state.soup_router_state.clone()),
-        )
+        .nest("/items", items_router(state.clone()))
         .nest(
             "/threads",
             threads::router(state.clone()).layer(axum::middleware::from_fn(
@@ -219,6 +225,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/favorites",
+            favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
+        )
+        .nest(
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
                 state.foreign_entity_state.clone(),
@@ -227,6 +237,10 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
+        )
+        .nest(
+            "/webhook",
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
         )
         .nest(
             "/crm",

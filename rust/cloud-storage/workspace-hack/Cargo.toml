@@ -3,10 +3,10 @@
 #     cargo hakari generate
 
 [package]
+description = "workspace-hack package, managed by hakari"
+edition = "2024"
 name = "workspace-hack"
 version = "0.1.0"
-edition = "2021"
-description = "workspace-hack package, managed by hakari"
 # You can choose to publish this crate: see https://docs.rs/cargo-hakari/latest/cargo_hakari/publishing.
 publish = false
 
@@ -17,10 +17,11 @@ publish = false
 [dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-aws-credential-types = { version = "1", default-features = false, features = ["test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
+aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
-aws-smithy-async = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
 aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
 aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }
@@ -68,6 +69,7 @@ hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features
 hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
+idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
@@ -89,10 +91,11 @@ redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+rig-core = { git = "https://github.com/macro-inc/rig", branch = "feat/responses-api-non-strict-tools", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rustc-hash = { version = "2" }
-rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["prefer-post-quantum", "ring", "std", "tls12"] }
+rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-647d43efb71741da = { package = "rustls", version = "0.21" }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -115,9 +118,9 @@ subtle = { version = "2" }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
@@ -132,10 +135,11 @@ zeroize = { version = "1", features = ["derive"] }
 [build-dependencies]
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
-aws-credential-types = { version = "1", default-features = false, features = ["test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
+aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
-aws-smithy-async = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
 aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
 aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }
@@ -184,6 +188,7 @@ hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features
 hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
+idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
@@ -208,10 +213,11 @@ redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+rig-core = { git = "https://github.com/macro-inc/rig", branch = "feat/responses-api-non-strict-tools", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rustc-hash = { version = "2" }
-rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["prefer-post-quantum", "ring", "std", "tls12"] }
+rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-647d43efb71741da = { package = "rustls", version = "0.21" }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -236,9 +242,9 @@ syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-trai
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
-tokio-util = { version = "0.7", features = ["codec", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
@@ -258,10 +264,10 @@ getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-f
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
-linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "ioctl", "no_std", "system"] }
+linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["fs", "system"] }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 thiserror = { version = "2" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
@@ -276,10 +282,10 @@ getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-f
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
-linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "ioctl", "no_std", "system"] }
+linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["fs", "system"] }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 thiserror = { version = "2" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
@@ -297,7 +303,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["client-pr
 ipnet = { version = "2", features = ["serde"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["fs", "system"] }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }
 thiserror = { version = "2" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
@@ -316,7 +322,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["client-pr
 ipnet = { version = "2", features = ["serde"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
-rustix = { version = "1", features = ["fs", "system"] }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }
 thiserror = { version = "2" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }

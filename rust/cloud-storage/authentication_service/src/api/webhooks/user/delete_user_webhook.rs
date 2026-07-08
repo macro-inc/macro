@@ -259,7 +259,7 @@ async fn delete_user(
                     tracing::trace!(user_id, "delete_document_storage_service_items complete");
 
                     tracing::trace!(user_id, "delete_user_macro_db");
-                    if let Err(e) = macro_db_client::user::delete_user::delete_user(&db, &user_id).await {
+                    if let Err(e) = macro_db_client::user::delete_user::delete_user(&db, &user_id, &macro_user_id).await {
                         tracing::error!(error=?e, user_id, "delete_user_macro_db unable to delete user");
                     }
                     tracing::trace!(user_id, "delete_user_macro_db complete");

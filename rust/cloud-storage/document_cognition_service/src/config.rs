@@ -2,6 +2,7 @@ use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use macro_middleware::auth::internal_access::InternalApiKey;
+use macro_service_urls::AiEditingWorkerUrl;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -9,14 +10,7 @@ use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 env_vars!(
     pub struct DatabaseUrl;
     pub struct DocumentStorageBucket;
-    pub struct DocumentTextExtractorQueue;
-    pub struct ChatDeleteQueue;
-    pub struct EmailScheduledQueue;
-    pub struct GmailOpsQueue;
-    pub struct NotificationQueue;
     pub struct DocumentStorageServiceAuthKey;
-    pub struct SearchEventQueue;
-    pub struct AiProjectionQueue;
     pub struct SyncServiceAuthKey;
     pub struct AuthenticationServiceUrl;
     pub struct AuthenticationServiceSecretKey;
@@ -26,6 +20,9 @@ env_vars!(
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     pub struct McpCredentialsKeySecretName;
+    pub struct DocumentPermissionJwt;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 );
 
 maybe_env_vars!(
@@ -51,19 +48,6 @@ pub struct Config {
     pub document_storage_bucket: DocumentStorageBucket,
     /// document storage service auth key
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
-    /// The sqs queue to send document text extract jobs to
-    pub document_text_extractor_queue: DocumentTextExtractorQueue,
-    /// The sqs queue to send chat delete jobs
-    pub chat_delete_queue: ChatDeleteQueue,
-    /// The sqs queue to enqueue outbound email sends
-    pub email_scheduled_queue: EmailScheduledQueue,
-    /// The sqs queue to enqueue Gmail label/sync operations
-    pub gmail_ops_queue: GmailOpsQueue,
-    /// The sqs queue to send notifications to
-    pub notification_queue: NotificationQueue,
-    pub search_event_queue: SearchEventQueue,
-    /// The sqs queue used to enqueue and poll ai projection materialization jobs
-    pub ai_projection_queue: AiProjectionQueue,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
     /// authentication service secret key (for soup service)
     pub authentication_service_secret_key: AuthenticationServiceSecretKey,
@@ -84,6 +68,13 @@ pub struct Config {
     pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    /// AI editing worker URL
+    #[macro_config_default(AiEditingWorkerUrl::unwrap_new().to_string())]
+    pub ai_editing_worker_url: String,
+    /// JWT secret for minting document permission tokens for the editing worker.
+    pub document_permission_jwt: DocumentPermissionJwt,
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub kafka_brokers: KafkaBrokers,
 }
 
 impl Config {
@@ -103,15 +94,6 @@ impl Config {
             document_storage_service_auth_key: DocumentStorageServiceAuthKey::Comptime(
                 "DOCUMENT_STORAGE_SERVICE_AUTH_KEY",
             ),
-            document_text_extractor_queue: DocumentTextExtractorQueue::Comptime(
-                "DOCUMENT_TEXT_EXTRACTOR_QUEUE",
-            ),
-            chat_delete_queue: ChatDeleteQueue::Comptime("CHAT_DELETE_QUEUE"),
-            email_scheduled_queue: EmailScheduledQueue::Comptime("EMAIL_SCHEDULED_QUEUE"),
-            gmail_ops_queue: GmailOpsQueue::Comptime("GMAIL_OPS_QUEUE"),
-            notification_queue: NotificationQueue::Comptime("NOTIFICATION_QUEUE"),
-            search_event_queue: SearchEventQueue::Comptime("SEARCH_EVENT_QUEUE"),
-            ai_projection_queue: AiProjectionQueue::Comptime("AI_PROJECTION_QUEUE"),
             sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
                 "SYNC_SERVICE_AUTH_KEY",
             )),
@@ -139,6 +121,9 @@ impl Config {
                 McpCredentialsKeySecretName::Comptime("MCP_CREDENTIALS_KEY_SECRET_NAME"),
             ),
             internal_api_key: InternalApiKey::Comptime(""),
+            ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
+            document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
+            kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
         }
     }
 }

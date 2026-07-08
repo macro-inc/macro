@@ -11,6 +11,7 @@ export const makeCopyAction = () => {
       entity.type !== 'channel' &&
       entity.type !== 'email' &&
       entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread' &&
       entity.type !== 'foreign'
     );
   };

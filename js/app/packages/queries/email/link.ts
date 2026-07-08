@@ -6,7 +6,7 @@ import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
@@ -58,6 +58,26 @@ export function usePrimaryEmailLinkId() {
     return linksQuery.data?.links.find(
       (link) => link.is_primary && link.macro_id === uid
     )?.id;
+  });
+}
+
+/**
+ * The HTML signature configured for a given inbox, read straight from the links
+ * query (`GET /email/links` → `link.settings.signature`) — no extra request.
+ * `undefined` until links load, when no link matches, or when the inbox has no
+ * signature set (the backend's `null` is normalized to `undefined`).
+ */
+export function useEmailSignature(
+  linkId: Accessor<string | undefined>
+): Accessor<string | undefined> {
+  const linksQuery = useEmailLinksQuery();
+  return createMemo(() => {
+    const id = linkId();
+    if (!id) return undefined;
+    return (
+      linksQuery.data?.links.find((link) => link.id === id)?.settings
+        .signature ?? undefined
+    );
   });
 }
 

@@ -1,15 +1,15 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { PlanTier } from '@app/component/paywall/plans';
 import { useHasPaidAccess } from '@core/auth';
-import CheckIcon from '@phosphor/check.svg';
+import { PERMISSION_IDS } from '@core/constant/permissions';
+import { usePermissions, useUserId } from '@core/context/user';
+import { plural } from '@core/util/string';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import CheckIcon from '@phosphor/check.svg';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
-import { usePermissions, useUserId } from '@core/context/user';
-import { PERMISSION_IDS } from '@core/constant/permissions';
-import { useCurrentTeamQuery } from '@queries/team/teams';
-import { plural } from '@core/util/string';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
@@ -132,7 +132,9 @@ export const Billing = () => {
                       them to make changes.
                     </p>
                   </Match>
-                  <Match when={hasPaid() && teamRole() === 'owner' && team.data}>
+                  <Match
+                    when={hasPaid() && teamRole() === 'owner' && team.data}
+                  >
                     {(team) => (
                       <p class="text-ink-extra-muted text-xs">
                         {team().members.length}{' '}

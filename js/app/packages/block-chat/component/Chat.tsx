@@ -1,18 +1,23 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { FloatRegionOrInline } from '@app/component/mobile/float-regions/FloatRegion';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
+import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  alternateProviderModel,
+  MODEL_PROVIDER,
+  modelsForPlan,
+} from '@core/component/AI/constant';
 import {
   ChatInputProvider,
   ChatProvider,
@@ -34,7 +39,6 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -46,17 +50,14 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { createRenameDssEntityMutation } from '@macro-entity';
-import ChatDebugIcon from '@phosphor/chat-text.svg';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
-  const { showPaywall } = usePaywallState();
 
   // Seed the model selector, highest priority first:
   //  1. peekPendingSend — the model the user just sent with in the soup chat
@@ -77,14 +78,60 @@ export function Chat(props: { data: ChatData }) {
       initialAttachments={loadedState.attachments}
       model={initialModel}
     >
-      <ChatProvider
-        chatId={props.data.chat.id}
-        messages={props.data.chat.messages}
-        controllerOptions={{ onShowPaywall: showPaywall }}
-      >
-        <ChatInner data={props.data} loadedInputText={loadedState.input} />
-      </ChatProvider>
+      <ChatWithController
+        data={props.data}
+        loadedInputText={loadedState.input}
+      />
     </ChatInputProvider>
+  );
+}
+
+/**
+ * Sits inside `ChatInputProvider` so the controller can be wired to model
+ * state — specifically, so a provider-outage error toast can switch the chat
+ * to a model from a different provider.
+ */
+function ChatWithController(props: {
+  data: ChatData;
+  loadedInputText: string | undefined;
+}) {
+  const { showPaywall } = usePaywallState();
+  const input = useChatInputContext();
+  const hasPaidAccess = useHasPaidAccess();
+
+  // Providers that have failed during this chat session. We avoid bouncing the
+  // user back to a provider we already know is down (e.g. Anthropic → OpenAI →
+  // back to Anthropic). Lives for the life of this chat component.
+  const failedProviders = new Set<string>();
+
+  // The model we'd fall back to if the current one failed: a different,
+  // non-failed provider drawn from the user's accessible models.
+  const nextModel = () =>
+    alternateProviderModel(input.model(), {
+      candidates: [...modelsForPlan(hasPaidAccess())],
+      failedProviders,
+    });
+
+  const onSwitchModel = () => {
+    const alternate = nextModel();
+    if (!alternate) return;
+    // Record the provider that just failed before moving off it.
+    failedProviders.add(MODEL_PROVIDER[input.model()]);
+    input.setModel(alternate);
+  };
+
+  return (
+    <ChatProvider
+      chatId={props.data.chat.id}
+      messages={props.data.chat.messages}
+      controllerOptions={{
+        onShowPaywall: showPaywall,
+        onSwitchModel,
+        hasAlternateModel: () => nextModel() !== undefined,
+      }}
+    >
+      <ChatInner data={props.data} loadedInputText={props.loadedInputText} />
+    </ChatProvider>
   );
 }
 
@@ -276,23 +323,12 @@ function ChatInner(props: {
     >
       <Show when={!isNestedBlock}>
         <Suspense>
-          <TopBar />
+          <TopBar
+            showStreamDebug={showStreamDebug}
+            toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
+          />
         </Suspense>
       </Show>
-      <SplitToolbarLeft>
-        <Show when={DEV_MODE_ENV}>
-          <Button
-            size="icon-sm"
-            class="rounded-xs"
-            onClick={() => setShowStreamDebug((p) => !p)}
-            tooltip={
-              showStreamDebug() ? 'Hide Stream Debug' : 'Show Stream Debug'
-            }
-          >
-            <ChatDebugIcon />
-          </Button>
-        </Show>
-      </SplitToolbarLeft>
       <Show when={showStreamDebug()}>
         <div class="px-2 py-1 bg-surface border-b border-edge text-ink font-mono text-sm">
           <Show when={chat.stream()} fallback={<div>No active stream</div>}>

@@ -10,6 +10,7 @@ import {
   getTypePreposition,
   getUniqueGithubLogins,
   getUniqueSenderIds,
+  isGithubNotificationType,
 } from './notification-description-helpers';
 
 // Re-export helpers for backward compatibility and testing
@@ -53,27 +54,31 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     return parts.firstName() || parts.fullName();
   };
 
-  // Sender display labels for the notification/stack. Macro senders resolve to
-  // their display name; GitHub PR senders (who usually aren't Macro users and so
-  // have no `sender_id`) fall back to the GitHub login carried in the
-  // notification metadata.
+  // Sender display labels for the notification/stack. GitHub PR senders are
+  // always named by the GitHub login carried in the notification metadata —
+  // never by a linked Macro user's name, even when the notification has a
+  // `sender_id`. Macro senders resolve to their display name.
   // Memoized so the per-sender name resolution (which has side effects: it
   // queues a fetch and registers a reactive effect) runs once per dependency
   // change rather than on every call from the description() formatters.
   const senderLabels = createMemo((): string[] => {
     if (props.notification) {
+      const tag = props.notification.notification_metadata.tag;
+      if (isGithubNotificationType(tag)) {
+        const login = getGithubSenderLogin(props.notification);
+        return login ? [login] : [];
+      }
       if (props.notification.sender_id) {
         return [macroFirstName(props.notification.sender_id)];
       }
-      const login = getGithubSenderLogin(props.notification);
-      return login ? [login] : [];
+      return [];
     }
     if (props.stack) {
-      const macroIds = getUniqueSenderIds(props.stack.notifications);
-      if (macroIds.length > 0) {
-        return macroIds.map(macroFirstName);
+      if (isGithubNotificationType(props.stack.type)) {
+        return getUniqueGithubLogins(props.stack.notifications);
       }
-      return getUniqueGithubLogins(props.stack.notifications);
+      const macroIds = getUniqueSenderIds(props.stack.notifications);
+      return macroIds.map(macroFirstName);
     }
     return [];
   });

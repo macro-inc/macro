@@ -11,6 +11,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { AutomationComposer } from '@block-automation/component';
 import { useIsAuthenticated } from '@core/auth';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { isSettingsPath } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
@@ -27,10 +28,12 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { AddInboxDialog, isAddInboxDialogOpen } from './AddInboxDialog';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { CommandMenu } from './command';
+import { FavoritesCommands } from './command/FavoritesCommands';
 import { DevStatusBar } from './DevStatusBar';
 import { GithubReauthenticationPrompt } from './GithubReauthenticationPrompt';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -48,7 +51,6 @@ import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
-import { SettingsModal } from './settings/SettingsModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const AUTH_URLS = [
@@ -63,7 +65,7 @@ const AUTH_URLS = [
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isMobile() ? 'slim' : 'hidden'),
+  createSignal<SidebarState>(!isMobile() ? 'expanded' : 'hidden'),
   {
     name: 'sidebar-state',
   }
@@ -76,8 +78,13 @@ export function Layout(props: RouteSectionProps) {
     () =>
       !isMobile() &&
       isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname)
+      !AUTH_URLS.includes(location.pathname) &&
+      // Settings is a full-cover route with its own tab nav — hide app chrome.
+      !isSettingsPath(location.pathname)
   );
+  createEffect(() => {
+    console.log('VIZ', sidebarVisible());
+  });
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -136,6 +143,7 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShortcuts />
           <Show when={!isMobile()}>
             <Suspense>
+              <FavoritesCommands />
               <CommandMenu />
             </Suspense>
           </Show>
@@ -146,7 +154,9 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
-          <SettingsModal />
+          <Show when={isAddInboxDialogOpen()}>
+            <AddInboxDialog />
+          </Show>
         </Show>
         <Show
           when={
@@ -165,21 +175,23 @@ function LayoutInner(props: RouteSectionProps) {
         <Paywall />
       </Show>
       <div class="max-h-full grow flex">
-        <Show when={isSidebarVisible()}>
-          <AppSidebar
-            sidebarState={sidebarState()}
-            onOpenChange={(open) => {
-              if (!open) {
-                setSidebarState(isMobile() ? 'hidden' : 'slim');
-                return;
-              }
-
-              setSidebarState('expanded');
-            }}
-          />
-        </Show>
-
+        {/* The provider spans the sidebar too so its favorites can register
+            sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
+          <Show when={isSidebarVisible()}>
+            <AppSidebar
+              sidebarState={sidebarState()}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setSidebarState(isMobile() ? 'hidden' : 'slim');
+                  return;
+                }
+
+                setSidebarState('expanded');
+              }}
+            />
+          </Show>
+
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
             {props.children}
           </div>

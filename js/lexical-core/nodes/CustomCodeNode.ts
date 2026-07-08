@@ -68,15 +68,15 @@ export type SerializedCustomCodeNode = Spread<
 
 // Re-export for backward compatibility
 export {
-  SupportedLanguages,
-  type SupportedLanguage,
   DEFAULT_LANGUAGE,
-  LanguageDefinitions,
-  type LanguageDefinition,
-  isSupportedLanguage,
-  normalizedLanguage,
-  isNormalizedLanguage,
   getSupportedLanguageFromFileExtension,
+  isNormalizedLanguage,
+  isSupportedLanguage,
+  type LanguageDefinition,
+  LanguageDefinitions,
+  normalizedLanguage,
+  type SupportedLanguage,
+  SupportedLanguages,
 };
 
 PrismTokenizer.defaultLanguage = DEFAULT_LANGUAGE;

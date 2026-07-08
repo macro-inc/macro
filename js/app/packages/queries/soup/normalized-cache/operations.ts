@@ -74,16 +74,30 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
-  if (partial.tag === 'channelThread') return { rollback: () => {} };
-
-  cancelSoupQueries();
-
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
   const dependentKeys = normKey
     ? normalizer.getDependentQueriesByIds([normKey])
     : [];
+
+  // Cancel only the queries this patch touches. A blanket cancel strands
+  // unrelated in-flight refetches (e.g. an invalidated destination folder's
+  // list refetching on mount): the fetch dies and nothing retries it.
+  // Skip cold initial fetches (data === undefined); cancelling those can leave
+  // the query stuck pending, which is why cancelSoupQueries has the same guard.
+  for (const queryKey of dependentKeys) {
+    if (
+      partialMatchKey(queryKey, soupKeys.items._def) ||
+      partialMatchKey(queryKey, soupKeys.astItems._def)
+    ) {
+      queryClient.cancelQueries({
+        queryKey,
+        exact: true,
+        predicate: (query) => query.state.data !== undefined,
+      });
+    }
+  }
   const previousDependents = dependentKeys.map(
     (key: QueryKey) =>
       [key, queryClient.getQueryData<SoupItemsInfiniteData>(key)] as const
@@ -128,6 +142,18 @@ export function invalidateSoupEntity(entityId: string): void {
   }
 }
 
+/** Mark stale soup queries whose query key references any of the given ids (e.g. project-scoped views). */
+export function invalidateSoupQueriesReferencing(ids: string[]): void {
+  if (ids.length === 0) return;
+  queryClient.invalidateQueries({
+    queryKey: ['soup'],
+    predicate: (query) => {
+      const serialized = JSON.stringify(query.queryKey);
+      return ids.some((id) => serialized.includes(id));
+    },
+  });
+}
+
 /** Mark every soup list query stale. Use `invalidateSoupEntity` when the entity ID is known. */
 export function invalidateAllSoup(): void {
   queryClient.invalidateQueries({
@@ -162,8 +188,6 @@ export function getSoupItemId(item: SoupApiItem): string {
  * and upsert into each resolvable group. Date / unresolved labels invalidate.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
-  if (item.tag === 'channelThread') return { rollback: () => {} };
-
   cancelSoupQueries();
 
   const previous = snapshotSoup();
@@ -345,8 +369,6 @@ export async function refetchSoupEntity(
   entityType: SoupEntityTag,
   options?: { includeRoot?: boolean }
 ): Promise<void> {
-  if (entityType === 'channelThread') return;
-
   const { storageServiceClient } = await import('@service-storage/client');
 
   const filter = buildSingleEntityFilter(entityType, entityId, options);
@@ -368,8 +390,6 @@ export async function refetchSoupEntity(
   if (!page.items.length) return;
 
   for (const item of page.items) {
-    if (item.tag === 'channelThread') continue;
-
     const itemId = getSoupItemId(item);
     if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
@@ -423,7 +443,10 @@ export function buildSingleEntityFilter(
       ...base,
       foreign_entity_filters: { ids: [entityId] },
     }))
-    .with('channelThread', () => base)
+    .with('channelThread', () => ({
+      ...base,
+      channel_thread_filters: { thread_ids: [entityId] },
+    }))
     .exhaustive();
 }
 
@@ -448,11 +471,7 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
-  } else if (
-    current.tag === 'call' ||
-    current.tag === 'foreignEntity' ||
-    current.tag === 'channelThread'
-  ) {
+  } else if (current.tag === 'call' || current.tag === 'foreignEntity') {
     // Call records, foreign entities, and channel threads don't have viewedAt — skip.
     return;
   } else {
@@ -490,12 +509,16 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'call' || current.tag === 'channelThread') {
+  } else if (current.tag === 'call') {
     // Call records use endedAt/startedAt and channel threads nest message timestamps — skip.
     return;
   } else {
-    if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))
-      return;
+    const timestamp =
+      current.tag === 'channelThread'
+        ? current.data.updated_at
+        : current.data.updatedAt;
+
+    if (!shouldUpdateOptimisticTimestamp(timestamp, updatedAt)) return;
 
     optimisticUpdateSoupEntity({
       tag: current.tag,

@@ -30,6 +30,8 @@ import {
 
 interface EmailMessageBodyProps {
   message: ApiMessage;
+  /** Sender emails (lowercased) with a CATEGORY_PERSONAL message in the thread */
+  personalSenders: Accessor<Set<string>>;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: (messageID: string | undefined) => void;
@@ -109,9 +111,12 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() => {
+    const senderEmail = props.message.from?.email?.toLowerCase();
     return (
-      props.message.from?.email === userEmail() ||
-      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')
+      (senderEmail !== undefined &&
+        senderEmail === userEmail()?.toLowerCase()) ||
+      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL') ||
+      (senderEmail !== undefined && props.personalSenders().has(senderEmail))
     );
   });
 
@@ -131,7 +136,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       isPersonal() && !isMacroSender()
         ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
         : '';
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
+    // Let long &nbsp;-joined signature lines wrap (overflow-wrap is inherited)
+    // and fixed-width tables scroll, so a wide signature doesn't trip the
+    // fit-to-width zoom below and shrink the whole message.
+    const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
+    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';

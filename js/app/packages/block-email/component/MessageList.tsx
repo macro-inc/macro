@@ -3,11 +3,23 @@ import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
-import { createMemo, createSelector, Index, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSelector,
+  Index,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { MessageContainer } from './MessageContainer';
+
+// Fraction of the list height reserved below the newest message so it rests
+// toward the middle of the view instead of pinned to the bottom edge.
+const LAST_MESSAGE_REST_FRACTION = 0.4;
 
 interface MessageListProps {
   initialLoadComplete: boolean;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   onScrollPositionChange?: (scrollFromTop: number) => void;
   title?: string;
   /**
@@ -30,10 +42,28 @@ export function MessageList(props: MessageListProps) {
     (a, b) => a === b
   );
 
+  // Since the list is bottom-anchored (col-reverse), extra bottom padding is
+  // the only way to let the newest message rest above the bottom edge. A
+  // thread that fills the screen gets its oldest messages pushed above the
+  // fold (still one scroll away) — the newest message resting at a
+  // consistent height wins over keeping the whole thread in view.
+  createEffect(() => {
+    const list = context.messagesListRef();
+    if (!list || isMobile()) return;
+    const observer = new ResizeObserver(() => {
+      list.style.setProperty(
+        '--thread-bottom-pad',
+        `${Math.round(list.clientHeight * LAST_MESSAGE_REST_FRACTION)}px`
+      );
+    });
+    observer.observe(list);
+    onCleanup(() => observer.disconnect());
+  });
+
   return (
     <div
       class={cn(
-        'pt-1 pb-6 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5',
+        'pt-1 pb-[calc(1.5rem+var(--thread-bottom-pad,0px))] w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm gap-1.5',
         // In-scroll top inset: messages rest below the floating split chrome
         // but under-scroll it.
         'mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
@@ -120,6 +150,9 @@ export function MessageList(props: MessageListProps) {
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}
                 isExpanded={isExpanded()}
+                markdownDomRef={
+                  isLastMessage() ? props.markdownDomRef : undefined
+                }
               />
             );
           }}

@@ -46,7 +46,6 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
 
   const forwardPhase = forwardAnimation.phase;
   const forwardIsActive = () => forwardPhase() !== 'idle';
-  const forwardIsAnimating = () => forwardPhase() === 'animating';
 
   function styleForSlot(isForeground: boolean) {
     if (forwardIsActive()) {
@@ -60,9 +59,7 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
       'absolute inset-0',
       {
         'z-10': isForeground && !forwardIsActive(),
-        'z-0 pointer-events-none':
-          (!isForeground && !forwardIsActive()) ||
-          (isForeground && forwardIsAnimating()),
+        'z-0 pointer-events-none': !isForeground && !forwardIsActive(),
         'z-user-highlight pointer-events-none':
           !isForeground && forwardIsActive(),
       },
@@ -70,7 +67,7 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
         !swipeBackGesture.isDragging() &&
         !swipeBackGesture.isAnimatingOut() &&
         !forwardIsActive() &&
-        'hidden'
+        'invisible'
     );
   }
 

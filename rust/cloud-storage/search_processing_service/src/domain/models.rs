@@ -155,6 +155,32 @@ pub struct DocumentBackfillRequest {
     pub index_override: Option<String>,
 }
 
+/// Project backfill filter. All `None` means "every non-deleted project".
+///
+/// `updated_after` / `updated_before` filter on `updatedAt` so incremental
+/// runs (e.g. "anything changed since X") catch projects that existed before
+/// the cutoff but were modified after it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ProjectBackfillRequest {
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for project backfills.
+///
+/// `get_projects_for_search_backfill` walks `"Project"` in
+/// `(updatedAt ASC, id ASC)` order; the cursor carries the last row's
+/// pair so the next page resumes with `WHERE (updatedAt, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct ProjectBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub project_id: String,
+}
+
 /// Email-thread backfill filter.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -165,4 +191,14 @@ pub struct EmailBackfillRequest {
     /// Number of thread ids grouped into each SQS batch message. `None` uses
     /// the adapter's default.
     pub batch_size: Option<usize>,
+}
+
+/// Property-only backfill: re-enqueue a property update message for every
+/// entity of one type that has property rows, refreshing the denormalized
+/// `properties` field without re-extracting content. Used after adding the
+/// field to an index's mapping.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PropertiesBackfillRequest {
+    /// The property entity type to backfill (e.g. "thread").
+    pub entity_type: String,
 }

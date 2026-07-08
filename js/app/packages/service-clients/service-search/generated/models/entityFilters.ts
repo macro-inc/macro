@@ -39,4 +39,8 @@ export interface EntityFilters {
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */
   property_filters?: PropertyFilter[];
+  /** tag option ids matched against `properties.values`, OR'd together across
+all tag definitions. Option ids are globally unique, so the match ignores
+the owning definition id (personal and team tags combine into one OR). */
+  tag_option_ids?: string[];
 }

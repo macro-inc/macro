@@ -7,6 +7,7 @@ import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
 import { displayResultsHandler } from './DisplayResults';
+import { editDocumentHandler } from './EditDocument';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
@@ -36,6 +37,8 @@ import { readThreadHandler } from './ReadThread';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { searchToolsHandler } from './SearchTools';
+import { selfKnowledgeHandler } from './SelfKnowledge';
+import { sendChannelMessageHandler } from './SendChannelMessage';
 import { sendEmailHandler } from './SendEmail';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
@@ -65,6 +68,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  EditDocument: editDocumentHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
   ReadCallRecord: readCallRecordHandler,
@@ -77,6 +81,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadMetadata: readMetadataHandler,
   RenameDocument: renameDocumentHandler,
   SearchTools: searchToolsHandler,
+  SelfKnowledge: selfKnowledgeHandler,
+  SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
   SetEntityProperty: setEntityPropertyHandler,
   Subagent: subagentHandler,

@@ -41,6 +41,8 @@ lexical_client = { path = "../lexical_client" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }
+macro_event_broker = { path = "../macro_event_broker" }
+macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
@@ -54,6 +56,7 @@ prompt = { path = "../prompt" }
 models_properties = { path = "../models_properties" }
 models_search = { path = "../models_search" }
 rand.workspace = true
+reqwest.workspace = true
 readonly_pool = { path = "../readonly_pool" }
 rootcause = { workspace = true }
 schemars.workspace = true

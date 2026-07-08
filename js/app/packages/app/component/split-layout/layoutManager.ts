@@ -7,10 +7,13 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { isMobile } from '@core/mobile/isMobile';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
+import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -83,6 +86,27 @@ function getAliasOrType(content: SplitContent): string {
     : content.aliasContext?.alias || content.type;
 }
 
+/**
+ * The `type/id` URL pair for a split's content. The docked settings panel is
+ * stored internally as the `component/settings` content, but it serializes as
+ * `settings/<active-tab-slug>` so the URL reflects (and can restore) which
+ * settings page is open — matching the full-page `/settings/:tab` route. Reads
+ * the active-tab signal, so the URL updates reactively as the tab changes.
+ *
+ * On mobile the panel keeps its internal `component/settings` form instead:
+ * mobile serializes only the foreground split, and a bare `settings/<tab>`
+ * path would be claimed by the full-page `/settings/:tab` route — unmounting
+ * the split layout whose back button / swipe-back gesture are the reason
+ * settings docks into a split on mobile in the first place.
+ */
+function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component' && content.id === 'settings') {
+    if (isMobile()) return ['component', 'settings'];
+    return ['settings', settingsTabToSlug(activeTabId())];
+  }
+  return [getAliasOrType(content), content.id].map(String);
+}
+
 function keyOfSplitContent(s: SplitContent): SplitKey {
   return `${s.type}:${s.id}`;
 }
@@ -135,6 +159,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {
@@ -151,6 +176,7 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  insertIndex?: number;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
@@ -166,7 +192,16 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  insertIndex?: number;
   handle?: SplitHandle;
+  /**
+   * Ask the block to land on its latest content via the `goToLatest` block
+   * method. Covers content that is already mounted (e.g. a channel open in
+   * another split parked at an old scroll position), which would otherwise
+   * just be activated as-is. Omit when navigating to a specific location
+   * within the block.
+   */
+  reopen?: 'latest';
 };
 
 /**
@@ -372,16 +407,6 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     referredFrom?: ReferredFrom;
   }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
-  /**
-   * Jump to the most-recent prior history entry matching `predicate` (or
-   * forward to the closest match if none earlier). Captures current entry
-   * state first, like back/forward. Returns true if a match was found and
-   * navigated to; false if no match (history left unchanged).
-   *
-   * Use for "open this view if it's already in my history, otherwise fall
-   * back to a fresh push" patterns (e.g. sidebar nav).
-   */
-  goToEntry: (predicate: (content: SplitContent) => boolean) => boolean;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -422,6 +447,12 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * keyed by `key`. Returns a teardown.
    */
   registerEntryStateCaptor: (key: string, getter: () => unknown) => () => void;
+  /**
+   * Immediately capture registered entry-state slices into the split's current
+   * history entry. This is usually done implicitly on navigation, but here we offer
+   * an explicit handle to trigger it manually, e.g. for mobile to manage it's split.
+   */
+  captureEntryState: () => void;
   /**
    * Read the `state` blob attached to this split's *current* history entry.
    * Returns `undefined` if no state has been captured.
@@ -560,7 +591,7 @@ export function createSplitLayout(
     if (idx < 0 || idx >= items.length) return;
     const currentItem = items[idx];
 
-    const state: EntryState = {};
+    const state: EntryState = { ...(currentItem.state ?? {}) };
     for (const [key, getter] of captors) {
       try {
         state[key] = getter();
@@ -763,48 +794,6 @@ export function createSplitLayout(
     reattach(split, next, undefined, 'replace');
   }
 
-  function goToEntry(
-    id: SplitId,
-    predicate: (content: SplitContent) => boolean
-  ): boolean {
-    const i = splitIndexById(id);
-    if (i < 0) {
-      console.error(`Split with id ${id} not found`);
-      return false;
-    }
-    const split = state.splits[i];
-    const items = split.history.items;
-    const currentIdx = split.history.index;
-    if (items.length === 0) return false;
-
-    // Prefer the closest match looking backwards (more common case — the
-    // user just came from there). Fall back to looking forward.
-    let targetIdx = -1;
-    for (let j = currentIdx - 1; j >= 0; j--) {
-      if (predicate(items[j])) {
-        targetIdx = j;
-        break;
-      }
-    }
-    if (targetIdx === -1) {
-      for (let j = currentIdx + 1; j < items.length; j++) {
-        if (predicate(items[j])) {
-          targetIdx = j;
-          break;
-        }
-      }
-    }
-    if (targetIdx === -1 || targetIdx === currentIdx) return false;
-
-    captureCurrentEntryState(split);
-    const target = split.history.goToIndex(targetIdx);
-    if (!target) return false;
-    const cause: NavigationCause =
-      targetIdx < currentIdx ? 'history-back' : 'history-forward';
-    reattach(split, target, undefined, cause);
-    return true;
-  }
-
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -845,8 +834,7 @@ export function createSplitLayout(
   const getUrlSegments = () => {
     return state.splits
       .filter((s) => !isExcluded(s))
-      .flatMap((s) => [getAliasOrType(s.content), s.content.id])
-      .map(String);
+      .flatMap((s) => contentUrlSegments(s.content));
   };
 
   const getUrl = () => {
@@ -919,8 +907,14 @@ export function createSplitLayout(
       id: currentSplit.id,
       content,
       activate: () => activateSplit(currentSplit.id),
-      canGoBack: () => currentSplit.history.canGoBack(),
-      canGoForward: () => currentSplit.history.canGoForward(),
+      // Re-resolve the split by id rather than reading the captured
+      // `currentSplit`. reconcileSplits can replace the SplitState (fresh
+      // history, same id) while this handle instance persists, so the captured
+      // reference goes stale and the button would report the old history.
+      canGoBack: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoBack(),
+      canGoForward: () =>
+        (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
@@ -929,8 +923,6 @@ export function createSplitLayout(
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },
-      goToEntry: (predicate: (content: SplitContent) => boolean) =>
-        goToEntry(currentSplit.id, predicate),
       previousContent: () => {
         const s = findSplitById(currentSplit.id);
         if (!s) return null;
@@ -957,9 +949,8 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () =>
-        [getAliasOrType(content()), content().id].map(String),
-      getUrl: () => getAliasOrType(content()) + '/' + content().id,
+      getUrlSegments: () => contentUrlSegments(content()),
+      getUrl: () => contentUrlSegments(content()).join('/'),
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
@@ -1014,6 +1005,11 @@ export function createSplitLayout(
           if (map.size === 0) entryStateCaptors.delete(currentSplit.id);
         };
       },
+      captureEntryState: () => {
+        const live = s();
+        if (!live) return;
+        captureCurrentEntryState(live);
+      },
       currentEntryState: () => {
         const live = s();
         if (!live) return undefined;
@@ -1026,8 +1022,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
-      options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      initialHistory,
+      insertIndex,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -1051,7 +1053,17 @@ export function createSplitLayout(
       initialHistory,
     });
 
-    setState('splits', (previousSplits) => [...previousSplits, split]);
+    setState('splits', (previousSplits) => {
+      if (insertIndex === undefined) return [...previousSplits, split];
+
+      const nextSplits = [...previousSplits];
+      nextSplits.splice(
+        Math.max(0, Math.min(insertIndex, nextSplits.length)),
+        0,
+        split
+      );
+      return nextSplits;
+    });
 
     const handle = getSplit(split.id)!;
 
@@ -1267,6 +1279,16 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    if (options.reopen === 'latest') {
+      // Fire-and-forget so it covers every open path (fresh mount, duplicate
+      // activation, interceptor-consumed navigation). The block-handle proxy
+      // waits for the block and method to register before invoking.
+      void orchestrator
+        .getBlockHandle(content.id)
+        .then((handle) => handle?.goToLatest())
+        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
+    }
+
     if (navigationInterceptor) {
       const result = navigationInterceptor(content, options);
       if (result.handled) return undefined;
@@ -1313,6 +1335,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
+        insertIndex: options.insertIndex,
       });
     }
   }

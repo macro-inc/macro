@@ -2124,6 +2124,16 @@
               }
             }
           },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnresolvedSignatureImagesError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -3048,6 +3058,10 @@
                 "description": "Headers JSON."
               }
             ]
+          },
+          "include_signature": {
+            "type": ["boolean", "null"],
+            "description": "Per-message override for whether to include the signature on send:\n`Some(false)` to exclude (user dismissed it). Omit to use the inbox's\ndefault policy. Ignored for drafts."
           },
           "provider_id": {
             "type": ["string", "null"],
@@ -5041,6 +5055,18 @@
           "email_address": {
             "type": "string",
             "description": "The email address of the sender to unblock."
+          }
+        }
+      },
+      "UnresolvedSignatureImagesError": {
+        "type": "object",
+        "description": "Body returned with a 422 when signature images can't be loaded.",
+        "required": ["unresolved_image_count"],
+        "properties": {
+          "unresolved_image_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },

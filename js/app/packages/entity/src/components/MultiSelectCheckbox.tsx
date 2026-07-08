@@ -4,6 +4,7 @@ import { Show } from 'solid-js';
 
 interface MultiSelectCheckboxProps {
   checked?: boolean;
+  showBorder?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
 }
 
@@ -31,6 +32,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
         class={cn(
           'size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none',
           {
+            'border border-edge': props.showBorder,
             'bg-accent border border-accent': props.checked,
           }
         )}

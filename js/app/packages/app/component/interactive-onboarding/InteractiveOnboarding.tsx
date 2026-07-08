@@ -133,14 +133,11 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   const advanceLesson = () => {
     const current = state.currentLesson();
     if (!current) return;
-    analytics.track(
-      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
-      {
-        id: current.definition.id,
-        index: current.index,
-        state: 'completed',
-      }
-    );
+    analytics.track('tutorial_step', {
+      id: current.definition.id,
+      index: current.index,
+      state: 'completed',
+    });
     state.completeLesson(current.definition.id);
     setReadyToContinue(false);
     setContinueLabel(undefined);
@@ -150,14 +147,11 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     const current = state.currentLesson();
     if (!current) return;
 
-    analytics.track(
-      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
-      {
-        id: current.definition.id,
-        index: current.index,
-        state: 'skipped',
-      }
-    );
+    analytics.track('tutorial_step', {
+      id: current.definition.id,
+      index: current.index,
+      state: 'skipped',
+    });
 
     state.skipLesson(current.definition.id);
     setReadyToContinue(false);
@@ -168,14 +162,11 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     const current = state.currentLesson();
     if (!current || !readyToContinue()) return;
 
-    analytics.track(
-      `onboarding_step_${current.definition.id.replaceAll('-', '_')}`,
-      {
-        id: current.definition.id,
-        index: current.index,
-        state: 'completed',
-      }
-    );
+    analytics.track('tutorial_step', {
+      id: current.definition.id,
+      index: current.index,
+      state: 'completed',
+    });
 
     state.completeLesson(current.definition.id);
     setReadyToContinue(false);
@@ -328,8 +319,10 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       () => state.isFinished(),
       (finished) => {
         if (finished && !testMode) {
+          analytics.track('tutorial_completed', {
+            isFirstTime: props.isFirstTimeOnboarding === true,
+          });
           if (props.isFirstTimeOnboarding) {
-            analytics.track('onboarding_completed');
             completeTutorial.mutate(undefined);
           }
         }
@@ -340,7 +333,9 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   onMount(() => {
     if (state.currentIndex() > 0) return;
 
-    analytics.track('onboarding_start');
+    analytics.track('tutorial_started', {
+      isFirstTime: props.isFirstTimeOnboarding === true,
+    });
   });
 
   createEffect(
@@ -349,14 +344,11 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       (lesson) => {
         if (!lesson) return;
 
-        analytics.track(
-          `onboarding_step_${lesson.definition.id.replaceAll('-', '_')}`,
-          {
-            id: lesson.definition.id,
-            index: lesson.index,
-            state: 'viewed',
-          }
-        );
+        analytics.track('tutorial_step', {
+          id: lesson.definition.id,
+          index: lesson.index,
+          state: 'viewed',
+        });
       }
     )
   );

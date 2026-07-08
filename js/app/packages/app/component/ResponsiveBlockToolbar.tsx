@@ -13,16 +13,18 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from './split-layout/components/SplitHeader';
-import { SplitPermissionsBadge } from './split-layout/components/SplitLabel';
 import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
+  SplitPermissionsBadge,
+  SplitTitleFileMenu,
+} from './split-layout/components/SplitLabel';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitFileMenuAction } from './split-layout/context';
 
 export type BlockTool = {
   label: string | (() => string);
   icon: Component;
   action: () => void;
+  children?: SplitFileMenuAction[];
   condition?: () => boolean;
   isActive?: () => boolean;
   buttonComponent?: () => JSX.Element;
@@ -56,6 +58,10 @@ export function ToolButton(props: { tool: BlockTool }) {
   );
 }
 
+function getToolLabel(tool: BlockTool) {
+  return typeof tool.label === 'function' ? tool.label() : tool.label;
+}
+
 export function ResponsivePermissionsBadge() {
   return (
     <Show
@@ -77,6 +83,7 @@ export function ResponsivePermissionsBadge() {
 
 interface BlockToolbarProps {
   tools: BlockTool[];
+  menuTools?: BlockTool[];
   ops: FileOperation[];
   id: string;
   itemType: ItemType;
@@ -88,52 +95,96 @@ interface BlockToolbarProps {
  * Handles the standard arrangement of file ops and block tools on desktop and mobile. On mobile, they are condensed together into a dropdown menu in the SplitHeader.
  */
 export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
+  const isShareTool = (tool: BlockTool) => getToolLabel(tool) === 'Share';
+  const isHiddenTool = (tool: BlockTool) => {
+    const label = getToolLabel(tool);
+    return (
+      label === 'Chat' ||
+      label === 'Dispatch to Agent' ||
+      label === 'References'
+    );
+  };
+  const visibleTools = () => props.tools.filter((tool) => !isHiddenTool(tool));
+  const headerTools = () => visibleTools().filter(isShareTool);
+  const toolbarTools = () =>
+    visibleTools().filter((tool) => !isShareTool(tool));
+  const activeToolbarTools = () =>
+    toolbarTools().filter((tool) => !tool.condition || tool.condition());
+  const fileMenuTools = () => {
+    if (!props.menuTools) return visibleTools();
+
+    const menuToolLabels = new Set(props.menuTools.map(getToolLabel));
+    const missingShareTools = visibleTools().filter(
+      (tool) => isShareTool(tool) && !menuToolLabels.has(getToolLabel(tool))
+    );
+
+    return [...props.menuTools, ...missingShareTools];
+  };
+
   return (
     <Show
       when={isMobile()}
       fallback={
         <>
+          <SplitHeaderRight>
+            <div class="order-[1000] flex items-center gap-1">
+              <For each={headerTools()}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+            </div>
+          </SplitHeaderRight>
           <Show when={props.ops.length > 0}>
-            <SplitToolbarLeft>
+            <SplitTitleFileMenu>
               <SplitFileMenu
                 id={props.id}
                 itemType={props.itemType}
                 name={props.name}
                 formattedName={props.formattedName}
                 ops={props.ops}
+                tools={fileMenuTools()}
                 buttonClass="order-first"
               />
-            </SplitToolbarLeft>
+            </SplitTitleFileMenu>
           </Show>
-          <SplitToolbarRight>
-            <For each={props.tools}>
-              {(tool) => (
-                <Show when={!tool.condition || tool.condition()}>
-                  {tool.buttonComponent ? (
-                    <tool.buttonComponent />
-                  ) : (
-                    <ToolButton tool={tool} />
-                  )}
-                </Show>
-              )}
-            </For>
-          </SplitToolbarRight>
+          <Show when={activeToolbarTools().length > 0}>
+            <SplitToolbarRight>
+              <For each={activeToolbarTools()}>
+                {(tool) => (
+                  <>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </>
+                )}
+              </For>
+            </SplitToolbarRight>
+          </Show>
         </>
       }
     >
-      <SplitHeaderRight>
-        <HeaderIsland>
+      <SplitTitleFileMenu>
+        <Show when={props.ops.length > 0}>
           <SplitFileMenu
             id={props.id}
             itemType={props.itemType}
             name={props.name}
             formattedName={props.formattedName}
             ops={props.ops}
-            tools={props.tools}
+            tools={fileMenuTools()}
             buttonClass="order-last"
           />
-        </HeaderIsland>
-      </SplitHeaderRight>
+        </Show>
+      </SplitTitleFileMenu>
     </Show>
   );
 }

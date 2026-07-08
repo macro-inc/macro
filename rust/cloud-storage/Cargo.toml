@@ -7,11 +7,14 @@ members = [
   "ai_projections_refresh_handler",
   "ai_usage",
   "authentication_service",
-  "backfill_entity_access",
   "bot_id",
   "bots",
   "call_recording_preview_handler",
   "channel_bots",
+  "client/cache-core",
+  "client/cache-idb",
+  "client/cache-sqlite",
+  "client/cache-wasm",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -32,16 +35,24 @@ members = [
   "email_sfs_delete_handler",
   "email_suppression_handler",
   "embedding",
+  "favorites",
   "foreign_entity",
+  "graphql_soup",
   "image_optimizer",
   "image_proxy_service",
   "integration_tests/local_e2e",
+  "macro_config",
+  "macro_event_broker",
+  "macro_event_topics",
+  "macro_queues",
+  "macro_sync_service_jwt",
   "mcp_service",
   "memory",
   "notification_sandbox",
   "notification_service",
   "organization_retention_handler",
   "organization_retention_trigger",
+  "prompt",
   "properties_service",
   "scheduled_action",
   "search_processing_service",
@@ -52,21 +63,24 @@ members = [
   "static_file_service",
   "task_dedup",
   "tools/native_app_server",
+  "tools/xtask",
+  "tools/xtask/crates/*",
   "unfurl",
   "unfurl_service",
   "upload_extractor_lambda_handler",
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
-  "macro_config",
-  "prompt",
   "workspace-hack",
-  "tools/xtask",
 ]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
+apollo-compiler = "1"
+apollo-parser = "0.8"
 askama = "0.14"
+async-graphql = "7.2.1"
+async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
@@ -75,7 +89,9 @@ async-openai = { version = "0.36.1", features = [
 ] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
+automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
+aws-msk-iam-sasl-signer = "1.0.1"
 aws-sdk-dynamodb = "1.111.0"
 aws-sdk-lambda = "1.122.0"
 aws-sdk-s3 = "1.132.0"
@@ -84,6 +100,7 @@ aws-sdk-sesv2 = "1.118.0"
 aws-sdk-sns = "1.99.0"
 aws-sdk-sqs = "1.98.0"
 aws-smithy-types = "1.4.7"
+aws-types = "1"
 aws_lambda_events = { version = "0.16.0", default-features = false }
 axum = { version = "0.8", features = ["tower-log"] }
 axum-extra = { version = "0.10" }
@@ -100,11 +117,17 @@ dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
+# Pinned engine for the generated dependency artifacts (used by the xtask
+# graph/deps commands). This version lives in Cargo.lock, so dev machines and
+# CI always run the identical generator; guppy is pinned to the version the
+# hakari release is built against.
+guppy = "0.17.24"
 hex = "0.4.3"
 hmac = "0.12.1"
 http = "1"
 http-body-util = "0.1.2"
 image = "0.25"
+indexmap = "2"
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -120,6 +143,8 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 ] }
 livekit-protocol = "0.7.2"
 log = "0.4.26"
+lol_html = "2.4.0"
+lru = "0.16"
 mockall = "0.13"
 nom = "8"
 opentelemetry = "0.31.0"
@@ -133,10 +158,21 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
 opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 ordered-float = "5"
 paste = "1"
-pdfium-render = { version = "0.8.37", default-features = false, features = ["pdfium_7543", "thread_safe"] }
+pdfium-render = { version = "0.8.37", default-features = false, features = [
+  "pdfium_7543",
+  "thread_safe",
+] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
+postcard = { version = "1", features = ["use-std"] }
 quote = "1"
 rand = "0.9.0"
+# uses vendored to fix lambda builds failing.
+rdkafka = { version = "0.37", default-features = false, features = [
+  "cmake-build",
+  "libz-static",
+  "ssl-vendored",
+  "tokio",
+] }
 recursion = "0.5.4"
 redis = "1.0.3"
 regex = "1.11.1"
@@ -151,10 +187,12 @@ rootcause = { version = "0.12" }
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1.0.214", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
 serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
+serde_yaml = "0.9"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -194,6 +232,8 @@ utoipa = { version = "5.4.0", features = [
 ] }
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
@@ -207,6 +247,7 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
 ] }
 derive_builder = "0.20.2"
 doppleganger = "0.5"
+doppler-config = "0.1.2"
 js-sys = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
@@ -215,4 +256,3 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
-doppler-config = "0.1.2"

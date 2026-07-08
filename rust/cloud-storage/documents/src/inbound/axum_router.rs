@@ -80,14 +80,41 @@ use crate::domain::ports::DocumentService;
 #[cfg(feature = "document_create")]
 use crate::domain::ports::create::DocumentCreationService;
 
+/// Stable machine-readable error code for an over-length document name. Clients
+/// branch on this instead of the human message and render their own copy.
+pub const DOCUMENT_NAME_TOO_LONG_CODE: &str = "DOCUMENT_NAME_TOO_LONG";
+
+/// Structured 422 body for [`DocumentError::NameTooLong`]. Carries the limit so
+/// clients can show it without hardcoding a value that could drift from the API.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NameTooLongErrorResponse {
+    code: &'static str,
+    max_length: usize,
+    message: &'static str,
+}
+
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
+        if let DocumentError::NameTooLong { max } = &self {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(NameTooLongErrorResponse {
+                    code: DOCUMENT_NAME_TOO_LONG_CODE,
+                    max_length: *max,
+                    message: "name too long",
+                }),
+            )
+                .into_response();
+        }
+
         let status_code = match &self {
             DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
             DocumentError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            DocumentError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             DocumentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             DocumentError::JwtEncoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

@@ -41,6 +41,12 @@ pub enum DocumentError {
     /// A bad request was made.
     #[error("bad request: {0}")]
     BadRequest(String),
+    /// The provided document name exceeds the maximum allowed length.
+    #[error("name too long")]
+    NameTooLong {
+        /// Maximum allowed name length, in grapheme clusters.
+        max: usize,
+    },
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),

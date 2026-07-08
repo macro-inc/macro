@@ -1,23 +1,33 @@
 import type { SidebarState } from '@app/component/app-sidebar/sidebar';
 import { useSenderName } from '@app/component/app-sidebar/utils';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { ReadonlyThread } from '@channel/StandaloneThread';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
-import { Avatar, Button, cn, Tooltip } from '@ui';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { Avatar, cn, NavRow, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
   on,
+  onCleanup,
   onMount,
+  type ParentProps,
   Show,
 } from 'solid-js';
 
@@ -69,7 +79,7 @@ function computeChannelLetters(groups: ChannelGroup[]): Map<string, string> {
   return result;
 }
 
-function ChannelLetterIcon(props: { letters: string }) {
+function ChannelLetterIcon(props: { letters: string; slim?: boolean }) {
   return (
     <Avatar size="md" class="bg-ink-extra-muted/15 text-ink-muted">
       <Avatar.Fallback>{props.letters}</Avatar.Fallback>
@@ -109,6 +119,95 @@ function groupByChannel(
   }
 
   return groups;
+}
+
+const HOVER_PREVIEW_COUNT = 3;
+
+// Unique thread roots (a reply previews its whole thread), newest first.
+function getPreviewThreadRoots(group: ChannelGroup): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const notification of group.notifications) {
+    const { messageId, threadId } = getChannelNotificationParams(notification);
+    const rootId = threadId ?? messageId;
+    if (!rootId || seen.has(rootId)) continue;
+    seen.add(rootId);
+    roots.push(rootId);
+  }
+  return roots;
+}
+
+function GroupHoverPreview(props: { group: ChannelGroup }) {
+  const orchestrator = useGlobalBlockOrchestrator();
+  const roots = () => getPreviewThreadRoots(props.group);
+  // Show the latest few threads oldest → newest, like the channel reads.
+  const visible = () => roots().slice(0, HOVER_PREVIEW_COUNT).reverse();
+  const hiddenCount = () => roots().length - visible().length;
+
+  return (
+    <div class="w-90 min-h-12 max-h-96 overflow-y-auto overscroll-contain flex flex-col py-1">
+      <Show when={hiddenCount() > 0}>
+        <span class="px-3 py-1 text-xs text-ink-extra-muted">
+          +{hiddenCount()} earlier
+        </span>
+      </Show>
+      <For each={visible()}>
+        {(rootMessageId) => (
+          <ReadonlyThread
+            channelId={props.group.entityId}
+            messageId={rootMessageId}
+            onClickMessage={(clickedMessageId, e) => {
+              e.stopPropagation();
+              const isReply = clickedMessageId !== rootMessageId;
+              navigateToChannelMessage(
+                orchestrator,
+                props.group.entityId,
+                clickedMessageId,
+                isReply ? rootMessageId : undefined
+              );
+            }}
+          />
+        )}
+      </For>
+    </div>
+  );
+}
+
+function UnreadHoverCard(
+  props: ParentProps<{ group: ChannelGroup; disabled?: boolean }>
+) {
+  const [hovered, setHovered] = createSignal(false);
+  const open = () => hovered() && !props.disabled;
+
+  return (
+    <Show when={!isTouchDevice()} fallback={props.children}>
+      <KobalteTooltip
+        open={open()}
+        onOpenChange={setHovered}
+        placement="right"
+        overflowPadding={16}
+        fitViewport={true}
+        closeDelay={250}
+        openDelay={1000}
+        flip={true}
+        gutter={4}
+      >
+        <KobalteTooltip.Trigger
+          class="inline-flex items-center w-full"
+          as="div"
+        >
+          {props.children}
+        </KobalteTooltip.Trigger>
+        <KobalteTooltip.Portal>
+          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation">
+            <Surface depth={3}>
+              <GroupHoverPreview group={props.group} />
+            </Surface>
+          </KobalteTooltip.Content>
+        </KobalteTooltip.Portal>
+      </KobalteTooltip>
+    </Show>
+  );
 }
 
 function ChannelGroupItem(props: {
@@ -186,16 +285,11 @@ function ChannelGroupItem(props: {
   const isSlim = () => props.isSlim ?? false;
 
   const ButtonContent = () => (
-    <Button
+    <NavRow
       class={cn(
-        'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-        isSlim()
-          ? 'justify-center size-8'
-          : 'justify-start gap-2 w-full h-8 py-1'
+        'transition-[opacity,transform] justify-start gap-2 w-full h-8 p-1.25'
       )}
       draggable={false}
-      variant="ghost"
-      size="sm"
       classList={{
         'opacity-0 -translate-y-2': !isVisible(),
         'opacity-100 translate-y-0': isVisible(),
@@ -206,14 +300,21 @@ function ChannelGroupItem(props: {
         navigateToLatestNotification(e.shiftKey);
       }}
     >
-      <div class="relative flex items-center justify-center shrink-0 size-5">
+      <div
+        class={cn('relative flex items-center justify-center shrink-0 size-5')}
+      >
         <Show
           when={isDM() && senderId()}
-          fallback={<ChannelLetterIcon letters={props.channelLetters ?? '?'} />}
+          fallback={
+            <ChannelLetterIcon
+              letters={props.channelLetters ?? '?'}
+              slim={isSlim()}
+            />
+          }
         >
           <UserIcon
             id={senderId()!}
-            size="md"
+            size={'md'}
             suppressClick
             showTooltip={false}
           />
@@ -232,12 +333,16 @@ function ChannelGroupItem(props: {
           </span>
         </Show>
       </Show>
-    </Button>
+    </NavRow>
   );
 
+  const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
+
   return (
-    <ContextMenu>
-      <ContextMenu.Trigger class="w-full">
+    <ContextMenu onOpenChange={setContextMenuOpen}>
+      <ContextMenu.Trigger
+        class={cn(isSlim() ? 'flex justify-center' : 'w-full')}
+      >
         <Show
           when={!isSlim()}
           fallback={
@@ -246,7 +351,9 @@ function ChannelGroupItem(props: {
             </Tooltip>
           }
         >
-          <ButtonContent />
+          <UnreadHoverCard group={props.group} disabled={contextMenuOpen()}>
+            <ButtonContent />
+          </UnreadHoverCard>
         </Show>
       </ContextMenu.Trigger>
 
@@ -319,13 +426,85 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   const SLIM_MAX = 4;
   const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
   const slimOverflow = () => Math.max(0, channelGroups().length - SLIM_MAX);
+  const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
+  const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [scrollFrameRef, setScrollFrameRef] = createSignal<HTMLDivElement>();
+  const scrollSize = createElementSize(scrollRef);
+  const scrollFrameSize = createElementSize(scrollFrameRef);
+  let scrollShadowFrame: number | undefined;
+  let detachScrollShadowObservers: VoidFunction | undefined;
+
+  const updateScrollShadows = () => {
+    const el = scrollRef();
+    if (!el) return;
+    const maxScrollTop = el.scrollHeight - el.clientHeight;
+    setHasOverflowTop(el.scrollTop > 1);
+    setHasOverflowBottom(maxScrollTop - el.scrollTop > 1);
+  };
+
+  const scheduleScrollShadowUpdate = () => {
+    if (scrollShadowFrame !== undefined) {
+      cancelAnimationFrame(scrollShadowFrame);
+    }
+    scrollShadowFrame = requestAnimationFrame(() => {
+      scrollShadowFrame = undefined;
+      updateScrollShadows();
+    });
+  };
+
+  const detachScrollObservers = () => {
+    detachScrollShadowObservers?.();
+    detachScrollShadowObservers = undefined;
+  };
+
+  const attachScrollEl = (el: HTMLDivElement) => {
+    detachScrollObservers();
+    setScrollRef(el);
+
+    const mutationObserver = new MutationObserver(scheduleScrollShadowUpdate);
+    const sidebarRoot = el.closest('[data-expanded]');
+
+    mutationObserver.observe(sidebarRoot ?? el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    scheduleScrollShadowUpdate();
+
+    detachScrollShadowObservers = () => {
+      mutationObserver.disconnect();
+    };
+  };
+
+  onCleanup(() => {
+    detachScrollObservers();
+    if (scrollShadowFrame !== undefined) {
+      cancelAnimationFrame(scrollShadowFrame);
+    }
+  });
+
+  createEffect(
+    on(channelGroups, () => {
+      scheduleScrollShadowUpdate();
+    })
+  );
+
+  createEffect(() => {
+    scrollSize.width;
+    scrollSize.height;
+    scrollFrameSize.width;
+    scrollFrameSize.height;
+    scheduleScrollShadowUpdate();
+  });
 
   return (
     <Show when={channelGroups().length > 0}>
       <Show
         when={!isSlim()}
         fallback={
-          <section class="w-full p-2 flex flex-col items-center">
+          <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
             <For each={slimVisible()}>
               {(group) => (
                 <ChannelGroupItem
@@ -337,28 +516,46 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
               )}
             </For>
             <Show when={slimOverflow() > 0}>
-              <span class="text-xxs text-ink-muted mt-1">
+              <span class="w-full text-center text-xxs text-ink-muted mt-1">
                 +{slimOverflow()}
               </span>
             </Show>
           </section>
         }
       >
-        <section class="size-full flex flex-col justify-center px-2 py-1.5">
-          <header class="text-xs font-medium text-ink-muted ml-2 mb-1">
+        <section class="size-full min-h-0 flex flex-col px-0 py-1.5">
+          <header class="shrink-0 text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
             <h1>Unread</h1>
           </header>
 
-          <div class="flex-1">
-            <For each={channelGroups()}>
-              {(group) => (
-                <ChannelGroupItem
-                  group={group}
-                  animate={false}
-                  channelLetters={channelLettersMap().get(group.entityId)}
-                />
+          <div ref={setScrollFrameRef} class="relative min-h-0 flex-1">
+            <div
+              ref={attachScrollEl}
+              onScroll={updateScrollShadows}
+              class="size-full overflow-y-auto overscroll-contain flex flex-col gap-0.5 pr-1 -mr-1"
+            >
+              <For each={channelGroups()}>
+                {(group) => (
+                  <ChannelGroupItem
+                    group={group}
+                    animate={false}
+                    channelLetters={channelLettersMap().get(group.entityId)}
+                  />
+                )}
+              </For>
+            </div>
+            <div
+              class={cn(
+                'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
+                hasOverflowTop() ? 'opacity-100' : 'opacity-0'
               )}
-            </For>
+            />
+            <div
+              class={cn(
+                'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
+                hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
+              )}
+            />
           </div>
         </section>
       </Show>

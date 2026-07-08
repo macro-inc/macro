@@ -69,6 +69,20 @@ type MetadataResponse = {
   }>;
 };
 
+export type HistorySession = {
+  userId: string;
+  startMs: number;
+  endMs: number;
+  count: number;
+};
+
+/** A single frontier op-id — structurally a `SyncServiceVersionID`, so it can
+ * be passed straight to the copy/fork path. */
+export type HistoryVersionId = {
+  peer: string;
+  counter: number;
+};
+
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
@@ -178,6 +192,36 @@ export const syncServiceClient = {
     }
 
     return ok(response.value as MetadataResponse);
+  },
+  /**
+   * Look up who last edited a given Lexical node and when. `user_id` is a
+   * MacroId resolved server-side; `null` if the peer has no recorded user
+   * (anonymous edits or legacy data not yet mirrored locally).
+   */
+  async getNodeBlame(args: { documentId: string; nodeId: string }) {
+    const token = await getPermissionToken('document', args.documentId);
+
+    const response = await syncFetch<{
+      peer_id: string;
+      user_id: string | null;
+      timestamp_ms: number;
+    }>(`/document/${args.documentId}/blame/${args.nodeId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      method: 'GET',
+    });
+
+    if (response.isErr()) {
+      return err(response.error);
+    }
+    const { peer_id, user_id, timestamp_ms } = response.value;
+    return ok({
+      peerId: peer_id,
+      userId: user_id,
+      editedAt: new Date(timestamp_ms),
+    });
   },
   async getSnapshot(args: { documentId: string }) {
     const token = await getPermissionToken('document', args.documentId);

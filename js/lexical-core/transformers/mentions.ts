@@ -11,12 +11,17 @@ import { GroupMentionNode } from '../nodes/GroupMentionNode';
 import { PullRequestMentionNode } from '../nodes/PullRequestMentionNode';
 import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
+import {
+  replaceElementWithUnknownMention,
+  replaceTextWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 // NOTE: If you are changing this file, you may need to update the `mention_utils` crate in `macro-api` as well. Please notify @hutch should you update this file.
 
 // Internal User Mentions
 export const I_USER_MENTION: TextMatchTransformer = {
-  dependencies: [UserMentionNode],
+  dependencies: [UserMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-user-mention>(.*?)<\/m-user-mention>/,
   importRegExp: /<m-user-mention>(.*?)<\/m-user-mention>/,
@@ -38,6 +43,7 @@ export const I_USER_MENTION: TextMatchTransformer = {
       node.replace(userMentionNode);
     } catch (e) {
       console.error('Error in I_USER_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown User');
     }
   },
 };
@@ -69,7 +75,7 @@ export const E_USER_MENTION: ElementTransformer = {
 
 // Internal Contact Mentions
 export const I_CONTACT_MENTION: TextMatchTransformer = {
-  dependencies: [ContactMentionNode],
+  dependencies: [ContactMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-contact-mention>(.*?)<\/m-contact-mention>/,
   importRegExp: /<m-contact-mention>(.*?)<\/m-contact-mention>/,
@@ -97,7 +103,8 @@ export const I_CONTACT_MENTION: TextMatchTransformer = {
       );
       node.replace(contactMentionNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_CONTACT_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Contact');
     }
   },
 };
@@ -132,7 +139,7 @@ export const E_CONTACT_MENTION: ElementTransformer = {
 
 // Internal Date Mentions
 export const I_DATE_MENTION: TextMatchTransformer = {
-  dependencies: [DateMentionNode],
+  dependencies: [DateMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-date-mention>(.*?)<\/m-date-mention>/,
   importRegExp: /<m-date-mention>(.*?)<\/m-date-mention>/,
@@ -158,7 +165,8 @@ export const I_DATE_MENTION: TextMatchTransformer = {
       );
       node.replace(dateMentionNode);
     } catch (e) {
-      console.error(e);
+      console.error('Error in I_DATE_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Date');
     }
   },
 };
@@ -192,7 +200,7 @@ export const E_DATE_MENTION: ElementTransformer = {
 // Internal Document Mentions
 
 export const I_DOCUMENT_MENTION: TextMatchTransformer = {
-  dependencies: [DocumentMentionNode],
+  dependencies: [DocumentMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-document-mention>(.*?)<\/m-document-mention>/,
   importRegExp: /<m-document-mention>(.*?)<\/m-document-mention>/,
@@ -224,6 +232,7 @@ export const I_DOCUMENT_MENTION: TextMatchTransformer = {
       node.replace(documentMentionNode);
     } catch (e) {
       console.error('Error in I_DOCUMENT_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Item');
     }
   },
 };
@@ -281,7 +290,7 @@ export const E_DOCUMENT_MENTION: ElementTransformer = {
 // Internal Pull Request Mentions
 
 export const I_PR_MENTION: TextMatchTransformer = {
-  dependencies: [PullRequestMentionNode],
+  dependencies: [PullRequestMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
   importRegExp: /<m-pr-mention>(.*?)<\/m-pr-mention>/,
@@ -308,6 +317,7 @@ export const I_PR_MENTION: TextMatchTransformer = {
       node.replace(prMentionNode);
     } catch (e) {
       console.error('Error in I_PR_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Pull Request');
     }
   },
 };
@@ -343,7 +353,7 @@ export const E_PR_MENTION: ElementTransformer = {
 
 // Internal Group Mentions (e.g., @here)
 export const I_GROUP_MENTION: TextMatchTransformer = {
-  dependencies: [GroupMentionNode],
+  dependencies: [GroupMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
   importRegExp: /<m-group-mention>(.*?)<\/m-group-mention>/,
@@ -357,11 +367,14 @@ export const I_GROUP_MENTION: TextMatchTransformer = {
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      if (!('groupAlias' in data)) throw new Error('Missing field groupAlias');
+      if (!('groupAlias' in data)) {
+        throw new Error('Missing field groupAlias');
+      }
       const groupMentionNode = new GroupMentionNode(data.groupAlias);
       node.replace(groupMentionNode);
     } catch (e) {
       console.error('Error in I_GROUP_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Group');
     }
   },
 };
@@ -394,7 +407,7 @@ export const E_GROUP_MENTION: ElementTransformer = {
 // Internal Document Cards
 
 export const I_DOCUMENT_CARD: ElementTransformer = {
-  dependencies: [DocumentCardNode],
+  dependencies: [DocumentCardNode, UnknownMentionNode],
   type: 'element',
   regExp: /<m-document-card>(.*?)<\/m-document-card>/,
   export: (node) => {
@@ -432,13 +445,14 @@ export const I_DOCUMENT_CARD: ElementTransformer = {
       parentNode.replace(documentCardNode);
     } catch (e) {
       console.error('Error in I_DOCUMENT_CARD replace:', e);
+      replaceElementWithUnknownMention(parentNode, 'Unknown Item');
     }
   },
 };
 
 // Internal Theme Mentions
 export const I_THEME_MENTION: TextMatchTransformer = {
-  dependencies: [ThemeMentionNode],
+  dependencies: [ThemeMentionNode, UnknownMentionNode],
   type: 'text-match',
   regExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
   importRegExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
@@ -457,12 +471,14 @@ export const I_THEME_MENTION: TextMatchTransformer = {
         typeof parsed !== 'object' ||
         parsed === null ||
         typeof parsed.name !== 'string'
-      )
+      ) {
         throw new Error('Invalid theme mention JSON');
+      }
       const themeMentionNode = new ThemeMentionNode(parsed.name, parsed.data);
       node.replace(themeMentionNode);
     } catch (e) {
       console.error('Error in I_THEME_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Theme');
     }
   },
 };

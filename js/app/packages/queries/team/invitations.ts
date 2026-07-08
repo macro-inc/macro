@@ -35,36 +35,13 @@ type JoinTeamCallbacks = MutationCallbacks<
 
 export function useJoinTeamMutation(callbacks?: JoinTeamCallbacks) {
   return useMutation(() => ({
+    mutationKey: teamKeys.acceptInvite.queryKey,
     mutationFn: async ({ teamInviteId }: JoinTeamArgs) => {
       await throwOnErr(() => authServiceClient.joinTeam(teamInviteId));
     },
 
     ...withCallbacks<void, Error, JoinTeamArgs, JoinTeamContext>(
       {
-        onMutate: async ({ teamInviteId }) => {
-          await queryClient.cancelQueries({
-            queryKey: teamKeys.userInvites.queryKey,
-          });
-
-          const previousInvites = queryClient.getQueryData<TeamInvitesResponse>(
-            teamKeys.userInvites.queryKey
-          );
-
-          queryClient.setQueryData<TeamInvitesResponse>(
-            teamKeys.userInvites.queryKey,
-            (old) =>
-              old
-                ? {
-                    invites: old.invites.filter(
-                      (invite) => invite.id !== teamInviteId
-                    ),
-                  }
-                : undefined
-          );
-
-          return { previousInvites };
-        },
-
         onSuccess: () => {
           invalidateUserTeams();
           invalidateUserInvites();
@@ -103,6 +80,7 @@ export function useRejectInvitationMutation(
   callbacks?: RejectInvitationCallbacks
 ) {
   return useMutation(() => ({
+    mutationKey: teamKeys.rejectInvite.queryKey,
     mutationFn: async ({ teamInviteId }: RejectInvitationArgs) => {
       await throwOnErr(() => authServiceClient.rejectInvitation(teamInviteId));
     },
@@ -114,30 +92,6 @@ export function useRejectInvitationMutation(
       RejectInvitationContext
     >(
       {
-        onMutate: async ({ teamInviteId }) => {
-          await queryClient.cancelQueries({
-            queryKey: teamKeys.userInvites.queryKey,
-          });
-
-          const previousInvites = queryClient.getQueryData<TeamInvitesResponse>(
-            teamKeys.userInvites.queryKey
-          );
-
-          queryClient.setQueryData<TeamInvitesResponse>(
-            teamKeys.userInvites.queryKey,
-            (old) =>
-              old
-                ? {
-                    invites: old.invites.filter(
-                      (invite) => invite.id !== teamInviteId
-                    ),
-                  }
-                : undefined
-          );
-
-          return { previousInvites };
-        },
-
         onSuccess: () => {
           invalidateUserInvites();
           toast.success('Invitation declined');

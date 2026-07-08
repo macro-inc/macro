@@ -23,6 +23,7 @@ use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
 };
+use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
@@ -253,24 +254,24 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Create a channel.
-    fn create_channel(
+    fn create_channel<'a>(
         &self,
-        owner_id: String,
+        owner_id: MacroUserIdStr<'a>,
         org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 
     /// Fetch an existing direct message channel.
-    fn maybe_get_dm(
+    fn maybe_get_dm<'a>(
         &self,
-        user_id: String,
-        recipient_id: String,
+        user_id: MacroUserIdStr<'a>,
+        recipient_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Fetch an existing private channel.
-    fn maybe_get_private_channel(
+    fn maybe_get_private_channel<'a>(
         &self,
-        participants: Vec<String>,
+        participants: HashSet<MacroUserIdStr<'a>>,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Patch a channel.
@@ -289,10 +290,10 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Add a participant.
-    fn add_participant(
+    fn add_participant<'a>(
         &self,
         channel_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'a>,
         role: super::models::ParticipantRole,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -304,10 +305,15 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Create a message.
-    fn create_message(
+    ///
+    /// `triggered_by_user_id` is the id of the user who triggered an agent
+    /// (bot) message, persisted to the nullable `triggered_by_user_id` column;
+    /// `None` for ordinary human messages.
+    fn create_message<'a>(
         &self,
         channel_id: Uuid,
-        sender_id: String,
+        sender_id: ChannelSender<'a>,
+        triggered_by_user_id: Option<String>,
         content: String,
         thread_id: Option<Uuid>,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
@@ -404,7 +410,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
         message_id: Uuid,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ChannelSender<'static>>, Self::Err>> + Send;
 
     /// Fetch active participants.
     fn get_participants(
@@ -419,9 +425,9 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
     /// Upsert activity for the user in the channel.
-    fn upsert_activity(
+    fn upsert_activity<'a>(
         &self,
-        user_id: String,
+        user_id: ChannelSender<'a>,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -440,21 +446,21 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Activity, Self::Err>> + Send;
 
     /// Add a reaction to a message within a channel.
-    fn add_reaction(
+    fn add_reaction<'a>(
         &self,
         channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
-        user_id: String,
+        user_id: ChannelSender<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Remove a reaction from a message within a channel.
-    fn remove_reaction(
+    fn remove_reaction<'a>(
         &self,
         channel_id: Uuid,
         message_id: Uuid,
         emoji: String,
-        user_id: String,
+        user_id: ChannelSender<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get grouped reactions for a message within a channel.
@@ -956,6 +962,15 @@ pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
 pub trait ChannelEventDispatcher: Send + Sync + 'static {
     /// Fire-and-forget dispatch of a channel event.
     fn dispatch(&self, event: ChannelEvent);
+}
+
+/// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is
+/// expected, so callers (e.g. the AI toolset) can inject a side-effect-wired
+/// dispatcher behind a uniform type.
+impl ChannelEventDispatcher for std::sync::Arc<dyn ChannelEventDispatcher> {
+    fn dispatch(&self, event: ChannelEvent) {
+        (**self).dispatch(event);
+    }
 }
 
 /// Dispatcher for contact graph updates.

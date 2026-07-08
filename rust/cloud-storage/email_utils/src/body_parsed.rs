@@ -44,6 +44,19 @@ pub fn compute_body_parsed_linkless(
     })
 }
 
+/// Convert an HTML fragment to block-aware plaintext: block elements are
+/// separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`, …) stay
+/// on one line. Returns `None` if conversion fails. Suitable for building a
+/// `text/plain` MIME alternative from a small HTML snippet (e.g. a signature).
+pub fn html_to_plaintext(html: &str) -> Option<String> {
+    let config = html2text::config::plain()
+        .no_table_borders()
+        .link_footnotes(false)
+        .no_link_wrapping();
+
+    parse_html_to_text(html, config)
+}
+
 fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<String> {
     match config.string_from_read(html.as_bytes(), usize::MAX) {
         Ok(text) => {
@@ -130,6 +143,22 @@ mod tests {
         assert!(text.contains("Thank you for your inquiry"));
         assert!(text.contains("Example Corp."));
         assert!(text.contains("123 Business St."));
+    }
+
+    #[test]
+    fn test_html_to_plaintext_inline_vs_block() {
+        // Inline tags stay on one line — no spurious break between the runs.
+        // Emphasis renders as markdown markers, matching the rest of our
+        // HTML->plaintext conversion.
+        assert_eq!(
+            html_to_plaintext("<div>Thanks <strong>Alice</strong></div>"),
+            Some("Thanks **Alice**".to_string())
+        );
+        // Block elements are separated by newlines.
+        assert_eq!(
+            html_to_plaintext("<div>Thanks</div><div>Alice</div>"),
+            Some("Thanks\nAlice".to_string())
+        );
     }
 
     #[test]

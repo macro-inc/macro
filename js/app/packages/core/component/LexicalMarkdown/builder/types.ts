@@ -1,5 +1,8 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
+import type { ChannelWithParticipants } from '@core/user';
+import type { EmailEntity } from '@entity';
 import type { EditorType } from '@lexical-core';
+import type { HistoryItem } from '@queries/history/history';
 import type { LexicalEditor, SerializedEditorState } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
@@ -15,6 +18,7 @@ import type {
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import type { createMenuOperations } from '../shared/inlineMenu';
+import type { UserMentionRecord } from '../utils/mentionsUtils';
 
 export interface ActionsOptions {
   useBlockBoundary?: boolean;
@@ -28,6 +32,9 @@ export interface MentionsOptions {
   sources?: MentionBucketId[];
   onRemove?: (mention: ItemMention) => void;
   onCreate?: (mention: ItemMention) => void;
+  onUserMention?: (mention: UserMentionRecord) => void;
+  onDocumentMention?: (item: HistoryItem | ChannelWithParticipants) => void;
+  onEmailMention?: (item: EmailEntity) => void;
   block?: string;
   showOpenTabs?: boolean;
   sourceDocumentId?: string;
@@ -136,6 +143,8 @@ export interface EditorConfig {
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;
+  /** Show a floating format toolbar over the current text selection. */
+  floatingFormatMenu: boolean;
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;

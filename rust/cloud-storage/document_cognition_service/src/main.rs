@@ -94,13 +94,20 @@ async fn main() -> anyhow::Result<()> {
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
+    let document_text_extractor_queue = macro_queues::DocumentTextExtractorQueue::new();
+    let chat_delete_queue = macro_queues::ChatDeleteQueue::new();
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let ai_projection_queue = macro_queues::AiProjectionQueue::new();
+    let notification_queue = macro_queues::NotificationIngressQueue::new();
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
-        .document_text_extractor_queue(&config.document_text_extractor_queue)
-        .chat_delete_queue(&config.chat_delete_queue)
-        .email_scheduled_queue(&config.email_scheduled_queue)
-        .gmail_ops_queue(&config.gmail_ops_queue)
-        .search_event_queue(&config.search_event_queue)
-        .ai_projection_queue(&config.ai_projection_queue);
+        .document_text_extractor_queue(&document_text_extractor_queue)
+        .chat_delete_queue(&chat_delete_queue)
+        .email_scheduled_queue(&email_scheduled_queue)
+        .gmail_ops_queue(&gmail_ops_queue)
+        .search_event_queue(&search_event_queue)
+        .ai_projection_queue(&ai_projection_queue);
 
     let internal_api_key = config.internal_api_key.to_string();
 
@@ -177,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.to_string(),
+        notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue,
@@ -185,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
 
     let notification_reader_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.to_string(),
+        notification_queue.to_string(),
     );
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(db.clone()),
@@ -217,6 +224,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -265,6 +275,10 @@ async fn main() -> anyhow::Result<()> {
         ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
     let task_properties_service =
         ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -276,6 +290,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker,
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -283,6 +298,11 @@ async fn main() -> anyhow::Result<()> {
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
+            config.ai_editing_worker_url.clone(),
+            std::sync::Arc::new(reqwest::Client::new()),
+        ),
+        config.document_permission_jwt.as_ref().to_string(),
     );
 
     tracing::info!("initialized document tool context");
@@ -332,6 +352,9 @@ async fn main() -> anyhow::Result<()> {
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -423,6 +446,15 @@ async fn main() -> anyhow::Result<()> {
             tool_service_context.clone(),
             ai_tools::all_tools(),
         );
+    // Notifier that pushes finished materializations to the target's connected
+    // clients through the connection gateway.
+    let projection_notifier =
+        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier::new(Arc::new(
+            connection_gateway_client::ConnectionGatewayClient::new(
+                internal_api_key.clone(),
+                ConnectionGatewayUrl::new()?.to_string(),
+            ),
+        ));
     let ai_projections_service_impl =
         ai_projections::domain::ai_projection_service::AiProjectionServiceImpl::new(
             ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl::new(
@@ -430,6 +462,7 @@ async fn main() -> anyhow::Result<()> {
             ),
             sqs_client.clone(),
             projection_generator,
+            projection_notifier,
         );
 
     // Spawn the inbound worker that polls ai_projection_queue and materializes
@@ -437,7 +470,7 @@ async fn main() -> anyhow::Result<()> {
     let ai_projection_worker = ai_projections::worker::AiProjectionWorker::new(
         sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.ai_projection_queue.to_string(),
+            ai_projection_queue.to_string(),
             10,
             10,
         ),

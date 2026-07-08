@@ -1,20 +1,22 @@
-import { Show, Suspense } from 'solid-js';
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
-import { SettingsPage, SettingsSection } from './primitives';
+import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
+import { IntegrationsSection } from './Integrations';
+import { SettingsPage, SettingsSection } from './primitives';
 
 /**
- * Consolidated "Connected accounts" page: one card per external service the
- * user can link (Gmail, GitHub). Replaces the separate Email / GitHub tabs.
+ * Consolidated "Connections" page: one card per external account the user can
+ * link (Gmail, GitHub), plus the agent's MCP integrations — so everything
+ * Macro is connected to lives in one place.
  */
 export function ConnectedAccounts() {
   return (
     <SettingsPage
-      title="Connected accounts"
+      title="Connections"
       description="Connect your accounts so Macro can work across the tools you already use."
     >
-      <SettingsSection>
+      <SettingsSection title="Accounts">
         <div class="flex flex-col gap-3">
           <Show when={ENABLE_EMAIL}>
             <Suspense>
@@ -26,6 +28,9 @@ export function ConnectedAccounts() {
           </Suspense>
         </div>
       </SettingsSection>
+      <Suspense>
+        <IntegrationsSection />
+      </Suspense>
     </SettingsPage>
   );
 }

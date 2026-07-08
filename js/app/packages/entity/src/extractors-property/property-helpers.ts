@@ -6,7 +6,10 @@ import {
 import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { nanoid } from 'nanoid';
-import { TASK_STATUS_OPTIONS } from '../utils/task-properties';
+import {
+  COMPANY_STAGE_OPTIONS,
+  TASK_STATUS_OPTIONS,
+} from '../utils/task-properties';
 
 const EPOCH_ZERO = new Date(0);
 
@@ -70,6 +73,16 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       updated_at: EPOCH_ZERO.toISOString(),
     },
   ],
+  [SYSTEM_PROPERTY_IDS.STAGE]: COMPANY_STAGE_OPTIONS.map(
+    ({ value, label }, displayOrder) => ({
+      id: value,
+      property_definition_id: SYSTEM_PROPERTY_IDS.STAGE,
+      value: { type: 'string', value: label },
+      display_order: displayOrder,
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
+    })
+  ),
 };
 
 /**
@@ -153,7 +166,9 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     updatedAt: definition.updated_at,
   };
 
-  const valueType = definition.data_type as ValueType;
+  const valueType = (
+    definition.data_type === 'TAG' ? 'SELECT_STRING' : definition.data_type
+  ) as ValueType;
 
   // Handle each value type with proper type checking
   switch (valueType) {
@@ -252,8 +267,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     }
 
     default: {
-      // Fallback for unknown types - treat as string with null value
-      return { ...baseProperty, valueType: 'STRING', value: null };
+      const exhaustiveCheck: never = valueType;
+      throw new Error(`Unsupported value type: ${String(exhaustiveCheck)}`);
     }
   }
 }
@@ -265,6 +280,54 @@ function _soupPropertiesToProperties(
   soupProperties: SoupProperty[]
 ): Property[] {
   return soupProperties.map(soupPropertyToProperty);
+}
+
+/** Definition stubs for the builtin CRM company properties. */
+const COMPANY_DEFAULT_PROPERTY_DEFS = [
+  {
+    id: SYSTEM_PROPERTY_IDS.STAGE,
+    displayName: 'Stage',
+    dataType: 'SELECT_STRING',
+    specificEntityType: undefined,
+  },
+  {
+    id: SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    displayName: 'Owner',
+    dataType: 'ENTITY',
+    specificEntityType: 'USER',
+  },
+  {
+    id: SYSTEM_PROPERTY_IDS.REVENUE,
+    displayName: 'Revenue',
+    dataType: 'NUMBER',
+    specificEntityType: undefined,
+  },
+] as const;
+
+/**
+ * Build placeholder `Property` values for the builtin CRM company
+ * properties (Stage / Owner / Revenue). Companies are auto-created from
+ * synced email, so most have no `entity_properties` rows yet — these
+ * stubs let the panel and list render (and edit) the defaults before a
+ * value ever gets saved. Setting a value upserts the real row.
+ */
+export function buildCompanyDefaultProperties(): Property[] {
+  return COMPANY_DEFAULT_PROPERTY_DEFS.map((def) =>
+    soupPropertyToProperty({
+      definition: {
+        id: def.id,
+        display_name: def.displayName,
+        data_type: def.dataType,
+        is_metadata: false,
+        is_multi_select: false,
+        is_system: true,
+        owner: { scope: 'system' },
+        specific_entity_type: def.specificEntityType,
+        created_at: EPOCH_ZERO.toISOString(),
+        updated_at: EPOCH_ZERO.toISOString(),
+      },
+    })
+  );
 }
 
 /**

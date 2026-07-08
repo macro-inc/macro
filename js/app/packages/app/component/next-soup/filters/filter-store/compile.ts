@@ -45,7 +45,10 @@ type DateRangeFieldName =
   | 'folderUpdatedAt'
   | 'emailUpdatedAt';
 
-type CompiledFieldName = Exclude<FieldName, 'properties' | DateRangeFieldName>;
+type CompiledFieldName = Exclude<
+  FieldName,
+  'properties' | 'tagFilters' | DateRangeFieldName
+>;
 
 const AST = {
   or(asts: BackendAst[]): BackendAst {
@@ -104,7 +107,12 @@ const FIELD_CONFIG: Record<
   channelDone: { target: 'chanf', field: 'NotificationDone' },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
+  channelMessageThreadId: { target: 'chanf', field: 'ThreadId' },
   channelThreadId: { target: 'cthf', field: 'ThreadId' },
+  channelThreadRootSenderId: { target: 'cthf', field: 'RootSender' },
+  channelThreadParticipantId: { target: 'cthf', field: 'Participant' },
+  channelThreadSeen: { target: 'cthf', field: 'NotificationSeen' },
+  channelThreadDone: { target: 'cthf', field: 'NotificationDone' },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
@@ -370,6 +378,14 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
+  // Tags: one OR group across every selected tag, regardless of which
+  // definition owns it. Pushed as a single propf entry so it ANDs with the
+  // status/priority groups but ORs internally (match any selected tag).
+  const includeTags = state.include.tagFilters ?? [];
+  if (includeTags.length) {
+    byTarget.propf.push(AST.or(includeTags.map(propertyToAst)));
+  }
+
   pushDateRangeFiltersToTargets(byTarget, state.include, state.exclude);
 
   for (const expression of state.documentWhere ?? []) {
@@ -384,10 +400,13 @@ export function compileToAst(state: QueryState): TargetAstMap {
     }
   }
 
-  // Channel-thread soup items are not displayable in the frontend. Always
-  // exclude them at the AST layer so hidden rows do not consume page limits or
-  // grouped counts.
-  result.cthf ??= AST.literal('ThreadId', NIL_UUID);
+  // Unless explicitly includes/excluded, channel threads are excluded by default
+  if (
+    !('channelThreadId' in state.include) &&
+    !('channelThreadId' in state.exclude)
+  ) {
+    result.cthf ??= AST.literal('ThreadId', NIL_UUID);
+  }
 
   if (state.emailView) {
     result.emailView = state.emailView;
@@ -418,6 +437,12 @@ const extractQueryTargets = (query: Query): QueryTarget[] => {
 
   if (query.documentWhere) {
     targets.add('df');
+  }
+
+  // An email view scopes the query to emails even when no ef field is set,
+  // so don't stuff the match-nothing threadId filter onto the email target.
+  if (query.emailView) {
+    targets.add('ef');
   }
 
   for (const field of Object.keys(query.include ?? {})) {

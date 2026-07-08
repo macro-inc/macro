@@ -1,6 +1,7 @@
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
+  type Component,
   createContext,
   type JSX,
   type Setter,
@@ -45,6 +46,37 @@ export type SplitBottomPanelRegistration = {
   onClose?: () => void;
 };
 
+export type SplitFileMenuAction = {
+  label: string | JSX.Element;
+  icon: Component;
+  action?: (e?: MouseEvent) => void;
+  children?: SplitFileMenuAction[];
+  group?: 'delete';
+};
+
+export type SplitFileMenuActionGroups = {
+  primaryOps: SplitFileMenuAction[];
+  tools: SplitFileMenuAction[];
+  deleteOps: SplitFileMenuAction[];
+};
+
+export type SplitFileMenuActionSection = {
+  key: keyof SplitFileMenuActionGroups;
+  actions: SplitFileMenuAction[];
+};
+
+export function getSplitFileMenuActionSections(
+  groups: SplitFileMenuActionGroups
+): SplitFileMenuActionSection[] {
+  const sections: SplitFileMenuActionSection[] = [
+    { key: 'tools', actions: groups.tools },
+    { key: 'primaryOps', actions: groups.primaryOps },
+    { key: 'deleteOps', actions: groups.deleteOps },
+  ];
+
+  return sections.filter((section) => section.actions.length > 0);
+}
+
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
@@ -63,6 +95,12 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
+  setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
+  titleFileMenuTrigger: Accessor<(() => void) | undefined>;
+  setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
+  titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
+  setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
   headerCollapser: HeaderCollapser;
 };
 

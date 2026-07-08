@@ -13,7 +13,7 @@ export const AnimatedCompanyIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.125"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
@@ -25,8 +25,8 @@ export const AnimatedCompanyIcon = (props: {
         .animated-company-icon {
           .building-center, #${maskId} .mask-center { transform-origin: 9px 6px; }
           /* Origin at each L's bottom point so scaling grows them upward only */
-          .building-left { transform-origin: 0.5625px 10.875px; }
-          .building-right { transform-origin: 17.4375px 10.875px; }
+          .building-left { transform-origin: 0.75px 10.875px; }
+          .building-right { transform-origin: 17.25px 10.875px; }
           .building-center, .building-left, .building-right, .ground, #${maskId} .mask-center {
             transition: transform 0.4s ease;
           }
@@ -75,12 +75,12 @@ export const AnimatedCompanyIcon = (props: {
       </defs>
 
       {/* Ground */}
-      <path class="ground" d="M0.5625 11.4375H17.4375" />
+      <path class="ground" d="M0.75 11.4375H17.25" />
 
       {/* Side buildings - masked so they vanish behind the middle building */}
       <g mask={`url(#${maskId})`}>
-        <path class="building-right" d="M17.4375 10.875V6H16" />
-        <path class="building-left" d="M0.5625 10.875V3.5H2" />
+        <path class="building-right" d="M17.25 10.875V6H16" />
+        <path class="building-left" d="M0.75 10.875V3.5H2" />
       </g>
 
       {/* Middle building (on top) - outline + windows + door */}

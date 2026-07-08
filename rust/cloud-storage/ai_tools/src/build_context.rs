@@ -14,6 +14,7 @@ use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
+use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
@@ -32,7 +33,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -51,17 +53,19 @@ env_var! {
         SyncServiceAuthKey,
         DocumentStorageBucket,
         DocxDocumentUploadBucket,
-        EmailScheduledQueue,
         DocumentStorageServiceCloudfrontDistributionUrl,
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        DocumentPermissionJwt,
+        KafkaBrokers,
     }
 }
 
 maybe_env_var! {
     struct ToolContextMaybeEnvVars {
-        NotificationQueue,
-        GmailOpsQueue,
+        EnableEmailScheduledQueue,
+        EnableGmailOpsQueue,
+        EnableNotificationQueue,
     }
 }
 
@@ -75,17 +79,21 @@ maybe_env_var! {
 ///
 /// Required env vars: `SYNC_SERVICE_AUTH_KEY`,
 /// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `DOCUMENT_STORAGE_BUCKET`,
-/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
+/// `KAFKA_BROKERS`.
 ///
-/// Service URLs are resolved through the `macro_service_urls` crate, using optional
-/// `OVERRIDE_*` env vars before environment defaults.
+/// Service URLs are resolved through the `macro_service_urls` crate, and queue
+/// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
+/// vars before environment defaults).
 ///
-/// Optional env vars:
-/// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
-/// - `GMAIL_OPS_QUEUE` (if omitted, thread-label updates can't enqueue Gmail sync ops)
+/// Queue wiring is opt-in via boolean flags (default `false`); the queue name
+/// itself comes from `macro_queues` when enabled:
+/// - `ENABLE_EMAIL_SCHEDULED_QUEUE`
+/// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
+/// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -97,21 +105,47 @@ pub async fn build_tool_service_context_from_env(
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+    let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
-    let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone())
-        .email_scheduled_queue(&env.email_scheduled_queue);
-    if let Some(gmail_ops_queue) = maybe_env.gmail_ops_queue.as_ref() {
-        sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue);
-    }
-    let notification_queue = maybe_env
-        .notification_queue
+    let enable_email_scheduled_queue = maybe_env
+        .enable_email_scheduled_queue
         .as_ref()
-        .map(|queue_url| {
-            ToolNotificationQueue::Sqs(SqsQueue::new(aws_sqs_client, queue_url.to_string()))
-        })
-        .unwrap_or(ToolNotificationQueue::NoOp);
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_gmail_ops_queue = maybe_env
+        .enable_gmail_ops_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_notification_queue = maybe_env
+        .enable_notification_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone());
+    if enable_email_scheduled_queue {
+        let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+        sqs_client = sqs_client.email_scheduled_queue(email_scheduled_queue.as_ref());
+    }
+    if enable_gmail_ops_queue {
+        let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+        sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue.as_ref());
+    }
+    let notification_queue = if enable_notification_queue {
+        let notification_queue = macro_queues::NotificationIngressQueue::new();
+        ToolNotificationQueue::Sqs(SqsQueue::new(
+            aws_sqs_client,
+            notification_queue.to_string(),
+        ))
+    } else {
+        ToolNotificationQueue::NoOp
+    };
 
     let secretsmanager_client =
         SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
@@ -136,7 +170,7 @@ pub async fn build_tool_service_context_from_env(
 
     let search_client = Arc::new(SearchServiceClient::new(
         env.document_storage_service_auth_key.to_string(),
-        document_storage_service_url,
+        document_storage_service_url.clone(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
@@ -159,6 +193,9 @@ pub async fn build_tool_service_context_from_env(
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -208,6 +245,10 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
         properties_service.clone(),
     );
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -222,6 +263,7 @@ pub async fn build_tool_service_context_from_env(
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
             pool.clone(),
         )),
+        macro_event_broker,
     };
 
     let document_tool_context = DocumentToolContext::new(
@@ -229,6 +271,8 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client,
         sync_client.as_ref().clone(),
+        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        env.document_permission_jwt.to_string(),
     );
 
     let properties_tool_context =
@@ -240,6 +284,9 @@ pub async fn build_tool_service_context_from_env(
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),

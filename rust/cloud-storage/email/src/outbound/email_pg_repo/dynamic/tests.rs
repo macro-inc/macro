@@ -510,6 +510,54 @@ fn test_build_query_projects_real_updated_at_for_candidate_threads() {
 }
 
 #[test]
+fn test_build_query_multi_link_fans_out_per_link() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    // Each link gets its own ordered, LIMITed candidate scan...
+    assert!(
+        sql.contains("FROM unnest(") && sql.contains("CROSS JOIN LATERAL"),
+        "multi-link candidates must fan out per link: {sql}"
+    );
+    assert!(
+        sql.contains("t.link_id = links.link_id"),
+        "per-link branch must scope to a single link: {sql}"
+    );
+    assert!(
+        !sql.contains("t.link_id = ANY("),
+        "multi-link owned scan must not use = ANY: {sql}"
+    );
+    // ...with a per-branch LIMIT feeding the outer sort.
+    assert_eq!(
+        sql.matches("ORDER BY effective_ts DESC, id DESC").count(),
+        2,
+        "expected per-link and outer candidate ordering: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_single_link_keeps_any_scan() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(sql.contains("t.link_id = ANY("));
+    assert!(!sql.contains("FROM unnest("));
+}
+
+#[test]
+fn test_build_query_team_scoped_multi_link_does_not_fan_out() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_team_scoped_multi_link(&view, &expr);
+
+    // Team-scoped candidates dedupe across links before the cursor; a
+    // per-link LIMIT could starve the dedupe of duplicate copies.
+    assert!(!sql.contains("FROM unnest("));
+}
+
+#[test]
 fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let expr = Expr::Literal(EmailLiteral::Shared(
@@ -975,7 +1023,7 @@ fn test_matching_threads_cte_body_single_sender_uses_union_form() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(complete("a@b.com")));
     let resolved = resolved_with(&[("a@b.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Single sender: one UNION branch (no UNION keyword needed), index probe
@@ -1004,7 +1052,7 @@ fn test_matching_threads_cte_body_or_of_kinds_emits_one_union_branch_per_literal
         Expr::Literal(EmailLiteral::Recipient(complete("x@y.com"))),
     );
     let resolved = resolved_with(&[("x@y.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Three UNIONs join the four branches.
@@ -1028,7 +1076,7 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
         Expr::Literal(EmailLiteral::Sender(complete("missing@x.com"))),
     );
     let resolved = resolved_with(&[("known@x.com", id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     // Only one branch left → no UNION keyword.
@@ -1040,8 +1088,8 @@ fn test_matching_threads_cte_body_skips_unresolved_complete_branches() {
 #[test]
 fn test_matching_threads_cte_body_partial_emits_ilike_branch_with_email_contacts_join() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("FROM email_contacts c"));
@@ -1055,8 +1103,8 @@ fn test_matching_threads_cte_body_domain_emits_split_part_branch() {
     // own copy of the address-match SQL builder. Domain on this path must
     // also emit the exact-domain predicate, not ILIKE.
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("FROM email_contacts c"));
@@ -1076,8 +1124,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
     // union-branch builder. Verify the predicate shape is consistent across
     // address kinds.
     let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain("acme.com".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("email_message_recipients"));
@@ -1090,8 +1138,8 @@ fn test_matching_threads_cte_body_domain_recipient_kind_uses_split_part() {
 #[test]
 fn test_matching_threads_cte_body_domain_lowercases_bind_value() {
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("AcMe.CoM".into())));
-    let body =
-        build_matching_threads_cte_body(&expr, &ResolvedFilters::empty()).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
 
     assert!(body.has_bind_string("acme.com"));
     assert!(!body.has_bind_string("AcMe.CoM"));
@@ -1109,7 +1157,7 @@ fn test_matching_threads_cte_body_and_of_conjuncts_uses_combined_predicate_form(
         Expr::Literal(EmailLiteral::Recipient(complete("r@x.com"))),
     );
     let resolved = resolved_with(&[("s@x.com", sender_id), ("r@x.com", recipient_id)]);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("SELECT DISTINCT m.thread_id"));
@@ -1131,7 +1179,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
     let resolved = ResolvedFilters::empty()
         .with_contact("a@b.com", contact_id)
         .with_trash(trash_id);
-    let body = build_matching_threads_cte_body(&expr, &resolved).expect("body present");
+    let body = build_matching_threads_cte_body(&expr, &resolved, None).expect("body present");
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("ml.label_id = "));
@@ -1144,7 +1192,7 @@ fn test_matching_threads_cte_body_uses_resolved_trash_label_id() {
 fn test_matching_threads_cte_body_none_when_no_address_literals() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
-    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty());
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None);
     assert!(body.is_none());
 }
 
@@ -1181,17 +1229,34 @@ fn test_full_query_emits_matching_threads_cte_and_in_reference() {
 }
 
 #[test]
-fn test_build_thread_email_filter_calendar_only_true_emits_ics_exists() {
+fn test_build_thread_email_filter_calendar_only_true_uses_thread_flag() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
     let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("EXISTS"));
-    assert!(debug.contains("email_attachments"));
-    assert!(debug.contains("m_cal.thread_id = t.id"));
-    assert!(debug.contains("a_cal.filename ILIKE '%.ics'"));
-    assert!(debug.contains("a_cal.mime_type = 'text/calendar'"));
-    assert!(debug.contains("a_cal.mime_type = 'application/ics'"));
+    assert!(debug.contains("t.has_calendar_attachment"));
+    // No per-thread attachment probe remains in the candidate WHERE.
+    assert!(!debug.contains("email_attachments"));
+}
+
+#[test]
+fn test_full_query_calendar_only_uses_thread_flag_without_cte() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        sql.contains("t.has_calendar_attachment"),
+        "candidate WHERE must use the denormalized flag: {sql}"
+    );
+    assert!(
+        !sql.contains("calendar_threads"),
+        "calendar CTE should be gone: {sql}"
+    );
+    assert!(
+        !sql.contains("email_attachments"),
+        "no attachment scan should remain: {sql}"
+    );
 }
 
 #[test]
@@ -1321,4 +1386,187 @@ fn test_has_message_literals_false_when_only_date_filters() {
         Expr::Literal(EmailLiteral::UpdatedAt(DateLiteral::LessThan(dt))),
     );
     assert!(!has_message_literals(&expr));
+}
+
+// ---------------------------------------------------------------------------
+// matching_threads link scoping (owned-only, non-team queries)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_matching_threads_partial_branch_is_link_scoped_when_scope_given() {
+    // Partial (ILIKE) branches join email_contacts/email_messages by text
+    // match; without a link scope they scan every mailbox in the table.
+    // With a scope, both the contact and message sides must be restricted.
+    let links = vec![Uuid::new_v4(), Uuid::new_v4()];
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("ILIKE"));
+    assert!(debug.contains("c.link_id = ANY("));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_domain_branch_is_link_scoped_when_scope_given() {
+    let links = vec![Uuid::new_v4()];
+    let expr = Expr::Literal(EmailLiteral::Recipient(Email::Domain(
+        "acme.com".to_string(),
+    )));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), Some(&links))
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("c.link_id = ANY("));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_combined_fallback_is_link_scoped_when_scope_given() {
+    // Multiple AND conjuncts take the combined-predicate fallback, whose
+    // outer scan is over email_messages — the scope must land there.
+    let id = Uuid::new_v4();
+    let links = vec![Uuid::new_v4()];
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::Sender(complete("a@b.com"))),
+        Expr::Literal(EmailLiteral::Recipient(complete("a@b.com"))),
+    );
+    let resolved = resolved_with(&[("a@b.com", id)]);
+    let body =
+        build_matching_threads_cte_body(&expr, &resolved, Some(&links)).expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(debug.contains("SELECT DISTINCT m.thread_id FROM email_messages m"));
+    assert!(debug.contains("m.link_id = ANY("));
+}
+
+#[test]
+fn test_matching_threads_unscoped_without_link_scope() {
+    // Shared/team queries pass None — no link_id predicates may appear,
+    // since candidate threads can live on other users' links.
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Partial("acme".to_string())));
+    let body = build_matching_threads_cte_body(&expr, &ResolvedFilters::empty(), None)
+        .expect("body present");
+    let debug = body.to_debug_sql();
+
+    assert!(!debug.contains("link_id = ANY("));
+}
+
+#[test]
+fn test_build_query_project_filter_adds_access_gated_union_branch() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::ProjectId(
+        "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+    ));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    // Project branch is UNIONed alongside the owned branch, not a replacement.
+    assert!(
+        sql.contains("t.link_id = ANY(") || sql.contains("t.link_id = links.link_id"),
+        "owned branch must remain: {sql}"
+    );
+    assert!(
+        sql.contains("UNION"),
+        "project branch must be a UNION: {sql}"
+    );
+    // Candidate set widens to the whole project, gated on project access.
+    assert!(
+        sql.contains("t.project_id = ANY("),
+        "project branch must filter on project_id: {sql}"
+    );
+    assert!(
+        sql.contains("pea.entity_id::text = t.project_id")
+            && sql.contains("pea.entity_type = 'project'")
+            && sql.contains("pea.source_id = ANY("),
+        "project branch must gate on entity_access project rows: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_negated_project_filter_does_not_widen() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::is_not(Expr::Literal(EmailLiteral::ProjectId(
+        "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+    )));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        !sql.contains("pea.entity_type = 'project'"),
+        "negated project filter must not add the project candidate branch: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_no_project_filter_has_no_project_branch() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        !sql.contains("pea.entity_type = 'project'"),
+        "project branch must only appear for project-scoped filters: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_multi_project_filter_widens_all_projects() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::ProjectId(
+            "159f7ca9-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    // One project branch carrying every requested id via = ANY, gated per
+    // row so access is checked against each thread's own project.
+    assert_eq!(
+        sql.matches("t.project_id = ANY(").count(),
+        1,
+        "multi-project filters must widen through a single ANY branch: {sql}"
+    );
+    assert!(
+        sql.contains("pea.entity_id::text = t.project_id"),
+        "access gate must be per-row: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_shared_only_project_branch_excludes_owned() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::Shared(item_filters::SharedEmailFilter::Only)),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        sql.contains("AND NOT (t.link_id = ANY("),
+        "Shared=Only must exclude the caller's own threads from the project branch: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_shared_include_project_branch_keeps_owned() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::and(
+        Expr::Literal(EmailLiteral::ProjectId(
+            "96a9e31b-4ea0-48c5-b72e-4ac275546501".to_string(),
+        )),
+        Expr::Literal(EmailLiteral::Shared(
+            item_filters::SharedEmailFilter::Include,
+        )),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(
+        !sql.contains("AND NOT (t.link_id = ANY("),
+        "Shared=Include must not exclude owned threads from the project branch: {sql}"
+    );
 }

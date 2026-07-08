@@ -12,11 +12,6 @@ use macro_env_var::env_vars;
 pub use macro_middleware::auth::internal_access::InternalApiKey;
 
 env_vars! {
-    /// SQS URL for the email scheduled queue, consumed by the AI tools.
-    pub struct EmailScheduledQueue;
-    /// SQS URL for the Gmail ops queue, consumed by the AI tools to enqueue
-    /// Gmail label/sync operations.
-    pub struct GmailOpsQueue;
     /// Auth key used by the document storage / search / lexical clients.
     pub struct DocumentStorageServiceAuthKey;
     /// Secrets Manager secret name for the sync service auth key.
@@ -53,6 +48,10 @@ env_vars! {
     /// Base URL of the Macro web app (e.g. `https://macro.com`), used to build
     /// links to Macro items in MCP responses.
     pub struct AppBaseUrl;
+    /// JWT secret for minting document permission tokens for the editing worker.
+    pub struct DocumentPermissionJwt;
+    /// Comma-separated Kafka bootstrap servers for the macro event broker.
+    pub struct KafkaBrokers;
 }
 
 /// The configuration parameters for the MCP server.
@@ -67,8 +66,6 @@ pub struct Config {
     pub port: usize,
     /// The connection URL for the Postgres database this application uses.
     pub database_url: DatabaseUrl,
-    pub email_scheduled_queue: EmailScheduledQueue,
-    pub gmail_ops_queue: GmailOpsQueue,
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: SyncServiceAuthKey,
     pub document_storage_bucket: DocumentStorageBucket,
@@ -91,6 +88,8 @@ pub struct Config {
     pub app_base_url: AppBaseUrl,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    pub document_permission_jwt: DocumentPermissionJwt,
+    pub kafka_brokers: KafkaBrokers,
 }
 
 impl Config {

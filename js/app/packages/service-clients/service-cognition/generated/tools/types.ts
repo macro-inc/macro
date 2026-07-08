@@ -106,6 +106,12 @@ export type UnifiedSearchIndex =
   | 'channels'
   | 'projects'
   | 'call_records';
+/**
+ * How search tools match query terms. Restricted to partial/exact — the
+ * backend also supports regexp and an internal query mode, but those are not
+ * offered to the model.
+ */
+export type SearchMatchType = 'partial' | 'exact';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -847,7 +853,7 @@ export interface Thread {
   updatedAt?: string | null;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
@@ -858,8 +864,9 @@ export interface ContentSearch {
    * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
    */
   inbox?: string | null;
+  matchType?: SearchMatchType & string;
   /**
-   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a term in double quotes to force exact-token (or full-email-address) matching.
+   * The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token (or full email address) matching instead of prefix.
    */
   query: string;
 }
@@ -1060,6 +1067,30 @@ export interface DocumentSearchResult {
    * The score of the result
    */
   score?: number | null;
+}
+/**
+ * Apply AI-driven edits to a Macro document in place -- rewriting, inserting, formatting, or restructuring. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
+ */
+export interface EditDocument {
+  /**
+   * The ID of the document to edit.
+   */
+  document_id: string;
+  /**
+   * Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up.
+   */
+  instructions: string;
+}
+export interface EditDocumentResponse {
+  /**
+   * If present, invoke this tool again with this information appended to `instructions`.
+   */
+  clarification?: string | null;
+  /**
+   * A short outcome for the model -- whether the edit was applied or
+   * interrupted -- never the underlying list of edit operations.
+   */
+  summary: string;
 }
 /**
  * A recipient for an email.
@@ -1726,8 +1757,8 @@ export interface LoadToolsResponse {
   not_found: string[];
 }
 /**
- * A tool surfaced by [`SearchTools`] or loaded by [`LoadTools`] — just enough
- * for the model to decide whether to load it and how to call it.
+ * A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
+ * model to decide how to call it.
  */
 export interface ToolMatch {
   /**
@@ -1735,7 +1766,7 @@ export interface ToolMatch {
    */
   description: string;
   /**
-   * The exact name to load and then call the tool by.
+   * The exact name to call the tool by.
    */
   name: string;
 }
@@ -1775,7 +1806,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface NameSearch {
   /**
@@ -1786,8 +1817,9 @@ export interface NameSearch {
    * Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results.
    */
   inbox?: string | null;
+  matchType?: SearchMatchType & string;
   /**
-   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a term in double quotes to force exact-token matching.
+   * The name or title to search. Pass 1-3 keywords drawn from words that would literally appear in the title, not the user's natural-language description. Whitespace-separated terms are ANDed. For non-email types the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. For emails each term is matched against the subject. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token matching instead of prefix.
    */
   name: string;
 }
@@ -1802,9 +1834,10 @@ export interface ProjectMetadata {
   viewed_at?: string | null;
 }
 /**
- * ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update the project record
- * every time the project updates (specifically for updated_at and viewed_at)
+ * ProjectSearchResponseItem object with project metadata we fetch from macrodb.
+ * The index carries created_at/updated_at for ranking, but viewed_at is
+ * per-user and deleted_at changes without a reindex, so metadata stays
+ * database-sourced.
  */
 export interface ProjectSearchResponseItemWithMetadata {
   created_at: string;
@@ -2583,7 +2616,7 @@ export interface SearchToolResponse {
   results: UnifiedSearchResponseItem[];
 }
 /**
- * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. Returns matching tools' names and descriptions but does NOT load them — pass the names you want to `LoadTools` to make them callable. Searching is cheap, so cast a wide net.
+ * Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**
@@ -2592,14 +2625,55 @@ export interface SearchTools {
   query: string;
 }
 /**
- * Response from [`SearchTools`]: matching tools (name + description), not yet
- * loaded.
+ * Response from [`SearchTools`]: ranked matches, split into the top matches
+ * (auto-loaded, callable on the next model turn) and the remainder (loadable
+ * via [`LoadTools`]).
  */
 export interface SearchToolsResponse {
   /**
-   * Tools matching the query. Call `LoadTools` with the names you want to use.
+   * Matches past the auto-load cap, ranked. Not callable yet — pass a name
+   * to `LoadTools` if one of these is the tool you need.
+   */
+  additional_matches: ToolMatch[];
+  /**
+   * Top matches, ranked by relevance. These are loaded: call them by exact
+   * name on the next step.
    */
   results: ToolMatch[];
+}
+/**
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
+ */
+export type SelfKnowledge = {};
+/**
+ * The response for the [`SelfKnowledge`] tool: a single Markdown about-page.
+ */
+export interface SelfKnowledgeResponse {
+  /**
+   * An overview of Macro and a routing map into the docs at docs.macro.com.
+   */
+  about: string;
+}
+/**
+ * Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message
+ */
+export interface SendChannelMessage {
+  /**
+   * The channel id to send the message to
+   */
+  channel_id: string;
+  /**
+   * Message content in macro markdown format. This uses the same syntax as markdown documents
+   */
+  content: string;
+  /**
+   * An optional thread id to reply too
+   */
+  thread_id?: string | null;
+}
+export interface SendChannelMessageResponse {
+  channel_id: string;
+  message_id: string;
 }
 /**
  * Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
@@ -2620,6 +2694,13 @@ export interface SendEmail {
    * Carbon copy recipients (optional).
    */
   cc?: EmailRecipient[];
+  /**
+   * Per-message signature override, set by the composer's signature preview —
+   * not normally by you. Omit to use the inbox's default policy (always on a
+   * new email; on replies/forwards only when the user enabled it). `false`
+   * excludes the signature for this one email.
+   */
+  includeSignature?: boolean | null;
   /**
    * The ID of a message to reply to (optional). When set, the email is
    * sent as a reply within the same thread.

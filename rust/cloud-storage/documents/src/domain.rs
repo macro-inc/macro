@@ -2,6 +2,7 @@
 
 pub mod branch_name;
 pub mod content;
+pub mod events;
 #[cfg(feature = "ports")]
 pub mod markdown_backfill;
 

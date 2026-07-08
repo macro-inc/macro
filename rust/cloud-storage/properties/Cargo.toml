@@ -29,6 +29,7 @@ model_notifications = { path = "../model_notifications" }
 model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
+properties_db_client = { path = "../properties_db_client" }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -41,6 +42,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 ai_toolset = { path = "../ai_toolset" }
+chrono = { workspace = true }
 mockall = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }

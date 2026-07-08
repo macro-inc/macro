@@ -1,36 +1,50 @@
-import { UserIcon } from '@core/component/UserIcon';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useLogout } from '@core/auth/logout';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobile } from '@core/mobile/isMobile';
 import { toast } from '@core/component/Toast/Toast';
-import { staticFileIdEndpoint } from '@core/constant/servers';
-import { createStaticFile } from '@core/util/create';
-import { openFilePicker } from '@core/util/upload';
-import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown } from '@ui';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import { UserIcon } from '@core/component/UserIcon';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import { createStaticFile } from '@core/util/create';
+import { openFilePicker } from '@core/util/upload';
+import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
+import {
+  type SupportedNotificationSettings,
+  useNotificationSettings,
+} from '@notifications';
 import CheckIcon from '@phosphor/check.svg';
+import PencilIcon from '@phosphor/pencil-simple.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
+import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
-import { useEmail, useUserId } from '@core/context/user';
+import { invoke } from '@tauri-apps/api/core';
+import {
+  Button,
+  cn,
+  Dialog,
+  Dropdown,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createEffect,
   createMemo,
@@ -42,14 +56,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  type SupportedNotificationSettings,
-  useNotificationSettings,
-} from '@notifications';
-import { useAnalytics } from '@app/component/analytics-context';
-import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
-import { invoke } from '@tauri-apps/api/core';
 import { Transition } from 'solid-transition-group';
+import { formatAssetUrl, loadEntryAssetInfo } from './entryAssetInfo';
+import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
@@ -90,17 +99,28 @@ async function removeProfilePicture(): Promise<boolean> {
 
 function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   switch (status.status) {
-    case 'Idle': return 'Idle';
-    case 'CheckingForUpdate': return 'Checking for update...';
-    case 'UpdateFound': return `Update available: v${status.data.version}`;
-    case 'NoUpdateNeeded': return 'Up to date';
-    case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
-    case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
-    case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
-    case 'ClearRequired': return 'Cached update revoked';
-    case 'NativeUpdateRequired': return 'App update required';
-    case 'Completed': return 'Update ready';
-    case 'Error': return 'An error occurred when checking for updates';
+    case 'Idle':
+      return 'Idle';
+    case 'CheckingForUpdate':
+      return 'Checking for update...';
+    case 'UpdateFound':
+      return `Update available: v${status.data.version}`;
+    case 'NoUpdateNeeded':
+      return 'Up to date';
+    case 'WaitingForWifi':
+      return 'Waiting for Wi-Fi to download';
+    case 'Downloading':
+      return `Downloading: ${Math.round(status.data.progress)}%`;
+    case 'Unzipping':
+      return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'ClearRequired':
+      return 'Cached update revoked';
+    case 'NativeUpdateRequired':
+      return 'App update required';
+    case 'Completed':
+      return 'Update ready';
+    case 'Error':
+      return 'An error occurred when checking for updates';
   }
 }
 
@@ -303,7 +323,8 @@ export function Account() {
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
+    createSignal<boolean>(false);
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -413,68 +434,88 @@ export function Account() {
       <Show when={isNativeMobilePlatform()}>
         <SettingsSection title="Danger zone">
           <div>
-            <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
+            <Button
+              variant="danger"
+              depth={3}
+              onClick={() => setShowDeleteModal(true)}
+            >
               Delete Account
             </Button>
             <Dialog
-                  open={showDeleteModal()}
-                  onOpenChange={setShowDeleteModal}
-                  position="center"
-                  class="w-120"
-                >
-                  <Panel depth={2} class="rounded-xl">
-                    <Panel.Header class="px-6">
-                      <Dialog.Title class="text-ink text-sm font-semibold">
-                        Delete Account
-                      </Dialog.Title>
-                    </Panel.Header>
-                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                        Are you sure you want to delete your account? This action is
-                        permanent and cannot be undone.
-                      </Dialog.Description>
-                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="base" depth={3} onClick={() => setShowDeleteModal(false)}>
-                          Cancel
-                        </Button>
-                        <Button variant="danger" depth={3} onClick={() => {
-                          setShowDeleteModal(false);
-                          setShowDeleteConfirmModal(true);
-                        }}>
-                          Delete
-                        </Button>
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                </Dialog>
-                <Dialog
-                  open={showDeleteConfirmModal()}
-                  onOpenChange={setShowDeleteConfirmModal}
-                  position="center"
-                  class="w-120"
-                >
-                  <Panel depth={2} class="rounded-xl">
-                    <Panel.Header class="px-6">
-                      <Dialog.Title class="text-ink text-sm font-semibold">
-                        Are you absolutely sure?
-                      </Dialog.Title>
-                    </Panel.Header>
-                    <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                      <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                        This will permanently delete your account and all associated
-                        data. This cannot be undone.
-                      </Dialog.Description>
-                      <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                        <Button variant="base" depth={3} onClick={() => setShowDeleteConfirmModal(false)}>
-                          Cancel
-                        </Button>
-                        <Button variant="danger" depth={3} onClick={deleteAccountHandler}>
-                          Delete My Account
-                        </Button>
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                </Dialog>
+              open={showDeleteModal()}
+              onOpenChange={setShowDeleteModal}
+              position="center"
+              class="w-120"
+            >
+              <Panel depth={2} class="rounded-xl">
+                <Panel.Header class="px-6">
+                  <Dialog.Title class="text-ink text-sm font-semibold">
+                    Delete Account
+                  </Dialog.Title>
+                </Panel.Header>
+                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                    Are you sure you want to delete your account? This action is
+                    permanent and cannot be undone.
+                  </Dialog.Description>
+                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                    <Button
+                      variant="base"
+                      depth={3}
+                      onClick={() => setShowDeleteModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      depth={3}
+                      onClick={() => {
+                        setShowDeleteModal(false);
+                        setShowDeleteConfirmModal(true);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </Panel.Body>
+              </Panel>
+            </Dialog>
+            <Dialog
+              open={showDeleteConfirmModal()}
+              onOpenChange={setShowDeleteConfirmModal}
+              position="center"
+              class="w-120"
+            >
+              <Panel depth={2} class="rounded-xl">
+                <Panel.Header class="px-6">
+                  <Dialog.Title class="text-ink text-sm font-semibold">
+                    Are you absolutely sure?
+                  </Dialog.Title>
+                </Panel.Header>
+                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                    This will permanently delete your account and all associated
+                    data. This cannot be undone.
+                  </Dialog.Description>
+                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                    <Button
+                      variant="base"
+                      depth={3}
+                      onClick={() => setShowDeleteConfirmModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      depth={3}
+                      onClick={deleteAccountHandler}
+                    >
+                      Delete My Account
+                    </Button>
+                  </div>
+                </Panel.Body>
+              </Panel>
+            </Dialog>
           </div>
         </SettingsSection>
       </Show>
@@ -607,13 +648,12 @@ function NotificationToggle() {
 function NotificationSettings(props: {
   settings: SupportedNotificationSettings;
 }) {
-  const analytics = useAnalytics()
+  const analytics = useAnalytics();
 
-  const handleToggle = (checked: boolean) =>  {
-    analytics.track('notifications_toggled')
-    props.settings.toggle(checked)
-  }
-
+  const handleToggle = (checked: boolean) => {
+    analytics.track('notifications_toggled');
+    props.settings.toggle(checked);
+  };
 
   return (
     <Row label="Notifications">
@@ -635,14 +675,17 @@ function NotificationNotSupported() {
 }
 
 function bundleUpdateAction(
-  status: BundleUpdateStatus,
+  status: BundleUpdateStatus
 ): { label: string; action: () => void } | null {
   const grantBundleUpdate = () =>
     invoke('grant_bundle_update', { approved: true }).catch(console.error);
 
   switch (status.status) {
     case 'Idle':
-      return { label: 'Check for Update', action: () => invoke('check_for_update') };
+      return {
+        label: 'Check for Update',
+        action: () => invoke('check_for_update'),
+      };
     case 'Error':
       return { label: 'Retry', action: () => invoke('check_for_update') };
     case 'UpdateFound':
@@ -666,22 +709,120 @@ type BundleDebugInfo = {
 
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
+  const [showBuildInfo, setShowBuildInfo] = createSignal(false);
   const [bundleDebugInfo] = createResource(() =>
     invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
       console.error('[bundle-update] get_bundle_debug_info failed', error);
       return null;
     })
   );
+  const [entryAssetInfo] = createResource(showBuildInfo, (open) =>
+    open ? loadEntryAssetInfo() : null
+  );
+
   return (
     <Show when={bundleDebugInfo()}>
       {(info) => (
-        <Row label="Version">
-          <span class="text-sm text-ink-muted">
-            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'})
-            {' '}
-            - {info().nativeBuild}
-          </span>
-        </Row>
+        <>
+          <Row label="Version">
+            <button
+              type="button"
+              class="appearance-none rounded-sm border-0 bg-transparent p-0 text-right text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => setShowBuildInfo(true)}
+            >
+              {info().bundleBuild} (
+              {info().source === 'embedded' ? 'app' : 'ota'}) -{' '}
+              {info().nativeBuild}
+            </button>
+          </Row>
+          <Dialog
+            open={showBuildInfo()}
+            onOpenChange={setShowBuildInfo}
+            position="center"
+            class="w-120"
+          >
+            <Panel active depth={2} class="rounded-xl">
+              <Panel.Header class="px-6">
+                <Dialog.Title class="text-ink text-sm font-semibold">
+                  App Debug Info
+                </Dialog.Title>
+              </Panel.Header>
+              <Panel.Body class="p-6 font-sans flex flex-col gap-4">
+                <div class="grid gap-2 text-sm">
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Selected bundle</span>
+                    <span class="text-ink">
+                      {info().bundleBuild} (
+                      {info().source === 'embedded' ? 'app' : 'ota'})
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Native build</span>
+                    <span class="text-ink">{info().nativeBuild}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Runtime entry</span>
+                    <span
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.loadedEntryUrl)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Fresh index entry</span>
+                    <span
+                      class={cn(
+                        'text-right break-all',
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : formatAssetUrl(entryAssetInfo()?.freshIndexEntryUrl)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span class="text-ink-muted">Matches</span>
+                    <span
+                      class={cn(
+                        entryAssetInfo()?.matches === false
+                          ? 'text-failure'
+                          : 'text-ink'
+                      )}
+                    >
+                      {entryAssetInfo.loading
+                        ? 'Loading...'
+                        : entryAssetInfo()?.matches == null
+                          ? 'unknown'
+                          : entryAssetInfo()?.matches
+                            ? 'true'
+                            : 'false'}
+                    </span>
+                  </div>
+                  <Show when={entryAssetInfo()?.error}>
+                    {(error) => (
+                      <div class="flex items-center justify-between gap-4">
+                        <span class="text-ink-muted">Error</span>
+                        <span class="text-right text-failure break-all">
+                          {error()}
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+              </Panel.Body>
+            </Panel>
+          </Dialog>
+        </>
       )}
     </Show>
   );

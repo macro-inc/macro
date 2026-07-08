@@ -1,5 +1,7 @@
 import {
   type EntityData,
+  getCompanyOwnerId,
+  getCompanyStageOptionId,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isGithubPrEntity,
@@ -11,6 +13,20 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
+import { NO_ASSIGNEE } from './configs/base';
+
+function getPredicateNotifications(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const attachedNotifications = (entity as WithNotification<EntityData>)
+    .notifications;
+  if (attachedNotifications) return attachedNotifications();
+
+  return notificationSource.notificationsByEntity()[
+    compositeEntity(toNotificationEntity(entity))
+  ];
+}
 
 /**
  * Unread filter - entity has unread content.
@@ -25,10 +41,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
       return !entity.isRead;
     }
 
-    const notifications =
-      notificationSource.notificationsByEntity()[
-        compositeEntity(toNotificationEntity(entity))
-      ];
+    const notifications = getPredicateNotifications(entity, notificationSource);
 
     return notifications?.some((n) => !n.viewed_at) ?? false;
   };
@@ -45,10 +58,7 @@ export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
     if (entity.type === 'email') return !entity.done;
 
-    const notifications =
-      notificationSource.notificationsByEntity()[
-        compositeEntity(toNotificationEntity(entity))
-      ];
+    const notifications = getPredicateNotifications(entity, notificationSource);
 
     return notifications?.some(({ done }) => !done);
   };
@@ -72,14 +82,18 @@ export function emailFilter(entity: EntityData): boolean {
 
 export function peopleFilter(entity: EntityData): boolean {
   return (
-    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    (entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread') &&
     entity.channelType === 'direct_message'
   );
 }
 
 export function teamsFilter(entity: EntityData): boolean {
   return (
-    (entity.type === 'channel' || entity.type === 'channel_message') &&
+    (entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread') &&
     entity.channelType !== 'direct_message'
   );
 }
@@ -107,7 +121,11 @@ export function githubPrFilter(entity: EntityData): boolean {
 }
 
 export function channelsFilter(entity: EntityData): boolean {
-  return entity.type === 'channel' || entity.type === 'channel_message';
+  return (
+    entity.type === 'channel' ||
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  );
 }
 
 export function callsFilter(entity: EntityData): boolean {
@@ -138,6 +156,39 @@ export function crmCompanyActiveFilter(entity: EntityData): boolean {
 
 export function crmCompanyHiddenFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company' && entity.hidden;
+}
+
+/** True when the company's Stage property matches the given option id. */
+export function hasCompanyStage(
+  entity: EntityData,
+  stageOptionId: string
+): boolean {
+  if (entity.type !== 'crm_company') return false;
+  return getCompanyStageOptionId(entity) === stageOptionId;
+}
+
+/** True when the company has no Stage set. */
+export function hasNoCompanyStage(entity: EntityData): boolean {
+  if (entity.type !== 'crm_company') return false;
+  return getCompanyStageOptionId(entity) === undefined;
+}
+
+/**
+ * Owner filter for companies, driven by the view's owner selection
+ * (`ctx.owners`). `NO_OWNER` matches companies without an Owner set.
+ */
+export function companyOwnedByUsersFilter(
+  ownerIds: () => string[] | undefined
+) {
+  return (entity: EntityData): boolean => {
+    const owners = ownerIds();
+    if (!owners?.length) return true;
+    if (entity.type !== 'crm_company') return false;
+    const ownerId = getCompanyOwnerId(entity);
+    return owners.some((id) =>
+      id === NO_ASSIGNEE ? ownerId === undefined : ownerId === id
+    );
+  };
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

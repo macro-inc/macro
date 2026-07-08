@@ -6,6 +6,7 @@
  */
 import type { ApiMessageSenderAvatarUrl } from './apiMessageSenderAvatarUrl';
 import type { ApiMessageSenderName } from './apiMessageSenderName';
+import type { ApiMessageSenderTriggeredBy } from './apiMessageSenderTriggeredBy';
 import type { ApiMessageSenderType } from './apiMessageSenderType';
 
 /**
@@ -18,6 +19,8 @@ export interface ApiMessageSender {
   id: string;
   /** Display name for bot senders. */
   name?: ApiMessageSenderName;
+  /** For an agent (bot) message, the id of the user who triggered it. */
+  triggered_by?: ApiMessageSenderTriggeredBy;
   /** Sender type. */
   type: ApiMessageSenderType;
 }

@@ -23,6 +23,7 @@ use crate::{
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
             inject_fragment_size, parse_highlight_hit,
         },
+        projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
     },
 };
@@ -64,6 +65,8 @@ pub struct UnifiedSearchArgs {
     pub chat_search_args: UnifiedChatSearchArgs,
     /// The call record search args. If None, we do not search call records
     pub call_record_search_args: UnifiedCallRecordSearchArgs,
+    /// The project search args. If None, we do not search projects
+    pub project_search_args: UnifiedProjectSearchArgs,
 }
 
 impl From<UnifiedSearchArgs> for DocumentSearchArgs {
@@ -80,6 +83,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             sub_types: args.document_search_args.sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
+            tag_option_ids: args.document_search_args.tag_option_ids,
         }
     }
 }
@@ -105,6 +109,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
             subject_only: args.email_search_args.subject_only,
+            tag_option_ids: args.email_search_args.tag_option_ids,
         }
     }
 }
@@ -139,6 +144,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
+            tag_option_ids: args.chat_search_args.tag_option_ids,
         }
     }
 }
@@ -160,12 +166,29 @@ impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
     }
 }
 
+impl From<UnifiedSearchArgs> for ProjectSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ProjectSearchArgs {
+            terms: args.project_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.project_search_args.ids_only,
+            project_ids: args.project_search_args.project_ids,
+            tag_option_ids: args.project_search_args.tag_option_ids,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedChatSearchArgs {
     pub terms: Vec<String>,
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -176,6 +199,7 @@ pub struct UnifiedDocumentSearchArgs {
     pub sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -192,6 +216,7 @@ pub struct UnifiedEmailSearchArgs {
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
     pub subject_only: bool,
+    pub tag_option_ids: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -212,6 +237,14 @@ pub struct UnifiedCallRecordSearchArgs {
     pub ids_only: bool,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedProjectSearchArgs {
+    pub terms: Vec<String>,
+    pub project_ids: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+}
+
 /// Possible search result indices for unified search
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -221,6 +254,10 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(Box<EmailIndex>),
     CallRecord(CallRecordIndex),
+    // Keep last: with `untagged`, earlier variants win and every other doc
+    // shape carries required fields (document_name, title, message_id, …)
+    // a project doc lacks.
+    Project(ProjectIndex),
 }
 
 pub struct SplitUnifiedSearchResponseValues {
@@ -492,6 +529,27 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .updated_at_seconds
                     .and_then(|s| DateTime::from_timestamp(s, 0)),
             },
+            UnifiedSearchIndex::Project(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Projects,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ProjectSearchConfig::TITLE_KEY,
+                                content_key: ProjectSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: a
+                    .updated_at_seconds
+                    .and_then(|s| DateTime::from_timestamp(s, 0)),
+            },
             UnifiedSearchIndex::CallRecord(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::CallRecords,
@@ -597,6 +655,17 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(query_type.to_owned());
     }
 
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Projects)
+    {
+        let project_search_args: ProjectSearchArgs = args.clone().into();
+        let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+        let project_bool_query = project_query_builder.build_bool_query()?;
+        let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
     // create the search request
     let mut search_request_builder = SearchRequestBuilder::new();
 
@@ -624,6 +693,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .require_field_match(true)
         .field("content", em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
+        .field("name", em_field().number_of_fragments(0))
         .field("subject", em_field().number_of_fragments(0))
         .field("sender", em_field().number_of_fragments(0))
         .field("sender_name", em_field().number_of_fragments(0))
@@ -643,6 +713,48 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     search_request_builder.query(built_query);
 
     Ok(search_request_builder.build())
+}
+
+/// Trim a page of top-level OpenSearch hits and derive the next cursor.
+///
+/// The query fetches `page_size + 1` *top-level* hits — one per parent entity
+/// for the join-shape indices (documents, chats, call records), one per message
+/// for the flat indices. Pagination is measured in those top-level hits, never
+/// in the child inner-hits a single parent expands into: a document matched on
+/// many content chunks is still one entity against the page budget. Counting the
+/// expanded children instead lets a couple of chunk-heavy documents exhaust the
+/// budget and short the page while minting a spurious "more results" cursor.
+///
+/// The extra (`page_size + 1`th) hit only signals "more exist"; it is dropped
+/// before expansion. The cursor anchors on the last *included* entity — every
+/// child a parent expands into carries that parent's `entity_id`/`updated_at`,
+/// so the last expanded hit yields the correct `search_after` for the next page.
+fn paginate_unified_hits(
+    hits: Vec<Hit<UnifiedSearchIndex>>,
+    page_size: usize,
+) -> (Vec<SearchHit>, SearchCursorOption) {
+    let has_more = hits.len() > page_size;
+
+    let results: Vec<SearchHit> = hits
+        .into_iter()
+        .take(page_size)
+        .flat_map(expand_hit_into_search_hits)
+        .collect();
+
+    // Continue only with a real anchor to resume from. A page_size of 0 yields
+    // an empty page (nothing to anchor on), so emitting NotDone there would loop
+    // the caller on identical empty pages. Return a terminal cursor instead.
+    let cursor = match results.last() {
+        Some(last) if has_more && page_size > 0 => {
+            SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+                entity_id: last.entity_id,
+                updated_at: last.updated_at.unwrap_or_else(Utc::now),
+            }))
+        }
+        _ => SearchCursorOption::Done,
+    };
+
+    (results, cursor)
 }
 
 #[tracing::instrument(skip(client, args), err)]
@@ -699,27 +811,7 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let mut results: Vec<SearchHit> = result
-        .hits
-        .hits
-        .into_iter()
-        .flat_map(expand_hit_into_search_hits)
-        .collect();
-
-    let has_more = results.len() > args.page_size as usize;
-
-    if has_more {
-        results.pop(); // Remove the extra item
-    }
-
-    let cursor = if has_more {
-        SearchCursorOption::NotDone(results.last().map(|last| SearchMethodCursor::UpdatedAt {
-            entity_id: last.entity_id,
-            updated_at: last.updated_at.unwrap_or_else(Utc::now),
-        }))
-    } else {
-        SearchCursorOption::Done
-    };
+    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
 
     Ok((results, cursor))
 }

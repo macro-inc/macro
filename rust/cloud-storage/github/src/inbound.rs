@@ -19,9 +19,6 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 StatusCode::PRECONDITION_REQUIRED,
                 "ReauthenticationRequired",
             ),
-            crate::domain::models::GithubError::AccountAlreadyLinked => {
-                (StatusCode::BAD_REQUEST, "account already linked")
-            }
             crate::domain::models::GithubError::NoRefreshTokenProvided => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "no refresh token was provided",

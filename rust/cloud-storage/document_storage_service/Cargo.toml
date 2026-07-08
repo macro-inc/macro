@@ -20,7 +20,9 @@ path = "src/doppler_config.rs"
 
 [features]
 connection_gateway = []
-default = ["connection_gateway", "location_check"]
+default = ["connection_gateway", "delete_document_worker", "graphql", "location_check"]
+delete_document_worker = []
+graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
@@ -28,6 +30,8 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
+async-graphql = { workspace = true, optional = true }
+async-graphql-axum = { version = "7.0.17", optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -66,9 +70,11 @@ dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
 entity_access = { path = "../entity_access", features = ["inbound", "schema"] }
 entity_access_management = { path = "../entity_access_management" }
+favorites = { path = "../favorites", features = ["inbound", "postgres"] }
 foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
+graphql_soup = { path = "../graphql_soup", optional = true }
 github = { path = "../github", default-features = false, features = [
   "axum",
   "inbound",
@@ -88,8 +94,11 @@ macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_event_broker = { path = "../macro_event_broker" }
 macro_service_urls = { path = "../macro_service_urls" }
+macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_env_var = { path = "../macro_env_var" }
+macro_queues = { path = "../macro_queues" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
   "cloud_storage",
@@ -118,6 +127,7 @@ properties = { path = "../properties" }
 properties_db_client = { path = "../properties_db_client" }
 properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
+rate_limit = { path = "../rate_limit", default-features = false, features = ["axum"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
@@ -154,6 +164,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+webhook = { path = "../webhook", features = ["inbound", "outbound"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_config = { path = "../macro_config" }
 doppler-config = { workspace = true }

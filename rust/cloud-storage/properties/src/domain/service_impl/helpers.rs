@@ -22,5 +22,13 @@ pub fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> 
         return entity_type == EntityType::Task;
     }
 
+    // CRM-company-only properties: Stage, Owner, Revenue
+    if property_id == SystemPropertyKey::STAGE_UUID
+        || property_id == SystemPropertyKey::COMPANY_OWNER_UUID
+        || property_id == SystemPropertyKey::REVENUE_UUID
+    {
+        return entity_type == EntityType::Company;
+    }
+
     true
 }

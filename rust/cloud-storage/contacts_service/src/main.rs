@@ -37,7 +37,7 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
 }
 
 async fn create_sqs_worker(config: &Config) -> SQSWorker {
-    let queue_url = config.contacts_queue.to_string().clone();
+    let queue_url = macro_queues::ContactsQueue::new().to_string();
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);

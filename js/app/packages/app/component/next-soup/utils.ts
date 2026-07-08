@@ -34,8 +34,11 @@ import {
 import { queryKeys } from '@macro-entity';
 import {
   compositeEntity,
+  getAllNotificationsFromGroup,
   type NotificationSource,
   setDoneOverride,
+  stackNotifications,
+  type UnifiedNotification,
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -182,7 +185,10 @@ export const openEntityInNewTab = ({
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     entityPath = `/app/channel/${entity.channelId}`;
   } else {
     entityPath = `/app/${entity.type}/${entity.id}`;
@@ -191,7 +197,7 @@ export const openEntityInNewTab = ({
   // Add location params if present
   let entityUrl = new URL(entityPath, window.location.origin);
 
-  if (entity.type === 'channel_message') {
+  if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
     entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
     if (entity.threadId) {
       entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
@@ -367,7 +373,10 @@ export const openEntityInSplitFromUnifiedList = async (
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     params = getChannelParams(entity.messageId, entity.threadId);
   } else if (entity.type === 'call' && location?.type === 'call_record') {
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
@@ -391,13 +400,17 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
+      reopen: entity.type === 'channel' && !location ? 'latest' : undefined,
     }
   );
 
   // Navigate to specific location if provided
   if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (entity.type === 'channel_message') {
+  } else if (
+    entity.type === 'channel_message' ||
+    entity.type === 'channel_thread'
+  ) {
     // NOTE: This will force target message navigation in case the split is already open.
     await navigateToLocation(
       entity.channelId,
@@ -421,6 +434,9 @@ function getEntitySplitContent(entity: EntityData) {
       return { type: blockName, id };
     })
     .with({ type: 'channel_message' }, (entity) => {
+      return { type: 'channel' as const, id: entity.channelId };
+    })
+    .with({ type: 'channel_thread' }, (entity) => {
       return { type: 'channel' as const, id: entity.channelId };
     })
     .with({ type: 'foreign' }, (entity) => {
@@ -675,6 +691,91 @@ export type MarkEntitiesDoneContext = {
   applyUndone: () => void;
 };
 
+function channelThreadNotificationIds(
+  notifications: UnifiedNotification[],
+  threadId?: string
+): Set<string> {
+  const ids = new Set<string>();
+
+  if (threadId !== undefined) {
+    for (const notification of notifications) {
+      const metadata = notification.notification_metadata;
+
+      const belongsToThread = match(metadata)
+        .with(
+          { tag: 'channel_message_send' },
+          (m) => m.content.messageId === threadId
+        )
+        .with(
+          { tag: 'channel_mention' },
+          (m) => (m.content.threadId ?? m.content.messageId) === threadId
+        )
+        .with(
+          { tag: 'channel_message_reply' },
+          (m) => m.content.threadId === threadId
+        )
+        .otherwise(() => false);
+
+      if (!belongsToThread) {
+        continue;
+      }
+      ids.add(notification.id);
+    }
+
+    return ids;
+  }
+
+  for (const stack of stackNotifications(notifications)) {
+    // New inbox renders thread replies and mentions separately from channels.
+    if (
+      stack.type !== 'channel_message_reply' &&
+      stack.type !== 'channel_mention'
+    ) {
+      continue;
+    }
+
+    for (const notification of getAllNotificationsFromGroup(stack)) {
+      ids.add(notification.id);
+    }
+  }
+
+  return ids;
+}
+
+export function scopeChannelNotificationsForEntity(
+  entity: EntityData,
+  notifications: UnifiedNotification[]
+): UnifiedNotification[] {
+  if (entity.type === 'channel') {
+    const threadNotificationIds = channelThreadNotificationIds(notifications);
+    return notifications.filter(
+      (notification) => !threadNotificationIds.has(notification.id)
+    );
+  }
+
+  if (entity.type === 'channel_thread') {
+    const threadNotificationIds = channelThreadNotificationIds(
+      notifications,
+      entity.messageId
+    );
+    return notifications.filter((notification) =>
+      threadNotificationIds.has(notification.id)
+    );
+  }
+
+  return notifications;
+}
+
+function notificationsForMarkDone(
+  entity: EntityData,
+  notifications: UnifiedNotification[],
+  scopeChannelNotificationsToEntity: boolean
+): UnifiedNotification[] {
+  if (!scopeChannelNotificationsToEntity) return notifications;
+
+  return scopeChannelNotificationsForEntity(entity, notifications);
+}
+
 /**
  * Extract the email ids and notification ids targeted by a mark-done on these
  * entities. The ids are snapshotted here so mutationFn/undoFn/redoFn operate
@@ -683,17 +784,36 @@ export type MarkEntitiesDoneContext = {
 export function resolveMarkEntitiesDoneVariables(args: {
   entities: EntityData[];
   notificationSource: NotificationSource;
+  /**
+   * Channel and channel_thread entities share the same notification bucket.
+   * When true, channel mark-done skips thread-stack notifications, and
+   * channel_thread mark-done only targets that thread's stack.
+   */
+  scopeChannelNotificationsToEntity?: boolean;
 }): { emailIds: string[]; notificationIds: string[] } {
-  const { entities, notificationSource } = args;
+  const {
+    entities,
+    notificationSource,
+    scopeChannelNotificationsToEntity = false,
+  } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
   const notificationIds = entities.flatMap((entity) => {
-    return (
+    const notificationsForEntity =
       notificationSource.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))
-      ] ?? []
+      ] ?? [];
+
+    return notificationsForMarkDone(
+      entity,
+      notificationsForEntity,
+      scopeChannelNotificationsToEntity
     ).map((n) => n.id);
   });
-  return { emailIds, notificationIds };
+
+  return {
+    emailIds: [...new Set(emailIds)],
+    notificationIds: [...new Set(notificationIds)],
+  };
 }
 
 /**

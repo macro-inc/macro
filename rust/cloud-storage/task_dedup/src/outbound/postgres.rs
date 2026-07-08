@@ -17,9 +17,21 @@ use embedding::{Content, KeyedEmbedding, LabeledEmbedding, Match, SearchResults,
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use system_properties::{StatusOption, SystemPropertyKey};
+
 use crate::domain::models::{TaskDedupError, TaskDuplicate, TaskSearchParameters};
 use crate::domain::ports::TaskMatchRepo;
 use crate::domain::service::ordered_pair;
+
+/// Status option ids for tasks excluded from every dedup surface: a finished or
+/// cancelled task is not an actionable duplicate, so it is neither retrieved as
+/// a similarity candidate nor shown in the duplicates list.
+fn closed_status_option_ids() -> Vec<String> {
+    vec![
+        StatusOption::COMPLETED_UUID.to_string(),
+        StatusOption::CANCELED_UUID.to_string(),
+    ]
+}
 
 /// Postgres/pgvector implementation of [`VectorDb`] for task embeddings.
 ///
@@ -108,8 +120,9 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
         // field score and capped at `limit`; all of a kept entity's field rows
         // are returned so the service can reconstruct its text.
         //
-        // Iterative index scan keeps recall high despite the owner/team,
-        // self-, and dismissed-pair filters dropping rows after the HNSW scan.
+        // Iterative index scan keeps recall high despite the owner/team, self-,
+        // dismissed-pair, and closed-status filters dropping rows after the
+        // HNSW scan.
         // SET LOCAL binds to the transaction's connection, so the search must run
         // in the same transaction to see it.
         let mut tx = self.pool.begin().await?;
@@ -150,6 +163,14 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
                           AND m.status = 'dismissed'
                     )
                   )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM entity_properties ep
+                    WHERE ep.entity_id = e.document_id
+                      AND ep.entity_type = 'TASK'
+                      AND ep.property_definition_id = $8
+                      AND ep.values->'value' ?| $9::text[]
+                  )
                 GROUP BY e.document_id, e.search_key, e.content, e.embedding
             ),
             ranked AS (
@@ -176,6 +197,8 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
             params.exclude_document_id,
             params.exclude_dismissed,
             params.limit,
+            SystemPropertyKey::STATUS_UUID,
+            &closed_status_option_ids(),
         )
         .fetch_all(&mut *tx)
         .await?;
@@ -354,10 +377,20 @@ impl TaskMatchRepo for PgTaskMatchRepo {
             WHERE m.status = 'active'
               AND (m.task_id = $1 OR m.duplicate_task_id = $1)
               AND d."deletedAt" IS NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM entity_properties ep
+                WHERE ep.entity_id = d.id
+                  AND ep.entity_type = 'TASK'
+                  AND ep.property_definition_id = $2
+                  AND ep.values->'value' ?| $3::text[]
+              )
             ORDER BY m.vector_score DESC, m.created_at DESC
             LIMIT 10
             "#,
             document_id,
+            SystemPropertyKey::STATUS_UUID,
+            &closed_status_option_ids(),
         )
         .fetch_all(&self.pool)
         .await?;

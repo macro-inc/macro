@@ -10,6 +10,11 @@ import {
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_NEW_INBOX_FLAG,
+  ENABLE_NEW_INBOX_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -34,10 +39,25 @@ export function SoupFiltersBar() {
       soup.setPreviewEntity(undefined);
       return;
     }
-    const focused = soup.focus.id();
+
+    let focused = soup.focus.id();
+
     if (!focused) {
-      return;
+      const allRows = soup.rows();
+
+      const firstEntityIndex = allRows.findIndex(
+        (row) => !row.getIsGrouped() && !row.getIsLoadMore()
+      );
+
+      if (firstEntityIndex === -1) return;
+
+      const result = soup.navigate.toIndex(firstEntityIndex);
+
+      if (!result) return;
+
+      focused = result.row.id;
     }
+
     analytics.track('preview_panel_use');
     soup.setPreviewEntity(focused);
   };
@@ -58,12 +78,27 @@ export function SoupFiltersBar() {
     return content.type === 'component' && content.id === 'search';
   });
 
+  // The new inbox hides sort (it's fixed to updated_at for this view).
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+  const isNewInbox = createMemo(() => {
+    const content = panel.handle.content();
+    return (
+      content.type === 'component' &&
+      content.id === 'inbox' &&
+      newInboxFlag().enabled
+    );
+  });
+
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-1 min-w-0 flex-1">
           <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
-            <SoupViewContextSort />
+            <Show when={!isNewInbox()}>
+              <SoupViewContextSort />
+            </Show>
             <SoupViewContextGroup />
             <UnifiedFilterDropdown
               open={filterDropdownOpen}

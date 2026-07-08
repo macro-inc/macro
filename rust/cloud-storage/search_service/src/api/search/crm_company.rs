@@ -1,6 +1,6 @@
 //! CRM company search source + enrichment for unified search.
 //!
-//! CRM companies are Postgres-only (like projects) and gated by a
+//! CRM companies are Postgres-only and gated by a
 //! capability-token receipt, so they don't flow through the OpenSearch
 //! split/enrich path: [`search_company_names`] synthesizes `SearchHit`s
 //! the same way the other name searches do, and [`enrich_crm_companies`]

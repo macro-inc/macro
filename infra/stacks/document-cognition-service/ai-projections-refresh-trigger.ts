@@ -21,7 +21,6 @@ const CADENCE_SCHEDULES: {
 
 export type AiProjectionsRefreshTriggerEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
-  AI_PROJECTION_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };

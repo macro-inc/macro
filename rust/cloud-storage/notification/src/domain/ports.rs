@@ -19,7 +19,7 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::{PatchDelete, TaggedContent, UserNotificationStatusUpdate};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
-use crate::domain::models::request::NotificationListFilters;
+use crate::domain::models::request::{NotificationEntityRef, NotificationListFilters};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
     NotificationStatusPatch, SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
@@ -145,6 +145,18 @@ pub trait NotificationRepository: Send + Sync + 'static {
         cursor: Query<Uuid, CreatedAt, ()>,
         filters: NotificationListFilters,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a user's active notifications for multiple entities, grouped by requested entity.
+    fn get_entity_notifications_batch(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<NotificationEntityRef>,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
+    > + Send;
 
     /// Get a single user notification by ID.
     ///

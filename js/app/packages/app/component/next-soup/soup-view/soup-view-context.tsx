@@ -20,26 +20,37 @@ import {
 } from '@app/component/next-soup/filters/filter-store/query-store';
 import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
+import { dateBucket } from '@app/component/next-soup/soup-view/group-by-date';
 import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
-import { deduplicateEntities } from '@app/component/next-soup/utils';
+import {
+  deduplicateEntities,
+  scopeChannelNotificationsForEntity,
+} from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import {
+  entityMatchesTagFilter,
   isListViewID,
   type ListView,
   soupItemMatchesListView,
+  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  ENABLE_NEW_INBOX_FLAG,
+  ENABLE_NEW_INBOX_OVERRIDE,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
+  COMPANY_STAGE_OPTIONS,
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
@@ -96,6 +107,8 @@ type SoupViewInitializeOptions = {
   additionalEntities?: Accessor<EntityData[]>;
 };
 
+export type ReadFilter = 'all' | 'unread' | 'read';
+
 interface SoupViewContextValues {
   soup: SoupState;
   initialize: (options?: SoupViewInitializeOptions) => void;
@@ -112,10 +125,14 @@ interface SoupViewContextValues {
   queryFilters: QueryStore;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
+  ownerFilter: Accessor<string[]>;
+  setOwnerFilter: Setter<string[]>;
   inboxFilter: Accessor<string[] | undefined>;
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  readFilter: Accessor<ReadFilter>;
+  setReadFilter: Setter<ReadFilter>;
   groupByField: Accessor<GroupByField | undefined>;
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
@@ -168,6 +185,11 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const queryClient = useQueryClient();
+  const useGraphqlSoupFF = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
+  const resolveTransport = (groupBy: GroupByField | undefined) =>
+    useGraphqlSoupFF().enabled && !groupBy ? 'graphql' : undefined;
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
@@ -208,10 +230,14 @@ export const SoupViewContextProvider: FlowComponent<
   onCleanup(predicatesCaptorTeardown);
 
   const invalidateCache = () => {
+    const groupBy = serverGroupByField();
+
     queryClient.setQueryData(
       soupKeys.astItems({
         params: soupParams(),
         body: soupBody(),
+        groupBy,
+        transport: resolveTransport(groupBy),
       }).queryKey,
       (prev: InfiniteData<SoupPage> | SoupPage | undefined) => {
         if (!prev) return;
@@ -250,6 +276,10 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.assigneeFilter',
     { default: [] }
   );
+  const [ownerFilter, setOwnerFilter] = useEntryState<string[]>(
+    'soup.ownerFilter',
+    { default: [] }
+  );
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
     INBOX_FILTER_ENTRY_KEY,
     { default: undefined }
@@ -275,11 +305,22 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.tab',
     { default: undefined }
   );
+  const [readFilter, setReadFilter] = useEntryState<ReadFilter>(
+    'soup.readFilter',
+    { default: 'unread' }
+  );
+
+  // Date grouping is done client-side (see the date branch in `rows()`): the
+  // backend date grouping is unreliable, and we'd rather keep paginating the
+  // single flat list and regenerate buckets from whatever's loaded.
+  const isClientDateGroup = createMemo(
+    () => soup.grouping.activeGroupId() === 'date'
+  );
 
   const groupByField = createMemo((): GroupByField | undefined => {
     const id = soup.grouping.activeGroupId();
     if (!id) return undefined;
-    if (id === 'date') return { type: 'date' };
+    if (id === 'date') return undefined;
     if (id === 'entity_type') return { type: 'entity_type' };
     if (id === 'project') return { type: 'project' };
     if (id.startsWith('property:')) {
@@ -298,6 +339,50 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
+  // Clear the owner sub-filter when leaving the CRM company presets
+  createEffect(() => {
+    if (
+      !soup.predicates.isActive('crm-company-active') &&
+      !soup.predicates.isActive('crm-company-hidden')
+    ) {
+      setOwnerFilter([]);
+    }
+  });
+
+  const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
+
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component') return;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
+  // CRM companies come back from a dedicated soup request (not the dynamic
+  // query the server-side grouped path is built on), so property grouping on
+  // the Customers view buckets client-side over the flat list — same approach
+  // as date grouping. `groupByField` stays populated so group headers can
+  // resolve icons/labels for the grouping property.
+  const isClientPropertyGroup = createMemo(
+    () =>
+      activeListView() === 'companies' && groupByField()?.type === 'property'
+  );
+
+  // The group-by actually sent to the backend (drives the grouped queries).
+  const serverGroupByField = createMemo(() =>
+    isClientPropertyGroup() ? undefined : groupByField()
+  );
+
+  // The new inbox surfaces channel threads the current user participates in —
+  // the root sender, anyone who replied, or anyone @-mentioned — via the
+  // `channelThreadParticipantId` filter, since soup otherwise only surfaces
+  // whole channels.
+  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
+    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
+  });
+  const isNewInbox = () =>
+    activeListView() === 'inbox' && newInboxFlag().enabled;
+
   const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
     if (inboxes === undefined) return state;
@@ -310,8 +395,71 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const applyInboxThreadFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) {
+      return {
+        ...state,
+        include: { ...state.include, channelThreadId: [NIL_UUID] },
+      };
+    }
+
+    const id = userId();
+    if (!id) return state;
+    return {
+      ...state,
+      include: {
+        ...state.include,
+        channelThreadParticipantId: [id],
+      },
+    };
+  };
+
+  // Unread/read/all filter for the new inbox: injects the per-entity-type seen
+  // filters ('all' leaves them unset). Matches the experimental inbox.
+  const applyInboxReadFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const filter = readFilter();
+    if (filter === 'all') return state;
+    const seen = filter === 'read';
+    return {
+      ...state,
+      include: {
+        ...state.include,
+        documentSeen: seen,
+        emailSeen: seen,
+        channelSeen: seen,
+        // channelThreadSeen: seen,
+        chatSeen: seen,
+        folderSeen: seen,
+        foreignEntitySeen: seen,
+      },
+    };
+  };
+
+  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
+  // calls entirely, so drop that exclusion and filter to missed status instead.
+  const applyInboxCallFilter = (state: QueryState): QueryState => {
+    if (!isNewInbox()) return state;
+    const { callId: _callId, ...include } = state.include;
+    return {
+      ...state,
+      include: {
+        ...include,
+        callStatus: 'MISSED',
+      },
+    };
+  };
+
+  const applyViewFilters = (state: QueryState): QueryState => {
+    let next = applyInboxFilter(state);
+    next = applyInboxThreadFilter(next);
+    next = applyInboxReadFilter(next);
+    next = applyInboxCallFilter(next);
+    return next;
+  };
+
   const soupBody = createMemo(() =>
-    compileToAst(applyInboxFilter(queryFilters.state))
+    compileToAst(applyViewFilters(queryFilters.state))
   );
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
@@ -320,7 +468,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const search = createSearchState({
     soup,
-    filters: () => applyInboxFilter(queryFilters.state),
+    filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
@@ -338,51 +486,59 @@ export const SoupViewContextProvider: FlowComponent<
     });
   };
 
-  const notificationSource = useGlobalNotificationSource();
-  const userId = useUserId();
   const showSupportedForeignEntitiesFF = useFeatureFlag(
     ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
     {
       enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
     }
   );
-
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
     userId: userId(),
     notificationSource,
     assignees: assigneeFilter(),
+    owners: ownerFilter(),
   });
 
   const attachNotifications = (entity: EntityData) => {
+    const notifications = useNotificationsForEntity(
+      notificationSource,
+      toNotificationEntity(entity)
+    );
     return {
       ...entity,
-      notifications: useNotificationsForEntity(
-        notificationSource,
-        toNotificationEntity(entity)
-      ),
+      notifications: () =>
+        isNewInbox()
+          ? scopeChannelNotificationsForEntity(entity, notifications())
+          : notifications(),
     };
   };
 
-  const activeListView = createMemo<ListView | undefined>(() => {
-    const content = panel.handle.content();
-    if (content.type !== 'component') return;
-    return isListViewID(content.id) ? content.id : undefined;
-  });
+  // Active tag option ids, used to gate optimistic websocket inserts so an
+  // active tag filter is honored even on the grouped render path.
+  const activeTagOptionIds = createMemo(() =>
+    (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
+  );
 
   const itemsQuery = useSoupAstItemsQuery(
-    () => ({
-      params: soupParams(),
-      body: soupBody(),
-      groupBy: groupByField(),
-    }),
+    () => {
+      const groupBy = serverGroupByField();
+      return {
+        params: soupParams(),
+        body: soupBody(),
+        groupBy,
+        transport: resolveTransport(groupBy),
+      };
+    },
     () => {
       const view = activeListView();
       return {
         enabled: !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     }
@@ -442,10 +598,14 @@ export const SoupViewContextProvider: FlowComponent<
   const baseEntities = () => {
     let transformed = items();
     const ctx = getFilterContext();
+    const tagOptionIds = activeTagOptionIds();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      if (!entityMatchesTagFilter(entity, tagOptionIds)) {
         continue;
       }
       next.push(entity);
@@ -497,7 +657,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (!groups || !items) return;
       return { groups, items };
     }),
-    groupByField,
+    groupByField: serverGroupByField,
     soupParams,
     soupBody,
     queryOptions: () => {
@@ -505,7 +665,9 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesListView(item, view),
+          itemFilter: (item) =>
+            soupItemMatchesListView(item, view) &&
+            soupItemMatchesTagFilter(item, activeTagOptionIds()),
         },
       };
     },
@@ -535,9 +697,163 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // Group key an entity falls under for a property grouping: the first
+  // select-option id / entity-reference id, or '' for "Not set".
+  const clientPropertyGroupKey = (
+    entity: SoupEntity,
+    propertyDefinitionId: string
+  ): string => {
+    const properties = 'properties' in entity ? (entity.properties ?? []) : [];
+    const property = properties.find(
+      (p) => p.definition.id === propertyDefinitionId
+    );
+    const value = property?.value;
+    if (!value) return '';
+    if (value.type === 'SelectOption' || value.type === 'Link') {
+      const first = value.value[0];
+      return typeof first === 'string' ? first : '';
+    }
+    if (value.type === 'EntityReference') {
+      const first = value.value[0];
+      return first && typeof first === 'object' && 'entity_id' in first
+        ? String(first.entity_id)
+        : '';
+    }
+    return '';
+  };
+
   const rows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsQuery.data?.groups;
+
+    // Client-side property grouping (Customers view): bucket the flat
+    // (paginated) list by property value; option order comes from the
+    // statically-known stage options, then label, with "Not set" last.
+    if (enabled() && isClientPropertyGroup() && !search.isSearching()) {
+      const definitionId =
+        field?.type === 'property' ? field.propertyDefinitionId : '';
+      const buckets = new Map<string, SoupEntity[]>();
+      for (const entity of entities()) {
+        const key = clientPropertyGroupKey(entity, definitionId);
+        const bucket = buckets.get(key);
+        if (bucket) {
+          bucket.push(entity);
+        } else {
+          buckets.set(key, [entity]);
+        }
+      }
+
+      const stageOrder = COMPANY_STAGE_OPTIONS.map((o) => o.value as string);
+      const order = [...buckets.keys()].sort((a, b) => {
+        if (a === '') return 1;
+        if (b === '') return -1;
+        const aStage = stageOrder.indexOf(a);
+        const bStage = stageOrder.indexOf(b);
+        if (aStage !== -1 || bStage !== -1) {
+          return (
+            (aStage === -1 ? stageOrder.length : aStage) -
+            (bStage === -1 ? stageOrder.length : bStage)
+          );
+        }
+        const aLabel = getPropertyOptionLabel(a) ?? a;
+        const bLabel = getPropertyOptionLabel(b) ?? b;
+        return aLabel.localeCompare(bLabel);
+      });
+
+      const groupedRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of order) {
+        const groupEntities = buckets.get(key)!;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: key === '' ? 'Not set' : (getPropertyOptionLabel(key) ?? key),
+          count: groupEntities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        groupedRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: groupEntities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of groupEntities) {
+          groupedRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return groupedRows;
+    }
+
+    // Client-side date grouping: reuse the single flat (paginated) list and
+    // regenerate date buckets from whatever's loaded — no per-group fetching.
+    if (enabled() && isClientDateGroup() && !search.isSearching()) {
+      const all = entities();
+      const buckets = new Map<
+        string,
+        { label: string; entities: SoupEntity[] }
+      >();
+      const order: string[] = [];
+      const now = new Date();
+
+      for (const entity of all) {
+        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const bucket = dateBucket(ts, now);
+        let group = buckets.get(bucket.key);
+
+        if (!group) {
+          group = { label: bucket.label, entities: [] };
+          buckets.set(bucket.key, group);
+          order.push(bucket.key);
+        }
+
+        group.entities.push(entity);
+      }
+
+      const dateRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of order) {
+        const group = buckets.get(key)!;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: group.label,
+          count: group.entities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        dateRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: group.entities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of group.entities) {
+          dateRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return dateRows;
+    }
 
     if (!enabled() || !field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>
@@ -644,10 +960,14 @@ export const SoupViewContextProvider: FlowComponent<
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
     inboxFilter,
     setInboxFilter,
     activeTab,
     setActiveTab,
+    readFilter,
+    setReadFilter,
     groupByField,
     fetchNextGroupPage,
     isFetchingGroupPage,

@@ -31,7 +31,7 @@ impl PgBotsRepo {
 }
 
 fn principal_id(bot_id: BotId) -> String {
-    bot_id.to_storage_string()
+    bot_id.into_storage_id().to_string()
 }
 
 fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
@@ -72,7 +72,7 @@ impl TryFrom<BotRow> for Bot {
         };
 
         Ok(Self {
-            id: BotId::from_uuid(row.id),
+            id: BotId::new_from_uuid(row.id),
             kind,
             owner,
             name: row.name,
@@ -129,7 +129,7 @@ impl From<BotTokenRow> for BotToken {
     fn from(row: BotTokenRow) -> Self {
         Self {
             id: row.id,
-            bot_id: BotId::from_uuid(row.bot_id),
+            bot_id: BotId::new_from_uuid(row.bot_id),
             token: row.token,
             label: row.label,
             last_used_at: row.last_used_at,
@@ -155,7 +155,7 @@ struct TokenCandidateRow {
 
 impl TokenCandidateRow {
     fn into_candidate(self) -> anyhow::Result<BotTokenCandidate> {
-        let bot_id = BotId::from_uuid(self.bot_id);
+        let bot_id = BotId::new_from_uuid(self.bot_id);
         let kind = self
             .kind
             .parse::<BotKind>()
@@ -199,7 +199,7 @@ impl BotRepo for PgBotsRepo {
         created_by: MacroUserIdStr<'static>,
         req: CreateBotRequest,
     ) -> Result<Bot, Self::Err> {
-        let bot_id = BotId::from_uuid(macro_uuid::generate_uuid_v7());
+        let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
         let (owner_user_id, team_id) = owner_columns(owner);
         let row = sqlx::query_as!(
             BotRow,
@@ -246,7 +246,7 @@ impl BotRepo for PgBotsRepo {
         token: String,
         req: CreateChannelScopedBotRequest,
     ) -> Result<(Bot, BotToken), Self::Err> {
-        let bot_id = BotId::from_uuid(macro_uuid::generate_uuid_v7());
+        let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
         let token_id = macro_uuid::generate_uuid_v7();
         let (owner_user_id, team_id) = owner_columns(owner);
         let mut tx = self

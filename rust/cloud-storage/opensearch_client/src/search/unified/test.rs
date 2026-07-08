@@ -488,8 +488,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
+            ..Default::default()
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
+        project_search_args: UnifiedProjectSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -522,6 +524,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -678,7 +681,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "simple_query_string": {
                             "default_operator": "AND",
                             "fields": ["subject", "content", "sender_name", "recipient_names", "cc_names", "bcc_names"],
-                            "query": "test*"
+                            "query": "(test)"
                           }
                         }
                       ]
@@ -786,8 +789,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
             ids_only: false,
+            ..Default::default()
         },
         call_record_search_args: UnifiedCallRecordSearchArgs::default(),
+        project_search_args: UnifiedProjectSearchArgs::default(),
         cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
             entity_id,
             updated_at: time,
@@ -840,6 +845,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         "fields": {
           "content": { "number_of_fragments": 1, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "document_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
+          "name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "subject": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
           "sender_name": { "number_of_fragments": 0, "post_tags": ["</macro_em>"], "pre_tags": ["<macro_em>"], "type": "plain" },
@@ -893,4 +899,192 @@ fn test_thread_sort_is_thread_id_then_message_id_field_sorts() {
     assert_eq!(json[0]["thread_id"]["unmapped_type"], "keyword");
     assert_eq!(json[1]["message_id"]["order"], "desc");
     assert_eq!(json[1]["message_id"]["unmapped_type"], "keyword");
+}
+
+/// A join-shape parent document whose content matched on `chunk_count` chunks,
+/// shaped like the `inner_hits` block OpenSearch returns for a `has_child`
+/// content query.
+fn doc_hit_with_chunks(
+    entity_id: uuid::Uuid,
+    updated_at_seconds: i64,
+    chunk_count: usize,
+) -> Hit<UnifiedSearchIndex> {
+    let chunks: Vec<serde_json::Value> = (0..chunk_count)
+        .map(|i| {
+            serde_json::json!({
+                "_id": format!("{entity_id}-chunk-{i}"),
+                "_score": 1.0,
+                "_source": { "node_id": format!("node-{i}"), "raw_content": "match" },
+                "highlight": { "content": ["<macro_em>match</macro_em>"] },
+            })
+        })
+        .collect();
+
+    Hit {
+        score: Some(1.0),
+        source: UnifiedSearchIndex::Document(DocumentIndex {
+            entity_id,
+            document_name: "Doc".to_string(),
+            owner_id: "alice".to_string(),
+            file_type: "md".to_string(),
+            updated_at_seconds: Some(updated_at_seconds),
+        }),
+        highlight: None,
+        inner_hits: Some(serde_json::json!({ "term_0": { "hits": { "hits": chunks } } })),
+    }
+}
+
+#[test]
+fn paginate_counts_parent_entities_not_inner_hits() {
+    // Two documents, each matched on many content chunks. The expanded hit count
+    // far exceeds page_size, but there are only two entities — the page is not
+    // full, so no spurious "more" cursor is minted and every chunk is returned.
+    let d1 = "00000000-0000-0000-0000-000000000001"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let d2 = "00000000-0000-0000-0000-000000000002"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let hits = vec![
+        doc_hit_with_chunks(d1, 1_779_000_100, 30),
+        doc_hit_with_chunks(d2, 1_779_000_050, 30),
+    ];
+
+    let (results, cursor) = paginate_unified_hits(hits, 10);
+
+    assert_eq!(
+        results.len(),
+        60,
+        "all chunks of both documents are returned"
+    );
+    assert!(
+        cursor.is_done(),
+        "two entities under a page_size of 10 must not report more results, got {cursor:?}"
+    );
+}
+
+#[test]
+fn paginate_has_more_when_parent_count_exceeds_page_size() {
+    // page_size + 1 distinct documents: the extra one signals more, is dropped
+    // before expansion, and the cursor anchors on the last *included* document.
+    let d1 = "00000000-0000-0000-0000-000000000001"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let d2 = "00000000-0000-0000-0000-000000000002"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let d3 = "00000000-0000-0000-0000-000000000003"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let hits = vec![
+        doc_hit_with_chunks(d1, 1_779_000_300, 5),
+        doc_hit_with_chunks(d2, 1_779_000_200, 5),
+        doc_hit_with_chunks(d3, 1_779_000_100, 5),
+    ];
+
+    let (results, cursor) = paginate_unified_hits(hits, 2);
+
+    assert_eq!(
+        results.len(),
+        10,
+        "only the two included docs' chunks remain"
+    );
+    assert!(
+        results
+            .iter()
+            .all(|h| h.entity_id == d1 || h.entity_id == d2),
+        "the third document must be dropped entirely, not partially"
+    );
+    match cursor {
+        SearchCursorOption::NotDone(Some(c)) => {
+            let (id, _) = c.as_updated_at().expect("UpdatedAt cursor");
+            assert_eq!(id, d2, "cursor anchors on the last included entity");
+        }
+        _ => panic!("expected NotDone cursor, got {cursor:?}"),
+    }
+}
+
+#[test]
+fn paginate_page_size_zero_terminates() {
+    // page_size 0 passes request validation, and the query fetches size(1) so a
+    // hit can return. The page is empty (take(0)) with no anchor, so the cursor
+    // must be Done — a NotDone here would loop the caller on empty pages.
+    let d1 = "00000000-0000-0000-0000-000000000001"
+        .parse::<uuid::Uuid>()
+        .unwrap();
+    let hits = vec![doc_hit_with_chunks(d1, 1_779_000_100, 5)];
+
+    let (results, cursor) = paginate_unified_hits(hits, 0);
+
+    assert!(results.is_empty(), "page_size 0 yields no results");
+    assert!(
+        cursor.is_done(),
+        "no anchor to resume from must terminate, not loop, got {cursor:?}"
+    );
+}
+
+#[test]
+fn project_hit_deserializes_and_converts() -> anyhow::Result<()> {
+    // A project doc as the flat projects index returns it. With the untagged
+    // UnifiedSearchIndex enum the Project variant must win: no other variant's
+    // required fields (document_name, title, message_id, channel_id, …) are
+    // present in a project _source.
+    let json = serde_json::json!({
+      "took": 3,
+      "timed_out": false,
+      "_shards": { "total": 3, "successful": 3, "skipped": 0, "failed": 0 },
+      "hits": {
+        "total": { "value": 1, "relation": "eq" },
+        "max_score": 4.2,
+        "hits": [
+          {
+            "_index": "projects_v1",
+            "_id": "0197a863-0000-7000-8000-000000000001",
+            "_score": 4.2,
+            "_source": {
+              "entity_id": "0197a863-0000-7000-8000-000000000001",
+              "name": "Mobile Redesign",
+              "owner_id": "macro|user@user.com",
+              "parent_project_id": "0197a863-0000-7000-8000-000000000002",
+              "created_at_seconds": 1770000000,
+              "updated_at_seconds": 1783000000,
+              "properties": [
+                { "definition_id": "0197a863-0000-7000-8000-00000000000a", "values": ["opt-1"] }
+              ]
+            },
+            "highlight": {
+              "name": ["<macro_em>Mobile</macro_em> Redesign"]
+            }
+          }
+        ]
+      }
+    });
+
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_value(json)?;
+    assert_eq!(result.hits.hits.len(), 1);
+    assert!(matches!(
+        result.hits.hits[0].source,
+        UnifiedSearchIndex::Project(_)
+    ));
+
+    let (hits, cursor) = paginate_unified_hits(result.hits.hits, 10);
+    assert_eq!(hits.len(), 1);
+    let hit = &hits[0];
+    assert_eq!(hit.entity_type, SearchEntityType::Projects);
+    assert_eq!(
+        hit.entity_id,
+        "0197a863-0000-7000-8000-000000000001".parse::<uuid::Uuid>()?
+    );
+    assert_eq!(
+        hit.highlight.name.as_deref(),
+        Some("<macro_em>Mobile</macro_em> Redesign")
+    );
+    assert!(hit.goto.is_none());
+    assert_eq!(
+        hit.updated_at,
+        chrono::DateTime::from_timestamp(1_783_000_000, 0)
+    );
+    assert!(cursor.is_done());
+
+    Ok(())
 }

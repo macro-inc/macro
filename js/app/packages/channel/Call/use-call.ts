@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { useChannelsContext } from '@core/context/channels';
 import { throwOnErr } from '@core/util/result';
 import {
@@ -196,6 +197,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       clearAutoRejoinTimer();
       void invalidateActiveCallQueries();
       attachDisconnectListener();
+      analytics.track('call_action', {
+        action: 'joined',
+        channelId: channelId(),
+      });
     },
     // Keep this handler synchronous: we undo the optimistic join and show the
     // error message right away. LiveKit disconnect and the server leave call
@@ -266,6 +271,11 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       try {
         await callCtx.disconnectSession(leaveOptions);
         options?.onLeave?.();
+        analytics.track('call_action', {
+          action: 'left',
+          channelId: id,
+          leaveReason: 'user_initiated',
+        });
       } finally {
         await leaveMutation.mutateAsync(id);
       }

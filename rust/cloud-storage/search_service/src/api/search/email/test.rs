@@ -27,7 +27,13 @@ fn create_email_history(thread_id: &str) -> models_email::service::message::Thre
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new(), HashMap::new(), HashMap::new());
+    let result = construct_search_result(
+        vec![],
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+    );
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -64,6 +70,7 @@ fn test_construct_search_result_single_thread() {
     let result = construct_search_result(
         search_results,
         thread_histories,
+        HashMap::new(),
         HashMap::new(),
         HashMap::new(),
     )
@@ -223,6 +230,7 @@ fn test_sort_stability() {
         thread_histories.clone(),
         HashMap::new(),
         HashMap::new(),
+        HashMap::new(),
     )
     .unwrap();
     let result2 = construct_search_result(
@@ -230,11 +238,13 @@ fn test_sort_stability() {
         thread_histories.clone(),
         HashMap::new(),
         HashMap::new(),
+        HashMap::new(),
     )
     .unwrap();
     let result3 = construct_search_result(
         input.clone(),
         thread_histories.clone(),
+        HashMap::new(),
         HashMap::new(),
         HashMap::new(),
     )

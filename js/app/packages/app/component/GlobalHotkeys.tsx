@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import {
   COMMAND_MENU_CATEGORY_LEADER_KEY,
   COMMAND_MENU_CATEGORY_SCOPE,
+  CREATE_MENU_COMMAND_SCOPE,
 } from '@app/constants/hotkeys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
@@ -127,7 +128,7 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
+  const { openSettings, settingsOpen, selectTab, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
@@ -143,7 +144,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  const createScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -159,7 +160,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-    activateCommandScope: true,
+    activateCommandScopeId: CREATE_MENU_COMMAND_SCOPE,
     surfaceNestedCommands: true,
     keywords: ['new', 'make', 'add'],
     icon: Plus,
@@ -169,7 +170,7 @@ export default function GlobalShortcuts() {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
-      scopeId: createScope.commandScopeId,
+      scopeId: CREATE_MENU_COMMAND_SCOPE,
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
@@ -180,8 +181,19 @@ export default function GlobalShortcuts() {
       keywords: item.keywords,
       hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
       runWithInputFocused: true,
-      proxiedHotkey: true,
     });
+  });
+
+  registerHotkey({
+    hotkey: ['c', 'escape'],
+    scopeId: CREATE_MENU_COMMAND_SCOPE,
+    description: 'Close Create',
+    condition: createMenuOpen,
+    keyDownHandler: () => {
+      setCreateMenuOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({
@@ -262,11 +274,11 @@ export default function GlobalShortcuts() {
     keyDownHandler: createNewSplit,
   });
 
-  // Settings open in a modal by default; tab selection is applied even when
-  // settings are already open.
-  const openSettingsModal = (tab?: SettingsTab) => {
+  // Open settings to a specific tab, switching the page in place if settings
+  // are already open.
+  const openSettingsAt = (tab?: SettingsTab) => {
     if (settingsOpen()) {
-      if (tab) setActiveTabId(tab);
+      if (tab) selectTab(tab);
       return;
     }
     openSettings(tab);
@@ -289,7 +301,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettingsModal('Account');
+      openSettingsAt('Account');
       return true;
     },
     runWithInputFocused: true,

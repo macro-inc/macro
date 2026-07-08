@@ -9,7 +9,6 @@ const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bo
 
 export type UploadExtractorLambdaTriggerEnvVars = {
   DYNAMODB_TABLE: pulumi.Output<string> | string;
-  UPLOAD_EXTRACTOR_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
 };

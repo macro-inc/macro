@@ -86,14 +86,14 @@ impl SessionStorage {
         Ok(res)
     }
 
-    /// append a new pending operation to the operation log
+    /// Append a new pending operation to the operation log and return the
+    /// Lexical node IDs that were touched (for blame tracking).
     pub async fn append_pending_operation(
         &self,
         operation: &[u8],
         document_state: &DocumentState,
-    ) -> Result<()> {
-        self.oplog.apply_op(document_state, operation).await?;
-        Ok(())
+    ) -> Result<Vec<String>> {
+        self.oplog.apply_op(document_state, operation).await
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {

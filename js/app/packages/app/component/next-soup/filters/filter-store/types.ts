@@ -37,7 +37,10 @@ export type ArrayFieldFilters = {
   channelId?: string[];
   channelType?: string[];
   channelSenderId?: string[];
+  channelMessageThreadId?: string[];
   channelThreadId?: string[];
+  channelThreadRootSenderId?: string[];
+  channelThreadParticipantId?: string[];
   chatId?: string[];
   chatOwnerId?: string[];
   chatProjectId?: string[];
@@ -50,6 +53,11 @@ export type ArrayFieldFilters = {
   foreignEntitySource?: string[];
   crmCompanyId?: string[];
   properties?: PropertyFilter[];
+  // Selected tags. Kept separate from `properties` because tags combine as a
+  // single OR across all tag definitions (personal + team), whereas `properties`
+  // AND across distinct definitions. Each entry carries its owning definition id
+  // (needed for the soup literal) and option id.
+  tagFilters?: PropertyFilter[];
 };
 
 export type ScalarFieldFilters = {
@@ -64,6 +72,8 @@ export type ScalarFieldFilters = {
   channelSeen?: boolean;
   channelDone?: boolean;
   channelImportance?: boolean;
+  channelThreadSeen?: boolean;
+  channelThreadDone?: boolean;
   chatSeen?: boolean;
   chatDone?: boolean;
   folderSeen?: boolean;

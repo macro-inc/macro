@@ -6,6 +6,7 @@ import { GlobalShareInboxConflictDialog } from '@app/component/ShareInboxConflic
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CallKitSync } from '@channel/Call';
@@ -22,6 +23,7 @@ import {
   useUserId,
   useUserInfo,
 } from '@core/context/user';
+import { initAndStartEmailSync } from '@core/email-link';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -93,6 +95,8 @@ import {
   systemThemeEffect,
 } from '../../theme/utils/themeUtils';
 import { Login } from './auth/Login';
+import { MobileAuthWelcome } from './auth/mobile-onboarding/MobileAuthWelcome';
+import { MobileOnboarding } from './auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
@@ -102,6 +106,7 @@ import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
+import { SettingsRoute } from './settings/SettingsRoute';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
@@ -260,6 +265,13 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
+  // Settings is its own place (`/settings/:tab`) rather than a layout split, so
+  // it's linkable without dragging the workspace layout into the URL. The static
+  // prefix outranks the `/*splits` splat.
+  {
+    path: '/settings/:tab?',
+    component: SettingsRoute,
+  },
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',
@@ -355,7 +367,21 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/welcome',
-    component: () => <Navigate href="/login" />,
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileAuthWelcome />
+      ) : (
+        <Navigate href="/login" />
+      ),
+  },
+  {
+    path: '/onboarding',
+    component: () =>
+      isNativeMobilePlatform() ? (
+        <MobileOnboarding />
+      ) : (
+        <Navigate href="/login" />
+      ),
   },
   {
     path: '/team-invite',
@@ -443,19 +469,21 @@ function UserInfoSideEffects() {
 
       if (!user || !user.authenticated) return;
 
-      if (posthog.instance._isIdentified() || identified) {
-        return;
+      if (!posthog.instance._isIdentified() && !identified) {
+        identified = true;
+
+        const platform = detect(navigator.userAgent);
+        const os = platform?.os?.replaceAll(' ', '');
+
+        analytics.identify(user.id, {
+          email: user.email,
+          os,
+        });
       }
 
-      identified = true;
-
-      const platform = detect(navigator.userAgent);
-      const os = platform?.os?.replaceAll(' ', '');
-
-      analytics.identify(user.id, {
-        email: user.email,
-        os,
-      });
+      // Fires sign_up + ad conversions once when the auth service flagged this
+      // session as a freshly created account (signed_up=true redirect param).
+      trackSignupCompletion(analytics, { id: user.id });
     })
   );
 
@@ -480,6 +508,7 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&
     (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
 
@@ -487,6 +516,28 @@ function InitialInteractiveOnboardingModal() {
     if (modalOpen()) {
       setOnboardingStarted(true);
     }
+  });
+
+  // First-time users (tutorial not yet completed) reach the app without passing
+  // through a login route that inits the email link — e.g. marketing SSO returns to
+  // /app, not /login — so kick off email sync once here. Idempotent on the backend;
+  // AlreadyInitialized is ignored. Keyed by user id (not a bare flag) so a native
+  // mobile logout→login of a different user in the same session still inits.
+  let emailInitForUserId: string | undefined;
+  createEffect(() => {
+    const data = userInfoQuery.data;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) return;
+    if (emailInitForUserId === data.id) return;
+    emailInitForUserId = data.id;
+
+    void initAndStartEmailSync().match(
+      () => {},
+      (err) => {
+        if (err.tag !== 'AlreadyInitialized') {
+          console.error('Failed to init email link for new user', err);
+        }
+      }
+    );
   });
 
   const handleOpenChange = (nextOpen: boolean) => {

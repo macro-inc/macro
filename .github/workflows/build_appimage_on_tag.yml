@@ -1,5 +1,5 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
-# Source: rust/cloud-storage/tools/xtask/src/workflows/build_appimage_on_tag.rs
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/build_appimage_on_tag.rs
 name: Build AppImage
 'on':
   workflow_call:

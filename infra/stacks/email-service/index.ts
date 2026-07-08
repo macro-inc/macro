@@ -379,7 +379,6 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   vpc: coparse_api_vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
-    LINK_MANAGER_QUEUE: pulumi.interpolate`${linkManagerQueueName}`,
     ENVIRONMENT: stack,
     RUST_LOG: 'email_refresh_handler=info',
     DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
@@ -396,7 +395,6 @@ const emailScheduledHandler = new EmailScheduledHandler(
     vpc: coparse_api_vpc,
     envVars: {
       DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,
-      EMAIL_SCHEDULED_QUEUE: pulumi.interpolate`${scheduledQueueName}`,
       ENVIRONMENT: stack,
       RUST_LOG: 'email_scheduled_handler=info',
     },
