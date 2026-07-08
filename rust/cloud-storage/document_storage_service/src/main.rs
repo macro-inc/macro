@@ -71,7 +71,9 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_service_urls::{
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 #[cfg(feature = "graphql")]
@@ -753,6 +755,13 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "delete_document_worker")]
     {
+        let editing_worker_client = Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            )
+            .with_internal_auth_key(Some(api_context.config.internal_api_key.to_string())),
+        );
+
         // Spawn the delete document worker.
         let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
             worker: Arc::new(delete_document_worker),
@@ -760,6 +769,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: api_context.s3_client.clone(),
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
+            editing_worker_client,
         };
 
         tokio::spawn(async move {

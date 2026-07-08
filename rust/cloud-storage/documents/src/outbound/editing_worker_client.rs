@@ -10,17 +10,28 @@ use std::sync::Arc;
 pub struct ReqwestEditingWorkerClient {
     worker_url: String,
     client: Arc<Client>,
+    internal_auth_key: Option<String>,
 }
 
 impl ReqwestEditingWorkerClient {
     /// Construct a new client.
     pub fn new(worker_url: String, client: Arc<Client>) -> Self {
-        Self { worker_url, client }
+        Self {
+            worker_url,
+            client,
+            internal_auth_key: None,
+        }
     }
 
     /// Construct a client backed by a fresh default reqwest client.
     pub fn from_url(worker_url: String) -> Self {
         Self::new(worker_url, Arc::new(Client::new()))
+    }
+
+    /// Set the internal auth key used to authenticate `delete_traces` calls.
+    pub fn with_internal_auth_key(mut self, internal_auth_key: Option<String>) -> Self {
+        self.internal_auth_key = internal_auth_key;
+        self
     }
 }
 
@@ -106,5 +117,27 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             usage,
             clarification: body["clarification"].as_str().map(str::to_owned),
         })
+    }
+
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn delete_traces(&self, document_id: &str) -> anyhow::Result<()> {
+        let Some(internal_auth_key) = self.internal_auth_key.as_deref() else {
+            anyhow::bail!("editing worker client has no internal auth key configured");
+        };
+
+        let resp = self
+            .client
+            .delete(format!("{}/traces/{}", self.worker_url, document_id))
+            .header("x-internal-auth-key", internal_auth_key)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("editing worker returned {}: {}", status, body);
+        }
+
+        Ok(())
     }
 }

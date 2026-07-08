@@ -10,6 +10,9 @@ export type Bindings = {
   TRACES_DB: D1Database | undefined;
   /** Shared admin key gating the trace-read endpoint; validated via getEnv. */
   TRACE_ADMIN_KEY: string | undefined;
+  /** Org internal service-to-service key; accepted on the trace endpoints via
+   * the `x-internal-auth-key` header (used by the delete-document worker). */
+  INTERNAL_API_KEY: string | undefined;
 };
 
 export type Env = ReturnType<typeof validateEnv>;
@@ -21,6 +24,7 @@ function validateEnv(rawEnv: Bindings) {
     OPENAI_API_KEY,
     SYNC_WS_BASE,
     TRACE_ADMIN_KEY,
+    INTERNAL_API_KEY,
   } = rawEnv;
   return envsafe(
     {
@@ -30,6 +34,8 @@ function validateEnv(rawEnv: Bindings) {
       SYNC_WS_BASE: str({ allowEmpty: false }),
       // Empty when unset; the trace-read endpoint stays closed until it's set.
       TRACE_ADMIN_KEY: str({ default: '', allowEmpty: true }),
+      // Empty when unset; internal-key trace access stays closed until it's set.
+      INTERNAL_API_KEY: str({ default: '', allowEmpty: true }),
     },
     {
       env: {
@@ -38,6 +44,7 @@ function validateEnv(rawEnv: Bindings) {
         OPENAI_API_KEY,
         SYNC_WS_BASE,
         TRACE_ADMIN_KEY,
+        INTERNAL_API_KEY,
       },
     }
   );

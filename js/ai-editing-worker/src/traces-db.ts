@@ -29,6 +29,17 @@ export async function insertEditTrace(
     .run();
 }
 
+/** Delete every trace for a document. Returns silently if there are none. */
+export async function deleteEditTracesByDocumentId(
+  db: D1Database,
+  documentId: string
+): Promise<void> {
+  await db
+    .prepare('DELETE FROM edit_traces WHERE document_id = ?')
+    .bind(documentId)
+    .run();
+}
+
 /** All traces for a document, newest first. */
 export async function listEditTraces(
   db: D1Database,
