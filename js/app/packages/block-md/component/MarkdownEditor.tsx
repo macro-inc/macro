@@ -66,7 +66,6 @@ import {
   selectionDataPlugin,
   tabIndentationPlugin,
   tableCellResizerPlugin,
-  tableClipboardPlugin,
   tablePlugin,
   tableTouchSelectionPlugin,
   textPastePlugin,
@@ -547,7 +546,6 @@ export function MarkdownEditor(props: {
       })
     )
     .use(tableCellResizerPlugin())
-    .use(tableClipboardPlugin())
     .use(tableTouchSelectionPlugin())
     .use(
       filePastePlugin({

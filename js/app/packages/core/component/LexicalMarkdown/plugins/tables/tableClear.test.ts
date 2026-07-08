@@ -33,7 +33,6 @@ vi.mock('../../utils', () => ({
   setEditorStateFromMarkdown: vi.fn(),
 }));
 
-import { tableClipboardPlugin } from './tableClipboardPlugin';
 import { tablePlugin } from './tablePlugin';
 
 // jsdom implements neither ClipboardEvent nor execCommand; the cut path only
@@ -62,7 +61,6 @@ function createTableEditor(): LexicalEditor {
     hasCellBackgroundColor: true,
     hasTabHandler: true,
   })(editor);
-  tableClipboardPlugin()(editor);
   registerRichText(editor);
   const rootElement = document.createElement('div');
   rootElement.contentEditable = 'true';

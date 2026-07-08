@@ -17,7 +17,6 @@ import {
 } from '@lexical/table';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import EraserIcon from '@phosphor/eraser.svg';
 import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
@@ -38,7 +37,6 @@ import {
   Show,
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { $clearSelectedCells } from '../../plugins/tables/tableClipboardPlugin';
 
 false && floatWithElement;
 
@@ -154,13 +152,6 @@ export function TableSelectionActionBar() {
     });
   });
 
-  const runClear = createCallback(() => {
-    editor()?.update(() => {
-      const selection = $getSelection();
-      if ($isTableSelection(selection)) $clearSelectedCells(selection);
-    });
-  });
-
   // Replays the system clipboard through the normal paste pipeline, so
   // copied cell ranges overlay the grid exactly like a desktop paste.
   const runPaste = createCallback(async () => {
@@ -227,7 +218,6 @@ export function TableSelectionActionBar() {
               {barButton('Cut', ScissorsIcon, runCut)}
               {barButton('Copy', CopyIcon, runCopy)}
               {barButton('Paste', ClipboardIcon, () => void runPaste())}
-              {barButton('Clear', EraserIcon, runClear, true)}
             </div>
           </Layer>
         </ScopedPortal>

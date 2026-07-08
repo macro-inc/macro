@@ -54,7 +54,8 @@
 		"@lexical/markdown@0.45.0": "app/patches/@lexical%2Fmarkdown@0.45.0.patch",
 		"@kobalte/core@0.13.11": "app/patches/@kobalte%2Fcore@0.13.11.patch",
 		"virtua@0.48.8": "app/patches/virtua@0.48.8.patch",
-		"@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch"
+		"@tanstack/solid-query@5.90.3": "app/patches/@tanstack%2Fsolid-query@5.90.3.patch",
+		"@lexical/table@0.45.0": "app/patches/@lexical%2Ftable@0.45.0.patch"
 	},
 	"private": true,
 	"scripts": {
