@@ -113,7 +113,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   const isPersonal = createMemo(() => {
     const senderEmail = props.message.from?.email?.toLowerCase();
     return (
-      props.message.from?.email === userEmail() ||
+      (senderEmail !== undefined &&
+        senderEmail === userEmail()?.toLowerCase()) ||
       props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL') ||
       (senderEmail !== undefined && props.personalSenders().has(senderEmail))
     );
