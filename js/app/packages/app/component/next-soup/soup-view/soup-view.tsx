@@ -1635,12 +1635,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 <Show
                                   when={
                                     i() === rows().length - 1 &&
-                                    isSearchServiceLoading()
+                                    (isSearchServiceLoading() ||
+                                      source.isFetchingNextPage())
                                   }
                                 >
                                   <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
                                     <Spinner class="size-3 animate-spin" />
-                                    Searching...
+                                    {source.isFetchingNextPage()
+                                      ? 'Loading more...'
+                                      : 'Searching...'}
                                   </div>
                                 </Show>
                                 <Show when={i() === rows().length - 1}>
@@ -1770,10 +1773,15 @@ const SoupList = (props: SoupListProps) => {
 
     props.onScrollOffsetChange?.(offset);
 
-    if (
-      handle.scrollSize - handle.viewportSize - offset <=
-      (props.scrollBottomOffset ?? 100)
-    ) {
+    // Trigger within a viewport of the bottom so the next page is usually
+    // loaded before the user reaches the end. scrollBottomOffset is a floor
+    // for tiny viewports.
+    const threshold = Math.max(
+      props.scrollBottomOffset ?? 100,
+      handle.viewportSize
+    );
+
+    if (handle.scrollSize - handle.viewportSize - offset <= threshold) {
       props.onScrollBottom?.();
     }
   };
