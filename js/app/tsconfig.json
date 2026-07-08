@@ -1,6 +1,7 @@
 {
   "include": [
     "./packages/**/*",
+    "./packages/core/component/Emoji/cldr-tags.json",
     "../loro-mirror/**/*",
     "../lexical-core/**/*"
   ],

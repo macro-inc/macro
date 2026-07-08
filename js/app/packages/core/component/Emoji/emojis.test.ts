@@ -31,6 +31,24 @@ describe('searchEmojis', () => {
     expect(searchEmojis('sad').map(({ emoji }) => emoji)).toContain('😢');
   });
 
+  it('matches CLDR tags missing from emojilib keywords', () => {
+    expect(
+      searchEmojis('celebrate')
+        .slice(0, 5)
+        .map(({ emoji }) => emoji)
+    ).toContain('🎉');
+    expect(
+      searchEmojis('lmao')
+        .slice(0, 5)
+        .map(({ emoji }) => emoji)
+    ).toContain('😂');
+    expect(
+      searchEmojis('lit')
+        .slice(0, 5)
+        .map(({ emoji }) => emoji)
+    ).toContain('🔥');
+  });
+
   it('returns the full ordered list for empty queries', () => {
     expect(searchEmojis('').length).toBeGreaterThan(1800);
     expect(searchEmojis('  ').length).toBeGreaterThan(1800);

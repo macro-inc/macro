@@ -3,6 +3,7 @@ import EmojiLib from 'emojilib';
 import { createMemo, createSignal } from 'solid-js';
 import GroupedEmojiData from 'unicode-emoji-json/data-by-group.json';
 import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
+import CldrTags from './cldr-tags.json';
 
 export type SimpleEmoji = {
   emoji: string;
@@ -34,9 +35,12 @@ function emojiKey(emoji: string): string {
 }
 
 function buildEmoji(emoji: string): SimpleEmoji {
-  const terms = EmojiLib[emoji] ?? [];
+  const keywords = EmojiLib[emoji] ?? [];
   const github = SHORTCODES_BY_KEY.get(emojiKey(emoji));
-  const shortcodes = github ?? [terms.at(0) ?? emoji];
+  const shortcodes = github ?? [keywords.at(0) ?? emoji];
+  const cldrTags: string[] =
+    (CldrTags as Record<string, string[]>)[emojiKey(emoji)] ?? [];
+  const terms = [...new Set([...keywords, ...cldrTags])];
   return { emoji, slug: shortcodes[0], shortcodes, terms };
 }
 
