@@ -7,10 +7,13 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { readClipboardAsDataTransfer } from '@core/util/dataTransfer';
+import {
+  readClipboardAsDataTransfer,
+  writeClipboardData,
+} from '@core/util/dataTransfer';
 import {
   $getClipboardDataFromSelection,
-  copyToClipboard,
+  $insertDataTransferForRichText,
 } from '@lexical/clipboard';
 import {
   $getTableCellNodeFromLexicalNode,
@@ -20,19 +23,20 @@ import {
   $unmergeCell,
 } from '@lexical/table';
 import ClipboardIcon from '@phosphor/clipboard.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import CornersInIcon from '@phosphor/corners-in.svg';
 import CornersOutIcon from '@phosphor/corners-out.svg';
-import CopyIcon from '@phosphor/copy.svg';
 import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
   $getNodeByKey,
   $getSelection,
+  $isRangeSelection,
+  $setSelection,
   BLUR_COMMAND,
   COMMAND_PRIORITY_LOW,
-  CUT_COMMAND,
-  PASTE_COMMAND,
+  KEY_BACKSPACE_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import {
@@ -45,6 +49,8 @@ import {
 } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { createLayoutTick } from './createLayoutTick';
+
+false && floatWithElement;
 
 export function TableSelectionActionBar() {
   const mdData = mdStore.get;
@@ -143,23 +149,49 @@ export function TableSelectionActionBar() {
     };
   });
 
-  const runCut = createCallback(() => {
-    editor()?.dispatchCommand(CUT_COMMAND, null);
+  // Collapse the selection so the bar dismisses after an action, the way a
+  // normal context menu closes once you pick something.
+  const clearSelection = createCallback(() => {
+    editor()?.update(() => $setSelection(null));
   });
 
-  const runCopy = createCallback(() => {
+  // Serialize the current table selection to clipboard MIME strings; null
+  // when there is no table selection to copy.
+  const readSelectionData = () => {
     const currentEditor = editor();
-    if (!currentEditor) return;
-    const data = currentEditor.read(() => {
+    if (!currentEditor) return null;
+    return currentEditor.read(() => {
       const selection = $getSelection();
       return $isTableSelection(selection)
         ? $getClipboardDataFromSelection(selection)
         : null;
     });
+  };
+
+  const runCut = createCallback(async () => {
+    const currentEditor = editor();
+    const data = readSelectionData();
+    if (!currentEditor || !data) return;
+    if (!(await writeClipboardData(data))) {
+      toast.failure('Failed to cut cells');
+      return;
+    }
+    // Clear the selected cells via the same path as backspacing a table
+    // selection ($clearText), which also collapses the selection.
+    currentEditor.dispatchCommand(
+      KEY_BACKSPACE_COMMAND,
+      new KeyboardEvent('keydown', { key: 'Backspace' })
+    );
+  });
+
+  const runCopy = createCallback(async () => {
+    const data = readSelectionData();
     if (!data) return;
-    void copyToClipboard(currentEditor, null, data).then((copied) => {
-      if (copied) toast.success('Copied cells');
-    });
+    if (await writeClipboardData(data)) {
+      toast.success('Copied cells');
+      // Dismiss the bar once the action is taken, like a normal menu.
+      clearSelection();
+    }
   });
 
   const runMerge = createCallback(() => {
@@ -167,15 +199,22 @@ export function TableSelectionActionBar() {
       const selection = $getSelection();
       if (!$isTableSelection(selection)) return;
       $mergeCells(selection.getNodes().filter($isTableCellNode));
+      $setSelection(null);
     });
   });
 
   const runSplit = createCallback(() => {
-    editor()?.update(() => $unmergeCell());
+    editor()?.update(() => {
+      $unmergeCell();
+      $setSelection(null);
+    });
   });
 
-  // Replays the system clipboard through the normal paste pipeline, so
-  // copied cell ranges overlay the grid exactly like a desktop paste.
+  // Replays the system clipboard through the normal rich-text paste pipeline
+  // (which routes a copied cell range through the table grid overlay), then
+  // collapses the selection so the bar dismisses. Inserting the DataTransfer
+  // directly avoids a synthetic ClipboardEvent, whose clipboardData is null
+  // on WebKit/mobile — the reason paste silently did nothing there.
   const runPaste = createCallback(async () => {
     const currentEditor = editor();
     if (!currentEditor) return;
@@ -184,10 +223,14 @@ export function TableSelectionActionBar() {
       toast.failure('Nothing to paste');
       return;
     }
-    currentEditor.dispatchCommand(
-      PASTE_COMMAND,
-      new ClipboardEvent('paste', { clipboardData: dataTransfer })
-    );
+    currentEditor.update(() => {
+      const selection = $getSelection();
+      if (!$isTableSelection(selection) && !$isRangeSelection(selection)) {
+        return;
+      }
+      $insertDataTransferForRichText(dataTransfer, selection, currentEditor);
+      $setSelection(null);
+    });
   });
 
   const barButton = (
@@ -237,8 +280,8 @@ export function TableSelectionActionBar() {
                 floatingOptions: { placement: 'top' },
               }}
             >
-              {barButton('Cut', ScissorsIcon, runCut)}
-              {barButton('Copy', CopyIcon, runCopy)}
+              {barButton('Cut', ScissorsIcon, () => void runCut())}
+              {barButton('Copy', CopyIcon, () => void runCopy())}
               {barButton('Paste', ClipboardIcon, () => void runPaste())}
               <Show when={isMultiCell()}>
                 {barButton('Merge', CornersInIcon, runMerge)}

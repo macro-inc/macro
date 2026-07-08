@@ -249,6 +249,9 @@ export function TableMoveHandle() {
     const wrapperRect = tableElem
       ?.closest('.md-table-scrollable-wrapper')
       ?.getBoundingClientRect();
+    // Vertical scroll viewport of the editor; its top is the highest the
+    // handle may sit before it would float over the gray area above.
+    const scrollTop = mdData.scrollContainer?.getBoundingClientRect().top;
 
     return {
       // Clamp to the scroll wrapper's visible right edge so a cell scrolled
@@ -258,7 +261,9 @@ export function TableMoveHandle() {
         wrapperRect?.right ?? window.innerWidth,
         window.innerWidth
       ),
-      y: Math.min(a.top, f.top),
+      // Clamp to the scroll viewport's top so scrolling the cell above the
+      // content area doesn't leave the handle floating over the gray.
+      y: Math.max(Math.min(a.top, f.top), scrollTop ?? -Infinity),
       tableCorner: tableRect
         ? {
             x: Math.max(tableRect.left, wrapperRect?.left ?? -Infinity),

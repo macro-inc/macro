@@ -27,6 +27,41 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
   return dataTransfer.types.length > 0 ? dataTransfer : null;
 }
 
+/**
+ * Writes clipboard data (MIME type → serialized string, as produced by
+ * lexical's `$getClipboardDataFromSelection`) to the system clipboard via
+ * the async Clipboard API. Unlike the `execCommand('copy')` path this works
+ * reliably inside a user gesture on mobile browsers. Rich (text/html) write
+ * is attempted first, falling back to plain text. Returns whether anything
+ * was written. Must be called from a user gesture on mobile browsers.
+ */
+export async function writeClipboardData(
+  data: Record<string, string | undefined>
+): Promise<boolean> {
+  const html = data['text/html'];
+  const text = data['text/plain'] ?? '';
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    const items: Record<string, Blob> = {
+      'text/plain': new Blob([text], { type: 'text/plain' }),
+    };
+    if (html !== undefined) {
+      items['text/html'] = new Blob([html], { type: 'text/html' });
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem(items)]);
+      return true;
+    } catch {
+      // Fall through to a plain-text write below.
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const EMPTY_RESULT: ExtractedEntries = {
   fileEntries: [],
   directoryEntries: [],
