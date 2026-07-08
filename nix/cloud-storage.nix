@@ -810,6 +810,14 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+              # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+              # buildInputs provides to host builds (see the note on `libraries`;
+              # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+              # invisible here. Pass the include path explicitly; cc-rs and
+              # cmake-rs both honor CFLAGS/CXXFLAGS.
+              CFLAGS = "-I${pkgs.curl.dev}/include";
+              CXXFLAGS = "-I${pkgs.curl.dev}/include";
               # rdkafka's ssl-vendored feature exists for the Lambda
               # derivations (see lambdaCommonArgs); local builds keep using
               # the Nix openssl instead of vendoring, which would need perl
