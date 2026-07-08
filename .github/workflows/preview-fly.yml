@@ -11,7 +11,7 @@ name: Fly Preview
 jobs:
   deploy:
     if: github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'preview')
-    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=fly-preview
     permissions:
       contents: read
       pull-requests: write

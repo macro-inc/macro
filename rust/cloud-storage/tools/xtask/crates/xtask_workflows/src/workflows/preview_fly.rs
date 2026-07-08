@@ -62,12 +62,11 @@ fn deploy() -> Job {
             "github.event.pull_request.head.repo.full_name == github.repository && \
              contains(github.event.pull_request.labels.*.name, 'preview')",
         ))
-        // Share the CI compile cache volume (nix store + sccache + cargo):
-        // this job compiles the same workspace as the check/test jobs, so its
-        // sccache entries are the same content-addressed set — a bespoke tag
-        // just means a permanently cold volume. The cargo target dir rides the
-        // same volume so the zigbuild is incremental across runs.
-        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        // Dedicated cache volume pool (nix store + sccache + cargo target):
+        // see PREVIEW_CACHE_TAG for why sharing the check/test jobs' pool was
+        // measured cold on both layers (different --target = disjoint sccache
+        // keys, and their volumes never carry a cargo target dir).
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::PREVIEW_CACHE_TAG))
         .permissions(
             Permissions::default()
                 .contents(Level::Read)

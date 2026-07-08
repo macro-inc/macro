@@ -37,6 +37,17 @@ pub const NEXTEST_TEST_THREADS: u32 = 32;
 /// global across all branches — see [`crate::workflows::runners::Runner::with_cache_tag`].
 pub const CI_CACHE_TAG: &str = "sccache-ci";
 
+/// Namespace cache tag for the Fly preview deploy job. Its own pool, NOT
+/// [`CI_CACHE_TAG`]: sharing looked economical but was measured cold both ways
+/// (run 28968155599: sccache 2.65% hits, cargo target dir absent). The
+/// check/test jobs compile for the host while this job zigbuilds with
+/// `--target x86_64-unknown-linux-gnu.2.36`, so their sccache entries hash
+/// differently and never serve this job — and they don't persist the cargo
+/// target dir at all, so a volume from the shared pool almost never carries
+/// one. A dedicated low-concurrency pool means the same volume (with this
+/// job's target dir + zigbuild sccache) comes back run after run.
+pub const PREVIEW_CACHE_TAG: &str = "fly-preview";
+
 /// Namespace cache tag for the web-app jobs (PR checks + preview deploys).
 /// Cache volumes are keyed workspace-wide by tag alone, so a dedicated tag
 /// gives the frontend its own volume — isolated both from the Rust CI volume
