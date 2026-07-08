@@ -51,7 +51,7 @@ impl LoopsClient {
     #[tracing::instrument(skip(self), err)]
     pub async fn add_contact(&self, email: &str, source: &str) -> Result<(), reqwest::Error> {
         let Some(inner) = &self.inner else {
-            tracing::warn!("loops not configured");
+            tracing::debug!("loops not configured");
             return Ok(());
         };
 
