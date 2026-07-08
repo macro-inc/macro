@@ -384,7 +384,7 @@ impl IntoResponse for SetEntityPropertyErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, request = ?request), err)]
+#[tracing::instrument(skip(state, user_context, request), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, has_value = request.value.is_some()), err)]
 pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
     Path((entity_type, entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,

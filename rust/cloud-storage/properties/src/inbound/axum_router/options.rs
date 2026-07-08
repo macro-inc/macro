@@ -55,17 +55,18 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, _user_context), err)]
+#[tracing::instrument(skip(state, user_context, team), fields(property_id = %property_uuid, user_id = %user_context.user_id), err)]
 pub async fn get_property_options<S: PropertiesService, A: EntityAccessService>(
     Path(property_uuid): Path<Uuid>,
     State(state): State<PropertiesRouterState<S, A>>,
-    Extension(_user_context): Extension<UserContext>,
+    Extension(user_context): Extension<UserContext>,
+    team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
     tracing::info!("retrieving property options");
 
     let options = state
         .properties_service
-        .get_property_options(property_uuid)
+        .get_property_options(property_uuid, &user_context.user_id, caller_team_id(&team))
         .await?;
 
     tracing::info!(

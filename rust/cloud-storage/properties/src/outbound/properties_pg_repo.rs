@@ -37,6 +37,26 @@ impl PropertiesPgRepo {
     }
 }
 
+fn regroup_entity_properties(
+    entity_refs: &[EntityReference],
+    properties_by_entity_id: HashMap<String, Vec<EntityPropertyWithDefinition>>,
+) -> HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>> {
+    let mut result = entity_refs
+        .iter()
+        .map(|entity_ref| (EntityPropertiesKey::from(entity_ref), Vec::new()))
+        .collect::<HashMap<_, _>>();
+
+    for property in properties_by_entity_id.into_values().flatten() {
+        let key = EntityPropertiesKey {
+            entity_id: property.property.entity_id.clone(),
+            entity_type: property.property.entity_type,
+        };
+        result.entry(key).or_default().push(property);
+    }
+
+    result
+}
+
 impl PropertiesRepo for PropertiesPgRepo {
     type Err = anyhow::Error;
 
@@ -324,11 +344,6 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         entity_refs: Vec<EntityReference>,
     ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err> {
-        let mut result = entity_refs
-            .iter()
-            .map(|entity_ref| (EntityPropertiesKey::from(entity_ref), Vec::new()))
-            .collect::<HashMap<_, _>>();
-
         let properties_by_entity_id =
             entity_properties_get_query::get_bulk_entity_properties_values(
                 &self.pool,
@@ -336,15 +351,10 @@ impl PropertiesRepo for PropertiesPgRepo {
             )
             .await?;
 
-        for property in properties_by_entity_id.into_values().flatten() {
-            let key = EntityPropertiesKey {
-                entity_id: property.property.entity_id.clone(),
-                entity_type: property.property.entity_type,
-            };
-            result.entry(key).or_default().push(property);
-        }
-
-        Ok(result)
+        Ok(regroup_entity_properties(
+            &entity_refs,
+            properties_by_entity_id,
+        ))
     }
 
     #[tracing::instrument(skip(self, entity_refs, property_ids), err)]
@@ -354,11 +364,6 @@ impl PropertiesRepo for PropertiesPgRepo {
         property_ids: Vec<Uuid>,
         tag_viewer_user_id: Option<&str>,
     ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err> {
-        let mut result = entity_refs
-            .iter()
-            .map(|entity_ref| (EntityPropertiesKey::from(entity_ref), Vec::new()))
-            .collect::<HashMap<_, _>>();
-
         let properties_by_entity_id =
             entity_properties_get_query::get_bulk_entity_properties_values_filtered(
                 &self.pool,
@@ -368,15 +373,10 @@ impl PropertiesRepo for PropertiesPgRepo {
             )
             .await?;
 
-        for property in properties_by_entity_id.into_values().flatten() {
-            let key = EntityPropertiesKey {
-                entity_id: property.property.entity_id.clone(),
-                entity_type: property.property.entity_type,
-            };
-            result.entry(key).or_default().push(property);
-        }
-
-        Ok(result)
+        Ok(regroup_entity_properties(
+            &entity_refs,
+            properties_by_entity_id,
+        ))
     }
 
     #[tracing::instrument(skip(self), err)]

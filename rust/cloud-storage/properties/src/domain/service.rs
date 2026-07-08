@@ -177,10 +177,12 @@ pub trait PropertiesService: Send + Sync + 'static {
         team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
-    /// Get all options for a property definition (for dropdowns).
+    /// Get all options for a property definition readable by the caller (for dropdowns).
     fn get_property_options(
         &self,
         property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
 
     /// Add a new option to a select property owned by the caller.

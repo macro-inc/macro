@@ -299,10 +299,10 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
         )
         .await?;
 
-    let option_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM property_options WHERE property_definition_id = $1",
+    let option_count: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
+        property.id
     )
-    .bind(property.id)
     .fetch_one(&pool)
     .await?;
     assert_eq!(option_count, 2);
@@ -368,18 +368,18 @@ async fn delete_property_definition_cascades(pool: Pool<Postgres>) -> anyhow::Re
         .unwrap();
 
     // Verify options and entity properties exist for this definition.
-    let options_before: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM property_options WHERE property_definition_id = $1",
+    let options_before: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
+        property_id
     )
-    .bind(property_id)
     .fetch_one(&pool)
     .await?;
     assert!(options_before > 0);
 
-    let entity_props_before: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM entity_properties WHERE property_definition_id = $1",
+    let entity_props_before: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_properties WHERE property_definition_id = $1"#,
+        property_id
     )
-    .bind(property_id)
     .fetch_one(&pool)
     .await?;
     assert!(entity_props_before > 0);
@@ -387,18 +387,18 @@ async fn delete_property_definition_cascades(pool: Pool<Postgres>) -> anyhow::Re
     repo.delete_property_definition(property_id).await?;
 
     // Verify options and entity properties are also deleted (cascade).
-    let options_after: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM property_options WHERE property_definition_id = $1",
+    let options_after: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
+        property_id
     )
-    .bind(property_id)
     .fetch_one(&pool)
     .await?;
     assert_eq!(options_after, 0);
 
-    let entity_props_after: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM entity_properties WHERE property_definition_id = $1",
+    let entity_props_after: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM entity_properties WHERE property_definition_id = $1"#,
+        property_id
     )
-    .bind(property_id)
     .fetch_one(&pool)
     .await?;
     assert_eq!(entity_props_after, 0);

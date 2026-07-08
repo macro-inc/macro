@@ -351,7 +351,7 @@ impl BackfillSource for PgBackfillSource {
                 offset as i64,
             )
             .await
-            .map_err(|e| BackfillError::Source(e.into()))?;
+            .map_err(BackfillError::Source)?;
 
         let rows_consumed = entity_ids.len();
         let messages: Vec<SearchQueueMessage> = entity_ids

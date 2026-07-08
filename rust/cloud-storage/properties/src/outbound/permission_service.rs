@@ -54,7 +54,7 @@ impl<Svc: EntityAccessService> PermissionServiceImpl<Svc> {
             .await
             .map_err(|e: AccessError| {
                 tracing::error!(
-                    error = %e,
+                    error = ?e,
                     "failed to get user access level"
                 );
                 anyhow::anyhow!("Failed to get user access level: {}", e)

@@ -688,7 +688,24 @@ where
     async fn get_property_options(
         &self,
         property_definition_id: Uuid,
+        user_id: &str,
+        team_id: Option<Uuid>,
     ) -> Result<Vec<PropertyOption>, PropertiesErr> {
+        let definition = self
+            .repository
+            .get_property_definition(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::NotFound)?;
+
+        if !definition.is_system {
+            self.repository
+                .get_property_definition_with_owner(property_definition_id, user_id, team_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(PropertiesErr::NotFound)?;
+        }
+
         Ok(self
             .repository
             .get_property_options(property_definition_id)

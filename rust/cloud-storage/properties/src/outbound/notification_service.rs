@@ -48,7 +48,9 @@ where
         // Tasks are stored as documents, so the task name is the document name.
         let task_name =
             entity_info_queries::get_document_name(&self.pool, &notification.task_id.to_string())
-                .await?;
+                .await
+                .ok()
+                .flatten();
 
         let sender_profile_picture_url = entity_info_queries::get_user_profile_picture(
             &self.pool,
@@ -98,7 +100,7 @@ where
                         Err(e) => {
                             tracing::error!(
                                 recipient_id = %recipient_id,
-                                error = %e,
+                                error = ?e,
                                 "failed to send task assignment notification"
                             );
                         }

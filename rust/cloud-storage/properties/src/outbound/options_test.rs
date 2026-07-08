@@ -314,16 +314,16 @@ async fn delete_property_option_strips_value_references(
 
     // Read the raw stored value (bypassing the read-path cleaner) to prove
     // the dangling id is gone from storage, not just filtered on read.
-    let raw: serde_json::Value = sqlx::query_scalar::<_, serde_json::Value>(
+    let raw: serde_json::Value = sqlx::query_scalar!(
         r#"
-        SELECT values
+        SELECT values as "values!: serde_json::Value"
         FROM entity_properties
         WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
         "#,
+        "doc_cascade",
+        EntityType::Document as EntityType,
+        property_id
     )
-    .bind("doc_cascade")
-    .bind(EntityType::Document)
-    .bind(property_id)
     .fetch_one(&pool)
     .await?;
 

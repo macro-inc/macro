@@ -10,7 +10,7 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 /// Get document metadata by document ID from macrodb
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_document_metadata(
     pool: &Pool<Postgres>,
     document_id: &str,
@@ -33,14 +33,7 @@ pub async fn get_document_metadata(
         document_id
     )
     .fetch_optional(pool)
-    .await
-    .inspect_err(|e| {
-        tracing::error!(
-            error = ?e,
-            document_id = %document_id,
-            "failed to fetch document metadata"
-        );
-    })?;
+    .await?;
 
     Ok(result.map(|row| DocumentMetadata {
         id: row.id,
