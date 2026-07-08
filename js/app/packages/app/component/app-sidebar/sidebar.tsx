@@ -393,7 +393,7 @@ const resetGoToHotkeysState = () => {
 export const GoToHotkeys = () => {
   const { openWithSplit } = useSplitLayout();
 
-  registerHotkey({
+  const inviteHotkey = registerHotkey({
     scopeId: 'global',
     hotkeyToken: TOKENS.global.inviteTeam,
     description: 'Send Invites',
@@ -419,7 +419,7 @@ export const GoToHotkeys = () => {
   );
 
   // Register 'g' as a leader key that activates the global GO_TO command scope
-  registerHotkey({
+  const leaderHotkey = registerHotkey({
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
     hotkeyToken: TOKENS.sidebar.goToLeader,
@@ -434,6 +434,16 @@ export const GoToHotkeys = () => {
     activateCommandScopeId: GO_TO_COMMAND_SCOPE,
     hide: true,
     registrationType: 'add',
+  });
+
+  // These two register in the 'global' scope, which outlives this component, so
+  // dispose them on unmount. Otherwise a remount (e.g. crossing the mobile
+  // breakpoint) leaks: the 'add' leader stacks duplicate handlers and the
+  // token-only invite command accumulates in the registry. The per-link nav
+  // hotkeys below are disposed by their own effect cleanup.
+  onCleanup(() => {
+    inviteHotkey.dispose();
+    leaderHotkey.dispose();
   });
 
   const registeredGoToKeys = () =>
