@@ -1,8 +1,11 @@
 export type {} from './context';
 export {
+  DateValueDisplay,
   FileDetailsSection,
   FilePropertiesSection,
   FileSidePanelSections,
+  FolderLink,
+  OwnerValue,
 } from './FileSidePanelSections';
 export {
   GithubPullRequestChecksContent,

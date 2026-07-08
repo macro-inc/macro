@@ -12,6 +12,7 @@ import { isReplyAllEligible } from '../util/recipientConversion';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
+import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
@@ -50,13 +51,13 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     createCallback(() => {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
-      const form = formRegistry.getOrInit({
-        type: 'replying_to',
-        messageID: messageId,
+      openEmailReplyComposerForMessage({
+        ctx,
+        formRegistry,
+        message: props.lastMessage,
+        replyType: type,
+        isLastMessage: true,
       });
-      form.setReplyType(type);
-      form.setShouldFocusInput(true);
-      ctx.messages.setBottomReplyOpen(true);
     });
 
   return (

@@ -13,6 +13,7 @@ export * from './nodes/DecoratorBlockNode';
 export * from './nodes/DiffDeleteNode';
 export * from './nodes/DiffInsertNode';
 export * from './nodes/DiffNode';
+export * from './nodes/DiffTextNode';
 export * from './nodes/DocumentCardNode';
 export * from './nodes/DocumentMentionNode';
 export * from './nodes/EquationNode';
@@ -37,5 +38,10 @@ export * from './plugins/peerIdPlugin';
 
 export * from './transformers';
 export { toXml } from './transformers/xml';
+export * from './utils/applyDiffs';
+export * from './utils/buildDiffState';
+export * from './utils/buildWhoMap';
+export * from './utils/diffStates';
+export * from './utils/diffTypes';
 export * from './utils/markdown-state';
 export * from './utils/mentions';

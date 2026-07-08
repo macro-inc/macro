@@ -75,6 +75,8 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'DOCUMENT',
   'TASK',
   'THREAD',
+  'PROJECT',
+  'CHAT',
 ]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {

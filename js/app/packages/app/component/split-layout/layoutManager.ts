@@ -159,6 +159,7 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
+  | 'fork'
   | null;
 
 export type SplitState = {

@@ -416,6 +416,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             projectId: result.metadata?.project_id ?? undefined,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -448,6 +449,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             projectId: result.metadata?.parent_project_id ?? undefined,
+            properties: result.properties ?? undefined,
             search,
           },
         ];
@@ -550,6 +552,7 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
       projectId: item.data.parentId ?? undefined,
       type: item.tag,
       name: item.data.name || 'New Project',
+      properties: item.data.properties,
     }))
     .with({ tag: 'emailThread' }, (item) => {
       const participants = item.data.participants?.map((p) => ({

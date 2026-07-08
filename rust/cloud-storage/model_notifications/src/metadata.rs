@@ -106,10 +106,10 @@ impl GithubPrNotificationCommon {
         snippet
     }
 
-    fn actor_name(&self, sender_id: Option<MacroUserIdStr<'_>>) -> Option<String> {
-        sender_id
-            .map(|sender| sender.email_part().local_part().to_string())
-            .or_else(|| self.sender_github_login.clone())
+    /// The displayed actor is always the GitHub login, never the linked Macro
+    /// user (whose id still rides along as the notification sender).
+    fn actor_name(&self) -> Option<String> {
+        self.sender_github_login.clone()
     }
 
     /// The shared body format: the compact PR label, plus the PR title when it
@@ -175,10 +175,10 @@ impl Notification for GithubPrStatusChanged {
 impl NotificationTitle for GithubPrStatusChanged {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         let verb = self.action_verb();
-        let title = match self.common.actor_name(sender_id) {
+        let title = match self.common.actor_name() {
             Some(actor) => format!("{actor} {verb} a pull request"),
             None => format!("Pull request {verb}"),
         };
@@ -289,9 +289,9 @@ impl Notification for GithubReviewRequested {
 impl NotificationTitle for GithubReviewRequested {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let title = match self.common.actor_name(sender_id) {
+        let title = match self.common.actor_name() {
             Some(actor) => format!("{actor} requested your review"),
             None => "Your review was requested".to_string(),
         };
@@ -341,9 +341,9 @@ impl Notification for GithubPrComment {
 impl NotificationTitle for GithubPrComment {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let title = match self.common.actor_name(sender_id) {
+        let title = match self.common.actor_name() {
             Some(actor) => format!("{actor} commented on a pull request"),
             None => "New comment on a pull request".to_string(),
         };
@@ -397,9 +397,9 @@ impl Notification for GithubPrMention {
 impl NotificationTitle for GithubPrMention {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let title = match self.common.actor_name(sender_id) {
+        let title = match self.common.actor_name() {
             Some(actor) => format!("{actor} mentioned you on a pull request"),
             None => "You were mentioned on a pull request".to_string(),
         };
@@ -451,9 +451,9 @@ impl Notification for GithubPrReview {
 impl NotificationTitle for GithubPrReview {
     fn format_title(
         &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
+        _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let actor = self.common.actor_name(sender_id);
+        let actor = self.common.actor_name();
         let title = match (self.state, actor) {
             (GithubPrReviewState::Approved, Some(actor)) => {
                 format!("{actor} approved your pull request")

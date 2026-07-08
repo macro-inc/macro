@@ -5,7 +5,10 @@
 	"type": "module",
 	"scripts": {
 		"prebuild": "bun scripts/generate-sandbox.ts",
-		"type-check": "tsc --noEmit --project tsconfig.json"
+		"type-check": "tsc --noEmit --project tsconfig.json",
+		"traces": "bun scripts/traces.ts",
+		"deploy-dev": "bun run prebuild && wrangler deploy --env dev",
+		"deploy-prod": "bun run prebuild && wrangler deploy --env prod"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.85",

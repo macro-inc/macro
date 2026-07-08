@@ -88,6 +88,12 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .env("SQLX_OFFLINE", "true")
         .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .env("AWS_LC_SYS_CMAKE_BUILDER", "1")
+        // The nix dev shell pins OPENSSL_NO_VENDOR=1 so host builds link the
+        // Nix openssl, but that openssl can't serve the cross target (pkg-config
+        // refuses cross lookups and the Nix .so's don't exist in the runtime
+        // image). Force rdkafka's ssl-vendored feature back on for zigbuild;
+        // outside the shell the variable is unset and this is a no-op.
+        .env("OPENSSL_NO_VENDOR", "0")
         .env("ZIG_GLOBAL_CACHE_DIR", zig_cache)
         .env("ZIG_LOCAL_CACHE_DIR", zig_cache)
         .env("RUSTC_WRAPPER", "sccache")
