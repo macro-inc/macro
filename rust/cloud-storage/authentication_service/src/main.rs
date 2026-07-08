@@ -21,6 +21,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
+use macro_service_urls::EmailServiceUrl;
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -156,6 +157,10 @@ async fn main() -> anyhow::Result<()> {
         DocumentStorageServiceUrl::new()?.to_string(),
     );
     tracing::trace!("initialized document storage service client");
+
+    let email_service_client =
+        email_service_client::EmailServiceClientExternal::new(EmailServiceUrl::new()?.to_string());
+    tracing::trace!("initialized email service client");
 
     let macro_cache_client =
         macro_cache_client::MacroCache::new(config.redis_uri.to_string().as_str());
@@ -314,6 +319,7 @@ async fn main() -> anyhow::Result<()> {
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
+            email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,
             sqs_client: Arc::new(sqs_client),

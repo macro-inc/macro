@@ -957,6 +957,7 @@ dependencies = [
  "doppleganger",
  "doppler-config",
  "email_db_client",
+ "email_service_client",
  "email_validator",
  "entity_access",
  "foreign_entity",

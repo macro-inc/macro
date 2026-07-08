@@ -8,7 +8,7 @@ pub mod get_message_senders;
 pub mod get_messages_by_thread_id;
 pub mod get_thread_owner;
 
-pub use external::EmailServiceClientExternal;
+pub use external::{EmailServiceClientExternal, InitEmailOutcome};
 #[derive(Clone)]
 pub struct EmailServiceClient {
     url: String,
