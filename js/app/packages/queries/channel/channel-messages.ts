@@ -118,29 +118,33 @@ export function useChannelMessagesQuery(
   );
 }
 
+export function channelMessagesByIdsQueryOptions(
+  channelId: string,
+  messageIds: string[]
+) {
+  return {
+    queryKey: channelKeys.messagesByIds(channelId, messageIds).queryKey,
+    queryFn: async (): Promise<ApiChannelMessage[]> => {
+      const page = await throwOnErr(() =>
+        storageServiceClient.postChannelMessages({
+          channel_id: channelId,
+          filters: { message_ids: messageIds },
+        })
+      );
+      return page.items.map(normalizeChannelMessageSender);
+    },
+    staleTime: Infinity,
+  };
+}
+
 export function useChannelMessagesByIdsQuery(
   channelId: Accessor<string>,
   messageIds: Accessor<string[]>
 ) {
-  return useQuery(() => {
-    const resolvedChannelId = channelId();
-    const resolvedMessageIds = messageIds();
-    return {
-      queryKey: channelKeys.messagesByIds(resolvedChannelId, resolvedMessageIds)
-        .queryKey,
-      queryFn: async (): Promise<ApiChannelMessage[]> => {
-        const page = await throwOnErr(() =>
-          storageServiceClient.postChannelMessages({
-            channel_id: resolvedChannelId,
-            filters: { message_ids: resolvedMessageIds },
-          })
-        );
-        return page.items.map(normalizeChannelMessageSender);
-      },
-      enabled: resolvedMessageIds.length > 0,
-      staleTime: Infinity,
-    };
-  });
+  return useQuery(() => ({
+    ...channelMessagesByIdsQueryOptions(channelId(), messageIds()),
+    enabled: messageIds().length > 0,
+  }));
 }
 
 /** Returns the cache key for one channel message query variant. */

@@ -17,9 +17,15 @@ import { openNotification } from '@notifications';
 import { isChannelNotification } from '@notifications/notification-helpers';
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
+import { channelMessagesByIdsQueryOptions } from '@queries/channel/channel-messages';
+import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
+import { queryClient } from '@queries/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Avatar, cn, NavRow, Surface, Tooltip } from '@ui';
 import {
+  type Accessor,
+  createContext,
   createEffect,
   createMemo,
   createSignal,
@@ -29,6 +35,7 @@ import {
   onMount,
   type ParentProps,
   Show,
+  useContext,
 } from 'solid-js';
 
 function getChannelInfo(notification: UnifiedNotification): {
@@ -122,6 +129,130 @@ function groupByChannel(
 }
 
 const HOVER_PREVIEW_COUNT = 3;
+const PREVIEW_OPEN_DELAY_MS = 450;
+const PREVIEW_WARM_OPEN_DELAY_MS = 100;
+const PREVIEW_CLOSE_DELAY_MS = 200;
+const PREVIEW_WARM_LINGER_MS = 400;
+const PREVIEW_ANCHOR_PIN_MS = 600;
+
+type UnreadPreviewManager = {
+  activeGroupId: Accessor<string | null>;
+  rowEnter: (groupId: string) => void;
+  rowLeave: () => void;
+  cardEnter: () => void;
+  cardLeave: () => void;
+  dismiss: (groupId?: string) => void;
+};
+
+// Single source of truth for which row's preview is open, so at most one
+// card exists and switching between rows skips the full hover-intent delay.
+function createUnreadPreviewManager(): UnreadPreviewManager {
+  const [activeGroupId, setActiveGroupId] = createSignal<string | null>(null);
+  let warm = false;
+  let pendingGroupId: string | null = null;
+  let openTimer: number | undefined;
+  let closeTimer: number | undefined;
+  let warmTimer: number | undefined;
+
+  const clearOpenTimer = () => {
+    window.clearTimeout(openTimer);
+    openTimer = undefined;
+    pendingGroupId = null;
+  };
+
+  const clearCloseTimer = () => {
+    window.clearTimeout(closeTimer);
+    closeTimer = undefined;
+  };
+
+  const startWarmLinger = () => {
+    warm = true;
+    window.clearTimeout(warmTimer);
+    warmTimer = window.setTimeout(() => {
+      warm = false;
+    }, PREVIEW_WARM_LINGER_MS);
+  };
+
+  const rowEnter = (groupId: string) => {
+    clearCloseTimer();
+    clearOpenTimer();
+    if (activeGroupId() === groupId) return;
+    const delay =
+      activeGroupId() !== null || warm
+        ? PREVIEW_WARM_OPEN_DELAY_MS
+        : PREVIEW_OPEN_DELAY_MS;
+    pendingGroupId = groupId;
+    openTimer = window.setTimeout(() => {
+      openTimer = undefined;
+      pendingGroupId = null;
+      window.clearTimeout(warmTimer);
+      setActiveGroupId(groupId);
+    }, delay);
+  };
+
+  const scheduleClose = () => {
+    clearCloseTimer();
+    if (activeGroupId() === null) return;
+    closeTimer = window.setTimeout(() => {
+      closeTimer = undefined;
+      setActiveGroupId(null);
+      startWarmLinger();
+    }, PREVIEW_CLOSE_DELAY_MS);
+  };
+
+  const rowLeave = () => {
+    clearOpenTimer();
+    scheduleClose();
+  };
+
+  const dismiss = (groupId?: string) => {
+    if (groupId === undefined || pendingGroupId === groupId) {
+      clearOpenTimer();
+    }
+    if (groupId !== undefined && activeGroupId() !== groupId) return;
+    clearCloseTimer();
+    if (activeGroupId() !== null) {
+      setActiveGroupId(null);
+      startWarmLinger();
+    }
+  };
+
+  createEffect(() => {
+    if (activeGroupId() === null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismiss();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
+  onCleanup(() => {
+    clearOpenTimer();
+    clearCloseTimer();
+    window.clearTimeout(warmTimer);
+  });
+
+  return {
+    activeGroupId,
+    rowEnter,
+    rowLeave,
+    cardEnter: clearCloseTimer,
+    cardLeave: scheduleClose,
+    dismiss,
+  };
+}
+
+const UnreadPreviewContext = createContext<UnreadPreviewManager>();
+
+function useUnreadPreviewManager(): UnreadPreviewManager {
+  const manager = useContext(UnreadPreviewContext);
+  if (!manager) {
+    throw new Error(
+      'useUnreadPreviewManager must be used inside UnreadPreviewContext'
+    );
+  }
+  return manager;
+}
 
 // Unique thread roots (a reply previews its whole thread), newest first.
 function getPreviewThreadRoots(group: ChannelGroup): string[] {
@@ -137,15 +268,142 @@ function getPreviewThreadRoots(group: ChannelGroup): string[] {
   return roots;
 }
 
+// Every notification in the group is unread, so the unread ids per thread
+// root are just the notification message ids grouped by root.
+function getGroupUnreadInfo(group: ChannelGroup): {
+  unreadIdsByRoot: Map<string, string[]>;
+  anchorMessageId: string | null;
+} {
+  const unreadIdsByRoot = new Map<string, string[]>();
+  let anchorMessageId: string | null = null;
+  for (const notification of group.notifications) {
+    const { messageId, threadId } = getChannelNotificationParams(notification);
+    if (!messageId) continue;
+    const rootId = threadId ?? messageId;
+    anchorMessageId ??= messageId;
+    const ids = unreadIdsByRoot.get(rootId);
+    if (ids) {
+      ids.push(messageId);
+    } else {
+      unreadIdsByRoot.set(rootId, [messageId]);
+    }
+  }
+  return { unreadIdsByRoot, anchorMessageId };
+}
+
+function prefetchGroupPreview(group: ChannelGroup) {
+  const roots = getPreviewThreadRoots(group).slice(0, HOVER_PREVIEW_COUNT);
+  const replyRootIds = new Set<string>();
+  for (const notification of group.notifications) {
+    const { threadId } = getChannelNotificationParams(notification);
+    if (threadId) replyRootIds.add(threadId);
+  }
+
+  for (const rootId of roots) {
+    const parentOptions = channelMessagesByIdsQueryOptions(group.entityId, [
+      rootId,
+    ]);
+    const parentPrefetch = queryClient.prefetchQuery(parentOptions);
+    if (replyRootIds.has(rootId)) {
+      void queryClient.prefetchQuery(
+        threadRepliesQueryOptions(group.entityId, rootId)
+      );
+    } else {
+      void parentPrefetch.then(() => {
+        const parent = queryClient.getQueryData<ApiChannelMessage[]>(
+          parentOptions.queryKey
+        )?.[0];
+        if ((parent?.thread.reply_count ?? 0) > 0) {
+          void queryClient.prefetchQuery(
+            threadRepliesQueryOptions(group.entityId, rootId)
+          );
+        }
+      });
+    }
+  }
+}
+
+function PreviewThreadSkeleton() {
+  return (
+    <div class="flex flex-col gap-3 px-3 py-2 animate-pulse">
+      <div class="flex items-center gap-2">
+        <div class="size-5 rounded-full bg-ink/10" />
+        <div class="h-3 w-24 rounded-sm bg-ink/10" />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <div class="h-3 w-full rounded-sm bg-ink/10" />
+        <div class="h-3 w-2/3 rounded-sm bg-ink/10" />
+      </div>
+    </div>
+  );
+}
+
 function GroupHoverPreview(props: { group: ChannelGroup }) {
   const orchestrator = useGlobalBlockOrchestrator();
   const roots = () => getPreviewThreadRoots(props.group);
   // Show the latest few threads oldest → newest, like the channel reads.
   const visible = () => roots().slice(0, HOVER_PREVIEW_COUNT).reverse();
   const hiddenCount = () => roots().length - visible().length;
+  const unreadInfo = createMemo(() => getGroupUnreadInfo(props.group));
+
+  let scrollRef: HTMLDivElement | undefined;
+
+  // Pin the newest unread message into view while async thread content
+  // settles, until the user scrolls the card themselves.
+  onMount(() => {
+    const container = scrollRef;
+    if (!container) return;
+    const anchorId = unreadInfo().anchorMessageId;
+    const startedAt = performance.now();
+    let cancelled = false;
+    let frame: number | undefined;
+
+    const cancel = () => {
+      cancelled = true;
+    };
+    container.addEventListener('wheel', cancel, { passive: true });
+    container.addEventListener('pointerdown', cancel);
+
+    const pin = () => {
+      frame = undefined;
+      if (cancelled) return;
+      const target = anchorId
+        ? container.querySelector<HTMLElement>(
+            `[data-message-id="${anchorId}"]`
+          )
+        : null;
+      if (target) {
+        const containerRect = container.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const bottomDelta = targetRect.bottom - containerRect.bottom;
+        const topDelta = targetRect.top - containerRect.top;
+        if (bottomDelta > 0) {
+          container.scrollTop += bottomDelta;
+        } else if (topDelta < 0) {
+          container.scrollTop += topDelta;
+        }
+      } else {
+        container.scrollTop = container.scrollHeight;
+      }
+      if (performance.now() - startedAt < PREVIEW_ANCHOR_PIN_MS) {
+        frame = requestAnimationFrame(pin);
+      }
+    };
+    frame = requestAnimationFrame(pin);
+
+    onCleanup(() => {
+      cancelled = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      container.removeEventListener('wheel', cancel);
+      container.removeEventListener('pointerdown', cancel);
+    });
+  });
 
   return (
-    <div class="w-90 min-h-12 max-h-96 overflow-y-auto overscroll-contain flex flex-col py-1">
+    <div
+      ref={scrollRef}
+      class="w-90 min-h-12 max-h-96 overflow-y-auto overscroll-contain flex flex-col py-1"
+    >
       <Show when={hiddenCount() > 0}>
         <span class="px-3 py-1 text-xs text-ink-extra-muted">
           +{hiddenCount()} earlier
@@ -156,6 +414,8 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
           <ReadonlyThread
             channelId={props.group.entityId}
             messageId={rootMessageId}
+            unreadMessageIds={unreadInfo().unreadIdsByRoot.get(rootMessageId)}
+            fallback={<PreviewThreadSkeleton />}
             onClickMessage={(clickedMessageId, e) => {
               e.stopPropagation();
               const isReply = clickedMessageId !== rootMessageId;
@@ -176,30 +436,48 @@ function GroupHoverPreview(props: { group: ChannelGroup }) {
 function UnreadHoverCard(
   props: ParentProps<{ group: ChannelGroup; disabled?: boolean }>
 ) {
-  const [hovered, setHovered] = createSignal(false);
-  const open = () => hovered() && !props.disabled;
+  const manager = useUnreadPreviewManager();
+  const groupId = () => props.group.entityId;
+  const open = () => manager.activeGroupId() === groupId() && !props.disabled;
+
+  createEffect(() => {
+    if (props.disabled) manager.dismiss(groupId());
+  });
+
+  onCleanup(() => manager.dismiss(groupId()));
 
   return (
     <Show when={!isTouchDevice()} fallback={props.children}>
       <KobalteTooltip
         open={open()}
-        onOpenChange={setHovered}
+        triggerOnFocusOnly={true}
         placement="right"
         overflowPadding={16}
         fitViewport={true}
-        closeDelay={250}
-        openDelay={1000}
         flip={true}
         gutter={4}
       >
         <KobalteTooltip.Trigger
           class="inline-flex items-center w-full"
           as="div"
+          onPointerEnter={(e: PointerEvent) => {
+            if (e.pointerType === 'touch') return;
+            prefetchGroupPreview(props.group);
+            manager.rowEnter(groupId());
+          }}
+          onPointerLeave={(e: PointerEvent) => {
+            if (e.pointerType === 'touch') return;
+            manager.rowLeave();
+          }}
         >
           {props.children}
         </KobalteTooltip.Trigger>
         <KobalteTooltip.Portal>
-          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation">
+          <KobalteTooltip.Content
+            class="z-tool-tip max-w-[calc(100vw-32px)] menu-open-animation"
+            onPointerEnter={() => manager.cardEnter()}
+            onPointerLeave={() => manager.cardLeave()}
+          >
             <Surface depth={3}>
               <GroupHoverPreview group={props.group} />
             </Surface>
@@ -381,6 +659,7 @@ function filterUnreadNotDone(notifications: UnifiedNotification[]) {
 
 export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   const notificationSource = useGlobalNotificationSource();
+  const previewManager = createUnreadPreviewManager();
   const allNotifications = () => [...notificationSource.notifications()];
 
   const filteredNotifications = () => filterUnreadNotDone(allNotifications());
@@ -418,14 +697,22 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
       .filter((g): g is ChannelGroup => g != null);
   });
 
+  // Iterate stable entity ids so notification refreshes update rows in place
+  // instead of remounting them, which would close an open hover preview.
+  const visibleGroupIds = createMemo(() =>
+    orderedIds().filter((id) => channelGroupsMap().has(id))
+  );
+
+  const groupById = (id: string) => channelGroupsMap().get(id)!;
+
   const channelLettersMap = createMemo(() =>
     computeChannelLetters(channelGroups())
   );
 
   const isSlim = () => props.sidebarState === 'slim';
   const SLIM_MAX = 4;
-  const slimVisible = () => channelGroups().slice(0, SLIM_MAX);
-  const slimOverflow = () => Math.max(0, channelGroups().length - SLIM_MAX);
+  const slimVisibleIds = () => visibleGroupIds().slice(0, SLIM_MAX);
+  const slimOverflow = () => Math.max(0, visibleGroupIds().length - SLIM_MAX);
   const [hasOverflowTop, setHasOverflowTop] = createSignal(false);
   const [hasOverflowBottom, setHasOverflowBottom] = createSignal(false);
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
@@ -500,65 +787,70 @@ export const ChannelsUnreadWidget = (props: { sidebarState: SidebarState }) => {
   });
 
   return (
-    <Show when={channelGroups().length > 0}>
-      <Show
-        when={!isSlim()}
-        fallback={
-          <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
-            <For each={slimVisible()}>
-              {(group) => (
-                <ChannelGroupItem
-                  group={group}
-                  animate={false}
-                  isSlim
-                  channelLetters={channelLettersMap().get(group.entityId)}
-                />
-              )}
-            </For>
-            <Show when={slimOverflow() > 0}>
-              <span class="w-full text-center text-xxs text-ink-muted mt-1">
-                +{slimOverflow()}
-              </span>
-            </Show>
-          </section>
-        }
-      >
-        <section class="size-full min-h-0 flex flex-col px-0 py-1.5">
-          <header class="shrink-0 text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
-            <h1>Unread</h1>
-          </header>
-
-          <div ref={setScrollFrameRef} class="relative min-h-0 flex-1">
-            <div
-              ref={attachScrollEl}
-              onScroll={updateScrollShadows}
-              class="size-full overflow-y-auto overscroll-contain flex flex-col gap-0.5 pr-1 -mr-1"
-            >
-              <For each={channelGroups()}>
-                {(group) => (
+    <UnreadPreviewContext.Provider value={previewManager}>
+      <Show when={channelGroups().length > 0}>
+        <Show
+          when={!isSlim()}
+          fallback={
+            <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
+              <For each={slimVisibleIds()}>
+                {(entityId) => (
                   <ChannelGroupItem
-                    group={group}
+                    group={groupById(entityId)}
                     animate={false}
-                    channelLetters={channelLettersMap().get(group.entityId)}
+                    isSlim
+                    channelLetters={channelLettersMap().get(entityId)}
                   />
                 )}
               </For>
+              <Show when={slimOverflow() > 0}>
+                <span class="w-full text-center text-xxs text-ink-muted mt-1">
+                  +{slimOverflow()}
+                </span>
+              </Show>
+            </section>
+          }
+        >
+          <section class="size-full min-h-0 flex flex-col px-0 py-1.5">
+            <header class="shrink-0 text-xs font-medium text-ink-extra-muted/50 my-1 px-1">
+              <h1>Unread</h1>
+            </header>
+
+            <div ref={setScrollFrameRef} class="relative min-h-0 flex-1">
+              <div
+                ref={attachScrollEl}
+                onScroll={() => {
+                  updateScrollShadows();
+                  previewManager.dismiss();
+                }}
+                class="size-full overflow-y-auto overscroll-contain flex flex-col gap-0.5 pr-1 -mr-1"
+              >
+                <For each={visibleGroupIds()}>
+                  {(entityId) => (
+                    <ChannelGroupItem
+                      group={groupById(entityId)}
+                      animate={false}
+                      channelLetters={channelLettersMap().get(entityId)}
+                    />
+                  )}
+                </For>
+              </div>
+              <div
+                class={cn(
+                  'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
+                  hasOverflowTop() ? 'opacity-100' : 'opacity-0'
+                )}
+              />
+              <div
+                class={cn(
+                  'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
+                  hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
+                )}
+              />
             </div>
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 top-0 h-3 transition-opacity bg-gradient-to-b from-surface to-transparent',
-                hasOverflowTop() ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-            <div
-              class={cn(
-                'pointer-events-none absolute inset-x-0 bottom-0 h-3 transition-opacity bg-gradient-to-t from-surface to-transparent',
-                hasOverflowBottom() ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-          </div>
-        </section>
+          </section>
+        </Show>
       </Show>
-    </Show>
+    </UnreadPreviewContext.Provider>
   );
 };
