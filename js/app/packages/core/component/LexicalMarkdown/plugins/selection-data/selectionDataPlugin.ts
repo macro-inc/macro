@@ -6,6 +6,11 @@ import { $isAutoLinkNode, $isLinkNode } from '@lexical/link';
 import type { ListNode } from '@lexical/list';
 // import { mergeRegister } from '@lexical/utils';
 import type { HeadingNode } from '@lexical/rich-text';
+import {
+  $getTableCellNodeFromLexicalNode,
+  $isTableCellNode,
+  $isTableSelection,
+} from '@lexical/table';
 import type { ElementName } from '@lexical-core';
 import {
   $getSelection,
@@ -29,7 +34,7 @@ import type { LexicalWrapper } from '../../context/LexicalWrapperContext';
  * are only valid if the selection is a RangeSelection.
  */
 export type SelectionData = {
-  type: 'range' | 'node' | null;
+  type: 'range' | 'node' | 'table' | null;
   bold: boolean;
   italic: boolean;
   underline: boolean;
@@ -41,6 +46,8 @@ export type SelectionData = {
   elementsInRange: Set<ElementName>;
   nodeKeys: Set<NodeKey>;
   hasLinks: boolean;
+  onMergableCells: boolean;
+  onSplittableCells: boolean;
 };
 
 export const defaultSelectionData: SelectionData = {
@@ -56,6 +63,8 @@ export const defaultSelectionData: SelectionData = {
   elementsInRange: new Set(),
   nodeKeys: new Set(),
   hasLinks: false,
+  onMergableCells: false,
+  onSplittableCells: false,
 };
 
 function resetSelectionData(setSelectionData: SetStoreFunction<SelectionData>) {
@@ -70,6 +79,16 @@ function $getSelectionData(selection: BaseSelection | null): SelectionData {
   const data = structuredClone(defaultSelectionData);
   if (selection === null) return data;
 
+  if ($isTableSelection(selection)) {
+    data.type = 'table';
+    const cells = selection.getNodes().filter($isTableCellNode);
+    data.onMergableCells = cells.length > 1;
+    data.onSplittableCells = cells.some(
+      (cell) => cell.getColSpan() > 1 || cell.getRowSpan() > 1
+    );
+    return data;
+  }
+
   if ($isRangeSelection(selection)) {
     data.type = 'range';
     data.bold = selection.hasFormat('bold');
@@ -82,6 +101,9 @@ function $getSelectionData(selection: BaseSelection | null): SelectionData {
     data.highlight = selection.hasFormat('highlight');
     data.elementsInRange = $extractNodeTypes(selection);
     data.hasLinks = $hasLinks(selection);
+    const cell = $getTableCellNodeFromLexicalNode(selection.anchor.getNode());
+    data.onSplittableCells =
+      !!cell && (cell.getColSpan() > 1 || cell.getRowSpan() > 1);
   }
 
   if ($isNodeSelection(selection)) {

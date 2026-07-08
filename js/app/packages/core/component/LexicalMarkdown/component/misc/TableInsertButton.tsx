@@ -140,8 +140,6 @@ export function TableInsertButton() {
         ?.getBoundingClientRect();
 
       if (edge.type === 'row') {
-        // The preview line spans the visible table; the button centers on the
-        // hovered cell's segment of the border.
         const left = Math.max(tableRect.left, wrapperRect?.left ?? -Infinity);
         const right = Math.min(tableRect.right, wrapperRect?.right ?? Infinity);
         setInsertTarget({

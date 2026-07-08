@@ -1,7 +1,8 @@
 /**
- * @file Floating cut/copy/clear bar shown over a table cell selection on
- * touch devices, where there is no keyboard shortcut or context menu to
- * reach the clipboard (aka mobile).
+ * @file Floating cut/copy/paste/merge/split bar shown over a table cell
+ * selection on touch devices, where there is no keyboard shortcut or context
+ * menu for the clipboard and no format popup for table selections. On
+ * desktop, merge/split live in the normal selection popup (FormatTools).
  */
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
@@ -13,14 +14,20 @@ import {
 } from '@lexical/clipboard';
 import {
   $getTableCellNodeFromLexicalNode,
+  $isTableCellNode,
   $isTableSelection,
+  $mergeCells,
+  $unmergeCell,
 } from '@lexical/table';
 import ClipboardIcon from '@phosphor/clipboard.svg';
+import CornersInIcon from '@phosphor/corners-in.svg';
+import CornersOutIcon from '@phosphor/corners-out.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
+  $getNodeByKey,
   $getSelection,
   BLUR_COMMAND,
   COMMAND_PRIORITY_LOW,
@@ -45,7 +52,10 @@ export function TableSelectionActionBar() {
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
+  const [hasMergedCell, setHasMergedCell] = createSignal(false);
   const { layoutTick, bumpLayout } = createLayoutTick();
+
+  const isMultiCell = () => anchorCellKey() !== focusCellKey();
 
   const trackSelection = createCallback(() => {
     const currentEditor = editor();
@@ -55,16 +65,26 @@ export function TableSelectionActionBar() {
       if (!$isTableSelection(selection)) {
         setAnchorCellKey(undefined);
         setFocusCellKey(undefined);
+        setHasMergedCell(false);
         return;
       }
-      const anchorCell = $getTableCellNodeFromLexicalNode(
-        selection.anchor.getNode()
-      );
-      const focusCell = $getTableCellNodeFromLexicalNode(
-        selection.focus.getNode()
-      );
+      // Use $getNodeByKey to avoid throws when nodes were just removed (e.g. post-merge).
+      const anchorNode = $getNodeByKey(selection.anchor.key);
+      const focusNode = $getNodeByKey(selection.focus.key);
+      if (!anchorNode || !focusNode) {
+        setAnchorCellKey(undefined);
+        setFocusCellKey(undefined);
+        setHasMergedCell(false);
+        return;
+      }
+      const anchorCell = $getTableCellNodeFromLexicalNode(anchorNode);
+      const focusCell = $getTableCellNodeFromLexicalNode(focusNode);
       setAnchorCellKey(anchorCell?.getKey());
       setFocusCellKey(focusCell?.getKey());
+      const cells = selection.getNodes().filter($isTableCellNode);
+      setHasMergedCell(
+        cells.some((c) => c.getColSpan() > 1 || c.getRowSpan() > 1)
+      );
     });
   });
 
@@ -88,6 +108,7 @@ export function TableSelectionActionBar() {
     () => {
       setAnchorCellKey(undefined);
       setFocusCellKey(undefined);
+      setHasMergedCell(false);
       return false;
     },
     COMMAND_PRIORITY_LOW
@@ -139,6 +160,18 @@ export function TableSelectionActionBar() {
     void copyToClipboard(currentEditor, null, data).then((copied) => {
       if (copied) toast.success('Copied cells');
     });
+  });
+
+  const runMerge = createCallback(() => {
+    editor()?.update(() => {
+      const selection = $getSelection();
+      if (!$isTableSelection(selection)) return;
+      $mergeCells(selection.getNodes().filter($isTableCellNode));
+    });
+  });
+
+  const runSplit = createCallback(() => {
+    editor()?.update(() => $unmergeCell());
   });
 
   // Replays the system clipboard through the normal paste pipeline, so
@@ -207,6 +240,12 @@ export function TableSelectionActionBar() {
               {barButton('Cut', ScissorsIcon, runCut)}
               {barButton('Copy', CopyIcon, runCopy)}
               {barButton('Paste', ClipboardIcon, () => void runPaste())}
+              <Show when={isMultiCell()}>
+                {barButton('Merge', CornersInIcon, runMerge)}
+              </Show>
+              <Show when={hasMergedCell()}>
+                {barButton('Split', CornersOutIcon, runSplit)}
+              </Show>
             </div>
           </Layer>
         </ScopedPortal>

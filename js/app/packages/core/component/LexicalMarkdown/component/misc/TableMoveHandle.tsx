@@ -4,6 +4,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   $computeTableMap,
+  $createTableSelection,
   $deleteTableColumnAtSelection,
   $deleteTableRowAtSelection,
   $getTableCellNodeFromLexicalNode,
@@ -12,12 +13,14 @@ import {
   $insertTableRowAtSelection,
   $isTableCellNode,
   $isTableSelection,
+  $unmergeCell,
   getDOMCellFromTarget,
   type TableCellNode,
 } from '@lexical/table';
 import ColumnsIcon from '@phosphor/columns.svg';
 import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
 import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
+import CornersOutIcon from '@phosphor/corners-out.svg';
 import DotsIcon from '@phosphor/dots-six-vertical.svg';
 import RowsIcon from '@phosphor/rows.svg';
 import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
@@ -30,6 +33,7 @@ import {
   $getNodeByKey,
   $getSelection,
   $isRangeSelection,
+  $setSelection,
   BLUR_COMMAND,
   COMMAND_PRIORITY_LOW,
   FOCUS_COMMAND,
@@ -122,6 +126,7 @@ export function TableMoveHandle() {
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
+  const [anchorCellMerged, setAnchorCellMerged] = createSignal(false);
   const { layoutTick, bumpLayout } = createLayoutTick();
 
   const [dragging, setDragging] = createSignal(false);
@@ -144,26 +149,39 @@ export function TableMoveHandle() {
     currentEditor.read(() => {
       const selection = $getSelection();
       if ($isTableSelection(selection)) {
-        const anchorCell = $getTableCellNodeFromLexicalNode(
-          selection.anchor.getNode()
-        );
-        const focusCell = $getTableCellNodeFromLexicalNode(
-          selection.focus.getNode()
-        );
+        const anchorNode = $getNodeByKey(selection.anchor.key);
+        const focusNode = $getNodeByKey(selection.focus.key);
+        if (!anchorNode || !focusNode) {
+          setAnchorCellKey(undefined);
+          setFocusCellKey(undefined);
+          setAnchorCellMerged(false);
+          return;
+        }
+        const anchorCell = $getTableCellNodeFromLexicalNode(anchorNode);
+        const focusCell = $getTableCellNodeFromLexicalNode(focusNode);
         setAnchorCellKey(anchorCell?.getKey());
         setFocusCellKey(focusCell?.getKey());
+        setAnchorCellMerged(
+          !!anchorCell &&
+            (anchorCell.getColSpan() > 1 || anchorCell.getRowSpan() > 1)
+        );
         return;
       }
       if ($isRangeSelection(selection)) {
-        const cell = $getTableCellNodeFromLexicalNode(
-          selection.anchor.getNode()
-        );
+        const anchorNode = $getNodeByKey(selection.anchor.key);
+        const cell = anchorNode
+          ? $getTableCellNodeFromLexicalNode(anchorNode)
+          : null;
         setAnchorCellKey(cell?.getKey());
         setFocusCellKey(cell?.getKey());
+        setAnchorCellMerged(
+          !!cell && (cell.getColSpan() > 1 || cell.getRowSpan() > 1)
+        );
         return;
       }
       setAnchorCellKey(undefined);
       setFocusCellKey(undefined);
+      setAnchorCellMerged(false);
     });
   });
 
@@ -233,7 +251,13 @@ export function TableMoveHandle() {
       ?.getBoundingClientRect();
 
     return {
-      x: Math.min(Math.max(a.right, f.right), window.innerWidth),
+      // Clamp to the scroll wrapper's visible right edge so a cell scrolled
+      // (or sized) past it doesn't leave the handle floating over the margin.
+      x: Math.min(
+        Math.max(a.right, f.right),
+        wrapperRect?.right ?? window.innerWidth,
+        window.innerWidth
+      ),
       y: Math.min(a.top, f.top),
       tableCorner: tableRect
         ? {
@@ -360,6 +384,37 @@ export function TableMoveHandle() {
     setDropTarget(undefined);
   };
 
+  // Select the cells the handle represents as a table selection, so the
+  // cells highlight and the selection popup (with merge/split) opens.
+  const selectHandleCells = createCallback(() => {
+    const currentEditor = editor();
+    if (!currentEditor) return;
+    currentEditor.update(() => {
+      const aKey = anchorCellKey();
+      const fKey = focusCellKey();
+      const anchorCell = aKey ? $getNodeByKey(aKey) : null;
+      const focusCell = fKey ? $getNodeByKey(fKey) : null;
+      if (
+        !$isTableCellNode(anchorCell) ||
+        !$isTableCellNode(focusCell) ||
+        !anchorCell.isAttached() ||
+        !focusCell.isAttached()
+      ) {
+        return;
+      }
+      const table = $getTableNodeFromLexicalNodeOrThrow(anchorCell);
+      const tableSelection = $createTableSelection();
+      tableSelection.set(
+        table.getKey(),
+        anchorCell.getKey(),
+        focusCell.getKey()
+      );
+      $setSelection(tableSelection);
+    });
+    // The popup listens for this; programmatic $setSelection doesn't fire it.
+    currentEditor.dispatchCommand(SELECTION_CHANGE_COMMAND, undefined);
+  });
+
   const runMenuAction = createCallback(
     (action: (cell: TableCellNode) => void) => {
       setMenuOpen(false);
@@ -443,8 +498,10 @@ export function TableMoveHandle() {
       const target = dropTarget();
       if (started && target) performMove(target.cellElem);
       // A tap (no drag) opens the action menu on touch devices, where the
-      // hover-driven insert/delete buttons are unusable.
+      // hover-driven insert/delete buttons are unusable. On desktop it
+      // selects the handle's cells, surfacing the selection popup.
       else if (!started && isTouchDevice()) setMenuOpen(true);
+      else if (!started) selectHandleCells();
       cleanup();
     };
 
@@ -540,6 +597,18 @@ export function TableMoveHandle() {
                 <For each={DELETE_ITEMS}>
                   {(item) => menuItemButton(item, true)}
                 </For>
+                <Show when={anchorCellMerged()}>
+                  <button
+                    type="button"
+                    aria-label="Split cell"
+                    title="Split cell"
+                    class="col-span-2 flex items-center justify-center gap-1.5 rounded-md py-2 ring-1 ring-edge active:bg-accent/10 text-ink-muted"
+                    onClick={() => runMenuAction(() => $unmergeCell())}
+                  >
+                    <CornersOutIcon class="size-4" />
+                    <span class="text-xs">Split cell</span>
+                  </button>
+                </Show>
               </div>
             </Show>
           </Layer>

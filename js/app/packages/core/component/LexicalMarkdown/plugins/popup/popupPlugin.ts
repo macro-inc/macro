@@ -169,15 +169,16 @@ function registerPopupPlugin(editor: LexicalEditor, props: PopupPluginProps) {
   let cachedLastSelection: EnhancedSelection | null = null;
 
   function $validateAndSetSelection(selection: BaseSelection) {
-    if (selection.getTextContent().length === 0) {
-      return null;
-    }
-
     if ($isTableSelection(selection)) {
       // Touch cell selections get their own action bar
       // (TableSelectionActionBar); the popup would stack on top of it.
+      // No text-length gate: empty cells can still be merged.
       if (isTouchDevice()) return null;
       return $enhanceTableSelection(selection);
+    }
+
+    if (selection.getTextContent().length === 0) {
+      return null;
     }
 
     if ($isRangeSelection(selection)) {
