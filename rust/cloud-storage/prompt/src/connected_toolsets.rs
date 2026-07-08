@@ -42,13 +42,13 @@ pub fn render(names: &[String]) -> Option<String> {
          Their individual tools are NOT all listed upfront. When a task might \
          need a capability from one of these integrations: (1) call \
          `SearchTools` with keywords (e.g. \"linear issue\", \"github commits\") \
-         to find matching tools by name and description; (2) call `LoadTools` \
-         with the names you want to make them callable; (3) call the loaded tool \
-         by its name. Searching is cheap — search broadly, then load only what \
-         you need. Think about whether a connected integration is relevant \
-         before answering from what you already have; e.g. a question about \
-         recent work may be answerable from a connected issue tracker or code \
-         host even though those tools aren't visible yet.\n"
+         to find matching tools by name and description; (2) the top matches \
+         are loaded automatically — on the next step, call the tool you need \
+         by its exact name. Searching is cheap — search broadly, then call \
+         only what you need. Think about whether a connected \
+         integration is relevant before answering from what you already have; \
+         e.g. a question about recent work may be answerable from a connected \
+         issue tracker or code host even though those tools aren't visible yet.\n"
     ))
 }
 
@@ -73,6 +73,6 @@ mod tests {
     fn instructs_the_model_to_use_tool_search() {
         let section = render(&["Slack".to_string()]).unwrap();
         assert!(section.contains("SearchTools"));
-        assert!(section.contains("LoadTools"));
+        assert!(!section.contains("LoadTools"));
     }
 }

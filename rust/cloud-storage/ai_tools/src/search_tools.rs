@@ -10,37 +10,63 @@ use crate::ToolServiceContext;
 #[cfg(test)]
 mod test;
 
-/// A tool surfaced by [`SearchTools`] or loaded by [`LoadTools`] — just enough
-/// for the model to decide whether to load it and how to call it.
+/// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
+/// model to decide how to call it.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct ToolMatch {
-    /// The exact name to load and then call the tool by.
+    /// The exact name to call the tool by.
     pub name: String,
     /// What the tool does.
     pub description: String,
 }
 
+impl ToolMatch {
+    fn of(tool: &SearchableTool) -> Self {
+        Self {
+            name: tool.name.clone(),
+            description: tool.description.clone(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
-// SearchTools — discovery only
+// SearchTools — discovery + auto-loading
 // ---------------------------------------------------------------------------
 
-/// Response from [`SearchTools`]: matching tools (name + description), not yet
-/// loaded.
+/// How many top-ranked matches a single [`SearchTools`] call loads
+/// automatically.
+///
+/// Every loaded tool's schema is advertised on all subsequent requests for the
+/// session, so auto-loading must be bounded — a broad query against a large
+/// integration would otherwise permanently bloat every following request.
+/// Matches past the cap are still returned (as `additional_matches`) and can
+/// be loaded explicitly with [`LoadTools`].
+const MAX_AUTO_LOADED_MATCHES: usize = 8;
+
+/// Response from [`SearchTools`]: ranked matches, split into the top matches
+/// (auto-loaded, callable on the next model turn) and the remainder (loadable
+/// via [`LoadTools`]).
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct SearchToolsResponse {
-    /// Tools matching the query. Call `LoadTools` with the names you want to use.
+    /// Top matches, ranked by relevance. These are loaded: call them by exact
+    /// name on the next step.
     pub results: Vec<ToolMatch>,
+    /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
+    /// to `LoadTools` if one of these is the tool you need.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_matches: Vec<ToolMatch>,
 }
 
 /// `SearchTools` discovers tools from connected integrations (MCP servers such
-/// as Slack, Gmail, Linear) that are not listed upfront. It only *finds* tools —
-/// returning their names and descriptions — without loading them, so it can
-/// return many candidates cheaply. To actually use a tool, pass its name to
-/// `LoadTools`.
+/// as Slack, Gmail, Linear) that are not listed upfront, and auto-loads the top
+/// matches so they are callable on the next model turn. This keeps the model
+/// from needing a brittle search → load → call three-step protocol: skipping
+/// the load step left the announced tool unadvertised, so the model's intended
+/// call was never dispatched and the turn ended empty.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
-    description = "Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. Returns matching tools' names and descriptions but does NOT load them — pass the names you want to `LoadTools` to make them callable. Searching is cheap, so cast a wide net."
+    description = "Find tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub) by keyword. The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net."
 )]
 pub struct SearchTools {
     /// Keywords describing the capability you need (matched against tool names
@@ -61,9 +87,11 @@ impl AsyncTool<ToolServiceContext> for SearchTools {
         _service_context: ServiceContext<ToolServiceContext>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        Ok(SearchToolsResponse {
-            results: search(&request_context.searchable_tools, &self.query),
-        })
+        Ok(search_and_stage(
+            &request_context.searchable_tools,
+            &self.query,
+            request_context.tool_loader.as_ref(),
+        ))
     }
 }
 
@@ -117,15 +145,14 @@ impl AsyncTool<ToolServiceContext> for LoadTools {
 // Pure logic (unit-testable without a service context)
 // ---------------------------------------------------------------------------
 
-/// Match `query` against `catalog` and return the matches' name + description,
-/// ranked by relevance. Does not load anything.
+/// Match `query` against `catalog`, ranked by relevance.
 ///
 /// The query is split into whitespace-separated terms; a tool matches if **any**
 /// term is a case-insensitive substring of its name or description, ranked by
 /// how many distinct terms match (so "github list commits" surfaces the most
-/// relevant tools first). All matches are returned — searching is cheap and
-/// loading is a separate step. An empty query returns the whole catalog.
-fn search(catalog: &[SearchableTool], query: &str) -> Vec<ToolMatch> {
+/// relevant tools first). All matches are returned — the caller decides how
+/// many to load. An empty query returns the whole catalog.
+fn search<'c>(catalog: &'c [SearchableTool], query: &str) -> Vec<&'c SearchableTool> {
     let query = query.to_lowercase();
     let terms: Vec<&str> = query.split_whitespace().collect();
 
@@ -146,13 +173,30 @@ fn search(catalog: &[SearchableTool], query: &str) -> Vec<ToolMatch> {
     // Highest term-match count first; tie-break by name for stable ordering.
     scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
 
-    scored
-        .into_iter()
-        .map(|(_, t)| ToolMatch {
-            name: t.name.clone(),
-            description: t.description.clone(),
-        })
-        .collect()
+    scored.into_iter().map(|(_, t)| t).collect()
+}
+
+/// Match `query`, auto-load the top [`MAX_AUTO_LOADED_MATCHES`] matches so they
+/// are advertised on the next model turn, and report the loaded/unloaded split
+/// to the model.
+fn search_and_stage(
+    catalog: &[SearchableTool],
+    query: &str,
+    loader: Option<&ToolLoader>,
+) -> SearchToolsResponse {
+    let matches = search(catalog, query);
+    let (loaded, additional) = matches.split_at(matches.len().min(MAX_AUTO_LOADED_MATCHES));
+
+    if let Some(loader) = loader
+        && !loaded.is_empty()
+    {
+        loader.load(loaded.iter().map(|&tool| tool.clone()).collect());
+    }
+
+    SearchToolsResponse {
+        results: loaded.iter().copied().map(ToolMatch::of).collect(),
+        additional_matches: additional.iter().copied().map(ToolMatch::of).collect(),
+    }
 }
 
 /// Look up `names` in `catalog`, hand the found tools to `loader` for loading,
@@ -168,10 +212,7 @@ fn load(
     for name in names {
         match catalog.iter().find(|t| &t.name == name) {
             Some(t) => {
-                loaded.push(ToolMatch {
-                    name: t.name.clone(),
-                    description: t.description.clone(),
-                });
+                loaded.push(ToolMatch::of(t));
                 to_load.push(t.clone());
             }
             None => not_found.push(name.clone()),
