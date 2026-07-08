@@ -1,6 +1,7 @@
 import type { ListView } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import {
   ENABLE_ANIMATED_ICONS,
   ENABLE_SNIPPETS_FLAG,
@@ -9,6 +10,7 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
+import { openFilePicker } from '@core/util/upload';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import IconGear from '@icon/macro-gear.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
@@ -23,6 +25,7 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import UploadIcon from '@phosphor/upload-simple.svg';
 import { useLocation } from '@solidjs/router';
 import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -32,6 +35,7 @@ import { useSplitLayout } from '../split-layout/layout';
 import {
   type MobileTouchIconComponent,
   MobileTouchMenu,
+  type MobileTouchMenuItem,
 } from './MobileTouchMenu';
 import { SearchState } from './mobileSearchState';
 import { pressPulse } from './pressPulse';
@@ -150,27 +154,45 @@ function CreateMenu() {
   const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
     enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
   });
+  const handleFileUpload = useHandleFileUpload();
 
   const blocks = () =>
     CREATABLE_BLOCKS.filter(
       (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
     ).toReversed();
 
+  const uploadItem: MobileTouchMenuItem = {
+    id: 'upload-file',
+    label: 'Upload file',
+    icon: UploadIcon,
+    animateIcon: false,
+    onSelect: () => {
+      openFilePicker({ multiple: true }, async (files) => {
+        await handleFileUpload(files, false);
+      });
+    },
+  };
+
   return (
     <MobileTouchMenu
       triggerIcon={PlusIcon}
       triggerAriaLabel="Create"
       footerLabel="Create"
-      items={blocks().map((block) => {
-        const useAnimatedIcon = ENABLE_ANIMATED_ICONS && block.animatedIcon;
-        return {
-          id: block.blockName,
-          label: block.label,
-          icon: useAnimatedIcon ? block.animatedIcon : block.icon,
-          animateIcon: !!useAnimatedIcon,
-          onSelect: () => runCreateAction(block.blockName),
-        };
-      })}
+      // The menu grows upward, so the last item sits nearest the trigger; keep
+      // upload in that primary "first" slot, above the create-block options.
+      items={[
+        ...blocks().map((block) => {
+          const useAnimatedIcon = ENABLE_ANIMATED_ICONS && block.animatedIcon;
+          return {
+            id: block.blockName,
+            label: block.label,
+            icon: useAnimatedIcon ? block.animatedIcon : block.icon,
+            animateIcon: !!useAnimatedIcon,
+            onSelect: () => runCreateAction(block.blockName),
+          };
+        }),
+        uploadItem,
+      ]}
     />
   );
 }
