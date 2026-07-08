@@ -68,6 +68,7 @@ function MobileSearchInner() {
 
   const filteredItems = useCommandItems(query, SearchState.categoryFilter, {
     showSearchRow: false,
+    commandScopeCommands: SearchState.commandScopeCommands,
   });
   const { results: fullTextResults, isLoading: isFullTextLoading } =
     useFullTextSearch(SearchState.query);
@@ -88,6 +89,9 @@ function MobileSearchInner() {
             hideShadowedCommands: false,
             hideCommandsWithoutHotkeys: false,
             limitToCurrentScope: true,
+            // Commands run from taps, not keystrokes, so the search input
+            // being focused (virtual keyboard up) shouldn't filter them.
+            ignoreInputFocused: true,
           }
         );
         SearchState.setQuery('');
@@ -95,7 +99,10 @@ function MobileSearchInner() {
         return;
       }
 
-      // Regular command - close and run
+      // Regular command - close and run. Clear any active command scope so a
+      // quick reopen (within the reset threshold) doesn't restore a stale
+      // nested-command list.
+      SearchState.clearCommandScopeCommands();
       SearchState.close();
       SearchState.setQuery('');
       runCommand(command);
@@ -274,6 +281,8 @@ function ResultsContainer(props: {
   const heightOfNameMatchList = () => props.nameMatchItems.length * rowHeight();
   const showFullTextSearchButton = () => {
     if (SearchState.isFullTextMode()) return false;
+    // In a command scope the input filters nested commands, not search.
+    if (SearchState.isInCommandScope()) return false;
     // Always show when there are no name matches (rowHeight stays 0 since list isn't rendered)
     if (props.nameMatchItems.length === 0) return true;
     const rh = rowHeight();
