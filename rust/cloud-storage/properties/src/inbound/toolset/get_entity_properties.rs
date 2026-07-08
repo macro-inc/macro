@@ -193,7 +193,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
     });
 
     let scope = (info.data_type == DataType::Tag)
-        .then(|| match info.owner {
+        .then_some(match info.owner {
             PropertyOwner::User { .. } => Some(TagScope::Personal),
             PropertyOwner::Team { .. } => Some(TagScope::Team),
             PropertyOwner::System => None,

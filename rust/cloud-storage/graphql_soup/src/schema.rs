@@ -53,7 +53,7 @@ impl SoupService for SchemaOnlySoupService {
     ) -> Result<
         Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
         soup::domain::models::SoupErr,
-    > {
+    >{
         Err(soup::domain::models::SoupErr::CommsErr)
     }
 }
@@ -103,7 +103,7 @@ where
     ) -> Result<
         Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
         soup::domain::models::SoupErr,
-    > {
+    >{
         self.0.caller_tag_sets(user_id).await
     }
 }

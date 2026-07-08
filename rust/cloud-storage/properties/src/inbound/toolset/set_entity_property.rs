@@ -232,7 +232,7 @@ where
                 service_context
                     .service
                     .add_entity_property_option(
-                        user_id,
+                        &request_context.user_id,
                         &self.entity_id,
                         entity_type,
                         self.property_definition_id,
@@ -248,7 +248,7 @@ where
                 service_context
                     .service
                     .remove_entity_property_option(
-                        user_id,
+                        &request_context.user_id,
                         &self.entity_id,
                         entity_type,
                         self.property_definition_id,

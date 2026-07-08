@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\nSELECT\n    ep.id as entity_property_id,\n    ep.entity_id,\n    ep.entity_type as \"entity_type: EntityType\",\n    ep.property_definition_id,\n    ep.values as \"values: sqlx::types::JsonValue\",\n    ep.created_at as entity_property_created_at,\n    ep.updated_at as entity_property_updated_at,\n    pd.team_id as definition_team_id,\n    pd.user_id as definition_user_id,\n    pd.display_name,\n    pd.data_type as \"data_type: DataType\",\n    pd.is_multi_select,\n    pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n    pd.created_at as definition_created_at,\n    pd.updated_at as definition_updated_at,\n    pd.is_system as definition_is_system\nFROM entity_properties ep\nINNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\nWHERE ep.entity_id = $1 AND ep.entity_type = $2\nAND (\n    pd.data_type <> $4\n    OR pd.user_id = $3\n    OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $3)\n)\n        ",
+  "query": "\nSELECT\n    ep.id as entity_property_id,\n    ep.entity_id,\n    ep.entity_type as \"entity_type: EntityType\",\n    ep.property_definition_id,\n    ep.values as \"values: sqlx::types::JsonValue\",\n    ep.created_at as entity_property_created_at,\n    ep.updated_at as entity_property_updated_at,\n    pd.team_id as definition_team_id,\n    pd.user_id as definition_user_id,\n    pd.display_name,\n    pd.data_type as \"data_type: DataType\",\n    pd.is_multi_select,\n    pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n    pd.created_at as definition_created_at,\n    pd.updated_at as definition_updated_at,\n    pd.is_system as definition_is_system\nFROM entity_properties ep\nINNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\nWHERE ep.entity_id = $1 AND ep.entity_type = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -152,25 +152,6 @@
               ]
             }
           }
-        },
-        "Text",
-        {
-          "Custom": {
-            "name": "property_data_type",
-            "kind": {
-              "Enum": [
-                "BOOLEAN",
-                "DATE",
-                "NUMBER",
-                "STRING",
-                "SELECT_NUMBER",
-                "SELECT_STRING",
-                "ENTITY",
-                "LINK",
-                "TAG"
-              ]
-            }
-          }
         }
       ]
     },
@@ -193,5 +174,5 @@
       false
     ]
   },
-  "hash": "3df394f8c1c44bc992e692304a9e317f4d0705601ee8107915fac82d6d09ca4b"
+  "hash": "d09a22b5d0a049677c6fc96d0aef74260d592ae30752c12a50512ebf95592e5f"
 }
