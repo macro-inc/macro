@@ -116,6 +116,16 @@ impl SoupService for MockSoup {
     ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        _user_id: MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        SoupErr,
+    > {
+        Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
+    }
 }
 
 struct MockEmail;
