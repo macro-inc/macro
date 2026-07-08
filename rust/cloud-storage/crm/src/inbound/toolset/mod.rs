@@ -116,6 +116,11 @@ pub(crate) struct CompanyCrmProps {
 pub(crate) struct StageOptionCatalog {
     /// option id -> label
     labels: HashMap<Uuid, String>,
+    /// Ids of team-scoped select definitions named "Stage". Teams with a
+    /// customized pipeline store their stage values under one of these
+    /// definitions instead of the system Stage definition, so property
+    /// fetches filtered by definition id must include them.
+    team_stage_definition_ids: Vec<Uuid>,
 }
 
 impl StageOptionCatalog {
@@ -140,6 +145,12 @@ impl StageOptionCatalog {
             .filter(|(_, label)| label.eq_ignore_ascii_case(trimmed))
             .map(|(id, _)| *id)
             .collect()
+    }
+
+    /// Ids of the team-scoped "Stage" definitions (empty when the team
+    /// only uses the system Stage definition).
+    pub(crate) fn team_stage_definition_ids(&self) -> &[Uuid] {
+        &self.team_stage_definition_ids
     }
 
     /// The distinct stage labels known to this team, for actionable error
@@ -172,6 +183,7 @@ pub(crate) async fn load_stage_option_catalog(
     })?;
 
     let mut labels = HashMap::new();
+    let mut team_stage_definition_ids = Vec::new();
     for def in defs {
         let is_stage_definition = def.definition.id == SystemPropertyKey::STAGE_UUID
             || (def.definition.display_name.eq_ignore_ascii_case("stage")
@@ -181,6 +193,9 @@ pub(crate) async fn load_stage_option_catalog(
                 ));
         if !is_stage_definition {
             continue;
+        }
+        if def.definition.id != SystemPropertyKey::STAGE_UUID {
+            team_stage_definition_ids.push(def.definition.id);
         }
         for option in def.property_options {
             let label = match option.value {
@@ -207,17 +222,24 @@ pub(crate) async fn load_stage_option_catalog(
             .or_insert_with(|| stage.display_value().to_string());
     }
 
-    Ok(StageOptionCatalog { labels })
+    Ok(StageOptionCatalog {
+        labels,
+        team_stage_definition_ids,
+    })
 }
 
 /// Extract the builtin CRM props (Stage / Owner / Revenue) from a
 /// company's entity properties. The stage may live on the system Stage
-/// definition or on a team-scoped select definition named "Stage".
+/// definition or on a team-scoped select definition named "Stage";
+/// teams with customized pipelines use the latter, so its value wins
+/// over one set under the system definition.
 pub(crate) fn extract_company_crm_props(
     props: &[EntityPropertyWithDefinition],
     stages: &StageOptionCatalog,
 ) -> CompanyCrmProps {
     let mut out = CompanyCrmProps::default();
+    let mut system_stage: Option<ToolCompanyStage> = None;
+    let mut team_stage: Option<ToolCompanyStage> = None;
     for prop in props {
         let definition_id = prop.property.property_definition_id;
         if definition_id == SystemPropertyKey::COMPANY_OWNER_UUID {
@@ -232,10 +254,18 @@ pub(crate) fn extract_company_crm_props(
             }
             continue;
         }
-        let is_stage = definition_id == SystemPropertyKey::STAGE_UUID
-            || prop.definition.display_name.eq_ignore_ascii_case("stage");
-        if is_stage
-            && out.stage.is_none()
+        let is_system_stage = definition_id == SystemPropertyKey::STAGE_UUID;
+        let is_team_stage = !is_system_stage
+            && (stages.team_stage_definition_ids.contains(&definition_id)
+                || prop.definition.display_name.eq_ignore_ascii_case("stage"));
+        let slot = if is_system_stage {
+            &mut system_stage
+        } else if is_team_stage {
+            &mut team_stage
+        } else {
+            continue;
+        };
+        if slot.is_none()
             && let Some(PropertyValue::SelectOption(option_ids)) = &prop.value
             && let Some(option_id) = option_ids.first().copied()
         {
@@ -255,9 +285,10 @@ pub(crate) fn extract_company_crm_props(
                 })
                 .or_else(|| stages.label_for(option_id))
                 .unwrap_or_else(|| option_id.to_string());
-            out.stage = Some(ToolCompanyStage { option_id, label });
+            *slot = Some(ToolCompanyStage { option_id, label });
         }
     }
+    out.stage = team_stage.or(system_stage);
     out
 }
 

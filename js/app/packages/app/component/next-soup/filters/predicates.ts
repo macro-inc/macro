@@ -158,21 +158,6 @@ export function crmCompanyHiddenFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company' && entity.hidden;
 }
 
-/** True when the company's Stage property matches the given option id. */
-export function hasCompanyStage(
-  entity: EntityData,
-  stageOptionId: string
-): boolean {
-  if (entity.type !== 'crm_company') return false;
-  return getCompanyStageOptionId(entity) === stageOptionId;
-}
-
-/** True when the company has no Stage set. */
-export function hasNoCompanyStage(entity: EntityData): boolean {
-  if (entity.type !== 'crm_company') return false;
-  return getCompanyStageOptionId(entity) === undefined;
-}
-
 /**
  * Stage filter for companies, driven by the view's stage selection
  * (`ctx.stages`). `NO_STAGE` matches companies without a Stage set. Stage

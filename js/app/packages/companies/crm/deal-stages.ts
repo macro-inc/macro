@@ -21,7 +21,10 @@ import {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
 } from '@entity/utils/task-properties';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import {
+  CRM_TEAM_STAGE_DEFINITION_NAME,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/constants';
 import type { Property } from '@property/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
@@ -29,11 +32,9 @@ import type { PropertyDefinitionWithOptions } from '@service-properties/generate
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import { type Accessor, createMemo } from 'solid-js';
 
-/**
- * Reserved display name of the team-scoped stage definition. Property
- * definition names are unique per team, so this doubles as the lookup key.
- */
-export const CRM_TEAM_STAGE_DEFINITION_NAME = 'Stage';
+// Canonical home is `@property/constants` (property pickers filter on it);
+// re-exported here for the CRM-side callers.
+export { CRM_TEAM_STAGE_DEFINITION_NAME } from '@property/constants';
 
 export type DealStage = {
   /** Property option id — the value stored on companies. */

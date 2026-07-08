@@ -67,6 +67,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   SettingsCard,
   SettingsPage,
@@ -833,21 +834,19 @@ const NEW_PROPERTY_TYPE_OPTIONS: { value: NewPropertyType; label: string }[] = [
 
 /** Mirrors `buildDataType` in the property package's CreatePropertyModal. */
 function buildDataType(type: NewPropertyType): PropertyDataType {
-  switch (type) {
-    case 'string':
-      return { type: 'string' };
-    case 'number':
-      return { type: 'number' };
-    case 'date':
-      return { type: 'date' };
-    case 'boolean':
-      return { type: 'boolean' };
-    case 'select_string':
+  return match<NewPropertyType, PropertyDataType>(type)
+    .with('string', () => ({ type: 'string' }))
+    .with('number', () => ({ type: 'number' }))
+    .with('date', () => ({ type: 'date' }))
+    .with('boolean', () => ({ type: 'boolean' }))
+    .with('select_string', () => ({
       // Options are added later from the property's editors.
-      return { type: 'select_string', multi: false, options: [] };
-    case 'link':
-      return { type: 'link', multi: false };
-  }
+      type: 'select_string',
+      multi: false,
+      options: [],
+    }))
+    .with('link', () => ({ type: 'link', multi: false }))
+    .exhaustive();
 }
 
 function CompanyPropertiesSection() {

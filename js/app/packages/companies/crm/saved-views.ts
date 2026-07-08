@@ -172,17 +172,33 @@ export function useTeamCrmViews() {
       createdBy: userId(),
       createdAt: new Date().toISOString(),
     };
-    update.mutate((current) => ({
-      ...current,
-      teamViews: [...(current.teamViews ?? []), view],
-    }));
+    update.mutate(
+      (current) => ({
+        ...current,
+        teamViews: [...(current.teamViews ?? []), view],
+      }),
+      {
+        onError: (error: Error) => {
+          console.error('Failed to save team view', error);
+          toast.failure('Failed to save team view');
+        },
+      }
+    );
   };
 
   const remove = (id: string) => {
-    update.mutate((current) => ({
-      ...current,
-      teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
-    }));
+    update.mutate(
+      (current) => ({
+        ...current,
+        teamViews: (current.teamViews ?? []).filter((view) => view.id !== id),
+      }),
+      {
+        onError: (error: Error) => {
+          console.error('Failed to delete team view', error);
+          toast.failure('Failed to delete team view');
+        },
+      }
+    );
   };
 
   return { views, add, remove, isLoading, isSaving: () => update.isPending };

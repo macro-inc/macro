@@ -211,12 +211,16 @@ where
         };
 
         // Attach Stage / Owner / Revenue for the remaining candidates.
+        // Teams with customized pipelines store stage values under a
+        // team-scoped "Stage" definition rather than the system one, so
+        // include those definition ids in the fetch filter too.
         let entity_refs = company_entity_refs(companies.iter().map(|c| c.company.id));
-        let property_ids = [
+        let mut property_ids = vec![
             SystemPropertyKey::STAGE_UUID,
             SystemPropertyKey::COMPANY_OWNER_UUID,
             SystemPropertyKey::REVENUE_UUID,
         ];
+        property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
         let properties_map =
             properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
                 &service_context.pool,
@@ -318,6 +322,9 @@ fn to_list_item(company: CrmCompanyForSoup, props: super::CompanyCrmProps) -> Co
             .map(|d| d.domain.clone())
             .collect(),
         hidden: company.company.hidden,
+        // The repo fills `company.updated_at` from
+        // `crm_companies.last_interaction`, so this really is the latest
+        // email interaction, not a row-lifecycle timestamp.
         last_interaction: company.company.updated_at,
         stage: props.stage,
         owner_user_id: props.owner_user_id,

@@ -242,6 +242,10 @@ where
                 .collect(),
             hidden: record.company.hidden,
             email_sync: record.company.email_sync,
+            // The repo fills `company.created_at` / `updated_at` from
+            // `crm_companies.first_interaction` / `last_interaction`, so
+            // these really are the interaction endpoints, not
+            // row-lifecycle timestamps.
             first_interaction: record.company.created_at,
             last_interaction: record.company.updated_at,
             stage: crm_props.stage,

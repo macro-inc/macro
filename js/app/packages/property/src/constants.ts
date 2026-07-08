@@ -16,6 +16,13 @@ export function isReservedPropertyDefinitionName(displayName: string): boolean {
 }
 
 /**
+ * Reserved display name of the team-scoped CRM deal-stage definition
+ * (unique per team). Managed exclusively from CRM settings, so generic
+ * property pickers must not offer it.
+ */
+export const CRM_TEAM_STAGE_DEFINITION_NAME = 'Stage';
+
+/**
  * System property definition IDs (from backend seed migration).
  * These are stable UUIDs that match the database.
  */

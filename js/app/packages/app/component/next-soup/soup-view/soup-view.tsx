@@ -156,10 +156,10 @@ export const DefaultGroupHeader = (
   // The Customers view groups by option ids from the team's deal-stage set
   // (or other custom select options) that the static PropertyValueIcon
   // table doesn't know — render those through CrmStageIcon instead.
-  const isCompaniesView = createMemo(() => {
+  const isCompaniesView = () => {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'companies';
-  });
+  };
 
   // Index into the active stage set so header dots match kanban columns.
   const stageIndex = (optionId: string): number | undefined => {
@@ -169,11 +169,11 @@ export const DefaultGroupHeader = (
     return index === -1 ? undefined : index;
   };
 
-  const stageOptionId = createMemo(() => {
+  const stageOptionId = () => {
     if (!isCompaniesView()) return undefined;
     const value = props.group.value ?? props.group.key;
     return typeof value === 'string' && value ? value : undefined;
-  });
+  };
 
   return (
     <SoupSectionHeader

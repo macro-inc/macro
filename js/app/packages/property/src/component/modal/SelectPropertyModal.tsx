@@ -3,7 +3,10 @@ import { ENABLE_CREATE_PROPERTY } from '@core/constant/featureFlags';
 import { useListKeyBindings } from '@core/util/useListKeyBindings';
 import PlusIcon from '@phosphor/plus.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
-import { isReservedPropertyDefinitionName } from '@property/constants';
+import {
+  CRM_TEAM_STAGE_DEFINITION_NAME,
+  isReservedPropertyDefinitionName,
+} from '@property/constants';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { cn, Dialog, Surface } from '@ui';
@@ -69,9 +72,15 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
         return toPropertyDefinitionDomain(item);
       })
       .filter(
-        // Reserved internal definitions (`__macro:*` config carriers) must
-        // never surface in property pickers.
-        (property) => !isReservedPropertyDefinitionName(property.displayName)
+        // Reserved internal definitions (`__macro:*` config carriers) and
+        // the CRM-managed team Stage definition must never surface in
+        // property pickers.
+        (property) =>
+          !isReservedPropertyDefinitionName(property.displayName) &&
+          !(
+            property.displayName === CRM_TEAM_STAGE_DEFINITION_NAME &&
+            !property.isSystem
+          )
       );
   });
 
