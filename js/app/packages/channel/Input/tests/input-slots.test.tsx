@@ -320,19 +320,13 @@ describe('Input slots', () => {
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('handle send');
   });
 
-  it('shows invalid state in drop overlay', () => {
+  it('shows the drop overlay when dragged over', () => {
     render(() => (
-      <Root
-        input={{
-          ...baseInput,
-          isDraggedOver: true,
-          isValidChannelDrag: false,
-        }}
-      >
-        <DropOverlay invalidMessage="[!] Invalid attachment file" />
+      <Root input={{ ...baseInput, isDraggedOver: true }}>
+        <DropOverlay hint="Drop files to attach" />
       </Root>
     ));
 
-    expect(screen.getByText('[!] Invalid attachment file')).toBeTruthy();
+    expect(screen.getByText('Drop files to attach')).toBeTruthy();
   });
 });

@@ -1,3 +1,5 @@
+import { isAiPeer } from '@core/collab/ai-peer';
+import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { tryMacroId, useDisplayName } from '@core/user';
 import {
   buildDiffState,
@@ -106,6 +108,14 @@ export function HistoryProvider(props: {
   // Peer -> user mapping for labelling sessions; lightweight JSON.
   const peerMap = useDocumentPeersQuery(props.documentId);
 
+  // AI peers are recognizable from the peer id alone (reserved block) and all
+  // collapse into the single Macro identity. Checked before the peer map,
+  // which may attribute them to whoever's token the AI worker connected with.
+  const resolvePeerUser = (peers: Map<string, string>, peer: string): string =>
+    isAiPeer(BigInt(peer))
+      ? MACRO_AGENT_BOT_ID
+      : (peers.get(peer) ?? 'unknown');
+
   // One stable useDisplayName per unique userId — batched into a single fetch.
   const uniqueUserIds = createMemo(() =>
     peerMap.data ? [...new Set(peerMap.data.values())] : []
@@ -123,7 +133,7 @@ export function HistoryProvider(props: {
       color: userColor(userId),
     };
   const userByPeer = (peerId: string): HistoryUser =>
-    userById(peerMap.data?.get(peerId) ?? 'unknown');
+    userById(resolvePeerUser(peerMap.data ?? new Map(), peerId));
 
   const historyIndex = createMemo(() => {
     const doc = historyDoc();
@@ -139,7 +149,7 @@ export function HistoryProvider(props: {
 
     const events: { userId: string; tMs: number }[] = [];
     for (const [peer, changes] of doc.getAllChanges()) {
-      const userId = peers.get(peer) ?? 'unknown';
+      const userId = resolvePeerUser(peers, peer);
       for (const change of changes) {
         events.push({ userId, tMs: change.timestamp * 1000 });
       }
@@ -186,7 +196,7 @@ export function HistoryProvider(props: {
       const peers = peerMap.data;
       const whoMap =
         doc && peers
-          ? buildWhoMap(doc, (peer) => peers.get(peer) ?? 'unknown')
+          ? buildWhoMap(doc, (peer) => resolvePeerUser(peers, peer))
           : new Map<string, string>();
       const diffs = diffStates(
         before,

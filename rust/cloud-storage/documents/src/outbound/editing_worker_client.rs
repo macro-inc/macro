@@ -53,6 +53,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             "models": {
                 "supervisor": [
                     { "provider": "anthropic", "model": "claude-opus-4-8" },
+                    { "provider": "anthropic", "model": "claude-sonnet-4-6" },
                     { "provider": "openai", "model": "gpt-5.5" },
                 ],
                 "interpret": [

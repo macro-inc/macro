@@ -1,5 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import {
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
@@ -12,7 +14,7 @@ import {
   type ConnectionState,
   StatusDot,
 } from './integration-ui';
-import { IntegrationRow, SettingsCard } from './primitives';
+import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 
 /** GitHub integration as a Connected-accounts card. */
 export function GitHubCard() {
@@ -24,7 +26,7 @@ export function GitHubCard() {
   const status = () => githubLink.data?.status;
   const username = () => githubLink.data?.username;
 
-  // Drives the connection dot shown beside the "GitHub" title.
+  // Drives the account connection dot.
   const connectionState = (): ConnectionState | undefined =>
     status() === 'linked'
       ? 'connected'
@@ -67,12 +69,21 @@ export function GitHubCard() {
       <IntegrationRow
         icon={<GithubIcon />}
         title="GitHub"
-        description="Surface pull requests and issues alongside your work."
-        status={
-          <Show when={connectionState()}>
-            {(state) => <StatusDot state={state()} label={connectionLabel()} />}
-          </Show>
+        description="Connect Macro to your GitHub account and repositories."
+      />
+
+      <SettingsRow
+        label={
+          <span class="flex items-center gap-2">
+            <span>Account</span>
+            <Show when={connectionState()}>
+              {(state) => (
+                <StatusDot state={state()} label={connectionLabel()} />
+              )}
+            </Show>
+          </span>
         }
+        description="Identify your GitHub activity in Macro."
       >
         <Show
           when={!githubLink.isLoading}
@@ -111,7 +122,22 @@ export function GitHubCard() {
             </Match>
           </Switch>
         </Show>
-      </IntegrationRow>
+      </SettingsRow>
+
+      <SettingsRow
+        label="GitHub App"
+        description="Choose repositories for Macro to sync."
+      >
+        <a
+          href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+        >
+          Configure app
+          <ArrowUpRightIcon class="size-3.5 opacity-70" />
+        </a>
+      </SettingsRow>
     </SettingsCard>
   );
 }

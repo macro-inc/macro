@@ -2,14 +2,17 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { formatRelativeTimestamp } from '@entity';
+import GithubIcon from '@icon/mcp-github.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
@@ -56,6 +59,7 @@ import {
 } from 'solid-js';
 import { z } from 'zod';
 import {
+  IntegrationRow,
   SettingsCard,
   SettingsPage,
   SettingsRow,
@@ -1223,6 +1227,26 @@ function TeamManagement(props: {
                 </div>
               </Show>
             </SettingsRow>
+          </SettingsCard>
+        </SettingsSection>
+
+        <SettingsSection title="Connections">
+          <SettingsCard>
+            <IntegrationRow
+              icon={<GithubIcon />}
+              title="GitHub App"
+              description="Connect your team's repositories for pull request sync."
+            >
+              <a
+                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              >
+                Configure app
+                <ArrowUpRightIcon class="size-3.5 opacity-70" />
+              </a>
+            </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
 

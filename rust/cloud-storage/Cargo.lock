@@ -215,6 +215,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_search",
+ "models_soup",
  "non_empty",
  "notification",
  "prompt",
@@ -966,6 +967,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "last_online_tracker",
+ "loops_client",
  "macro_auth",
  "macro_aws_config",
  "macro_cache_client",
@@ -3277,7 +3279,9 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "entity_access",
@@ -3285,10 +3289,14 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "model_user",
+ "models_properties",
+ "properties",
  "reqwest 0.13.4",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -4065,7 +4073,6 @@ dependencies = [
  "non_empty",
  "notification",
  "prompt",
- "properties",
  "readonly_pool",
  "redis",
  "regex",
@@ -4189,7 +4196,6 @@ dependencies = [
  "opensearch_client",
  "ordered-float",
  "properties",
- "properties_db_client",
  "properties_service",
  "rate_limit",
  "rayon",
@@ -7615,6 +7621,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "loops_client"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "lru"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8222,7 +8239,6 @@ dependencies = [
  "mcp_auth_proxy",
  "notification",
  "prompt",
- "properties",
  "readonly_pool",
  "redis",
  "rmcp",
@@ -8297,7 +8313,6 @@ dependencies = [
  "macro_uuid",
  "model_user",
  "notification",
- "properties",
  "readonly_pool",
  "search_service_client",
  "serde",
@@ -8692,6 +8707,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "document_sub_type",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
@@ -10495,22 +10511,22 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
- "email_db_client",
  "entity_access",
  "entity_access_db_utils",
  "futures",
- "macro_db_client",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "model",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_permissions",
  "models_properties",
  "notification",
- "properties_db_client",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -10518,25 +10534,9 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "properties_db_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "macro_db_migrator",
- "macro_uuid",
- "models_properties",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.18",
- "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -10545,39 +10545,14 @@ dependencies = [
 name = "properties_service"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
- "aws-sdk-sqs",
  "axum",
- "chrono",
- "email_db_client",
  "entity_access",
- "http-body-util",
- "last_online_tracker",
- "macro_auth",
- "macro_env",
  "macro_middleware",
- "macro_user_id",
- "macro_uuid",
- "model",
- "model-entity",
- "models_permissions",
  "models_properties",
  "notification",
  "properties",
- "properties_db_client",
- "serde",
  "serde_json",
- "serde_with",
- "sqlx",
- "system_properties",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tower-http",
- "tracing",
  "utoipa",
- "uuid",
  "workspace-hack",
 ]
 
@@ -11908,7 +11883,7 @@ dependencies = [
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
- "properties_db_client",
+ "properties",
  "rust-embed",
  "s3_client",
  "s3_key",
@@ -11965,7 +11940,7 @@ dependencies = [
  "models_soup",
  "name_search",
  "opensearch_client",
- "properties_db_client",
+ "properties",
  "readonly_pool",
  "secretsmanager_client",
  "serde",
@@ -12747,7 +12722,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "ordered-float",
- "properties_db_client",
+ "properties",
  "readonly_pool",
  "recursion",
  "rootcause",

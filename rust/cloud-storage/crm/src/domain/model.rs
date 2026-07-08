@@ -60,9 +60,13 @@ pub struct CrmCompany {
     /// `email_sync = false` (see
     /// [`crate::domain::service::CrmService::set_company_hidden`]).
     pub hidden: bool,
-    /// When the company was created
+    /// Earliest known email interaction with this company. Repository
+    /// read paths fill this from `crm_companies.first_interaction`, not
+    /// the row's lifecycle `created_at`.
     pub created_at: DateTime<Utc>,
-    /// When the company was last updated
+    /// Most recent known email interaction with this company. Repository
+    /// read paths fill this from `crm_companies.last_interaction`, not
+    /// the row's lifecycle `updated_at`.
     pub updated_at: DateTime<Utc>,
     /// All domains associated with this company
     pub domains: Vec<CrmDomain>,

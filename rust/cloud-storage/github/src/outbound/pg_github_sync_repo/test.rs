@@ -721,3 +721,63 @@ async fn test_upsert_installation_sources_idempotent_user_source(pool: Pool<Post
         )]
     );
 }
+
+// ---------------------------------------------------------------------------
+// installation installer
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_upsert_installation_installer_records_installer(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.upsert_installation_installer("11111", "12345")
+        .await
+        .unwrap();
+    repo.upsert_installation_installer("22222", "12345")
+        .await
+        .unwrap();
+
+    let installation_ids = repo
+        .get_installation_ids_by_installer("12345")
+        .await
+        .unwrap();
+
+    assert_eq!(installation_ids, vec!["11111", "22222"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_upsert_installation_installer_replaces_installer(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.upsert_installation_installer("11111", "12345")
+        .await
+        .unwrap();
+    repo.upsert_installation_installer("11111", "67890")
+        .await
+        .unwrap();
+
+    assert!(
+        repo.get_installation_ids_by_installer("12345")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.get_installation_ids_by_installer("67890")
+            .await
+            .unwrap(),
+        vec!["11111"]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_installation_ids_by_installer_empty(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let installation_ids = repo
+        .get_installation_ids_by_installer("missing")
+        .await
+        .unwrap();
+
+    assert!(installation_ids.is_empty());
+}

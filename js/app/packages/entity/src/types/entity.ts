@@ -114,6 +114,7 @@ export type ChannelThreadEntity = EntityBase & {
 export type ChatEntity = EntityBase & {
   type: 'chat';
   projectId?: string;
+  properties?: SoupProperty[];
 };
 
 /** Named sub types - 'task' and 'snippet' */
@@ -356,7 +357,7 @@ export const isChannelThreadEntity = (
   return entity.type === 'channel_thread';
 };
 
-const _isChatEntity = (entity: EntityData): entity is ChatEntity => {
+export const isChatEntity = (entity: EntityData): entity is ChatEntity => {
   return entity.type === 'chat';
 };
 

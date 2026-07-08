@@ -53,6 +53,7 @@ import {
   useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import type { ReplyType } from '../util/replyType';
 
 /**
  * Tracks thread IDs that had a draft saved since the last query fetch.
@@ -98,6 +99,19 @@ type EmailContextValues = {
     setBottomReplyOpen: (open: boolean) => void;
     // Sender emails (lowercased) with a CATEGORY_PERSONAL message in the thread
     personalSenders: Accessor<Set<string>>;
+  };
+  mobileReplyComposer: {
+    open: Accessor<boolean>;
+    messageId: Accessor<string | undefined>;
+    setOpen: (open: boolean) => void;
+    openForMessage: (id: string) => void;
+    close: () => void;
+  };
+  replyRequest: {
+    messageId: Accessor<string | undefined>;
+    replyType: Accessor<ReplyType | undefined>;
+    set: (messageId: string, replyType: ReplyType) => void;
+    clear: () => void;
   };
   thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
@@ -196,6 +210,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
   const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
+  const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
+    createSignal(false);
+  const [mobileReplyComposerMessageId, setMobileReplyComposerMessageId] =
+    createSignal<string>();
+  const [replyRequestMessageId, setReplyRequestMessageId] =
+    createSignal<string>();
+  const [replyRequestType, setReplyRequestType] = createSignal<ReplyType>();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
@@ -607,6 +628,31 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setReplyingToMessageId,
             bottomReplyOpen,
             setBottomReplyOpen,
+          },
+          mobileReplyComposer: {
+            open: mobileReplyComposerOpen,
+            messageId: mobileReplyComposerMessageId,
+            setOpen: setMobileReplyComposerOpen,
+            openForMessage: (id: string) => {
+              setMobileReplyComposerMessageId(id);
+              setMobileReplyComposerOpen(true);
+            },
+            close: () => {
+              setMobileReplyComposerOpen(false);
+              setMobileReplyComposerMessageId(undefined);
+            },
+          },
+          replyRequest: {
+            messageId: replyRequestMessageId,
+            replyType: replyRequestType,
+            set: (messageId: string, replyType: ReplyType) => {
+              setReplyRequestMessageId(messageId);
+              setReplyRequestType(replyType);
+            },
+            clear: () => {
+              setReplyRequestMessageId(undefined);
+              setReplyRequestType(undefined);
+            },
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);

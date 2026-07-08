@@ -6,6 +6,7 @@ import {
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
 import {
+  ENABLE_NEW_INBOX,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -127,12 +128,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
-        groupBy: 'date',
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
-        groupBy: 'date',
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
       all: () => ({
         filters: {
@@ -157,7 +158,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
-        groupBy: 'date',
+        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
       }),
     },
   },

@@ -1,9 +1,14 @@
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
-import { bufferedStream } from '@core/component/AI/util/stream';
+import {
+  bufferedStream,
+  createMentionBufferPlugin,
+} from '@core/component/AI/util/stream';
+import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { toast } from '@core/component/Toast/Toast';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
+import type { EditorState } from 'lexical';
 import type { Accessor, Owner, Setter } from 'solid-js';
 import {
   createEffect,
@@ -43,6 +48,15 @@ export type ChatController = {
   dispatch: (event: ControllerEvent) => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
+  /**
+   * Ref to the renderer's parsed editor state for the streaming message's
+   * tail text part. The renderer sets it; the stream's Macro XML buffering
+   * reads it to skip buffering tags that land in code blocks.
+   */
+  setStreamTailState: (
+    state: Accessor<EditorState | null> | undefined,
+    key?: string
+  ) => void;
 };
 
 export type ChatControllerOptions = {
@@ -70,6 +84,19 @@ export function createChatController(
   const [messages, setMessages] =
     createSignal<ChatMessageWithAttachments[]>(initialMessages);
   const [stream, setStream] = createSignal<ChatMessageStream>();
+
+  /*
+   The renderer's parsed editor state for the streaming message's tail text
+   part (set from AssistantMessageParts as it renders). Macro XML buffering
+   reads the node tree the renderer already built — never parses — to skip
+   buffering tags that land in code blocks, where they render literally.
+  */
+  let streamTailState: Accessor<EditorState | null> | undefined;
+  let streamTailStateKey: string | undefined;
+  function streamTailInCode(): boolean {
+    const state = streamTailState?.();
+    return state ? tailContext(state).inCode : false;
+  }
 
   function executeEffects(effects: SideEffect[]) {
     for (const effect of effects) {
@@ -143,16 +170,21 @@ export function createChatController(
   function dispatch(event: ControllerEvent) {
     // Handle stream attachment through the state transition
     if (event.type === 'stream_connected' && 'stream' in event) {
+      /* the previous message's tail state must not answer for this stream */
+      streamTailState = undefined;
+      streamTailStateKey = undefined;
+      const makeStream = () =>
+        bufferedStream(event.stream, [
+          createMentionBufferPlugin(streamTailInCode),
+        ]);
       const { owner = getOwner() } = event;
-      let newStream: ChatMessageStream;
+      let newStream: ReturnType<typeof bufferedStream>;
       if (owner) {
-        const ownedStream = runWithOwner(owner, () =>
-          bufferedStream(event.stream)
-        );
+        const ownedStream = runWithOwner(owner, makeStream);
         if (!ownedStream) return;
         newStream = ownedStream;
       } else {
-        newStream = bufferedStream(event.stream);
+        newStream = makeStream();
       }
       setStream(newStream);
 
@@ -218,5 +250,16 @@ export function createChatController(
 
     dispatch,
     setStream,
+    setStreamTailState: (state, key) => {
+      if (!state) {
+        if (key === undefined || key === streamTailStateKey) {
+          streamTailState = undefined;
+          streamTailStateKey = undefined;
+        }
+        return;
+      }
+      streamTailState = state;
+      streamTailStateKey = key;
+    },
   };
 }

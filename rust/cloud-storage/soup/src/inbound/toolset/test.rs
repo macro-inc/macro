@@ -81,7 +81,7 @@ fn test_macro_task_completed_assigned_to_me_filter_deserializes() {
     });
 
     let list: ListEntities = serde_json::from_value(input).unwrap();
-    let ast = list.entity_filter_ast();
+    let ast = list.entity_filter_ast(None);
 
     assert_eq!(
         list.effective_include_types(),
@@ -117,7 +117,7 @@ fn test_full_ast_input_deserializes() {
     });
 
     let list: ListEntities = serde_json::from_value(input).unwrap();
-    let ast = list.entity_filter_ast();
+    let ast = list.entity_filter_ast(None);
 
     assert_eq!(list.limit, Some(100));
     assert!(matches!(list.sort_by, SortBy::RecentlyUpdated));
@@ -136,7 +136,7 @@ fn test_email_preset_defaults_to_email_results() {
     }))
     .unwrap();
 
-    let ast = list.entity_filter_ast();
+    let ast = list.entity_filter_ast(None);
     assert!(ast.email_filter.tree.is_some());
     assert!(ast.document_filter.is_some());
     assert!(ast.project_filter.is_some());
@@ -154,7 +154,7 @@ fn test_include_types_document_without_filter_keeps_document_unfiltered() {
     }))
     .unwrap();
 
-    let ast = list.entity_filter_ast();
+    let ast = list.entity_filter_ast(None);
     assert!(ast.document_filter.is_none());
     assert!(ast.foreign_entity_filter.is_some());
     assert_eq!(
@@ -170,7 +170,7 @@ fn test_include_types_foreign_entity_without_filter_keeps_foreign_entity_unfilte
     }))
     .unwrap();
 
-    let ast = list.entity_filter_ast();
+    let ast = list.entity_filter_ast(None);
     assert!(ast.document_filter.is_some());
     assert!(ast.project_filter.is_some());
     assert!(ast.chat_filter.is_some());
@@ -199,14 +199,21 @@ fn test_build_summary_with_items() {
         EntityItem::Document {
             id: Uuid::new_v4(),
             name: "test.md".to_string(),
+            file_type: Some("md".to_string()),
+            sub_type: None,
+            tags: vec![],
         },
         EntityItem::Document {
             id: Uuid::new_v4(),
             name: "other.md".to_string(),
+            file_type: Some("md".to_string()),
+            sub_type: Some("task".to_string()),
+            tags: vec![],
         },
         EntityItem::Email {
             id: Uuid::new_v4(),
             subject: Some("Hello".to_string()),
+            tags: vec![],
         },
         EntityItem::ForeignEntity {
             id: Uuid::new_v4(),
@@ -241,7 +248,7 @@ fn test_converts_foreign_entity_soup_item() {
         updated_at: Utc::now(),
     });
 
-    let entity_item = EntityItem::from(item);
+    let entity_item = EntityItem::from_soup_item(item, &Default::default());
 
     match entity_item {
         EntityItem::ForeignEntity {
@@ -256,6 +263,156 @@ fn test_converts_foreign_entity_soup_item() {
             assert_eq!(actual_metadata, metadata);
         }
         other => panic!("expected foreign entity item, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_tags_arg_deserializes_and_documents_or_semantics() {
+    let validated = generate_validated_input_schema::<ListEntities>().unwrap();
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(
+        schema_json.contains("OR semantics"),
+        "tags arg should document OR semantics"
+    );
+    assert!(
+        schema_json.contains("ListTags"),
+        "tags arg should point at ListTags"
+    );
+
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "tags": [
+            { "label": "bug-report" },
+            { "label": "urgent", "scope": "team" }
+        ]
+    }))
+    .unwrap();
+    let tags = list.tags.unwrap();
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0].label, "bug-report");
+    assert!(tags[0].scope.is_none());
+    assert_eq!(
+        tags[1].scope,
+        Some(models_properties::service::tag_sets::TagScope::Team)
+    );
+}
+
+#[test]
+fn test_tag_filter_expr_ands_with_existing_propf() {
+    use filter_ast::Expr;
+    use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
+
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "propf": {
+            "l": {
+                "pd": "00000001-0000-0000-0000-000000000002",
+                "et": "TASK",
+                "v": { "so": "00000001-0000-0000-0002-000000000004" }
+            }
+        }
+    }))
+    .unwrap();
+
+    let tag_expr = Expr::val(PropertiesLiteral {
+        property_definition_id: Uuid::new_v4(),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+    });
+
+    let ast = list.entity_filter_ast(Some(tag_expr));
+    let tree = serde_json::to_value(ast.properties_filter.unwrap().as_ref()).unwrap();
+    let and = tree.get("&").expect("tag filter should AND with propf");
+    assert_eq!(and.as_array().unwrap().len(), 2);
+
+    // Without a propf, the tag expr becomes the whole tree.
+    let list = ListEntities::default();
+    let tag_expr = Expr::val(PropertiesLiteral {
+        property_definition_id: Uuid::new_v4(),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::new_v4()),
+    });
+    let ast = list.entity_filter_ast(Some(tag_expr));
+    let tree = serde_json::to_value(ast.properties_filter.unwrap().as_ref()).unwrap();
+    assert!(tree.get("l").is_some());
+}
+
+#[test]
+fn test_from_soup_item_resolves_tags_via_caller_map() {
+    use macro_user_id::user_id::MacroUserIdStr;
+    use models_properties::service::property_definition::PropertyDefinition;
+    use models_properties::service::property_value::PropertyValue;
+    use models_properties::service::tag_sets::{AppliedTag, TagScope};
+    use models_properties::{DataType, PropertyOwner};
+    use models_soup::SoupProperty;
+    use models_soup::document::SoupDocument;
+    use std::collections::HashMap;
+
+    let known_option = Uuid::new_v4();
+    let unknown_option = Uuid::new_v4();
+    let definition_id = Uuid::new_v4();
+
+    let now = Utc::now();
+    let tag_property = SoupProperty {
+        definition: PropertyDefinition {
+            id: definition_id,
+            owner: PropertyOwner::User {
+                user_id: "user1".to_string(),
+            },
+            display_name: "Tags".to_string(),
+            data_type: DataType::Tag,
+            is_multi_select: true,
+            specific_entity_type: None,
+            created_at: now,
+            updated_at: now,
+            is_system: false,
+            is_metadata: false,
+        },
+        value: Some(PropertyValue::SelectOption(vec![
+            known_option,
+            unknown_option,
+        ])),
+    };
+
+    let doc = SoupDocument {
+        id: Uuid::new_v4(),
+        document_version_id: 1,
+        owner_id: MacroUserIdStr::try_from("macro|user1@test.com".to_string()).unwrap(),
+        name: "tagged.md".to_string(),
+        file_type: None,
+        sha: None,
+        project_id: None,
+        branched_from_id: None,
+        branched_from_version_id: None,
+        document_family_id: None,
+        created_at: now,
+        updated_at: now,
+        viewed_at: None,
+        sub_type: None,
+        deleted_at: None,
+        properties: vec![tag_property],
+    };
+
+    let tag_map: HashMap<_, _> = [(
+        known_option,
+        AppliedTag {
+            label: "bug-report".to_string(),
+            scope: TagScope::Personal,
+        },
+    )]
+    .into();
+
+    let entity_item = EntityItem::from_soup_item(SoupItem::Document(doc), &tag_map);
+    match entity_item {
+        EntityItem::Document { tags, .. } => {
+            // The unknown option (another user's tag) is dropped.
+            assert_eq!(
+                tags,
+                vec![AppliedTag {
+                    label: "bug-report".to_string(),
+                    scope: TagScope::Personal,
+                }]
+            );
+        }
+        other => panic!("expected document item, got {other:?}"),
     }
 }
 

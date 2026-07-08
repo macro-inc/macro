@@ -356,6 +356,7 @@ pub async fn build_tool_service_context_from_env(
         chat_tool_context,
         channel_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
+        crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

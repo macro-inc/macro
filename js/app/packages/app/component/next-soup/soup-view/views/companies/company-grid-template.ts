@@ -42,20 +42,51 @@ export type CompanyGridColumn = (typeof COMPANY_GRID_COLUMNS)[number];
 /** Width for the trailing Last Interaction timestamp column. */
 const LAST_INTERACTION_COLUMN_WIDTH = 'var(--company-col-timestamp, 7rem)';
 
-export const COMPANY_GRID_TEMPLATE_COLUMNS = `1rem minmax(0, 100%) ${COMPANY_GRID_COLUMNS.map(
-  (c) => c.width
-).join(' ')} ${LAST_INTERACTION_COLUMN_WIDTH}`;
+/**
+ * `grid-template-columns` for the given visible property columns (hidden
+ * columns collapse entirely). `hideIndicator` drops the leading
+ * indicator (checkbox) track.
+ */
+export function companyGridTemplateColumns(
+  visible: readonly CompanyGridColumn[],
+  hideIndicator: boolean
+): string {
+  return [
+    ...(hideIndicator ? [] : ['1rem']),
+    'minmax(0, 100%)',
+    ...visible.map((c) => c.width),
+    LAST_INTERACTION_COLUMN_WIDTH,
+  ].join(' ');
+}
+
+/** `grid-template-areas` counterpart of {@link companyGridTemplateColumns}. */
+export function companyGridTemplateAreas(
+  visible: readonly CompanyGridColumn[],
+  hideIndicator: boolean
+): string {
+  const areas = [
+    ...(hideIndicator ? [] : ['indicator']),
+    'content',
+    ...visible.map((c) => c.id),
+    'timestamp',
+  ].join(' ');
+  return `"${areas}"`;
+}
+
+export const COMPANY_GRID_TEMPLATE_COLUMNS = companyGridTemplateColumns(
+  COMPANY_GRID_COLUMNS,
+  false
+);
 
 /** Template without the leading indicator (checkbox) column. */
-export const COMPANY_GRID_TEMPLATE_COLUMNS_NO_INDICATOR = `minmax(0, 100%) ${COMPANY_GRID_COLUMNS.map(
-  (c) => c.width
-).join(' ')} ${LAST_INTERACTION_COLUMN_WIDTH}`;
+export const COMPANY_GRID_TEMPLATE_COLUMNS_NO_INDICATOR =
+  companyGridTemplateColumns(COMPANY_GRID_COLUMNS, true);
 
-export const COMPANY_GRID_TEMPLATE_AREAS = `"indicator content ${COMPANY_GRID_COLUMNS.map(
-  (c) => c.id
-).join(' ')} timestamp"`;
+export const COMPANY_GRID_TEMPLATE_AREAS = companyGridTemplateAreas(
+  COMPANY_GRID_COLUMNS,
+  false
+);
 
 /** Template areas without the leading indicator (checkbox) column. */
-export const COMPANY_GRID_TEMPLATE_AREAS_NO_INDICATOR = `"content ${COMPANY_GRID_COLUMNS.map(
-  (c) => c.id
-).join(' ')} timestamp"`;
+export const COMPANY_GRID_TEMPLATE_AREAS_NO_INDICATOR =
+  companyGridTemplateAreas(COMPANY_GRID_COLUMNS, true);

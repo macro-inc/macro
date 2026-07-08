@@ -2,6 +2,9 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 
 interface EmailHotkeyHandlers {
+  replyToFocusedMessage: () => boolean;
+  replyAllToFocusedMessage?: () => boolean;
+  forwardFocusedMessage: () => boolean;
   blockSender: () => boolean;
   markDone: () => boolean;
   markSenderSignal: () => boolean;
@@ -14,38 +17,31 @@ export function registerEmailHotkeys(
   scopeId: string,
   handlers: EmailHotkeyHandlers
 ) {
-  registerHotkey({
-    hotkey: 'opt+r',
-    scopeId: scopeId,
-    description: 'Reply to thread',
-    keyDownHandler: () => {
-      // handlers.setReplyMode('reply');
-      return true;
-    },
-    hotkeyToken: TOKENS.email.reply,
-    displayPriority: 9,
-  });
+  if (handlers.replyAllToFocusedMessage) {
+    registerHotkey({
+      hotkey: 'opt+r',
+      scopeId: scopeId,
+      description: 'Reply all to message',
+      keyDownHandler: handlers.replyAllToFocusedMessage,
+      hotkeyToken: TOKENS.email.replyAll,
+      displayPriority: 8,
+    });
+  }
+
   registerHotkey({
     hotkey: 'r',
     scopeId: scopeId,
-    description: 'Reply all to thread',
-    keyDownHandler: () => {
-      // handlers.setReplyMode('reply-all');
-      return true;
-    },
-    hotkeyToken: TOKENS.email.replyAll,
-    displayPriority: 8,
+    description: 'Reply to message',
+    keyDownHandler: handlers.replyToFocusedMessage,
+    hotkeyToken: TOKENS.email.reply,
+    displayPriority: 9,
   });
+
   registerHotkey({
     hotkey: 'f',
     scopeId: scopeId,
-    description: 'Forward thread',
-    keyDownHandler: () => {
-      // TODO: Populate to field
-      // TODO: Attachments from last/current selected message
-      // handlers.setReplyMode('forward');
-      return true;
-    },
+    description: 'Forward message',
+    keyDownHandler: handlers.forwardFocusedMessage,
     hotkeyToken: TOKENS.email.forward,
     displayPriority: 7,
   });

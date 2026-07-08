@@ -343,6 +343,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
+        crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
         recorder: ai_usage::pg_recorder(pool.clone()),

@@ -60,7 +60,9 @@ fn deploy() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(setup_bun())
+        .add_step(setup_node())
         .add_step(install_deps())
+        .add_step(install_worker_deps())
         .add_step(deploy_step())
 }
 
@@ -68,10 +70,22 @@ fn setup_bun() -> Step<Use> {
     Step::new("Setup Bun").uses("oven-sh", "setup-bun", "v2")
 }
 
+fn setup_node() -> Step<Use> {
+    Step::new("Setup Node")
+        .uses("actions", "setup-node", "v4")
+        .add_with(("node-version", "22"))
+}
+
 fn install_deps() -> Step<Run> {
     Step::new("Install dependencies")
         .run("bun install --frozen-lockfile")
         .working_directory("js")
+}
+
+fn install_worker_deps() -> Step<Run> {
+    Step::new("Install worker dependencies")
+        .run("bun install --frozen-lockfile")
+        .working_directory("js/ai-editing-worker")
 }
 
 fn deploy_step() -> Step<Run> {

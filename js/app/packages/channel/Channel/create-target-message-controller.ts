@@ -131,6 +131,21 @@ export function createTargetMessageController(
     });
   };
 
+  /**
+   * Clear the active target (and any pending scroll) if it still points at
+   * `messageId`; no-op if navigation has since moved elsewhere. Leaves
+   * `loadAroundMessageId` untouched so pagination is not disturbed.
+   */
+  const clearActiveTarget = (messageId: string) => {
+    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
+    setTargetMessageData({
+      activeTargetMessageId: undefined,
+      activeTargetMessageReplyId: undefined,
+      pendingScrollTargetId: undefined,
+      pendingTargetReplyId: undefined,
+    });
+  };
+
   return {
     activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
     activeTargetMessageReplyId: () =>
@@ -142,6 +157,7 @@ export function createTargetMessageController(
     goToMessage,
     completePendingScroll,
     completePendingReplyScroll,
+    clearActiveTarget,
     reset,
   };
 }

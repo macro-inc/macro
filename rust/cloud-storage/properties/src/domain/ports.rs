@@ -6,15 +6,21 @@
 use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::TaskAssignedMetadata;
+use models_properties::service::document_metadata::DocumentMetadata;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
-use notification::domain::models::SendNotificationRequest;
+use models_properties::service::thread_metadata::ThreadMetadata;
+use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
 use uuid::Uuid;
 
-use super::model::{EntityPropertiesKey, EntityPropertyInfo};
+use super::model::{
+    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome,
+};
 
 /// Repository trait for property operations.
 ///
@@ -30,6 +36,120 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Get a property definition by ID with ownership validation.
+    /// Returns `None` if the property doesn't exist, if the caller doesn't own it,
+    /// or if it's a system property. The caller owns it when it is their user
+    /// property, or a property of the team they belong to.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_property_definition_with_owner<'a>(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions with their options, owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions_with_options<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
+    /// Create a property definition, optionally with select options
+    /// (atomically when options are provided).
+    fn create_property_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+        options: Vec<PropertyOption>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// Delete a property definition and all associated data (cascades).
+    /// A no-op if the definition doesn't exist.
+    fn delete_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a single property option by ID.
+    /// Returns `None` if the option doesn't exist.
+    fn get_property_option(
+        &self,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyOption>, Self::Err>> + Send;
+
+    /// Get all options for a property definition, ordered for display.
+    fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
+
+    /// Create a new property option.
+    fn create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
+
+    /// Update a property option's value, color, and display order in place.
+    /// The option id is preserved, so every entity referencing it reflects the
+    /// change with no per-entity rewrite.
+    fn update_property_option(
+        &self,
+        option_id: Uuid,
+        value: PropertyOptionValue,
+        color: Option<String>,
+        display_order: i32,
+    ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Delete a property option and strip its id from every entity value that
+    /// references it, atomically. Returns `true` if the option was deleted,
+    /// `false` if it didn't exist.
+    fn delete_property_option(
+        &self,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the single tag definition owned by the given owner, if it exists.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Return the owner's tag definition, creating it on first use.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_or_create_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
 
     /// Count how many of the provided option IDs exist for the property definition.
     fn count_valid_property_options(
@@ -117,12 +237,21 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 
     /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Tag properties are restricted to the viewer's own and their teams' definitions.
     /// Returns properties sorted by display name.
     fn get_entity_properties(
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
+
+    /// Get the tag definitions visible to a user — their own plus their teams' —
+    /// with options attached.
+    fn get_caller_tag_definitions(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
     /// Get all properties attached to multiple entities, keyed by entity id and type.
     /// Returns properties sorted by display name for each entity.
@@ -133,20 +262,70 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
     > + Send;
 
-    /// Get the name of a document.
-    /// Returns `None` if the document doesn't exist or has no name.
-    /// Tasks are stored as documents, so this works for both documents and tasks.
-    fn get_document_name(
+    /// Get the properties attached to multiple entities, filtered by property
+    /// definition IDs, keyed by entity id and type. When `tag_viewer_user_id`
+    /// is set, also returns TAG properties whose definition is owned by that
+    /// user or their team.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_entity_properties_batch_filtered<'a>(
         &self,
-        id: &str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+        tag_viewer_user_id: Option<&'a MacroUserIdStr<'a>>,
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
+    > + Send;
 
-    /// Get the profile picture URL for a user.
-    /// Returns `None` if the user doesn't exist or has no profile picture.
-    fn get_user_profile_picture(
+    /// Get an entity's properties with definitions, values, and options,
+    /// sorted by display name.
+    fn get_entity_properties_with_definitions(
         &self,
-        user_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyWithDefinition>, Self::Err>> + Send;
+
+    /// Look up an entity property by its ID.
+    /// Returns the entity reference (for permissions) and definition ID
+    /// (for required property checks), or `None` if it doesn't exist.
+    fn lookup_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityPropertyReference>, Self::Err>> + Send;
+
+    /// Delete an entity property by its ID. A no-op if it doesn't exist.
+    fn delete_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete all properties attached to an entity.
+    fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a document's metadata (name, owner, timestamps, project).
+    /// Returns `None` if the document doesn't exist.
+    /// Tasks are stored as documents, so this works for both.
+    fn get_document_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentMetadata>, Self::Err>> + Send;
+
+    /// Get an email thread's metadata (subject, timestamps, message count).
+    /// Returns `None` if the thread doesn't exist.
+    fn get_thread_metadata(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ThreadMetadata>, Self::Err>> + Send;
+
+    /// Get a project's metadata (name, owner, timestamps, parent).
+    /// Returns `None` if the project doesn't exist or is deleted.
+    fn get_project_metadata(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Option<ProjectMetadata>, Self::Err>> + Send;
 }
 
 /// Permission service trait for entity access control.
@@ -166,9 +345,24 @@ pub trait PermissionService: Send + Sync + 'static {
 
     /// Check if a user has edit access to an entity.
     /// Returns an error if the user does not have edit or owner access.
-    fn check_entity_edit_permission(
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn check_entity_edit_permission<'a>(
         &self,
-        user_id: &str,
+        user_id: &MacroUserIdStr<'a>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Check if a user has view access to an entity (any access level).
+    /// The owner always has access; deleted entities are only visible to their
+    /// owner. For anonymous users (`None`), only allows access to
+    /// publicly shared entities.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn check_entity_view_permission<'a>(
+        &self,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -185,21 +379,18 @@ pub trait PermissionService: Send + Sync + 'static {
 /// Notification service trait for sending notifications.
 ///
 /// This trait abstracts notification operations, allowing for different implementations
-/// (e.g., notification-service-backed, mock for testing).
+/// (e.g., notification-service-backed, mock for testing). Adapters are expected to
+/// enrich the domain-level notification (task name, sender profile picture) and fan
+/// out delivery per recipient on a best-effort basis.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait NotificationService: Send + Sync + 'static {
     type Err;
 
-    /// Send a notification message.
-    /// Returns the notification ID if successful.
-    fn send_notification<'a>(
+    /// Notify the recipients that they were assigned to a task.
+    fn send_task_assigned<'a>(
         &self,
-        message: SendNotificationRequest<
-            'a,
-            TaskAssignedMetadata,
-            notification::domain::models::apple::PushNotificationData,
-        >,
-    ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
+        notification: TaskAssignedNotification<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Port for keeping an entity's indexed properties in sync after a mutation.

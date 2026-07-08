@@ -103,6 +103,38 @@ fn child_doc_body_omits_raw_content_when_none() {
 }
 
 #[test]
+fn parent_only_bulk_body_writes_parent_and_no_children() {
+    let mut a = args("doc1", "n1");
+    a.sub_type = Some("task".to_string());
+    a.properties = vec![IndexedProperty {
+        definition_id: "tag-def".to_string(),
+        values: vec!["opt-1".to_string()],
+        ..Default::default()
+    }];
+    let body = parent_only_bulk_body(&a);
+
+    assert_eq!(body.len(), 2);
+
+    let action: serde_json::Value = serde_json::from_str(&body[0]).unwrap();
+    assert_eq!(action["index"]["_id"], "doc1");
+    assert_eq!(action["index"]["routing"], "doc1");
+
+    let doc: serde_json::Value = serde_json::from_str(&body[1]).unwrap();
+    assert_eq!(doc["entity_id"], "doc1");
+    assert_eq!(doc["document_name"], "name-doc1");
+    assert_eq!(doc["owner_id"], "owner-doc1");
+    assert_eq!(doc["file_type"], "md");
+    assert_eq!(doc["document_relation"], "document");
+    assert_eq!(doc["sub_type"], "task");
+    assert_eq!(doc["properties"][0]["definition_id"], "tag-def");
+    assert_eq!(doc["properties"][0]["values"][0], "opt-1");
+    // No chunk is written and no chunk fields leak onto the parent.
+    assert!(doc.get("content").is_none());
+    assert!(doc.get("node_id").is_none());
+    assert!(doc.get("raw_content").is_none());
+}
+
+#[test]
 fn resolve_destination_defaults_to_documents_alias() {
     assert_eq!(resolve_destination(None), SearchIndex::Documents.as_ref());
     assert_eq!(resolve_destination(Some("documents_v2")), "documents_v2");

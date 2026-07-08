@@ -17,6 +17,7 @@ use github::{
         pg_github_repo::PgGithubRepo,
     },
 };
+use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
@@ -242,6 +243,18 @@ async fn main() -> anyhow::Result<()> {
     }));
     tracing::trace!("initialized analytics client");
 
+    // Initialize Loops client. Only production sign-ups are added to Loops;
+    // in all other environments (or when no API key is configured) this is a
+    // no-op.
+    let loops_client = match (config.environment, config.loops_api_key.value()) {
+        (Environment::Production, Some(api_key)) => {
+            tracing::info!("configuring Loops");
+            LoopsClient::new(api_key.to_string())
+        }
+        _ => LoopsClient::noop(),
+    };
+    tracing::trace!("initialized loops client");
+
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
     let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
@@ -350,6 +363,7 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
+            loops_client: Arc::new(loops_client),
             analytics_client,
             stripe_price_id: config.stripe_price_id.to_string(),
         },

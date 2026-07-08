@@ -8,7 +8,7 @@ version = "0.1.0"
 [features]
 default = ["processing", "service", "pdf"]
 processing = []
-service = ["macro_db_client", "models_properties", "properties_db_client"]
+service = ["macro_db_client", "models_properties", "properties"]
 pdf = ["dep:pdfium-render"]
 
 [[bin]]
@@ -60,7 +60,9 @@ nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
 ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true, optional = true }
-properties_db_client = { path = "../properties_db_client", optional = true }
+properties = { path = "../properties", default-features = false, features = [
+  "outbound",
+], optional = true }
 rust-embed = "8.6.0"
 s3_client = { path = "../s3_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }

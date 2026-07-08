@@ -33,6 +33,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
@@ -646,5 +647,17 @@ where
         req: GroupedSortRequest<'_>,
     ) -> Result<Vec<GroupedSoupItem>, SoupErr> {
         self.handle_grouped_soup_request(req).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, SoupErr> {
+        Ok(self
+            .soup_storage
+            .caller_tag_sets(user_id)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }
