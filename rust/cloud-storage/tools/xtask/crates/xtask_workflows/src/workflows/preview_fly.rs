@@ -111,9 +111,12 @@ fn deploy() -> Job {
             // the `local-stack` feature: the VM restores the baked snapshot,
             // whose Kafka volume already carries the topics, so it never
             // provisions Kafka — and skipping rdkafka means no
-            // dynamically-linked librdkafka to ship into the VM.
+            // dynamically-linked librdkafka to ship into the VM. zigbuild,
+            // not a host build: the nix dev shell links the /nix/store ELF
+            // interpreter, which doesn't exist in the VM image (exit 127,
+            // "required file not found").
             Step::new("Build xtask_local (runs inside the preview VM)")
-                .run("cargo build --release -p xtask_local")
+                .run("cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local")
                 .working_directory("rust/cloud-storage"),
         )
         .add_step(
@@ -198,10 +201,16 @@ fn bake_preload_tar() -> Step<Run> {
         # VM's boot-time docker load serial and single-threaded (observed
         # 15+ minutes on shared cores) — per-image tars let the entrypoint
         # load them in parallel. Shared base layers get duplicated across
-        # tars; that costs a little disk, not boot time.
+        # tars; that costs a little disk, not boot time. The manifest maps
+        # tag -> image ID -> tar so the entrypoint can skip images already
+        # present in the machine's persistent /var/lib/docker volume.
+        : > preview-ctx/preload/manifest.txt
         pids=""
         for img in $images alpine:3; do
-          docker save -o "preview-ctx/preload/images/$(echo "$img" | tr '/:' '__').tar" "$img" &
+          tarname="$(echo "$img" | tr '/:' '__').tar"
+          echo "$(docker image inspect -f '{{.Id}}' "$img") $img $tarname" \
+            >> preview-ctx/preload/manifest.txt
+          docker save -o "preview-ctx/preload/images/$tarname" "$img" &
           pids="$pids $!"
         done
         for pid in $pids; do wait "$pid"; done
@@ -238,7 +247,7 @@ fn stage_context() -> Step<Run> {
           -exec cp {} "$ctx/artifacts/binaries/" \;
         cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
         cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/release/xtask_local "$ctx/bin/xtask"
+        cp rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
         cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp infra/preview/Dockerfile "$ctx/Dockerfile"
     "#})

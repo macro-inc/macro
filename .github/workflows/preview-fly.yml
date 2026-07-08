@@ -52,7 +52,7 @@ jobs:
         sccache --show-stats
       working-directory: rust/cloud-storage
     - name: Build xtask_local (runs inside the preview VM)
-      run: cargo build --release -p xtask_local
+      run: cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.36 -p xtask_local
       working-directory: rust/cloud-storage
     - name: Build frontend bundle (same-origin)
       run: bun run --bun build
@@ -96,10 +96,16 @@ jobs:
         # VM's boot-time docker load serial and single-threaded (observed
         # 15+ minutes on shared cores) — per-image tars let the entrypoint
         # load them in parallel. Shared base layers get duplicated across
-        # tars; that costs a little disk, not boot time.
+        # tars; that costs a little disk, not boot time. The manifest maps
+        # tag -> image ID -> tar so the entrypoint can skip images already
+        # present in the machine's persistent /var/lib/docker volume.
+        : > preview-ctx/preload/manifest.txt
         pids=""
         for img in $images alpine:3; do
-          docker save -o "preview-ctx/preload/images/$(echo "$img" | tr '/:' '__').tar" "$img" &
+          tarname="$(echo "$img" | tr '/:' '__').tar"
+          echo "$(docker image inspect -f '{{.Id}}' "$img") $img $tarname" \
+            >> preview-ctx/preload/manifest.txt
+          docker save -o "preview-ctx/preload/images/$tarname" "$img" &
           pids="$pids $!"
         done
         for pid in $pids; do wait "$pid"; done
@@ -133,7 +139,7 @@ jobs:
           -exec cp {} "$ctx/artifacts/binaries/" \;
         cp -r js/app/packages/app/dist "$ctx/artifacts/frontend-dist"
         cp -r infra/local/generated/.snapshots "$ctx/artifacts/snapshots"
-        cp rust/cloud-storage/target/release/xtask_local "$ctx/bin/xtask"
+        cp rust/cloud-storage/target/x86_64-unknown-linux-gnu/release/xtask_local "$ctx/bin/xtask"
         cp infra/preview/entrypoint.sh "$ctx/entrypoint.sh"
         cp infra/preview/Dockerfile "$ctx/Dockerfile"
     - name: Setup flyctl

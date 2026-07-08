@@ -25,15 +25,23 @@ fi
 # Per-image tars, loaded in parallel: one monolithic tar made this a serial,
 # single-threaded untar+sha256 of ~6GB (observed 15+ minutes on shared
 # cores). dockerd serializes layer registration internally, so concurrent
-# loads are safe; shared layers settle to one copy.
-if compgen -G '/srv/macro/preload/images/*.tar' >/dev/null; then
-  log "loading baked images (parallel)"
+# loads are safe; shared layers settle to one copy. /var/lib/docker is a
+# persistent volume, so the manifest (image ID per tag) lets redeploys skip
+# every image that is already in the store — only changed images pay the
+# load.
+if [ -f /srv/macro/preload/manifest.txt ]; then
+  log "loading baked images (parallel, warm store aware)"
   t0=$(date +%s)
   pids=""
-  for tar in /srv/macro/preload/images/*.tar; do
-    docker load -i "$tar" &
+  while read -r id tag tarfile; do
+    have=$(docker image inspect -f '{{.Id}}' "$tag" 2>/dev/null || true)
+    if [ "$have" = "$id" ]; then
+      log "already loaded: $tag"
+      continue
+    fi
+    docker load -i "/srv/macro/preload/images/$tarfile" &
     pids="$pids $!"
-  done
+  done < /srv/macro/preload/manifest.txt
   rc=0
   for pid in $pids; do wait "$pid" || rc=1; done
   [ "$rc" = 0 ] || { log "docker load failed"; exit 1; }
