@@ -178,9 +178,8 @@ function CreateMenu() {
       triggerIcon={PlusIcon}
       triggerAriaLabel="Create"
       footerLabel="Create"
-      // The menu grows upward, so the last item sits nearest the trigger; keep
-      // upload in that primary "first" slot, above the create-block options.
       items={[
+        uploadItem,
         ...blocks().map((block) => {
           const useAnimatedIcon = ENABLE_ANIMATED_ICONS && block.animatedIcon;
           return {
@@ -191,7 +190,6 @@ function CreateMenu() {
             onSelect: () => runCreateAction(block.blockName),
           };
         }),
-        uploadItem,
       ]}
     />
   );
