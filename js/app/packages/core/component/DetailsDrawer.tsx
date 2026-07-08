@@ -1,9 +1,7 @@
-import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';
-import { useCanEdit } from '@core/signal/permissions';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -86,29 +84,18 @@ function ChatDetails(props: { chatId: string }) {
   const projectQuery = useProjectDataQuery(
     () => chat()?.projectId ?? undefined
   );
-  const canEdit = useCanEdit();
 
   return (
-    <>
-      <DetailsGrid
-        owner={() => chat()?.userId}
-        folder={() => {
-          const id = chat()?.projectId;
-          const name = projectQuery.data?.name;
-          return id && name ? { id, name } : undefined;
-        }}
-        createdAt={() => chat()?.createdAt}
-        updatedAt={() => chat()?.updatedAt}
-      />
-      <div class="px-2 py-2">
-        <EntityPropertiesSection
-          entityId={props.chatId}
-          entityType="CHAT"
-          canEdit={canEdit()}
-          documentName={chat()?.name}
-        />
-      </div>
-    </>
+    <DetailsGrid
+      owner={() => chat()?.userId}
+      folder={() => {
+        const id = chat()?.projectId;
+        const name = projectQuery.data?.name;
+        return id && name ? { id, name } : undefined;
+      }}
+      createdAt={() => chat()?.createdAt}
+      updatedAt={() => chat()?.updatedAt}
+    />
   );
 }
 
