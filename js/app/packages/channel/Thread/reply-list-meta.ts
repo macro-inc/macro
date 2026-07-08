@@ -1,10 +1,11 @@
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { shouldGroupWithPreviousMessage } from '../Channel/message-grouping-meta';
+import type { NewMessageCheckable } from '../Channel/util';
 import type { ChannelMessageListMeta } from '../Message';
 
 export function buildThreadReplyListMeta(
   replies: ApiThreadReply[],
-  isNewMessageFn?: (message: ApiThreadReply) => boolean
+  isNewMessageFn?: (message: NewMessageCheckable) => boolean
 ): Record<string, ChannelMessageListMeta> {
   let foundFirstNewMessage = false;
 
