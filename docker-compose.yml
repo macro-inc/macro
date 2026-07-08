@@ -368,39 +368,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # mcp_service (Port 8090)
-  # MCP server exposing Macro tools over Streamable HTTP with FusionAuth OAuth
-  # ============================================================================
-  mcp_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/mcp_service"]
-    ports:
-      - "8090:8080"
-    environment:
-      - MCP_PUBLIC_URL=http://localhost:8090
-      - REDIS_URL=redis://redis:6379
-      - APP_BASE_URL=http://localhost:3001
-    depends_on:
-      - postgres
-      - fusionauth
-      - redis
-      - authentication-service
-      - document_storage_service
-
-    networks:
-      databases:
-      services:
-        aliases:
-          - mcp-service
-      auth:
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # websocket_service (Port 6969)
   # Simple WebSocket service - responds with "ping" to all messages
   # ============================================================================
