@@ -62,8 +62,17 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   };
 
   function EmojiOption(props: EmojiOptionProps): JSX.Element {
+    let buttonEl!: HTMLButtonElement;
+
+    createEffect(() => {
+      if (props.isSelected) {
+        buttonEl.scrollIntoView({ block: 'nearest' });
+      }
+    });
+
     return (
       <button
+        ref={buttonEl}
         type="button"
         class={cn(
           'hover:bg-hover hover-transition-bg rounded-md p-1 aspect-square w-full flex items-center justify-center',
@@ -80,7 +89,10 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
     );
   }
 
+  const [selectedIndex, setSelectedIndex] = createSignal(-1);
+
   createEffect(() => {
+    setSelectedIndex(-1);
     if (!props.nameFilter) return;
     filter(props.nameFilter);
     scrollEl.scrollTop = 0;
@@ -89,8 +101,6 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   function validFilter(filter: string | undefined) {
     return filter && filter.trim().length > 0;
   }
-
-  const [selectedIndex, setSelectedIndex] = createSignal(-1);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const emojisToUse = validFilter(props.nameFilter)
