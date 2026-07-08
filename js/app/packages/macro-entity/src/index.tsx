@@ -3,6 +3,7 @@ export {
   createBulkCopyDssEntityMutation,
   createBulkDeleteDssItemsMutation,
   createBulkMoveToProjectDssEntityMutation,
+  createBulkRemoveFromProjectDssEntityMutation,
   createMoveToProjectDssEntityMutation,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';

@@ -3,7 +3,10 @@ import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { createSoupEntityActions } from './create-soup-entity-actions';
+import {
+  createSoupEntityActions,
+  viewedProjectIdFromContent,
+} from './create-soup-entity-actions';
 import { useSoupView } from './soup-view-context';
 
 interface SoupEntityActionsMenuProps {
@@ -17,11 +20,14 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
-  const groups = () =>
-    buildActionGroups(props.soup, props.entities, {
+  const groups = () => {
+    const content = panel.handle.content();
+    return buildActionGroups(props.soup, props.entities, {
       activeTab: activeTab(),
-      activeListView: panel.handle.content().id,
+      activeListView: content.id,
+      viewedProjectId: viewedProjectIdFromContent(content),
     });
+  };
 
   const handleAction = async (onClick: () => void | Promise<void>) => {
     await onClick();

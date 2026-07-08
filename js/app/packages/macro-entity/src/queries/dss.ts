@@ -160,6 +160,81 @@ export function createMoveToProjectDssEntityMutation() {
   }));
 }
 
+export function createBulkRemoveFromProjectDssEntityMutation() {
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return (
+      type !== 'chat' &&
+      type !== 'document' &&
+      type !== 'project' &&
+      type !== 'email'
+    );
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({ entities }: { entities: EntityData[] }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((entity) =>
+          moveToFolder({
+            itemType: entity.type as 'document' | 'chat' | 'project' | 'email',
+            id: entity.id,
+            folderId: null,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to move`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async ({ entities }: { entities: EntityData[] }) => {
+      const moveableEntities = entities.filter(
+        (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
+          e.type === 'document' || e.type === 'chat' || e.type === 'email'
+      );
+      return moveableEntities.map((e) => {
+        const current = getSoupEntityById(e.id);
+        const tag = e.type === 'email' ? 'emailThread' : e.type;
+        return optimisticUpdateSoupEntity({
+          tag,
+          data: { id: e.id, projectId: null },
+          frecency_score: current?.frecency_score ?? 0,
+        });
+      });
+    },
+
+    onSettled: (data, error, { entities }, context) => {
+      const failed = data?.success === false || !!error;
+      if (failed) {
+        context?.forEach((txn) => txn.rollback());
+        console.error(
+          `Failed to remove dss items from folder`,
+          entities,
+          error
+        );
+        toast.failure('Failed to remove items from folder');
+      }
+
+      // The source folder's list queries contain the entities
+      for (const entity of entities) {
+        invalidateSoupEntity(entity.id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
+      // Removed projects' breadcrumbs (and nested projects') change too
+      if (entities.some((e) => e.type === 'project')) {
+        queryClient.invalidateQueries({ queryKey: ['project'] });
+      }
+    },
+  }));
+}
+
 export function createBulkCopyDssEntityMutation() {
   // Only support chat + document, same as single-copy version
   const isUnsupportedEntity = (entity: EntityData) => {
