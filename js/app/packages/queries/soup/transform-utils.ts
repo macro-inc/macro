@@ -43,6 +43,7 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -356,7 +357,11 @@ export const useSearchResponseItemMapper = () => {
                   ? { type: 'snippet' }
                   : null,
             id: result.document_id,
-            name: result.name || blockNameToDefaultFile(result.file_type),
+            name: formatDocumentName(
+              result.name || blockNameToDefaultFile(result.file_type),
+              result.file_type,
+              { fullyQualifiedBlockName: true }
+            ),
             ownerId: result.owner_id,
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
