@@ -5,7 +5,7 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import type { EntityData } from '@entity';
+import { type EntityData, getEntityProjectId } from '@entity';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
@@ -16,6 +16,7 @@ import {
   optimisticUpdateSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
+  removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
 import { callServiceClient } from '@service-call/client';
@@ -199,7 +200,7 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
         (e): e is typeof e & { type: 'document' | 'chat' | 'email' } =>
           e.type === 'document' || e.type === 'chat' || e.type === 'email'
       );
-      return moveableEntities.map((e) => {
+      const txns = moveableEntities.map((e) => {
         const current = getSoupEntityById(e.id);
         const tag = e.type === 'email' ? 'emailThread' : e.type;
         return optimisticUpdateSoupEntity({
@@ -208,12 +209,33 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
           frecency_score: current?.frecency_score ?? 0,
         });
       });
+
+      // Drop the rows from the source folders' views right away; other views
+      // keep the entities
+      const sourceProjectIds = [
+        ...new Set(
+          entities.flatMap((e) => {
+            const projectId =
+              getEntityProjectId(e) || getSoupEntityProjectId(e.id);
+            return projectId ? [projectId] : [];
+          })
+        ),
+      ];
+      txns.push(
+        removeSoupEntitiesFromQueriesReferencing(
+          new Set(entities.map((e) => e.id)),
+          sourceProjectIds
+        )
+      );
+
+      return { txns, sourceProjectIds };
     },
 
     onSettled: (data, error, { entities }, context) => {
       const failed = data?.success === false || !!error;
       if (failed) {
-        context?.forEach((txn) => txn.rollback());
+        // Reverse order: each txn's snapshot captures the previous txns' writes
+        context?.txns.toReversed().forEach((txn) => txn.rollback());
         console.error(
           `Failed to remove dss items from folder`,
           entities,
@@ -222,10 +244,13 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
         toast.failure('Failed to remove items from folder');
       }
 
-      // The source folder's list queries contain the entities
+      // Queries still containing the entities
       for (const entity of entities) {
         invalidateSoupEntity(entity.id);
       }
+      // The source folders' views no longer contain the entities after the
+      // optimistic removal, so match them by project id in the key
+      invalidateSoupQueriesReferencing(context?.sourceProjectIds ?? []);
       queryClient.invalidateQueries({ queryKey: ['entity'] });
       // Removed projects' breadcrumbs (and nested projects') change too
       if (entities.some((e) => e.type === 'project')) {
@@ -233,6 +258,15 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
       }
     },
   }));
+}
+
+/** Source project of a soup-cached entity ('project' items nest it as parentId). */
+function getSoupEntityProjectId(entityId: string): string | undefined {
+  const cached = getSoupEntityById(entityId);
+  if (!cached) return undefined;
+  if (cached.tag === 'project') return cached.data.parentId ?? undefined;
+  if ('projectId' in cached.data) return cached.data.projectId ?? undefined;
+  return undefined;
 }
 
 export function createBulkCopyDssEntityMutation() {
