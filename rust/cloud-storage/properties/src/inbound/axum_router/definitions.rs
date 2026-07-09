@@ -9,7 +9,7 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::EntityType;
-use models_properties::api::{CreatePropertyDefinitionRequest, CreatePropertyScope};
+use models_properties::api::CreatePropertyDefinitionRequest;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use serde::{Deserialize, Serialize};
@@ -17,9 +17,8 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{PropertiesRouterState, PropertyTeamExtractor, caller_team_id, properties_err_status};
+use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::PropertyDefinitionOwner;
 use crate::domain::service::PropertiesService;
 
 #[derive(Debug, Error)]
@@ -108,11 +107,11 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     }: MacroUserExtractor,
     team: PropertyTeamExtractor<A>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
-    let callers_team = caller_team_id(&team);
+    let callers_team = team.entity_access_receipt.as_ref();
 
-    // Determine query parameters based on scope. Team and user ids are derived from the
-    // authenticated caller, never from the request.
-    let (team_id, user_id_opt, include_system) = match query.scope {
+    // Determine query parameters based on scope. The team receipt and user id are
+    // derived from the authenticated caller, never from the request.
+    let (team, user_id_opt, include_system) = match query.scope {
         PropertyScope::User => (None, Some(&user), false),
         PropertyScope::Team => (callers_team, None, false),
         PropertyScope::System => (None, None, true),
@@ -120,7 +119,6 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     };
 
     tracing::info!(
-        team_id = ?team_id,
         scope = ?query.scope,
         include_system = include_system,
         for_entity_type = ?query.for_entity_type,
@@ -132,7 +130,7 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
         state
             .properties_service
             .list_property_definitions_with_options(
-                team_id,
+                team,
                 user_id_opt,
                 include_system,
                 query.for_entity_type,
@@ -144,7 +142,7 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
     } else {
         state
             .properties_service
-            .list_property_definitions(team_id, user_id_opt, include_system, query.for_entity_type)
+            .list_property_definitions(team, user_id_opt, include_system, query.for_entity_type)
             .await?
             .into_iter()
             .map(PropertyDefinitionResponse::Simple)
@@ -153,7 +151,6 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
 
     tracing::info!(
         properties_count = response.len(),
-        team_id = ?team_id,
         scope = ?query.scope,
         user_id = %user,
         "successfully retrieved properties"
@@ -166,15 +163,12 @@ pub async fn list_properties<S: PropertiesService, A: EntityAccessService>(
 pub enum CreatePropertyDefinitionErr {
     #[error(transparent)]
     Properties(#[from] PropertiesErr),
-    #[error("You must be on a team to create a team property")]
-    TeamMembershipRequired,
 }
 
 impl IntoResponse for CreatePropertyDefinitionErr {
     fn into_response(self) -> Response {
         let status_code = match &self {
             CreatePropertyDefinitionErr::Properties(e) => properties_err_status(e),
-            CreatePropertyDefinitionErr::TeamMembershipRequired => StatusCode::FORBIDDEN,
         };
 
         if status_code.is_server_error() {
@@ -212,25 +206,13 @@ pub async fn create_property_definition<S: PropertiesService, A: EntityAccessSer
     team: PropertyTeamExtractor<A>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
-    // Derive the owner from the authenticated caller - clients never supply owner ids.
-    let owner = match request.scope {
-        CreatePropertyScope::User => PropertyDefinitionOwner::User(&user),
-        CreatePropertyScope::Team => {
-            let team_id =
-                caller_team_id(&team).ok_or(CreatePropertyDefinitionErr::TeamMembershipRequired)?;
-            PropertyDefinitionOwner::Team(team_id)
-        }
-    };
+    tracing::info!(scope = ?request.scope, "creating property definition");
 
-    tracing::info!(
-        owner = ?owner,
-        scope = ?request.scope,
-        "creating property definition"
-    );
-
+    // The owner is derived in the service from the authenticated caller and
+    // their team receipt - clients never supply owner ids.
     let property = state
         .properties_service
-        .create_property_definition(owner, &request)
+        .create_property_definition(&user, team.entity_access_receipt.as_ref(), &request)
         .await?;
 
     Ok((StatusCode::CREATED, Json(property)))
@@ -290,7 +272,7 @@ pub async fn delete_property_definition<S: PropertiesService, A: EntityAccessSer
 
     state
         .properties_service
-        .delete_property_definition(property_uuid, &user, caller_team_id(&team))
+        .delete_property_definition(property_uuid, &user, team.entity_access_receipt.as_ref())
         .await?;
 
     tracing::info!("successfully deleted property definition");

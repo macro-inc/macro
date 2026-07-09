@@ -303,6 +303,26 @@ export type GraphqlSimpleSortMethod =
   /** Sort by viewed timestamp, falling back to updated timestamp. */
   | 'VIEWED_UPDATED';
 
+export type GraphqlSoupDataType =
+  /** Boolean true/false values. */
+  | 'BOOLEAN'
+  /** Date and time values. */
+  | 'DATE'
+  /** Entity reference property. */
+  | 'ENTITY'
+  /** Link value Property. */
+  | 'LINK'
+  /** Numeric values. */
+  | 'NUMBER'
+  /** Select property with numeric options. */
+  | 'SELECT_NUMBER'
+  /** Select property with string options. */
+  | 'SELECT_STRING'
+  /** String/text values. */
+  | 'STRING'
+  /** Tag property - user- or team-scoped colored labels (always multi-select). */
+  | 'TAG';
+
 /** GraphQL representation of Soup entity types. */
 export type GraphqlSoupEntityType =
   /** Call entity. */
@@ -315,6 +335,8 @@ export type GraphqlSoupEntityType =
   | 'CHAT'
   /** CRM company entity. */
   | 'CRM_COMPANY'
+  /** crm contact */
+  | 'CRM_CONTACT'
   /** Document entity. */
   | 'DOCUMENT'
   /** Email thread entity. */
@@ -323,8 +345,22 @@ export type GraphqlSoupEntityType =
   | 'FOREIGN_ENTITY'
   /** Project entity. */
   | 'PROJECT'
-  /** Unknown or unsupported entity type. */
-  | 'UNKNOWN';
+  /** Static File */
+  | 'STATIC_FILE'
+  /** Team entity */
+  | 'TEAM'
+  /** User entity */
+  | 'USER';
+
+export type GraphqlSoupPropertyEntityType =
+  | 'CHANNEL'
+  | 'CHAT'
+  | 'COMPANY'
+  | 'DOCUMENT'
+  | 'PROJECT'
+  | 'TASK'
+  | 'THREAD'
+  | 'USER';
 
 /** Input for `Query.soup`. */
 export type SoupInput = {
@@ -354,15 +390,15 @@ export type SoupQuery = { user: { id: string, soup: { nextCursor: string | null,
           | { __typename: 'GraphqlSoupCall', id: string, channelId: string, channelName: string | null, createdBy: string, customName: string | null, summary: string | null, startedAt: string, endedAt: string | null, durationMs: number | null, isActive: boolean, status: string, attended: boolean, participants: Array<{ userId: string, joinedAt: string, leftAt: string | null }> }
           | { __typename: 'GraphqlSoupChannel', id: string, channelType: string, ownerId: string, organizationId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, interactedAt: string | null, channelName: string | null, channelTeamId: string | null, participants: Array<{ channelId: string, userId: string, role: string, joinedAt: string, leftAt: string | null }>, latestMessage: { id: string, threadId: string | null, senderId: string, content: string, createdAt: string, updatedAt: string, deletedAt: string | null, mentions: Array<string> } | null, latestNonThreadMessage: { id: string, threadId: string | null, senderId: string, content: string, createdAt: string, updatedAt: string, deletedAt: string | null, mentions: Array<string> } | null }
           | { __typename: 'GraphqlSoupChannelThread', id: string, channelId: string, senderId: string, content: string, createdAt: string, updatedAt: string, effectiveUpdatedAt: string, replyCount: number }
-          | { __typename: 'GraphqlSoupChat', id: string, ownerId: string, projectId: string | null, isPersistent: boolean, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, chatName: string, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null }> }
-          | { __typename: 'GraphqlSoupCrmCompany', id: string, description: string | null, emailSync: boolean, hidden: boolean, createdAt: string, updatedAt: string, viewedAt: string | null, domains: Array<string>, crmTeamId: string, crmCompanyName: string | null, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null }> }
-          | { __typename: 'GraphqlSoupDocument', id: string, ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, documentName: string, subType: { kind: string, isCompleted: boolean | null } | null, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null }> }
-          | { __typename: 'GraphqlSoupEmailThread', id: string, providerId: string | null, ownerId: string, inboxVisible: boolean, linkId: string | null, snippet: string | null, senderEmail: string | null, senderName: string | null, senderPhotoUrl: string | null, isRead: boolean, isDraft: boolean, isImportant: boolean, projectId: string | null, sortTs: string, createdAt: string, updatedAt: string, viewedAt: string | null, emailName: string | null, participants: Array<{ id: string, linkId: string, name: string | null, email: string | null, sfsPhotoUrl: string | null }>, attachments: Array<{ id: string, messageId: string, providerAttachmentId: string | null, filename: string | null, mimeType: string | null, sizeBytes: number | null, contentId: string | null, createdAt: string }>, labels: Array<{ id: string, linkId: string, providerLabelId: string, name: string, createdAt: string, messageListVisibility: string, labelListVisibility: string, type: string }>, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null }> }
+          | { __typename: 'GraphqlSoupChat', id: string, ownerId: string, projectId: string | null, isPersistent: boolean, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, chatName: string, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null }> }
+          | { __typename: 'GraphqlSoupCrmCompany', id: string, description: string | null, emailSync: boolean, hidden: boolean, createdAt: string, updatedAt: string, viewedAt: string | null, domains: Array<string>, crmTeamId: string, crmCompanyName: string | null, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null }> }
+          | { __typename: 'GraphqlSoupDocument', id: string, ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, documentName: string, subType: { kind: string, isCompleted: boolean | null } | null, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null }> }
+          | { __typename: 'GraphqlSoupEmailThread', id: string, providerId: string | null, ownerId: string, inboxVisible: boolean, linkId: string | null, snippet: string | null, senderEmail: string | null, senderName: string | null, senderPhotoUrl: string | null, isRead: boolean, isDraft: boolean, isImportant: boolean, projectId: string | null, sortTs: string, createdAt: string, updatedAt: string, viewedAt: string | null, emailName: string | null, participants: Array<{ id: string, linkId: string, name: string | null, email: string | null, sfsPhotoUrl: string | null }>, attachments: Array<{ id: string, messageId: string, providerAttachmentId: string | null, filename: string | null, mimeType: string | null, sizeBytes: number | null, contentId: string | null, createdAt: string }>, labels: Array<{ id: string, linkId: string, providerLabelId: string, name: string, createdAt: string, messageListVisibility: string, labelListVisibility: string, type: string }>, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null }> }
           | { __typename: 'GraphqlSoupForeignEntity', id: string, foreignEntityId: string, foreignEntitySource: string, storedForId: string, storedForAuthEntity: string, metadata: unknown, createdAt: string, updatedAt: string }
-          | { __typename: 'GraphqlSoupProject', id: string, ownerId: string, parentId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, projectName: string, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null }> }
+          | { __typename: 'GraphqlSoupProject', id: string, ownerId: string, parentId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, projectName: string, properties: Array<{ propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null }> }
          }> } } };
 
-export type SoupPropertyFieldsFragment = { propertyDefinitionId: string, displayName: string, dataType: string, isMultiSelect: boolean, specificEntityType: string | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: string, specificMessageId: string | null }> } | null };
+export type SoupPropertyFieldsFragment = { propertyDefinitionId: string, displayName: string, dataType: GraphqlSoupDataType, isMultiSelect: boolean, specificEntityType: GraphqlSoupPropertyEntityType | null, isSystem: boolean, isMetadata: boolean, value: { kind: string, boolValue: boolean | null, numberValue: number | null, stringValue: string | null, dateValue: string | null, selectOptionIds: Array<string>, links: Array<string>, entityReferences: Array<{ entityId: string, entityType: GraphqlSoupPropertyEntityType, specificMessageId: string | null }> } | null };
 
 export type SoupChannelMessageFieldsFragment = { id: string, threadId: string | null, senderId: string, content: string, createdAt: string, updatedAt: string, deletedAt: string | null, mentions: Array<string> };
 

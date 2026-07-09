@@ -16,7 +16,7 @@ use crate::domain::{
 };
 
 use super::{
-    CrmToolContext, ToolCompanyStage, caller_team_receipt, company_entity_refs, crm_error,
+    CrmToolContext, ToolCompanyStage, caller_team_receipt, company_view_receipts, crm_error,
     extract_company_crm_props, load_stage_option_catalog,
 };
 
@@ -125,7 +125,6 @@ where
 
         let (team_receipt, role) =
             caller_team_receipt(&*service_context.entity_access_service, &request_context).await?;
-        let team_id = team_receipt.team_id();
 
         let include_hidden = self.include_hidden.unwrap_or(false);
         if include_hidden && !matches!(role, TeamRole::Admin | TeamRole::Owner) {
@@ -188,7 +187,7 @@ where
         }
 
         let stage_catalog =
-            load_stage_option_catalog(&*service_context.properties, team_id).await?;
+            load_stage_option_catalog(&*service_context.properties, team_receipt.receipt()).await?;
 
         // Resolve the stage filter to option ids up front so an unknown
         // stage fails with an actionable error instead of an empty list.
@@ -218,7 +217,12 @@ where
         // Teams with customized pipelines store stage values under a
         // team-scoped "Stage" definition rather than the system one, so
         // include those definition ids in the fetch filter too.
-        let entity_refs = company_entity_refs(companies.iter().map(|c| c.company.id));
+        // Access to these companies is proven by the caller's team receipt:
+        // the list is the caller's own team's CRM listing.
+        let company_access = company_view_receipts(
+            &request_context.user_id,
+            companies.iter().map(|c| c.company.id),
+        );
         let mut property_ids = vec![
             SystemPropertyKey::STAGE_UUID,
             SystemPropertyKey::COMPANY_OWNER_UUID,
@@ -227,7 +231,7 @@ where
         property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
         let properties_map = service_context
             .properties
-            .get_bulk_entity_properties(entity_refs, property_ids)
+            .get_bulk_entity_properties(&company_access, property_ids)
             .await
             .map_err(|e| ToolCallError {
                 description: "failed to load company properties".to_string(),

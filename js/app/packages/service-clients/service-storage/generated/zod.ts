@@ -8876,7 +8876,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced upstream in soup's axum router."
+            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced by the CRM service from the\ncaller's team receipt."
           ),
       })
       .optional()
@@ -20026,11 +20026,27 @@ export const editProjectV2Response = zod.object({
 export const createWebhookBody = zod
   .object({
     endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    filters: zod.array(
+      zod
+        .object({
+          events: zod
+            .array(zod.string())
+            .describe('Event names matched by this filter.'),
+          ids: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+            ),
+        })
+        .describe(
+          'Event and optional entity-id constraints used to match webhook deliveries.'
+        )
+    ),
     headers: zod
       .union([zod.null(), zod.record(zod.string(), zod.string())])
       .optional(),
     name: zod.string().describe('Display name.'),
-    rule: zod.unknown().describe('Rule definition used to match events.'),
     scope: zod
       .enum(['user', 'team'])
       .describe('Scope that owns a newly-created webhook.'),
@@ -20054,14 +20070,32 @@ export const patchWebhookParams = zod.object({
 export const patchWebhookBody = zod
   .object({
     endpoint_url: zod.string().nullish().describe('HTTPS endpoint URL.'),
+    filters: zod
+      .union([
+        zod.null(),
+        zod.array(
+          zod
+            .object({
+              events: zod
+                .array(zod.string())
+                .describe('Event names matched by this filter.'),
+              ids: zod
+                .array(zod.string())
+                .nullish()
+                .describe(
+                  'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+                ),
+            })
+            .describe(
+              'Event and optional entity-id constraints used to match webhook deliveries.'
+            )
+        ),
+      ])
+      .optional(),
     headers: zod
       .union([zod.null(), zod.record(zod.string(), zod.string())])
       .optional(),
     name: zod.string().nullish().describe('Display name.'),
-    rule: zod
-      .unknown()
-      .optional()
-      .describe('Rule definition used to match events.'),
     status: zod
       .union([
         zod.null(),
@@ -20082,6 +20116,23 @@ export const patchWebhookResponse = zod
       .nullish()
       .describe('Soft-delete timestamp.'),
     endpoint_url: zod.string().describe('HTTPS endpoint URL.'),
+    filters: zod.array(
+      zod
+        .object({
+          events: zod
+            .array(zod.string())
+            .describe('Event names matched by this filter.'),
+          ids: zod
+            .array(zod.string())
+            .nullish()
+            .describe(
+              'Entity ids matched by this filter. When absent, the filter matches all entity ids.'
+            ),
+        })
+        .describe(
+          'Event and optional entity-id constraints used to match webhook deliveries.'
+        )
+    ),
     headers: zod.record(zod.string(), zod.string()),
     id: zod.string(),
     is_valid: zod
@@ -20090,7 +20141,6 @@ export const patchWebhookResponse = zod
         'Whether the current endpoint configuration has passed validation.'
       ),
     name: zod.string().describe('Display name.'),
-    rule: zod.unknown().describe('Event matching rule.'),
     status: zod
       .enum(['active', 'paused', 'disabled'])
       .describe('Webhook lifecycle status.'),

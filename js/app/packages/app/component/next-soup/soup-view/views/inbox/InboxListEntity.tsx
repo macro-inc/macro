@@ -2,7 +2,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { MaybeEntityRow, MultiSelectCheckbox } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { cn } from '@ui';
-import { createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
 import { scopeThreadNotifications } from './utils';
 
@@ -41,18 +41,21 @@ export function InboxListEntity(props: BaseListEntityProps) {
           onClick={props.onClick}
         />
       </MaybeEntityRow>
-      <div
-        class={cn(
-          'hidden absolute right-2 bottom-2 z-10 group-hover/inbox-item:flex items-center justify-center bg-surface overflow-hidden',
-          props.checked && 'flex'
-        )}
-      >
-        <MultiSelectCheckbox
-          checked={props.checked}
-          onChecked={props.onChecked}
-          showBorder
-        />
-      </div>
+      {/* Select checkbox lives in the gutter reserved by the card's `pl-9`. */}
+      <Show when={!props.hideCheckbox}>
+        <div
+          class={cn(
+            'absolute left-1 top-2.5 z-10 size-8 place-items-center',
+            props.checked ? 'grid' : 'hidden group-hover/inbox-item:grid'
+          )}
+        >
+          <MultiSelectCheckbox
+            checked={props.checked}
+            onChecked={props.onChecked}
+            showBorder
+          />
+        </div>
+      </Show>
     </div>
   );
 }

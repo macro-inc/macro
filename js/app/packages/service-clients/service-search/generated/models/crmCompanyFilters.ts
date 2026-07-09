@@ -16,6 +16,7 @@ include all of the team's visible CRM companies. */
   /** Optional `crm_companies.hidden` filter. `None` = visible only
 (default for back-compat with non-admin callers). `Some(false)` =
 visible only (explicit). `Some(true)` = hidden only — requires
-admin/owner team role; enforced upstream in soup's axum router. */
+admin/owner team role; enforced by the CRM service from the
+caller's team receipt. */
   hidden?: CrmCompanyFiltersHidden;
 }

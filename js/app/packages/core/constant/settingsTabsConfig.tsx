@@ -16,6 +16,7 @@ import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CRM,
   ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
@@ -144,8 +145,12 @@ export const useSettingsTabAvailable = () => {
       case 'Billing':
         return true;
       case 'Team':
-      case 'CRM':
         return teamsFlag().enabled;
+      // CRM is still rolling out (Macro-internal only); keep the settings tab
+      // behind the same ENABLE_CRM gate as every other CRM surface so it never
+      // leaks into teams that can't actually use the CRM.
+      case 'CRM':
+        return teamsFlag().enabled && ENABLE_CRM;
       case 'Connected':
         return true;
       case 'Shortcuts':

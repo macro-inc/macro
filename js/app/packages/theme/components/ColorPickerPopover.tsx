@@ -192,7 +192,7 @@ export function ColorPickerPopover(props: {
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="flex w-64 flex-col gap-3 rounded-xl bg-surface p-3 shadow-lg ring-1 ring-edge-muted"
+              class="flex w-64 flex-col gap-3 rounded-xl bg-surface p-3 shadow-lg ring ring-edge-muted"
               role="dialog"
               aria-label={props.ariaLabel}
             >

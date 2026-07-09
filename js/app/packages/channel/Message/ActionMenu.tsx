@@ -2,6 +2,7 @@ import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import StarIcon from '@icon/wide-star.svg';
 import TaskIcon from '@icon/wide-task.svg';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import LinkIcon from '@phosphor/link.svg';
 import EditIcon from '@phosphor/pencil-simple.svg';
 import AddEmojiIcon from '@phosphor/smiley.svg';
@@ -19,6 +20,7 @@ const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 type ActionId =
   | 'reply'
   | 'copy-link'
+  | 'copy-message-text'
   | 'create-task'
   | 'chat'
   | 'edit'
@@ -102,6 +104,13 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+      iconClass: 'size-3.5',
+    },
+    {
+      id: 'copy-message-text',
+      label: 'Copy Text',
+      icon: CopyIcon,
+      onClick: actions?.onCopyMessageText,
       iconClass: 'size-3.5',
     },
     {

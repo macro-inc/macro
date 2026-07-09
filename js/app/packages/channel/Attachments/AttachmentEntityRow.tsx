@@ -18,7 +18,7 @@ export function AttachmentEntityRow(props: {
       <div class="size-4 shrink-0">
         <Entity.Icon entity={props.entity} />
       </div>
-      <span class="ph-no-capture font-semibold truncate flex-1 min-w-0">
+      <span class="ph-no-capture font-medium truncate flex-1 min-w-0">
         <Entity.Title entity={props.entity} />
       </span>
       <Show when={props.senderId}>

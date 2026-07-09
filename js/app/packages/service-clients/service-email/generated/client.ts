@@ -28,6 +28,7 @@ import type {
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
+  InitErrorCodeResponse,
   InitResponse,
   InitUserParams,
   ListBackfillJobsResponse,
@@ -1485,7 +1486,7 @@ export type initUserResponse200 = {
 };
 
 export type initUserResponse400 = {
-  data: ErrorResponse;
+  data: InitErrorCodeResponse;
   status: 400;
 };
 

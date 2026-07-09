@@ -219,7 +219,7 @@ export function FloatingEquationMenu() {
   return (
     <Show when={menuOpen()}>
       <div
-        class="p-4 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96 ring-1 ring-edge"
+        class="p-4 fixed bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96 ring ring-edge"
         use:floatWithElement={{ element: getElement }}
         use:floatWithSelection={{
           selection: untrack(getSelection),
@@ -239,7 +239,7 @@ export function FloatingEquationMenu() {
                   value={equation() ?? ''}
                   onInput={(e) => setEquation(e.currentTarget.value)}
                   placeholder="Enter LaTeX expression"
-                  class="w-full p-2 border border-edge rounded-md focus:ring-1 focus:ring-accent/40 focus:border-accent/40 outline-none transition"
+                  class="w-full p-2 border border-edge rounded-md focus:ring focus:ring-accent/40 focus:border-accent/40 outline-none transition"
                 />
               ) : (
                 <textarea
@@ -249,7 +249,7 @@ export function FloatingEquationMenu() {
                   value={equation() ?? ''}
                   onInput={(e) => setEquation(e.currentTarget.value)}
                   placeholder="Enter LaTeX expression"
-                  class="w-full p-2 border border-edge rounded-md focus:ring-1 focus:ring-accent/40 focus:border-accent/40 outline-none transition resize-none"
+                  class="w-full p-2 border border-edge rounded-md focus:ring focus:ring-accent/40 focus:border-accent/40 outline-none transition resize-none"
                 />
               )}
             </div>

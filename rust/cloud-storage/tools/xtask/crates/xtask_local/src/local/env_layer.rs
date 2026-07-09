@@ -22,6 +22,9 @@ use anyhow::{Context, Result};
 use super::instance::Instance;
 use super::{Mode, local_env};
 
+#[cfg(test)]
+mod test;
+
 /// The fully resolved environment for a run.
 pub struct ResolvedEnv {
     pub merged: BTreeMap<String, String>,
@@ -67,8 +70,12 @@ pub fn resolve(
 
     // Process env — override only keys already present, so a developer can
     // `FOO=bar just run_local` without dumping their whole environment in.
+    // For run-dev, do not let the Nix shell's localhost SQLx default replace
+    // Doppler's shared-dev database URL.
     for key in env.keys().cloned().collect::<Vec<_>>() {
-        if let Ok(v) = std::env::var(&key) {
+        if let Ok(v) = std::env::var(&key)
+            && should_overlay_process_env(mode, &key, &v)
+        {
             env.insert(key, v);
         }
     }
@@ -92,6 +99,14 @@ pub fn resolve(
         env_file: env_file.map(Path::to_path_buf),
         generated_path,
     })
+}
+
+fn should_overlay_process_env(mode: Mode, key: &str, value: &str) -> bool {
+    !(mode == Mode::Dev && key == "DATABASE_URL" && is_local_database_url(value))
+}
+
+pub(super) fn is_local_database_url(value: &str) -> bool {
+    value.contains("@postgres:") || value.contains("localhost")
 }
 
 /// Dev-only overrides: pin the environment + project name, and strip any local

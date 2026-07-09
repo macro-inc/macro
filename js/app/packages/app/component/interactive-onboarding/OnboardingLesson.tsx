@@ -65,7 +65,7 @@ export function OnboardingLessonActions(props: LessonActionsProps) {
           type="button"
           onClick={onboarding.handleSkipLesson}
           class={cn(
-            'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 border-none bg-transparent text-ink/60 hover:bg-hover ring-1 ring-edge-muted',
+            'w-full px-3 py-2.5 text-lg font-bold rounded-xs flex items-center gap-2 border-none bg-transparent text-ink/60 hover:bg-hover ring ring-edge-muted',
             props.lesson.definition.centeredButton
               ? 'justify-center'
               : 'justify-between'

@@ -37,6 +37,10 @@ pub enum PropertiesErr {
     #[error("Cannot modify system properties")]
     SystemPropertyNotModifiable,
 
+    /// Team scope was requested by a caller with no team - maps to 403
+    #[error("You must be on a team to use team-scoped properties")]
+    TeamMembershipRequired,
+
     /// Repository/database errors - maps to 500
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

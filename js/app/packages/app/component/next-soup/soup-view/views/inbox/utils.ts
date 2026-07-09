@@ -109,6 +109,10 @@ export function itemContent(
     return meta.content.messageContent;
   }
 
+  if (meta?.tag === 'call_started') {
+    return;
+  }
+
   const channel = channelMessageContent(entity);
   if (channel) return channel;
   return notification ? notificationContent(notification) : undefined;

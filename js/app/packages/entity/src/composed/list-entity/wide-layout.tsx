@@ -100,7 +100,7 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-semibold truncate items-center gap-2 flex"
+        class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
@@ -166,16 +166,6 @@ export function WideLayout(props: LayoutProps) {
               entityType={EntityType.PROJECT}
               properties={entity().properties}
             />
-          )}
-        </Show>
-        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <span class="ph-no-capture text-ink-extra-muted text-xs">
-              <ProjectBreadCrumb
-                entity={entity()}
-                onClick={props.onProjectClick}
-              />
-            </span>
           )}
         </Show>
         <Show
@@ -246,6 +236,16 @@ export function WideLayout(props: LayoutProps) {
               entityType={EntityType.CHAT}
               properties={entity().properties}
             />
+          )}
+        </Show>
+        <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ph-no-capture text-ink-extra-muted text-xs">
+              <ProjectBreadCrumb
+                entity={entity()}
+                onClick={props.onProjectClick}
+              />
+            </span>
           )}
         </Show>
       </Entity.Slot>

@@ -8,14 +8,24 @@ publish = false
 anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-trait = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 either = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false }
+email = { path = "../email", default-features = false, features = [
+  "axum",
+  "inbound",
+  "ports",
+] }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "inbound",
+] }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
+model_user = { path = "../model_user", features = ["axum"] }
 model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
@@ -25,6 +35,7 @@ properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }
 rootcause = { workspace = true }
+tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }

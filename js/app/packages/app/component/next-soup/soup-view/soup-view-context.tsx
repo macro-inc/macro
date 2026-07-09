@@ -68,7 +68,8 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import type { SoupPage } from '@service-storage/generated/schemas';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -462,25 +463,10 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  // The inbox only surfaces missed calls. The preset NILs `callId` to exclude
-  // calls entirely, so drop that exclusion and filter to missed status instead.
-  const applyInboxCallFilter = (state: QueryState): QueryState => {
-    if (!isNewInbox()) return state;
-    const { callId: _callId, ...include } = state.include;
-    return {
-      ...state,
-      include: {
-        ...include,
-        callStatus: 'MISSED',
-      },
-    };
-  };
-
   const applyViewFilters = (state: QueryState): QueryState => {
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
-    next = applyInboxCallFilter(next);
     return next;
   };
 
@@ -548,6 +534,19 @@ export const SoupViewContextProvider: FlowComponent<
     (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
   );
 
+  const soupItemMatchesActiveFilters = (
+    item: SoupApiItem,
+    view: ListView | undefined
+  ): boolean => {
+    if (!soupItemMatchesListView(item, view)) return false;
+    if (!soupItemMatchesTagFilter(item, activeTagOptionIds())) return false;
+
+    return soup.predicates.test(
+      mapApiSoupItemToEntity(item) as SoupEntity,
+      getFilterContext()
+    );
+  };
+
   const itemsQuery = useSoupAstItemsQuery(
     () => {
       const groupBy = serverGroupByField();
@@ -564,9 +563,7 @@ export const SoupViewContextProvider: FlowComponent<
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     }
@@ -693,9 +690,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     },

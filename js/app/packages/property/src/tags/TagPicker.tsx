@@ -193,7 +193,7 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring-1 ring-edge-muted"
+          class="z-modal w-64 rounded-xl bg-surface text-sm shadow-lg ring ring-edge-muted"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (props.dismissOnFocusOutside === false) event.preventDefault();
@@ -498,7 +498,7 @@ function DeleteConfirm(props: {
 }) {
   return (
     <Dialog open={props.open} position="center" onOpenChange={props.onCancel}>
-      <div class="rounded-xl bg-surface p-4 text-sm ring-1 ring-edge-muted">
+      <div class="rounded-xl bg-surface p-4 text-sm ring ring-edge-muted">
         <div class="text-ink">Delete label "{props.label}"?</div>
         <p class="mt-1 text-ink-muted">
           It will be removed from every item it's applied to.

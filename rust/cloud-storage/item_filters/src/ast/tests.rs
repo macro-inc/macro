@@ -1530,3 +1530,38 @@ fn properties_filter_matches_propertyless_evaluates_literals_as_false() {
         Expr::is_not(lit())
     )));
 }
+
+#[test]
+fn requests_crm_admin_finds_hidden_true_anywhere_in_tree() {
+    let ast_with = |tree: Expr<CrmCompanyLiteral>| EntityFilterAst {
+        crm_company_filter: Some(Arc::new(tree)),
+        ..EntityFilterAst::default()
+    };
+
+    // Bare literal.
+    assert!(ast_with(Expr::val(CrmCompanyLiteral::Hidden(true))).requests_crm_admin());
+    // Hidden(false) is visible-only — no admin needed.
+    assert!(!ast_with(Expr::val(CrmCompanyLiteral::Hidden(false))).requests_crm_admin());
+    // Nested under And with an id filter.
+    assert!(
+        ast_with(Expr::and(
+            Expr::val(CrmCompanyLiteral::Id(Uuid::from_u128(1))),
+            Expr::val(CrmCompanyLiteral::Hidden(true)),
+        ))
+        .requests_crm_admin()
+    );
+    // Conservative under Not.
+    assert!(
+        ast_with(Expr::is_not(Expr::val(CrmCompanyLiteral::Hidden(true)))).requests_crm_admin()
+    );
+    // No crm_company_filter at all.
+    assert!(!EntityFilterAst::default().requests_crm_admin());
+}
+
+#[test]
+fn requests_crm_scope_reflects_email_crm_scope_tag() {
+    let mut ast = EntityFilterAst::default();
+    assert!(!ast.requests_crm_scope());
+    ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".into()]));
+    assert!(ast.requests_crm_scope());
+}

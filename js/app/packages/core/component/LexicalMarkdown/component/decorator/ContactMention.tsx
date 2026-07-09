@@ -131,7 +131,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       <Show when={popupOpen()}>
         <Portal>
           <div
-            class="absolute select-none overflow-hidden z-toast-region w-64 bg-surface ring-1 ring-edge text-ink rounded-lg p-3"
+            class="absolute select-none overflow-hidden z-toast-region w-64 bg-surface ring ring-edge text-ink rounded-lg p-3"
             use:floatWithElement={{ element: () => mentionRef }}
           >
             <div class="flex items-center gap-2">
