@@ -55,6 +55,7 @@ import {
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
+  type Notification,
   toNotificationEntity,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
@@ -183,6 +184,17 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'updated_at',
   'viewed_updated',
 ];
+
+type EntityWithRawNotifications = EntityData & {
+  notifications?: Notification[];
+};
+
+function rawEntityNotifications(
+  entity: EntityData
+): Notification[] | undefined {
+  const notifications = (entity as EntityWithRawNotifications).notifications;
+  return Array.isArray(notifications) ? notifications : undefined;
+}
 
 export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
@@ -518,6 +530,24 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const attachNotifications = (entity: EntityData) => {
+    const rawNotifications = rawEntityNotifications(entity);
+    if (rawNotifications) {
+      const {
+        notifications: _notifications,
+        ...entityWithoutRawNotifications
+      } = entity as EntityWithRawNotifications;
+      return {
+        ...entityWithoutRawNotifications,
+        notifications: () =>
+          isNewInbox()
+            ? scopeChannelNotificationsForEntity(
+                entityWithoutRawNotifications,
+                rawNotifications
+              )
+            : rawNotifications,
+      };
+    }
+
     const notifications = useNotificationsForEntity(
       notificationSource,
       toNotificationEntity(entity)
@@ -621,7 +651,7 @@ export const SoupViewContextProvider: FlowComponent<
 
       for (let i = 0; i < merged.length; i++) {
         const entity = merged[i];
-        if (entity.notifications) continue;
+        if (isWithNotification(entity)) continue;
         merged[i] = attachNotifications(entity);
       }
 
