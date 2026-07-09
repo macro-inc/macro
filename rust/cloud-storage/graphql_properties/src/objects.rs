@@ -2,7 +2,7 @@ use async_graphql::{Enum, ID, Object, SimpleObject};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::SoupProperty;
 
-#[allow(missing_docs)]
+/// GraphQL representation of supported Soup property data types.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
 pub enum GraphqlSoupDataType {
     /// Boolean true/false values.
@@ -25,8 +25,8 @@ pub enum GraphqlSoupDataType {
     Link,
 }
 
-impl GraphqlSoupDataType {
-    fn from_properties_data_type(dt: models_properties::DataType) -> Self {
+impl From<models_properties::DataType> for GraphqlSoupDataType {
+    fn from(dt: models_properties::DataType) -> Self {
         match dt {
             models_properties::DataType::Boolean => Self::Boolean,
             models_properties::DataType::Date => Self::Date,
@@ -65,7 +65,7 @@ impl GraphqlSoupProperty {
     }
 
     async fn data_type(&self) -> GraphqlSoupDataType {
-        GraphqlSoupDataType::from_properties_data_type(self.0.definition.data_type)
+        self.0.definition.data_type.into()
     }
 
     async fn is_multi_select(&self) -> bool {
@@ -76,7 +76,7 @@ impl GraphqlSoupProperty {
         self.0
             .definition
             .specific_entity_type
-            .map(GraphqlSoupPropertyEntityType::from_property_entity)
+            .map(GraphqlSoupPropertyEntityType::from)
     }
 
     async fn is_system(&self) -> bool {
@@ -193,21 +193,29 @@ pub struct GraphqlSoupPropertyEntityReference {
     specific_message_id: Option<ID>,
 }
 
-#[allow(missing_docs)]
+/// GraphQL entity type supported by Soup properties.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
 pub enum GraphqlSoupPropertyEntityType {
+    /// Channel entity.
     Channel,
+    /// Chat entity.
     Chat,
+    /// Company entity.
     Company,
+    /// Document entity.
     Document,
+    /// Project entity.
     Project,
+    /// Task entity.
     Task,
+    /// Thread entity.
     Thread,
+    /// User entity.
     User,
 }
 
-impl GraphqlSoupPropertyEntityType {
-    fn from_property_entity(entity: models_properties::EntityType) -> Self {
+impl From<models_properties::EntityType> for GraphqlSoupPropertyEntityType {
+    fn from(entity: models_properties::EntityType) -> Self {
         match entity {
             models_properties::EntityType::Channel => Self::Channel,
             models_properties::EntityType::Chat => Self::Chat,
@@ -225,7 +233,7 @@ impl From<&models_properties::EntityReference> for GraphqlSoupPropertyEntityRefe
     fn from(value: &models_properties::EntityReference) -> Self {
         Self {
             entity_id: value.entity_id.clone(),
-            entity_type: GraphqlSoupPropertyEntityType::from_property_entity(value.entity_type),
+            entity_type: value.entity_type.into(),
             specific_message_id: value
                 .specific_message_id
                 .map(|message_id| ID(message_id.to_string())),

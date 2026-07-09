@@ -33,20 +33,6 @@ impl EntityNotificationsKey {
             )),
         }
     }
-
-    fn entity_type_key(item_type: NotificationItemType) -> &'static str {
-        match item_type {
-            NotificationItemType::Email => "email",
-            NotificationItemType::Message => "message",
-            NotificationItemType::Channel => "channel",
-            NotificationItemType::Document => "document",
-            NotificationItemType::Project => "project",
-            NotificationItemType::Chat => "chat",
-            NotificationItemType::Call => "call",
-            NotificationItemType::Task => "task",
-            NotificationItemType::Github => "github",
-        }
-    }
 }
 
 /// Object-safe reader used by GraphQL notification edges.
@@ -82,30 +68,33 @@ where
             .map(|key| (key, Vec::new()))
             .collect::<HashMap<_, _>>();
 
-        let entity_refs = keys
+        let requested_refs = keys
             .iter()
             .map(|key| {
-                Ok(NotificationEntityRef {
-                    entity_type: key.notification_item_type()?,
-                    id: key.entity_id.clone(),
-                })
+                Ok((
+                    key.clone(),
+                    NotificationEntityRef {
+                        entity_type: key.notification_item_type()?,
+                        id: key.entity_id.clone(),
+                    },
+                ))
             })
             .collect::<Result<Vec<_>, rootcause::Report>>()?;
+
+        let entity_refs = requested_refs
+            .iter()
+            .map(|(_, entity_ref)| entity_ref.clone())
+            .collect();
 
         let notifications_by_entity = self
             .get_entity_notifications_batch(user_id, entity_refs)
             .await
             .map_err(|err| rootcause::report!(err))?;
 
-        for (key, notifications) in notifications_by_entity {
-            result.insert(
-                EntityNotificationsKey {
-                    entity_type: EntityNotificationsKey::entity_type_key(key.entity_type)
-                        .to_owned(),
-                    entity_id: key.id,
-                },
-                notifications,
-            );
+        for (original_key, entity_ref) in requested_refs {
+            if let Some(notifications) = notifications_by_entity.get(&entity_ref) {
+                result.insert(original_key, notifications.clone());
+            }
         }
 
         Ok(result)

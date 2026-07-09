@@ -13,11 +13,14 @@ filter_expr_input!(
     "PropertiesFilterExpr"
 );
 
-#[allow(missing_docs)]
+/// GraphQL input for matching a property value on an entity.
 #[derive(async_graphql::InputObject)]
 pub struct GraphqlPropertiesLiteral {
+    /// Property definition id to match.
     property_definition_id: ID,
+    /// Optional entity type scope for the property match.
     entity_type: Option<GraphqlPropertyEntityType>,
+    /// Value to compare against the property.
     value: GraphqlPropertyMatchValue,
 }
 
@@ -31,10 +34,12 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
     }
 }
 
-#[allow(missing_docs)]
+/// GraphQL input value used when matching a property.
 #[derive(async_graphql::OneofObject)]
 pub enum GraphqlPropertyMatchValue {
+    /// Select option id to match.
     SelectOption(ID),
+    /// Entity reference id to match.
     EntityRef(String),
 }
 
@@ -53,16 +58,24 @@ impl GraphqlPropertyMatchValue {
     }
 }
 
-#[allow(missing_docs)]
+/// GraphQL entity type supported by property filters.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlPropertyEntityType {
+    /// Channel entity.
     Channel,
+    /// Chat entity.
     Chat,
+    /// Company entity.
     Company,
+    /// Document entity.
     Document,
+    /// Project entity.
     Project,
+    /// Task entity.
     Task,
+    /// Thread entity.
     Thread,
+    /// User entity.
     User,
 }
 

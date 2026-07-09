@@ -291,25 +291,73 @@ input GraphqlPropertiesExpr @oneOf {
 	literal: GraphqlPropertiesLiteral
 }
 
+"""
+GraphQL input for matching a property value on an entity.
+"""
 input GraphqlPropertiesLiteral {
+	"""
+	Property definition id to match.
+	"""
 	propertyDefinitionId: ID!
+	"""
+	Optional entity type scope for the property match.
+	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Value to compare against the property.
+	"""
 	value: GraphqlPropertyMatchValue!
 }
 
+"""
+GraphQL entity type supported by property filters.
+"""
 enum GraphqlPropertyEntityType {
+	"""
+	Channel entity.
+	"""
 	CHANNEL
+	"""
+	Chat entity.
+	"""
 	CHAT
+	"""
+	Company entity.
+	"""
 	COMPANY
+	"""
+	Document entity.
+	"""
 	DOCUMENT
+	"""
+	Project entity.
+	"""
 	PROJECT
+	"""
+	Task entity.
+	"""
 	TASK
+	"""
+	Thread entity.
+	"""
 	THREAD
+	"""
+	User entity.
+	"""
 	USER
 }
 
+"""
+GraphQL input value used when matching a property.
+"""
 input GraphqlPropertyMatchValue @oneOf {
+	"""
+	Select option id to match.
+	"""
 	selectOption: ID
+	"""
+	Entity reference id to match.
+	"""
 	entityRef: String
 }
 
@@ -446,6 +494,9 @@ type GraphqlSoupCrmCompany {
 	notifications: [GraphqlSoupNotification!]!
 }
 
+"""
+GraphQL representation of supported Soup property data types.
+"""
 enum GraphqlSoupDataType {
 	"""
 	Boolean true/false values.
@@ -699,14 +750,41 @@ type GraphqlSoupPropertyEntityReference {
 	specificMessageId: ID
 }
 
+"""
+GraphQL entity type supported by Soup properties.
+"""
 enum GraphqlSoupPropertyEntityType {
+	"""
+	Channel entity.
+	"""
 	CHANNEL
+	"""
+	Chat entity.
+	"""
 	CHAT
+	"""
+	Company entity.
+	"""
 	COMPANY
+	"""
+	Document entity.
+	"""
 	DOCUMENT
+	"""
+	Project entity.
+	"""
 	PROJECT
+	"""
+	Task entity.
+	"""
 	TASK
+	"""
+	Thread entity.
+	"""
 	THREAD
+	"""
+	User entity.
+	"""
 	USER
 }
 
