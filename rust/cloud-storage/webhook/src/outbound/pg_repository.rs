@@ -162,6 +162,53 @@ impl WebhookRepo for PgRepository {
         fetch_webhook(&self.pool, &webhook_id).await
     }
 
+    #[tracing::instrument(skip(self, workspace_ids), err)]
+    async fn list_active_webhooks_matching_event(
+        &self,
+        workspace_ids: Vec<String>,
+        event: String,
+        entity_id: String,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        let rows = sqlx::query_as!(
+            WebhookRow,
+            r#"
+            SELECT
+                w.id,
+                w.workspace_id,
+                w.name,
+                w.endpoint_url,
+                w.signing_secret,
+                w.headers,
+                w.status,
+                w.is_valid,
+                w.created_by_user_id,
+                w.created_at,
+                w.updated_at,
+                w.deleted_at,
+                w.filters
+            FROM webhook w
+            WHERE w.workspace_id = ANY($1)
+              AND w.deleted_at IS NULL
+              AND w.status = 'active'
+              AND w.is_valid
+              AND w.filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($2::text)))
+              AND jsonb_path_exists(
+                  w.filters,
+                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $2::text, 'id', $3::text)
+              )
+            ORDER BY w.id
+            "#,
+            &workspace_ids,
+            &event,
+            &entity_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(row_to_webhook).collect()
+    }
+
     #[tracing::instrument(skip(self, request), err)]
     async fn patch_webhook(
         &self,

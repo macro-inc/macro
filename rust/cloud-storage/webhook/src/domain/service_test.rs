@@ -34,6 +34,17 @@ impl FakeRepo {
     }
 }
 
+fn filter_matches_event(filter: &WebhookFilter, event: &str, entity_id: &str) -> bool {
+    if !filter.events.iter().any(|candidate| candidate == event) {
+        return false;
+    }
+
+    match &filter.ids {
+        Some(ids) => ids.iter().any(|id| id == entity_id),
+        None => true,
+    }
+}
+
 impl WebhookRepo for FakeRepo {
     type Err = anyhow::Error;
 
@@ -58,6 +69,35 @@ impl WebhookRepo for FakeRepo {
             .webhook
             .clone()
             .filter(|webhook| webhook.id == webhook_id))
+    }
+
+    async fn list_active_webhooks_matching_event(
+        &self,
+        workspace_ids: Vec<String>,
+        event: String,
+        entity_id: String,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        let Some(webhook) = self.state.lock().await.webhook.clone() else {
+            return Ok(Vec::new());
+        };
+
+        if webhook.deleted_at.is_some()
+            || webhook.status != WebhookStatus::Active
+            || !webhook.is_valid
+            || !workspace_ids.contains(&webhook.workspace_id)
+        {
+            return Ok(Vec::new());
+        }
+
+        if webhook
+            .filters
+            .iter()
+            .any(|filter| filter_matches_event(filter, &event, &entity_id))
+        {
+            return Ok(vec![webhook]);
+        }
+
+        Ok(Vec::new())
     }
 
     async fn patch_webhook(

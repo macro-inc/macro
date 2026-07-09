@@ -1,5 +1,8 @@
 use super::*;
-use crate::domain::{models::WebhookFilter, ports::WebhookRepo};
+use crate::domain::{
+    models::{WebhookFilter, WebhookStatus},
+    ports::WebhookRepo,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
@@ -7,6 +10,7 @@ use sqlx::{PgPool, types::Uuid};
 
 const USER_ID: &str = "macro|webhook-owner@example.com";
 const TEAM_ID: &str = "11111111-1111-1111-1111-111111111111";
+const OTHER_WORKSPACE_ID: &str = "workspace_other";
 
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(USER_ID.to_string()).expect("valid macro user id")
@@ -68,6 +72,57 @@ async fn create_webhook(repo: &PgRepository) -> Webhook {
     )
     .await
     .expect("create webhook")
+}
+
+fn webhook_filter(events: &[&str], ids: Option<&[&str]>) -> WebhookFilter {
+    WebhookFilter {
+        events: events.iter().map(|event| (*event).to_string()).collect(),
+        ids: ids.map(|ids| ids.iter().map(|id| (*id).to_string()).collect()),
+    }
+}
+
+fn webhook_ids(webhooks: &[Webhook]) -> Vec<&str> {
+    webhooks.iter().map(|webhook| webhook.id.as_str()).collect()
+}
+
+async fn insert_webhook_for_matching(
+    pool: &PgPool,
+    id: &str,
+    workspace_id: &str,
+    filters: Vec<WebhookFilter>,
+    status: WebhookStatus,
+    is_valid: bool,
+    deleted: bool,
+) -> anyhow::Result<()> {
+    let deleted_at = deleted.then(chrono::Utc::now);
+    let endpoint_url = format!("https://example.com/{id}");
+    let filters = serde_json::to_value(filters)?;
+    let name = format!("{id} webhook");
+    let status = status.as_str();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO webhook (
+            id, workspace_id, name, endpoint_url, signing_secret,
+            filters, status, is_valid, created_by_user_id, deleted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        "#,
+        id,
+        workspace_id,
+        name,
+        endpoint_url,
+        "signing-secret",
+        filters,
+        status,
+        is_valid,
+        USER_ID,
+        deleted_at
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -144,6 +199,167 @@ async fn containment_query_uses_filters_gin_index(pool: PgPool) -> anyhow::Resul
         plan_text.contains("webhook_filters_gin_idx"),
         "expected webhook_filters_gin_idx in plan:\n{plan_text}"
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_matching_event_treats_missing_ids_as_wildcard(pool: PgPool) -> anyhow::Result<()> {
+    insert_webhook_for_matching(
+        &pool,
+        "wh_all_ids",
+        USER_ID,
+        vec![webhook_filter(&["document.created"], None)],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool);
+
+    let doc_1_webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.created".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+    let doc_2_webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.created".to_string(),
+            "doc_2".to_string(),
+        )
+        .await?;
+    let non_matching_event_webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.deleted".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+
+    assert_eq!(webhook_ids(&doc_1_webhooks), vec!["wh_all_ids"]);
+    assert_eq!(webhook_ids(&doc_2_webhooks), vec!["wh_all_ids"]);
+    assert!(non_matching_event_webhooks.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_matching_event_requires_id_in_same_filter_element(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_webhook_for_matching(
+        &pool,
+        "wh_doc_1_only",
+        USER_ID,
+        vec![webhook_filter(&["document.created"], Some(&["doc_1"]))],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_same_element",
+        USER_ID,
+        vec![
+            webhook_filter(&["channel.created"], None),
+            webhook_filter(&["document.created"], Some(&["doc_1"])),
+        ],
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool);
+
+    let doc_1_webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.created".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+    let doc_2_webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.created".to_string(),
+            "doc_2".to_string(),
+        )
+        .await?;
+
+    assert_eq!(
+        webhook_ids(&doc_1_webhooks),
+        vec!["wh_doc_1_only", "wh_same_element"]
+    );
+    assert!(doc_2_webhooks.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_matching_event_excludes_ineligible_webhooks(pool: PgPool) -> anyhow::Result<()> {
+    let matching_filter = vec![webhook_filter(&["document.created"], None)];
+    insert_webhook_for_matching(
+        &pool,
+        "wh_active_valid",
+        USER_ID,
+        matching_filter.clone(),
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_paused",
+        USER_ID,
+        matching_filter.clone(),
+        WebhookStatus::Paused,
+        true,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_invalid",
+        USER_ID,
+        matching_filter.clone(),
+        WebhookStatus::Active,
+        false,
+        false,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_deleted",
+        USER_ID,
+        matching_filter.clone(),
+        WebhookStatus::Active,
+        true,
+        true,
+    )
+    .await?;
+    insert_webhook_for_matching(
+        &pool,
+        "wh_other_workspace",
+        OTHER_WORKSPACE_ID,
+        matching_filter,
+        WebhookStatus::Active,
+        true,
+        false,
+    )
+    .await?;
+    let repo = PgRepository::new(pool);
+
+    let webhooks = repo
+        .list_active_webhooks_matching_event(
+            vec![USER_ID.to_string()],
+            "document.created".to_string(),
+            "doc_1".to_string(),
+        )
+        .await?;
+
+    assert_eq!(webhook_ids(&webhooks), vec!["wh_active_valid"]);
     Ok(())
 }
 
