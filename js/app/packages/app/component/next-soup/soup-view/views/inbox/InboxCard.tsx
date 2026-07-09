@@ -38,7 +38,9 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 px-2',
+        // `pl-9` reserves a fixed left column for the select checkbox (rendered
+        // by the row wrapper) so content never reflows when it appears on hover.
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-9',
 
         {
           'bg-accent/8': props.selected,
