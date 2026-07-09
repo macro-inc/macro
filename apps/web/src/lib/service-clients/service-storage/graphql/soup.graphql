@@ -25,6 +25,9 @@ query Soup($input: SoupInput!) {
             properties {
               ...SoupPropertyFields
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupChat {
             id
@@ -39,6 +42,9 @@ query Soup($input: SoupInput!) {
             properties {
               ...SoupPropertyFields
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupProject {
             id
@@ -51,6 +57,9 @@ query Soup($input: SoupInput!) {
             deletedAt
             properties {
               ...SoupPropertyFields
+            }
+            notifications {
+              ...SoupNotificationFields
             }
           }
           ... on GraphqlSoupEmailThread {
@@ -102,6 +111,9 @@ query Soup($input: SoupInput!) {
             properties {
               ...SoupPropertyFields
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupChannel {
             id
@@ -127,6 +139,9 @@ query Soup($input: SoupInput!) {
             latestNonThreadMessage {
               ...SoupChannelMessageFields
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupChannelThread {
             id
@@ -137,6 +152,9 @@ query Soup($input: SoupInput!) {
             updatedAt
             effectiveUpdatedAt
             replyCount
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupCall {
             id
@@ -156,6 +174,9 @@ query Soup($input: SoupInput!) {
               joinedAt
               leftAt
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupCrmCompany {
             id
@@ -171,6 +192,9 @@ query Soup($input: SoupInput!) {
             properties {
               ...SoupPropertyFields
             }
+            notifications {
+              ...SoupNotificationFields
+            }
           }
           ... on GraphqlSoupForeignEntity {
             id
@@ -181,6 +205,9 @@ query Soup($input: SoupInput!) {
             metadata
             createdAt
             updatedAt
+            notifications {
+              ...SoupNotificationFields
+            }
           }
         }
       }
@@ -223,4 +250,19 @@ fragment SoupChannelMessageFields on GraphqlSoupChannelMessage {
   updatedAt
   deletedAt
   mentions
+}
+
+fragment SoupNotificationFields on GraphqlSoupNotification {
+  id
+  eventType
+  entityType
+  entityId
+  sent
+  done
+  seen
+  createdAt
+  viewedAt
+  updatedAt
+  senderId
+  metadata
 }

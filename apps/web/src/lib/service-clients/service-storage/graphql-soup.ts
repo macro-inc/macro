@@ -128,6 +128,10 @@ type GraphqlSoupChannelMessage = NonNullable<
     { __typename: 'GraphqlSoupChannel' }
   >['latestMessage']
 >;
+type GraphqlSoupNotification = Extract<
+  GraphqlSoupEntity,
+  { __typename: 'GraphqlSoupDocument' }
+>['notifications'][number];
 
 const GRAPHQL_PROPERTY_VALUE_KINDS = [
   'Boolean',
@@ -239,6 +243,29 @@ function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
 
+function mapGraphqlNotificationEntityType(
+  entityType: GraphqlSoupNotification['entityType']
+) {
+  return entityType.toLowerCase();
+}
+
+function mapGraphqlNotifications(notifications: GraphqlSoupNotification[]) {
+  return notifications.map((notification) => ({
+    id: notification.id,
+    notification_event_type: notification.eventType,
+    notification_metadata: notification.metadata,
+    entity_id: notification.entityId,
+    entity_type: mapGraphqlNotificationEntityType(notification.entityType),
+    sent: notification.sent,
+    done: notification.done,
+    seen: notification.seen,
+    created_at: notification.createdAt,
+    viewed_at: notification.viewedAt ?? undefined,
+    updated_at: notification.updatedAt,
+    sender_id: notification.senderId ?? undefined,
+  }));
+}
+
 function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
   const frecency = item.frecencyScore;
   // `is_favorited: false` below: the GraphQL soup surface has no favorites
@@ -266,6 +293,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             documentVersionId: 0,
             properties: mapGraphqlProperties(entity.properties),
             subType: mapDocumentSubType(entity.subType),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -287,6 +315,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             viewedAt: entity.viewedAt ?? undefined,
             deletedAt: entity.deletedAt ?? undefined,
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -307,6 +336,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             viewedAt: entity.viewedAt ?? undefined,
             deletedAt: entity.deletedAt ?? undefined,
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -364,6 +394,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               type: label.type,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -398,6 +429,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             latest_non_thread_message: mapChannelMessage(
               entity.latestNonThreadMessage
             ),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -426,6 +458,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               reply_count: entity.replyCount,
             },
             updated_at: entity.updatedAt,
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -454,6 +487,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               joinedAt: participant.joinedAt,
               leftAt: participant.leftAt ?? undefined,
             })),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -481,6 +515,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
               createdAt: entity.createdAt,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
@@ -500,6 +535,7 @@ function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem {
             metadata: entity.metadata,
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt,
+            notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
     )
