@@ -4,6 +4,7 @@ use crate::api::{
     utils::{
         append_signed_up_param_if_new_user, create_access_token_cookie,
         create_refresh_token_cookie, default_redirect_url, generate_session_code,
+        spawn_first_inbox_provision,
     },
 };
 use axum::{
@@ -146,6 +147,8 @@ pub async fn handler(
     // Set cookies
     cookies.add(create_access_token_cookie(&access_token));
     cookies.add(create_refresh_token_cookie(&refresh_token));
+
+    spawn_first_inbox_provision(&ctx, &access_token);
 
     Ok(html_redirect(&redirect_url).into_response())
 }
