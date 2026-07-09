@@ -523,43 +523,18 @@ export const SoupViewContextProvider: FlowComponent<
     resolveCompanyStage,
   });
 
-  const attachProvidedNotifications = (
-    entity: EntityData,
-    notifications: Notification[]
-  ) => {
-    const cleanEntity = stripRawNotifications(entity);
-    return {
-      ...cleanEntity,
-      notifications: () =>
-        isNewInbox()
-          ? scopeChannelNotificationsForEntity(cleanEntity, notifications)
-          : notifications,
-    };
-  };
-
   const attachNotifications = (entity: EntityData) => {
-    const cleanEntity = stripRawNotifications(entity);
     const notifications = useNotificationsForEntity(
       notificationSource,
-      toNotificationEntity(cleanEntity)
+      toNotificationEntity(entity)
     );
     return {
-      ...cleanEntity,
+      ...entity,
       notifications: () =>
         isNewInbox()
-          ? scopeChannelNotificationsForEntity(cleanEntity, notifications())
+          ? scopeChannelNotificationsForEntity(entity, notifications())
           : notifications(),
     };
-  };
-
-  const attachSoupEntityNotifications = (
-    entity: EntityData,
-    providedNotifications?: Notification[]
-  ) => {
-    if (providedNotifications !== undefined) {
-      return attachProvidedNotifications(entity, providedNotifications);
-    }
-    return isWithNotification(entity) ? entity : attachNotifications(entity);
   };
 
   // Active tag option ids, used to gate optimistic websocket inserts so an

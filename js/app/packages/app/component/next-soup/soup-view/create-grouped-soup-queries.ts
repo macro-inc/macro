@@ -166,7 +166,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         getNextPageParam: (lastPage: GroupQueryPage): string | null => {
           return lastPage.group.nextCursor;
         },
-        select: (pages) => combineGroupPages(pages, options.meta?.itemFilter),
+        select: (pages: GroupQueryPage[]) =>
+          combineGroupPages(pages, options.meta?.itemFilter),
         initialData: {
           pages: [initialPage],
           pageParams: [null],
