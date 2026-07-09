@@ -1,7 +1,8 @@
 use ai_toolset::{ToolCallError, ToolResult};
+use item_filters::TagFilterMode;
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter};
+use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_search::MatchType;
 use models_search::unified::UnifiedSearchResponseItem;
 use models_soup::SoupProperty;
@@ -49,6 +50,14 @@ pub struct TaggedSearchResult {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SearchToolResponse {
     pub results: Vec<TaggedSearchResult>,
+}
+
+/// Map the model-facing tag match mode onto the search request's filter mode.
+pub(super) fn tag_filter_mode(mode: TagMatch) -> TagFilterMode {
+    match mode {
+        TagMatch::Any => TagFilterMode::Any,
+        TagMatch::All => TagFilterMode::All,
+    }
 }
 
 /// Resolve the model's tag filters against the caller's tag sets, returning

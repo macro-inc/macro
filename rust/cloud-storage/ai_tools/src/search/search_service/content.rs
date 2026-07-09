@@ -1,13 +1,14 @@
 use super::context::SearchToolContext;
 use super::types::{
     PAGE_SIZE, SearchMatchType, SearchToolResponse, annotate_result_tags, resolve_tag_filters,
+    tag_filter_mode,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::tag_sets::TagFilter;
+use models_properties::service::tag_sets::{TagFilter, TagMatch};
 use models_search::unified::{
     UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include,
 };
@@ -45,14 +46,21 @@ pub struct ContentSearch {
     pub inbox: Option<String>,
 
     #[schemars(description = "\
-Restrict results to items carrying at least one of the given tags (OR semantics). Each entry \
-names a tag by its label, matched case-insensitively against the user's own tags; only set \
-scope (\"personal\" or \"team\") when the user distinguishes between their personal and team \
-tags. An unknown label fails with the list of available tags — call ListTags first when \
-unsure what tags exist. Only taggable items (documents, emails, AI chats, projects) can \
-match, so channels and call records are dropped while a tag filter is active.")]
+Restrict results to items carrying the given tags — any of them by default, every one of \
+them with tagsMatch=\"all\". Each entry names a tag by its label, matched case-insensitively \
+against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
+distinguishes between their personal and team tags. An unknown label fails with the list of \
+available tags — call ListTags first when unsure what tags exist. Only taggable items \
+(documents, emails, AI chats, projects) can match, so channels and call records are dropped \
+while a tag filter is active.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
+
+    #[schemars(description = "\
+How multiple entries in tags combine: \"any\" (the default) matches items carrying at least \
+one of the tags, \"all\" only items carrying every one of them. Ignored unless tags is set.")]
+    #[serde(default)]
+    pub tags_match: TagMatch,
 }
 
 #[async_trait]
@@ -116,6 +124,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
         let base_filters = EntityFilters {
             email_filters,
             tag_option_ids,
+            tag_filter_mode: tag_filter_mode(self.tags_match),
             ..Default::default()
         };
         let search_request = UnifiedSearchRequest {

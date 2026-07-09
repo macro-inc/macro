@@ -267,12 +267,16 @@ fn test_converts_foreign_entity_soup_item() {
 }
 
 #[test]
-fn test_tags_arg_deserializes_and_documents_or_semantics() {
+fn test_tags_arg_deserializes_and_documents_match_modes() {
     let validated = generate_validated_input_schema::<ListEntities>().unwrap();
     let schema_json = serde_json::to_string(&validated.schema).unwrap();
     assert!(
-        schema_json.contains("OR semantics"),
-        "tags arg should document OR semantics"
+        schema_json.contains("any of them by default"),
+        "tags arg should document the default any-of combining"
+    );
+    assert!(
+        schema_json.contains("tagsMatch"),
+        "tags arg should point at tagsMatch for all-of combining"
     );
     assert!(
         schema_json.contains("ListTags"),
@@ -293,6 +297,21 @@ fn test_tags_arg_deserializes_and_documents_or_semantics() {
     assert_eq!(
         tags[1].scope,
         Some(models_properties::service::tag_sets::TagScope::Team)
+    );
+    assert_eq!(
+        list.tags_match,
+        models_properties::service::tag_sets::TagMatch::Any,
+        "tagsMatch defaults to any"
+    );
+
+    let list: ListEntities = serde_json::from_value(serde_json::json!({
+        "tags": [{ "label": "bug-report" }],
+        "tagsMatch": "all"
+    }))
+    .unwrap();
+    assert_eq!(
+        list.tags_match,
+        models_properties::service::tag_sets::TagMatch::All
     );
 }
 

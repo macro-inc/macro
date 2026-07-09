@@ -52,6 +52,17 @@ pub struct TagFilter {
     pub scope: Option<TagScope>,
 }
 
+/// How multiple tag filters combine when filtering items.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TagMatch {
+    /// Items carrying at least one of the tags match.
+    #[default]
+    Any,
+    /// Only items carrying every one of the tags match.
+    All,
+}
+
 /// A tag filter label that matched nothing in the caller's tag sets.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("unknown tag \"{label}\"{}", format_available(available))]
