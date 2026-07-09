@@ -13,7 +13,7 @@ import { createSignal, lazy, Show, Suspense } from 'solid-js';
 const SignatureEditor = lazy(() => import('./SignatureEditor'));
 
 // Unsaved signature drafts and per-inbox expanded state, keyed by link id and
-// held at module scope. The settings modal unmounts the Connected Accounts tab
+// held at module scope. The settings panel unmounts the Connected Accounts tab
 // when you switch away (and the links query can recreate an inbox row on
 // refetch); keeping this outside that subtree means tabbing away and back no
 // longer closes the editor or discards unsaved edits.
@@ -94,8 +94,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   const isDirty = () => draft() !== null && draft() !== persisted();
   // Enabled when there's a saved signature or unsaved draft text to clear — so
   // "Remove" stays available even after the user manually empties the editor.
-  const hasContent = () =>
-    persisted().length > 0 || (draft()?.length ?? 0) > 0;
+  const hasContent = () => persisted().length > 0 || (draft()?.length ?? 0) > 0;
 
   const updateSettings = useUpdateEmailSettingsMutation();
   // Imperative handle to the editor, so Save/Remove sync its content directly
@@ -180,7 +179,9 @@ export function SignatureSection(props: { link: EmailLink }) {
           checked={props.link.settings.signature_on_replies_forwards ?? false}
           onChange={setOnRepliesForwards}
           label={
-            <span class="text-sm text-ink-muted">Add to replies & forwards</span>
+            <span class="text-sm text-ink-muted">
+              Add to replies & forwards
+            </span>
           }
         />
         <div class="flex items-center gap-2">

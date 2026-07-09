@@ -213,24 +213,21 @@ export const BulkMoveToProjectView = (props: {
     const rootItems: Project[] = [];
     // Build project tree structure
 
-    // First pass: create item map and identify root items
+    // First pass: create item map
     for (const project of allProjects) {
       itemMap[project.id] = { ...project, children: [] };
-      if (!project.parentId) {
-        rootItems.push(project);
-      } else {
-        // This will be processed in second pass
-        const parentId = project.parentId;
-        if (!itemMap[parentId]) {
-          itemMap[parentId] = { ...project, children: [] };
-        }
-      }
     }
 
-    // Second pass: build parent-child relationships
+    // Second pass: attach children; projects with a missing or self-referencing parent become roots
     for (const project of allProjects) {
-      if (project.parentId && itemMap[project.parentId]) {
+      if (
+        project.parentId &&
+        project.parentId !== project.id &&
+        itemMap[project.parentId]
+      ) {
         itemMap[project.parentId].children!.push(project);
+      } else {
+        rootItems.push(project);
       }
     }
 
@@ -240,8 +237,10 @@ export const BulkMoveToProjectView = (props: {
   const getProjectPath = (projectId: string): string => {
     const tree = projectTree();
     const path: string[] = [];
+    const visited = new Set<string>();
     let currentId: string | undefined = projectId;
-    while (currentId) {
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
       const project: Project & { children?: Project[] } =
         tree.itemMap[currentId];
       if (project) {

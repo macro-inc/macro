@@ -29,7 +29,14 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const id = segments[i + 1];
     if (!type || !id) break;
 
-    if (type === 'component') {
+    if (type === 'settings') {
+      // `settings/<tab>` is the URL form of the docked settings panel; it maps
+      // to the internal `component/settings` content. The active tab is read
+      // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
+      // threaded through content params. See `contentUrlSegments` in
+      // layoutManager for the matching encode.
+      pairs.push({ type: 'component', id: 'settings' });
+    } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {
       const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);

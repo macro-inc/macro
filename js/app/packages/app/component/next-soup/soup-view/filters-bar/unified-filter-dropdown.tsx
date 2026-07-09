@@ -2,6 +2,7 @@ import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import {
   type FilterContext,
   NO_ASSIGNEE,
+  NO_STAGE,
 } from '@app/component/next-soup/filters/configs/';
 import {
   buildDocumentTypeQuery,
@@ -22,6 +23,8 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -299,6 +302,11 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
+// The Customers view's Stage filter is context-driven (team-customizable
+// stage set), rendered as a searchable submenu next to Owner — no static
+// categories here.
+const COMPANIES_FILTER_CATEGORIES: FilterCategory[] = [];
+
 const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
@@ -371,7 +379,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   mail: MAIL_FILTER_CATEGORIES,
   documents: DOCUMENTS_FILTER_CATEGORIES,
   tasks: TASKS_FILTER_CATEGORIES,
-  companies: [],
+  companies: COMPANIES_FILTER_CATEGORIES,
   channels: [],
   calls: [],
   folders: [],
@@ -537,12 +545,17 @@ export const UnifiedFilterDropdown = (
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    ownerFilter,
+    setOwnerFilter,
+    stageFilter,
+    setStageFilter,
     activeTab,
     readFilter,
     setReadFilter,
   } = useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
+  const dealStages = useDealStages();
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -702,7 +715,84 @@ export const UnifiedFilterDropdown = (
     });
   };
 
+  // Owner options for the Customers view (contacts, plus a "No owner" row).
+  const ownerOptions = createMemo((): SearchableOption[] => {
+    const currentUserId = userId();
+    const noOwnerOption: SearchableOption = {
+      id: NO_ASSIGNEE,
+      label: 'No owner',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    };
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const opt: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, currentUserId),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === currentUserId) {
+        meOption = opt;
+      } else {
+        otherContactOptions.push(opt);
+      }
+    }
+    return [
+      ...(meOption ? [meOption] : []),
+      noOwnerOption,
+      ...otherContactOptions,
+    ];
+  });
+
+  // Owner filtering is a client-side predicate (companies come back from a
+  // dedicated capped CRM request), so no query filters to maintain here.
+  const handleOwnerChange = (ids: string[]) => {
+    batch(() => {
+      setOwnerFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
+        soup.predicates.toggle({ and: ['company-owner'] });
+      }
+    });
+  };
+
+  // Stage options for the Customers view: the team's active deal-stage set
+  // plus a trailing "No stage" row.
+  const stageOptions = createMemo((): SearchableOption[] => [
+    ...dealStages.stages().map((stage, index) => ({
+      id: stage.id,
+      label: stage.label,
+      icon: () => (
+        <CrmStageIcon optionId={stage.id} index={index} class="size-3.5" />
+      ),
+    })),
+    {
+      id: NO_STAGE,
+      label: 'No stage',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    },
+  ]);
+
+  // Stage filtering is a client-side predicate, mirroring the owner filter.
+  const handleStageChange = (ids: string[]) => {
+    batch(() => {
+      setStageFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
+        soup.predicates.toggle({ and: ['company-stage'] });
+      }
+    });
+  };
+
   const isTasksView = () => currentView() === 'tasks';
+  const isCompaniesView = () => currentView() === 'companies';
   const isDocumentsView = () => currentView() === 'documents';
 
   const tagFilter = useTagFilter();
@@ -752,6 +842,7 @@ export const UnifiedFilterDropdown = (
       when={
         categories().length > 0 ||
         isTasksView() ||
+        isCompaniesView() ||
         isNewInbox() ||
         showTagsFilter()
       }
@@ -785,7 +876,10 @@ export const UnifiedFilterDropdown = (
             </Show>
             <Show
               when={
-                categories().length === 1 && !isTasksView() && !isNewInbox()
+                categories().length === 1 &&
+                !isTasksView() &&
+                !isCompaniesView() &&
+                !isNewInbox()
               }
               fallback={
                 <>
@@ -843,6 +937,24 @@ export const UnifiedFilterDropdown = (
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
                       placeholder="Search assignees..."
+                    />
+                  </Show>
+
+                  {/* Stage + Owner filters for the Customers view */}
+                  <Show when={isCompaniesView()}>
+                    <SearchableFilterSubmenu
+                      label="Stage"
+                      options={stageOptions}
+                      activeIds={stageFilter}
+                      onChange={handleStageChange}
+                      placeholder="Filter stages..."
+                    />
+                    <SearchableFilterSubmenu
+                      label="Owner"
+                      options={ownerOptions}
+                      activeIds={ownerFilter}
+                      onChange={handleOwnerChange}
+                      placeholder="Search owners..."
                     />
                   </Show>
                 </>

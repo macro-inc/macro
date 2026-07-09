@@ -40,6 +40,7 @@ export type ArrayFieldFilters = {
   channelMessageThreadId?: string[];
   channelThreadId?: string[];
   channelThreadRootSenderId?: string[];
+  channelThreadParticipantId?: string[];
   chatId?: string[];
   chatOwnerId?: string[];
   chatProjectId?: string[];
@@ -71,6 +72,8 @@ export type ScalarFieldFilters = {
   channelSeen?: boolean;
   channelDone?: boolean;
   channelImportance?: boolean;
+  channelThreadSeen?: boolean;
+  channelThreadDone?: boolean;
   chatSeen?: boolean;
   chatDone?: boolean;
   folderSeen?: boolean;

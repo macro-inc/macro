@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_filters WHERE id = $1 AND link_id = $2\n        RETURNING email_address, email_domain",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_domain",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "b291ecfab39f7d8dabb4cc4b5ca58ae16b1a9bb47acd22272ccdb4aa87a88efe"
+}

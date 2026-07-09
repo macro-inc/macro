@@ -14,6 +14,7 @@ use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
+use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
@@ -32,7 +33,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -54,6 +56,8 @@ env_var! {
         DocumentStorageServiceCloudfrontDistributionUrl,
         DocumentStorageServiceCloudfrontSignerPublicKeyId,
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        DocumentPermissionJwt,
+        KafkaBrokers,
     }
 }
 
@@ -78,7 +82,8 @@ maybe_env_var! {
 /// `DOCX_DOCUMENT_UPLOAD_BUCKET`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
+/// `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -100,6 +105,7 @@ pub async fn build_tool_service_context_from_env(
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+    let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
@@ -164,7 +170,7 @@ pub async fn build_tool_service_context_from_env(
 
     let search_client = Arc::new(SearchServiceClient::new(
         env.document_storage_service_auth_key.to_string(),
-        document_storage_service_url,
+        document_storage_service_url.clone(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
@@ -187,6 +193,9 @@ pub async fn build_tool_service_context_from_env(
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -236,6 +245,10 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
         properties_service.clone(),
     );
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
@@ -250,6 +263,7 @@ pub async fn build_tool_service_context_from_env(
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
             pool.clone(),
         )),
+        macro_event_broker,
     };
 
     let document_tool_context = DocumentToolContext::new(
@@ -257,6 +271,8 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client,
         sync_client.as_ref().clone(),
+        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        env.document_permission_jwt.to_string(),
     );
 
     let properties_tool_context =
@@ -268,6 +284,9 @@ pub async fn build_tool_service_context_from_env(
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -337,6 +356,7 @@ pub async fn build_tool_service_context_from_env(
         chat_tool_context,
         channel_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
+        crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
         recorder: ai_usage::pg_recorder(pool.clone()),

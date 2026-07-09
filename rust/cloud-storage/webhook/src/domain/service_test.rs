@@ -1,7 +1,7 @@
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookScope,
-        WebhookStatus, WebhookValidationResult,
+        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookFilter,
+        WebhookFilters, WebhookScope, WebhookStatus, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
     service::WebhookServiceImpl,
@@ -34,6 +34,17 @@ impl FakeRepo {
     }
 }
 
+fn filter_matches_event(filter: &WebhookFilter, event: &str, entity_id: &str) -> bool {
+    if !filter.events.iter().any(|candidate| candidate == event) {
+        return false;
+    }
+
+    match &filter.ids {
+        Some(ids) => ids.iter().any(|id| id == entity_id),
+        None => true,
+    }
+}
+
 impl WebhookRepo for FakeRepo {
     type Err = anyhow::Error;
 
@@ -60,6 +71,35 @@ impl WebhookRepo for FakeRepo {
             .filter(|webhook| webhook.id == webhook_id))
     }
 
+    async fn list_active_webhooks_matching_event(
+        &self,
+        workspace_ids: Vec<String>,
+        event: String,
+        entity_id: String,
+    ) -> Result<Vec<Webhook>, Self::Err> {
+        let Some(webhook) = self.state.lock().await.webhook.clone() else {
+            return Ok(Vec::new());
+        };
+
+        if webhook.deleted_at.is_some()
+            || webhook.status != WebhookStatus::Active
+            || !webhook.is_valid
+            || !workspace_ids.contains(&webhook.workspace_id)
+        {
+            return Ok(Vec::new());
+        }
+
+        if webhook
+            .filters
+            .iter()
+            .any(|filter| filter_matches_event(filter, &event, &entity_id))
+        {
+            return Ok(vec![webhook]);
+        }
+
+        Ok(Vec::new())
+    }
+
     async fn patch_webhook(
         &self,
         webhook_id: String,
@@ -82,8 +122,8 @@ impl WebhookRepo for FakeRepo {
         if let Some(headers) = request.headers {
             webhook.headers = headers;
         }
-        if let Some(rule) = request.rule {
-            webhook.rule = rule;
+        if let Some(filters) = request.filters {
+            webhook.filters = filters;
         }
         if let Some(status) = request.status {
             webhook.status = status;
@@ -187,8 +227,11 @@ fn caller() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("user@example.com").unwrap()
 }
 
-fn valid_rule() -> serde_json::Value {
-    serde_json::json!({ "events": ["file.created"] })
+fn valid_filters() -> WebhookFilters {
+    vec![WebhookFilter {
+        events: vec!["file.created".to_string()],
+        ids: None,
+    }]
 }
 
 fn create_request() -> CreateWebhookRequest {
@@ -200,7 +243,7 @@ fn create_request() -> CreateWebhookRequest {
             "X-Custom".to_string(),
             "value".to_string(),
         )])),
-        rule: valid_rule(),
+        filters: valid_filters(),
     }
 }
 
@@ -209,7 +252,7 @@ fn patch_request() -> PatchWebhookRequest {
         name: Some("Updated".to_string()),
         endpoint_url: None,
         headers: None,
-        rule: None,
+        filters: None,
         status: None,
     }
 }
@@ -233,7 +276,7 @@ fn webhook_from_create(
         created_at: now,
         updated_at: now,
         deleted_at: None,
-        rule: request.rule,
+        filters: request.filters,
     }
 }
 
@@ -330,13 +373,68 @@ async fn private_and_link_local_endpoints_are_rejected() {
 }
 
 #[tokio::test]
-async fn empty_events_array_is_rejected() {
+async fn empty_filters_list_is_rejected() {
     let repo = FakeRepo::default();
     let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
     let mut request = create_request();
-    request.rule = serde_json::json!({ "events": [] });
+    request.filters = Vec::new();
 
     assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn filter_with_empty_events_is_rejected() {
+    let repo = FakeRepo::default();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let mut request = create_request();
+    request.filters = vec![WebhookFilter {
+        events: Vec::new(),
+        ids: None,
+    }];
+
+    assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn filter_with_empty_ids_is_rejected() {
+    let repo = FakeRepo::default();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let mut request = create_request();
+    request.filters = vec![WebhookFilter {
+        events: vec!["file.created".to_string()],
+        ids: Some(Vec::new()),
+    }];
+
+    assert_bad_request(service.create_webhook(caller(), request).await);
+}
+
+#[tokio::test]
+async fn filter_without_ids_is_accepted() {
+    let repo = FakeRepo::default();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+
+    let webhook = service
+        .create_webhook(caller(), create_request())
+        .await
+        .unwrap();
+
+    assert_eq!(webhook.filters, valid_filters());
+}
+
+#[tokio::test]
+async fn filter_with_valid_ids_is_accepted() {
+    let repo = FakeRepo::default();
+    let service = WebhookServiceImpl::new(repo, FakeValidationClient::default());
+    let mut request = create_request();
+    request.filters = vec![WebhookFilter {
+        events: vec!["file.created".to_string()],
+        ids: Some(vec!["file_1".to_string()]),
+    }];
+    let expected_filters = request.filters.clone();
+
+    let webhook = service.create_webhook(caller(), request).await.unwrap();
+
+    assert_eq!(webhook.filters, expected_filters);
 }
 
 #[tokio::test]

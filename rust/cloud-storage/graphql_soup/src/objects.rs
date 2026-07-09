@@ -74,8 +74,14 @@ pub enum GraphqlSoupEntityType {
     CrmCompany,
     /// Foreign entity.
     ForeignEntity,
-    /// Unknown or unsupported entity type.
-    Unknown,
+    /// User entity
+    User,
+    /// Team entity
+    Team,
+    /// Static File
+    StaticFile,
+    /// crm contact
+    CrmContact,
 }
 
 impl From<EntityType> for GraphqlSoupEntityType {
@@ -90,15 +96,18 @@ impl From<EntityType> for GraphqlSoupEntityType {
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
-            _ => Self::Unknown,
+            EntityType::User => Self::User,
+            EntityType::Team => Self::Team,
+            EntityType::StaticFile => Self::StaticFile,
+            EntityType::CrmContact => Self::CrmContact,
         }
     }
 }
 
 #[Object]
 impl GraphqlSoupItem {
-    async fn id(&self) -> &str {
-        &self.id
+    async fn id(&self) -> ID {
+        ID(self.id.clone())
     }
 
     async fn entity_type(&self) -> GraphqlSoupEntityType {
@@ -347,12 +356,54 @@ async fn load_entity_notifications(
         .collect())
 }
 
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlSoupDataType {
+    /// Boolean true/false values.
+    Boolean,
+    /// Date and time values.
+    Date,
+    /// Numeric values.
+    Number,
+    /// String/text values.
+    String,
+    /// Select property with numeric options.
+    SelectNumber,
+    /// Select property with string options.
+    SelectString,
+    /// Tag property - user- or team-scoped colored labels (always multi-select).
+    Tag,
+    /// Entity reference property.
+    Entity,
+    /// Link value Property.
+    Link,
+}
+
+impl GraphqlSoupDataType {
+    fn from_properties_data_type(dt: models_properties::DataType) -> Self {
+        match dt {
+            models_properties::DataType::Boolean => Self::Boolean,
+            models_properties::DataType::Date => Self::Date,
+            models_properties::DataType::Number => Self::Number,
+            models_properties::DataType::String => Self::String,
+            models_properties::DataType::SelectNumber => Self::SelectNumber,
+            models_properties::DataType::SelectString => Self::SelectString,
+            models_properties::DataType::Tag => Self::Tag,
+            models_properties::DataType::Entity => Self::Entity,
+            models_properties::DataType::Link => Self::Link,
+        }
+    }
+}
+
 /// GraphQL property attached to a Soup entity.
 pub struct GraphqlSoupProperty(SoupProperty);
 
 #[Object]
 impl GraphqlSoupProperty {
-    async fn id(&self) -> ID {
+    /// Id of the shared property *definition* — deliberately not named `id`:
+    /// a property instance has no global identity (its `value` is
+    /// per-entity), so it must never be treated as a cacheable entity.
+    /// Normalized caches key objects by the presence of an `id` field.
+    async fn property_definition_id(&self) -> ID {
         ID(self.0.definition.id.to_string())
     }
 
@@ -360,19 +411,19 @@ impl GraphqlSoupProperty {
         &self.0.definition.display_name
     }
 
-    async fn data_type(&self) -> String {
-        format!("{:?}", self.0.definition.data_type)
+    async fn data_type(&self) -> GraphqlSoupDataType {
+        GraphqlSoupDataType::from_properties_data_type(self.0.definition.data_type)
     }
 
     async fn is_multi_select(&self) -> bool {
         self.0.definition.is_multi_select
     }
 
-    async fn specific_entity_type(&self) -> Option<String> {
+    async fn specific_entity_type(&self) -> Option<GraphqlSoupPropertyEntityType> {
         self.0
             .definition
             .specific_entity_type
-            .map(|entity_type| entity_type.to_string())
+            .map(GraphqlSoupPropertyEntityType::from_property_entity)
     }
 
     async fn is_system(&self) -> bool {
@@ -485,15 +536,42 @@ impl From<&PropertyValue> for GraphqlSoupPropertyValue {
 #[derive(SimpleObject)]
 pub struct GraphqlSoupPropertyEntityReference {
     entity_id: String,
-    entity_type: String,
+    entity_type: GraphqlSoupPropertyEntityType,
     specific_message_id: Option<ID>,
+}
+
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlSoupPropertyEntityType {
+    Channel,
+    Chat,
+    Company,
+    Document,
+    Project,
+    Task,
+    Thread,
+    User,
+}
+
+impl GraphqlSoupPropertyEntityType {
+    fn from_property_entity(entity: models_properties::EntityType) -> Self {
+        match entity {
+            models_properties::EntityType::Channel => Self::Channel,
+            models_properties::EntityType::Chat => Self::Chat,
+            models_properties::EntityType::Company => Self::Company,
+            models_properties::EntityType::Document => Self::Document,
+            models_properties::EntityType::Project => Self::Project,
+            models_properties::EntityType::Task => Self::Task,
+            models_properties::EntityType::Thread => Self::Thread,
+            models_properties::EntityType::User => Self::User,
+        }
+    }
 }
 
 impl From<&models_properties::EntityReference> for GraphqlSoupPropertyEntityReference {
     fn from(value: &models_properties::EntityReference) -> Self {
         Self {
             entity_id: value.entity_id.clone(),
-            entity_type: value.entity_type.to_string(),
+            entity_type: GraphqlSoupPropertyEntityType::from_property_entity(value.entity_type),
             specific_message_id: value
                 .specific_message_id
                 .map(|message_id| ID(message_id.to_string())),
@@ -976,9 +1054,12 @@ impl GraphqlSoupChannelParticipant {
 /// GraphQL channel message summary.
 pub struct GraphqlSoupChannelMessage(ChannelMessage);
 
+// NOTE: `id` (not `messageId`) — objects exposing `id: ID!` are treated as
+// normalized entities by clients' caches (presence-of-id convention).
+
 #[Object]
 impl GraphqlSoupChannelMessage {
-    async fn message_id(&self) -> ID {
+    async fn id(&self) -> ID {
         ID(self.0.message_id.to_string())
     }
 
@@ -1355,6 +1436,15 @@ impl GraphqlSoupCrmCompany {
             .domains
             .iter()
             .map(|domain| domain.domain.clone())
+            .collect()
+    }
+
+    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
+        self.0
+            .properties
+            .iter()
+            .cloned()
+            .map(GraphqlSoupProperty)
             .collect()
     }
 

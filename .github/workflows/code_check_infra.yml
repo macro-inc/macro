@@ -1,0 +1,111 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from rust/cloud-storage).
+# Source: rust/cloud-storage/tools/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
+name: infra code check
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    branches:
+    - main
+jobs:
+  path-check:
+    runs-on: namespace-profile-linux-small
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'infra/**'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/actions/setup-cachix/**'
+            - '.github/workflows/code_check_infra.yml'
+  biome-check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: Biome Check
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: Run Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: infra
+  check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: bun
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-cachix'
+      with:
+        cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        dev-shell: 'true'
+    - name: install
+      run: bun install --frozen-lockfile
+      working-directory: infra
+    - name: check
+      run: bun run check
+      working-directory: infra
+  status-check:
+    needs:
+    - path-check
+    - biome-check
+    - check
+    if: always()
+    name: Infra Status Check
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "biome-check: ${{ needs.biome-check.result }}"
+        echo "check: ${{ needs.check.result }}"
+
+        # Fail if any job failed (skipped and success are both OK)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.check.result }}" == "failure" ]]; then
+          echo "❌ One or more jobs failed"
+          exit 1
+        fi
+
+        echo "✅ All jobs passed or were skipped"
+concurrency:
+  group: code-check-infra-${{ github.ref }}
+  cancel-in-progress: true

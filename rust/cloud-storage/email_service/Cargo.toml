@@ -14,6 +14,14 @@ name = "backfill_contacts"
 path = "src/bin/backfill_contacts/backfill_contacts.rs"
 
 [[bin]]
+name = "backfill_calendar_flags"
+path = "src/bin/backfill_calendar_flags/backfill_calendar_flags.rs"
+
+[[bin]]
+name = "backfill_signal_flags"
+path = "src/bin/backfill_signal_flags/backfill_signal_flags.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
@@ -90,6 +98,7 @@ doppler-config = { workspace = true }
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../entity_access_management" }
 email_db_client = { path = "../email_db_client" }
 email_utils = { path = "../email_utils" }
 filter_ast = { path = "../filter_ast" }

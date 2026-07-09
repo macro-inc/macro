@@ -1,4 +1,5 @@
 import { openMacroMcpSetupModal } from '@app/component/macro-mcp-setup-modal/MacroMcpSetupModal';
+import type { SplitFileMenuAction } from '@app/component/split-layout/context';
 import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
@@ -196,6 +197,32 @@ export function useDispatchAgentAction() {
     executeAction,
     executeLastUsed: () => executeAction(lastUsed()),
   };
+}
+
+export function useDispatchAgentSplitFileActions(): SplitFileMenuAction[] {
+  const { executeAction } = useDispatchAgentAction();
+
+  return [
+    {
+      label: COPY_ACTION.name,
+      icon: COPY_ACTION.icon,
+      action: () => {
+        void executeAction(COPY_ACTION);
+      },
+    },
+    ...PLATFORM_ACTIONS.map((action) => ({
+      label: action.name,
+      icon: action.icon,
+      action: () => {
+        void executeAction(action);
+      },
+    })),
+    {
+      label: 'MCP setup instructions',
+      icon: PlugIcon,
+      action: openMacroMcpSetupModal,
+    },
+  ];
 }
 
 export function DispatchAgentButton(

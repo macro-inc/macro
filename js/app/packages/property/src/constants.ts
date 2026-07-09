@@ -7,6 +7,21 @@ import type { BlockAlias, BlockName } from '@core/block';
 
 export const NUMBER_DECIMAL_PLACES = 4;
 
+/** Prefix for internal, non-user-facing property definitions. */
+export const RESERVED_PROPERTY_DEFINITION_PREFIX = '__macro:';
+
+/** True for internal definitions that must not appear in property UIs. */
+export function isReservedPropertyDefinitionName(displayName: string): boolean {
+  return displayName.startsWith(RESERVED_PROPERTY_DEFINITION_PREFIX);
+}
+
+/**
+ * Reserved display name of the team-scoped CRM deal-stage definition
+ * (unique per team). Managed exclusively from CRM settings, so generic
+ * property pickers must not offer it.
+ */
+export const CRM_TEAM_STAGE_DEFINITION_NAME = 'Stage';
+
 /**
  * System property definition IDs (from backend seed migration).
  * These are stable UUIDs that match the database.
@@ -29,6 +44,10 @@ export const SYSTEM_PROPERTY_IDS = {
   SENDER: '00000001-0000-0000-0000-00000000000d',
   RECIPIENTS: '00000001-0000-0000-0000-00000000000e',
   SUBJECT: '00000001-0000-0000-0000-00000000000f',
+  // CRM company properties
+  STAGE: '00000001-0000-0000-0000-000000000010',
+  COMPANY_OWNER: '00000001-0000-0000-0000-000000000011',
+  REVENUE: '00000001-0000-0000-0000-000000000012',
 } as const;
 
 /**
@@ -51,6 +70,11 @@ const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
     SYSTEM_PROPERTY_IDS.STORY_POINTS,
     SYSTEM_PROPERTY_IDS.RELEVANT_DOCUMENTS,
   ],
+  company: [
+    SYSTEM_PROPERTY_IDS.STAGE,
+    SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    SYSTEM_PROPERTY_IDS.REVENUE,
+  ],
 } as const;
 
 /**
@@ -64,6 +88,11 @@ const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
     SYSTEM_PROPERTY_IDS.STATUS,
     SYSTEM_PROPERTY_IDS.PRIORITY,
     SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  ],
+  company: [
+    SYSTEM_PROPERTY_IDS.STAGE,
+    SYSTEM_PROPERTY_IDS.COMPANY_OWNER,
+    SYSTEM_PROPERTY_IDS.REVENUE,
   ],
 } as const;
 
@@ -105,5 +134,14 @@ export const PROPERTY_OPTION_IDS = {
     IN_REVIEW: '00000001-0000-0000-0002-000000000003',
     COMPLETED: '00000001-0000-0000-0002-000000000004',
     CANCELED: '00000001-0000-0000-0002-000000000005',
+  },
+  STAGE: {
+    LEAD: '00000001-0000-0000-0010-000000000001',
+    QUALIFIED: '00000001-0000-0000-0010-000000000002',
+    DEMO: '00000001-0000-0000-0010-000000000003',
+    TRIAL: '00000001-0000-0000-0010-000000000004',
+    NEGOTIATION: '00000001-0000-0000-0010-000000000005',
+    CUSTOMER: '00000001-0000-0000-0010-000000000006',
+    CHURNED: '00000001-0000-0000-0010-000000000007',
   },
 } as const;

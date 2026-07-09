@@ -6,6 +6,7 @@ use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
+use crate::domain::ports::editing::EditingWorkerService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use anyhow::Context;
 use async_trait::async_trait;
@@ -59,16 +60,17 @@ pub struct CreateDocument {
 }
 
 #[async_trait]
-impl<DSvc, ESvc> AsyncTool<DocumentToolContext<DSvc, ESvc>> for CreateDocument
+impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for CreateDocument
 where
     DSvc: DocumentService + DocumentCreationService,
     ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
 {
     type Output = CreateDocumentResponse;
 
     async fn call(
         &self,
-        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc>>,
+        service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Create content");
@@ -80,11 +82,26 @@ where
             })?;
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
+        // gets the members team if exists so we can track the task number correctly
+        let maybe_team = if self.is_task {
+            service_context
+                .entity_access_service
+                .get_user_team(&user_id)
+                .await
+                .map(|t| t.map(|tt| tt.team_id))
+                .map_err(|e| ToolCallError {
+                    description: "failed to get users team".to_string(),
+                    internal_error: e.into(),
+                })?
+        } else {
+            None
+        };
+
         let document =
             NewPlainTextDocument::builder(NewDocumentMetadata::new(self.document_name.clone()))
                 .file_type(parsed_file_type)
                 .text(self.file_content.clone())
-                .task_flag(self.is_task)
+                .task_flag(self.is_task, maybe_team)
                 .build()
                 .map_err(failed_to_create_document)?;
 

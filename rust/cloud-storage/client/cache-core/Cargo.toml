@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "cache-core"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+apollo-parser = { workspace = true }
+lru = { workspace = true }
+postcard = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+apollo-compiler = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+pollster = "0.4"

@@ -14,6 +14,7 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
@@ -215,6 +216,8 @@ export class McpServer extends pulumi.ComponentResource {
           secretsManagerPolicy.arn,
           s3Policy.arn,
           sqsPolicy.arn,
+          // Producer/consumer access to the macro event Kafka cluster.
+          getKafkaClusterPolicy(),
         ],
         tags: this.tags,
       },

@@ -1357,7 +1357,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/InitErrorCodeResponse"
                 }
               }
             }
@@ -4134,6 +4134,21 @@
         "properties": {
           "thread": {
             "$ref": "#/components/schemas/ApiThread"
+          }
+        }
+      },
+      "InitErrorCodeResponse": {
+        "type": "object",
+        "description": "Structured 400 body carrying a machine-readable code. Clients branch on\n`code` instead of parsing the human message.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation."
           }
         }
       },

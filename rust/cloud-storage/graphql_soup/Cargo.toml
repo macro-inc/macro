@@ -21,8 +21,11 @@ models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 notification = { path = "../notification" }
-properties = { path = "../properties" }
+properties = { path = "../properties", default-features = false, features = [
+  "ports",
+] }
 rootcause = { workspace = true }
+tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }

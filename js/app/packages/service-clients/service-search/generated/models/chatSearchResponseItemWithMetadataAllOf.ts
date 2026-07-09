@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatSearchResponseItemWithMetadataAllOfMetadata } from './chatSearchResponseItemWithMetadataAllOfMetadata';
+import type { ChatSearchResponseItemWithMetadataAllOfProperties } from './chatSearchResponseItemWithMetadataAllOfProperties';
 
 export type ChatSearchResponseItemWithMetadataAllOf = {
   metadata?: ChatSearchResponseItemWithMetadataAllOfMetadata;
+  /** Entity properties (e.g. tags) on the chat. */
+  properties?: ChatSearchResponseItemWithMetadataAllOfProperties;
 };

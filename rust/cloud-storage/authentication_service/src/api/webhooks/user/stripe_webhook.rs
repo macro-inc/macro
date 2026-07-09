@@ -16,9 +16,17 @@ use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
-use roles_and_permissions::domain::{model::ProductTier, port::UserRolesAndPermissionsService};
+use roles_and_permissions::domain::{
+    model::{ProductTier, SubscriptionStatus},
+    port::UserRolesAndPermissionsService,
+};
 use serde::Serialize;
 use stripe_webhook::{EventObject, EventType};
+use teams::domain::team_repo::TeamService;
+use tracing::Instrument;
+
+#[cfg(test)]
+mod test;
 
 /// Extracts the previous status from the previous_attributes JSON value.
 fn extract_previous_status(previous_attributes: &Option<JsonValue>) -> Option<String> {
@@ -31,8 +39,57 @@ fn extract_previous_status(previous_attributes: &Option<JsonValue>) -> Option<St
         _ => None,
     }
 }
-use teams::domain::team_repo::TeamService;
-use tracing::Instrument;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum PaymentEventOutcome {
+    RevokePremiumAccess,
+    RestorePremiumAccess,
+}
+
+impl PaymentEventOutcome {
+    fn from_event_type(event_type: &EventType) -> Option<Self> {
+        match event_type {
+            EventType::InvoicePaymentFailed => Some(Self::RevokePremiumAccess),
+            EventType::InvoicePaymentSucceeded | EventType::InvoicePaid => {
+                Some(Self::RestorePremiumAccess)
+            }
+            _ => None,
+        }
+    }
+
+    fn personal_subscription_status(self) -> SubscriptionStatus {
+        match self {
+            Self::RevokePremiumAccess => SubscriptionStatus::PastDue,
+            Self::RestorePremiumAccess => SubscriptionStatus::Active,
+        }
+    }
+
+    fn team_subscription_status(self) -> &'static str {
+        match self {
+            Self::RevokePremiumAccess => "past_due",
+            Self::RestorePremiumAccess => "active",
+        }
+    }
+
+    fn is_revoke(self) -> bool {
+        matches!(self, Self::RevokePremiumAccess)
+    }
+}
+
+fn is_active_subscription_status(status: &stripe::SubscriptionStatus) -> bool {
+    matches!(
+        *status,
+        stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
+    )
+}
+
+fn is_active_subscription_except_current(
+    subscription_id: &str,
+    status: &stripe::SubscriptionStatus,
+    current_subscription_id: &str,
+) -> bool {
+    subscription_id != current_subscription_id && is_active_subscription_status(status)
+}
 
 /// The main entrypoint for all stripe webhook events handling
 #[tracing::instrument(skip(ctx, headers, body))]
@@ -108,8 +165,11 @@ pub async fn handler(
             )
             .await
         }
+        EventType::InvoicePaymentFailed
+        | EventType::InvoicePaymentSucceeded
+        | EventType::InvoicePaid => handle_payment_event(&ctx, event.data.object, event_type).await,
         _ => {
-            tracing::error!(event_type=?event.type_, "unexpected event type");
+            tracing::error!(event_type=?event_type, "unexpected event type");
             Ok(())
         }
     }
@@ -119,6 +179,157 @@ pub async fn handler(
     })?;
 
     Ok(StatusCode::OK.into_response())
+}
+
+#[tracing::instrument(skip(ctx, event_object), err, ret)]
+async fn handle_payment_event(
+    ctx: &ApiContext,
+    event_object: EventObject,
+    event_type: EventType,
+) -> anyhow::Result<()> {
+    let invoice = match event_object {
+        EventObject::InvoicePaymentFailed(invoice) => invoice,
+        EventObject::InvoicePaymentSucceeded(invoice) => invoice,
+        EventObject::InvoicePaid(invoice) => invoice,
+        _ => {
+            anyhow::bail!("expected invoice payment event");
+        }
+    };
+
+    let outcome = PaymentEventOutcome::from_event_type(&event_type)
+        .context("expected invoice payment event type")?;
+
+    let Some(webhook_subscription_id) = invoice
+        .subscription
+        .as_ref()
+        .map(|subscription| subscription.id().as_str())
+    else {
+        tracing::info!(
+            event_type = ?event_type,
+            invoice_id = ?invoice.id.as_ref().map(|id| id.as_str()),
+            "acknowledging invoice payment event without subscription"
+        );
+        return Ok(());
+    };
+
+    let subscription_id: stripe::SubscriptionId = webhook_subscription_id
+        .parse()
+        .context("expected subscription id")?;
+    let subscription =
+        stripe::Subscription::retrieve(&ctx.stripe_client, &subscription_id, &[]).await?;
+
+    let customer_id = subscription.customer.id();
+    let customer = stripe::Customer::retrieve(&ctx.stripe_client, &customer_id, &[]).await?;
+
+    tracing::trace!(customer=?customer, "retrieved customer");
+
+    if customer.deleted {
+        return Ok(());
+    }
+
+    let email = customer.email.context("expected customer email")?;
+    let email = Email::parse_from_str(&email)
+        .context("expected customer email")?
+        .lowercase();
+
+    let subscription_id = subscription.id.as_str();
+    let subscription_status = outcome.team_subscription_status();
+    let stripe_subscription_status = subscription.status.as_str();
+
+    let subscription_currency = Some(subscription.currency.to_string());
+    let subscription_value: i64 = subscription
+        .items
+        .data
+        .iter()
+        .filter_map(|item| {
+            let price = item.price.as_ref()?;
+            let unit_amount = price.unit_amount?;
+            let quantity = item.quantity.unwrap_or(1) as i64;
+            Some(unit_amount * quantity)
+        })
+        .sum();
+    let subscription_value = if subscription_value > 0 {
+        Some(subscription_value)
+    } else {
+        None
+    };
+
+    let ga_client_id = subscription.metadata.get("ga_client_id").cloned();
+    let fbp = subscription.metadata.get("fbp").cloned();
+    let fbc = subscription.metadata.get("fbc").cloned();
+
+    tracing::info!(
+        email=%email.as_ref(),
+        event_type = ?event_type,
+        outcome = ?outcome,
+        subscription_id,
+        payment_derived_subscription_status = subscription_status,
+        stripe_subscription_status,
+        ga_client_id=?ga_client_id,
+        fbp=?fbp,
+        fbc=?fbc,
+        "processing stripe invoice payment event"
+    );
+
+    if let Some(team_id) = subscription.metadata.get("team_id") {
+        let team_id = macro_uuid::string_to_uuid(team_id)?;
+        return handle_team_subscription_event(
+            ctx,
+            subscription_id,
+            subscription_status,
+            &team_id,
+            &email,
+            SubscriptionTrackingData {
+                ga_client_id: ga_client_id.clone(),
+                fbp: fbp.clone(),
+                fbc: fbc.clone(),
+                email: email.as_ref().to_string(),
+                value_cents: subscription_value,
+                currency: subscription_currency,
+                status: subscription_status.to_string(),
+                is_new: false,
+            },
+        )
+        .await;
+    }
+
+    if outcome.is_revoke() {
+        let mut list_subscriptions = stripe::ListSubscriptions::new();
+        list_subscriptions.customer = Some(customer_id.clone());
+        list_subscriptions.limit = Some(10);
+
+        let all_subscriptions =
+            stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
+
+        let has_other_active_personal_subscription =
+            all_subscriptions.data.iter().any(|subscription| {
+                !subscription.metadata.contains_key("team_id")
+                    && is_active_subscription_except_current(
+                        subscription.id.as_str(),
+                        &subscription.status,
+                        subscription_id,
+                    )
+            });
+
+        if has_other_active_personal_subscription {
+            tracing::info!(
+                customer_id = %customer_id,
+                subscription_id,
+                "invoice payment failed but user still has another active subscription - not revoking permissions"
+            );
+            return Ok(());
+        }
+    }
+
+    ctx.user_roles_and_permissions_service
+        .update_user_roles_and_permissions_for_subscription(
+            email,
+            outcome.personal_subscription_status(),
+            ProductTier::Opus,
+        )
+        .await?;
+
+    Ok(())
 }
 
 #[tracing::instrument(skip(ctx, event_object, previous_attributes), err, ret)]
@@ -279,12 +490,7 @@ async fn handle_customer_subscription_event(
     let active_subscriptions: Vec<_> = all_subscriptions
         .data
         .iter()
-        .filter(|sub| {
-            matches!(
-                sub.status,
-                stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
-            )
-        })
+        .filter(|sub| is_active_subscription_status(&sub.status))
         .collect();
 
     // If this is a new active/trialing subscription and there are multiple active subscriptions,

@@ -119,11 +119,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   // Channel thread filters
   if (
     include.channelThreadId?.length ||
-    include.channelThreadRootSenderId?.length
+    include.channelThreadRootSenderId?.length ||
+    include.channelThreadParticipantId?.length
   ) {
     filters.channel_thread_filters = {
       thread_ids: include.channelThreadId,
       root_sender_ids: include.channelThreadRootSenderId,
+      participant_ids: include.channelThreadParticipantId,
     };
   }
 

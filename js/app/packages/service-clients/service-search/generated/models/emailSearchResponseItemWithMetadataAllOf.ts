@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailSearchResponseItemWithMetadataAllOfProperties } from './emailSearchResponseItemWithMetadataAllOfProperties';
 import type { EmailSearchResponseItemWithMetadataAllOfSnippet } from './emailSearchResponseItemWithMetadataAllOfSnippet';
 import type { EmailSearchResponseItemWithMetadataAllOfViewedAt } from './emailSearchResponseItemWithMetadataAllOfViewedAt';
 
@@ -13,6 +14,8 @@ export type EmailSearchResponseItemWithMetadataAllOf = {
   is_draft: boolean;
   is_important: boolean;
   is_read: boolean;
+  /** Entity properties (e.g. tags) on the thread. */
+  properties?: EmailSearchResponseItemWithMetadataAllOfProperties;
   snippet?: EmailSearchResponseItemWithMetadataAllOfSnippet;
   updated_at: string;
   viewed_at?: EmailSearchResponseItemWithMetadataAllOfViewedAt;

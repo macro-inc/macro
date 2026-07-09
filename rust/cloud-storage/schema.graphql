@@ -387,7 +387,7 @@ type GraphqlSoupChannel {
 }
 
 type GraphqlSoupChannelMessage {
-	messageId: ID!
+	id: ID!
 	threadId: ID
 	senderId: String!
 	content: String!
@@ -442,7 +442,47 @@ type GraphqlSoupCrmCompany {
 	updatedAt: String!
 	viewedAt: String
 	domains: [String!]!
+	properties: [GraphqlSoupProperty!]!
 	notifications: [GraphqlSoupNotification!]!
+}
+
+enum GraphqlSoupDataType {
+	"""
+	Boolean true/false values.
+	"""
+	BOOLEAN
+	"""
+	Date and time values.
+	"""
+	DATE
+	"""
+	Numeric values.
+	"""
+	NUMBER
+	"""
+	String/text values.
+	"""
+	STRING
+	"""
+	Select property with numeric options.
+	"""
+	SELECT_NUMBER
+	"""
+	Select property with string options.
+	"""
+	SELECT_STRING
+	"""
+	Tag property - user- or team-scoped colored labels (always multi-select).
+	"""
+	TAG
+	"""
+	Entity reference property.
+	"""
+	ENTITY
+	"""
+	Link value Property.
+	"""
+	LINK
 }
 
 type GraphqlSoupDocument {
@@ -569,9 +609,21 @@ enum GraphqlSoupEntityType {
 	"""
 	FOREIGN_ENTITY
 	"""
-	Unknown or unsupported entity type.
+	User entity
 	"""
-	UNKNOWN
+	USER
+	"""
+	Team entity
+	"""
+	TEAM
+	"""
+	Static File
+	"""
+	STATIC_FILE
+	"""
+	crm contact
+	"""
+	CRM_CONTACT
 }
 
 type GraphqlSoupForeignEntity {
@@ -587,7 +639,7 @@ type GraphqlSoupForeignEntity {
 }
 
 type GraphqlSoupItem {
-	id: String!
+	id: ID!
 	entityType: GraphqlSoupEntityType!
 	frecencyScore: Float!
 	entity: GraphqlSoupEntity!
@@ -622,11 +674,17 @@ type GraphqlSoupProject {
 }
 
 type GraphqlSoupProperty {
-	id: ID!
+	"""
+	Id of the shared property *definition* — deliberately not named `id`:
+	a property instance has no global identity (its `value` is
+	per-entity), so it must never be treated as a cacheable entity.
+	Normalized caches key objects by the presence of an `id` field.
+	"""
+	propertyDefinitionId: ID!
 	displayName: String!
-	dataType: String!
+	dataType: GraphqlSoupDataType!
 	isMultiSelect: Boolean!
-	specificEntityType: String
+	specificEntityType: GraphqlSoupPropertyEntityType
 	isSystem: Boolean!
 	isMetadata: Boolean!
 	value: GraphqlSoupPropertyValue
@@ -637,8 +695,19 @@ GraphQL entity reference stored in a property value.
 """
 type GraphqlSoupPropertyEntityReference {
 	entityId: String!
-	entityType: String!
+	entityType: GraphqlSoupPropertyEntityType!
 	specificMessageId: ID
+}
+
+enum GraphqlSoupPropertyEntityType {
+	CHANNEL
+	CHAT
+	COMPANY
+	DOCUMENT
+	PROJECT
+	TASK
+	THREAD
+	USER
 }
 
 """
@@ -653,6 +722,17 @@ type GraphqlSoupPropertyValue {
 	selectOptionIds: [ID!]!
 	entityReferences: [GraphqlSoupPropertyEntityReference!]!
 	links: [String!]!
+}
+
+type GraphqlUser {
+	"""
+	Stable id of the authenticated user.
+	"""
+	id: ID!
+	"""
+	Fetch a page of Soup items using the existing Soup filter AST format.
+	"""
+	soup(input: SoupInput!): SoupPage!
 }
 
 """
@@ -711,9 +791,9 @@ type SoupPage {
 
 type SoupQueryRoot {
 	"""
-	Fetch a page of Soup items using the existing Soup filter AST format.
+	The authenticated user.
 	"""
-	soup(input: SoupInput!): SoupPage!
+	user: GraphqlUser!
 }
 
 """

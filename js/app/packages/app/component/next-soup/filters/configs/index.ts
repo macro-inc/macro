@@ -1,5 +1,6 @@
 export type { FilterContext } from './base';
 export * from './base';
+export * from './company';
 export * from './document';
 export * from './email';
 export * from './entity';
@@ -9,6 +10,7 @@ export * from './general';
 export * from './task';
 
 import type { FilterGroupConfig } from './base';
+import { companyOwnerFilter, companyStageFilter } from './company';
 import {
   DOCUMENT_CONTEXTUAL_FILTERS,
   emailAttachmentsFilter,
@@ -87,6 +89,8 @@ export const SOUP_FILTERS = [
   crmCompanyFilter,
   crmCompanyActiveFilter,
   crmCompanyHiddenFilter,
+  companyOwnerFilter,
+  companyStageFilter,
   emailAttachmentsFilter,
   inFolderFilter,
   searchSupportedFilter,

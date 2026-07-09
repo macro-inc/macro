@@ -164,12 +164,12 @@ pub enum MarkdownSubtype {
 
 impl MarkdownSubtype {
     /// Convert a simple task flag into the default markdown subtype.
-    pub fn from_task_flag(is_task: bool) -> Self {
+    pub fn from_task_flag(is_task: bool, team_id: Option<uuid::Uuid>) -> Self {
         if is_task {
             Self::Task {
                 property_values: None,
                 share_with_team: true,
-                team_id: None,
+                team_id,
             }
         } else {
             Self::Note
@@ -301,8 +301,8 @@ impl<FileTypeState, TextState> NewPlainTextDocumentBuilder<FileTypeState, TextSt
     }
 
     /// Set the markdown subtype from a simple task flag.
-    pub fn task_flag(self, is_task: bool) -> Self {
-        self.markdown_subtype(MarkdownSubtype::from_task_flag(is_task))
+    pub fn task_flag(self, is_task: bool, team_id: Option<uuid::Uuid>) -> Self {
+        self.markdown_subtype(MarkdownSubtype::from_task_flag(is_task, team_id))
     }
 }
 
@@ -711,7 +711,7 @@ mod tests {
         let err = NewPlainTextDocument::builder(metadata())
             .file_type(FileType::Txt)
             .text("hello")
-            .markdown_subtype(MarkdownSubtype::from_task_flag(true))
+            .markdown_subtype(MarkdownSubtype::from_task_flag(true, None))
             .build()
             .unwrap_err();
 
@@ -726,7 +726,7 @@ mod tests {
         NewPlainTextDocument::builder(metadata())
             .file_type(FileType::Md)
             .text("# hello")
-            .task_flag(true)
+            .task_flag(true, None)
             .build()
             .unwrap();
     }

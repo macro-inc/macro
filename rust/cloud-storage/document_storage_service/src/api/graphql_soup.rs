@@ -77,7 +77,10 @@ async fn handler(
             link_ids,
             team_receipt,
         })
-        .data(graphql_soup::entity_properties_loader(property_reader))
+        .data(graphql_soup::entity_properties_loader(
+            macro_user_id.clone(),
+            property_reader,
+        ))
         .data(graphql_soup::entity_notifications_loader(
             macro_user_id,
             state.graphql_notification_reader.clone(),

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "extends": ["../app/biome.jsonc"],
+  "vcs": {
+    "root": "../.."
+  },
+  "files": {
+    "includes": [
+      "**/*.{ts,tsx,js,jsx}",
+      "!**/*.d.ts",
+      "!**/node_modules",
+      "!src/editor-sandbox-code.ts"
+    ]
+  }
+}

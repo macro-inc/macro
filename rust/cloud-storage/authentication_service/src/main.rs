@@ -17,10 +17,12 @@ use github::{
         pg_github_repo::PgGithubRepo,
     },
 };
+use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::AppServiceUrl;
 use macro_service_urls::DocumentStorageServiceUrl;
+use macro_service_urls::EmailServiceUrl;
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -38,8 +40,8 @@ use sqlx::postgres::PgPoolOptions;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
-        customer_repo::CustomerRepositoryImpl, team_channels_repo::TeamChannelsRepositoryImpl,
-        team_repo::TeamRepositoryImpl,
+        customer_repo::CustomerRepositoryImpl, team_analytics::AnalyticsClientTeamAnalytics,
+        team_channels_repo::TeamChannelsRepositoryImpl, team_repo::TeamRepositoryImpl,
     },
 };
 
@@ -157,6 +159,10 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized document storage service client");
 
+    let email_service_client =
+        email::outbound::EmailServiceHttpClient::new(EmailServiceUrl::new()?.to_string());
+    tracing::trace!("initialized email service client");
+
     let macro_cache_client =
         macro_cache_client::MacroCache::new(config.redis_uri.to_string().as_str());
 
@@ -204,7 +210,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized sqs client");
 
     // Initialize analytics client with configured providers
-    let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
+    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
         google_analytics: config
             .ga_measurement_id
             .value()
@@ -239,8 +245,20 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
             }
         }),
-    });
+    }));
     tracing::trace!("initialized analytics client");
+
+    // Initialize Loops client. Only production sign-ups are added to Loops;
+    // in all other environments (or when no API key is configured) this is a
+    // no-op.
+    let loops_client = match (config.environment, config.loops_api_key.value()) {
+        (Environment::Production, Some(api_key)) => {
+            tracing::info!("configuring Loops");
+            LoopsClient::new(api_key.to_string())
+        }
+        _ => LoopsClient::noop(),
+    };
+    tracing::trace!("initialized loops client");
 
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
@@ -261,8 +279,9 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(notification_ingress_service);
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
+    let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
 
-    let teams_service_impl = TeamServiceImpl::new(
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,
         customer_repo_impl,
         team_channels_repo_impl,
@@ -270,6 +289,7 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress_service.clone(),
         crm_enqueuer,
         team_crm_settings_repo_impl,
+        team_analytics,
     );
 
     let foreign_entity_service =
@@ -312,6 +332,7 @@ async fn main() -> anyhow::Result<()> {
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
+            email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,
             sqs_client: Arc::new(sqs_client),
@@ -348,7 +369,8 @@ async fn main() -> anyhow::Result<()> {
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
-            analytics_client: Arc::new(analytics_client),
+            loops_client: Arc::new(loops_client),
+            analytics_client,
             stripe_price_id: config.stripe_price_id.to_string(),
         },
         config.port,

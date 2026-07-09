@@ -12,6 +12,7 @@ import { isReplyAllEligible } from '../util/recipientConversion';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
 import { getEmailFormRegistry } from './EmailFormContext';
+import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
@@ -20,21 +21,19 @@ function ReplyActionButton(props: {
 }) {
   return (
     <Button
-      variant="base"
-      size="sm"
       // Button wraps itself in Layer depth={0} by default; in the floating
       // accessory region, match the chrome's depth so the island surface
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
       depth={isMobile() ? 3 : undefined}
+      variant="base"
       class={cn(
-        'rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:text-ink border border-ink-muted/8 bg-ink-muted/2.5 hover:bg-ink-muted/6',
         // Island pills when floating in the mobile accessory region.
         'mobile:island mobile:h-8 mobile:rounded-full mobile:border-0'
       )}
       onClick={props.onClick}
     >
-      <props.icon class="size-3.5" />
+      <props.icon class="size-4 shrink-0" />
       <span>{props.label}</span>
     </Button>
   );
@@ -52,18 +51,18 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
     createCallback(() => {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
-      const form = formRegistry.getOrInit({
-        type: 'replying_to',
-        messageID: messageId,
+      openEmailReplyComposerForMessage({
+        ctx,
+        formRegistry,
+        message: props.lastMessage,
+        replyType: type,
+        isLastMessage: true,
       });
-      form.setReplyType(type);
-      form.setShouldFocusInput(true);
-      ctx.messages.setBottomReplyOpen(true);
     });
 
   return (
     <FloatRegionOrInline region="accessory">
-      <div class="w-full pt-2 pb-1 mobile:py-0 mobile:px-(--mobile-chrome-gutter)">
+      <div class="w-full p-2 pb-2 pt-4 mobile:px-(--mobile-chrome-gutter) mobile:py-0">
         <div class="flex flex-row items-center gap-2 mobile:pointer-events-auto">
           <ReplyActionButton
             icon={ArrowBendUpLeft}

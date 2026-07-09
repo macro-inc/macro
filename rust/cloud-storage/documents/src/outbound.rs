@@ -2,6 +2,8 @@
 
 #[cfg(feature = "document_create_adapters")]
 pub mod document_bytes_upload;
+#[cfg(feature = "ai_tools")]
+pub mod editing_worker_client;
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
 #[cfg(feature = "outbound")]

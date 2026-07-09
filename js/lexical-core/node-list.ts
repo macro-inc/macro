@@ -23,6 +23,7 @@ import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
 import { DiffNode } from './nodes/DiffNode';
+import { DiffTextNode } from './nodes/DiffTextNode';
 import { DocumentCardNode } from './nodes/DocumentCardNode';
 import { DocumentMentionNode } from './nodes/DocumentMentionNode';
 import { EquationNode } from './nodes/EquationNode';
@@ -97,6 +98,7 @@ export const SupportedNodeTypes = [
   DiffNode,
   DiffInsertNode,
   DiffDeleteNode,
+  DiffTextNode,
   HtmlRenderNode,
   ClassedBlockNode,
   WatermarkNode,

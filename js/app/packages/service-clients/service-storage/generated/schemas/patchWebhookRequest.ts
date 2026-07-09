@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PatchWebhookRequestEndpointUrl } from './patchWebhookRequestEndpointUrl';
+import type { PatchWebhookRequestFilters } from './patchWebhookRequestFilters';
 import type { PatchWebhookRequestHeaders } from './patchWebhookRequestHeaders';
 import type { PatchWebhookRequestName } from './patchWebhookRequestName';
 import type { PatchWebhookRequestStatus } from './patchWebhookRequestStatus';
@@ -15,10 +16,9 @@ import type { PatchWebhookRequestStatus } from './patchWebhookRequestStatus';
 export interface PatchWebhookRequest {
   /** HTTPS endpoint URL. */
   endpoint_url?: PatchWebhookRequestEndpointUrl;
+  filters?: PatchWebhookRequestFilters;
   headers?: PatchWebhookRequestHeaders;
   /** Display name. */
   name?: PatchWebhookRequestName;
-  /** Rule definition used to match events. */
-  rule?: unknown;
   status?: PatchWebhookRequestStatus;
 }

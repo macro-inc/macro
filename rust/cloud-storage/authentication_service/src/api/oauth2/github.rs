@@ -32,10 +32,6 @@ pub enum GithubLinkError {
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
         let (status_code, message): (StatusCode, &str) = match &self {
-            GithubLinkError::GithubServiceError(GithubError::AccountAlreadyLinked) => (
-                StatusCode::CONFLICT,
-                "github account is already linked with another Macro account",
-            ),
             GithubLinkError::GithubServiceError(GithubError::NoLinkFound) => {
                 (StatusCode::NOT_FOUND, "no github link found")
             }
@@ -105,7 +101,8 @@ async fn link_user(
         .map(|id| id.into_owned().lowercase())
         .context("valid macro user id")?;
 
-    ctx.github_link_service
+    let link = ctx
+        .github_link_service
         .link_user(
             &macro_user_id,
             &fusionauth_user_id,
@@ -114,6 +111,20 @@ async fn link_user(
             code,
         )
         .await?;
+
+    // Associate any GitHub App installations this GitHub user made before
+    // linking. Fire-and-forget: the link itself succeeded, and association can
+    // also happen lazily on the next installation webhook.
+    let document_storage_service_client = ctx.document_storage_service_client.clone();
+    tokio::spawn(async move {
+        document_storage_service_client
+            .associate_github_installations(&link.github_user_id)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to associate github installations after link");
+            })
+            .ok();
+    });
 
     Ok(())
 }

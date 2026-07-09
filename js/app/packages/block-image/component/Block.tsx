@@ -1,4 +1,5 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
+import { FileSidePanelSections, SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
@@ -61,23 +62,28 @@ export default function BlockImage() {
     <DocumentBlockContainer>
       <div class="size-full bg-surface select-none overscroll-none overflow-hidden flex flex-col">
         <ModalsProvider>
-          <TopBar />
-          <Show
-            when={imageUrl()}
-            fallback={
-              <div class="size-full flex items-center justify-center">
-                {/* Loading state handled by DocumentBlockContainer */}
-              </div>
-            }
-          >
-            <div class="size-full flex items-center justify-center">
-              <img
-                src={imageUrl()}
-                alt={blockMetadataSignal()?.documentName || 'Image'}
-                class="max-w-full max-h-full object-contain"
-              />
+          <SidePanel.Layout defaultOpen={false}>
+            <FileSidePanelSections />
+            <div class="flex size-full min-w-0 flex-col overflow-hidden">
+              <TopBar />
+              <Show
+                when={imageUrl()}
+                fallback={
+                  <div class="size-full flex items-center justify-center">
+                    {/* Loading state handled by DocumentBlockContainer */}
+                  </div>
+                }
+              >
+                <div class="size-full flex items-center justify-center">
+                  <img
+                    src={imageUrl()}
+                    alt={blockMetadataSignal()?.documentName || 'Image'}
+                    class="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              </Show>
             </div>
-          </Show>
+          </SidePanel.Layout>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

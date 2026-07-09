@@ -10,10 +10,14 @@ import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockAliasedName, useBlockId } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
-import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
+import {
+  editorFocusSignal,
+  getSaveState,
+} from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
+  ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
@@ -38,6 +42,8 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { useHistory } from '../history/HistoryContext';
+import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
@@ -95,7 +101,10 @@ function useCanUseLexicalStateDebugger() {
   });
 }
 
-export function Notebook(props: { loroManager: LoroManager }) {
+export function Notebook(props: {
+  loroManager: LoroManager;
+  documentId: string;
+}) {
   const blockElement = blockElementSignal.get;
   const blockId = useBlockId();
   const blockAliasedName = useBlockAliasedName();
@@ -104,7 +113,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const documentName = useBlockDocumentName();
   const scopeId = blockHotkeyScopeSignal.get;
   const md = mdStore.get;
+  const history = useHistory();
   const { navigatedFromJK } = useNavigatedFromJK();
+  const documentId = props.documentId;
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -120,6 +131,12 @@ export function Notebook(props: { loroManager: LoroManager }) {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
+  const showComments = () => hasComment() && !history.isOpen();
+
+  const currentEditorState = () => {
+    const editor = md.editor;
+    return editor ? getSaveState(editor.getEditorState()) : undefined;
+  };
 
   // Set the refs on the block store.
   onMount(() => {
@@ -135,7 +152,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const mode = hasComment() ? widthToMode(width) : CommentLayoutMode.none;
+      const mode = showComments() ? widthToMode(width) : CommentLayoutMode.none;
       setLayoutMode(mode);
       const leftFloat =
         contentRef.getBoundingClientRect().right - left + GapTargetWidth;
@@ -148,9 +165,8 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   createEffect(() => {
     const goToTempRedirect = useGoToTempRedirect();
-    const documentId = blockId;
     const recentState = tempRedirectLocation();
-    if (!documentId || !recentState) return;
+    if (!recentState) return;
 
     setTimeout(() => {
       goToTempRedirect(documentId, recentState);
@@ -158,7 +174,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
   });
 
   createEffect(() => {
-    if (!hasComment()) {
+    if (!showComments()) {
       setLayoutMode(CommentLayoutMode.none);
     } else {
       setLayoutMode(widthToMode(untrack(width)));
@@ -166,8 +182,10 @@ export function Notebook(props: { loroManager: LoroManager }) {
   });
 
   createEffect(() => {
-    if (hasComment()) {
+    if (showComments()) {
       setWideEnoughForComments(width() >= BreaksPoints.md);
+    } else {
+      setWideEnoughForComments(false);
     }
   });
 
@@ -291,7 +309,11 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   return (
     <div class={containerClasses()} ref={notebookRef}>
-      <div class={contentDivClasses()} ref={contentRef}>
+      <div
+        class={contentDivClasses()}
+        ref={contentRef}
+        classList={{ relative: true }}
+      >
         <SidePanel.Section
           id="document-ai-actions"
           title="Actions"
@@ -320,16 +342,31 @@ export function Notebook(props: { loroManager: LoroManager }) {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor
-            loroManager={props.loroManager}
-            showLexicalStateDebugger={
-              canUseLexicalStateDebugger() && showLexicalStateDebugger()
-            }
-            onLexicalStateDebuggerClose={() =>
-              setShowLexicalStateDebugger(false)
-            }
-          />
-          <DocumentDiscussion />
+          {/* Relative wrapper so the history overlay covers only the body region,
+              leaving the title + properties above it untouched and aligned. */}
+          <div class="relative">
+            <MarkdownEditor
+              loroManager={props.loroManager}
+              showLexicalStateDebugger={
+                canUseLexicalStateDebugger() && showLexicalStateDebugger()
+              }
+              onLexicalStateDebuggerClose={() =>
+                setShowLexicalStateDebugger(false)
+              }
+            />
+            <Show when={ENABLE_HISTORY_COMPONENT()}>
+              <HistoryOverlay
+                currentState={currentEditorState}
+                selectedAt={history.selectedAt()}
+                isLive={history.isLive()}
+                visible={history.isOpen()}
+                onExit={history.exit}
+              />
+            </Show>
+          </div>
+          <Show when={!history.isOpen()}>
+            <DocumentDiscussion />
+          </Show>
         </ParamsProvider>
       </div>
       <div
@@ -345,8 +382,8 @@ export function Notebook(props: { loroManager: LoroManager }) {
         }}
         ref={commentMarginRef}
         classList={{
-          block: hasComment(),
-          hidden: !hasComment(),
+          block: showComments(),
+          hidden: !showComments(),
         }}
       >
         <CommentMargin />

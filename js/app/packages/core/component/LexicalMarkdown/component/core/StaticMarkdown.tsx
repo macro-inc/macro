@@ -55,6 +55,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   Show,
   useContext,
 } from 'solid-js';
@@ -836,23 +837,25 @@ function Render(
   return '';
 }
 
-function MapRender(props: {
-  children: LexicalNode[];
-  theme: EditorThemeClasses;
-  lazy: boolean;
-}) {
+function MapRender(
+  props: {
+    children: LexicalNode[];
+    theme: EditorThemeClasses;
+  } & StaticRenderOptions
+) {
   return props.children.map((child) => (
     <Render node={child} theme={props.theme} lazy={props.lazy} />
   ));
 }
 
-function Document(props: {
-  rootNode: RootNode;
-  theme: EditorThemeClasses;
-  lazy: boolean;
-  rootRef?: (ref: HTMLDivElement) => void;
-  singleLine?: boolean;
-}): JSX.Element {
+function Document(
+  props: {
+    rootNode: RootNode;
+    theme: EditorThemeClasses;
+    rootRef?: (ref: HTMLDivElement) => void;
+    singleLine?: boolean;
+  } & StaticRenderOptions
+): JSX.Element {
   return (
     <div
       class={cn(
@@ -882,6 +885,14 @@ export function StaticMarkdown(props: {
   parentEditor?: LexicalEditor;
   theme?: EditorThemeClasses;
   setEditorRef?: (editor: LexicalEditor) => void;
+  /* Accessor for the parsed state this instance renders. Unlike setEditorRef
+     (which may hand back the shared context editor), the state snapshot is
+     always this instance's own parse of its markdown. */
+  setStateRef?: (
+    state: Accessor<EditorState | null> | undefined,
+    key?: string
+  ) => void;
+  stateRefKey?: string;
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
@@ -893,6 +904,13 @@ export function StaticMarkdown(props: {
     lazy: parentLazy,
   } = useContext(context);
   let [editorState, setEditorState] = createSignal<EditorState | null>(null);
+  createEffect(() => {
+    const setStateRef = props.setStateRef;
+    const key = props.stateRefKey;
+    if (!setStateRef) return;
+    setStateRef(editorState, key);
+    onCleanup(() => setStateRef(undefined, key));
+  });
 
   if (contextEditor === null) {
     console.warn(

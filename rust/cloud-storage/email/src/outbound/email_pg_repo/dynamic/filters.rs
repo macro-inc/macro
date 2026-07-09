@@ -4,6 +4,7 @@ use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{Email, EmailLiteral};
+use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue};
 use recursion::CollapsibleExt;
 use uuid::Uuid;
 
@@ -35,7 +36,8 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::CreatedAt(_)
-            | EmailLiteral::UpdatedAt(_),
+            | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::Property(_),
         ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
         filter_ast::ExprFrame::Literal(_) => false,
@@ -53,7 +55,8 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::CreatedAt(_)
-            | EmailLiteral::UpdatedAt(_),
+            | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::Property(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
     })
@@ -333,6 +336,7 @@ pub(super) fn build_message_email_filter(
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::Property(_)) => SqlFragment::raw("TRUE"),
     });
 
     fragment.with_and_prefix()
@@ -761,19 +765,11 @@ pub(super) fn build_thread_email_filter(
             f
         }
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => SqlFragment::raw(
-            r#"EXISTS (
-                    SELECT 1
-                    FROM email_messages m_cal
-                    JOIN email_attachments a_cal ON a_cal.message_id = m_cal.id
-                    WHERE m_cal.thread_id = t.id
-                      AND (
-                        a_cal.filename ILIKE '%.ics'
-                        OR a_cal.mime_type = 'text/calendar'
-                        OR a_cal.mime_type = 'application/ics'
-                      )
-                )"#,
-        ),
+        // Denormalized flag maintained at attachment ingest — deriving this
+        // from email_attachments at query time is prohibitively slow.
+        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => {
+            SqlFragment::raw("t.has_calendar_attachment")
+        }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
             SqlFragment::raw("TRUE")
@@ -785,6 +781,10 @@ pub(super) fn build_thread_email_filter(
 
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(ref lit)) => {
             date_predicate(sort_ts_field, lit)
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Property(ref lit)) => {
+            build_thread_property_predicate(lit)
         }
 
         filter_ast::ExprFrame::Literal(
@@ -800,6 +800,42 @@ pub(super) fn build_thread_email_filter(
     });
 
     fragment.with_and_prefix()
+}
+
+/// Entity-property predicate for a candidate thread: EXISTS against
+/// `entity_properties` keyed on the thread id. A literal typed to a
+/// non-thread entity can never match a thread, so it renders FALSE.
+fn build_thread_property_predicate(lit: &PropertiesLiteral) -> SqlFragment {
+    if lit
+        .entity_type
+        .is_some_and(|et| et != PropertyEntityType::Thread)
+    {
+        return SqlFragment::raw("FALSE");
+    }
+    let mut f = SqlFragment::raw(
+        r#"EXISTS (
+                SELECT 1 FROM entity_properties ep_prop
+                WHERE ep_prop.entity_id = t.id::text
+                AND ep_prop.entity_type = 'THREAD'
+                AND ep_prop.property_definition_id = "#,
+    );
+    f.extend(SqlFragment::bind_uuid(lit.property_definition_id));
+    match &lit.value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            f.push_raw(" AND ep_prop.values->'value' ? ");
+            f.extend(SqlFragment::bind_string(option_id.to_string()));
+        }
+        PropertyMatchValue::EntityRef(entity_id) => {
+            f.push_raw(" AND ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', ");
+            f.extend(SqlFragment::bind_string(entity_id.to_string()));
+            f.push_raw("::text))");
+        }
+    }
+    f.push_raw(
+        r#"
+            )"#,
+    );
+    f
 }
 
 /// Escapes special characters in LIKE patterns to prevent SQL injection

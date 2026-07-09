@@ -7,8 +7,8 @@ import { cn } from '@ui';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
-import type { MessageSelectionState } from './context';
-import { MessageSelectionProvider, useMessage } from './context';
+import { isUnifiedInputMode } from '../unified-input-mode';
+import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
 import type { MessageActions, MessageData } from './types';
@@ -20,8 +20,12 @@ type ChannelMessageProps = {
   listMeta?: ChannelMessageListMeta;
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
-  highlighted?: boolean;
-  selectionState?: MessageSelectionState;
+  selected?: boolean;
+  /**
+   * The unified-input mode's floating reply/edit input, or message
+   * navigation, points at this message.
+   */
+  targeted?: boolean;
   onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
@@ -43,10 +47,11 @@ function MessageContentSlot(props: {
 
   return (
     <Switch>
-      <Match when={isEditing() && props.messageEditor}>
+      <Match when={isEditing() && !isUnifiedInputMode() && props.messageEditor}>
         {(messageEditor) => (
           <MessageEditorContent
             channelId={props.channelId}
+            message={message()}
             messageEditor={messageEditor()}
             participants={props.participants}
             class={props.class}
@@ -197,8 +202,14 @@ export function ChannelMessage(props: ChannelMessageProps) {
     <Message.Root
       message={props.message}
       actions={props.actions}
-      highlighted={props.highlighted}
-      selected={props.selectionState?.isSelected}
+      selected={props.selected}
+      targeted={
+        props.targeted ||
+        // In unified-input mode the edit happens in the floating input; the
+        // accent bar marks the message it is bound to.
+        (isUnifiedInputMode() &&
+          isEditingMessage(props.messageEditor, props.message.id))
+      }
       onClick={props.onClick}
       ref={(el) =>
         touchHandler(el, () => ({
@@ -209,27 +220,25 @@ export function ChannelMessage(props: ChannelMessageProps) {
         }))
       }
     >
-      <MessageSelectionProvider value={props.selectionState}>
-        <Switch>
-          <Match when={props.message.deleted_at != null}>
-            <DeletedMessageLayout />
-          </Match>
-          <Match when={isGrouped()}>
-            <GroupedMessageLayout
-              channelId={props.channelId}
-              messageEditor={props.messageEditor}
-              participants={props.participants}
-            />
-          </Match>
-          <Match when={true}>
-            <RegularMessageLayout
-              channelId={props.channelId}
-              messageEditor={props.messageEditor}
-              participants={props.participants}
-            />
-          </Match>
-        </Switch>
-      </MessageSelectionProvider>
+      <Switch>
+        <Match when={props.message.deleted_at != null}>
+          <DeletedMessageLayout />
+        </Match>
+        <Match when={isGrouped()}>
+          <GroupedMessageLayout
+            channelId={props.channelId}
+            messageEditor={props.messageEditor}
+            participants={props.participants}
+          />
+        </Match>
+        <Match when={true}>
+          <RegularMessageLayout
+            channelId={props.channelId}
+            messageEditor={props.messageEditor}
+            participants={props.participants}
+          />
+        </Match>
+      </Switch>
     </Message.Root>
   );
 }

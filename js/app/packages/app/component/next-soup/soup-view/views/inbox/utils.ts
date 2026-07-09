@@ -6,7 +6,6 @@ import {
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import {
   differenceInDays,
-  differenceInHours,
   differenceInMilliseconds,
   differenceInMonths,
   differenceInWeeks,
@@ -110,6 +109,10 @@ export function itemContent(
     return meta.content.messageContent;
   }
 
+  if (meta?.tag === 'call_started') {
+    return;
+  }
+
   const channel = channelMessageContent(entity);
   if (channel) return channel;
   return notification ? notificationContent(notification) : undefined;
@@ -177,11 +180,15 @@ export function formatCompactRelativeTimestamp(value: string) {
   if (Number.isNaN(date.getTime())) return value;
 
   const now = new Date();
-  const ageMs = differenceInMilliseconds(now, date);
-  if (ageMs < 12 * 60 * 60 * 1000) return format(date, 'p');
+  const ageMs = Math.max(0, differenceInMilliseconds(now, date));
+  const seconds = Math.floor(ageMs / 1000);
+  if (seconds < 60) return format(date, 'p');
 
-  const hours = differenceInHours(now, date);
-  if (hours < 24) return `${Math.max(12, hours)}h`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
 
   const days = differenceInDays(now, date);
   if (days < 7) return `${Math.max(1, days)}d`;

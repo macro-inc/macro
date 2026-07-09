@@ -15,6 +15,7 @@ use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
 use connection::domain::ports::ConnectionService;
+use crm::inbound::toolset::CrmToolContext;
 use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
@@ -52,17 +53,29 @@ pub type ToolCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
 >;
 
+/// Type alias for the entity access management service implementation.
+pub type ToolEamService =
+    entity_access_management::domain::service::EntityAccessManagementServiceImpl<
+        entity_access_management::outbound::PgRepository,
+    >;
+
 /// Type alias for the email service implementation
 pub type ToolEmailService = EmailServiceImpl<
     EmailPgRepo,
     ToolFrecencyService,
     email::domain::ports::NoOpEnqueuer,
     ToolCrmService,
+    ToolEamService,
 >;
 
 /// Type alias for the send-capable email service implementation used by user tools.
-pub type ToolUserEmailService =
-    EmailServiceImpl<EmailPgRepo, ToolFrecencyService, sqs_client::SQS, ToolCrmService>;
+pub type ToolUserEmailService = EmailServiceImpl<
+    EmailPgRepo,
+    ToolFrecencyService,
+    sqs_client::SQS,
+    ToolCrmService,
+    ToolEamService,
+>;
 
 /// Type alias for the channel list service implementation.
 pub type ToolCommsService = ChannelListServiceImpl<
@@ -111,6 +124,28 @@ pub fn build_channel_tool_context_with_dispatcher(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
     )
+}
+
+/// Type alias for the CRM AI tool context.
+pub type ToolCrmToolContext =
+    CrmToolContext<ToolCrmService, ToolEntityAccessService, ToolPropertiesService>;
+
+/// Build the CRM AI tool context from a Postgres pool.
+pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
+    );
+    let properties = build_properties_service(pool.clone(), entity_access_service.clone());
+    CrmToolContext {
+        service: Arc::new(crm::domain::service::CrmServiceImpl::new(
+            crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+            crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+        )),
+        entity_access_service,
+        properties,
+    }
 }
 
 /// Type alias for the team member listing service used by AI tools.
@@ -194,14 +229,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
+        let access = self
+            .properties
+            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+            .await?;
+
         self.properties
-            .set_entity_property(
-                user_id,
-                entity_id,
-                models_properties::EntityType::Task,
-                property_definition_id,
-                value,
-            )
+            .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(Into::into)
     }
@@ -456,6 +492,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     NoOpConnectionService,
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
+    macro_event_broker::MacroEventBrokerService<macro_event_broker::KafkaEventPublisher>,
 >;
 
 /// Type alias for the entity access service implementation
@@ -464,8 +501,11 @@ pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessS
 >;
 
 /// Type alias for the document tool context
-pub type ToolDocumentToolContext =
-    DocumentToolContext<ToolDocumentService, ToolEntityAccessService>;
+pub type ToolDocumentToolContext = DocumentToolContext<
+    ToolDocumentService,
+    ToolEntityAccessService,
+    documents::outbound::editing_worker_client::ReqwestEditingWorkerClient,
+>;
 
 /// Type alias for the foreign entity service implementation used by AI tools.
 pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;
@@ -488,15 +528,11 @@ pub struct NoOpNotificationService;
 impl properties::NotificationService for NoOpNotificationService {
     type Err = anyhow::Error;
 
-    async fn send_notification<'a>(
+    async fn send_task_assigned<'a>(
         &self,
-        _message: notification::domain::models::SendNotificationRequest<
-            'a,
-            model_notifications::TaskAssignedMetadata,
-            notification::domain::models::apple::PushNotificationData,
-        >,
-    ) -> Result<uuid::Uuid, Self::Err> {
-        Ok(uuid::Uuid::nil())
+        _notification: properties::domain::model::TaskAssignedNotification<'a>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
     }
 }
 
@@ -614,6 +650,7 @@ pub struct ToolServiceContext {
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub team_tool_context: ToolTeamToolContext,
+    pub crm_tool_context: ToolCrmToolContext,
     pub schedule_tool_context: NoOpScheduleContext,
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.

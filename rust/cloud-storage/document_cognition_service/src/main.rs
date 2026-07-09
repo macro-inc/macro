@@ -224,6 +224,9 @@ async fn main() -> anyhow::Result<()> {
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(db.clone()),
+        ),
         0,
     );
     let channels_service = ChannelListServiceImpl::new(
@@ -272,6 +275,10 @@ async fn main() -> anyhow::Result<()> {
         ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
     let task_properties_service =
         ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -283,6 +290,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        macro_event_broker,
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -290,6 +298,11 @@ async fn main() -> anyhow::Result<()> {
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
+        documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
+            config.ai_editing_worker_url.clone(),
+            std::sync::Arc::new(reqwest::Client::new()),
+        ),
+        config.document_permission_jwt.as_ref().to_string(),
     );
 
     tracing::info!("initialized document tool context");
@@ -339,6 +352,9 @@ async fn main() -> anyhow::Result<()> {
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
             0,
         )),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
@@ -394,6 +410,7 @@ async fn main() -> anyhow::Result<()> {
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(db.clone()),
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
+        crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder: ai_usage::pg_recorder(db.clone()),

@@ -111,7 +111,6 @@ function TranscriptSegmentRow(props: {
     <Thread.Row message={message}>
       <Message.Root
         message={message}
-        highlighted={props.isActive}
         selected={props.isActive}
         onClick={() => {
           if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);
@@ -169,7 +168,6 @@ function GroupedTranscriptSegmentRow(props: {
     <Thread.Row message={message}>
       <Message.Root
         message={message}
-        highlighted={props.isActive}
         selected={props.isActive}
         onClick={() => {
           if (videoTimestamp !== null) props.onSeekToSeconds?.(videoTimestamp);

@@ -1,7 +1,12 @@
 import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it, vi } from 'vitest';
 import { SyncEngine } from './engine';
-import { MockLiveSyncSource, MockLoroManager, makeTestWAL } from './testing';
+import {
+  MockChatter,
+  MockLiveSyncSource,
+  MockLoroManager,
+  makeTestWAL,
+} from './testing';
 
 const emptySnapshot = () => new LoroDoc().export({ mode: 'snapshot' });
 
@@ -110,6 +115,73 @@ describe('SyncEngine', () => {
         const entries = await walStore.getAll();
         expect(entries.every((e) => e.delivered)).toBe(true);
       });
+    });
+  });
+
+  describe('cross-replica chatter', () => {
+    it('broadcasts local updates to the chatter', async () => {
+      const source = new MockLiveSyncSource();
+      const { wal } = makeTestWAL(source);
+      const manager = new MockLoroManager();
+      const chatter = new MockChatter();
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live: source },
+        bindings: { onRemoteState: vi.fn() },
+        makeChatter: () => chatter,
+      });
+
+      engine.start();
+      const update = new Uint8Array([1, 2, 3]);
+      manager.triggerLocalUpdate(update);
+
+      await vi.waitFor(() =>
+        expect(chatter.posted).toContainEqual({ type: 'update', data: update })
+      );
+    });
+
+    it('applies updates received from another replica', async () => {
+      const source = new MockLiveSyncSource();
+      const { wal } = makeTestWAL(source);
+      const manager = new MockLoroManager();
+      const chatter = new MockChatter();
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live: source },
+        bindings: { onRemoteState: vi.fn() },
+        makeChatter: () => chatter,
+      });
+
+      engine.start();
+      const update = new Uint8Array([4, 5, 6]);
+      chatter.receive({ type: 'update', data: update });
+
+      await vi.waitFor(() =>
+        expect(manager.importUpdate).toHaveBeenCalledWith(update)
+      );
+    });
+
+    it('stops listening to the chatter on stop', () => {
+      const source = new MockLiveSyncSource();
+      const { wal } = makeTestWAL(source);
+      const manager = new MockLoroManager();
+      const chatter = new MockChatter();
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live: source },
+        bindings: { onRemoteState: vi.fn() },
+        makeChatter: () => chatter,
+      });
+
+      engine.start();
+      engine.stop();
+      chatter.receive({ type: 'update', data: new Uint8Array([7]) });
+
+      expect(chatter.closed).toBe(true);
+      expect(manager.importUpdate).not.toHaveBeenCalled();
     });
   });
 

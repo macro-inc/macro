@@ -8,6 +8,7 @@ use model::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
 use model::user::UserContext;
+use sqs_client::search::{SearchQueueMessage, project::UpsertProject};
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -39,18 +40,45 @@ pub async fn handler(
 ) -> impl IntoResponse {
     tracing::info!("revert_delete project");
 
-    if let Err(e) = macro_db_client::projects::revert_delete::revert_delete_project(
+    let project_ids = match macro_db_client::projects::revert_delete::revert_delete_project(
         &ctx.db,
         &id,
         project_context.parent_id.as_deref(),
     )
     .await
     {
-        tracing::error!(error=?e, "unable to revert project");
-        return GenericResponse::builder()
-            .message("unable to revert project")
-            .is_error(true)
-            .send(StatusCode::INTERNAL_SERVER_ERROR);
+        Ok(project_ids) => project_ids,
+        Err(e) => {
+            tracing::error!(error=?e, "unable to revert project");
+            return GenericResponse::builder()
+                .message("unable to revert project")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    if !project_ids.is_empty() {
+        tokio::spawn({
+            let sqs_client = ctx.sqs_client.clone();
+            async move {
+                let _ = sqs_client
+                    .bulk_send_message_to_search_event_queue(
+                        project_ids
+                            .iter()
+                            .map(|id| {
+                                SearchQueueMessage::UpsertProject(UpsertProject {
+                                    project_id: id.to_string(),
+                                    index_override: None,
+                                })
+                            })
+                            .collect(),
+                    )
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to enqueue restored projects for search"),
+                    );
+            }
+        });
     }
 
     let data = GenericSuccessResponse::default();

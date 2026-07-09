@@ -1,44 +1,54 @@
+import { Billing } from '@app/component/settings/Billing';
+import { useLogout } from '@core/auth/logout';
+import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
+  isSoloSettings,
+  type SettingsTab,
+  settingsTabFromSplitPath,
+  useSettingsState,
+} from '@core/constant/SettingsState';
+import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { isMobile } from '@core/mobile/isMobile';
+import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
+import ArrowsIn from '@phosphor/arrows-in.svg';
+import ArrowsOut from '@phosphor/arrows-out.svg';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
+import SignOutIcon from '@phosphor/sign-out.svg';
+import { useLocation } from '@solidjs/router';
+import { Button, cn, Layer, SideNav } from '@ui';
+import {
+  createRenderEffect,
   createSignal,
   For,
   onCleanup,
   onMount,
   Show,
   Suspense,
+  untrack,
 } from 'solid-js';
-import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
-import { useLogout } from '@core/auth/logout';
-import { isMobile } from '@core/mobile/isMobile';
-import { MobileApp } from './MobileApp';
-import { Agent } from './Agent';
-import { Admin } from './Admin';
-import { Appearance } from './Appearance';
-import { Account } from './Account';
-import { ConnectedAccounts } from './ConnectedAccounts';
-import { Shortcuts } from './Shortcuts';
-import { Team } from './Team';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { FloatRegion } from '../mobile/float-regions/FloatRegion';
 import { PillTabs } from '../mobile/PillTabs';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
-import { Button, cn, Layer, SideNav } from '@ui';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
-import { Billing } from '@app/component/settings/Billing';
+import { Account } from './Account';
+import { Admin } from './Admin';
+import { Agent } from './Agent';
+import { Appearance } from './Appearance';
+import { ConnectedAccounts } from './ConnectedAccounts';
+import { Crm } from './Crm';
+import { MobileApp } from './MobileApp';
+import { Shortcuts } from './Shortcuts';
+import { Team } from './Team';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
-export type SettingsVariant = 'split' | 'modal';
+export type SettingsVariant = 'split' | 'fullscreen';
 
-// Panel-width breakpoints (the panel can be a full-screen modal or a resizable
+// Panel-width breakpoints (the panel can be a full-screen page or a resizable
 // split, so we measure the panel itself rather than the viewport). Below
 // `COMPACT` the sidebar collapses into a horizontal tab bar; between `COMPACT`
 // and `NARROW` the gutter around the content card tightens.
@@ -46,9 +56,20 @@ const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
-  return (
-      <SettingsPanel />
-  )
+  const location = useLocation();
+  // Sync the active page from the docked split's URL (`settings/<slug>`). Read
+  // the live URL reactively — not static mount props — so browser back/forward
+  // and direct navigation stay in sync: reconcile reuses this component on
+  // same-key changes, so it never remounts to pick up a new tab. Using
+  // createRenderEffect (runs during render) matches the previous synchronous set
+  // so the layout URL-sync never observes a stale tab on first paint, and the
+  // activeTabId read is untracked so a tab click (which sets it, then updates
+  // the URL) isn't reverted by this effect firing before the URL catches up.
+  createRenderEffect(() => {
+    const tab = settingsTabFromSplitPath(location.pathname);
+    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+  });
+  return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
 }
 
 type SettingsPanelProps = {
@@ -61,9 +82,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const {
     closeSettings,
     moveSettingsToSplit,
-    moveSettingsToModal,
+    moveSettingsToSolo,
     activeTabId,
-    setActiveTabId,
+    selectTab,
   } = useSettingsState();
   const { groups, flatTabs, isAvailable } = useSettingsTabs();
   const logout = useLogout();
@@ -116,7 +137,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        setActiveTabId(tab.tab);
+        selectTab(tab.tab);
         return true;
       }
     }
@@ -124,19 +145,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex(tab => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
   }
 
   function handleNextTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
+    const nextIndex =
+      getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
 
   function handlePreviousTab() {
     const tabs = flatTabs();
-    const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
+    const nextIndex =
+      getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
@@ -162,7 +185,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register number keys 1-9 for direct tab navigation
   for (let i = 1; i <= 9; i++) {
     const keyNum = i;
-    function handleNumberKey() { return navigateToTabIndex(keyNum - 1); }
+    function handleNumberKey() {
+      return navigateToTabIndex(keyNum - 1);
+    }
     registerHotkey({
       description: `Go to settings tab ${keyNum}`,
       hotkey: `${keyNum}` as ValidHotkey,
@@ -174,7 +199,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      setActiveTabId(value as SettingsTab);
+      selectTab(value as SettingsTab);
     }
   };
 
@@ -187,7 +212,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <FloatRegion region="accessory">
         <div class="flex items-center px-(--mobile-chrome-gutter)">
           <PillTabs
-            items={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+            items={flatTabs().map((tab) => ({
+              value: tab.tab,
+              label: tab.label,
+            }))}
             value={activeTabId()}
             onChange={handleTabChange}
           />
@@ -196,7 +224,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     );
   }
 
-  // "Back to app" — the modal's only close affordance. Laid out like a nav row.
+  // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
       type="button"
@@ -249,13 +277,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </div>
           </Show>
         </SplitHeaderLeft>
-        {/* Pop the split back out into the modal (desktop only). */}
+        {/* Collapse the other splits so settings becomes the sole one (desktop only). */}
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
               class="p-1 rounded-lg"
-              label="Open in modal"
-              onClick={() => moveSettingsToModal()}
+              label="Open fullscreen"
+              onClick={() => moveSettingsToSolo()}
             >
               <ArrowsOut class="size-4" />
             </Button>
@@ -272,9 +300,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
               narrow() ? 'pr-1' : 'pr-2'
             )}
           >
-            {/* The full-screen modal has no surrounding chrome, so the sidebar
+            {/* The full-screen page has no surrounding chrome, so the sidebar
                 carries the "back" and "move to split" affordances itself. */}
-            <Show when={variant() === 'modal'}>
+            <Show when={variant() === 'fullscreen'}>
               <div class="flex items-center justify-between gap-1">
                 {backToApp()}
                 {moveToSplitButton()}
@@ -324,11 +352,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
         >
           <Layer depth={1}>
             <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu mobile:rounded-none mobile:border-0 mobile:bg-transparent">
-              {/* Compact modal chrome: no split header to host the tabs, so
-                  the sidebar collapses into a top bar here — back / tab
+              {/* Compact full-screen chrome: no split header to host the tabs,
+                  so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its
                   header.) */}
-              <Show when={variant() === 'modal' && compact()}>
+              <Show when={variant() === 'fullscreen' && compact()}>
                 <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
                   {backToApp()}
                   <TabsInsetDropdown
@@ -361,6 +389,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Team')}>
                   <Suspense>
                     <Team />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('CRM')}>
+                  <Suspense>
+                    <Crm />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Connected')}>

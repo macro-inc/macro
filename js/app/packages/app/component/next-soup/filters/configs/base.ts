@@ -4,6 +4,9 @@ import type { PropertyFilter, Query } from '../filter-store';
 
 export const NO_ASSIGNEE = 'NO_ASSIGNEE';
 
+/** Sentinel stage-filter id matching companies without a Stage set. */
+export const NO_STAGE = 'NO_STAGE';
+
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export const IMAGE_EXTENSIONS = [
@@ -44,6 +47,20 @@ export type FilterContext = {
   userId?: string;
   notificationSource?: NotificationSource;
   assignees?: string[];
+  /** Selected company Owner ids for the Customers view's owner filter. */
+  owners?: string[];
+  /**
+   * Selected stage option ids for the Customers view's stage filter (may
+   * include the `NO_STAGE` sentinel).
+   */
+  stages?: string[];
+  /**
+   * Company → active stage option id, resolved against the team's deal
+   * stage set (legacy system-stage values are label-mapped). Supplied by
+   * the soup view provider from `useDealStages` so plain predicate
+   * functions bucket companies exactly like the kanban does.
+   */
+  resolveCompanyStage?: (entity: EntityData) => string | undefined;
 };
 
 export type Predicate = (entity: EntityData, ctx: FilterContext) => boolean;

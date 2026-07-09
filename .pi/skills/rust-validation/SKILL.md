@@ -24,6 +24,7 @@ Run these commands one at a time, in this exact order:
 just check
 just clippy
 just format
+just hakari
 ```
 
 If `just check` or `just clippy` fails, do not continue to later commands. Inspect the failure, fix it if it is in scope, then rerun the full sequence starting at `just check`.

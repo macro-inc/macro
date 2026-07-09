@@ -2,8 +2,8 @@
 
 use super::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook, WebhookId,
-        WebhookScope, WebhookValidationResult,
+        CreateWebhookRequest, PatchWebhookRequest, ValidateWebhookResponse, Webhook,
+        WebhookFilters, WebhookId, WebhookScope, WebhookValidationResult,
     },
     ports::{WebhookError, WebhookRepo, WebhookService, WebhookValidationClient},
 };
@@ -13,6 +13,10 @@ use std::net::IpAddr;
 use url::Url;
 
 const MAX_NAME_LEN: usize = 128;
+const MAX_FILTERS: usize = 50;
+const MAX_FILTER_EVENTS: usize = 100;
+const MAX_FILTER_IDS: usize = 100;
+const MAX_FILTER_VALUE_LEN: usize = 256;
 const VALIDATION_EVENT_NAME: &str = "webhook.validation.test";
 
 /// Webhook service implementation.
@@ -95,16 +99,73 @@ fn is_blocked_endpoint_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn validate_rule(rule: &serde_json::Value) -> Result<(), WebhookError> {
-    let events = rule
-        .get("events")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| WebhookError::BadRequest("rule.events must be an array".to_string()))?;
+fn validate_filter_value(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty() && value.len() <= MAX_FILTER_VALUE_LEN
+}
 
-    if events.is_empty() || !events.iter().all(|event| event.as_str().is_some()) {
+fn validate_filter_events(events: &[String]) -> Result<(), WebhookError> {
+    if events.is_empty() {
         return Err(WebhookError::BadRequest(
-            "rule.events must be a non-empty array of strings".to_string(),
+            "filters[].events must be a non-empty array of strings".to_string(),
         ));
+    }
+
+    if events.len() > MAX_FILTER_EVENTS {
+        return Err(WebhookError::BadRequest(format!(
+            "filters[].events must include at most {MAX_FILTER_EVENTS} entries"
+        )));
+    }
+
+    if !events.iter().all(|event| validate_filter_value(event)) {
+        return Err(WebhookError::BadRequest(format!(
+            "filters[].events entries must be non-empty strings at most {MAX_FILTER_VALUE_LEN} characters"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_filter_ids(ids: &[String]) -> Result<(), WebhookError> {
+    if ids.is_empty() {
+        return Err(WebhookError::BadRequest(
+            "filters[].ids must be a non-empty array of strings when present".to_string(),
+        ));
+    }
+
+    if ids.len() > MAX_FILTER_IDS {
+        return Err(WebhookError::BadRequest(format!(
+            "filters[].ids must include at most {MAX_FILTER_IDS} entries"
+        )));
+    }
+
+    if !ids.iter().all(|id| validate_filter_value(id)) {
+        return Err(WebhookError::BadRequest(format!(
+            "filters[].ids entries must be non-empty strings at most {MAX_FILTER_VALUE_LEN} characters"
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookError> {
+    if filters.is_empty() {
+        return Err(WebhookError::BadRequest(
+            "filters must be a non-empty array".to_string(),
+        ));
+    }
+
+    if filters.len() > MAX_FILTERS {
+        return Err(WebhookError::BadRequest(format!(
+            "filters must include at most {MAX_FILTERS} entries"
+        )));
+    }
+
+    for filter in filters {
+        validate_filter_events(&filter.events)?;
+        if let Some(ids) = &filter.ids {
+            validate_filter_ids(ids)?;
+        }
     }
 
     Ok(())
@@ -113,7 +174,7 @@ fn validate_rule(rule: &serde_json::Value) -> Result<(), WebhookError> {
 fn validate_create_request(request: &CreateWebhookRequest) -> Result<(), WebhookError> {
     validate_name(&request.name)?;
     validate_endpoint_url(&request.endpoint_url)?;
-    validate_rule(&request.rule)
+    validate_filters(&request.filters)
 }
 
 fn validate_patch_request(request: &PatchWebhookRequest) -> Result<(), WebhookError> {
@@ -123,8 +184,8 @@ fn validate_patch_request(request: &PatchWebhookRequest) -> Result<(), WebhookEr
     if let Some(endpoint_url) = &request.endpoint_url {
         validate_endpoint_url(endpoint_url)?;
     }
-    if let Some(rule) = &request.rule {
-        validate_rule(rule)?;
+    if let Some(filters) = &request.filters {
+        validate_filters(filters)?;
     }
     Ok(())
 }

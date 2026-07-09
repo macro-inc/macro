@@ -37,6 +37,7 @@ export class EditorConfigBuilder implements EditorBuilder {
       restoreFocus: false,
       withIds: false,
       selectionData: false,
+      floatingFormatMenu: false,
       actions: false as const,
       skipPreviewFetch: false,
     };
@@ -106,6 +107,18 @@ export class EditorConfigBuilder implements EditorBuilder {
   }
 
   withSelectionData(): this {
+    this.state.selectionData = true;
+    return this;
+  }
+
+  /**
+   * Show a floating format toolbar (headings, lists, inline styles, links)
+   * over the current text selection, like the markdown block's popup.
+   * Implies `.withSelectionData()`. The link button is only shown when
+   * `.withLinks({ floatingMenu: true })` is also enabled.
+   */
+  withFloatingFormatMenu(): this {
+    this.state.floatingFormatMenu = true;
     this.state.selectionData = true;
     return this;
   }

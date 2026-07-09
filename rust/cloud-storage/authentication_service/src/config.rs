@@ -40,6 +40,7 @@ maybe_env_vars! {
     pub struct MetaTestEventCode;
     pub struct PosthogApiKey;
     pub struct PosthogHost;
+    pub struct LoopsApiKey;
 }
 
 /// The configuration parameters for the application.
@@ -105,6 +106,9 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)
     pub posthog_host: PosthogHost,
+    /// Loops API key (optional). When set, Macro sign-ups are added to our
+    /// Loops audience.
+    pub loops_api_key: LoopsApiKey,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
     /// The internal api key

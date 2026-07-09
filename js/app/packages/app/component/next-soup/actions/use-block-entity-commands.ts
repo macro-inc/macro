@@ -22,6 +22,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
   makeDeleteAction,
+  makeFavoriteAction,
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeRenameAction,
@@ -54,6 +55,7 @@ export const useBlockEntityCommands = () => {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const favoriteAction = makeFavoriteAction();
 
   const allProperties = useAllProperties();
 
@@ -187,6 +189,32 @@ export const useBlockEntityCommands = () => {
       condition: () => {
         const entity = getEntity();
         return entity !== undefined && renameAction.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
+    registerHotkey({
+      hotkey: ['opt+f'],
+      hotkeyToken: TOKENS.entity.action.favorite,
+      scopeId,
+      description: () => {
+        const entity = getEntity();
+        return entity && favoriteAction.isFavorited(entity)
+          ? 'Unfavorite'
+          : 'Favorite';
+      },
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!favoriteAction.canExecute(entity)) return false;
+        favoriteAction.execute([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && favoriteAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],

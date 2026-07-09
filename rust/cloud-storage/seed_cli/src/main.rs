@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! The Seed CLI to enable easy populate Macro with seed data
+//! The Seed CLI to enable easy populate Macro with seed data.
 
 mod config;
 mod entity;

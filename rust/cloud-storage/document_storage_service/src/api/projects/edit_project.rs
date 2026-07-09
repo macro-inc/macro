@@ -132,30 +132,33 @@ async fn edit_project_v2(
                 "project parent id matches project id".to_string(),
             ));
         }
-        match macro_db_client::projects::nested_projects::is_project_recursively_nested(
-            ctx.db.clone(),
-            id.as_str(),
-            project_parent_id.as_str(),
-        )
-        .await
-        {
-            Ok(e) => {
-                if e.is_some() {
-                    tracing::warn!(error=?e, "project is recursively nested");
+        // An empty parent id clears the parent, so there is no nesting to check
+        if !project_parent_id.is_empty() {
+            match macro_db_client::projects::nested_projects::is_project_recursively_nested(
+                ctx.db.clone(),
+                id.as_str(),
+                project_parent_id.as_str(),
+            )
+            .await
+            {
+                Ok(e) => {
+                    if e.is_some() {
+                        tracing::warn!(error=?e, "project is recursively nested");
+                        return Err((
+                            StatusCode::BAD_REQUEST,
+                            "project is recursively nested".to_string(),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to check if project is recursively nested");
                     return Err((
-                        StatusCode::BAD_REQUEST,
-                        "project is recursively nested".to_string(),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "error checking if project is recursively nested".to_string(),
                     ));
                 }
-            }
-            Err(e) => {
-                tracing::error!(error=?e, "unable to check if project is recursively nested");
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "error checking if project is recursively nested".to_string(),
-                ));
-            }
-        };
+            };
+        }
     }
 
     if req.share_permission.is_some() && users_access_level != AccessLevel::Owner {
@@ -186,6 +189,7 @@ async fn edit_project_v2(
     // Update the project you are editting
     macro_project_utils::update_project_modified(
         &ctx.db,
+        Some(ctx.sqs_client.as_ref()),
         macro_project_utils::ProjectModifiedArgs {
             project_id: Some(id.clone()), // The project you edited
             old_project_id: None,
@@ -205,6 +209,8 @@ async fn edit_project_v2(
                 .as_ref(),
             req.project_parent_id
                 .as_ref()
+                // An empty parent id clears the parent
+                .filter(|p| !p.is_empty())
                 .map(|p| macro_uuid::string_to_uuid(p).unwrap())
                 .as_ref(),
         )
@@ -214,6 +220,7 @@ async fn edit_project_v2(
     // Update the project you moved from and moved to
     macro_project_utils::update_project_modified(
         &ctx.db,
+        Some(ctx.sqs_client.as_ref()),
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_parent_id, // The new project you've placed your item in
             old_project_id: project_context.parent_id.clone(), // The old project you've moved your item from

@@ -12,7 +12,7 @@ export const AnimatedInboxIcon = (props: {
       viewBox="0 0 18 12"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.125"
+      stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
@@ -22,13 +22,18 @@ export const AnimatedInboxIcon = (props: {
       {/*<title>Animated inbox icon</title>*/}
       <style>{`
         .animated-inbox-icon {
+          .left-bar, .right-bar {
+            /* Butt caps: a round cap centered on the hinge would balloon into
+               an ellipse under the animating scaleY and poke above the back rim. */
+            stroke-linecap: butt;
+          }
           .left-bar {
-            transition: d 0.2s ease;
-            d: path("M4.5 0.5625L0.5625 5.25");
+            transform-origin: 4.5px 0.75px;
+            transition: transform 0.2s ease;
           }
           .right-bar {
-            transition: d 0.2s ease;
-            d: path("M13.5 0.5625L17.4375 5.25");
+            transform-origin: 13.5px 0.75px;
+            transition: transform 0.2s ease;
           }
           .envelope {
             transform-origin: center;
@@ -45,13 +50,11 @@ export const AnimatedInboxIcon = (props: {
           .drawer-body, .tray, #${maskId} .moving-mask-parts {
             transform: translate(0, 3px);
           }
-          /* flaps swing open AND extend — the tip drops with the drawer front.
-             Animating 'd' (geometry) instead of scaleX avoids warping the round caps. */
-          .left-bar {
-            d: path("M4.5 0.5625L0.5625 8.25");
-          }
-          .right-bar {
-            d: path("M13.5 0.5625L17.4375 8.25");
+          /* Flaps swing open AND extend — the tip drops with the drawer front.
+             Stretched from the fixed hinge via scaleY (not 'd' morphing, which
+             doesn't animate in Safari/WebKit — see wide-channel.tsx). */
+          .left-bar, .right-bar {
+            transform: scaleY(1.6667);
           }
         }
       `}</style>
@@ -93,24 +96,23 @@ export const AnimatedInboxIcon = (props: {
 
       {/* Drawer (unmasked) */}
       {/* Back rim */}
-      <line x1="4.5" y1="0.5625" x2="13.5" y2="0.5625" />
+      <line x1="4.5" y1="0.75" x2="13.5" y2="0.75" />
 
       {/* Walls + rounded bottom */}
       <path
         class="drawer-body"
-        d="M0.5625 5.25L0.5625 9.9375A1.5 1.5 0 0 0 2.0625 11.4375L15.9375 11.4375A1.5 1.5 0 0 0 17.4375 9.9375L17.4375 5.25"
+        d="M0.75 5.25L0.75 9.9375A1.5 1.5 0 0 0 2.0625 11.25L15.9375 11.25A1.5 1.5 0 0 0 17.25 9.9375L17.25 5.25"
       />
 
       {/* Tray shelf with central slot */}
       <path
         class="tray"
-        d="M0.5625 5.25L6.92 5.25L7.67 6.48L10.33 6.48L11.08 5.25L17.4375 5.25"
+        d="M0.75 5.25L6.92 5.25L7.67 6.48L10.33 6.48L11.08 5.25L17.25 5.25"
       />
 
-      {/* Flaps — animated via 'd' so the tip drops to the dropped drawer front
-          while stroke-width (and the round caps) stay constant */}
-      <path class="right-bar" d="M13.5 0.5625L17.4375 5.25" />
-      <path class="left-bar" d="M4.5 0.5625L0.5625 5.25" />
+      {/* Flaps — stretched via scaleY from their fixed hinge point (see CSS above) */}
+      <path class="right-bar" d="M13.5 0.75L17.25 5.25" />
+      <path class="left-bar" d="M4.5 0.75L0.75 5.25" />
     </svg>
   );
 };

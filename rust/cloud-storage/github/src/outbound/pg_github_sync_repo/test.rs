@@ -300,28 +300,81 @@ async fn test_get_installation_sources_empty(pool: Pool<Postgres>) {
 }
 
 // ---------------------------------------------------------------------------
-// get_macro_id_by_github_user_id
+// get_macro_ids_by_github_user_ids
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
 )]
-async fn test_get_macro_id_by_github_user_id_found(pool: Pool<Postgres>) {
+async fn test_get_macro_ids_by_github_user_ids_found(pool: Pool<Postgres>) {
     let repo = PgGithubSyncRepo::new(pool);
 
-    let macro_id = repo.get_macro_id_by_github_user_id("12345").await.unwrap();
+    let links = repo
+        .get_macro_ids_by_github_user_ids(&["12345".to_string()])
+        .await
+        .unwrap();
 
-    assert_eq!(macro_id.as_deref(), Some("macro|user@user.com"));
+    assert_eq!(
+        links.get("12345"),
+        Some(&vec!["macro|user@user.com".to_string()])
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_macro_id_by_github_user_id_not_found(pool: Pool<Postgres>) {
+async fn test_get_macro_ids_by_github_user_ids_not_found(pool: Pool<Postgres>) {
     let repo = PgGithubSyncRepo::new(pool);
 
-    let macro_id = repo.get_macro_id_by_github_user_id("99999").await.unwrap();
+    let links = repo
+        .get_macro_ids_by_github_user_ids(&["99999".to_string()])
+        .await
+        .unwrap();
 
-    assert!(macro_id.is_none());
+    assert!(!links.contains_key("99999"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_get_macro_ids_by_github_user_ids_fans_out_to_multiple_users(pool: Pool<Postgres>) {
+    // A second link sharing github_user_id '12345' (github_user_id is not unique;
+    // multiple Macro users may share one GitHub account).
+    sqlx::query(
+        r#"
+        INSERT INTO public.github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind("macro|user2@user.com")
+    .bind(
+        "cccccccc-cccc-cccc-cccc-cccccccccccc"
+            .parse::<Uuid>()
+            .unwrap(),
+    )
+    .bind("testuser2")
+    .bind("12345")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let links = repo
+        .get_macro_ids_by_github_user_ids(&["12345".to_string()])
+        .await
+        .unwrap();
+
+    let mut macro_ids = links.get("12345").cloned().unwrap_or_default();
+    macro_ids.sort();
+    assert_eq!(
+        macro_ids,
+        vec![
+            "macro|user2@user.com".to_string(),
+            "macro|user@user.com".to_string(),
+        ]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -667,4 +720,64 @@ async fn test_upsert_installation_sources_idempotent_user_source(pool: Pool<Post
             "user".to_string(),
         )]
     );
+}
+
+// ---------------------------------------------------------------------------
+// installation installer
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_upsert_installation_installer_records_installer(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.upsert_installation_installer("11111", "12345")
+        .await
+        .unwrap();
+    repo.upsert_installation_installer("22222", "12345")
+        .await
+        .unwrap();
+
+    let installation_ids = repo
+        .get_installation_ids_by_installer("12345")
+        .await
+        .unwrap();
+
+    assert_eq!(installation_ids, vec!["11111", "22222"]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_upsert_installation_installer_replaces_installer(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    repo.upsert_installation_installer("11111", "12345")
+        .await
+        .unwrap();
+    repo.upsert_installation_installer("11111", "67890")
+        .await
+        .unwrap();
+
+    assert!(
+        repo.get_installation_ids_by_installer("12345")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.get_installation_ids_by_installer("67890")
+            .await
+            .unwrap(),
+        vec!["11111"]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_installation_ids_by_installer_empty(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let installation_ids = repo
+        .get_installation_ids_by_installer("missing")
+        .await
+        .unwrap();
+
+    assert!(installation_ids.is_empty());
 }

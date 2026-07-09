@@ -17,6 +17,7 @@ import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   SERVICE_DOMAIN_NAME,
   DopplerEcsEnvironment,
+  getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
@@ -264,6 +265,16 @@ export class CloudStorageService extends pulumi.ComponentResource {
         policyArn: snsPolicy.arn,
       },
       { parent: this, dependsOn: [snsPolicy, this.role] }
+    );
+
+    // Producer/consumer access to the macro event Kafka cluster.
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-kafka-client-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: getKafkaClusterPolicy(),
+      },
+      { parent: this, dependsOn: [this.role] }
     );
 
     // ecr image

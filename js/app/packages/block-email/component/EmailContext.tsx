@@ -31,6 +31,9 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { getSoupEntityById } from '@queries/soup/cache';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import type { UndoHandle } from '@queries/undo';
 import type {
   ApiMessage,
   ApiThread,
@@ -50,6 +53,7 @@ import {
   useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import type { ReplyType } from '../util/replyType';
 
 /**
  * Tracks thread IDs that had a draft saved since the last query fetch.
@@ -93,6 +97,21 @@ type EmailContextValues = {
     setReplyingToMessageId: (id: string | undefined) => void;
     bottomReplyOpen: Accessor<boolean>;
     setBottomReplyOpen: (open: boolean) => void;
+    // Sender emails (lowercased) with a CATEGORY_PERSONAL message in the thread
+    personalSenders: Accessor<Set<string>>;
+  };
+  mobileReplyComposer: {
+    open: Accessor<boolean>;
+    messageId: Accessor<string | undefined>;
+    setOpen: (open: boolean) => void;
+    openForMessage: (id: string) => void;
+    close: () => void;
+  };
+  replyRequest: {
+    messageId: Accessor<string | undefined>;
+    replyType: Accessor<ReplyType | undefined>;
+    set: (messageId: string, replyType: ReplyType) => void;
+    clear: () => void;
   };
   thread: Accessor<ApiThread | undefined>;
   permissions: Accessor<{
@@ -107,7 +126,10 @@ type EmailContextValues = {
     refetch: () => void;
   };
 
-  archiveThread: () => boolean;
+  archiveThread: (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => boolean;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -188,6 +210,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
   const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
+  const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
+    createSignal(false);
+  const [mobileReplyComposerMessageId, setMobileReplyComposerMessageId] =
+    createSignal<string>();
+  const [replyRequestMessageId, setReplyRequestMessageId] =
+    createSignal<string>();
+  const [replyRequestType, setReplyRequestType] = createSignal<ReplyType>();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
@@ -336,8 +365,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
-  const archiveThread = () => {
+  const archiveThread = (opts?: {
+    silent?: boolean;
+    onUndoHandle?: (handle: UndoHandle) => void;
+  }) => {
     const thread = threadQuery.data;
+    // `=== true` because callers may pass this straight to an event handler.
+    const silent = opts?.silent === true;
+    const markDoneOpts = { silent, onUndoHandle: opts?.onUndoHandle };
 
     if (!thread?.db_id) return false;
 
@@ -351,30 +386,34 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     const selectedRow = soup?.items.get(thread.db_id);
 
-    if (selectedRow) {
-      if (soup) {
-        markAsDoneAction.executeWithSoup(
-          [selectedRow.original],
-          soup,
-          (nextEntity) => {
-            const splitHandle = splitPanel?.handle;
-            if (!splitHandle) return;
-            void openEntityInSplitFromUnifiedList(nextEntity, {
-              splitHandle,
-              mergeHistory: true,
-              referredFrom: splitHandle.referredFrom(),
-            });
-          }
-        );
-      } else {
-        markAsDoneAction.execute([selectedRow.original]);
-      }
+    if (soup && selectedRow) {
+      markAsDoneAction.executeWithSoup(
+        [selectedRow.original],
+        soup,
+        (nextEntity) => {
+          const splitHandle = splitPanel?.handle;
+          if (!splitHandle) return;
+          void openEntityInSplitFromUnifiedList(nextEntity, {
+            splitHandle,
+            mergeHistory: true,
+            referredFrom: splitHandle.referredFrom(),
+          });
+        },
+        markDoneOpts
+      );
     } else {
-      archiveMutation.mutate({
-        threadId: thread.db_id,
-        archive: thread.inbox_visible,
-        linkId: toHeaderLinkId(thread.link_id),
-      });
+      // Not rendered inside a soup list (e.g. thread opened in a split): no
+      // row to drive the action from, so mark done via the cached soup entity
+      // so soup views drop the thread and its notifications settle. The
+      // archive itself already ran above.
+      const cachedItem = getSoupEntityById(thread.db_id);
+      if (cachedItem && cachedItem.tag !== 'channelThread') {
+        void markAsDoneAction.execute(
+          [mapApiSoupItemToEntity(cachedItem)],
+          undefined,
+          markDoneOpts
+        );
+      }
     }
 
     return true;
@@ -567,6 +606,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
+            // Google's CATEGORY_PERSONAL classification is inconsistent across
+            // identical messages, so promote it per-sender across the thread
+            personalSenders: createMemo(() => {
+              const senders = new Set<string>();
+              for (const message of threadQuery.data?.messages ?? []) {
+                const email = message.from?.email?.toLowerCase();
+                if (!email) continue;
+                if (
+                  message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')
+                ) {
+                  senders.add(email);
+                }
+              }
+              return senders;
+            }),
             expandedBodyIds: expandedMessageBodyIds,
             setExpandedBodyId: onExpandMessageBody,
             isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
@@ -574,6 +628,31 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setReplyingToMessageId,
             bottomReplyOpen,
             setBottomReplyOpen,
+          },
+          mobileReplyComposer: {
+            open: mobileReplyComposerOpen,
+            messageId: mobileReplyComposerMessageId,
+            setOpen: setMobileReplyComposerOpen,
+            openForMessage: (id: string) => {
+              setMobileReplyComposerMessageId(id);
+              setMobileReplyComposerOpen(true);
+            },
+            close: () => {
+              setMobileReplyComposerOpen(false);
+              setMobileReplyComposerMessageId(undefined);
+            },
+          },
+          replyRequest: {
+            messageId: replyRequestMessageId,
+            replyType: replyRequestType,
+            set: (messageId: string, replyType: ReplyType) => {
+              setReplyRequestMessageId(messageId);
+              setReplyRequestType(replyType);
+            },
+            clear: () => {
+              setReplyRequestMessageId(undefined);
+              setReplyRequestType(undefined);
+            },
           },
           permissions: createMemo(() => {
             const perms = getPermissions(threadQuery.data?.access_level);

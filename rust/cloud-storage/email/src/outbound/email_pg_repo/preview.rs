@@ -4,8 +4,11 @@ use crate::domain::models::{
 };
 use doppleganger::{Doppleganger, Mirror};
 use either::Either;
+use filter_ast::Expr;
+use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
@@ -45,8 +48,24 @@ pub(super) async fn previews_for_view_cursor(
             )
             .await?
         }
-        (PreviewView::StandardLabel(PreviewViewStandardLabel::Sent), Either::Left(query)) => {
-            super::preview_views::sent::sent_preview_cursor(pool, &link_ids, limit, &query).await?
+        (
+            view @ PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
+            Either::Left(query),
+        ) => {
+            // Sent always uses the dynamic builder, even with no filter;
+            // CalendarOnly(false) is the documented no-op literal.
+            let query =
+                query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
+            super::dynamic::dynamic_email_thread_cursor(
+                pool,
+                &link_ids,
+                limit,
+                &view,
+                query,
+                user_id.as_ref(),
+                team_id,
+            )
+            .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts), Either::Left(query)) => {
             super::preview_views::draft::drafts_preview_cursor(pool, &link_ids, limit, &query)

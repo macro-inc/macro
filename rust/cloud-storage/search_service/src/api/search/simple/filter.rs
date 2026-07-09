@@ -4,7 +4,7 @@
 use comms_db_client::model::SimpleMention;
 use opensearch_client::search::unified::{
     UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs,
-    UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
+    UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs, UnifiedProjectSearchArgs,
 };
 
 use crate::api::{
@@ -15,12 +15,6 @@ use crate::api::{
         simple_project::filter_projects,
     },
 };
-
-#[derive(Default, Debug, Clone)]
-pub struct UnifiedProjectSearchArgs {
-    pub project_ids: Vec<String>,
-    pub ids_only: bool,
-}
 
 /// Trait to convert item_filters into search args
 pub(super) trait FilterVariantToSearchArgs {
@@ -144,6 +138,7 @@ impl FilterVariantToSearchArgs for item_filters::ProjectFilters {
             Ok(UnifiedProjectSearchArgs {
                 project_ids: filter_project_response.project_ids,
                 ids_only: filter_project_response.ids_only,
+                ..Default::default()
             })
         }
     }

@@ -17,6 +17,7 @@ use worker::{
 };
 
 use crate::{
+    ai_peer::is_ai_peer,
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
@@ -371,7 +372,15 @@ impl DocumentSyncSession {
                         }
                         path::RAW => return self.raw_handler(document_id).await,
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
-                        path::ACTIVE_PEERS_MARKER => return self.active_peer_ids_handler().await,
+                        path::ACTIVE_PEERS_MARKER => {
+                            // `?include_ai=false` filters out AI editors; default keeps them.
+                            let include_ai = req
+                                .url()?
+                                .query_pairs()
+                                .find(|(k, _)| k == "include_ai")
+                                .map_or(true, |(_, v)| !matches!(v.as_ref(), "false" | "0"));
+                            return self.active_peer_ids_handler(include_ai).await;
+                        }
                         path::INITIALIZE => {
                             or_unauth!(claims.has_permission(&AccessLevel::Edit).then_some(()));
                             return self.initialize_handler(req, document_id).await;
@@ -465,11 +474,17 @@ impl DocumentSyncSession {
         Response::empty()
     }
 
-    async fn active_peer_ids_handler(&self) -> Result<Response> {
+    /// Active peer ids. With `include_ai = false`, AI editors (peer ids from the
+    /// reserved AI block) are filtered out so callers see only human collaborators.
+    async fn active_peer_ids_handler(&self, include_ai: bool) -> Result<Response> {
         let mut peer_ids: BTreeSet<u64> = BTreeSet::new();
         for ws in self.state.get_websockets() {
             let new_peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
-            peer_ids.extend(new_peer_ids);
+            peer_ids.extend(
+                new_peer_ids
+                    .into_iter()
+                    .filter(|&p| include_ai || !is_ai_peer(p)),
+            );
         }
         let str_ids = peer_ids
             .into_iter()

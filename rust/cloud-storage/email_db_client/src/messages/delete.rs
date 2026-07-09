@@ -24,6 +24,20 @@ pub async fn delete_message_with_tx(
             .await?;
     }
 
+    // The message's attachments cascade with the delete, which may have
+    // removed the thread's last calendar attachment. Drafts never have
+    // email_attachments rows, so they can't move the flag.
+    if !deleted_thread && !message.is_draft {
+        threads::update::sync_thread_calendar_flag(&mut *tx, message.thread_db_id).await?;
+    }
+
+    // Callers that skip the metadata recompute (draft discard) still need
+    // is_signal refreshed — the deleted message may have been the thread's
+    // only signal message, and macro drafts get no Gmail echo.
+    if !deleted_thread && !update_thread_metadata {
+        threads::update::sync_thread_signal_flag(&mut *tx, message.thread_db_id).await?;
+    }
+
     if deleted_thread {
         Ok(Some(message.thread_db_id))
     } else {

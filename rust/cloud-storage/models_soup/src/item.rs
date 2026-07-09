@@ -220,8 +220,10 @@ impl SoupItem {
             SoupItem::Channel(_) => None,
             SoupItem::ChannelThread(_) => None,
             SoupItem::Call(_) => None,
-            // CRM companies are not in entity_properties.
-            SoupItem::CrmCompany(_) => None,
+            SoupItem::CrmCompany(c) => Some(EntityReference::new(
+                c.id.to_string(),
+                PropertiesEntityType::Company,
+            )),
             SoupItem::ForeignEntity(_) => None,
         }
     }

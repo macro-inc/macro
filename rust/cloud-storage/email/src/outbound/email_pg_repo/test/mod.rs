@@ -6,6 +6,8 @@ mod labels;
 mod link;
 mod message;
 mod preview;
+mod project_scope_dynamic_query;
+mod signal_flag;
 mod thread;
 mod thread_labels;
 
