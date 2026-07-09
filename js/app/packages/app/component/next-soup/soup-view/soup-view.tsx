@@ -949,7 +949,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const groupHeaderComponent = () => {
     if (currentView() === 'tasks') return TaskGroupHeader;
-    if (isNewInboxEnabled()) return DateGroupHeader;
+    if (soup.grouping.activeGroupId() === 'date') return DateGroupHeader;
     return DefaultGroupHeader;
   };
 
