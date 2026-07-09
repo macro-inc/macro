@@ -834,7 +834,9 @@
               CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
               CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
               CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
-              # Sets the DATABASE_URL globally so we no longer need to make individual .env files with this in each crate
+              # Default for local SQLx/cargo workflows so individual crates do
+              # not need their own .env files. The run-dev env resolver ignores
+              # this localhost default so Doppler's dev DATABASE_URL wins.
               DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
             }
             // pkgs.lib.optionalAttrs isLinux {
