@@ -22,6 +22,7 @@ mod check_node_modules_nix;
 mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_infra;
+mod deploy_ai_editing_worker;
 mod deploy_preview;
 mod deploy_web_app;
 mod deploy_web_app_dev_push;
@@ -147,6 +148,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
         render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
+    },
+    WorkflowFile {
+        slug: "deploy_ai_editing_worker",
+        file_name: "deploy_ai_editing_worker.yml",
+        render_yaml: || render_gh_workflow(deploy_ai_editing_worker::deploy_ai_editing_worker)(),
     },
     WorkflowFile {
         slug: "deploy_preview",

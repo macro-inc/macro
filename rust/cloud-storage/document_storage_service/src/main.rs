@@ -72,7 +72,9 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_service_urls::{
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 #[cfg(feature = "graphql")]
@@ -306,9 +308,12 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
-    let notification_service = NotificationServiceImpl::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
+    let notification_service = NotificationServiceImpl::new(
+        SqsNotificationIngress {
+            queue: ingress_queue,
+        },
+        db.clone(),
+    );
     let properties_service = Arc::new(
         PropertiesServiceImpl::new(
             PropertiesPgRepo::new(db.clone()),
@@ -584,6 +589,29 @@ async fn main() -> anyhow::Result<()> {
         webhook_service,
         webhook_rate_limiter,
     );
+
+    // Webhook event ingestion: consume document and channel broker events and
+    // fan them out to matching webhooks (per-event handlers are stubs for now).
+    let webhook_ingestion_service =
+        webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
+            entity_access_service.clone(),
+        );
+    let webhook_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) = webhook::inbound::kafka_consumer::run_webhook_event_consumer(
+                &webhook_consumer_brokers,
+                webhook_ingestion_service.clone(),
+                std::future::pending::<()>(),
+            )
+            .await
+            {
+                tracing::error!(error = ?e, "webhook event consumer exited");
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    });
+
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
     // Create the SQS worker for delete document processing before config is moved.
@@ -768,6 +796,13 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "delete_document_worker")]
     {
+        let editing_worker_client = Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            )
+            .with_internal_auth_key(Some(api_context.config.internal_api_key.to_string())),
+        );
+
         // Spawn the delete document worker.
         let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
             worker: Arc::new(delete_document_worker),
@@ -775,6 +810,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: api_context.s3_client.clone(),
             redis_client: api_context.redis_client.clone(),
             sync_service_client: api_context.sync_service_client.clone(),
+            editing_worker_client,
         };
 
         tokio::spawn(async move {

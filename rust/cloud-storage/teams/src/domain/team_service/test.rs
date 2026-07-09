@@ -60,6 +60,7 @@ struct MockTeamRepository {
     backfilled_subscription_id: Arc<Mutex<Option<stripe::SubscriptionId>>>,
     stripe_customer_id: Option<stripe::CustomerId>,
     team_payment_status: bool,
+    team_members: Vec<TeamMember<'static>>,
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
@@ -91,6 +92,7 @@ impl MockTeamRepository {
             backfilled_subscription_id: Arc::new(Mutex::new(None)),
             stripe_customer_id: None,
             team_payment_status: true,
+            team_members: Vec::new(),
             accepted_invite: None,
             removed_member: None,
             rollback_accept_calls: Arc::new(Mutex::new(0)),
@@ -117,6 +119,11 @@ impl MockTeamRepository {
 
     fn with_team(mut self, team: Team) -> Self {
         self.team_for_get_by_id = Some(team);
+        self
+    }
+
+    fn with_team_members(mut self, members: Vec<TeamMember<'static>>) -> Self {
+        self.team_members = members;
         self
     }
 }
@@ -351,7 +358,8 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<TeamMember<'_>>, TeamError>> + Send {
-        async { unimplemented!() }
+        let members = self.team_members.clone();
+        async move { Ok(members) }
     }
 
     fn bulk_is_member_of_other_team(
@@ -809,6 +817,16 @@ fn make_invite(email: &str, invite_id: uuid::Uuid, team_id: uuid::Uuid) -> TeamI
     }
 }
 
+fn make_team_member(team_id: uuid::Uuid, user_id: &str, role: TeamRole) -> TeamMember<'static> {
+    TeamMember {
+        team_id,
+        user_id: MacroUserIdStr::parse_from_str(user_id)
+            .unwrap()
+            .into_owned(),
+        role,
+    }
+}
+
 fn make_accepted_invite(
     team_id: uuid::Uuid,
     invite_id: uuid::Uuid,
@@ -876,6 +894,117 @@ fn build_service_with_analytics(
 }
 
 // -- Tests --
+
+#[tokio::test]
+async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
+    let team_id = uuid::Uuid::from_u128(5000);
+    let members = vec![
+        make_team_member(team_id, "macro|member-one@example.com", TeamRole::Member),
+        make_team_member(team_id, "macro|member-two@example.com", TeamRole::Admin),
+    ];
+    let expected_roles = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
+        .with_team_members(members);
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let remove_role_calls = roles_service.remove_calls.clone();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .revoke_permissions_for_team_members(&team_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *remove_role_calls.lock().unwrap(),
+        vec![
+            (
+                "macro|member-one@example.com".to_string(),
+                expected_roles.clone(),
+            ),
+            ("macro|member-two@example.com".to_string(), expected_roles),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn team_payment_restore_adds_exact_premium_roles_to_members() {
+    let team_id = uuid::Uuid::from_u128(5001);
+    let members = vec![
+        make_team_member(team_id, "macro|member-one@example.com", TeamRole::Member),
+        make_team_member(team_id, "macro|member-two@example.com", TeamRole::Admin),
+    ];
+    let expected_roles = vec![RoleId::TeamSubscriber, RoleId::SubOpus];
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
+        .with_team_members(members);
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_role_calls = roles_service.upsert_calls.clone();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .restore_permissions_for_team_members(&team_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *upsert_role_calls.lock().unwrap(),
+        vec![
+            (
+                "macro|member-one@example.com".to_string(),
+                expected_roles.clone(),
+            ),
+            ("macro|member-two@example.com".to_string(), expected_roles),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn team_payment_patch_payment_status_delegates_to_repository() {
+    let team_id = uuid::Uuid::from_u128(5002);
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    let payment_update_calls = team_repo.payment_update_calls.clone();
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .patch_team_payment_status(&team_id, false)
+        .await
+        .unwrap();
+    service
+        .patch_team_payment_status(&team_id, true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *payment_update_calls.lock().unwrap(),
+        vec![(team_id, false), (team_id, true)]
+    );
+}
 
 #[tokio::test]
 async fn test_create_team_moves_github_installation_to_created_team() {

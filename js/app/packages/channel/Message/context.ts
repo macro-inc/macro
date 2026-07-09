@@ -46,14 +46,3 @@ export const MessageActionDrawerContextProvider =
 export function useMessageActionDrawer(): MessageActionDrawerState | undefined {
   return useContext(MessageActionDrawerContext);
 }
-
-export type MessageSelectionState = {
-  isSelected: boolean;
-};
-
-const MessageSelectionContext = createContext<MessageSelectionState>();
-export const MessageSelectionProvider = MessageSelectionContext.Provider;
-
-export function useMessageSelection(): MessageSelectionState | undefined {
-  return useContext(MessageSelectionContext);
-}

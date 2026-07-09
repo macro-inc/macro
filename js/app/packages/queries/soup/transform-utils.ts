@@ -43,6 +43,7 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -280,6 +281,9 @@ export function mapChannelSearchResultItem(
     });
 }
 
+const formatDisplayName = (text: string, fileType?: string | null) =>
+  formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
+
 export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
@@ -345,6 +349,17 @@ export const useSearchResponseItemMapper = () => {
             results: result.document_search_results,
           });
         }
+        // The index stores unformatted document names, so server name
+        // highlights lack the extension suffix the display name carries.
+        if (search.nameHighlight) {
+          search = {
+            ...search,
+            nameHighlight: formatDisplayName(
+              search.nameHighlight,
+              result.file_type
+            ),
+          };
+        }
         const properties = result.properties ?? undefined;
         return [
           {
@@ -356,7 +371,10 @@ export const useSearchResponseItemMapper = () => {
                   ? { type: 'snippet' }
                   : null,
             id: result.document_id,
-            name: result.name || blockNameToDefaultFile(result.file_type),
+            name: formatDisplayName(
+              result.name || blockNameToDefaultFile(result.file_type),
+              result.file_type
+            ),
             ownerId: result.owner_id,
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
@@ -416,6 +434,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             projectId: result.metadata?.project_id ?? undefined,
+            properties: result.properties ?? undefined,
             search,
           },
         ];

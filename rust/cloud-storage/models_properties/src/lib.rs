@@ -3,7 +3,7 @@
 //! This crate defines the data models for the properties system using a three-layer architecture:
 //!
 //! - **shared**: Shared types (EntityType, DataType) used across all layers
-//! - **db**: Database layer types (used only by properties_db_client)
+//! - **db**: Database layer types (used only by the properties crate's outbound adapters)
 //! - **service**: Business logic layer types (used within properties_service)
 //! - **api**: API layer types (external-facing requests/responses)
 

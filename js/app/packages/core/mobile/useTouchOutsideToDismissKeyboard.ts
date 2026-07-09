@@ -31,9 +31,13 @@ export function useTouchOutsideToDismissKeyboard(
       const touch = e.touches[0];
       if (!touch) return;
 
-      const target = e.target as Node | null;
+      const target = e.target instanceof Element ? e.target : null;
       // Touch is inside the container — leave the keyboard alone.
       if (!target || container.contains(target)) return;
+
+      // Sibling regions that opt into the keyboard-safe zone (e.g. the input
+      // flag, rendered outside the input) must not dismiss the keyboard either.
+      if (target.closest('[data-keep-keyboard]')) return;
 
       // If the active element sits inside a Kobalte dialog, focusing the
       // dialog root instead of calling blur() satisfies the focus-trap while

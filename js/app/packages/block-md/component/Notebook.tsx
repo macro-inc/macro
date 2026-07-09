@@ -355,7 +355,7 @@ export function Notebook(props: {
                 setShowLexicalStateDebugger(false)
               }
             />
-            <Show when={ENABLE_HISTORY_COMPONENT}>
+            <Show when={ENABLE_HISTORY_COMPONENT()}>
               <HistoryOverlay
                 currentState={currentEditorState}
                 selectedAt={history.selectedAt()}

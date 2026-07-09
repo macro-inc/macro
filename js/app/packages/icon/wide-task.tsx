@@ -37,13 +37,13 @@ export const AnimatedTaskIcon = (props: {
       `}</style>
       <rect
         class="box"
-        x="0.46875"
+        x="0.75"
         y="0.46875"
         width="5.0625"
         height="5.0625"
         rx="1.5"
       />
-      <polyline class="checkmark" points="0.535,8.465 3.01,10.94 6.55,7.4" />
+      <polyline class="checkmark" points="0.75,8.465 3.01,10.94 6.55,7.4" />
       <rect
         x="8"
         y="2.25"

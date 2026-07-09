@@ -3,7 +3,11 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import { InputProvider } from './context';
-import { type InputCommands, type InputData, isReplyInput } from './types';
+import {
+  type InputCommands,
+  type InputData,
+  isInlineReplyInput,
+} from './types';
 
 const NoopInputCommands: InputCommands = {
   send: async () => false,
@@ -37,7 +41,7 @@ export function Root(props: RootProps) {
       }}
       class={cn(
         'relative macro-message-width flex flex-col flex-1 items-center justify-between',
-        isReplyInput(local.input) && 'mb-4',
+        isInlineReplyInput(local.input) && 'mb-4',
         local.class
       )}
       data-input

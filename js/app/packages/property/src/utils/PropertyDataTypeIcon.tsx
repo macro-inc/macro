@@ -17,10 +17,10 @@ import type { Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { twMerge } from 'tailwind-merge';
 import { match } from 'ts-pattern';
-import type { Property } from '../types';
+import type { PropertyDefinitionDomain } from '../types';
 
 const EntityDataTypeIcon: Component<{
-  property: Pick<Property, 'specificEntityType'>;
+  property: Pick<PropertyDefinitionDomain, 'specificEntityType'>;
   class?: string;
 }> = (props) => {
   const iconClass = () => twMerge('size-4 text-ink-muted', props.class);
@@ -40,7 +40,7 @@ const EntityDataTypeIcon: Component<{
 };
 
 export const PropertyDataTypeIcon: Component<{
-  property: Pick<Property, 'valueType' | 'specificEntityType'>;
+  property: Pick<PropertyDefinitionDomain, 'valueType' | 'specificEntityType'>;
   class?: string;
 }> = (props) => {
   const iconClass = () => twMerge('size-4 text-ink-muted', props.class);

@@ -175,6 +175,7 @@ export * from './getScheduledResponse';
 export * from './getThreadMessagesHandlerParams';
 export * from './getThreadParams';
 export * from './getThreadResponse';
+export * from './initErrorCodeResponse';
 export * from './initResponse';
 export * from './initResponseBackfillJobId';
 export * from './initUserParams';

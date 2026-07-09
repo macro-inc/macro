@@ -234,6 +234,7 @@ pub async fn build_tool_service_context(
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(pool.clone()),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
+        crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder: ai_usage::pg_recorder(pool.clone()),

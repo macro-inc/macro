@@ -5,7 +5,7 @@ use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
 };
-use properties_db_client::entity_properties::get::{
+use properties::outbound::entity_properties_get_query::{
     get_entity_properties_for_index, get_entity_properties_for_index_batch,
 };
 use sqlx::PgPool;

@@ -27,19 +27,25 @@ type InputDataBase = {
   placeholder?: string;
   value?: string;
   isDraggedOver?: boolean;
-  isDraggingOverChannel?: boolean;
-  isValidChannelDrag?: boolean;
   showFormatRibbon?: boolean;
   hasPendingAttachments?: boolean;
   attachments?: InputAttachmentData[];
 };
 
 export type ChannelInputMode = InputDataBase & { mode: 'channel' };
-export type ReplyInputMode = InputDataBase & { mode: 'reply' };
+export type ReplyInputMode = InputDataBase & {
+  mode: 'reply';
+  /** Where the reply input is hosted. Defaults to 'inline' (in the thread). */
+  host?: 'inline' | 'unified';
+};
 export type InputData = ChannelInputMode | ReplyInputMode;
 
 export const isReplyInput = (input: InputData): input is ReplyInputMode =>
   input.mode === 'reply';
+
+/** A reply input rendered inline inside a thread (not the unified input). */
+export const isInlineReplyInput = (input: InputData): input is ReplyInputMode =>
+  isReplyInput(input) && input.host !== 'unified';
 
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 

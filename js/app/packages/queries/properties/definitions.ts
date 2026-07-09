@@ -57,6 +57,37 @@ type CreatePropertyDefinitionParams = {
   body: CreatePropertyDefinitionRequest;
 };
 
+type DeletePropertyDefinitionParams = {
+  definitionId: string;
+};
+
+export function useDeletePropertyDefinitionMutation(
+  callbacks?: MutationCallbacks<unknown, Error, DeletePropertyDefinitionParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: DeletePropertyDefinitionParams) => {
+      return await throwOnErr(
+        async () =>
+          await propertiesServiceClient.deletePropertyDefinition({
+            definition_id: vars.definitionId,
+          })
+      );
+    },
+    ...withCallbacks<unknown, Error, DeletePropertyDefinitionParams>(
+      {
+        onError(error) {
+          console.error('Failed to delete property definition', error);
+          toast.failure('Failed to delete property');
+        },
+        onSuccess: () => {
+          invalidatePropertyDefinitions();
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
 export function useCreatePropertyDefinitionMutation(
   callbacks?: MutationCallbacks<
     PropertyDefinition,

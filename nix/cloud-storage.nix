@@ -678,6 +678,9 @@
           zig
           cmake
           nasm
+          # openssl-src (vendored OpenSSL for zigbuild cross builds, see the
+          # OPENSSL_NO_VENDOR notes above) runs OpenSSL's perl-based Configure.
+          perl
           (writeShellScriptBin "rustup" ''
             set -euo pipefail
             rustc_path="$(${coreutils}/bin/readlink -f "$(command -v rustc)")"
@@ -716,6 +719,7 @@
           sccache
           rustToolchain
           python3
+          vitejs
         ]
         ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -819,6 +823,21 @@
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
               AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # cargo-zigbuild compiles C with zig cc, which ignores the Nix
+              # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
+              # buildInputs provides to host builds (see the note on `libraries`;
+              # librdkafka 2.12 needs curl headers even with WITH_CURL=0) are
+              # invisible to zigbuild cross builds. cc-rs and cmake-rs honor
+              # these target-scoped forms, so only the Linux cross targets get
+              # the include path; host builds keep their Nix cc-wrapper flags.
+              CFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CXXFLAGS_aarch64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              CXXFLAGS_x86_64_unknown_linux_gnu = "-I${pkgs.curl.dev}/include";
+              # Default for local SQLx/cargo workflows so individual crates do
+              # not need their own .env files. The run-dev env resolver ignores
+              # this localhost default so Doppler's dev DATABASE_URL wins.
+              DATABASE_URL = "postgres://user:password@localhost:5432/macrodb";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";

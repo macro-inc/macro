@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { isReservedPropertyDefinitionName } from '@companies/crm/team-crm-config';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
@@ -62,6 +63,12 @@ export interface EntityPropertiesSectionProps {
    * properties with the same definition id take precedence.
    */
   defaultProperties?: () => Property[];
+  /**
+   * Fetched properties with these definition ids are dropped before
+   * merging with `defaultProperties` — e.g. the system Stage row when the
+   * team has its own stage set.
+   */
+  hidePropertyDefinitionIds?: string[];
 }
 
 const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
@@ -69,6 +76,7 @@ const TAGGABLE_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'TASK',
   'THREAD',
   'PROJECT',
+  'CHAT',
 ]);
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
@@ -93,9 +101,15 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   );
 
   // Fetched properties merged with any default placeholders whose
-  // definition the entity doesn't carry yet.
+  // definition the entity doesn't carry yet. Hidden definitions and
+  // reserved internal definitions (`__macro:*`) are dropped first.
   const mergedProperties = createMemo(() => {
-    const fetched = properties();
+    const hiddenDefinitionIds = new Set(props.hidePropertyDefinitionIds ?? []);
+    const fetched = properties().filter(
+      (property) =>
+        !hiddenDefinitionIds.has(property.propertyDefinitionId) &&
+        !isReservedPropertyDefinitionName(property.displayName)
+    );
     const defaults = props.defaultProperties?.() ?? [];
     if (defaults.length === 0) return fetched;
     const fetchedDefinitionIds = new Set(

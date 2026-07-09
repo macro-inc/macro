@@ -108,7 +108,7 @@ function DetailsSectionContent() {
   );
 }
 
-function FolderLink(props: { projectId: string; projectName: string }) {
+export function FolderLink(props: { projectId: string; projectName: string }) {
   const open = createCallback((e: MouseEvent) => {
     openDocument('project', props.projectId, undefined, !e.shiftKey);
   });
@@ -129,7 +129,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   );
 }
 
-function OwnerValue(props: { ownerId: string }) {
+export function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
 
   return (
@@ -140,7 +140,7 @@ function OwnerValue(props: { ownerId: string }) {
   );
 }
 
-function DateValueDisplay(props: { value: DateValue }) {
+export function DateValueDisplay(props: { value: DateValue }) {
   return (
     <SidePanel.Pill>
       <span class="truncate">

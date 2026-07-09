@@ -27,6 +27,8 @@ use macro_middleware::{
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
 };
 
+mod associate_github_installations;
+
 /// Internal routes. All routes are authenticated via the internal_access middleware
 /// These routes are not part of the public Swagger documentation and should never be
 pub fn router(state: ApiContext) -> Router<ApiContext> {
@@ -177,6 +179,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/validate_item_ids",
             post(validate_item_ids::handler).layer(ensure_user_exists_middleware),
+        )
+        // Github routes
+        .route(
+            "/github/installations/{github_user_id}/associate",
+            post(associate_github_installations::associate_github_installations_handler),
         )
         .route("/health", get(async move || "healthy"))
 }

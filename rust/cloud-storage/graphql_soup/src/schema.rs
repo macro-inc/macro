@@ -46,6 +46,16 @@ impl SoupService for SchemaOnlySoupService {
     ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
         Err(soup::domain::models::SoupErr::CommsErr)
     }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        _user_id: macro_user_id::user_id::MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        soup::domain::models::SoupErr,
+    >{
+        Err(soup::domain::models::SoupErr::CommsErr)
+    }
 }
 
 /// Object-safe-ish wrapper for sharing a concrete Soup service with GraphQL.
@@ -85,6 +95,16 @@ where
         req: soup::domain::models::GroupedSortRequest<'_>,
     ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
         self.0.get_user_soup_grouped(req).await
+    }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: macro_user_id::user_id::MacroUserIdStr<'a>,
+    ) -> Result<
+        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        soup::domain::models::SoupErr,
+    >{
+        self.0.caller_tag_sets(user_id).await
     }
 }
 

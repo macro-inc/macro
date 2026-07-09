@@ -21,6 +21,7 @@ use anthropic::toolset::anthropic_toolset;
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
+use crm::inbound::toolset::crm_toolset;
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
@@ -45,14 +46,14 @@ pub use tool_context::{
     NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext,
     TaskPropertiesAdapter, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
-    ToolChatService, ToolChatToolContext, ToolCommsService, ToolDocumentService,
-    ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolForeignEntityService,
     ToolFrecencyService, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPropertiesService, ToolPropertiesToolContext,
     ToolServiceContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, build_channel_tool_context,
-    build_channel_tool_context_with_dispatcher, build_properties_service,
+    build_channel_tool_context_with_dispatcher, build_crm_tool_context, build_properties_service,
     build_properties_tool_context, build_task_properties_adapter, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
@@ -84,6 +85,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())
         .add_subtoolset::<ToolChannelToolContext>(channel_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
+        .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
 

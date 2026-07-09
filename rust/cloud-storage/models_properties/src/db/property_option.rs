@@ -22,23 +22,6 @@ pub struct PropertyOption {
     pub updated_at: DateTime<Utc>,
 }
 
-impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for PropertyOption {
-    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        use sqlx::Row;
-
-        Ok(PropertyOption {
-            id: row.try_get("id")?,
-            property_definition_id: row.try_get("property_definition_id")?,
-            display_order: row.try_get("display_order")?,
-            number_value: row.try_get("number_value")?,
-            string_value: row.try_get("string_value")?,
-            color: row.try_get("color")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-        })
-    }
-}
-
 // ===== Conversions =====
 
 impl std::convert::TryFrom<PropertyOption> for crate::service::property_option::PropertyOption {

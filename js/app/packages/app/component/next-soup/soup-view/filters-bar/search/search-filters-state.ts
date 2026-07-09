@@ -25,14 +25,16 @@ export type SearchIndexId =
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
-/** Search types where tag filtering applies: documents/tasks, emails, plus
- * the mixed `all` view (tags there narrow the taggable result types and leave
- * the rest untouched). */
+/** Search types where tag filtering applies: documents/tasks, emails, chats,
+ * folders, plus the mixed `all` view (tags there narrow the taggable result
+ * types and leave the rest untouched). */
 export const TAG_SEARCH_TYPES = new Set<SearchTypeValue>([
   'all',
   'task',
   'document-or-file',
   'email',
+  'agent',
+  'folders',
 ]);
 
 /**

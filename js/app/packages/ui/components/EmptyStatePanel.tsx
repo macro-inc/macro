@@ -52,8 +52,10 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
       {/* A FIXED top spacer (not content-proportional) so the title lands on
           the same baseline for every empty state, regardless of what's below
           it. The graphic box has a fixed height too, so the title's vertical
-          position is constant; the bottom grows to fill. */}
-      <div aria-hidden="true" class="shrink-0 basis-[28%]" />
+          position is constant; the bottom grows to fill. On mobile the viewport
+          is short and the wrapper already adds a top inset, so the spacer is
+          reduced to keep content from overflowing the visible area. */}
+      <div aria-hidden="true" class="shrink-0 basis-[28%] mobile:basis-[8%]" />
       <div
         class={cn(
           // Explicit vertical rhythm: a generous gap below the graphic, then a

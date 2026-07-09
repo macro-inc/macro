@@ -174,14 +174,15 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
+        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
+
+        let access = self
+            .properties
+            .mint_edit_receipt(&user_id, entity_id, models_properties::EntityType::Task)
+            .await?;
+
         self.properties
-            .set_entity_property(
-                user_id,
-                entity_id,
-                models_properties::EntityType::Task,
-                property_definition_id,
-                value,
-            )
+            .set_entity_property(&access, property_definition_id, value)
             .await
             .map_err(Into::into)
     }
@@ -381,11 +382,10 @@ env_var! {
 
 impl From<&ApiContext> for PropertiesHandlerState {
     fn from(ctx: &ApiContext) -> Self {
-        PropertiesHandlerState {
-            db: ctx.db.clone(),
-            properties_service: ctx.properties_service.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
+        PropertiesHandlerState::new(
+            ctx.properties_service.clone(),
+            ctx.entity_access_service.clone(),
+        )
     }
 }
 

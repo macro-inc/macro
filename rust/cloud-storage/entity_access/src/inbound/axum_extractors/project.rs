@@ -271,6 +271,14 @@ where
             });
         };
 
+        // An empty id clears the entity's project: no target project to authorize
+        if project.id().is_empty() {
+            return Ok(Self::ProjectNotInBody {
+                body: cb()?,
+                _marker: PhantomData,
+            });
+        }
+
         if internal_user.is_some() {
             return Ok(Self::FoundProject {
                 entity_access_receipt: EntityAccessReceipt {

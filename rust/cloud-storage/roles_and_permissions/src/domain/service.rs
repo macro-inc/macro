@@ -65,6 +65,8 @@ where
                     .await
             }
             SubscriptionStatus::Canceled
+            | SubscriptionStatus::IncompleteExpired
+            | SubscriptionStatus::PastDue
             | SubscriptionStatus::Paused
             | SubscriptionStatus::Unpaid => {
                 self.user_roles_and_permissions_repository

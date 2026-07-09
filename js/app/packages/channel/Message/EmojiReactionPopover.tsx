@@ -1,7 +1,7 @@
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { Popover } from '@kobalte/core/popover';
 import { Button, type ButtonProps, Layer } from '@ui';
-import { createSignal, type JSX, splitProps } from 'solid-js';
+import { createEffect, createSignal, type JSX, splitProps } from 'solid-js';
 
 type EmojiReactionPopoverPlacement = 'top' | 'right' | 'bottom' | 'left';
 
@@ -24,6 +24,14 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
     'placement',
   ]);
   const [query, setQuery] = createSignal('');
+
+  // The component outlives the popover content, so reset the search when it
+  // closes or reopening shows a stale filter.
+  createEffect(() => {
+    if (!local.open) {
+      setQuery('');
+    }
+  });
 
   return (
     <Popover

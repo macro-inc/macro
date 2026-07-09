@@ -2,19 +2,17 @@
 
 use std::collections::HashSet;
 
-use futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::property_value::PropertyValue;
-use notification::domain::models::SendNotificationRequestBuilder;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
+use crate::domain::model::{EditReceipt, TaskAssignedNotification};
 use crate::domain::ports::{NotificationService, PermissionService, PropertiesRepo};
-use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -24,14 +22,40 @@ where
     N: NotificationService,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
-    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
-    pub async fn handle_task_relationship_property(
+    /// Require edit access to every referenced task before linking: linking
+    /// mutates the referenced task's Parent Task / Subtasks property, so edit
+    /// access to the primary task alone is not enough. Internal (machine)
+    /// callers are trusted and skip the check.
+    async fn check_referenced_task_edit_access(
         &self,
-        entity_id: &str,
+        access: &EditReceipt,
+        referenced_task_ids: &[Uuid],
+    ) -> Result<(), PropertiesErr> {
+        if referenced_task_ids.is_empty() {
+            return Ok(());
+        }
+        let Some(user_id) = access.authenticated_user() else {
+            // Internal callers operate outside a user session and are trusted.
+            return Ok(());
+        };
+        let permission_service = self.permission_service()?;
+        for task_id in referenced_task_ids {
+            permission_service
+                .mint_edit_receipt(user_id, &task_id.to_string(), EntityType::Task)
+                .await
+                .map_err(|_| PropertiesErr::PermissionDenied)?;
+        }
+        Ok(())
+    }
+
+    /// Handle task relationship properties (Parent Task / Subtasks) with bidirectional linking.
+    pub(crate) async fn handle_task_relationship_property(
+        &self,
+        access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<(), PropertiesErr> {
-        let task_id = Uuid::parse_str(entity_id)
+        let task_id = Uuid::parse_str(access.entity_id())
             .map_err(|_| PropertiesErr::Validation("Invalid task ID".to_string()))?;
 
         match property_definition_id {
@@ -55,7 +79,13 @@ where
                     }
                 };
 
-                PropertiesService::link_parent_task(self, task_id, parent_task_id).await?;
+                self.check_referenced_task_edit_access(access, parent_task_id.as_slice())
+                    .await?;
+
+                self.repository
+                    .link_parent_task(task_id, parent_task_id)
+                    .await
+                    .map_err(anyhow::Error::from)?;
             }
             SystemPropertyKey::SUBTASKS_UUID => {
                 let subtask_ids = match &value {
@@ -81,7 +111,13 @@ where
                     }
                 };
 
-                PropertiesService::link_subtasks(self, task_id, subtask_ids).await?;
+                self.check_referenced_task_edit_access(access, &subtask_ids)
+                    .await?;
+
+                self.repository
+                    .link_subtasks(task_id, subtask_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?;
             }
             _ => {
                 return Err(PropertiesErr::Validation(
@@ -94,11 +130,11 @@ where
     }
 
     /// Handle task assignees property with permissions.
-    pub async fn handle_task_assignees_property(
+    pub(crate) async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
         value: Option<SetPropertyValue>,
-        assigned_by_user_id: &str,
+        assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<(), PropertiesErr> {
         let Some(SetPropertyValue::MultiEntityReference { references }) = &value else {
             if value.is_some() {
@@ -128,16 +164,22 @@ where
         Ok(())
     }
 
-    /// Handle notifications when task assignees are updated.
+    /// Handle notifications when task assignees are updated. Internal
+    /// (machine) writes have no assigning user and send no notifications.
     pub async fn handle_task_assignee_notifications(
         &self,
         task_id: Uuid,
         assignee_ids: &[MacroUserIdStr<'_>],
-        assigned_by_user_id: &str,
+        assigned_by_user_id: Option<&MacroUserIdStr<'_>>,
     ) -> Result<(), PropertiesErr> {
         if assignee_ids.is_empty() {
             return Ok(());
         }
+
+        let Some(assigned_by_user_id) = assigned_by_user_id else {
+            tracing::debug!("no assigning user (internal write), skipping notifications");
+            return Ok(());
+        };
 
         let notification_service = match &self.notification_service {
             Some(service) => service,
@@ -168,7 +210,8 @@ where
         let recipient_ids: Vec<MacroUserIdStr<'_>> = assignee_ids
             .iter()
             .filter(|id| {
-                !current_assignee_ids.contains(id.as_ref()) && id.as_ref() != assigned_by_user_id
+                !current_assignee_ids.contains(id.as_ref())
+                    && id.as_ref() != assigned_by_user_id.as_ref()
             })
             .map(|id| id.copied())
             .collect();
@@ -178,73 +221,17 @@ where
             return Ok(());
         }
 
-        let task_name = self
-            .repository
-            .get_document_name(&task_id.to_string())
+        let assigned_by = assigned_by_user_id.copied();
+
+        notification_service
+            .send_task_assigned(TaskAssignedNotification {
+                task_id,
+                assigned_by,
+                recipient_ids,
+            })
             .await
             .map_err(anyhow::Error::from)
             .map_err(PropertiesErr::Repo)?;
-
-        let assigned_by =
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str(assigned_by_user_id)
-                .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?
-                .into_owned();
-
-        let notification_entity =
-            model_entity::EntityType::Document.with_entity_string(task_id.to_string());
-
-        let sender_profile_picture_url = self
-            .repository
-            .get_user_profile_picture(assigned_by_user_id)
-            .await
-            .ok()
-            .flatten();
-
-        let notification_futures: Vec<_> = recipient_ids
-            .iter()
-            .map(|recipient_id| {
-                let metadata = model_notifications::TaskAssignedMetadata {
-                    task_id: task_id.to_string(),
-                    task_name: task_name.clone(),
-                    sub_type: Some(model_notifications::NotificationDocumentSubType::Task),
-                    assigned_by: assigned_by.clone(),
-                    sender_profile_picture_url: sender_profile_picture_url.clone(),
-                };
-
-                let request = SendNotificationRequestBuilder {
-                    notification_entity: notification_entity.clone(),
-                    secondary_notification_entity: None,
-                    notification: metadata,
-                    sender_id: Some(assigned_by.clone()),
-                    recipient_ids: HashSet::from([recipient_id.copied()]),
-                }
-                .into_request()
-                .with_apns()
-                .with_conn_gateway();
-
-                let recipient_id_for_log = recipient_id.clone();
-                async move {
-                    let send_result = notification_service.send_notification(request).await;
-                    match send_result {
-                        Ok(notification_id) => {
-                            tracing::debug!(
-                                recipient_id = %recipient_id_for_log,
-                                notification_id = %notification_id,
-                                "sent task assignment notification"
-                            );
-                        }
-                        Err(_e) => {
-                            tracing::error!(
-                                recipient_id = %recipient_id_for_log,
-                                "failed to send task assignment notification"
-                            );
-                        }
-                    }
-                }
-            })
-            .collect();
-
-        join_all(notification_futures).await;
 
         Ok(())
     }
@@ -259,10 +246,7 @@ where
             return Ok(());
         }
 
-        let permission_service = self
-            .permission_service
-            .as_ref()
-            .ok_or(PropertiesErr::PermissionDenied)?;
+        let permission_service = self.permission_service()?;
 
         tracing::debug!(
             task_id = %task_id,

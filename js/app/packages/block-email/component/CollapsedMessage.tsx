@@ -11,6 +11,7 @@ interface CollapsedMessageProps {
   message: ApiMessage;
   isFocused: boolean;
   onClick: () => void;
+  onFocus?: () => void;
 }
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
@@ -45,6 +46,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       props.onClick();
     }
   };
@@ -62,6 +64,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           data-message-body-id={props.message.db_id}
           tabIndex={0}
           onClick={props.onClick}
+          onFocus={props.onFocus}
           onKeyDown={handleKeyDown}
         >
           <div

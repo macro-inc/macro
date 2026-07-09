@@ -63,11 +63,11 @@ const Unknown = () => {
 
         <div class="flex flex-row gap-2 items-center">
           <Button variant="active" onClick={shareCtx.open}>
-            <ShareFat /> Share
+            <ShareFat class="size-4" /> Share
           </Button>
 
           <Button variant="active" onClick={downloadDocument}>
-            <DownloadSimple /> Download
+            <DownloadSimple class="size-4" /> Download
           </Button>
         </div>
       </div>

@@ -5,7 +5,7 @@ use opensearch_client::{
     date_format::EpochSeconds,
     upsert::{project::UpsertProjectArgs, properties::IndexedProperty},
 };
-use properties_db_client::entity_properties::get::get_entity_properties_for_index;
+use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
 use sqs_client::search::project::{RemoveProject, UpsertProject};
 
 /// Fetch the project's indexed properties, flattened for the search index.

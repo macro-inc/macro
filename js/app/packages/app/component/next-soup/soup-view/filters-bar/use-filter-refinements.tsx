@@ -7,6 +7,7 @@ import {
   type FilterContext,
   type FilterID,
   NO_ASSIGNEE,
+  NO_STAGE,
 } from '@app/component/next-soup/filters';
 import {
   buildDocumentTypeQuery,
@@ -22,6 +23,8 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { useDealStages } from '@companies/crm/deal-stages';
+import { CrmStageIcon } from '@companies/crm/StageIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
@@ -72,6 +75,8 @@ export function useFilterRefinements() {
     setAssigneeFilter,
     ownerFilter,
     setOwnerFilter,
+    stageFilter,
+    setStageFilter,
     activeTab,
   } = useSoupView();
   const filterData = () => queryFilters.state;
@@ -81,6 +86,7 @@ export function useFilterRefinements() {
   const currentUserId = useUserId();
   const taskStatus = useTaskStatusFilter();
   const tagFilter = useTagFilter();
+  const dealStages = useDealStages();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -134,7 +140,9 @@ export function useFilterRefinements() {
       currentFilterData.emailView !== presetFilters.emailView;
 
     const hasSubFilters =
-      assigneeFilter().length > 0 || ownerFilter().length > 0;
+      assigneeFilter().length > 0 ||
+      ownerFilter().length > 0 ||
+      stageFilter().length > 0;
 
     return hasClientFilterDiff || hasQueryFilterDiff || hasSubFilters;
   });
@@ -286,6 +294,52 @@ export function useFilterRefinements() {
       const shouldBeActive = ids.length > 0;
       if (shouldBeActive !== soup.predicates.isActive('company-owner')) {
         soup.predicates.toggle({ and: ['company-owner'] });
+      }
+    });
+  };
+
+  /**
+   * Stage options for the Customers view's stage sub-filter: the team's
+   * active deal-stage set plus a trailing "No stage" row.
+   */
+  const stageSearchableOptions = createMemo((): SearchableOption[] => [
+    ...dealStages.stages().map((stage, index) => ({
+      id: stage.id,
+      label: stage.label,
+      icon: () => (
+        <CrmStageIcon optionId={stage.id} index={index} class="size-3.5" />
+      ),
+    })),
+    {
+      id: NO_STAGE,
+      label: 'No stage',
+      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
+    },
+  ]);
+
+  const stageOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      for (const option of stageSearchableOptions()) {
+        map.set(option.id, { label: option.label, icon: option.icon });
+      }
+      return map;
+    }
+  );
+
+  /**
+   * Handler for stage filter changes (Customers view). Client-side
+   * predicate only, mirroring the owner filter.
+   */
+  const handleStageChange = (ids: string[]) => {
+    batch(() => {
+      setStageFilter(ids);
+      const shouldBeActive = ids.length > 0;
+      if (shouldBeActive !== soup.predicates.isActive('company-stage')) {
+        soup.predicates.toggle({ and: ['company-stage'] });
       }
     });
   };
@@ -721,8 +775,57 @@ export function useFilterRefinements() {
       );
     };
 
+    // Stage filter (consolidated) for the Customers view.
+    const pushStageConsolidatedChip = () => {
+      if (view !== 'companies') return;
+      const key = 'stage';
+      const popupOpen =
+        consolidatedChipCache.get(key)?.isPopupOpen?.() ?? false;
+      const ids = stageFilter();
+      if (ids.length === 0 && !popupOpen) return;
+
+      seenKeys.add(key);
+
+      const getValues = (): FilterValue[] =>
+        stageFilter().map((id) => {
+          const opt = stageOptionsMap().get(id);
+          return {
+            id,
+            label: opt?.label ?? id,
+            icon: opt?.icon,
+          };
+        });
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => {
+          const [isPopupOpen, _setPopupOpen] = createSignal(false);
+          const setPopupOpen = (v: boolean) => {
+            if (!v) {
+              queueMicrotask(() =>
+                panel.panelRef()?.focus({ preventScroll: true })
+              );
+            }
+            _setPopupOpen(v);
+          };
+          return {
+            key,
+            categoryLabel: 'Stage',
+            values: getValues,
+            searchableOptions: stageSearchableOptions,
+            activeSearchableIds: stageFilter,
+            onSearchableChange: handleStageChange,
+            searchPlaceholder: 'Filter stages...',
+            isPopupOpen,
+            setPopupOpen,
+            onRemoveAll: () => handleStageChange([]),
+          };
+        })
+      );
+    };
+
     pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
+    pushStageConsolidatedChip();
     pushOwnerConsolidatedChip();
     pushTagsConsolidatedChip();
 
@@ -845,6 +948,7 @@ export function useFilterRefinements() {
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
       setOwnerFilter([]);
+      setStageFilter([]);
       if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };
