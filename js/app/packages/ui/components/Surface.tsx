@@ -41,7 +41,8 @@ export function Surface(props: SurfaceProps) {
 
     if (local.active) {
       const ring = local.highlightColor ?? 'var(--b4)';
-      base['box-shadow'] = `0 0 0 2px color-mix(in srgb, ${ring} 60%, transparent)`;
+      base['box-shadow'] =
+        `0 0 0 2px color-mix(in srgb, ${ring} 60%, transparent)`;
     }
 
     return { ...base, ...local.style };

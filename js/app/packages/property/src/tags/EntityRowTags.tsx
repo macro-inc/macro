@@ -120,10 +120,7 @@ function TagOverflow(props: {
               {(tag, index) => (
                 <TagDot
                   color={tag.color}
-                  class={cn(
-                    'size-2 ring ring-surface',
-                    index() > 0 && '-ml-1'
-                  )}
+                  class={cn('size-2 ring ring-surface', index() > 0 && '-ml-1')}
                 />
               )}
             </For>
