@@ -191,7 +191,6 @@ function DropdownContent(props: DropdownContentProps) {
             'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu',
             local.class
           )}
-          data-corvu-no-drag=""
           depth={local.depth ?? 2}
           as={Surface}
           bgToken="menu"
@@ -234,7 +233,6 @@ function DropdownSubContent(props: DropdownSubContentProps) {
             'rounded-xl size-auto z-action-menu menu-open-animation',
             local.class
           )}
-          data-corvu-no-drag=""
           depth={local.depth ?? 2}
           as={Surface}
           bgToken="menu"
@@ -344,7 +342,6 @@ function DropdownTrigger(props: DropdownTriggerProps) {
       as={Button}
       size="sm"
       {...props}
-      data-corvu-no-drag=""
     />
   );
 }
