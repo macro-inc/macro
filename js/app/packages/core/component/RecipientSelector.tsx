@@ -350,9 +350,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   }
 
   const placeholderText = () => {
-    return props.selectedOptions.length === 0
-      ? 'Select recipients'
-      : 'select more recipients';
+    return props.selectedOptions.length === 0 ? 'Select recipients' : undefined;
   };
 
   const userId = useUserId();
@@ -760,6 +758,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                     class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
                     classList={{ 'ml-1': selectedLen() === 0 }}
+                    onFocus={() => setIsOpen(true)}
                     onKeyDown={(e) => {
                       if (
                         (e.key === 'a' && e.ctrlKey) ||

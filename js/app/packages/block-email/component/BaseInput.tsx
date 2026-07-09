@@ -54,7 +54,7 @@ import Reply from '@phosphor/arrow-bend-up-left.svg';
 import Forward from '@phosphor/arrow-bend-up-right.svg';
 
 import ChevronDown from '@phosphor/caret-down.svg';
-import ClockIcon from '@phosphor/clock.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
@@ -62,7 +62,6 @@ import Quotes from '@phosphor/quotes.svg';
 
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
@@ -1575,9 +1574,19 @@ export function BaseInput(props: {
   const footerSignatureHtml = () =>
     isMobileDrawer() ? undefined : replySignatureHtml();
   const mobileRecipientSelectorClass =
-    'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:basis-full! [&_input]:w-full! [&_input]:min-w-28! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder';
+    'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:min-w-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder';
   const mobileDrawerRowClass =
     'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent';
+  const mobileDrawerCcBccOpen = () =>
+    !!showCc() ||
+    !!showBcc() ||
+    form().recipients().cc.length > 0 ||
+    form().recipients().bcc.length > 0;
+  const toggleMobileDrawerCcBcc = () => {
+    const next = !mobileDrawerCcBccOpen();
+    setShowCc(next);
+    setShowBcc(next);
+  };
 
   const toggleQuotedText = () => {
     const replyingTo = props.replyingTo();
@@ -1681,65 +1690,6 @@ export function BaseInput(props: {
     </Dropdown>
   );
 
-  const MobileOverflowMenu = () => (
-    <Dropdown>
-      <Dropdown.Trigger
-        as={Button}
-        variant="ghost"
-        size="icon-sm"
-        class="rounded-full border border-edge-muted/70 bg-transparent"
-        tooltip="More"
-      >
-        <DotsThree class="size-4" />
-      </Dropdown.Trigger>
-      <Dropdown.Content portalScope="local" class="min-w-44">
-        <Dropdown.Group>
-          <Show when={ENABLE_EMAIL_SCHEDULED_SEND && !sendActionHidden()}>
-            <EmailDateSelector
-              sendTime={form().sendTime() ?? null}
-              onSendTimeChange={handleSendTimeChange}
-              disabled={scheduleSendDisabled()}
-              disablePortal={isMobile()}
-              trigger={(state) => (
-                <div
-                  aria-disabled={scheduleSendDisabled()}
-                  class={cn(
-                    'group rounded-lg w-full min-w-44 flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none hover:bg-ink/5 group-data-[expanded]/date-selector-trigger:bg-ink/5',
-                    scheduleSendDisabled() &&
-                      'opacity-50 cursor-not-allowed hover:bg-transparent'
-                  )}
-                >
-                  <ClockIcon
-                    class={cn(
-                      'size-4 shrink-0',
-                      state.selectedDate && 'text-accent'
-                    )}
-                  />
-                  <span class="flex-1 truncate">Schedule send</span>
-                  <Show when={state.formattedDate}>
-                    {(date) => (
-                      <span class="max-w-20 truncate text-xs text-ink-extra-muted">
-                        {date()}
-                      </span>
-                    )}
-                  </Show>
-                </div>
-              )}
-            />
-          </Show>
-          <Dropdown.Item
-            onSelect={() => setShowFormatRibbon(!showFormatRibbon())}
-          >
-            <TextAa class="size-4 shrink-0" />
-            <span class="flex-1 truncate">
-              {showFormatRibbon() ? 'Hide formatting' : 'Show formatting'}
-            </span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-
   return (
     <Surface
       class={cn(
@@ -1776,7 +1726,7 @@ export function BaseInput(props: {
                 tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
                 onClick={deleteDraftAndReset}
               >
-                <XIcon class="size-4" />
+                <Trash class="size-4" />
               </Button>
             </div>
             <div class="ml-auto flex items-center gap-1">
@@ -1784,7 +1734,6 @@ export function BaseInput(props: {
                 variant="ghost"
                 class="rounded-full border border-edge-muted/70 bg-transparent"
               />
-              <MobileOverflowMenu />
               <SendButton
                 disabled={sendActionDisabled() || sendActionHidden()}
                 pending={sendMutation.isPending}
@@ -1990,21 +1939,15 @@ export function BaseInput(props: {
         <div class="pt-1 relative min-w-0 leading-6 text-ink-muted px-5">
           <RecipientDropRow
             field="to"
-            class={cn(mobileDrawerRowClass, 'items-start py-2')}
+            class={cn(mobileDrawerRowClass, 'items-center py-2')}
             dragState={recipientDragState}
             onDrop={handleRecipientDrop}
           >
-            <ReplyTypeDropdown
-              triggerVariant="ghost"
-              triggerSize="sm"
-              triggerClass="mt-0 h-[30px] shrink-0 rounded-full border border-edge-muted/70 bg-transparent px-2"
-              iconOnly
-            />
+            <div class="shrink-0 text-ink-placeholder">To:</div>
             <RecipientSelector<EmailRecipient['kind']>
               class={mobileRecipientSelectorClass}
               inputRef={setToRef}
               options={ctx.recipientOptions}
-              portalScope={composePortalScope()}
               selfEmail={activeInboxEmail()}
               selectedOptions={form().recipients().to}
               setSelectedOptions={withDraftSave((v) =>
@@ -2018,33 +1961,22 @@ export function BaseInput(props: {
               }
               onChipDragEnd={handleChipDragEnd}
             />
-          </RecipientDropRow>
-
-          <div
-            class="min-h-14 border-b border-edge-muted/70 flex items-center min-w-0"
-            data-corvu-no-drag=""
-          >
-            <button
-              type="button"
-              class="shrink-0 text-left text-ink-placeholder"
-              onClick={() => {
-                setShowCc(true);
-                setShowBcc(true);
-                queueMicrotask(() => ccRef()?.focus());
-              }}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="shrink-0 rounded-full bg-transparent text-ink-placeholder"
+              tooltip={mobileDrawerCcBccOpen() ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
+              aria-expanded={mobileDrawerCcBccOpen()}
+              onClick={toggleMobileDrawerCcBcc}
             >
-              Cc/Bcc
-            </button>
-            <span class="shrink-0 text-ink-placeholder">, From:&nbsp;</span>
-            <FromInboxSelector
-              compact
-              class="min-w-0 truncate text-ink-muted"
-              links={emailLinksQuery.data?.links ?? []}
-              activeLinkId={activeLinkId()}
-              onSelect={persistDraftOnSenderSwitch}
-              portalScope={composePortalScope()}
-            />
-          </div>
+              <Show
+                when={mobileDrawerCcBccOpen()}
+                fallback={<CaretRight class="size-4" />}
+              >
+                <ChevronDown class="size-4" />
+              </Show>
+            </Button>
+          </RecipientDropRow>
 
           <Show when={showCc() || form().recipients().cc.length > 0}>
             <RecipientDropRow
@@ -2058,7 +1990,6 @@ export function BaseInput(props: {
                 class={mobileRecipientSelectorClass}
                 inputRef={setCcRef}
                 options={ctx.recipientOptions}
-                portalScope={composePortalScope()}
                 selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().cc}
                 setSelectedOptions={withDraftSave((v) =>
@@ -2087,7 +2018,6 @@ export function BaseInput(props: {
                 class={mobileRecipientSelectorClass}
                 inputRef={setBccRef}
                 options={ctx.recipientOptions}
-                portalScope={composePortalScope()}
                 selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().bcc}
                 setSelectedOptions={withDraftSave((v) =>
@@ -2103,6 +2033,21 @@ export function BaseInput(props: {
               />
             </RecipientDropRow>
           </Show>
+
+          <div
+            class="min-h-14 border-b border-edge-muted/70 flex items-center min-w-0"
+            data-corvu-no-drag=""
+          >
+            <span class="shrink-0 text-ink-placeholder">From:&nbsp;</span>
+            <FromInboxSelector
+              compact
+              class="min-w-0 truncate text-ink-muted"
+              links={emailLinksQuery.data?.links ?? []}
+              activeLinkId={activeLinkId()}
+              onSelect={persistDraftOnSenderSwitch}
+              portalScope={composePortalScope()}
+            />
+          </div>
 
           <div class="min-h-14 border-b border-edge-muted/70 flex items-center">
             <input
