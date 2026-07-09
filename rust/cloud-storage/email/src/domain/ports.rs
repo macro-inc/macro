@@ -531,3 +531,23 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
         Ok(())
     }
 }
+
+/// Outcome of a first-inbox provisioning attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstInboxProvisionOutcome {
+    /// The inbox was provisioned and a backfill was started.
+    Provisioned,
+    /// The service declined the request as a no-op: the inbox is already
+    /// initialized or the user holds no Gmail grant. Expected, not an error.
+    Skipped,
+}
+
+/// Port for provisioning the calling user's primary inbox.
+pub trait FirstInboxProvisioner: Send + Sync + 'static {
+    /// Provisions the caller's primary inbox. Idempotent, so safe to invoke on
+    /// every authentication.
+    fn provision_first_inbox(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = anyhow::Result<FirstInboxProvisionOutcome>> + Send;
+}

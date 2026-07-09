@@ -18,8 +18,8 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome,
+    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyDefinitionOwner,
+    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -237,12 +237,21 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
 
     /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Tag properties are restricted to the viewer's own and their teams' definitions.
     /// Returns properties sorted by display name.
     fn get_entity_properties(
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
+
+    /// Get the tag definitions visible to a user — their own plus their teams' —
+    /// with options attached.
+    fn get_caller_tag_definitions(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
     /// Get all properties attached to multiple entities, keyed by entity id and type.
     /// Returns properties sorted by display name for each entity.
@@ -321,42 +330,38 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 
 /// Permission service trait for entity access control.
 ///
-/// This trait abstracts permission operations (checking and granting), allowing for different implementations
-/// (e.g., database-backed, mock for testing).
+/// This trait abstracts permission operations (receipt minting and granting),
+/// allowing for different implementations (e.g., database-backed, mock for
+/// testing). Minting is the single enforcement point: it encapsulates the
+/// properties-specific access rules (Task shares Document permissions, the
+/// thread-ownership fallback, and deleted entities being visible only to
+/// their owner).
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait PermissionService: Send + Sync + 'static {
     type Err;
 
-    /// Gets the owner of the entity and whether it's deleted
-    fn get_owner_and_deleted(
-        &self,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl Future<Output = Result<(String, bool), Self::Err>> + Send;
-
-    /// Check if a user has edit access to an entity.
-    /// Returns an error if the user does not have edit or owner access.
+    /// Mint a proof that the user (or the public, for `None`) has view access
+    /// to the entity. The owner always has access; deleted entities are only
+    /// visible to their owner. Errors if the caller has no access.
     // Explicit lifetime required by mockall's automock expansion.
     #[allow(clippy::needless_lifetimes)]
-    fn check_entity_edit_permission<'a>(
-        &self,
-        user_id: &MacroUserIdStr<'a>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Check if a user has view access to an entity (any access level).
-    /// The owner always has access; deleted entities are only visible to their
-    /// owner. For anonymous users (`None`), only allows access to
-    /// publicly shared entities.
-    // Explicit lifetime required by mockall's automock expansion.
-    #[allow(clippy::needless_lifetimes)]
-    fn check_entity_view_permission<'a>(
+    fn mint_view_receipt<'a>(
         &self,
         user_id: Option<&'a MacroUserIdStr<'a>>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<ViewReceipt, Self::Err>> + Send;
+
+    /// Mint a proof that the user has edit (or owner) access to the entity.
+    /// Errors if the caller has no edit access.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn mint_edit_receipt<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
 
     /// Grant edit permissions to users for a task.
     /// This is used when task assignees are updated to ensure they can edit the task.

@@ -415,6 +415,12 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
+    'static-markdown-stream',
+    lazy(
+      () => import('@core/component/AI/component/debug/StaticMarkdownStream')
+    )
+  );
+  registerComponent(
     'resize',
     lazy(() => import('@core/internal/ResizeDemo'))
   );

@@ -12,6 +12,7 @@ use crate::{
 };
 use either::Either;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
@@ -132,6 +133,18 @@ impl SoupRepo for PgSoupRepo {
         items: &'a mut [SoupItem],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send {
         populate_properties(&self.pool.0, user_id, items)
+    }
+
+    async fn caller_tag_sets<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        properties::outbound::property_definition_queries::get_caller_tag_definitions_with_options(
+            &self.pool.0,
+            user_id.as_ref(),
+        )
+        .await
+        .map_err(|e| sqlx::Error::Decode(e.into()))
     }
 
     fn expanded_grouped_cursor_soup<'a>(

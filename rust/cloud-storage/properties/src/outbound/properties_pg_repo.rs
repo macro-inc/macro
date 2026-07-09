@@ -336,8 +336,24 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         entity_id: &str,
         entity_type: EntityType,
+        tag_viewer_user_id: &str,
     ) -> Result<Vec<EntityPropertyInfo>, Self::Err> {
-        entity_properties_get_query::get_entity_properties(&self.pool, entity_id, entity_type).await
+        entity_properties_get_query::get_entity_properties(
+            &self.pool,
+            entity_id,
+            entity_type,
+            tag_viewer_user_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_caller_tag_definitions(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<PropertyDefinitionWithOptions>, Self::Err> {
+        property_definition_queries::get_caller_tag_definitions_with_options(&self.pool, user_id)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]

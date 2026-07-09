@@ -1,4 +1,9 @@
 //! Entity property endpoints.
+//!
+//! Access control happens in the receipt extractors ([`super::extract`]): the
+//! handlers receive a minted [`ViewReceipt`](crate::domain::model::ViewReceipt)
+//! or [`EditReceipt`](crate::domain::model::EditReceipt) and pass it into the
+//! service, whose entity-scoped methods only accept receipts.
 
 use std::collections::HashMap;
 
@@ -9,16 +14,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::user_id::MacroUserIdStr;
-use model::user::axum_extractor::{MacroUserExtractor, OptionalMacroUserExtractor};
+use model::user::axum_extractor::MacroUserExtractor;
 use models_properties::api::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
+use models_properties::{EntityReference, EntityType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
 use super::{PropertiesRouterState, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
@@ -55,27 +60,6 @@ pub struct BulkEntityPropertiesRequest {
 const MAX_BULK_ENTITIES: usize = 200;
 /// Maximum number of property IDs allowed in a single bulk properties request.
 const MAX_BULK_PROPERTY_IDS: usize = 200;
-
-/// Drops tag-typed properties the caller may not see. A user-owned tag set (personal labels)
-/// is visible only to its owner, so personal tags stay private even on a shared entity.
-/// Team- and system-owned tags are the shared vocabulary and are left in place. Non-tag
-/// properties are unaffected.
-pub fn retain_caller_visible_tags(
-    properties: &mut Vec<EntityPropertyWithDefinition>,
-    caller_user_id: Option<&MacroUserIdStr<'_>>,
-) {
-    properties.retain(|property| {
-        if property.definition.data_type != DataType::Tag {
-            return true;
-        }
-        match &property.definition.owner {
-            PropertyOwner::User { user_id } => {
-                caller_user_id.is_some_and(|caller| user_id == caller.as_ref())
-            }
-            PropertyOwner::Team { .. } | PropertyOwner::System => true,
-        }
-    });
-}
 
 #[derive(Debug, Error)]
 pub enum GetEntityPropertiesErr {
@@ -124,37 +108,26 @@ impl IntoResponse for GetEntityPropertiesErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(state, user), fields(entity_type = ?entity_type, include_metadata = query.include_metadata), err)]
+#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type(), include_metadata = query.include_metadata), err)]
 pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id)): Path<(EntityType, String)>,
     Query(query): Query<EntityQueryParams>,
     State(state): State<PropertiesRouterState<S, A>>,
-    // Optional: this route allows anonymous access for publicly shared entities.
-    OptionalMacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: OptionalMacroUserExtractor,
+    // Anonymous access is allowed for publicly shared entities; the extractor
+    // minted a view receipt either way.
+    access: ViewReceiptExtractor,
 ) -> Result<Json<EntityPropertiesResponse>, GetEntityPropertiesErr> {
-    tracing::info!(
-        entity_id = %entity_id,
-        "retrieving entity properties"
-    );
-
-    // Note: This can fail if the entity is marked with "deletedAt"
-    state
-        .properties_service
-        .check_entity_view_permission(user.as_ref(), &entity_id, entity_type)
-        .await?;
+    let ViewReceiptExtractor(access) = access;
+    tracing::info!("retrieving entity properties");
 
     let (user_properties, metadata_properties) = if query.include_metadata {
         // Fetch user properties and metadata in parallel when metadata is requested
         let (user_properties_result, metadata_properties_result) = tokio::join!(
             state
                 .properties_service
-                .get_entity_properties_with_definitions(&entity_id, entity_type),
+                .get_entity_properties_with_definitions(&access),
             state
                 .properties_service
-                .get_entity_metadata_properties(&entity_id, entity_type)
+                .get_entity_metadata_properties(&access)
         );
 
         let user_properties = user_properties_result?;
@@ -167,7 +140,7 @@ pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>
         tracing::debug!("skipping metadata properties due to include_metadata=false");
         let user_properties = state
             .properties_service
-            .get_entity_properties_with_definitions(&entity_id, entity_type)
+            .get_entity_properties_with_definitions(&access)
             .await?;
 
         (user_properties, vec![])
@@ -176,15 +149,12 @@ pub async fn get_entity_properties<S: PropertiesService, A: EntityAccessService>
     let mut all_properties = user_properties;
     all_properties.extend(metadata_properties);
 
-    retain_caller_visible_tags(&mut all_properties, user.as_ref());
-
     let response = EntityPropertiesResponse {
-        entity_id: entity_id.to_string(),
+        entity_id: access.entity_id().to_string(),
         properties: all_properties,
     };
 
     tracing::info!(
-        entity_id = %entity_id,
         properties_count = response.properties.len(),
         "successfully retrieved entity properties"
     );
@@ -247,69 +217,6 @@ fn validate_bulk_request_size(
     Ok(())
 }
 
-/// Shared implementation for bulk entity properties retrieval
-async fn get_bulk_entity_properties_impl<S: PropertiesService, A: EntityAccessService>(
-    state: &PropertiesRouterState<S, A>,
-    request: BulkEntityPropertiesRequest,
-) -> Result<HashMap<String, EntityPropertiesResponse>, GetBulkEntityPropertiesErr> {
-    if request.entities.is_empty() {
-        tracing::error!("empty entities array in request");
-        return Err(GetBulkEntityPropertiesErr::InvalidRequest);
-    }
-    validate_bulk_request_size(&request)?;
-
-    tracing::info!("retrieving bulk entity properties");
-
-    // An empty property_ids fetches all properties for the given entities.
-    // Note: the public endpoint requires property_ids, but internal callers can
-    // pass an empty vec to fetch all properties for the given entities.
-    let bulk_properties = state
-        .properties_service
-        .get_bulk_entity_properties(request.entities, request.property_ids)
-        .await?;
-
-    let mut result: HashMap<String, EntityPropertiesResponse> = HashMap::new();
-
-    for (key, properties_values) in bulk_properties {
-        result.insert(
-            key.entity_id.clone(),
-            EntityPropertiesResponse {
-                entity_id: key.entity_id,
-                properties: properties_values,
-            },
-        );
-    }
-
-    tracing::info!(
-        successful_entities = result.len(),
-        "successfully retrieved bulk entity properties"
-    );
-
-    Ok(result)
-}
-
-/// Get properties for multiple entities in bulk (internal endpoint - service-to-service)
-#[utoipa::path(
-    post,
-    path = "/internal/properties/entities/bulk",
-    request_body = BulkEntityPropertiesRequest,
-    responses(
-        (status = 200, description = "Bulk entity properties retrieved successfully", body = HashMap<String, EntityPropertiesResponse>),
-        (status = 400, description = "Invalid request body"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Internal"
-)]
-#[tracing::instrument(skip(state, request), fields(entity_count = request.entities.len()), err)]
-pub async fn get_bulk_entity_properties_internal<S: PropertiesService, A: EntityAccessService>(
-    State(state): State<PropertiesRouterState<S, A>>,
-    Json(request): Json<BulkEntityPropertiesRequest>,
-) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    get_bulk_entity_properties_impl(&state, request)
-        .await
-        .map(Json)
-}
-
 /// Get properties for multiple entities in bulk (public endpoint with user auth)
 ///
 /// Only returns properties for entities the user has view permission for.
@@ -335,26 +242,23 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
     }: MacroUserExtractor,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
-    // Unlike the internal endpoint, the public endpoint requires explicit property IDs.
-    // An empty property_ids means "no properties requested", so return early with empty result.
+    // The public endpoint requires explicit property IDs. An empty property_ids
+    // means "no properties requested", so return early with empty result.
     if request.entities.is_empty() || request.property_ids.is_empty() {
         return Ok(Json(HashMap::new()));
     }
     validate_bulk_request_size(&request)?;
 
-    // Filter to only entities the user has permission to view
-    let mut permitted_entities = Vec::with_capacity(request.entities.len());
+    // Mint a view receipt per entity, keeping only the entities the user has
+    // permission to view.
+    let mut receipts = Vec::with_capacity(request.entities.len());
     for entity_ref in &request.entities {
         match state
             .properties_service
-            .check_entity_view_permission(
-                Some(&user),
-                &entity_ref.entity_id,
-                entity_ref.entity_type,
-            )
+            .mint_view_receipt(Some(&user), &entity_ref.entity_id, entity_ref.entity_type)
             .await
         {
-            Ok(()) => permitted_entities.push(entity_ref.clone()),
+            Ok(receipt) => receipts.push(receipt),
             Err(e) => {
                 tracing::debug!(
                     entity_id = %entity_ref.entity_id,
@@ -367,23 +271,35 @@ pub async fn get_bulk_entity_properties<S: PropertiesService, A: EntityAccessSer
     }
 
     tracing::info!(
-        permitted = permitted_entities.len(),
+        permitted = receipts.len(),
         "filtered entities by permission"
     );
 
-    if permitted_entities.is_empty() {
+    if receipts.is_empty() {
         return Ok(Json(HashMap::new()));
     }
 
-    let filtered_request = BulkEntityPropertiesRequest {
-        entities: permitted_entities,
-        property_ids: request.property_ids.clone(),
-    };
+    let bulk_properties = state
+        .properties_service
+        .get_bulk_entity_properties(&receipts, request.property_ids)
+        .await?;
 
-    let mut result = get_bulk_entity_properties_impl(&state, filtered_request).await?;
-    for response in result.values_mut() {
-        retain_caller_visible_tags(&mut response.properties, Some(&user));
+    let mut result: HashMap<String, EntityPropertiesResponse> = HashMap::new();
+    for (key, properties_values) in bulk_properties {
+        result.insert(
+            key.entity_id.clone(),
+            EntityPropertiesResponse {
+                entity_id: key.entity_id,
+                properties: properties_values,
+            },
+        );
     }
+
+    tracing::info!(
+        successful_entities = result.len(),
+        "successfully retrieved bulk entity properties"
+    );
+
     Ok(Json(result))
 }
 
@@ -424,26 +340,24 @@ impl IntoResponse for SetEntityPropertyErr {
     responses(
         (status = 204, description = "Entity property set successfully (with or without value)"),
         (status = 400, description = "Invalid request or entity type"),
+        (status = 403, description = "No edit access to the entity"),
         (status = 404, description = "Entity or property not found"),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user, request), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, has_value = request.value.is_some()), err)]
+#[tracing::instrument(skip(state, access, request), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, entity_type = ?access.0.entity_type(), has_value = request.value.is_some()), err)]
 pub async fn set_entity_property<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
+    Path((_entity_type, _entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
+    access: EditReceiptExtractor,
     Json(request): Json<SetEntityPropertyRequest>,
 ) -> Result<StatusCode, SetEntityPropertyErr> {
     tracing::info!("setting entity property");
 
     state
         .properties_service
-        .set_entity_property(&user, &entity_id, entity_type, property_uuid, request.value)
+        .set_entity_property(&access.0, property_uuid, request.value)
         .await?;
 
     tracing::info!("successfully set entity property");
@@ -498,25 +412,22 @@ impl IntoResponse for EntityPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type), err)]
+#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
 pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id, property_uuid, option_uuid)): Path<(
+    Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
         EntityType,
         String,
         Uuid,
         Uuid,
     )>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
+    access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("adding entity property option");
 
     state
         .properties_service
-        .add_entity_property_option(&user, &entity_id, entity_type, property_uuid, option_uuid)
+        .add_entity_property_option(&access.0, property_uuid, option_uuid)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -543,84 +454,23 @@ pub async fn add_entity_property_option<S: PropertiesService, A: EntityAccessSer
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, property_id = %property_uuid, option_id = %option_uuid, entity_type = ?entity_type), err)]
+#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), property_id = %property_uuid, option_id = %option_uuid, entity_type = ?access.0.entity_type()), err)]
 pub async fn remove_entity_property_option<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id, property_uuid, option_uuid)): Path<(
+    Path((_entity_type, _entity_id, property_uuid, option_uuid)): Path<(
         EntityType,
         String,
         Uuid,
         Uuid,
     )>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
+    access: EditReceiptExtractor,
 ) -> Result<StatusCode, EntityPropertyOptionErr> {
     tracing::info!("removing entity property option");
 
     state
         .properties_service
-        .remove_entity_property_option(&user, &entity_id, entity_type, property_uuid, option_uuid)
+        .remove_entity_property_option(&access.0, property_uuid, option_uuid)
         .await?;
-
-    Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(Debug, Error)]
-pub enum DeleteEntityErr {
-    #[error(transparent)]
-    Properties(#[from] PropertiesErr),
-}
-
-impl IntoResponse for DeleteEntityErr {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            DeleteEntityErr::Properties(e) => properties_err_status(e),
-        };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                error = ?self,
-                error_type = "DeleteEntityErr",
-                "Internal server error"
-            );
-        }
-
-        (status_code, self.to_string()).into_response()
-    }
-}
-
-/// Delete all properties for an entity
-#[utoipa::path(
-    delete,
-    path = "/internal/properties/entities/{entity_type}/{entity_id}",
-    params(
-        ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
-        ("entity_id" = String, Path, description = "Entity ID")
-    ),
-    responses(
-        (status = 204, description = "Entity properties deleted successfully"),
-        (status = 404, description = "Entity not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "Internal"
-)]
-#[tracing::instrument(skip(state), err)]
-pub async fn delete_entity<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id)): Path<(EntityType, String)>,
-    State(state): State<PropertiesRouterState<S, A>>,
-) -> Result<StatusCode, DeleteEntityErr> {
-    tracing::info!("deleting all properties for entity");
-
-    let entity_reference = EntityReference::new(entity_id.clone(), entity_type);
-
-    state
-        .properties_service
-        .delete_entity_properties(&entity_reference)
-        .await?;
-
-    tracing::info!("successfully deleted all properties for entity");
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -658,7 +508,7 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     responses(
         (status = 204, description = "Entity property removed successfully"),
-        (status = 403, description = "Property is required and cannot be removed"),
+        (status = 403, description = "Property is required and cannot be removed, or no edit access"),
         (status = 404, description = "Entity property not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -675,9 +525,22 @@ pub async fn delete_entity_property<S: PropertiesService, A: EntityAccessService
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 
+    // The entity this property is attached to is only known after a lookup, so
+    // the edit receipt is minted here instead of in an extractor.
+    let property_info = state
+        .properties_service
+        .lookup_entity_property(entity_property_uuid)
+        .await?
+        .ok_or(PropertiesErr::EntityPropertyNotFound)?;
+
+    let access = state
+        .properties_service
+        .mint_edit_receipt(&user, &property_info.entity_id, property_info.entity_type)
+        .await?;
+
     state
         .properties_service
-        .delete_entity_property(entity_property_uuid, &user)
+        .delete_entity_property(&access, entity_property_uuid)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -725,27 +588,16 @@ impl IntoResponse for SetPropertyStatusCompleteErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(state, user), fields(entity_id = %entity_id, entity_type = ?entity_type), err)]
+#[tracing::instrument(skip(state, access), fields(entity_id = %access.0.entity_id(), entity_type = ?access.0.entity_type()), err)]
 pub async fn set_property_status_complete<S: PropertiesService, A: EntityAccessService>(
-    Path((entity_type, entity_id)): Path<(EntityType, String)>,
     State(state): State<PropertiesRouterState<S, A>>,
-    MacroUserExtractor {
-        macro_user_id: user,
-        ..
-    }: MacroUserExtractor,
+    access: EditReceiptExtractor,
 ) -> Result<StatusCode, SetPropertyStatusCompleteErr> {
     tracing::info!("setting entity status to complete");
 
-    // Check edit permissions
     state
         .properties_service
-        .check_entity_edit_permission(&user, &entity_id, entity_type)
-        .await?;
-
-    // Delegate to service layer for business logic
-    state
-        .properties_service
-        .set_system_property_status_complete(&entity_id, entity_type)
+        .set_system_property_status_complete(&access.0)
         .await?;
 
     tracing::debug!("status complete handled");

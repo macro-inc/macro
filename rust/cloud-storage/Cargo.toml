@@ -41,6 +41,7 @@ members = [
   "image_optimizer",
   "image_proxy_service",
   "integration_tests/local_e2e",
+  "loops_client",
   "macro_config",
   "macro_event_broker",
   "macro_event_topics",

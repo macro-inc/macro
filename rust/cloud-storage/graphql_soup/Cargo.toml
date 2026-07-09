@@ -25,6 +25,7 @@ properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }
 rootcause = { workspace = true }
+tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }

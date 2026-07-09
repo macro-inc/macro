@@ -4,8 +4,10 @@ use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use models_properties::PropertyOwner;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::service::tag_sets::TagScope;
 use models_properties::{DataType, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -44,7 +46,7 @@ impl From<ToolEntityType> for EntityType {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "GetEntityProperties",
-    description = "Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Use this to discover custom properties on an entity. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
+    description = "Get all properties attached to an entity (document, task, project, CRM company, etc.). Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType \"tag\"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For tasks, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
 )]
 pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]
@@ -74,7 +76,7 @@ pub struct ToolPropertyItem {
     pub property_definition_id: Uuid,
     /// Human-readable name of the property.
     pub display_name: String,
-    /// The data type (boolean, date, number, string, select_number, select_string, entity, link).
+    /// The data type (boolean, date, number, string, select_number, select_string, tag, entity, link).
     pub data_type: String,
     /// Whether this property supports multiple values.
     pub is_multi_select: bool,
@@ -82,8 +84,15 @@ pub struct ToolPropertyItem {
     pub is_system: bool,
     /// The current value, if set.
     pub current_value: Option<serde_json::Value>,
+    /// The current value's option ids resolved to human-readable labels, for
+    /// select and tag properties with a value set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_value_labels: Option<Vec<String>>,
+    /// For tag properties, whether this is the user's personal set or a team set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<TagScope>,
     /// Available options for select-type properties.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<ToolPropertyOption>,
 }
 
@@ -111,13 +120,22 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Get entity properties");
-        let _ = &request_context;
 
         let entity_type = EntityType::from(self.entity_type);
 
+        // Prove the requesting user can view the entity before reading anything.
+        let access = service_context
+            .service
+            .mint_view_receipt(Some(&request_context.user_id), &self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
+
         let props = service_context
             .service
-            .get_entity_properties(&self.entity_id, entity_type)
+            .get_entity_properties(&access)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to get entity properties: {e}"),
@@ -162,6 +180,32 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
     }
     .to_string();
 
+    let current_value_labels = info.value.as_ref().and_then(|v| match v {
+        PropertyValue::SelectOption(option_ids) => Some(
+            option_ids
+                .iter()
+                .filter_map(|id| {
+                    info.options
+                        .iter()
+                        .find(|o| o.id == *id)
+                        .map(|o| match &o.value {
+                            PropertyOptionValue::String(s) => s.clone(),
+                            PropertyOptionValue::Number(n) => n.to_string(),
+                        })
+                })
+                .collect(),
+        ),
+        _ => None,
+    });
+
+    let scope = (info.data_type == DataType::Tag)
+        .then_some(match info.owner {
+            PropertyOwner::User { .. } => Some(TagScope::Personal),
+            PropertyOwner::Team { .. } => Some(TagScope::Team),
+            PropertyOwner::System => None,
+        })
+        .flatten();
+
     let current_value = info.value.map(|v| property_value_to_json(&v));
 
     let options = info.options.into_iter().map(to_tool_option).collect();
@@ -173,6 +217,8 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         is_multi_select: info.is_multi_select,
         is_system: info.is_system,
         current_value,
+        current_value_labels,
+        scope,
         options,
     }
 }

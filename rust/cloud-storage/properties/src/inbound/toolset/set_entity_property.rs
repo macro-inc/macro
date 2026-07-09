@@ -38,6 +38,8 @@ pub struct ToolEntityRef {
     title = "SetEntityProperty",
     description = "Set or update a property value on an entity (document, task, project, etc.). Provide the property_definition_id and exactly one value field matching the property's data type.
 
+For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
+
 Tasks always have these system properties (use these property_definition_id values directly):
 - Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com'.
 - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
@@ -91,10 +93,22 @@ pub struct SetEntityProperty {
     pub option_id: Option<Uuid>,
 
     #[schemars(
-        description = "For multi-select properties. The option UUIDs from available options."
+        description = "For multi-select properties. Replaces the entire value with these option UUIDs — prefer add_option_ids / remove_option_ids for adding or removing specific options."
     )]
     #[serde(default)]
     pub option_ids: Option<Vec<Uuid>>,
+
+    #[schemars(
+        description = "For multi-select properties (including tags): add these options to the current value atomically without touching other options. Cannot be combined with other value fields."
+    )]
+    #[serde(default)]
+    pub add_option_ids: Option<Vec<Uuid>>,
+
+    #[schemars(
+        description = "For multi-select properties (including tags): remove these options from the current value atomically without touching other options. Removing an absent option is a no-op. Cannot be combined with other value fields."
+    )]
+    #[serde(default)]
+    pub remove_option_ids: Option<Vec<Uuid>>,
 
     #[schemars(description = "For single entity reference properties.")]
     #[serde(default)]
@@ -200,15 +214,60 @@ where
         let entity_type = EntityType::from(self.entity_type);
         let set_value = self.to_set_property_value();
 
+        // Prove the requesting user can edit the entity before writing anything.
+        let access = service_context
+            .service
+            .mint_edit_receipt(&request_context.user_id, &self.entity_id, entity_type)
+            .await
+            .map_err(|e| ToolCallError {
+                description: "You do not have edit access to this entity".to_string(),
+                internal_error: e.into(),
+            })?;
+
+        // Delta mode: add/remove specific options atomically so concurrent
+        // edits to the same multi-select value are never overwritten.
+        let add_option_ids = self.add_option_ids.as_deref().unwrap_or_default();
+        let remove_option_ids = self.remove_option_ids.as_deref().unwrap_or_default();
+        if !add_option_ids.is_empty() || !remove_option_ids.is_empty() {
+            if set_value.is_some() {
+                return Err(ToolCallError {
+                    description: "add_option_ids/remove_option_ids cannot be combined with other value fields".to_string(),
+                    internal_error: anyhow::anyhow!(
+                        "delta option fields combined with a value field"
+                    ),
+                });
+            }
+
+            for option_id in add_option_ids {
+                service_context
+                    .service
+                    .add_entity_property_option(&access, self.property_definition_id, *option_id)
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: format!("Failed to add option {option_id}: {e}"),
+                        internal_error: e.into(),
+                    })?;
+            }
+            for option_id in remove_option_ids {
+                service_context
+                    .service
+                    .remove_entity_property_option(&access, self.property_definition_id, *option_id)
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: format!("Failed to remove option {option_id}: {e}"),
+                        internal_error: e.into(),
+                    })?;
+            }
+
+            return Ok(SetEntityPropertyResponse {
+                success: true,
+                message: "Property options updated successfully.".to_string(),
+            });
+        }
+
         service_context
             .service
-            .set_entity_property(
-                &request_context.user_id,
-                &self.entity_id,
-                entity_type,
-                self.property_definition_id,
-                set_value,
-            )
+            .set_entity_property(&access, self.property_definition_id, set_value)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to set property: {e}"),

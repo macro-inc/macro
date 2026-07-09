@@ -1,5 +1,8 @@
 //! Domain layer for webhooks.
 
+#[cfg(feature = "ingestion")]
+/// Webhook event ingestion service.
+pub mod ingestion;
 /// Webhook domain models.
 pub mod models;
 #[cfg(feature = "ports")]

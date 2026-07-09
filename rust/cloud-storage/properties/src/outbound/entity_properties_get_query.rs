@@ -17,6 +17,8 @@ use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 /// Database row from the joined query.
 struct PropertyRow {
     property_definition_id: Uuid,
+    team_id: Option<Uuid>,
+    user_id: Option<String>,
     display_name: String,
     data_type: DataType,
     is_multi_select: bool,
@@ -34,12 +36,14 @@ struct OptionRow {
 }
 
 /// Get all properties attached to an entity, with their definitions, values, and options.
-/// Results are sorted by display_name (case-insensitive).
+/// Tag properties are restricted to definitions the viewer can see: their own
+/// and their teams'. Results are sorted by display_name (case-insensitive).
 #[tracing::instrument(skip(pool))]
 pub async fn get_entity_properties(
     pool: &Pool<Postgres>,
     entity_id: &str,
     entity_type: EntityType,
+    tag_viewer_user_id: &str,
 ) -> anyhow::Result<Vec<EntityPropertyInfo>> {
     // Fetch all entity properties with their definitions
     let rows = sqlx::query_as!(
@@ -47,6 +51,8 @@ pub async fn get_entity_properties(
         r#"
         SELECT
             ep.property_definition_id,
+            pd.team_id,
+            pd.user_id,
             pd.display_name,
             pd.data_type as "data_type: DataType",
             pd.is_multi_select,
@@ -56,10 +62,17 @@ pub async fn get_entity_properties(
         INNER JOIN property_definitions pd ON pd.id = ep.property_definition_id
         WHERE ep.entity_id = $1
           AND ep.entity_type = $2
+          AND (
+            pd.data_type <> $4
+            OR pd.user_id = $3
+            OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $3)
+          )
         ORDER BY LOWER(pd.display_name)
         "#,
         entity_id,
         entity_type as EntityType,
+        tag_viewer_user_id,
+        DataType::Tag as DataType,
     )
     .fetch_all(pool)
     .await?;
@@ -139,6 +152,11 @@ pub async fn get_entity_properties(
 
         result.push(EntityPropertyInfo {
             property_definition_id: row.property_definition_id,
+            owner: models_properties::PropertyOwner::from_optional_ids(
+                row.team_id,
+                row.user_id,
+                row.is_system,
+            ),
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,

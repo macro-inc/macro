@@ -8,7 +8,7 @@ import {
 } from '@core/constant/featureFlags';
 import { createMemo } from 'solid-js';
 
-export const WIDE_SPLIT_PANEL_BREAKPOINT = 512;
+export const WIDE_SPLIT_PANEL_BREAKPOINT = 640;
 
 export function useIsNewInboxEnabled() {
   const panel = useSplitPanelOrThrow();

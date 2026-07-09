@@ -46,18 +46,21 @@ type ActionItem = {
 
 function buildActionItems(
   actions: MessageActions | undefined,
-  messageId: string | undefined
+  message: { id: string; thread_id?: string | null } | undefined
 ): ActionItem[] {
+  const messageId = message?.id;
+  // Reply inputs are keyed by the thread root, not the long-pressed message.
+  const replyThreadId = message ? (message.thread_id ?? message.id) : undefined;
   return [
     {
       id: 'reply',
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
-      getFocusTarget: messageId
+      getFocusTarget: replyThreadId
         ? () =>
             document.querySelector<HTMLElement>(
-              `[data-input-id="thread-reply-input-${messageId}"] [contenteditable]`
+              `[data-input-id="thread-reply-input-${replyThreadId}"] [contenteditable]`
             )
         : undefined,
     },
@@ -176,7 +179,7 @@ export function ActionDrawer() {
     drawerState.close();
   };
 
-  const actionItems = () => buildActionItems(actions(), message()?.id);
+  const actionItems = () => buildActionItems(actions(), message());
   const nonDestructiveActions = () =>
     actionItems().filter((item) => item.onClick && !item.destructive);
   const destructiveActions = () =>

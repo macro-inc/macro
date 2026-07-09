@@ -169,18 +169,18 @@ impl StageOptionCatalog {
     }
 }
 
-/// Load the stage option catalog for `team_id`: options of the system
-/// Stage definition (id `00000001-0000-0000-0000-000000000010`) plus any
-/// team-scoped select definition named "Stage".
+/// Load the stage option catalog for the team proven by `team`: options of
+/// the system Stage definition (id `00000001-0000-0000-0000-000000000010`)
+/// plus any team-scoped select definition named "Stage".
 pub(crate) async fn load_stage_option_catalog<PSvc>(
     properties: &PSvc,
-    team_id: Uuid,
+    team: &properties::TeamReceipt,
 ) -> Result<StageOptionCatalog, ToolCallError>
 where
     PSvc: PropertiesService,
 {
     let defs = properties
-        .list_property_definitions_with_options(Some(team_id), None, true, None)
+        .list_property_definitions_with_options(Some(team), None, true, None)
         .await
         .map_err(|e| ToolCallError {
             description: "failed to load the team's stage options".to_string(),
@@ -297,17 +297,23 @@ pub(crate) fn extract_company_crm_props(
     out
 }
 
-/// Entity references for a batch of company ids, in `entity_properties`
-/// terms (`entity_type = company`).
-pub(crate) fn company_entity_refs(
+/// Properties view receipts for a batch of company ids
+/// (`entity_type = company`). Asserted rather than minted: callers only pass
+/// company ids whose access was already verified through the CRM seam (the
+/// caller's own team listing, or a company permission check) — re-checking
+/// each company here would repeat that lookup per company.
+pub(crate) fn company_view_receipts(
+    user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
     company_ids: impl IntoIterator<Item = Uuid>,
-) -> Vec<models_properties::shared::EntityReference> {
+) -> Vec<properties::ViewReceipt> {
     company_ids
         .into_iter()
-        .map(|id| models_properties::shared::EntityReference {
-            entity_type: PropertyEntityType::Company,
-            entity_id: id.to_string(),
-            specific_message_id: None,
+        .map(|id| {
+            properties::PropertiesAccessReceipt::dangerously_assert_authenticated_user(
+                user_id.clone(),
+                &id.to_string(),
+                PropertyEntityType::Company,
+            )
         })
         .collect()
 }

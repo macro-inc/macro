@@ -15,6 +15,7 @@
  */
 import type { BlockName } from '@core/block';
 import type { DateValue } from '@core/util/date';
+import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
@@ -103,8 +104,9 @@ export type SelectProperty = SelectStringProperty | SelectNumberProperty;
  * This is the UI layer representation of a property definition.
  * Use `toPropertyDefinitionDomain` to transform from API types.
  *
- * Note: Uses `valueType` to match the `Property` type, enabling shared
- * components like `PropertyDataTypeIcon` to work with both types.
+ * Note: `valueType` carries the definition's full `DataType` (including
+ * `TAG`), a superset of the narrow value discriminator on `Property`. The
+ * shared name lets components like `PropertyDataTypeIcon` accept both types.
  *
  * @see PropertyDefinition - Generated API type (snake_case)
  * @see Property - Domain type for property instances with values
@@ -112,7 +114,7 @@ export type SelectProperty = SelectStringProperty | SelectNumberProperty;
 export type PropertyDefinitionDomain = {
   id: string;
   displayName: string;
-  valueType: ValueType;
+  valueType: DataType;
   isMultiSelect: boolean;
   isMetadata: boolean;
   isSystem: boolean;

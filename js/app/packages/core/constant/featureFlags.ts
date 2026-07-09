@@ -489,3 +489,9 @@ export const ENABLE_TAGS_FE_OVERRIDE =
 export const ENABLE_TAGS_SEARCH_FE_FLAG = 'enable-tags-search-fe';
 export const ENABLE_TAGS_SEARCH_FE_OVERRIDE =
   resolveFeatureFlag('ENABLE_TAGS_SEARCH_FE', DEV_MODE_ENV) || undefined;
+
+// Channel mode where replying and editing do not happen inline, but in a single unified input instead.
+export const UNIFIED_CHANNEL_INPUT = resolveFeatureFlag(
+  'UNIFIED_CHANNEL_INPUT',
+  false
+);

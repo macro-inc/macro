@@ -13,7 +13,7 @@ use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
 use uuid::Uuid;
 
-use super::{PropertiesRouterState, PropertyTeamExtractor, caller_team_id, properties_err_status};
+use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
 
@@ -69,7 +69,7 @@ pub async fn get_property_options<S: PropertiesService, A: EntityAccessService>(
 
     let options = state
         .properties_service
-        .get_property_options(property_uuid, &user, caller_team_id(&team))
+        .get_property_options(property_uuid, &user, team.entity_access_receipt.as_ref())
         .await?;
 
     tracing::info!(
@@ -136,7 +136,12 @@ pub async fn add_property_option<S: PropertiesService, A: EntityAccessService>(
 
     let option = state
         .properties_service
-        .add_property_option(&user, caller_team_id(&team), property_uuid, &request)
+        .add_property_option(
+            &user,
+            team.entity_access_receipt.as_ref(),
+            property_uuid,
+            &request,
+        )
         .await?;
 
     Ok((StatusCode::CREATED, Json(option)))
@@ -202,7 +207,7 @@ pub async fn update_property_option<S: PropertiesService, A: EntityAccessService
         .properties_service
         .update_property_option(
             &user,
-            caller_team_id(&team),
+            team.entity_access_receipt.as_ref(),
             def_uuid,
             option_uuid,
             &request,
@@ -267,7 +272,12 @@ pub async fn delete_property_option<S: PropertiesService, A: EntityAccessService
 
     state
         .properties_service
-        .delete_property_option(&user, caller_team_id(&team), def_uuid, option_uuid)
+        .delete_property_option(
+            &user,
+            team.entity_access_receipt.as_ref(),
+            def_uuid,
+            option_uuid,
+        )
         .await?;
 
     tracing::info!("successfully deleted property option");

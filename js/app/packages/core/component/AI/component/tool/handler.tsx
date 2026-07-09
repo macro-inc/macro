@@ -14,6 +14,7 @@ import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
+import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
 import {
@@ -63,6 +64,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListNotifications: listNotificationsHandler,
+  ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
   MarkNotificationsDone: markNotificationsDoneHandler,

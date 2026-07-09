@@ -507,6 +507,122 @@ pub async fn get_or_create_tag_definition(
     }
 }
 
+/// Gets the tag definitions visible to a user — their own plus their teams' —
+/// with options attached. Team membership is resolved in the query.
+#[tracing::instrument(skip(pool))]
+pub async fn get_caller_tag_definitions_with_options(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            pd.id,
+            pd.team_id,
+            pd.user_id,
+            pd.display_name,
+            pd.data_type as "data_type: DataType",
+            pd.is_multi_select,
+            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+            pd.created_at,
+            pd.updated_at,
+            pd.is_system,
+            po.id as "option_id?",
+            po.display_order as "option_display_order?",
+            po.number_value as option_number_value,
+            po.string_value as option_string_value,
+            po.color as option_color,
+            po.created_at as "option_created_at?",
+            po.updated_at as "option_updated_at?"
+        FROM property_definitions pd
+        LEFT JOIN property_options po ON pd.id = po.property_definition_id
+        WHERE
+            pd.data_type = $2
+            AND (
+                pd.user_id = $1
+                OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1)
+            )
+        ORDER BY pd.user_id NULLS LAST, po.display_order, LOWER(po.string_value)
+        "#,
+        user_id,
+        DataType::Tag as DataType
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut ordered_ids: Vec<Uuid> = Vec::new();
+    let mut property_map: HashMap<Uuid, PropertyDefinitionWithOptions> = HashMap::new();
+
+    for row in rows {
+        let owner = models_properties::PropertyOwner::from_optional_ids(
+            row.team_id,
+            row.user_id.clone(),
+            row.is_system,
+        );
+
+        let property_def = PropertyDefinition {
+            id: row.id,
+            owner,
+            display_name: row.display_name.clone(),
+            data_type: row.data_type,
+            is_multi_select: row.is_multi_select,
+            specific_entity_type: row.specific_entity_type.flatten(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            is_system: row.is_system,
+            is_metadata: false,
+        };
+
+        if !property_map.contains_key(&row.id) {
+            ordered_ids.push(row.id);
+        }
+        let entry = property_map
+            .entry(row.id)
+            .or_insert_with(|| PropertyDefinitionWithOptions {
+                definition: property_def,
+                property_options: Vec::new(),
+            });
+
+        if let Some(option_id) = row.option_id {
+            let value = match (row.option_number_value, &row.option_string_value) {
+                (Some(num), None) => PropertyOptionValue::Number(num),
+                (None, Some(str)) => PropertyOptionValue::String(str.clone()),
+                (Some(_), Some(_)) => {
+                    return Err(
+                        models_properties::db::DbConversionError::PropertyOptionBothValuesSet {
+                            id: option_id,
+                        }
+                        .into(),
+                    );
+                }
+                (None, None) => {
+                    return Err(
+                        models_properties::db::DbConversionError::PropertyOptionNoValueSet {
+                            id: option_id,
+                        }
+                        .into(),
+                    );
+                }
+            };
+
+            entry.property_options.push(PropertyOption {
+                id: option_id,
+                property_definition_id: row.id,
+                display_order: row.option_display_order.unwrap_or(0),
+                value,
+                color: row.option_color,
+                created_at: row.option_created_at.unwrap_or(row.created_at),
+                updated_at: row.option_updated_at.unwrap_or(row.updated_at),
+            });
+        }
+    }
+
+    Ok(ordered_ids
+        .into_iter()
+        .filter_map(|id| property_map.remove(&id))
+        .collect())
+}
+
 /// Deletes a property definition and all associated data (cascades).
 #[tracing::instrument(skip(pool))]
 pub async fn delete_property_definition(
