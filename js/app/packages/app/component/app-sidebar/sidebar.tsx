@@ -1114,15 +1114,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
             )}
           </Show>
         </div>
-        <div class="flex shrink-0 items-center">
+        <div class="flex shrink-0 items-center gap-1">
+          <Show when={searchLink()}>
+            {(link) => <SidebarHeaderSearchButton link={link()} />}
+          </Show>
           <SidebarCreateMenu
             isSlim={isSlim}
             variant="icon"
             onMenuOpenChange={handleOverlayDropdownOpenChange}
           />
-          <Show when={searchLink()}>
-            {(link) => <SidebarHeaderSearchButton link={link()} />}
-          </Show>
         </div>
       </div>
 

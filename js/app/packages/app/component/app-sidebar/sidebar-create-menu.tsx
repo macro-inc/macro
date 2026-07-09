@@ -119,9 +119,10 @@ export const SidebarCreateMenu = (props: {
       >
         <Dropdown.Trigger
           as={Button}
-          variant="ghost"
+          variant="base"
           size="icon-sm"
-          class="[&_svg]:size-4!"
+          depth={1}
+          class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
           label="Create"
           hotkey={TOKENS.global.createCommand}
           onMouseDown={(e: MouseEvent) => {
