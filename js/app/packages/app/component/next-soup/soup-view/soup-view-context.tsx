@@ -67,7 +67,8 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import type { SoupPage } from '@service-storage/generated/schemas';
+import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import type { SoupApiItem, SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -522,18 +523,43 @@ export const SoupViewContextProvider: FlowComponent<
     resolveCompanyStage,
   });
 
-  const attachNotifications = (entity: EntityData) => {
-    const notifications = useNotificationsForEntity(
-      notificationSource,
-      toNotificationEntity(entity)
-    );
+  const attachProvidedNotifications = (
+    entity: EntityData,
+    notifications: Notification[]
+  ) => {
+    const cleanEntity = stripRawNotifications(entity);
     return {
-      ...entity,
+      ...cleanEntity,
       notifications: () =>
         isNewInbox()
-          ? scopeChannelNotificationsForEntity(entity, notifications())
+          ? scopeChannelNotificationsForEntity(cleanEntity, notifications)
+          : notifications,
+    };
+  };
+
+  const attachNotifications = (entity: EntityData) => {
+    const cleanEntity = stripRawNotifications(entity);
+    const notifications = useNotificationsForEntity(
+      notificationSource,
+      toNotificationEntity(cleanEntity)
+    );
+    return {
+      ...cleanEntity,
+      notifications: () =>
+        isNewInbox()
+          ? scopeChannelNotificationsForEntity(cleanEntity, notifications())
           : notifications(),
     };
+  };
+
+  const attachSoupEntityNotifications = (
+    entity: EntityData,
+    providedNotifications?: Notification[]
+  ) => {
+    if (providedNotifications !== undefined) {
+      return attachProvidedNotifications(entity, providedNotifications);
+    }
+    return isWithNotification(entity) ? entity : attachNotifications(entity);
   };
 
   // Active tag option ids, used to gate optimistic websocket inserts so an
@@ -541,6 +567,19 @@ export const SoupViewContextProvider: FlowComponent<
   const activeTagOptionIds = createMemo(() =>
     (queryFilters.state.include.tagFilters ?? []).map((t) => t.value)
   );
+
+  const soupItemMatchesActiveFilters = (
+    item: SoupApiItem,
+    view: ListView | undefined
+  ): boolean => {
+    if (!soupItemMatchesListView(item, view)) return false;
+    if (!soupItemMatchesTagFilter(item, activeTagOptionIds())) return false;
+
+    return soup.predicates.test(
+      mapApiSoupItemToEntity(item) as SoupEntity,
+      getFilterContext()
+    );
+  };
 
   const itemsQuery = useSoupAstItemsQuery(
     () => {
@@ -558,9 +597,7 @@ export const SoupViewContextProvider: FlowComponent<
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     }
@@ -687,9 +724,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) =>
-            soupItemMatchesListView(item, view) &&
-            soupItemMatchesTagFilter(item, activeTagOptionIds()),
+          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
       };
     },
