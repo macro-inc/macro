@@ -412,7 +412,9 @@ export const SoupViewContextProvider: FlowComponent<
 
   // The group-by actually sent to the backend (drives the grouped queries).
   const serverGroupByField = createMemo(() =>
-    isClientPropertyGroup() ? undefined : groupByField()
+    isClientPropertyGroup() || groupByField()?.type === 'date'
+      ? undefined
+      : groupByField()
   );
 
   // The new inbox surfaces channel threads the current user participates in —
