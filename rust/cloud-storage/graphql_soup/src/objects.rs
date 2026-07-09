@@ -74,8 +74,14 @@ pub enum GraphqlSoupEntityType {
     CrmCompany,
     /// Foreign entity.
     ForeignEntity,
-    /// Unknown or unsupported entity type.
-    Unknown,
+    /// User entity
+    User,
+    /// Team entity
+    Team,
+    /// Static File
+    StaticFile,
+    /// crm contact
+    CrmContact,
 }
 
 impl From<EntityType> for GraphqlSoupEntityType {
@@ -90,7 +96,10 @@ impl From<EntityType> for GraphqlSoupEntityType {
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
             EntityType::ForeignEntity => Self::ForeignEntity,
-            _ => Self::Unknown,
+            EntityType::User => Self::User,
+            EntityType::Team => Self::Team,
+            EntityType::StaticFile => Self::StaticFile,
+            EntityType::CrmContact => Self::CrmContact,
         }
     }
 }
@@ -410,11 +419,11 @@ impl GraphqlSoupProperty {
         self.0.definition.is_multi_select
     }
 
-    async fn specific_entity_type(&self) -> Option<String> {
+    async fn specific_entity_type(&self) -> Option<GraphqlSoupPropertyEntityType> {
         self.0
             .definition
             .specific_entity_type
-            .map(|entity_type| entity_type.to_string())
+            .map(GraphqlSoupPropertyEntityType::from_property_entity)
     }
 
     async fn is_system(&self) -> bool {

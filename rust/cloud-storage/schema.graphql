@@ -609,9 +609,21 @@ enum GraphqlSoupEntityType {
 	"""
 	FOREIGN_ENTITY
 	"""
-	Unknown or unsupported entity type.
+	User entity
 	"""
-	UNKNOWN
+	USER
+	"""
+	Team entity
+	"""
+	TEAM
+	"""
+	Static File
+	"""
+	STATIC_FILE
+	"""
+	crm contact
+	"""
+	CRM_CONTACT
 }
 
 type GraphqlSoupForeignEntity {
@@ -672,7 +684,7 @@ type GraphqlSoupProperty {
 	displayName: String!
 	dataType: GraphqlSoupDataType!
 	isMultiSelect: Boolean!
-	specificEntityType: String
+	specificEntityType: GraphqlSoupPropertyEntityType
 	isSystem: Boolean!
 	isMetadata: Boolean!
 	value: GraphqlSoupPropertyValue
