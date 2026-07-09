@@ -207,7 +207,7 @@ export function useAddInboxFlow() {
     await initEmailLink({ linkId, forceShare }).match(
       async () => {
         await query.refetch();
-        toast.success('Inbox connected', { mobile: true });
+        toast.success('Inbox connected');
       },
       async (error) => {
         if (error.tag === 'AlreadyInitialized') {
@@ -222,7 +222,7 @@ export function useAddInboxFlow() {
           });
           return;
         }
-        toast.failure('Failed to add inbox', { mobile: true });
+        toast.failure('Failed to add inbox');
       }
     );
   };
@@ -236,7 +236,7 @@ export function useAddInboxFlow() {
         showPaywall(PaywallKey.MULTI_INBOX);
         return;
       }
-      toast.failure('Failed to start Gmail link flow', { mobile: true });
+      toast.failure('Failed to start Gmail link flow');
       return;
     }
 
@@ -251,13 +251,13 @@ export function useAddInboxFlow() {
       });
     } catch (error) {
       console.error('add-inbox authenticate failed', error);
-      toast.failure('Failed to add inbox', { mobile: true });
+      toast.failure('Failed to add inbox');
       return;
     }
 
     if (!auth.success || !auth.token) {
       if (auth.error !== 'User canceled login') {
-        toast.failure('Failed to add inbox', { mobile: true });
+        toast.failure('Failed to add inbox');
       }
       return;
     }

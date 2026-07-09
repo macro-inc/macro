@@ -741,7 +741,6 @@ export function BaseInput(props: {
             ]
           : undefined,
         duration: 10_000,
-        mobile: true,
       });
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);

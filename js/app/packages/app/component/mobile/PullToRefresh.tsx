@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
@@ -28,6 +29,11 @@ const OVERDRAG_FADE = 40;
 const SETTLE_MS = 250;
 /** Spin floor so near-instant refreshes still read as a completed refresh. */
 const MIN_REFRESH_SPIN_MS = 200;
+/** Refreshes running longer than this are treated as failed. Bounds the
+ * spinner when connectivity is gone: refetches can pause or hang
+ * indefinitely rather than reject (navigator.onLine is unreliable in
+ * WKWebView, so the offline case can't be detected up front). */
+const REFRESH_TIMEOUT_MS = 8000;
 
 type PullPhase = 'idle' | 'pulling' | 'refreshing' | 'settling';
 
@@ -75,7 +81,21 @@ export function PullToRefresh(props: {
     const minSpin = new Promise((resolve) =>
       window.setTimeout(resolve, MIN_REFRESH_SPIN_MS)
     );
-    void Promise.allSettled([props.onRefresh(), minSpin]).then(retract);
+    const timeout = new Promise((_, reject) =>
+      window.setTimeout(
+        () => reject(new Error('Refresh timed out')),
+        REFRESH_TIMEOUT_MS
+      )
+    );
+    void Promise.allSettled([
+      Promise.race([props.onRefresh(), timeout]),
+      minSpin,
+    ]).then(([refreshResult]) => {
+      if (refreshResult.status === 'rejected') {
+        toast.failure('Failed to refresh');
+      }
+      retract();
+    });
   };
 
   const onTouchStart = (e: TouchEvent) => {
@@ -154,7 +174,6 @@ export function PullToRefresh(props: {
     gesture = null;
     if (wasPulling) retract();
   };
-
 
   createEffect(
     on(props.scrollContainer, (el) => {

@@ -1008,7 +1008,12 @@ export const SoupViewContextProvider: FlowComponent<
         trimToFirstPage();
 
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+          queryClient.invalidateQueries(
+            { queryKey: soupKeys._def },
+            // Reject on refetch failure so pull-to-refresh can surface it
+            // instead of retracting as if the refresh succeeded.
+            { throwOnError: true }
+          ),
           invalidateUserNotifications(),
         ]);
       },
