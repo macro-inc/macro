@@ -33,6 +33,20 @@ fn soup_response_schema_exposes_frontend_fields() {
     }
 }
 
+/// The exported SDL is a frontend contract: `schema.graphql` feeds the client
+/// codegen and the normalized-cache metadata. Splitting the schema across
+/// crates must never change it silently — regenerate with
+/// `cargo run -p complete_graph --bin graphql_schema -- schema.graphql`.
+#[test]
+fn sdl_matches_committed_schema_graphql() {
+    let sdl = crate::build_schema().sdl();
+    assert_eq!(
+        format!("{sdl}\n"),
+        include_str!("../../schema.graphql"),
+        "generated SDL diverges from the committed schema.graphql"
+    );
+}
+
 fn assert_sdl_line(sdl: &str, expected: &str) {
     assert!(
         sdl.lines().any(|line| line.trim() == expected),

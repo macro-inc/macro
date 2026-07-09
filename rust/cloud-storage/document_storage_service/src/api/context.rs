@@ -134,7 +134,7 @@ type DssSoupState = SoupRouterState<DssSoupService, DssEmailService, EntityAcces
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
 #[cfg(feature = "graphql")]
-pub(crate) type DssGraphqlSoupSchema = graphql_soup::SharedSoupSchema<
+pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssEmailService,
     EntityAccessService,
@@ -353,7 +353,7 @@ pub(crate) struct ApiContext {
     #[cfg(feature = "graphql")]
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     #[cfg(feature = "graphql")]
-    pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
+    pub graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub foreign_entity_state: DssForeignEntityState,

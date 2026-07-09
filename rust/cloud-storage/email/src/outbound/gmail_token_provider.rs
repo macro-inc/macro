@@ -90,7 +90,7 @@ pub async fn fetch_gmail_access_token(
 
 /// Fetches a Gmail access token directly from the auth service, bypassing the Redis cache for
 /// reads but still caching the newly fetched token.
-#[tracing::instrument(skip(key, redis_conn, auth_service_client), err)]
+#[tracing::instrument(skip(key, redis_conn, auth_service_client), err(level = "debug"))]
 pub async fn fetch_gmail_access_token_no_cache(
     key: &TokenCacheKey,
     redis_conn: &MultiplexedConnection,
@@ -119,7 +119,7 @@ async fn cache_token_in_redis(conn: &mut MultiplexedConnection, key: &TokenCache
 }
 
 /// Fetches a Gmail access token from the auth service.
-#[tracing::instrument(skip(key, auth_service_client), err)]
+#[tracing::instrument(skip(key, auth_service_client), err(level = "debug"))]
 async fn fetch_token_from_auth_service(
     key: &TokenCacheKey,
     auth_service_client: &AuthServiceClient,

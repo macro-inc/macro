@@ -10,7 +10,7 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = ["staticlib", "rlib"]
+crate-type = ["rlib", "staticlib"]
 name = "app_lib"
 
 [build-dependencies]
@@ -37,17 +37,20 @@ tracing-oslog = { version = "0.3" }
 
 nom = "8.0.0"
 reqwest = { workspace = true, features = ["cookies", "stream"] }
-tokio-util = { version = "0.7", features = ["io"] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-deep-link = "=2.4.5"
-tauri-plugin-http = { git = "https://github.com/seanaye/plugins-workspace", branch = "seanaye/feat/websocket-cookies", features = [
+tokio-util = { version = "0.7", features = ["io"] }
+# seanaye/feat/ws-replay-buffer; keep both plugin revs identical, and keep the
+# TauriMessage/ReplayEnvelope types in packages/websocket/platform/tauri-websocket.ts
+# in sync when bumping
+tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "a1351a7c8c9f4dfe9699badd940cfc5afdb68e36", features = [
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
 tauri-plugin-safe-area-insets = "0.1.0"
-tauri-plugin-websocket = { git = "https://github.com/seanaye/plugins-workspace", branch = "seanaye/feat/websocket-cookies" }
+tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "a1351a7c8c9f4dfe9699badd940cfc5afdb68e36" }
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing = { workspace = true }

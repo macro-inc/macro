@@ -97,7 +97,21 @@ export function ChannelThread(props: ThreadProps) {
   );
 
   const isThreadFocused = () => !!replySelection.selectedId();
+
+  // Channel navigation landed on this root message (and not on one of its
+  // replies).
+  const isRootNavTargeted = () =>
+    !!props.targetThreadId &&
+    props.targetThreadId === props.data().id &&
+    !props.activeTargetReplyId;
+
   const selectThreadMessage = () => {
+    // Clicking the navigation-targeted message releases the target instead
+    // of toggling selection.
+    if (isRootNavTargeted()) {
+      props.onClearTarget?.(props.data().id);
+      return;
+    }
     // On touch devices, we want to block "click to select"
     if (isTouchDevice()) return;
     if (isSelected() && !isThreadFocused()) {
@@ -110,6 +124,12 @@ export function ChannelThread(props: ThreadProps) {
   };
 
   const selectReply = (replyId: string) => {
+    // Clicking the navigation-targeted reply releases the target instead of
+    // toggling selection.
+    if (props.activeTargetReplyId === replyId) {
+      props.onClearTarget?.(props.data().id);
+      return;
+    }
     // On touch devices, we want to block "click to select"
     if (isTouchDevice()) return;
     if (isSelected() && replySelection.selectedId() === replyId) {
@@ -267,12 +287,8 @@ export function ChannelThread(props: ThreadProps) {
                 selected={isSelected() && !isThreadFocused()}
                 targeted={
                   // The unified input's reply is bound to this root, or
-                  // channel navigation landed on it (and not on one of its
-                  // replies).
-                  unifiedReplyBinding()?.boundToRoot ||
-                  (!!props.targetThreadId &&
-                    props.targetThreadId === props.data().id &&
-                    !props.activeTargetReplyId)
+                  // channel navigation landed on it.
+                  unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
                 }
               />
             </DebugSuspense>

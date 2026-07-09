@@ -650,6 +650,7 @@ export function Channel(props: ChannelProps) {
                                 selectedMessageId={selection.selectedId}
                                 onSelectMessage={selectMessage}
                                 onClearSelection={clearSelection}
+                                onClearTarget={releaseSelectionAndTarget}
                                 messageListScopeId={messageListScopeId}
                               />
                             )}

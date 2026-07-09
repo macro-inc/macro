@@ -173,18 +173,17 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
+    const filter = meta.itemFilter;
+    const nextGroupKeys =
+      filter && !filter(entity)
+        ? []
+        : computeGroupKeysForItem(entity, meta.groupBy);
     if (nextGroupKeys === undefined) {
       queryClient.invalidateQueries({ queryKey: query.queryKey });
       continue;
     }
 
-    const filter = meta.itemFilter;
-    let shouldHave = nextGroupKeys.includes(meta.groupKey);
-
-    if (filter && !filter(entity)) {
-      shouldHave = false;
-    }
+    const shouldHave = nextGroupKeys.includes(meta.groupKey);
 
     let changed = false;
 

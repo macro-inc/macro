@@ -6,9 +6,9 @@ fn main() -> Result<()> {
     let output_path = std::env::args_os()
         .nth(1)
         .map(PathBuf::from)
-        .context("usage: graphql_soup_schema <output-path>")?;
+        .context("usage: graphql_schema <output-path>")?;
 
-    let schema = graphql_soup::build_schema().sdl();
+    let schema = complete_graph::build_schema().sdl();
 
     if let Some(parent) = output_path
         .parent()

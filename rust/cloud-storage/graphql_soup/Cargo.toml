@@ -5,14 +5,11 @@ edition = "2024"
 publish = false
 
 [dependencies]
-anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
-async-trait = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
-either = { workspace = true }
 email = { path = "../email", default-features = false, features = [
   "axum",
   "inbound",
@@ -22,6 +19,9 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "inbound",
 ] }
 filter_ast = { path = "../filter_ast" }
+graphql_common = { path = "../graphql_common" }
+graphql_notification = { path = "../graphql_notification" }
+graphql_properties = { path = "../graphql_properties" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
@@ -30,15 +30,8 @@ model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
-notification = { path = "../notification" }
-properties = { path = "../properties", default-features = false, features = [
-  "ports",
-] }
-rootcause = { workspace = true }
-tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
-tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -6,6 +6,7 @@ import { Layer } from './Layer';
 export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
   depth?: 0 | 1 | 2 | 3 | 4 | 5;
   style?: JSX.CSSProperties;
+  edgeColor?: string;
   highlightColor?: string;
   active?: boolean;
   solid?: boolean;
@@ -17,6 +18,7 @@ export type SurfaceProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
 export function Surface(props: SurfaceProps) {
   const [local, rest] = splitProps(props, [
     'highlightColor',
+    'edgeColor',
     'children',
     'active',
     'solid',
@@ -36,7 +38,7 @@ export function Surface(props: SurfaceProps) {
     };
 
     if (!local.hideBorder) {
-      base.border = '0.5px solid var(--b4)';
+      base.border = `0.5px solid ${local.edgeColor ?? 'var(--b4)'}`;
     }
 
     if (local.active) {

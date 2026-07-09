@@ -6,9 +6,10 @@ use email::domain::models::{
     UpsertEmailFilterInput,
 };
 use entity_access::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, EditAccessLevel, EntityPermission, EntityType,
-    RequiredPermission, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, CallChannelInfo, EditAccessLevel, EntityAccessReceipt,
+    EntityPermission, EntityType, RequiredPermission, UserTeamInfo, ViewAccessLevel,
 };
+use graphql_common::GraphqlSoupRequestParts;
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},

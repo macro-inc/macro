@@ -170,31 +170,6 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show
           when={
-            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
-          }
-        >
-          <SharedBadge ownerId={props.entity.ownerId} />
-        </Show>
-        <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => <GithubPullRequestPills entity={entity()} />}
-        </Show>
-        <Show when={isCallEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <>
-              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                <CallStatusBadge status={entity().status} />
-              </Show>
-              <span class="flex w-10 shrink-0 justify-end">
-                <CallParticipants participantIds={entity().participantIds} />
-              </span>
-            </>
-          )}
-        </Show>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(entity) => <Entity.Properties entity={entity()} />}
-        </Show>
-        <Show
-          when={
             rowTagsVisible() && isDocumentEntity(props.entity) && props.entity
           }
         >
@@ -237,6 +212,31 @@ export function WideLayout(props: LayoutProps) {
               properties={entity().properties}
             />
           )}
+        </Show>
+        <Show
+          when={
+            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+          }
+        >
+          <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isGithubPrEntity(props.entity) && props.entity}>
+          {(entity) => <GithubPullRequestPills entity={entity()} />}
+        </Show>
+        <Show when={isCallEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <>
+              <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
+                <CallStatusBadge status={entity().status} />
+              </Show>
+              <span class="flex w-10 shrink-0 justify-end">
+                <CallParticipants participantIds={entity().participantIds} />
+              </span>
+            </>
+          )}
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (

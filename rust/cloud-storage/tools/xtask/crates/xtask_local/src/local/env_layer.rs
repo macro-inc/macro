@@ -70,11 +70,12 @@ pub fn resolve(
 
     // Process env — override only keys already present, so a developer can
     // `FOO=bar just run_local` without dumping their whole environment in.
-    // For run-dev, do not let the Nix shell's localhost SQLx default replace
-    // Doppler's shared-dev database URL.
+    // Never let the Nix shell's localhost SQLx default through: run-dev needs
+    // Doppler's shared-dev database URL, and local injects this map into
+    // containers, where localhost cannot reach postgres.
     for key in env.keys().cloned().collect::<Vec<_>>() {
         if let Ok(v) = std::env::var(&key)
-            && should_overlay_process_env(mode, &key, &v)
+            && should_overlay_process_env(&key, &v)
         {
             env.insert(key, v);
         }
@@ -101,8 +102,8 @@ pub fn resolve(
     })
 }
 
-fn should_overlay_process_env(mode: Mode, key: &str, value: &str) -> bool {
-    !(mode == Mode::Dev && key == "DATABASE_URL" && is_local_database_url(value))
+fn should_overlay_process_env(key: &str, value: &str) -> bool {
+    !(key == "DATABASE_URL" && is_local_database_url(value))
 }
 
 pub(super) fn is_local_database_url(value: &str) -> bool {

@@ -285,7 +285,7 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue.clone(),
     });
     #[cfg(feature = "graphql")]
-    let graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader> =
+    let graphql_notification_reader: Arc<dyn complete_graph::SoupNotificationEdgeReader> =
         Arc::new(NotificationReaderService {
             repository: notification::outbound::repository::DbNotificationRepository::new(
                 db.clone(),
@@ -735,7 +735,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         favorites_service,
         #[cfg(feature = "graphql")]
-        graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
+        graphql_soup_schema: complete_graph::build_schema_from_arc(soup_service),
         #[cfg(feature = "graphql")]
         graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),
