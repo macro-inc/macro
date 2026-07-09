@@ -68,89 +68,110 @@ Outbound adapters must not:
 - Invent business policy beyond faithfully implementing the domain port contract.
 - Decide use-case flow; return facts/capabilities/results for the domain service to decide.
 
-## Authorization rule
+## Authorization and `EntityAccessReceipt` rule
 
-Authentication can happen at the edge. Authorization belongs in the domain service.
+Authentication can happen at the edge. Entity access checks should cross the boundary as a typed capability: `EntityAccessReceipt<T>`.
+
+`EntityAccessReceipt<T>` means the entity access layer has verified the caller has at least permission `T` for the entity. Inbound adapters may obtain this receipt through the standard access extractors or by calling the entity access service specifically to mint a receipt. After that, ordinary handlers/tools/listeners must pass the receipt inward instead of re-checking or branching on authorization.
 
 Allowed in inbound:
 
 - Reject missing/invalid credentials (`401` / unauthenticated).
-- Extract `actor`, `request_context`, `user_id`, service identity, or internal principal.
-- Pass that identity into the domain command/service call.
+- Extract `actor`, `request_context`, `user_id`, service identity, internal principal, or a typed `EntityAccessReceipt<T>`.
+- Use standard access extractors or `generate_entity_access_receipt::<RequiredLevel>(...)` to mint a receipt.
+- Pass the receipt and parsed request data into the domain service call.
+- Convert domain/access errors into transport responses.
 
-Forbidden in inbound:
+Forbidden in ordinary inbound handlers/tools/listeners:
 
 - `if user_id != owner_id { ... }`
 - `if access_level < Edit { ... }`
-- `entity_access_service.check_*` followed by allow/deny.
+- `entity_access_service.get_access_level(...)` or `can_edit(...)` followed by allow/deny branching.
 - Role/team/tenant/project permission checks.
-- Any `can_*`, `authorize_*`, `ensure_*permission*`, or `AccessLevel` decision that determines whether the use case is permitted.
+- Inspecting `receipt.entity_permission()` to decide use-case business policy.
+- Direct repository/persistence calls for the protected action.
 
 Correct pattern:
 
-1. Add a domain port when the service needs authz data, e.g. `DocumentAuthorizer`, `EntityAccessPort`, or reuse an existing domain service port.
-2. Inject that port into the domain `Service`.
-3. In the service method, perform `ensure_can_*` / permission checks before the protected action.
-4. Return a domain error such as `Unauthorized`, `Forbidden`, or a typed policy error.
-5. Let inbound map that domain error to HTTP/tool/listener semantics.
-6. Unit-test allow and deny cases at the domain service level with fake ports.
+1. Pick the minimum required permission type for the use case, e.g. `ViewAccessLevel`, `EditAccessLevel`, or `OwnerAccessLevel`.
+2. In inbound, obtain `EntityAccessReceipt<RequiredLevel>` using the existing entity access boundary.
+3. Pass that receipt to the domain service method.
+4. In the domain service, perform use-case-specific policy that is not captured by the minimum receipt type, e.g. owner-only share changes inside an edit operation.
+5. Return a domain error such as `Unauthorized`, `Forbidden`, or a typed policy error.
+6. Let inbound map that domain/access error to HTTP/tool/listener semantics.
+7. Unit-test allow and deny cases at the domain service level with fake receipts/ports.
 
 ## Bad vs good
 
-Bad: authz and persistence leak into the handler.
+Bad: the handler branches on permissions and performs the protected action itself.
 
 ```rust
-pub async fn rename_document(
-    Extension(user): Extension<MacroUserExtractor>,
-    State(state): State<AppState>,
-    Json(body): Json<RenameBody>,
-) -> Result<Json<RenameResponse>, ApiError> {
-    let access = state.entity_access.can_edit(user.id(), body.document_id).await?;
-    if !access {
-        return Err(ApiError::Forbidden);
+pub async fn edit_document_handler(
+    State(state): State<DocumentRouterState>,
+    Json(args): Json<EditDocumentServiceArgs>,
+) -> Result<Json<EditDocumentResponse>, DocumentError> {
+    let access_level = state
+        .entity_access
+        .get_access_level(current_user(), &args.document_id, EntityType::Document)
+        .await?
+        .ok_or(DocumentError::Unauthorized)?;
+
+    if access_level < AccessLevel::Edit {
+        return Err(DocumentError::Unauthorized);
     }
 
-    let updated = state.document_repo.rename(body.document_id, body.name).await?;
-    Ok(Json(updated.into()))
+    if args.share_permission.is_some() && access_level != AccessLevel::Owner {
+        return Err(DocumentError::Unauthorized);
+    }
+
+    state.document_repo.update_document(args).await?;
+    Ok(Json(EditDocumentResponse::success()))
 }
 ```
 
-Good: the handler adapts transport; the domain service owns policy and orchestration.
+Good: inbound obtains a typed receipt and forwards it; the domain service owns policy and orchestration.
 
 ```rust
-pub async fn rename_document<S: DocumentService>(
-    Extension(user): Extension<MacroUserExtractor>,
-    State(state): State<AppState<S>>,
-    Json(body): Json<RenameBody>,
-) -> Result<Json<RenameResponse>, ApiError> {
-    let command = RenameDocumentCommand {
-        actor: user.into_actor(),
-        document_id: body.document_id,
-        name: body.name.try_into()?,
-    };
-
+pub async fn edit_document_handler<T: DocumentService, Svc: EntityAccessService>(
+    access: DocumentAccessExtractor<EditAccessLevel, Svc>,
+    State(state): State<DocumentRouterState<T, Svc>>,
+    document_context: LoadedDocumentBasic,
+    project: ProjectBodyAccessLevelExtractor<EditAccessLevel, EditDocumentServiceArgs, Svc>,
+) -> Result<Json<EditDocumentResponse>, DocumentError> {
     state
-        .document_service
-        .rename_document(command)
-        .await
-        .map(Json::from)
-        .map_err(ApiError::from)
+        .service
+        .edit_document(
+            access.entity_access_receipt,
+            document_context.into_inner(),
+            project.into_inner(),
+        )
+        .await?;
+
+    Ok(Json(EditDocumentResponse::success()))
 }
 ```
 
 ```rust
-impl<R, A> DocumentService for Service<R, A>
-where
-    R: DocumentRepository,
-    A: DocumentAuthorizer,
-{
-    async fn rename_document(&self, command: RenameDocumentCommand) -> Result<Document, DocumentError> {
-        self.authorizer
-            .ensure_can_edit(&command.actor, command.document_id)
-            .await?;
+async fn edit_document(
+    &self,
+    receipt: EntityAccessReceipt<EditAccessLevel>,
+    document_context: DocumentBasic,
+    args: EditDocumentServiceArgs,
+) -> Result<(), DocumentError> {
+    if let EntityPermission::AccessLevel { access_level } = receipt.entity_permission() {
+        if args.project_id.is_some() && *access_level != AccessLevel::Owner {
+            return Err(DocumentError::Unauthorized);
+        }
 
-        self.repo.rename(command.document_id, command.name).await
+        if args.share_permission.is_some() && *access_level != AccessLevel::Owner {
+            return Err(DocumentError::Unauthorized);
+        }
     }
+
+    let document_id = receipt.entity().entity_id.clone();
+    self.repo
+        .edit_document_metadata(document_id, document_context, args)
+        .await
 }
 ```
 
@@ -173,7 +194,7 @@ For every diff under `rust/cloud-storage/**`, reject or refactor if any of these
 
 - `src/domain/**` imports `axum`, `http::StatusCode`, `IntoResponse`, `Json`, `Router`, `Request`, `HeaderMap`, SQLx pools/queries, AWS SDK clients, Redis clients, reqwest clients, `crate::inbound`, or `crate::outbound`.
 - `src/inbound/**` contains SQLx queries, transaction handling, repository calls, AWS/Redis/OpenSearch/reqwest calls, or direct calls to outbound implementations.
-- `src/inbound/**` contains authorization decisions (`AccessLevel`, role checks, owner checks, team/project membership checks, `can_*`, `authorize_*`, `ensure_*permission*`) instead of forwarding identity to a service.
+- Ordinary `src/inbound/**` handlers/tools/listeners contain authorization decisions (`AccessLevel`, role checks, owner checks, team/project membership checks, `can_*`, `authorize_*`, `ensure_*permission*`) instead of forwarding a typed `EntityAccessReceipt<T>` or identity to a service. Dedicated access extractors whose job is to mint receipts are the exception.
 - Handlers return domain-specific decisions not produced by a domain service.
 - Outbound code imports inbound/transport DTOs or axum types.
 - A domain service depends on concrete adapters rather than port traits/generic bounds/trait objects.
@@ -187,14 +208,15 @@ Set `CRATE` to the crate you are touching, for example `CRATE=rust/cloud-storage
 # Domain must not know transport or concrete infrastructure.
 rg -n "use (axum|http::StatusCode)|IntoResponse|Json<|Router|HeaderMap|Request<|sqlx::|PgPool|aws_sdk|redis::|reqwest|crate::inbound|crate::outbound" "$CRATE/src/domain" --glob '*.rs'
 
-# Inbound authz/policy hits require inspection; most should move to domain service.
-rg -n "entity_access|roles_and_permissions|AccessLevel|RoleId|owner|admin|member|tenant|team|project|permission|authorize|authz|can_|ensure_.*permission|Forbidden|Unauthorized" "$CRATE/src/inbound" --glob '*.rs'
+# Inbound authz/policy hits require inspection. Receipt-minting extractors are allowed;
+# ordinary handlers should forward EntityAccessReceipt<T> instead of branching.
+rg -n "entity_access|EntityAccessReceipt|roles_and_permissions|AccessLevel|RoleId|owner|admin|member|tenant|team|project|permission|authorize|authz|can_|ensure_.*permission|Forbidden|Unauthorized" "$CRATE/src/inbound" --glob '*.rs'
 
 # Inbound should not do persistence or infrastructure work.
 rg -n "sqlx::|query!|query_as!|PgPool|Transaction|aws_sdk|redis::|opensearch|reqwest|S3|Sqs|Dynamo" "$CRATE/src/inbound" --glob '*.rs'
 
 # Outbound must not depend on inbound transport.
-rg -n "crate::inbound|axum|IntoResponse|Json<|Router|StatusCode|Extension<" "$CRATE/src/outbound" --glob '*.rs'
+rg -n "crate::inbound|axum|IntoResponse|Json<|Router|StatusCode" "$CRATE/src/outbound" --glob '*.rs'
 ```
 
 `rg` hits are not automatically failures, but every hit must be explained by layer responsibilities. When in doubt, move policy inward.
