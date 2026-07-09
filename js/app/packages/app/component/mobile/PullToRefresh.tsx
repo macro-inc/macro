@@ -49,10 +49,7 @@ type PullGesture = {
  * reveals a floating spinner badge that arms past a threshold and, once
  * released, spins until `onRefresh` settles. Renders nothing off mobile.
  *
- * Mount inside a `position: relative` wrapper of the scroll container. The
- * badge sits parked just below the floating mobile chrome
- * (`--mobile-content-inset-top`) and paints beneath the list; the pull
- * translates the scroll container down, and the opaque rows sliding away
+ * Mount inside a `position: relative` wrapper of the scroll container. Pull translates the scroll container down, and the opaque rows sliding away
  * are what reveal it. A transform leaves layout and scrollTop untouched,
  * so the virtualizer's scroll math is unaffected.
  */
@@ -209,8 +206,6 @@ export function PullToRefresh(props: {
 
   return (
     <Show when={isMobile()}>
-      {/* No z-index: the badge paints beneath the list (later positioned
-          sibling), so the opaque rows translating down are what reveal it. */}
       <div
         class="pointer-events-none absolute inset-x-0 flex justify-center"
         style={{
