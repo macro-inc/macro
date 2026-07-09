@@ -350,17 +350,6 @@
   }
 }
 
-@keyframes long-press-message-highlight {
-  from {
-    background-color: oklch(from var(--color-ink) l c h / 0%);
-    border-radius: var(--radius-sm);
-  }
-  to {
-    background-color: oklch(from var(--color-ink) l c h / 5%);
-    border-radius: var(--radius-sm);
-  }
-}
-
 @keyframes typing-dot {
   0%   { transform: scale(1)   translateY(0   ); }
   50%  { transform: scale(1.5) translateY(-2px); }
@@ -595,9 +584,26 @@ html:not([data-touch-device="true"]) [data-message]:hover{
   @apply bg-ink/5 rounded-sm;
 }
 
-/* Accent bar marking the targeted message (unified-input target, navigation target) */
-[data-message][data-targeted] > .message-accent-bar {
+[data-message][data-targeted] {
+  @apply bg-accent/30 rounded-sm;
+}
+[data-message][data-selected][data-targeted],
+html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
+  @apply bg-accent/40 rounded-sm;
+}
+/*[data-message][data-targeted] > .message-accent-bar {
   opacity: 1;
+}*/
+
+@keyframes long-press-message-highlight {
+  from {
+    background-color: oklch(from var(--color-ink) l c h / 0%);
+    border-radius: var(--radius-sm);
+  }
+  to {
+    background-color: oklch(from var(--color-ink) l c h / 10%);
+    border-radius: var(--radius-sm);
+  }
 }
 
 /* Channel message long-press animation */
