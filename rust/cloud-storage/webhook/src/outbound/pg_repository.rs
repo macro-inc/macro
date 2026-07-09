@@ -42,7 +42,7 @@ struct WebhookRow {
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-    rule: Value,
+    filters: Value,
 }
 
 fn new_webhook_id() -> String {
@@ -61,9 +61,9 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
             source: message.into(),
         })?;
 
-    let filters = serde_json::from_value::<WebhookFilters>(row.rule).map_err(|err| {
+    let filters = serde_json::from_value::<WebhookFilters>(row.filters).map_err(|err| {
         sqlx::Error::ColumnDecode {
-            index: "rule".to_string(),
+            index: "filters".to_string(),
             source: err.into(),
         }
     })?;
@@ -102,7 +102,7 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
             w.created_at,
             w.updated_at,
             w.deleted_at,
-            w.rule
+            w.filters
         FROM webhook w
         WHERE w.id = $1
           AND w.deleted_at IS NULL
@@ -136,7 +136,7 @@ impl WebhookRepo for PgRepository {
             r#"
             INSERT INTO webhook (
                 id, workspace_id, name, endpoint_url, signing_secret, headers,
-                rule, status, is_valid, created_by_user_id
+                filters, status, is_valid, created_by_user_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
             "#,
@@ -185,7 +185,7 @@ impl WebhookRepo for PgRepository {
                 name = COALESCE($2, name),
                 endpoint_url = COALESCE($3, endpoint_url),
                 headers = COALESCE($4, headers),
-                rule = COALESCE($5, rule),
+                filters = COALESCE($5, filters),
                 status = COALESCE($6, status),
                 is_valid = CASE WHEN $3::TEXT IS NOT NULL OR $4::JSONB IS NOT NULL THEN false ELSE is_valid END,
                 updated_at = now()

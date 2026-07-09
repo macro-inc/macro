@@ -90,6 +90,64 @@ async fn create_inserts_webhook_with_filters(pool: PgPool) -> anyhow::Result<()>
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn object_shaped_filters_are_rejected_by_check_constraint(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO webhook (
+            id, workspace_id, name, endpoint_url, signing_secret,
+            filters, created_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+        "wh_object_filters",
+        USER_ID,
+        "Object filters",
+        "https://example.com/webhook",
+        "signing-secret",
+        json!({ "events": ["x"] }),
+        USER_ID
+    )
+    .execute(&pool)
+    .await;
+
+    let err = result.expect_err("object-shaped filters should violate array check");
+    assert_eq!(
+        err.as_database_error().and_then(|db| db.constraint()),
+        Some("webhook_filters_is_array")
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn containment_query_uses_filters_gin_index(pool: PgPool) -> anyhow::Result<()> {
+    let mut connection = pool.acquire().await?;
+    sqlx::query("SET enable_seqscan = off")
+        .execute(&mut *connection)
+        .await?;
+
+    // EXPLAIN output is planner text rather than application data, so the SQLx
+    // macros do not add useful type validation for this assertion.
+    let plan_lines = sqlx::query_scalar::<_, String>(
+        r#"
+        EXPLAIN SELECT id
+        FROM webhook
+        WHERE filters @> '[{"events": ["document.created"]}]'
+        "#,
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    let plan_text = plan_lines.join("\n");
+
+    assert!(
+        plan_text.contains("webhook_filters_gin_idx"),
+        "expected webhook_filters_gin_idx in plan:\n{plan_text}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn patch_updates_endpoint_and_resets_validity(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
     let repo = PgRepository::new(pool.clone());
