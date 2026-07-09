@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// Webhook id. Webhook ids are stored with a `wh_` prefix.
@@ -86,8 +85,8 @@ pub struct CreateWebhookRequest {
     pub endpoint_url: String,
     /// Optional custom delivery headers.
     pub headers: Option<WebhookHeaders>,
-    /// Rule definition used to match events.
-    pub rule: Value,
+    /// Typed filters used to match events and optional entity ids.
+    pub filters: WebhookFilters,
 }
 
 /// Request to patch a webhook.
@@ -100,8 +99,8 @@ pub struct PatchWebhookRequest {
     pub endpoint_url: Option<String>,
     /// Optional custom delivery headers. When present, replaces existing headers.
     pub headers: Option<WebhookHeaders>,
-    /// Rule definition used to match events.
-    pub rule: Option<Value>,
+    /// Typed filters used to match events and optional entity ids.
+    pub filters: Option<WebhookFilters>,
     /// Webhook lifecycle status.
     pub status: Option<WebhookStatus>,
 }
@@ -135,8 +134,8 @@ pub struct Webhook {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Event matching rule.
-    pub rule: Value,
+    /// Typed filters used to match events and optional entity ids.
+    pub filters: WebhookFilters,
 }
 
 /// Sanitized result of validating a webhook endpoint.

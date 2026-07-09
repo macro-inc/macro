@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::ports::WebhookRepo;
+use crate::domain::{models::WebhookFilter, ports::WebhookRepo};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
@@ -18,7 +18,10 @@ fn create_request() -> CreateWebhookRequest {
         name: "Build events".to_string(),
         endpoint_url: "https://example.com/webhook".to_string(),
         headers: None,
-        rule: json!({ "events": ["build.created"] }),
+        filters: vec![WebhookFilter {
+            events: vec!["build.created".to_string()],
+            ids: None,
+        }],
     }
 }
 
@@ -68,14 +71,20 @@ async fn create_webhook(repo: &PgRepository) -> Webhook {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_inserts_webhook_with_rule(pool: PgPool) -> anyhow::Result<()> {
+async fn create_inserts_webhook_with_filters(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool).await?;
     let repo = PgRepository::new(pool.clone());
 
     let webhook = create_webhook(&repo).await;
 
     assert!(webhook.id.starts_with("wh_"));
-    assert_eq!(webhook.rule, json!({ "events": ["build.created"] }));
+    assert_eq!(
+        webhook.filters,
+        vec![WebhookFilter {
+            events: vec!["build.created".to_string()],
+            ids: None,
+        }]
+    );
     assert!(!webhook.is_valid);
     Ok(())
 }
@@ -94,7 +103,7 @@ async fn patch_updates_endpoint_and_resets_validity(pool: PgPool) -> anyhow::Res
                 name: Some("Deploy events".to_string()),
                 endpoint_url: Some("https://example.com/deploy".to_string()),
                 headers: None,
-                rule: None,
+                filters: None,
                 status: None,
             },
         )

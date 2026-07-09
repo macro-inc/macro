@@ -5,8 +5,8 @@ mod pg_repository_test;
 
 use crate::domain::{
     models::{
-        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookHeaders, WebhookId,
-        WebhookStatus,
+        CreateWebhookRequest, PatchWebhookRequest, Webhook, WebhookFilters, WebhookHeaders,
+        WebhookId, WebhookStatus,
     },
     ports::WebhookRepo,
 };
@@ -61,9 +61,16 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
             source: message.into(),
         })?;
 
+    let filters = serde_json::from_value::<WebhookFilters>(row.rule).map_err(|err| {
+        sqlx::Error::ColumnDecode {
+            index: "rule".to_string(),
+            source: err.into(),
+        }
+    })?;
+
     Ok(Webhook {
-        id: row.id.clone(),
-        workspace_id: row.workspace_id.clone(),
+        id: row.id,
+        workspace_id: row.workspace_id,
         name: row.name,
         endpoint_url: row.endpoint_url,
         signing_secret: row.signing_secret,
@@ -74,7 +81,7 @@ fn row_to_webhook(row: WebhookRow) -> Result<Webhook, sqlx::Error> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         deleted_at: row.deleted_at,
-        rule: row.rule,
+        filters,
     })
 }
 
@@ -123,6 +130,8 @@ impl WebhookRepo for PgRepository {
         let webhook_id = new_webhook_id();
         let status = WebhookStatus::Active.as_str();
         let created_by_user_id = created_by_user_id.as_ref();
+        let filters = serde_json::to_value(&request.filters)
+            .map_err(|err| sqlx::Error::Encode(err.into()))?;
         sqlx::query!(
             r#"
             INSERT INTO webhook (
@@ -137,7 +146,7 @@ impl WebhookRepo for PgRepository {
             request.endpoint_url,
             signing_secret,
             headers,
-            request.rule,
+            filters,
             status,
             created_by_user_id
         )
@@ -163,6 +172,12 @@ impl WebhookRepo for PgRepository {
             serde_json::to_value(headers).unwrap_or_else(|_| Value::Object(Default::default()))
         });
         let status = request.status.map(WebhookStatus::as_str);
+        let filters = request
+            .filters
+            .as_ref()
+            .map(serde_json::to_value)
+            .transpose()
+            .map_err(|err| sqlx::Error::Encode(err.into()))?;
         let updated = sqlx::query!(
             r#"
             UPDATE webhook
@@ -180,7 +195,7 @@ impl WebhookRepo for PgRepository {
             request.name,
             request.endpoint_url,
             headers,
-            request.rule,
+            filters,
             status
         )
         .execute(&self.pool)
