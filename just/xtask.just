@@ -36,7 +36,6 @@ stop_local *ARGS:
 #   just stack up                      # full stack; static frontend served by the proxy
 #   just stack update                  # rebuild + reload only what changed (the `r` hotkey)
 #   just stack status --json           # machine-readable state
-#   just stack expose --detach         # public URL via a Cloudflare quick tunnel
 #   just stack down                    # reclaim everything
 stack *ARGS:
   {{ xtask }} stack "$@"

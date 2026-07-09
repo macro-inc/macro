@@ -1,12 +1,11 @@
-//! Headless stack orchestration: `cargo x stack up|update|status|expose|down`.
+//! Headless stack orchestration: `cargo x stack up|update|status|down`.
 //!
 //! The preview/agent/CI surface. Same bring-up as `run_local`, but no TTY
 //! hotkey loop and no attached dev server: the frontend is a static bundle
 //! served by the instance's Caddy, so a finished `up` leaves only Docker
 //! containers running — nothing to babysit, and the whole product lives behind
-//! the ONE proxy origin. That single origin is what `expose` publishes (a
-//! Cloudflare quick tunnel), what an agent drives with a browser, and what a
-//! preview deploy fronts with a real hostname.
+//! the ONE proxy origin that an agent drives with a browser and a preview
+//! deploy fronts with a real hostname.
 //!
 //! `up` is full-delete/full-create like `run_local` (unconditionally
 //! idempotent); `update` is the `r`-hotkey as a one-shot verb (rebuild, restart
@@ -14,9 +13,8 @@
 //! everything.
 
 use std::io::{BufReader, Read};
-use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
@@ -106,18 +104,6 @@ pub struct DownArgs {
     /// which wipes them anyway — use `just run_local`/`stop_local` semantics).
     #[arg(long)]
     pub keep_data: bool,
-}
-
-#[derive(Args, Clone, Default)]
-pub struct ExposeArgs {
-    #[command(flatten)]
-    pub instance: InstanceArgs,
-    /// Leave the tunnel running in the background and return (see `--stop`).
-    #[arg(long)]
-    pub detach: bool,
-    /// Stop a previously detached tunnel.
-    #[arg(long)]
-    pub stop: bool,
 }
 
 /// Durable per-instance record of what `up` brought up, so `update`/`status`
@@ -496,8 +482,6 @@ pub fn status(args: &StatusArgs) -> Result<()> {
     let backend_healthy = running && probe(&format!("{}/auth/health", proxy::url(&instance)));
     let static_frontend = state.as_ref().is_some_and(|s| s.frontend == "static");
     let frontend_url = static_frontend.then(|| frontend::static_url(&instance));
-    let expose = read_expose(&instance);
-
     if args.json {
         let mut out = summary_json(
             state.as_ref().map_or(Mode::Local, |s| {
@@ -509,7 +493,6 @@ pub fn status(args: &StatusArgs) -> Result<()> {
         out["running"] = json!(running);
         out["backend_healthy"] = json!(backend_healthy);
         out["services"] = json!(services);
-        out["expose_url"] = json!(expose.as_ref().map(|e| e.url.clone()));
         println!("{}", serde_json::to_string(&out)?);
         return Ok(());
     }
@@ -533,9 +516,6 @@ pub fn status(args: &StatusArgs) -> Result<()> {
         if let Some(url) = frontend_url {
             println!("  frontend  {url}");
         }
-        if let Some(e) = expose {
-            println!("  exposed   {}", e.url);
-        }
     }
     for svc in &services {
         let health = svc
@@ -553,170 +533,14 @@ pub fn status(args: &StatusArgs) -> Result<()> {
 }
 
 /// `cargo x stack down` — reclaim the instance: containers, volumes, networks,
-/// tunnel, and state. `--keep-data` only stops containers.
+/// and state. `--keep-data` only stops containers.
 pub fn down(args: &DownArgs) -> Result<()> {
-    let stage = Stage::from_env();
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-    if let Some(expose) = read_expose(&instance) {
-        stop_tunnel(&stage, &instance, &expose);
-    }
     if args.keep_data {
         return super::stop(&args.instance);
     }
     super::destroy(&args.instance)?;
     clear_state(&instance)?;
-    Ok(())
-}
-
-/// Where a detached tunnel's identity lives (URL + cloudflared pid).
-fn expose_path(instance: &Instance) -> PathBuf {
-    instance.artifact_dir().join("expose.json")
-}
-
-#[derive(Serialize, Deserialize)]
-struct ExposeState {
-    url: String,
-    pid: u32,
-}
-
-/// A recorded tunnel whose process is still alive. A stale record (machine
-/// rebooted, cloudflared died) reads as "not exposed".
-fn read_expose(instance: &Instance) -> Option<ExposeState> {
-    let raw = std::fs::read_to_string(expose_path(instance)).ok()?;
-    let state: ExposeState = serde_json::from_str(&raw).ok()?;
-    // SAFETY: signal 0 only probes liveness/permission; no signal is delivered.
-    let alive = unsafe { libc::kill(state.pid as i32, 0) } == 0;
-    alive.then_some(state)
-}
-
-fn stop_tunnel(stage: &Stage, instance: &Instance, expose: &ExposeState) {
-    // SAFETY: plain kill(2) of the recorded cloudflared pid; ESRCH is harmless.
-    unsafe {
-        libc::kill(expose.pid as i32, libc::SIGTERM);
-    }
-    let _ = std::fs::remove_file(expose_path(instance));
-    stage.note(&format!(
-        "stopped tunnel {} (pid {})",
-        expose.url, expose.pid
-    ));
-}
-
-/// `cargo x stack expose` — publish the instance's single origin through a
-/// Cloudflare quick tunnel. Attached by default (Ctrl-C stops it); `--detach`
-/// records the URL + pid and returns.
-pub fn expose(args: &ExposeArgs) -> Result<()> {
-    let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
-
-    if args.stop {
-        match read_expose(&instance) {
-            Some(state) => stop_tunnel(&stage, &instance, &state),
-            None => stage.note("no running tunnel for this instance"),
-        }
-        return Ok(());
-    }
-    if let Some(existing) = read_expose(&instance) {
-        println!("{}", existing.url);
-        stage.note(&format!(
-            "already exposed (pid {}) — `just stack expose --stop{}` to stop",
-            existing.pid,
-            instance_suffix(&instance)
-        ));
-        return Ok(());
-    }
-
-    let port = instance.port(Port::Proxy);
-    if std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(500),
-    )
-    .is_err()
-    {
-        bail!(
-            "nothing listening on the proxy port {port} — bring the stack up first \
-             (`just stack up{}`)",
-            instance_suffix(&instance)
-        );
-    }
-    if which("cloudflared").is_none() {
-        bail!(
-            "cloudflared not found on PATH — install it (macOS: `brew install cloudflared`; \
-             nix: `nix run nixpkgs#cloudflared`) and retry"
-        );
-    }
-
-    // Quick tunnel: no account, no DNS — cloudflared prints a random
-    // *.trycloudflare.com hostname on stderr. Output goes to a log file so a
-    // detached tunnel stays diagnosable.
-    instance.ensure_artifact_dir()?;
-    let log_path = instance.artifact_dir().join("expose.log");
-    let log = std::fs::File::create(&log_path)
-        .with_context(|| format!("creating {}", log_path.display()))?;
-    let mut cmd = Command::new("cloudflared");
-    cmd.args(["tunnel", "--no-autoupdate", "--url"])
-        .arg(format!("http://localhost:{port}"))
-        .stdin(Stdio::null())
-        .stdout(log.try_clone().context("cloning log handle")?)
-        .stderr(log);
-    if args.detach {
-        // Own process group: a later Ctrl-C in the launching shell must not
-        // take the detached tunnel down with it.
-        cmd.process_group(0);
-    }
-    let mut child = cmd.spawn().context("launching cloudflared")?;
-
-    // The URL appears within a few seconds; poll the log rather than the pipes
-    // so attached and detached spawn identically.
-    let url = 'url: {
-        for _ in 0..60 {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            if let Some(status) = child.try_wait()? {
-                let tail = std::fs::read_to_string(&log_path).unwrap_or_default();
-                bail!("cloudflared exited during startup ({status})\n{tail}");
-            }
-            let log = std::fs::read_to_string(&log_path).unwrap_or_default();
-            if let Some(url) = find_trycloudflare_url(&log) {
-                break 'url url;
-            }
-        }
-        let _ = child.kill();
-        bail!(
-            "cloudflared did not print a tunnel URL — see {}",
-            log_path.display()
-        );
-    };
-
-    println!("{url}");
-    stage.note(
-        "  WARNING: this URL is public and unauthenticated — anyone who has it reaches \
-         this stack. Share deliberately; stop the tunnel when done.",
-    );
-    if args.detach {
-        std::fs::write(
-            expose_path(&instance),
-            serde_json::to_string_pretty(&ExposeState {
-                url: url.clone(),
-                pid: child.id(),
-            })?,
-        )
-        .with_context(|| format!("writing {}", expose_path(&instance).display()))?;
-        stage.note(&format!(
-            "  detached (pid {}) — `just stack expose --stop{}` to stop",
-            child.id(),
-            instance_suffix(&instance)
-        ));
-        return Ok(());
-    }
-    stage.note("  attached — Ctrl-C to stop the tunnel");
-    let status = child.wait()?;
-    if !status.success() {
-        // Ctrl-C lands here too (SIGINT reaches the whole foreground group) —
-        // only a genuinely failed tunnel should error.
-        if !matches!(status.signal(), Some(libc::SIGINT | libc::SIGTERM)) {
-            let tail = std::fs::read_to_string(&log_path).unwrap_or_default();
-            bail!("cloudflared exited with {status}\n{tail}");
-        }
-    }
     Ok(())
 }
 
@@ -843,20 +667,6 @@ fn probe(url: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
-}
-
-fn which(bin: &str) -> Option<PathBuf> {
-    let paths = std::env::var_os("PATH")?;
-    std::env::split_paths(&paths)
-        .map(|p| p.join(bin))
-        .find(|p| p.is_file())
-}
-
-/// Extract the quick-tunnel hostname from cloudflared's startup banner.
-fn find_trycloudflare_url(text: &str) -> Option<String> {
-    let end = text.find(".trycloudflare.com")? + ".trycloudflare.com".len();
-    let start = text[..end].rfind("https://")?;
-    Some(text[start..end].to_string())
 }
 
 fn mode_from_label(label: &str) -> Result<Mode> {

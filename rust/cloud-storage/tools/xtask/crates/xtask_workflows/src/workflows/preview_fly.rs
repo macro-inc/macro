@@ -242,6 +242,12 @@ fn bake_snapshot() -> Step<Run> {
           echo "init snapshot cache hit: $status"
           cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
             -p xtask_local --features local-stack -- gen-compose
+          # The cold path builds the runtime image inside `stack up`; on a
+          # hit nothing else does, and the registry mirror needs it in the
+          # local daemon (its pull fallback only covers public images —
+          # macro-local-runtime:dev is not on Docker Hub).
+          cargo run --quiet --manifest-path rust/cloud-storage/Cargo.toml \
+            -p xtask_local --features local-stack -- runtime-image
         else
           just stack up --infra-only --no-doppler --no-build
           status=$(just stack snapshot --json | tail -n 1)

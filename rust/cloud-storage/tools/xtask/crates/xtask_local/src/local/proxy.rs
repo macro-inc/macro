@@ -23,7 +23,7 @@ pub fn url(instance: &Instance) -> String {
 /// the frontend through this single origin to the local service containers; the
 /// only difference is the static-file block (dev has no local LocalStack).
 /// With `static_frontend` the proxy also serves the built app bundle at `/app`,
-/// making it the ONE origin for the whole product (what `stack expose` tunnels).
+/// making it the one origin for the whole product.
 pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> Result<PathBuf> {
     let path = caddyfile_path(instance);
     if let Some(dir) = path.parent() {

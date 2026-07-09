@@ -133,7 +133,7 @@ just stack up                  # bring everything up, print URLs, return
 just stack status --json      # machine-readable state (containers, health, URLs)
 just stack update             # rebuild + reload only changed services (the `r` hotkey)
 just stack update --frontend  # also rebuild the frontend bundle
-just stack down               # containers + volumes + tunnel + state
+just stack down               # containers + volumes + state
 ```
 
 All the `run_local` flags apply (`--instance`, `--no-doppler --env-file`,
@@ -141,8 +141,8 @@ All the `run_local` flags apply (`--instance`, `--no-doppler --env-file`,
 `--frontend-dist`, and `--infra-only` stops after the infra bring-up + init
 (the CI bake mode — without Doppler the app services have no env to boot
 with, and the snapshot only captures infra volumes). The app is served at `<proxy>/app/` — the bundle resolves its
-backend from the origin it is served on, so the same stack works on localhost,
-through a tunnel, or behind a preview hostname without a rebuild.
+backend from the origin it is served on, so the same stack works on localhost
+or behind a preview hostname without a rebuild.
 
 `stack up` also caches the expensive infra init. The first cold run migrates
 the DB, waits out the FusionAuth kickstart, and creates the search indices,
@@ -153,17 +153,6 @@ snapshot and skip the init entirely; any input change is a cache miss and a
 normal full init. `just stack snapshot` shows the current key; `--no-snapshot`
 opts out. This is also what makes Fly previews boot fast — CI bakes the
 snapshot into the preview image (see `infra/preview/README.md`).
-
-To share a running stack publicly (a preview link, a QA session):
-
-```bash
-just stack expose --detach    # prints a https://*.trycloudflare.com URL
-just stack expose --stop
-```
-
-`expose` uses a Cloudflare quick tunnel (requires `cloudflared` on PATH; no
-account needed). The URL is public and unauthenticated — anyone who has it
-reaches your stack. Share deliberately and stop the tunnel when done.
 
 ## Common Commands
 

@@ -56,9 +56,7 @@ pub enum StackCmd {
     Update(super::stack::UpdateArgs),
     /// Report the instance's containers, health, and URLs (`--json` for machines).
     Status(super::stack::StatusArgs),
-    /// Publish the stack's single origin via a Cloudflare quick tunnel.
-    Expose(super::stack::ExposeArgs),
-    /// Tear the instance down: containers, volumes, tunnel, and state.
+    /// Tear the instance down: containers, volumes, and state.
     Down(super::stack::DownArgs),
     /// Report the init-snapshot key/location for this instance.
     Snapshot(super::stack::SnapshotArgs),
@@ -183,7 +181,6 @@ fn run(cli: Cli) -> Result<()> {
             StackCmd::Up(a) => super::stack::up(Mode::Local, &a),
             StackCmd::Update(a) => super::stack::update(&a),
             StackCmd::Status(a) => super::stack::status(&a),
-            StackCmd::Expose(a) => super::stack::expose(&a),
             StackCmd::Down(a) => super::stack::down(&a),
             StackCmd::Snapshot(a) => super::stack::snapshot_status(&a),
         },
