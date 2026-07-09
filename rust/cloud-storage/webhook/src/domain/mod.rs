@@ -5,6 +5,8 @@
 pub mod ingestion;
 /// Webhook domain models.
 pub mod models;
+#[cfg(test)]
+mod models_test;
 #[cfg(feature = "ports")]
 /// Webhook ports.
 pub mod ports;

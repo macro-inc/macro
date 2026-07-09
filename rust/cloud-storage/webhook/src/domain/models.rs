@@ -11,6 +11,21 @@ pub type WebhookId = String;
 /// Custom headers supplied for webhook delivery.
 pub type WebhookHeaders = BTreeMap<String, String>;
 
+/// Event and optional entity-id constraints used to match webhook deliveries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
+pub struct WebhookFilter {
+    /// Event names matched by this filter.
+    pub events: Vec<String>,
+    /// Entity ids matched by this filter. When absent, the filter matches all entity ids.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ids: Option<Vec<String>>,
+}
+
+/// Collection of webhook filters used to decide delivery eligibility.
+pub type WebhookFilters = Vec<WebhookFilter>;
+
 /// Webhook lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
