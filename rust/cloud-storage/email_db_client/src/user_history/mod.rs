@@ -160,7 +160,7 @@ pub async fn get_thread_summary_info(
         }
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
-            user_id: row.macro_id,
+            user_id: row.macro_id.unwrap(),
             link_id: row.link_id,
             subject: row.subject,
             snippet: row.snippet,

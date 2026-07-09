@@ -79,22 +79,161 @@ pub async fn upsert_email_filter_by_domain(
     Ok(row.into())
 }
 
-/// Delete an email filter by its ID, scoped to a link.
+/// Delete an email filter by its ID, scoped to a link. Returns the deleted
+/// filter's (email_address, email_domain) so the caller can resync affected
+/// threads' signal flags, or `None` if no row matched.
 #[tracing::instrument(skip(pool), err)]
 pub async fn delete_email_filter(
     pool: &PgPool,
     filter_id: Uuid,
     link_id: Uuid,
-) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
-        r#"DELETE FROM email_filters WHERE id = $1 AND link_id = $2"#,
+) -> Result<Option<(Option<String>, Option<String>)>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"DELETE FROM email_filters WHERE id = $1 AND link_id = $2
+        RETURNING email_address, email_domain"#,
         filter_id,
         link_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| (r.email_address, r.email_domain)))
+}
+
+/// Recomputes `email_threads.is_signal` for every thread in the link with a
+/// message from the given sender address or domain. Called after an
+/// email_filters change, since the override feeds the signal heuristic.
+/// The recompute mirrors sync_thread_signal_flag (thread.rs) / the
+/// Importance(true) predicate in the dynamic query builder.
+#[tracing::instrument(skip(pool), err)]
+pub async fn resync_signal_flags_for_sender(
+    pool: &PgPool,
+    link_id: Uuid,
+    email_address: Option<&str>,
+    email_domain: Option<&str>,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        WITH affected AS MATERIALIZED (
+            -- Contact-first candidate scan, MATERIALIZED so the planner can't
+            -- hoist the expensive per-thread sig predicate above this
+            -- selective filter and evaluate it for the whole link.
+            SELECT DISTINCT m.thread_id
+            FROM email_contacts c
+            JOIN email_messages m ON m.from_contact_id = c.id
+            WHERE c.link_id = $1
+              AND m.link_id = $1
+              AND ($2::text IS NULL OR LOWER(c.email_address) = LOWER($2))
+              AND ($3::text IS NULL OR LOWER(SPLIT_PART(c.email_address, '@', 2)) = LOWER($3))
+        ),
+        -- MATERIALIZED so sig is computed once per thread; inlined, both the
+        -- SET and the IS DISTINCT FROM would re-evaluate the predicate.
+        calc AS MATERIALIZED (
+            SELECT a.thread_id,
+                EXISTS (
+                    SELECT 1
+                    FROM email_messages m
+                    WHERE m.thread_id = a.thread_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM email_message_labels ml
+                          JOIN email_labels l ON ml.label_id = l.id
+                          WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                      )
+                      AND (
+                          (
+                              EXISTS (
+                                  SELECT 1
+                                  FROM email_contacts sender_c
+                                  JOIN email_filters ef
+                                    ON ef.link_id = m.link_id
+                                   AND ef.email_address IS NOT NULL
+                                   AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                                  WHERE sender_c.id = m.from_contact_id
+                                    AND ef.is_important = TRUE
+                              )
+                              OR EXISTS (
+                                  SELECT 1
+                                  FROM email_contacts sender_c
+                                  JOIN email_filters ef
+                                    ON ef.link_id = m.link_id
+                                   AND ef.email_domain IS NOT NULL
+                                   AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                                  WHERE sender_c.id = m.from_contact_id
+                                    AND ef.is_important = TRUE
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM email_filters ef_addr
+                                        WHERE ef_addr.link_id = m.link_id
+                                          AND ef_addr.email_address IS NOT NULL
+                                          AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                          AND ef_addr.is_important = FALSE
+                                    )
+                              )
+                          )
+                          OR (
+                              NOT (
+                                  EXISTS (
+                                      SELECT 1
+                                      FROM email_contacts sender_c
+                                      JOIN email_filters ef
+                                        ON ef.link_id = m.link_id
+                                       AND ef.email_address IS NOT NULL
+                                       AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                                      WHERE sender_c.id = m.from_contact_id
+                                        AND ef.is_important = FALSE
+                                  )
+                                  OR EXISTS (
+                                      SELECT 1
+                                      FROM email_contacts sender_c
+                                      JOIN email_filters ef
+                                        ON ef.link_id = m.link_id
+                                       AND ef.email_domain IS NOT NULL
+                                       AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                                      WHERE sender_c.id = m.from_contact_id
+                                        AND ef.is_important = FALSE
+                                        AND NOT EXISTS (
+                                            SELECT 1 FROM email_filters ef_addr
+                                            WHERE ef_addr.link_id = m.link_id
+                                              AND ef_addr.email_address IS NOT NULL
+                                              AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                              AND ef_addr.is_important = TRUE
+                                        )
+                                  )
+                              )
+                              AND (
+                                  m.is_draft = TRUE
+                                  OR EXISTS (
+                                      SELECT 1 FROM email_message_labels ml
+                                      JOIN email_labels l ON ml.label_id = l.id
+                                      WHERE ml.message_id = m.id
+                                        AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                                  )
+                                  OR NOT EXISTS (
+                                      SELECT 1 FROM email_message_labels ml
+                                      JOIN email_labels l ON ml.label_id = l.id
+                                      WHERE ml.message_id = m.id
+                                        AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                                  )
+                              )
+                          )
+                      )
+                ) AS sig
+            FROM affected a
+        )
+        UPDATE email_threads t
+        SET is_signal = calc.sig
+        FROM calc
+        WHERE t.id = calc.thread_id
+          AND t.link_id = $1
+          AND t.is_signal IS DISTINCT FROM calc.sig
+        "#,
+        link_id,
+        email_address,
+        email_domain,
     )
     .execute(pool)
     .await?;
 
-    Ok(result.rows_affected() > 0)
+    Ok(result.rows_affected())
 }
 
 /// List all email filters for a link.

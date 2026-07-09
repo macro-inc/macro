@@ -380,6 +380,9 @@ pub(crate) async fn delete_draft_message(
         sqlx::query!("DELETE FROM email_threads WHERE id = $1", thread_db_id)
             .execute(&mut *tx)
             .await?;
+    } else {
+        // The discarded draft may have been the thread's only signal message.
+        super::thread::sync_thread_signal_flag(&mut tx, thread_db_id).await?;
     }
 
     tx.commit().await?;

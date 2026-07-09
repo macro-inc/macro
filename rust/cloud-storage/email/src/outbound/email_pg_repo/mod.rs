@@ -321,14 +321,14 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         input: UpsertEmailFilterInput,
     ) -> Result<EmailFilter, Self::Err> {
-        if let Some(address) = &input.email_address {
+        let filter = if let Some(address) = &input.email_address {
             email_filter::upsert_email_filter_by_address(
                 &self.pool,
                 link_id,
                 address,
                 input.is_important,
             )
-            .await
+            .await?
         } else if let Some(domain) = &input.email_domain {
             email_filter::upsert_email_filter_by_domain(
                 &self.pool,
@@ -336,16 +336,39 @@ impl EmailRepo for EmailPgRepo {
                 domain,
                 input.is_important,
             )
-            .await
+            .await?
         } else {
             unreachable!(
                 "UpsertEmailFilterInput must have either email_address or email_domain; validated by service layer"
             )
-        }
+        };
+
+        // The override feeds the is_signal heuristic; resync affected threads.
+        email_filter::resync_signal_flags_for_sender(
+            &self.pool,
+            link_id,
+            filter.email_address.as_deref(),
+            filter.email_domain.as_deref(),
+        )
+        .await?;
+
+        Ok(filter)
     }
 
     async fn delete_email_filter(&self, filter_id: Uuid, link_id: Uuid) -> Result<bool, Self::Err> {
-        email_filter::delete_email_filter(&self.pool, filter_id, link_id).await
+        let deleted = email_filter::delete_email_filter(&self.pool, filter_id, link_id).await?;
+
+        if let Some((address, domain)) = &deleted {
+            email_filter::resync_signal_flags_for_sender(
+                &self.pool,
+                link_id,
+                address.as_deref(),
+                domain.as_deref(),
+            )
+            .await?;
+        }
+
+        Ok(deleted.is_some())
     }
 
     async fn list_email_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, Self::Err> {
