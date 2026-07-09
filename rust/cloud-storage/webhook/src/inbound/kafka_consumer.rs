@@ -227,7 +227,7 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 /// Connects to `brokers`, subscribes to [`MacroDocumentsTopic`] and
 /// [`MacroChannelsTopic`] under the `webhook-event-ingestion` consumer group,
 /// and feeds every decoded event to `service`, committing each offset only
-/// after ingestion succeeds (see [`ingest_with_retry`] for the retry policy).
+/// after ingestion succeeds (see `ingest_with_retry` for the retry policy).
 /// Returns an error when the consumer cannot be created or subscribed, or when
 /// a transient ingestion failure exhausts its in-process retries; callers
 /// should treat that as fatal and restart, which redelivers the uncommitted
