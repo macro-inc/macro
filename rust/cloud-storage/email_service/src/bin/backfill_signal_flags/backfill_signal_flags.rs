@@ -17,6 +17,9 @@
 //! - `CONCURRENCY`: Number of users processed concurrently (defaults to 1).
 //! - `FULL_RECOMPUTE`: When `true`, recomputes both directions instead of
 //!   the default set-true-only pass (defaults to false).
+//! - `VERIFY`: When `true`, read-only mode — reports threads whose is_signal
+//!   disagrees with the heuristic and exits non-zero if any are found.
+//!   Mutually exclusive with `FULL_RECOMPUTE`.
 
 mod config;
 mod process;
@@ -53,12 +56,12 @@ async fn main() -> anyhow::Result<()> {
         config.concurrency
     );
 
-    let full_recompute = config.full_recompute;
+    let mode = config.mode;
     let results: Vec<(String, anyhow::Result<u64>)> = stream::iter(macro_ids)
         .map(|macro_id| {
             let db_pool = db_pool.clone();
             async move {
-                let result = process::process_macro_id(&db_pool, &macro_id, full_recompute).await;
+                let result = process::process_macro_id(&db_pool, &macro_id, mode).await;
                 (macro_id, result)
             }
         })
@@ -66,9 +69,14 @@ async fn main() -> anyhow::Result<()> {
         .enumerate()
         .map(|(index, (macro_id, result))| {
             match &result {
-                Ok(flagged) => println!(
-                    "=== Completed {macro_id} ({}/{total_users}): flagged {flagged} threads ===",
-                    index + 1
+                Ok(count) => println!(
+                    "=== Completed {macro_id} ({}/{total_users}): {count} threads {} ===",
+                    index + 1,
+                    if mode == config::BackfillMode::Verify {
+                        "mismatched"
+                    } else {
+                        "flagged"
+                    }
                 ),
                 Err(e) => println!(
                     "=== Failed {macro_id} ({}/{total_users}): {e:?} ===",
@@ -80,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         .collect()
         .await;
 
-    let total_flagged: u64 = results.iter().filter_map(|(_, r)| r.as_ref().ok()).sum();
+    let total: u64 = results.iter().filter_map(|(_, r)| r.as_ref().ok()).sum();
     let failures: Vec<&String> = results
         .iter()
         .filter(|(_, r)| r.is_err())
@@ -88,7 +96,12 @@ async fn main() -> anyhow::Result<()> {
         .collect();
 
     println!(
-        "\n=== All macro IDs processed: {total_flagged} threads flagged, {} failures ===",
+        "\n=== All macro IDs processed: {total} threads {}, {} failures ===",
+        if mode == config::BackfillMode::Verify {
+            "mismatched"
+        } else {
+            "flagged"
+        },
         failures.len()
     );
     if !failures.is_empty() {
@@ -100,6 +113,11 @@ async fn main() -> anyhow::Result<()> {
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+    }
+    if mode == config::BackfillMode::Verify && total > 0 {
+        anyhow::bail!(
+            "{total} threads disagree with the heuristic; run with FULL_RECOMPUTE=true to repair"
         );
     }
     Ok(())

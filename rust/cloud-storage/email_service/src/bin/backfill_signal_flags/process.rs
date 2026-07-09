@@ -1,14 +1,16 @@
+use crate::config::BackfillMode;
 use sqlx::types::Uuid;
 
 /// Flags every thread on one of the user's links that has at least one
 /// non-TRASH message matching the importance heuristic. One statement per
 /// link keeps transactions small and the progress output per-mailbox.
-/// With `full_recompute`, stale true flags are also cleared (clear + re-set
-/// in one transaction per link). Returns the number of threads flagged.
+/// `FullRecompute` also clears stale true flags (clear + re-set in one
+/// transaction per link); `Verify` is read-only and counts disagreements.
+/// Returns the number of threads flagged (or mismatched, for `Verify`).
 pub async fn process_macro_id(
     pool: &sqlx::PgPool,
     macro_id: &str,
-    full_recompute: bool,
+    mode: BackfillMode,
 ) -> anyhow::Result<u64> {
     let link_ids: Vec<Uuid> =
         sqlx::query_scalar!("SELECT id FROM email_links WHERE macro_id = $1", macro_id)
@@ -20,14 +22,21 @@ pub async fn process_macro_id(
         return Ok(0);
     }
 
-    let mut total_flagged = 0u64;
+    let mut total = 0u64;
     for link_id in link_ids {
+        if mode == BackfillMode::Verify {
+            let mismatched = verify_link(pool, link_id).await?;
+            println!("[{macro_id}] link {link_id}: {mismatched} threads mismatched");
+            total += mismatched;
+            continue;
+        }
+
         let mut tx = pool.begin().await?;
 
         // Full recompute: clear everything first so the set-true pass below
         // yields exactly the heuristic verdict. Same transaction, so readers
         // never observe the intermediate all-false state.
-        if full_recompute {
+        if mode == BackfillMode::FullRecompute {
             let cleared = sqlx::query!(
                 r#"
                 UPDATE email_threads
@@ -148,10 +157,115 @@ pub async fn process_macro_id(
 
         // Prefix with the user so interleaved concurrent output stays readable.
         println!("[{macro_id}] link {link_id}: flagged {flagged} threads");
-        total_flagged += flagged;
+        total += flagged;
     }
 
-    Ok(total_flagged)
+    Ok(total)
+}
+
+/// Read-only differential check: counts the link's threads whose stored
+/// is_signal disagrees with the live heuristic verdict. Mirrors
+/// sync_thread_signal_flag (email_db_client/threads/update.rs).
+async fn verify_link(pool: &sqlx::PgPool, link_id: Uuid) -> anyhow::Result<u64> {
+    let mismatched = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "mismatched!"
+        FROM email_threads t
+        WHERE t.link_id = $1
+          AND t.is_signal IS DISTINCT FROM EXISTS (
+              SELECT 1
+              FROM email_messages m
+              WHERE m.thread_id = t.id
+                AND NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                )
+                AND (
+                    (
+                        EXISTS (
+                            SELECT 1
+                            FROM email_contacts sender_c
+                            JOIN email_filters ef
+                              ON ef.link_id = m.link_id
+                             AND ef.email_address IS NOT NULL
+                             AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                            WHERE sender_c.id = m.from_contact_id
+                              AND ef.is_important = TRUE
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM email_contacts sender_c
+                            JOIN email_filters ef
+                              ON ef.link_id = m.link_id
+                             AND ef.email_domain IS NOT NULL
+                             AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                            WHERE sender_c.id = m.from_contact_id
+                              AND ef.is_important = TRUE
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM email_filters ef_addr
+                                  WHERE ef_addr.link_id = m.link_id
+                                    AND ef_addr.email_address IS NOT NULL
+                                    AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                    AND ef_addr.is_important = FALSE
+                              )
+                        )
+                    )
+                    OR (
+                        NOT (
+                            EXISTS (
+                                SELECT 1
+                                FROM email_contacts sender_c
+                                JOIN email_filters ef
+                                  ON ef.link_id = m.link_id
+                                 AND ef.email_address IS NOT NULL
+                                 AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                                WHERE sender_c.id = m.from_contact_id
+                                  AND ef.is_important = FALSE
+                            )
+                            OR EXISTS (
+                                SELECT 1
+                                FROM email_contacts sender_c
+                                JOIN email_filters ef
+                                  ON ef.link_id = m.link_id
+                                 AND ef.email_domain IS NOT NULL
+                                 AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                                WHERE sender_c.id = m.from_contact_id
+                                  AND ef.is_important = FALSE
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM email_filters ef_addr
+                                      WHERE ef_addr.link_id = m.link_id
+                                        AND ef_addr.email_address IS NOT NULL
+                                        AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                        AND ef_addr.is_important = TRUE
+                                  )
+                            )
+                        )
+                        AND (
+                            m.is_draft = TRUE
+                            OR EXISTS (
+                                SELECT 1 FROM email_message_labels ml
+                                JOIN email_labels l ON ml.label_id = l.id
+                                WHERE ml.message_id = m.id
+                                  AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
+                            )
+                            OR NOT EXISTS (
+                                SELECT 1 FROM email_message_labels ml
+                                JOIN email_labels l ON ml.label_id = l.id
+                                WHERE ml.message_id = m.id
+                                  AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                            )
+                        )
+                    )
+                )
+          )
+        "#,
+        link_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(mismatched as u64)
 }
 
 /// Every macro ID that owns at least one email link. Connected secondary

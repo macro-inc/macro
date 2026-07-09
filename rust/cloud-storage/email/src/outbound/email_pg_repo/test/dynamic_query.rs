@@ -680,6 +680,7 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
 async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -748,8 +749,10 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
             dynamic::dynamic_email_thread_cursor(&pool, &[link_id], limit, &view, query, "", None)
                 .await?;
 
-        // Threads 6 (CATEGORY_UPDATES) and 7 (CATEGORY_PROMOTIONS)
-        // Thread 8 has CATEGORY_UPDATES but is excluded because DRAFT is a priority label
+        // Threads 6 (CATEGORY_UPDATES) and 7 (CATEGORY_PROMOTIONS). The
+        // all-trash threads 9-11 are is_signal=false too, but the lateral's
+        // TRASH exclusion leaves them no message to surface, so they still
+        // drop out. Thread 8 is excluded because DRAFT made it signal.
         assert_eq!(
             results.len(),
             2,
@@ -786,6 +789,7 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
 async fn test_dynamic_query_importance_true_email_filters_domain_with_address_override(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -822,6 +826,7 @@ async fn test_dynamic_query_importance_true_email_filters_domain_with_address_ov
 async fn test_dynamic_query_importance_true_email_filters_excludes_trashed_messages(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -854,6 +859,7 @@ async fn test_dynamic_query_importance_true_email_filters_excludes_trashed_messa
 async fn test_dynamic_query_importance_false_email_filters_domain_with_address_override(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -1041,6 +1047,7 @@ async fn test_dynamic_query_project_id_with_inbox_view(pool: Pool<Postgres>) -> 
 async fn test_dynamic_query_inbox_view_with_importance_false(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let limit = 50;
@@ -1147,6 +1154,7 @@ async fn test_dynamic_query_thread_id_with_sender_filter(
 async fn test_importance_true_includes_drafts_with_depriority_label(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -1184,6 +1192,7 @@ async fn test_importance_true_includes_drafts_with_depriority_label(
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
 async fn test_importance_true_excludes_trashed_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -1226,6 +1235,7 @@ async fn test_importance_true_excludes_trashed_drafts(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
 async fn test_importance_false_excludes_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sync_all_signal_flags(&pool).await?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let limit = 50;
@@ -1253,7 +1263,7 @@ async fn test_importance_false_excludes_drafts(pool: Pool<Postgres>) -> anyhow::
         "importance=false should exclude draft thread 3"
     );
 
-    // Only non-draft threads with depriority labels should appear
+    // Only non-signal threads with a surfaceable (non-trash) message appear
     assert!(
         result_ids.contains("20000006-0000-0000-0000-000000000006"),
         "Should include thread 6 (CATEGORY_UPDATES, not a draft)"
