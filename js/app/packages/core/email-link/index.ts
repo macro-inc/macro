@@ -100,14 +100,9 @@ function initEmailLink(args?: {
       if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
         return err<void, EmailInitError>({ tag: 'NoGmailGrant' });
       }
-      const alreadyInitialized = initResult.error.some(
-        (e) =>
-          e.code === ALREADY_INITIALIZED_CODE ||
-          // Legacy fallback for a backend that predates the typed codes and
-          // answers both no-op cases with an uncoded 400.
-          e.message.includes('400')
-      );
-      const error: EmailInitError = alreadyInitialized
+      const error: EmailInitError = initResult.error.some(
+        (e) => e.code === ALREADY_INITIALIZED_CODE
+      )
         ? { tag: 'AlreadyInitialized' }
         : { tag: 'FailedToInitialize', message: 'Failed to initialize' };
       return err<void, EmailInitError>(error);
