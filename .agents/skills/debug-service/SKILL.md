@@ -1,3 +1,9 @@
+---
+name: debug-service
+description: "Interactively debug a Rust binary in the current crate by starting it with debug logging and tailing its log. Use when asked to debug or inspect a running Rust service."
+allowed-tools: Bash Read
+---
+
 You are going to help me interactively debug the rust binary
 that's in this crate.
 

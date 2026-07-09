@@ -1,6 +1,6 @@
 ---
 name: initialize-workspace
-description: Initialize the current repo when an agent first starts in a repository. Use at the beginning of every new agent session before editing files: set up direnv on NixOS when direnv is installed, then run `just rust/cloud-storage/setup_test_envs`.
+description: "Initialize the current repo when an agent first starts in a repository. Use at the beginning of every new agent session before editing files by setting up direnv on NixOS when direnv is installed, then running `just rust/cloud-storage/setup_test_envs`."
 allowed-tools: Bash Read
 ---
 
